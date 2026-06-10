@@ -209,8 +209,8 @@ describe("Endereço salvo", () => {
 });
 
 describe("Diagnóstico (17–20)", () => {
-  it("PASS, sem pedido real, sem Evolution, sem Pix, runtimeTouched=false", () => {
-    const r = runWhatsAppTextOrderDiagnostic();
+  it("PASS, sem pedido real, sem Evolution, sem Pix, runtimeTouched=false", async () => {
+    const r = await runWhatsAppTextOrderDiagnostic();
     expect(r.status).toBe("PASS");
     expect(r.p0).toBe(0);
     expect(r.noOrder && r.noEvolution && r.noPix && r.noSend).toBe(true);

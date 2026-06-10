@@ -42,6 +42,20 @@ export interface RuntimeInput {
   messageText:     string;
 }
 
+/**
+ * Pure mode → permission mapping (single source of truth, testable):
+ *   DRY_RUN_ONLY         → no reply, no order, no Pix;
+ *   ALLOWLIST_REPLY_ONLY → reply only;
+ *   ALLOWLIST_FULL_TEST  → reply + order + Pix (allowlist still required upstream).
+ * No mode can bypass the allowlist — the phone guard runs before any of this.
+ */
+export function modePermissions(mode: string): { canReply: boolean; canCreateOrder: boolean } {
+  return {
+    canReply:       mode === "ALLOWLIST_REPLY_ONLY" || mode === "ALLOWLIST_FULL_TEST",
+    canCreateOrder: mode === "ALLOWLIST_FULL_TEST",
+  };
+}
+
 export interface RuntimeDecision {
   handled:        boolean;        // did the engine take this message?
   blockedReason:  string | null;  // why it didn't, if applicable
@@ -97,8 +111,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     || isPhoneInList(input.phone, config.allowlistedPhones);
   if (!phoneOk) return block("phone not in restaurant allowlist", mode);
 
-  const canReply       = mode === "ALLOWLIST_REPLY_ONLY" || mode === "ALLOWLIST_FULL_TEST";
-  const canCreateOrder = mode === "ALLOWLIST_FULL_TEST";
+  const { canReply, canCreateOrder } = modePermissions(mode);
 
   if (canReply)       safetyNotes.push(`mode=${mode} → reply allowed`);
   else                safetyNotes.push(`mode=${mode} → no reply (dry-run only)`);
@@ -125,6 +138,27 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
       mode,
       source:         "webhook",
     });
+  }
+
+  // Fute-parity metadata injection (once per session, never blocking):
+  // official payment options from PaymentSettings + the customer's saved address.
+  try {
+    const { enrichSessionMetadata } = await import("./checkoutBridge");
+    const enriched = await enrichSessionMetadata({
+      restaurantId:    input.restaurantId,
+      customerId:      input.customerId ?? session.customerId ?? null,
+      currentMetadata: (session.metadata ?? null) as Record<string, unknown> | null,
+      hasAddress:      !!session.address?.street,
+    });
+    if (enriched.changed) {
+      session = { ...session, metadata: enriched.metadata };
+      safetyNotes.push(
+        `bridge metadata injected (pagamento oficial${enriched.savedAddressLoaded ? " + endereço salvo" : ""})`,
+      );
+    }
+  } catch (err) {
+    // Defaults of the state machine keep working — never block the turn.
+    safetyNotes.push(`bridge metadata skipped: ${err instanceof Error ? err.message.slice(0, 60) : "erro"}`);
   }
 
   // Process the turn. Real order/Pix only when full-test permissions allow.

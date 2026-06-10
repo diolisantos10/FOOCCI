@@ -13,6 +13,8 @@ import { advanceSession } from "@/services/whatsapp/ordering/WhatsAppOrderStateM
 import type { WaMenuItem, WaPersistedSession } from "@/services/whatsapp/ordering/types";
 import { reasonWhatsAppMessage, extractOrderEntities } from "./WhatsAppBrainReasoningAdapter";
 import { MENU_FOOTER } from "@/services/whatsapp/ordering/menuFooter";
+import { enrichSessionMetadata, renderPaymentQuestion } from "@/services/whatsapp/ordering/checkoutBridge";
+import { modePermissions } from "@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService";
 
 // ── Synthetic catalog (no DB) ────────────────────────────────────────────────────
 const mk = (over: Partial<WaMenuItem> & Pick<WaMenuItem, "id" | "name" | "price">): WaMenuItem => ({
@@ -59,12 +61,18 @@ export interface TextOrderDiagnosticResult {
   noEvolution: true;
   noOrder: true;
   noPix: true;
+  runtimeMetadataInjected: boolean;
+  paymentOptionsFromFute: boolean;
+  savedAddressLoaded: boolean;
+  replyOnlyNoOrder: boolean;
+  fullTestOrderOnlyAfterConfirmation: boolean;
+  pixOnlyAfterConfirmation: boolean;
   runtimeTouched: false;
 }
 
 const SIDE_EFFECT_ACTIONS = new Set(["CREATE_ORDER", "GENERATE_PIX"]);
 
-export function runWhatsAppTextOrderDiagnostic(): TextOrderDiagnosticResult {
+export async function runWhatsAppTextOrderDiagnostic(): Promise<TextOrderDiagnosticResult> {
   const cases: CaseResult[] = [];
   const add = (name: string, pass: boolean, note = "") => cases.push({ name, pass, note: pass ? "ok" : note });
 
@@ -131,6 +139,51 @@ export function runWhatsAppTextOrderDiagnostic(): TextOrderDiagnosticResult {
     add("descartar volta ao menu sem pedido", /menu principal/i.test(s3.suggestedReply) && s3.session.stage === "CANCELLED", "");
   }
 
+  // 7) Runtime metadata injection (hermetic: injected fake Fute settings).
+  let runtimeMetadataInjected = false;
+  let paymentOptionsFromFute = false;
+  let savedAddressLoaded = false;
+  {
+    const enriched = await enrichSessionMetadata(
+      { restaurantId: "diag", customerId: "cust-1", currentMetadata: null, hasAddress: false },
+      {
+        getPaymentOptions: async () => ({ order: ["PIX", "CASH"], question: renderPaymentQuestion(["PIX", "CASH"]) }),
+        getSavedAddress: async () => ({ street: "Rua Diag", number: "10", formatted: "Rua Diag, 10" }),
+      },
+    );
+    runtimeMetadataInjected = enriched.changed && Array.isArray(enriched.metadata.paymentOptionOrder);
+    const q = String(enriched.metadata.paymentQuestion ?? "");
+    paymentOptionsFromFute = q.includes("1. Pix") && q.includes("2. Dinheiro na entrega") && !q.includes("Cartão");
+    savedAddressLoaded = enriched.savedAddressLoaded;
+    add("runtime injeta metadados do Fute", runtimeMetadataInjected && paymentOptionsFromFute, q);
+    add("endereço salvo carregado", savedAddressLoaded, "");
+  }
+
+  // 8) Mode permissions — REPLY_ONLY never creates order/Pix; DRY_RUN never replies.
+  const replyOnly = modePermissions("ALLOWLIST_REPLY_ONLY");
+  const fullTest = modePermissions("ALLOWLIST_FULL_TEST");
+  const dryRun = modePermissions("DRY_RUN_ONLY");
+  const replyOnlyNoOrder = replyOnly.canReply && !replyOnly.canCreateOrder;
+  add("REPLY_ONLY responde mas não cria pedido/Pix", replyOnlyNoOrder, JSON.stringify(replyOnly));
+  add("DRY_RUN não responde nem cria", !dryRun.canReply && !dryRun.canCreateOrder, JSON.stringify(dryRun));
+  add("FULL_TEST é o único que cria", fullTest.canCreateOrder, "");
+
+  // 9) Order/Pix only AFTER confirmation: a fresh annotation never emits the
+  // actions; the full flow only emits CREATE_ORDER(+GENERATE_PIX) at the end.
+  let fullTestOrderOnlyAfterConfirmation = false;
+  let pixOnlyAfterConfirmation = false;
+  {
+    let s1 = advanceSession(freshSession(), "Quero 1 coca-cola lata", CATALOG);
+    const annotationClean = !s1.actions.includes("CREATE_ORDER") && !s1.actions.includes("GENERATE_PIX");
+    let s2 = advanceSession(s1.session, "retirada", CATALOG);
+    const midClean = !s2.actions.includes("CREATE_ORDER");
+    const s3 = advanceSession(s2.session, "pix", CATALOG);
+    const endHasActions = s3.actions.includes("CREATE_ORDER") && s3.actions.includes("GENERATE_PIX");
+    fullTestOrderOnlyAfterConfirmation = annotationClean && midClean && endHasActions;
+    pixOnlyAfterConfirmation = annotationClean && endHasActions;
+    add("pedido/Pix só após o fim do fluxo confirmado", fullTestOrderOnlyAfterConfirmation, `a1=${s1.actions} a2=${s2.actions} a3=${s3.actions}`);
+  }
+
   const passed = cases.filter((c) => c.pass).length;
   const allPass = passed === cases.length;
   return {
@@ -144,6 +197,12 @@ export function runWhatsAppTextOrderDiagnostic(): TextOrderDiagnosticResult {
     noEvolution: true,
     noOrder: true,
     noPix: true,
+    runtimeMetadataInjected,
+    paymentOptionsFromFute,
+    savedAddressLoaded,
+    replyOnlyNoOrder,
+    fullTestOrderOnlyAfterConfirmation,
+    pixOnlyAfterConfirmation,
     runtimeTouched: false,
   };
 }

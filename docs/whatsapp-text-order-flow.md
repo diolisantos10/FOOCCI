@@ -68,22 +68,62 @@ sintético + máquina pura + adapter: pedido livre, retirada, Pix declarado,
 produto inexistente, atendente e `0` com comanda. Critérios: PASS, p0=0,
 `noSend/noEvolution/noOrder/noPix`, `runtimeTouched=false`. Não toca o banco.
 
+Checks operacionais adicionais (ativação v1): `runtimeMetadataInjected`,
+`paymentOptionsFromFute` (a pergunta numerada reflete só as formas configuradas),
+`savedAddressLoaded`, `replyOnlyNoOrder`, `fullTestOrderOnlyAfterConfirmation`,
+`pixOnlyAfterConfirmation`. Workflow manual:
+`.github/workflows/whatsapp-text-order-diagnostic.yml` (CRON_SECRET, logs seguros).
+
+## Como o runtime injeta (ativação v1)
+
+O `WhatsAppTextOrderingRuntimeService`, depois de carregar/criar a sessão e ANTES
+da máquina, chama `enrichSessionMetadata` (checkoutBridge):
+- **Pagamento oficial:** `metadata.paymentQuestion` + `paymentOptionOrder` +
+  `paymentOptions` ← `PaymentSettings` do restaurante (mesma tabela do Fute).
+  Ordem estável PIX→Cartão→Dinheiro filtrada pelo que está ligado; número digitado
+  mapeia para o método oficial; nada é inventado.
+- **Endereço salvo:** `metadata.savedAddress` ← último endereço de entrega do
+  cliente (somente com `customerId` seguro e enquanto a sessão não tem endereço;
+  a oferta "1. Sim / 2. Usar outro" só aparece no fluxo de DELIVERY).
+- **Garantias:** injeção única por sessão (não sobrescreve), `bridgeInjectedAt`
+  para observabilidade, e **nunca lança** — falha de DB cai nos defaults seguros
+  da máquina, sem bloquear o turno.
+
+## Modos (gates reforçados — `modePermissions`, fonte única testada)
+
+| Modo | Responde? | Pedido real? | Pix real? |
+|---|---|---|---|
+| `DRY_RUN_ONLY` | ❌ | ❌ | ❌ |
+| `ALLOWLIST_REPLY_ONLY` | ✅ (só allowlist) | ❌ | ❌ |
+| `ALLOWLIST_FULL_TEST` | ✅ (só allowlist) | ✅ após confirmação | ✅ após confirmação |
+
+Nenhum modo burla a allowlist (o guard de telefone roda antes de tudo); pedido e
+Pix só viram ações no FIM do fluxo confirmado (`CREATE_ORDER`/`GENERATE_PIX`),
+executadas pelo backend do Fute apenas em FULL_TEST.
+
+## Como ativar por allowlist
+
+1. Painel admin do restaurante: habilitar text-ordering, modo
+   `ALLOWLIST_REPLY_ONLY`, adicionar os telefones do time na allowlist.
+2. Validar no aparelho: rodapé `0. menu`, opções numeradas, pergunta de pagamento
+   refletindo só as formas configuradas, oferta de endereço salvo.
+3. Subir para `ALLOWLIST_FULL_TEST` (mesmos telefones): pedido na entrega +
+   pedido Pix ponta a ponta.
+4. Só então considerar `RESTAURANT_WIDE`.
+
 ## Critérios para ativar produção (geral)
 
 1. Validar em `ALLOWLIST_REPLY_ONLY` com telefones do time (respostas reais, sem
    pedido) — conferir rodapé, opções numeradas e pagamento oficial no aparelho.
 2. `ALLOWLIST_FULL_TEST` com restaurante de teste: pedido na entrega + pedido Pix
    ponta a ponta (pedido aparece na operação pela regra do Fute).
-3. Popular `metadata.paymentQuestion/paymentOptionOrder/savedAddress` no runtime
-   (hoje o RuntimeService ainda não injeta — os defaults atuais seguem valendo).
+3. ✅ ~~Popular metadata no runtime~~ — FEITO (ativação v1: `enrichSessionMetadata`
+   ligado no RuntimeService).
 4. Resolver as 3 falhas pré-existentes do matcher de "menu question" (W8/W9).
 5. Só então ampliar a allowlist / RESTAURANT_WIDE.
 
 ## Pendências conhecidas
 
-- Runtime ainda não injeta os metadados do bridge (pagamento configurado /
-  endereço salvo) — implementado e testado na máquina; ligação no
-  `WhatsAppTextOrderingRuntimeService` fica para a rodada de ativação.
 - O retorno ao "menu principal" após `0` emite `MENU_RETURN`; a renderização do
   menu do recepcionista é do router (fora da máquina pura).
 - 3 falhas pré-existentes de matcher (W8-D/N, W9-O) — UX, não segurança.

@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, status: "FAIL", message: auth.error, runtimeTouched: false }, { status: auth.status });
   }
   try {
-    const result = runWhatsAppTextOrderDiagnostic();
+    const result = await runWhatsAppTextOrderDiagnostic();
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";

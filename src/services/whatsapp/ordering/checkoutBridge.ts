@@ -81,3 +81,71 @@ export async function getSavedAddressForCustomer(customerId: string): Promise<Sa
   const formatted = [`${a.street}, ${a.number}`, a.neighborhood, a.city].filter(Boolean).join(" — ");
   return { street: a.street, number: a.number, neighborhood: a.neighborhood ?? undefined, formatted };
 }
+
+// ── Runtime metadata enrichment (called by WhatsAppTextOrderingRuntimeService) ──
+
+export interface EnrichInput {
+  restaurantId: string;
+  customerId?: string | null;
+  currentMetadata: Record<string, unknown> | null;
+  /** Skip the saved-address lookup when the session already has an address. */
+  hasAddress?: boolean;
+}
+
+export interface EnrichDeps {
+  getPaymentOptions?: (restaurantId: string) => Promise<ConfiguredPaymentOptions>;
+  getSavedAddress?: (customerId: string) => Promise<SavedAddress | null>;
+}
+
+export interface EnrichResult {
+  metadata: Record<string, unknown>;
+  changed: boolean;
+  paymentInjected: boolean;
+  savedAddressLoaded: boolean;
+}
+
+/**
+ * Injects the Fute-parity metadata into an ordering session, exactly once:
+ *  • paymentQuestion / paymentOptionOrder / paymentOptions ← PaymentSettings;
+ *  • savedAddress ← customer's last delivery address (only with a safe customerId
+ *    and only while the session has no address yet).
+ * NEVER throws (a failure falls back to the machine's safe defaults) and never
+ * overwrites values that are already present.
+ */
+export async function enrichSessionMetadata(input: EnrichInput, deps: EnrichDeps = {}): Promise<EnrichResult> {
+  const meta: Record<string, unknown> = { ...(input.currentMetadata ?? {}) };
+  let paymentInjected = false;
+  let savedAddressLoaded = false;
+
+  // Payment options (stable order, straight from PaymentSettings — never invented).
+  if (!Array.isArray(meta.paymentOptionOrder)) {
+    try {
+      const fetchOptions = deps.getPaymentOptions ?? getConfiguredPaymentOptions;
+      const options = await fetchOptions(input.restaurantId);
+      meta.paymentOptionOrder = options.order;
+      meta.paymentQuestion = options.question;
+      meta.paymentOptions = options.order.map((m, i) => ({ n: i + 1, method: m }));
+      paymentInjected = true;
+    } catch {
+      // fall back to the machine's default question — never block the turn
+    }
+  }
+
+  // Saved address (only with a safe customer, only before any address exists).
+  if (!input.hasAddress && input.customerId && meta.savedAddress === undefined) {
+    try {
+      const fetchAddress = deps.getSavedAddress ?? getSavedAddressForCustomer;
+      const saved = await fetchAddress(input.customerId);
+      if (saved) {
+        meta.savedAddress = saved;
+        savedAddressLoaded = true;
+      }
+    } catch {
+      // no saved address — the machine simply asks for one
+    }
+  }
+
+  const changed = paymentInjected || savedAddressLoaded;
+  if (changed) meta.bridgeInjectedAt = new Date().toISOString();
+  return { metadata: meta, changed, paymentInjected, savedAddressLoaded };
+}
