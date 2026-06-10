@@ -1,17 +1,30 @@
 "use client";
 
 /**
- * WaiterSimulationLab — the single operational cockpit for the Waiter Simulation
- * Lab. The operator opens this ONE tab and immediately sees: is the lab running
- * automatically, when it last ran / runs next, what was tested, which problems and
- * OPPORTUNITIES appeared, what needs human approval, the real sanitized examples
- * feeding it, and the recent history. Nothing is hidden in docs/logs/workflows.
+ * WaiterSimulationLab — apresentado ao operador como o "Centro de Treinamento do
+ * Waiter". A complexidade técnica (Simulation Engine, Quality, Library, Runtime
+ * Merge) continua intacta por baixo; esta tela só TRADUZ tudo para linguagem de
+ * marketing/vendas/operação e organiza a decisão humana:
  *
- * Human approval lives here (opportunities + real examples) — NOT on individual
- * Library techniques (those are born ready; governance is at version/runtime).
+ *   1. Status do treinamento  2. Fontes de aprendizado (Biblioteca · Casos reais ·
+ *   Simulador)  3. Sugestões de treinamento (o coração)  4. Treinamentos aprovados
+ *   5. Casos reais  6. Próxima versão de teste.
+ *
+ * Nada aqui muda o atendimento real: aprovar registra a decisão como treinamento;
+ * só vira mudança real numa versão de teste aprovada no Quality Gate.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  severityLabel,
+  opportunityTypeLabel,
+  scenarioTypeLabel,
+  trainingActionLabel,
+  exampleStatusLabel,
+  buildTrainingSuggestion,
+  APPROVAL_DISCLAIMER,
+  TRAINING_ACTION_MICROCOPY,
+} from "@/services/simulation/waiterTrainingDisplayLabels";
 
 const BASE = "/api/admin/agents/waiter/simulation";
 
@@ -87,7 +100,7 @@ export function WaiterSimulationLab() {
         body: JSON.stringify({ scenarioCount, seed: seed.trim() || undefined }),
       });
       const json = await res.json();
-      setMsg(json.ok ? `Pronto: ${json.summary.passed}/${json.summary.scenariosTotal} OK · ${json.summary.p0} crítico(s) · ${json.summary.opportunities} oportunidade(s).` : (json.error ?? "Falha."));
+      setMsg(json.ok ? `Pronto: ${json.summary.passed}/${json.summary.scenariosTotal} OK · ${json.summary.p0} crítico(s) · ${json.summary.opportunities} sugestão(ões) de treinamento.` : (json.error ?? "Falha."));
       await load();
     } finally { setBusy(false); }
   }, [scenarioCount, seed, load]);
@@ -102,7 +115,7 @@ export function WaiterSimulationLab() {
     try {
       const res = await fetch(`${BASE}/examples/extract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 50, days: 30 }) });
       const json = await res.json();
-      setMsg(json.ok ? `Extraídos ${json.created} exemplo(s) pendente(s).` : (json.error ?? "Falha."));
+      setMsg(json.ok ? `Extraídos ${json.created} caso(s) real(is) — aguardando sua revisão.` : (json.error ?? "Falha."));
       await load();
     } finally { setBusy(false); }
   }, [load]);
@@ -119,92 +132,130 @@ export function WaiterSimulationLab() {
 
   return (
     <div className="space-y-4">
-      {/* ── SEÇÃO 1 — Status do laboratório ─────────────────────────────── */}
+      {/* ── 1. STATUS DO TREINAMENTO ─────────────────────────────────────── */}
       <section className="rounded-xl border border-orange-200 bg-orange-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-base font-bold text-gray-900">🧪 Laboratório automático do Waiter</h3>
-            <p className="text-[11px] text-gray-700">Clientes artificiais testam o Waiter em ambiente seguro. Não cria pedido, não gera Pix, não envia WhatsApp e não altera o runtime.</p>
+            <h3 className="text-base font-bold text-gray-900">🎓 Centro de Treinamento do Waiter</h3>
+            <p className="text-[11px] text-gray-700">O Waiter aprende com materiais, conversas reais e simulações. Você aprova o que vira treinamento.</p>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <Pill tone={ck?.automation.isAutomated ? "green" : "gray"}>{ck?.automation.isAutomated ? "Ativo · roda automaticamente" : "Inativo"}</Pill>
-            <Pill tone="green">Seguro · runtime real intocado</Pill>
+            <Pill tone={ck?.automation.isAutomated ? "green" : "gray"}>{ck?.automation.isAutomated ? "Treinamento automático ativo" : "Treinamento automático inativo"}</Pill>
+            <Pill tone="green">Seguro: não muda o atendimento real sozinho</Pill>
           </div>
         </div>
+        <p className="mt-2 text-[11px] text-gray-600">O Waiter está sendo testado em ambiente seguro — sem criar pedido, gerar Pix ou enviar WhatsApp.</p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label="Última automática" value={fmt(ck?.latestCronRun?.createdAt)} tone="violet" />
-          <Stat label="Próxima automática" value={fmt(ck?.automation.nextScheduledRunEstimate)} tone="blue" />
-          <Stat label="Última manual" value={fmt(ck?.latestManualRun?.createdAt)} tone="blue" />
-          <Stat label="Crítico (P0) último run" value={String(ck?.latestRun?.p0Count ?? 0)} tone={(ck?.latestRun?.p0Count ?? 0) > 0 ? "red" : "green"} />
-          <Stat label="Pendente para você decidir" value={String(ck?.pendingOpportunityCount ?? 0)} tone={(ck?.pendingOpportunityCount ?? 0) > 0 ? "amber" : "gray"} />
-          <Stat label="Exemplos aprovados" value={String(ck?.exampleStats.approved ?? 0)} tone="green" />
-          <Stat label="Frequência" value={ck?.automation.scheduleLabel ?? "—"} tone="gray" />
-          <Stat label="Runtime real" value="Intocado" tone="green" />
+          <Stat label="Última simulação" value={fmt(ck?.latestRun?.createdAt)} tone="violet" />
+          <Stat label="Próxima simulação" value={fmt(ck?.automation.nextScheduledRunEstimate)} tone="blue" />
+          <Stat label="Problemas críticos encontrados" value={String(ck?.latestRun?.p0Count ?? 0)} tone={(ck?.latestRun?.p0Count ?? 0) > 0 ? "red" : "green"} />
+          <Stat label="Esperando sua decisão" value={String(ck?.pendingOpportunityCount ?? 0)} tone={(ck?.pendingOpportunityCount ?? 0) > 0 ? "amber" : "gray"} />
         </div>
       </section>
 
-      {/* ── SEÇÃO 2 — Rodar simulação ───────────────────────────────────── */}
+      {/* ── 2. FONTES DE APRENDIZADO ─────────────────────────────────────── */}
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <SourceCard emoji="📚" title="Biblioteca" text="Materiais enviados por você. A IA extrai técnicas e transforma em aprendizado para o Waiter." />
+        <SourceCard emoji="💬" title="Casos reais" text="Conversas reais sanitizadas. Ajudam o simulador a criar situações parecidas com clientes reais." />
+        <SourceCard emoji="🧪" title="Simulador" text="Clientes artificiais testam o Waiter todos os dias e encontram oportunidades de melhoria." />
+      </section>
+
+      {/* ── 3. SUGESTÕES DE TREINAMENTO (o coração) ──────────────────────── */}
+      <section className="rounded-xl border-2 border-amber-200 bg-white p-4">
+        <h3 className="text-sm font-bold text-gray-900">✨ Sugestões de treinamento</h3>
+        <p className="mt-0.5 text-[11px] text-gray-600">O que o Waiter pode aprender, por que foi sugerido e qual o impacto esperado. Você decide.</p>
+        <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[11px] text-blue-800">
+          ℹ️ {APPROVAL_DISCLAIMER}
+        </div>
+        <div className="mt-3 space-y-2">
+          {(ck?.pendingOpportunities.length ?? 0) === 0 && (
+            <p className="text-[12px] text-gray-500">Nenhuma sugestão pendente agora. O simulador continua testando o Waiter automaticamente.</p>
+          )}
+          {ck?.pendingOpportunities.map((o) => {
+            const v = buildTrainingSuggestion(o);
+            return (
+              <div key={o.id} className="rounded-lg border border-amber-100 bg-amber-50/40 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Pill tone={sevTone(o.severity)}>{severityLabel(o.severity)}</Pill>
+                  <Pill tone="blue">{opportunityTypeLabel(o.type)}</Pill>
+                  <span className="text-xs font-bold text-gray-900">{v.title}</span>
+                </div>
+
+                <dl className="mt-2 space-y-1 text-[11px] leading-snug">
+                  <Row label="Problema" value={v.problem} />
+                  {v.customerExample && <Row label="O cliente disse" value={`“${v.customerExample}”`} />}
+                  <Row label="Solução sugerida" value={v.solution} strong />
+                  <Row label="Impacto esperado" value={v.expectedImpact} />
+                  <Row label="Origem" value={v.origin} />
+                </dl>
+
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Btn tone="green" title={TRAINING_ACTION_MICROCOPY.APPROVED} onClick={() => void reviewOpp(o.id, "APPROVED")}>
+                    {trainingActionLabel("APPROVED")}
+                  </Btn>
+                  <Btn tone="red" title={TRAINING_ACTION_MICROCOPY.REJECTED} onClick={() => void reviewOpp(o.id, "REJECTED")}>
+                    {trainingActionLabel("REJECTED")}
+                  </Btn>
+                  <Btn title={TRAINING_ACTION_MICROCOPY.BACKLOGGED} onClick={() => void reviewOpp(o.id, "BACKLOGGED")}>
+                    {trainingActionLabel("BACKLOGGED")}
+                  </Btn>
+                </div>
+
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-[10px] text-gray-400">Detalhe técnico</summary>
+                  <p className="mt-0.5 text-[10px] text-gray-400">{v.technicalDetail}</p>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── 4. TREINAMENTOS APROVADOS ────────────────────────────────────── */}
+      <section className="rounded-xl border border-green-200 bg-white p-4">
+        <h3 className="text-sm font-bold text-gray-900">✅ Treinamentos aprovados</h3>
+        <p className="mt-0.5 text-[11px] text-gray-600">
+          Essas melhorias foram aprovadas por você e podem virar técnica, regra ou ajuste em uma <strong>versão de teste</strong> do Waiter.
+        </p>
+        {ck && (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <Stat label="Aprovados por você" value={String(ck.opportunitiesByStatus.APPROVED ?? 0)} tone="green" />
+            <Stat label="Guardados para depois" value={String(ck.opportunitiesByStatus.BACKLOGGED ?? 0)} tone="violet" />
+            <Stat label="Rejeitados" value={String(ck.opportunitiesByStatus.REJECTED ?? 0)} tone="gray" />
+          </div>
+        )}
+      </section>
+
+      {/* ── Rodar simulação agora (operacional) ──────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="text-sm font-bold text-gray-900">Rodar simulação agora</h3>
+        <h3 className="text-sm font-bold text-gray-900">Testar o Waiter agora</h3>
+        <p className="mt-0.5 text-[11px] text-gray-500">Roda uma rodada de clientes artificiais em ambiente seguro e gera novas sugestões de treinamento.</p>
         <div className="mt-2 flex flex-wrap items-end gap-3">
-          <label className="text-xs text-gray-600">Cenários
+          <label className="text-xs text-gray-600">Quantos clientes testar
             <input type="number" min={1} max={24} value={scenarioCount}
               onChange={(e) => setScenarioCount(Math.max(1, Math.min(24, Number(e.target.value) || 12)))}
               className="mt-0.5 block w-20 rounded border border-gray-300 px-2 py-1 text-sm" />
           </label>
-          <label className="text-xs text-gray-600">Seed (opcional)
-            <input type="text" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="ex: 2026-06-09"
-              className="mt-0.5 block w-44 rounded border border-gray-300 px-2 py-1 text-sm" />
-          </label>
           <button type="button" disabled={busy} onClick={() => void runNow()}
             className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
-            {busy ? "Rodando…" : "Rodar simulação agora"}
+            {busy ? "Testando…" : "Testar o Waiter agora"}
           </button>
-          {ck?.latestManualRun && (
-            <span className="text-[11px] text-gray-500">Último manual: {ck.latestManualRun.scenariosPassed}/{ck.latestManualRun.scenariosTotal} OK · P0 {ck.latestManualRun.p0Count}</span>
-          )}
+          <details className="text-[10px] text-gray-400">
+            <summary className="cursor-pointer">Opções avançadas</summary>
+            <label className="mt-1 block text-xs text-gray-600">Semente (reprodutível)
+              <input type="text" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="ex: 2026-06-10"
+                className="mt-0.5 block w-44 rounded border border-gray-300 px-2 py-1 text-sm" />
+            </label>
+          </details>
         </div>
         {msg && <p className="mt-2 text-[11px] text-gray-700">{msg}</p>}
       </section>
 
-      {/* ── SEÇÃO 3 — Oportunidades pendentes (a mais importante) ────────── */}
-      <section className="rounded-xl border-2 border-amber-200 bg-white p-4">
-        <h3 className="text-sm font-bold text-gray-900">⚠️ Oportunidades pendentes para sua decisão</h3>
-        <div className="mt-2 space-y-1.5">
-          {(ck?.pendingOpportunities.length ?? 0) === 0 && (
-            <p className="text-[12px] text-gray-500">Nenhuma oportunidade pendente agora. O simulador continuará rodando automaticamente.</p>
-          )}
-          {ck?.pendingOpportunities.map((o) => (
-            <div key={o.id} className="rounded-lg border border-amber-100 bg-amber-50/40 px-2.5 py-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Pill tone={sevTone(o.severity)}>{o.severity}</Pill>
-                <Pill tone="gray">{o.type}</Pill>
-                <span className="text-xs font-semibold text-gray-900">{o.title}</span>
-                <Pill tone={o.run?.mode === "CRON" ? "violet" : "blue"}>{o.run?.mode ?? "—"}</Pill>
-              </div>
-              <p className="mt-1 text-[11px] text-gray-600">{o.summary}</p>
-              <p className="mt-0.5 text-[11px] text-gray-800">→ {o.recommendation}</p>
-              {o.scenario && <p className="mt-0.5 text-[10px] text-gray-400">Cenário: {o.scenario.scenarioType} · “{o.scenario.initialMessage}”</p>}
-              <div className="mt-1.5 flex gap-1">
-                <Btn tone="green" onClick={() => void reviewOpp(o.id, "APPROVED")}>Aprovar</Btn>
-                <Btn tone="red" onClick={() => void reviewOpp(o.id, "REJECTED")}>Rejeitar</Btn>
-                <Btn onClick={() => void reviewOpp(o.id, "BACKLOGGED")}>Mandar para backlog</Btn>
-              </div>
-            </div>
-          ))}
-        </div>
-        {ck && (
-          <p className="mt-2 text-[10px] text-gray-400">
-            Aprovadas {ck.opportunitiesByStatus.APPROVED ?? 0} · Rejeitadas {ck.opportunitiesByStatus.REJECTED ?? 0} · Backlog {ck.opportunitiesByStatus.BACKLOGGED ?? 0}
-          </p>
-        )}
-      </section>
-
-      {/* ── SEÇÃO 4 — Últimas conversas simuladas ───────────────────────── */}
+      {/* ── Últimas conversas simuladas ──────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="text-sm font-bold text-gray-900">Últimas conversas simuladas</h3>
         <div className="mt-2 space-y-1.5">
-          {(ck?.latestScenarios.length ?? 0) === 0 && <p className="text-[11px] text-gray-500">Rode uma simulação para ver as conversas.</p>}
+          {(ck?.latestScenarios.length ?? 0) === 0 && <p className="text-[11px] text-gray-500">Teste o Waiter para ver as conversas.</p>}
           {ck?.latestScenarios.map((s) => {
             const turns = parseTranscript(s.transcript);
             const customer = turns.find((t) => t.role === "customer")?.content ?? s.initialMessage;
@@ -212,10 +263,9 @@ export function WaiterSimulationLab() {
             return (
               <div key={s.id} className="rounded-lg border border-gray-100 px-2 py-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Pill tone={statusTone(s.status)}>{s.status}</Pill>
-                  <Pill tone={sevTone(s.severity)}>{s.severity}</Pill>
-                  <span className="text-xs font-semibold text-gray-800">{s.scenarioType}</span>
-                  <span className="text-[10px] text-gray-400">{s.persona}</span>
+                  <Pill tone={statusTone(s.status)}>{s.status === "PASS" ? "OK" : s.status === "WARNING" ? "Atenção" : s.status === "FAIL" ? "Falhou" : s.status}</Pill>
+                  <Pill tone={sevTone(s.severity)}>{severityLabel(s.severity)}</Pill>
+                  <span className="text-xs font-semibold text-gray-800">{scenarioTypeLabel(s.scenarioType)}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-gray-600">🙋 {customer}</p>
                 {agent && <p className="text-[11px] text-gray-700">🤖 {agent}</p>}
@@ -226,54 +276,62 @@ export function WaiterSimulationLab() {
         </div>
       </section>
 
-      {/* ── SEÇÃO 5 — Exemplos reais sanitizados ────────────────────────── */}
+      {/* ── 5. CASOS REAIS ───────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">Exemplos reais sanitizados</h3>
+          <h3 className="text-sm font-bold text-gray-900">💬 Casos reais</h3>
           <button type="button" disabled={busy} onClick={() => void extractExamples()}
-            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Extrair de conversas reais</button>
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Buscar conversas reais</button>
         </div>
-        <p className="mt-1 text-[11px] text-amber-700">Conversas reais são sanitizadas antes de alimentar o simulador (telefone, e-mail, endereço, CPF/CNPJ, nome). Conversa bruta nunca é exibida nem armazenada.</p>
+        <p className="mt-1 text-[11px] text-gray-600">Conversas reais com clientes, com dados sensíveis removidos. Elas ajudam o simulador a criar testes mais parecidos com a realidade.</p>
         {ck && (
           <div className="mt-2 grid grid-cols-4 gap-2">
             <Stat label="Total" value={String(ck.exampleStats.total)} tone="blue" />
-            <Stat label="Aprovados" value={String(ck.exampleStats.approved)} tone="green" />
-            <Stat label="Pendentes" value={String(ck.exampleStats.pending)} tone="amber" />
-            <Stat label="Rejeitados" value={String(ck.exampleStats.rejected)} tone="gray" />
+            <Stat label="Usados como exemplo" value={String(ck.exampleStats.approved)} tone="green" />
+            <Stat label="Aguardando revisão" value={String(ck.exampleStats.pending)} tone="amber" />
+            <Stat label="Não usar" value={String(ck.exampleStats.rejected)} tone="gray" />
           </div>
         )}
         <div className="mt-2 space-y-1.5">
-          {examples.length === 0 && <p className="text-[11px] text-gray-500">Nenhum exemplo ainda. Extraia de conversas reais (sanitizadas) acima.</p>}
+          {examples.length === 0 && <p className="text-[11px] text-gray-500">Nenhum caso real ainda. Use “Buscar conversas reais” (sanitizadas) acima.</p>}
           {examples.map((e) => (
             <div key={e.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5">
-              <Pill tone={e.status === "APPROVED" ? "green" : e.status === "REJECTED" ? "red" : e.status === "BACKLOGGED" ? "violet" : "amber"}>{e.status}</Pill>
-              <Pill tone="gray">{e.scenarioType}</Pill>
-              <Pill tone="blue">{e.channel}</Pill>
-              <span className="text-[11px] text-gray-700">{e.intent}</span>
+              <Pill tone={e.status === "APPROVED" ? "green" : e.status === "REJECTED" ? "red" : e.status === "BACKLOGGED" ? "violet" : "amber"}>{exampleStatusLabel(e.status)}</Pill>
+              <span className="text-xs font-semibold text-gray-800">{scenarioTypeLabel(e.scenarioType)}</span>
+              <span className="text-[11px] text-gray-600">{e.intent}</span>
               <div className="ml-auto flex gap-1">
-                <Btn tone="green" onClick={() => void reviewExample(e.id, "APPROVED")}>Aprovar</Btn>
-                <Btn tone="red" onClick={() => void reviewExample(e.id, "REJECTED")}>Rejeitar</Btn>
-                <Btn onClick={() => void reviewExample(e.id, "BACKLOGGED")}>Backlog</Btn>
+                <Btn tone="green" title="Quero usar este caso como exemplo." onClick={() => void reviewExample(e.id, "APPROVED")}>Usar como exemplo</Btn>
+                <Btn tone="red" title="Não usar este caso." onClick={() => void reviewExample(e.id, "REJECTED")}>Não usar</Btn>
+                <Btn title="Revisar depois." onClick={() => void reviewExample(e.id, "BACKLOGGED")}>Revisar depois</Btn>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── SEÇÃO 6 — Histórico ─────────────────────────────────────────── */}
+      {/* ── 6. PRÓXIMA VERSÃO DE TESTE ───────────────────────────────────── */}
+      <section className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+        <h3 className="text-sm font-bold text-gray-900">🧬 Próxima versão de teste do Waiter</h3>
+        <p className="mt-1 text-[11px] text-gray-700">
+          Quando houver treinamentos suficientes, você pode criar uma <strong>versão de teste do Waiter</strong> com essas
+          melhorias. Ela passa pelo <strong>Quality Gate</strong> (segurança) antes de qualquer ativação — e só você ativa,
+          manualmente. Abra a aba <strong>“Versão de teste”</strong> para montar.
+        </p>
+      </section>
+
+      {/* ── Histórico ────────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="text-sm font-bold text-gray-900">Histórico</h3>
+        <h3 className="text-sm font-bold text-gray-900">Histórico de simulações</h3>
         <div className="mt-2 space-y-1">
           {history.length === 0 && <p className="text-[11px] text-gray-500">Nenhuma simulação ainda.</p>}
           {history.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5">
               <span className="font-mono text-[10px] text-gray-400">{fmt(r.createdAt)}</span>
-              <Pill tone={r.mode === "CRON" ? "violet" : "blue"}>{r.mode}</Pill>
-              <Pill tone={statusTone(r.status === "COMPLETED" ? "PASS" : "WARNING")}>{r.status}</Pill>
-              <span className="text-[11px] text-gray-600">{r.scenariosTotal} cenários · {r.scenariosPassed} OK · {r.scenariosWarning} aviso · {r.scenariosFailed} falha</span>
-              <Pill tone={r.p0Count > 0 ? "red" : "gray"}>P0 {r.p0Count}</Pill>
-              <Pill tone="violet">{r.opportunityCount} opp</Pill>
-              <Pill tone="green">runtime intocado</Pill>
+              <Pill tone={r.mode === "CRON" ? "violet" : "blue"}>{r.mode === "CRON" ? "Automática" : "Manual"}</Pill>
+              <span className="text-[11px] text-gray-600">{r.scenariosTotal} clientes · {r.scenariosPassed} OK · {r.scenariosWarning} atenção · {r.scenariosFailed} falha</span>
+              {r.p0Count > 0 && <Pill tone="red">{r.p0Count} crítico(s)</Pill>}
+              <Pill tone="violet">{r.opportunityCount} sugestão(ões)</Pill>
+              <Pill tone="green">atendimento real intocado</Pill>
             </div>
           ))}
         </div>
@@ -290,9 +348,25 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
     </div>
   );
 }
-function Btn({ children, onClick, tone }: { children: React.ReactNode; onClick: () => void; tone?: string }) {
+function SourceCard({ emoji, title, text }: { emoji: string; title: string; text: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3">
+      <p className="text-sm font-bold text-gray-900">{emoji} {title}</p>
+      <p className="mt-1 text-[11px] leading-snug text-gray-600">{text}</p>
+    </div>
+  );
+}
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div>
+      <dt className="inline font-semibold text-gray-400">{label}: </dt>
+      <dd className={`inline ${strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>{value}</dd>
+    </div>
+  );
+}
+function Btn({ children, onClick, tone, title }: { children: React.ReactNode; onClick: () => void; tone?: string; title?: string }) {
   const cls = tone === "red" ? "border-red-300 text-red-700 hover:bg-red-50"
     : tone === "green" ? "border-green-300 text-green-700 hover:bg-green-50"
     : "border-gray-300 text-gray-700 hover:bg-gray-100";
-  return <button type="button" onClick={onClick} className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{children}</button>;
+  return <button type="button" title={title} onClick={onClick} className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{children}</button>;
 }

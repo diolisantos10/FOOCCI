@@ -175,6 +175,14 @@ const TABS: readonly Tab[] = [
   "Governança",
 ];
 
+// Rótulos de exibição (apresentação). As CHAVES internas (Tab) não mudam —
+// só o texto que o operador lê fica em linguagem de produto/operação.
+const TAB_LABELS: Record<string, string> = {
+  Library: "Biblioteca de Treinamento",
+  Simulador: "Centro de Treinamento",
+  "Runtime Merge": "Versão de teste",
+};
+
 // ── room ────────────────────────────────────────────────────────────────────────
 
 export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
@@ -224,7 +232,7 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
               tab === t ? "bg-orange-600 text-white" : "text-gray-600 hover:bg-gray-100"
             }`}
           >
-            {t}
+            {TAB_LABELS[t] ?? t}
           </button>
         ))}
       </nav>

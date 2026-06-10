@@ -23,6 +23,10 @@ import {
   friendlyUploadMessage,
   classifyUploadOutcome,
 } from "@/services/agentLibrary/agentLibraryHelpers";
+import {
+  libraryProcessingStatusLabel,
+  libraryTechniqueStatusLabel,
+} from "@/services/simulation/waiterTrainingDisplayLabels";
 
 // ── DTOs (mirror the API responses) ─────────────────────────────────────────────
 
@@ -46,7 +50,7 @@ interface SourceDetailDTO {
 // ── small UI helpers ────────────────────────────────────────────────────────────
 
 type Tone = "gray" | "green" | "amber" | "blue" | "violet";
-function Pill({ children, tone = "gray" }: { children: React.ReactNode; tone?: Tone }) {
+function Pill({ children, tone = "gray", title }: { children: React.ReactNode; tone?: Tone; title?: string }) {
   const cls = {
     gray: "bg-gray-100 text-gray-600",
     green: "bg-green-50 text-green-700",
@@ -54,7 +58,7 @@ function Pill({ children, tone = "gray" }: { children: React.ReactNode; tone?: T
     blue: "bg-blue-50 text-blue-700",
     violet: "bg-violet-50 text-violet-700",
   }[tone];
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>;
+  return <span title={title} className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>;
 }
 function extractionTone(s: string): Tone {
   return s === "EXTRACTED" ? "green" : s === "FAILED" ? "amber" : s === "EXTRACTING" ? "amber" : "gray";
@@ -242,8 +246,8 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Biblioteca do {agentName}</h3>
-            <p className="text-xs text-gray-500">Você aprova a <strong>fonte</strong> ao enviá-la. A IA extrai e as técnicas já ficam <strong>ativas e prontas</strong> — sem fila de aprovação por técnica. O uso real só acontece via uma versão LIBRARY_ASSISTED ativa (o padrão CURRENT continua seguro).</p>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Biblioteca de Treinamento</h3>
+            <p className="text-xs text-gray-500">Envie livros, manuais ou materiais. A IA extrai técnicas e transforma em aprendizado para o {agentName}. As técnicas ficam <strong>prontas para treino</strong> e só são usadas de verdade dentro de uma <strong>versão de teste</strong> aprovada no Quality Gate — o atendimento real continua seguro.</p>
           </div>
           <button type="button" onClick={() => { setShowForm((v) => !v); setErr(null); setWarn(null); }}
             className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700">
@@ -281,10 +285,10 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { label: "Fontes cadastradas", value: stats.sources },
-            { label: "Técnicas extraídas", value: stats.techniques },
-            { label: "Ativas no runtime", value: stats.activeInRuntime },
-            { label: "Fontes pendentes", value: stats.pendingExtraction },
+            { label: "Materiais enviados", value: stats.sources },
+            { label: "Técnicas prontas", value: stats.techniques },
+            { label: "Em uso no atendimento real", value: stats.activeInRuntime },
+            { label: "Processando", value: stats.pendingExtraction },
           ].map((k) => (
             <div key={k.label} className="rounded-lg border border-gray-200 bg-white p-3">
               <p className="text-xl font-bold text-gray-900">{k.value}</p>
@@ -385,11 +389,11 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                     <p className="truncate text-sm font-bold">{s.title}</p>
                     <p className="truncate text-xs text-gray-500">{s.author || "—"} · {SOURCE_TYPE_LABELS[s.sourceType as keyof typeof SOURCE_TYPE_LABELS] ?? s.sourceType}</p>
                   </div>
-                  <Pill tone={extractionTone(s.extractionStatus)}>{EXTRACTION_STATUS_LABELS[s.extractionStatus] ?? s.extractionStatus}</Pill>
+                  <Pill tone={extractionTone(s.extractionStatus)} title={EXTRACTION_STATUS_LABELS[s.extractionStatus] ?? s.extractionStatus}>{libraryProcessingStatusLabel(s.extractionStatus)}</Pill>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {s.category && <Pill tone="violet">{s.category}</Pill>}
-                  <Pill tone="gray">{SOURCE_STATUS_LABELS[s.status] ?? s.status}</Pill>
+                  <Pill tone="gray" title={SOURCE_STATUS_LABELS[s.status] ?? s.status}>{s.techniqueCount > 0 ? "Pronta para treino" : "Sem técnicas"}</Pill>
                   <Pill tone="green">{s.techniqueCount} técnica(s)</Pill>
                   <span className="ml-auto text-[11px] text-gray-400">{fmtDate(s.createdAt)}</span>
                   <button type="button"
@@ -422,7 +426,7 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                       {selected.fileName ? ` · ${selected.fileName}` : ""}
                     </p>
                   </div>
-                  <Pill tone={extractionTone(selected.extractionStatus)}>{EXTRACTION_STATUS_LABELS[selected.extractionStatus] ?? selected.extractionStatus}</Pill>
+                  <Pill tone={extractionTone(selected.extractionStatus)} title={EXTRACTION_STATUS_LABELS[selected.extractionStatus] ?? selected.extractionStatus}>{libraryProcessingStatusLabel(selected.extractionStatus)}</Pill>
                 </div>
                 {selected.description && (
                   <>
@@ -505,7 +509,7 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                   <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-3">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-bold">{t.techniqueName}</p>
-                      <Pill tone="amber">{TECHNIQUE_STATUS_LABELS[t.status] ?? t.status}</Pill>
+                      <Pill tone={t.status === "ACTIVE" ? "green" : t.status === "ARCHIVED" || t.status === "REJECTED" ? "gray" : "amber"} title={TECHNIQUE_STATUS_LABELS[t.status] ?? t.status}>{libraryTechniqueStatusLabel(t.status)}</Pill>
                     </div>
                     {t.category && <p className="mt-0.5"><Pill tone="violet">{t.category}</Pill></p>}
                     {t.application && <p className="mt-1 text-sm text-gray-800">{t.application}</p>}
