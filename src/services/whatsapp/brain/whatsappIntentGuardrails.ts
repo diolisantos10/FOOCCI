@@ -12,6 +12,8 @@ import { detectGuardrailIntent } from "@/services/brain/reasoning/IntentGuardrai
 
 export type WhatsAppIntent =
   | "START_ORDER"
+  | "ORDER_BY_TEXT"
+  | "MENU_RETURN"
   | "ASK_MENU"
   | "ASK_HOURS"
   | "PAYMENT_QUESTION"

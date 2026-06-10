@@ -26,6 +26,7 @@ import {
 } from "./parser";
 import { parsePaymentMethod } from "./WhatsAppPaymentService";
 import { parseAddressFragment } from "./addressParser";
+import { withMenuFooter, isMenuReturn } from "./menuFooter";
 import { channelPrice } from "@/services/menu/MenuPricingService";
 import type {
   WaPersistedSession,
@@ -74,6 +75,37 @@ export function advanceSession(
       ? "Sinto muito por isso. Vou chamar um atendente para te ajudar. 🤝"
       : "Certo! Vou chamar um atendente agora. 🤝";
     return done(next, intent, reply, [], true);
+  }
+
+  // 1.5 Menu return (`0` / "menu") — never silently discards an in-progress order.
+  if (next.metadata?.menuReturnPending === true) {
+    delete (next.metadata as Record<string, unknown>).menuReturnPending;
+    if (/^\s*1\s*$/.test(text)) {
+      return done(next, "QUESTION", "Perfeito! Seguimos com o seu pedido de onde paramos. 😊", [], false);
+    }
+    if (/^\s*2\s*$/.test(text)) {
+      next.status = "CANCELLED";
+      next.stage  = "CANCELLED";
+      return done(next, "MENU_RETURN", "Pedido descartado. Voltando ao menu principal. 👋", [], false);
+    }
+    if (/^\s*3\s*$/.test(text)) {
+      next.status = "HANDOFF_REQUIRED";
+      next.stage  = "HANDOFF_REQUIRED";
+      return done(next, "HUMAN_REQUEST", "Certo! Vou chamar um atendente agora. 🤝", [], true);
+    }
+    // Anything else (including another `0`) → re-ask, keeping the draft safe.
+    next.metadata = { ...(next.metadata ?? {}), menuReturnPending: true };
+    return done(next, "QUESTION",
+      "Você tem um pedido em andamento.\n1. Continuar pedido\n2. Descartar pedido\n3. Falar com atendente", [], false);
+  }
+  if (isMenuReturn(text)) {
+    const hasDraft = next.selectedItems.length > 0 || next.unresolvedItems.length > 0 || next.stage !== "IDLE";
+    if (hasDraft && next.stage !== "CANCELLED") {
+      next.metadata = { ...(next.metadata ?? {}), menuReturnPending: true };
+      return done(next, "QUESTION",
+        "Você tem um pedido em andamento.\n1. Continuar pedido\n2. Descartar pedido\n3. Falar com atendente", [], false);
+    }
+    return done(next, "MENU_RETURN", "Voltando ao menu principal. 👋", [], false);
   }
 
   // 2. Stage-specific handling
@@ -360,7 +392,7 @@ function routeAfterResolved(
     if (!addrComplete) {
       session.stage  = "COLLECTING_ADDRESS";
       session.status = "AWAITING_CUSTOMER";
-      return done(session, "DELIVERY_INFO", "Me envia o endereço completo com número, por favor.", [], false);
+      return done(session, "DELIVERY_INFO", askAddressReply(session), [], false);
     }
     if (!session.deliveryQuote || session.deliveryQuote.status !== "ok") {
       session.stage  = "CALCULATING_DELIVERY_FEE";
@@ -373,7 +405,7 @@ function routeAfterResolved(
     session.stage  = "COLLECTING_PAYMENT_METHOD";
     session.status = "AWAITING_CUSTOMER";
     const comanda = inlineComanda(session);
-    return done(session, "ORDER_REQUEST", `${comanda}\n\nVai pagar no Pix, cartão ou dinheiro?`, [], false);
+    return done(session, "ORDER_REQUEST", `${comanda}\n\n${askPaymentReply(session)}`, [], false);
   }
 
   return finalizePayment(session);
@@ -489,7 +521,7 @@ function handleDeliveryType(session: WaPersistedSession, text: string, menu: WaM
     session.status = "AWAITING_CUSTOMER";
     const comanda = inlineComanda(session);
     return done(session, "DELIVERY_INFO",
-      `Retirada no balcão. ✅\n\n${comanda}\n\nVai pagar no Pix, cartão ou dinheiro?`, [], false);
+      `Retirada no balcão. ✅\n\n${comanda}\n\n${askPaymentReply(session)}`, [], false);
   }
   if (DELIVERY_RE.test(text)) {
     session.deliveryType = "DELIVERY";
@@ -501,8 +533,7 @@ function handleDeliveryType(session: WaPersistedSession, text: string, menu: WaM
     }
     session.stage  = "COLLECTING_ADDRESS";
     session.status = "AWAITING_CUSTOMER";
-    return done(session, "DELIVERY_INFO",
-      "Me envia o endereço com rua, número e bairro, por favor.", [], false);
+    return done(session, "DELIVERY_INFO", askAddressReply(session), [], false);
   }
 
   // Not a delivery/pickup answer — maybe the customer is modifying the order.
@@ -633,7 +664,40 @@ function cancelPendingItem(session: WaPersistedSession, menu: WaMenuItem[]): Adv
 
 // ── Address ─────────────────────────────────────────────────────────────────────
 
+// ── Saved address (opt-in via session.metadata.savedAddress, Fute parity) ───────
+interface WaSavedAddress { street: string; number: string; neighborhood?: string; formatted: string }
+
+function savedAddressOf(session: WaPersistedSession): WaSavedAddress | null {
+  const meta = (session.metadata ?? {}) as Record<string, unknown>;
+  const sa = meta.savedAddress as WaSavedAddress | undefined;
+  return sa && sa.street && sa.number ? sa : null;
+}
+
+/** The ask-address question — offers the saved address (1/2) when available. */
+function askAddressReply(session: WaPersistedSession): string {
+  const saved = savedAddressOf(session);
+  if (saved && !session.address?.street) {
+    return `Posso enviar para este endereço?\n${saved.formatted}\n1. Sim\n2. Usar outro endereço`;
+  }
+  return "Me envia o endereço com rua, número e bairro, por favor.";
+}
+
 function handleAddress(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
+  // Saved-address answer: 1 = use it, 2 = type another one.
+  const saved = savedAddressOf(session);
+  if (saved && !session.address?.street) {
+    if (/^\s*1\s*$/.test(text)) {
+      session.address = { street: saved.street, number: saved.number, neighborhood: saved.neighborhood, raw: saved.formatted };
+      session.metadata = { ...(session.metadata ?? {}), savedAddress: undefined };
+      session.stage  = "CALCULATING_DELIVERY_FEE";
+      session.status = "ACTIVE";
+      return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
+    }
+    if (/^\s*2\s*$/.test(text)) {
+      session.metadata = { ...(session.metadata ?? {}), savedAddress: undefined };
+      return done(session, "DELIVERY_INFO", "Me envia o endereço com rua, número e bairro, por favor.", [], false);
+    }
+  }
   // Add-item interrupt: if the message carries order content and does NOT look
   // like a street address, treat it as a new item request, not an address.
   if ((ADD_RE.test(text) || hasOrderContent(text)) && !ADDRESS_LIKE_RE.test(text)) {
@@ -806,7 +870,58 @@ function finalizePayment(session: WaPersistedSession): AdvanceResult {
   return done(session, "PAYMENT_INFO", "Confirmando seu pedido…", ["CREATE_ORDER"], false);
 }
 
+// ── Configured payment options (Fute parity, opt-in via session.metadata) ───────
+// metadata.paymentQuestion: numbered question rendered from the restaurant's
+//   configured payment options (same PaymentSettings the Fute checkout uses);
+// metadata.paymentOptionOrder: ["PIX","CARD","CASH"...] so a bare number maps to
+//   the official option; metadata.declaredPayment: method the customer mentioned
+//   in free text — still confirmed through the official options (1. Sim / 2. Outra).
+const PAYMENT_LABELS: Record<"PIX" | "CARD" | "CASH", string> = {
+  PIX: "Pix", CARD: "Cartão na entrega", CASH: "Dinheiro na entrega",
+};
+
+function askPaymentReply(session: WaPersistedSession): string {
+  const meta = (session.metadata ?? {}) as Record<string, unknown>;
+  const declared = meta.declaredPayment as "PIX" | "CARD" | "CASH" | undefined;
+  if (declared && !session.paymentMethod) {
+    return `Você informou ${PAYMENT_LABELS[declared].toLowerCase()}.\nConfirma essa forma de pagamento?\n1. Sim, ${PAYMENT_LABELS[declared].toLowerCase()}\n2. Escolher outra forma de pagamento`;
+  }
+  if (typeof meta.paymentQuestion === "string" && meta.paymentQuestion.trim()) {
+    return meta.paymentQuestion;
+  }
+  return "Vai pagar no Pix, cartão ou dinheiro?";
+}
+
 function handlePayment(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
+  const meta = (session.metadata ?? {}) as Record<string, unknown>;
+
+  // Declared payment pre-confirmation (official flow): 1=Sim, 2=outra forma.
+  const declared = meta.declaredPayment as "PIX" | "CARD" | "CASH" | undefined;
+  if (declared && !session.paymentMethod) {
+    if (/^\s*1\s*$/.test(text)) {
+      session.metadata = { ...meta, declaredPayment: undefined };
+      session.paymentMethod = declared;
+      return finalizePayment(session);
+    }
+    if (/^\s*2\s*$/.test(text)) {
+      session.metadata = { ...meta, declaredPayment: undefined };
+      return done(session, "PAYMENT_INFO", askPaymentReply(session), [], false);
+    }
+  }
+
+  // Numeric selection over the configured option order (Fute parity).
+  const optionOrder = Array.isArray(meta.paymentOptionOrder) ? (meta.paymentOptionOrder as Array<"PIX" | "CARD" | "CASH">) : null;
+  if (optionOrder && !session.paymentMethod) {
+    const n = text.match(/^\s*([1-9])\s*$/);
+    if (n && n[1]) {
+      const picked = optionOrder[parseInt(n[1], 10) - 1];
+      if (picked) {
+        session.paymentMethod = picked;
+        return finalizePayment(session);
+      }
+    }
+  }
+
   const { method, changeFor } = parsePaymentMethod(text);
 
   // No method this turn — but if we're awaiting cash change, a bare number is it.
@@ -824,7 +939,7 @@ function handlePayment(session: WaPersistedSession, text: string, menu: WaMenuIt
     }
     const mod = tryModification(session, text, menu);
     if (mod) return mod;
-    return done(session, "PAYMENT_INFO", "Vai pagar no Pix, cartão ou dinheiro?", [], false);
+    return done(session, "PAYMENT_INFO", askPaymentReply(session), [], false);
   }
 
   session.paymentMethod = method;
@@ -847,7 +962,7 @@ function handleReview(
     }
     if (!session.paymentMethod) {
       session.stage = "COLLECTING_PAYMENT_METHOD";
-      return done(session, "CONFIRMATION", "Vai pagar no Pix, cartão ou dinheiro?", [], false);
+      return done(session, "CONFIRMATION", askPaymentReply(session), [], false);
     }
   }
   // Otherwise treat as a modification (change / add more items)
@@ -1075,6 +1190,9 @@ function operatorSummaryOf(session: WaPersistedSession): string {
   return parts.join(" ");
 }
 
+/** Terminal stages exit the flow — no "0. menu" footer on goodbye/handoff. */
+const NO_FOOTER_STAGES = new Set(["CANCELLED", "HANDOFF_REQUIRED", "EXPIRED"]);
+
 function done(
   session: WaPersistedSession,
   intent:  WaDetectedIntent,
@@ -1082,7 +1200,12 @@ function done(
   actions: WaDeferredAction[],
   handoff: boolean,
 ): AdvanceResult {
-  return { session, intent, suggestedReply: reply, actions, handoff, operatorSummary: operatorSummaryOf(session) };
+  // Product rule: every ACTIVE-flow message ends with exactly `0. menu`.
+  const suggestedReply =
+    handoff || NO_FOOTER_STAGES.has(session.stage) || intent === "MENU_RETURN"
+      ? reply
+      : withMenuFooter(reply);
+  return { session, intent, suggestedReply, actions, handoff, operatorSummary: operatorSummaryOf(session) };
 }
 
 function clone(s: WaPersistedSession): WaPersistedSession {

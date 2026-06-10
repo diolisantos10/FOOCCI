@@ -13,6 +13,7 @@
  */
 
 import { detectWhatsAppIntent, type WhatsAppIntent } from "./whatsappIntentGuardrails";
+import { parseTextItems } from "@/services/whatsapp/ordering/parser";
 
 export type WhatsAppRecommendedAction =
   | "SEND_ORDER_LINK"
@@ -20,7 +21,15 @@ export type WhatsAppRecommendedAction =
   | "HANDOFF_TO_HUMAN"
   | "KEEP_AI"
   | "NO_REPLY"
-  | "ASK_CLARIFYING_QUESTION";
+  | "ASK_CLARIFYING_QUESTION"
+  | "START_TEXT_ORDER_DRAFT";
+
+/** Entities extracted from a free-text order (anotador de pedido). */
+export interface WhatsAppExtractedEntities {
+  items: string[];
+  paymentMentioned?: "dinheiro" | "cartao" | "pix";
+  deliveryMentioned?: "entrega" | "retirada";
+}
 
 export interface WhatsAppBrainRequest {
   restaurantId: string;
@@ -46,12 +55,16 @@ export interface WhatsAppBrainResult {
   handoffReason?: string;
   shouldSendOrderLink: boolean;
   safetyNotes: string[];
+  /** Present when the message is a free-text order (ORDER_BY_TEXT). */
+  extractedEntities?: WhatsAppExtractedEntities;
   /** Hard invariant: reasoning NEVER touches the live runtime. */
   runtimeTouched: false;
 }
 
 const NEEDS: Record<WhatsAppIntent, string> = {
   START_ORDER: "Fazer um pedido.",
+  ORDER_BY_TEXT: "Fazer um pedido escrevendo em texto livre.",
+  MENU_RETURN: "Voltar ao menu principal.",
   ASK_MENU: "Ver o cardápio / opções.",
   ASK_HOURS: "Saber o horário de funcionamento.",
   PAYMENT_QUESTION: "Saber como pode pagar.",
@@ -64,9 +77,70 @@ const NEEDS: Record<WhatsAppIntent, string> = {
   OTHER: "Atendimento geral.",
 };
 
+
+// ── Entity extraction for free-text orders (anotador de pedido) ─────────────────
+const PAYMENT_CLAUSE_RE = /\b(pagar|pagamento|pago)\b/i;
+const CASH_RE = /\b(dinheiro|esp[eé]cie)\b/i;
+const CARD_RE = /\b(cart[aã]o|cr[eé]dito|d[eé]bito)\b/i;
+const PIX_RE = /\bpix\b/i;
+const DELIVERY_RE = /\b(entrega|delivery)\b/i;
+const PICKUP_RE = /\b(retirada|retirar|buscar|balc[aã]o)\b/i;
+
+/** Extracts items (via the ordering parser) + declared payment/delivery. */
+export function extractOrderEntities(text: string): WhatsAppExtractedEntities {
+  // Items only from sentences that are NOT the payment/delivery clause.
+  const sentences = (text ?? "").split(/[.!?\n]+/).map((p2) => p2.trim()).filter(Boolean);
+  const itemSentences = sentences.filter((p2) => !PAYMENT_CLAUSE_RE.test(p2));
+  // Generic intent words are NOT products ("quero fazer um pedido" has no item).
+  const GENERIC_RE = /(^|\s)(pedidos?|algo|alguma coisa|comida)\s*$/i;
+  // Payment/delivery vocabulary is never a product ("vocês aceitam cartão?").
+  const PAYMENT_WORD_RE = /^((qual|quais|a|o|as|os|voc[eê]s?|aceitam?|tem|t[eê]m)\s+)*(cart[aã]o|pix|dinheiro|cr[eé]dito|d[eé]bito|esp[eé]cie|entrega|retirada|taxa( de entrega)?)\s*\??$/i;
+  const items = itemSentences
+    .flatMap((p2) => parseTextItems(p2))
+    .map((i) => i.name)
+    .filter((n) => Boolean(n) && !GENERIC_RE.test(n.trim()) && !PAYMENT_WORD_RE.test(n.trim()));
+
+  const paymentMentioned = CASH_RE.test(text) ? "dinheiro" as const
+    : PIX_RE.test(text) ? "pix" as const
+    : CARD_RE.test(text) ? "cartao" as const
+    : undefined;
+  const deliveryMentioned = DELIVERY_RE.test(text) ? "entrega" as const
+    : PICKUP_RE.test(text) ? "retirada" as const
+    : undefined;
+
+  return { items, paymentMentioned, deliveryMentioned };
+}
+
 export function reasonWhatsAppMessage(req: WhatsAppBrainRequest): WhatsAppBrainResult {
+  // Menu return (`0` / "menu") at the receptionist level.
+  if (/^\s*(0|menu)\s*$/i.test(req.messageText ?? "")) {
+    return {
+      primaryIntent: "MENU_RETURN",
+      confidence: 0.95,
+      recommendedAction: "ANSWER_BASIC_INFO",
+      customerNeed: NEEDS.MENU_RETURN,
+      safeReplyStrategy: "Mostrar o menu principal do WhatsApp Agent. Se houver pedido em andamento, perguntar continuar/descartar antes.",
+      contextUsed: [],
+      missingContext: [],
+      shouldHandoff: false,
+      shouldSendOrderLink: false,
+      safetyNotes: ["Nunca descartar um pedido em andamento sem confirmação."],
+      runtimeTouched: false,
+    };
+  }
+
   const match = detectWhatsAppIntent(req.messageText);
-  const intent = match.intent;
+  let intent = match.intent;
+
+  // Free-text order: items extractable ⇒ ORDER_BY_TEXT (anotador de pedido).
+  const entities = extractOrderEntities(req.messageText);
+  // An actual order with extractable items WINS over the declared payment/delivery
+  // mention ("vou pagar em dinheiro na entrega" inside an order is a declaration,
+  // not a payment question) — the declaration is preserved in extractedEntities.
+  const FLIPPABLE = new Set(["START_ORDER", "OTHER", "UNCLEAR", "PAYMENT_QUESTION", "ASK_DELIVERY"]);
+  if (entities.items.length > 0 && FLIPPABLE.has(intent)) {
+    intent = "ORDER_BY_TEXT";
+  }
   const open = req.isRestaurantOpen;
   const contextUsed: string[] = [open ? "restaurante aberto" : "restaurante fechado"];
   const missingContext: string[] = [];
@@ -93,6 +167,13 @@ export function reasonWhatsAppMessage(req: WhatsAppBrainRequest): WhatsAppBrainR
       safeReplyStrategy = "Responder com as formas de pagamento cadastradas e conduzir ao fechamento do pedido.";
       safetyNotes.push("NUNCA recomendar prato. Usar só formas cadastradas, sem inventar taxas.");
       contextUsed.push("formas de pagamento cadastradas");
+      break;
+    case "ORDER_BY_TEXT":
+      recommendedAction = "START_TEXT_ORDER_DRAFT";
+      safeReplyStrategy =
+        "Anotar o pedido: localizar os itens no cardápio real, resolver ambiguidade com opções numeradas, montar a comanda e confirmar entrega/pagamento pelo fluxo oficial. Toda mensagem termina com `0. menu`.";
+      safetyNotes.push("Nunca inventar item, preço, taxa ou forma de pagamento. Confirmar antes de finalizar.");
+      contextUsed.push("cardápio real");
       break;
     case "START_ORDER":
       recommendedAction = "SEND_ORDER_LINK";
@@ -165,6 +246,7 @@ export function reasonWhatsAppMessage(req: WhatsAppBrainRequest): WhatsAppBrainR
     handoffReason,
     shouldSendOrderLink,
     safetyNotes,
+    extractedEntities: intent === "ORDER_BY_TEXT" ? entities : undefined,
     runtimeTouched: false,
   };
 }

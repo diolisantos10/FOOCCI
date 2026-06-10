@@ -50,6 +50,7 @@ export type WaDetectedIntent =
   | "QUESTION"
   | "COMPLAINT"
   | "HUMAN_NEEDED"  // legacy alias for HUMAN_REQUEST (W0/W1)
+  | "MENU_RETURN"   // customer typed `0`/"menu" → back to the WhatsApp main menu
   | "UNKNOWN";
 
 // Per-item resolution status (W6 menu matching)
