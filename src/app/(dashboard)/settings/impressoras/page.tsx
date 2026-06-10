@@ -24,6 +24,29 @@ export default function ImpressorasPage() {
         </div>
       </PageCard>
 
+      {/* Impressão automática ao aceitar */}
+      <PageCard>
+        <SectionHeading
+          title="Impressão automática ao aceitar pedido"
+          subtitle="A comanda dispara automaticamente quando você aceita um novo pedido."
+        />
+        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-800 mb-4">
+          <p className="font-semibold">✅ Ativo por padrão</p>
+          <p className="mt-1 text-green-700">
+            Na tela de <strong>Pedidos</strong>, o botão{" "}
+            <span className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+              🖨️ Impr. automática
+            </span>{" "}
+            no topo controla se a impressão dispara ao clicar em <strong>Confirmar</strong> ou aceitar pelo modal de novo pedido.
+            Clique nele para alternar entre impressão automática e manual.
+          </p>
+        </div>
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          <strong>Nota:</strong> Em navegadores comuns, a caixa de diálogo de impressão ainda pode aparecer.
+          Para impressão 100% silenciosa, use o atalho Chrome kiosk-printing abaixo.
+        </div>
+      </PageCard>
+
       {/* Como usar hoje */}
       <PageCard>
         <SectionHeading title="Como usar hoje" subtitle="Fluxo recomendado para o dia a dia." />
@@ -35,7 +58,7 @@ export default function ImpressorasPage() {
               <span className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-700">
                 🖨️ Imprimir comanda
               </span>{" "}
-              para imprimir diretamente.
+              para imprimir diretamente, ou ative a impressão automática para que ela dispare ao aceitar.
             </>,
             <>Confirme a impressão na janela do navegador. A comanda é enviada para a impressora padrão.</>,
           ].map((text, i) => (
@@ -110,11 +133,11 @@ export default function ImpressorasPage() {
             <div className="rounded-xl border border-gray-200 bg-gray-900 px-4 py-3">
               <p className="text-xs font-semibold text-gray-400 mb-1.5">Destino do atalho (Windows)</p>
               <code className="block text-xs text-green-400 break-all leading-relaxed">
-                {`"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --app=https://app.foocci.com.br/pedidos`}
+                {`"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --app=https://foocci.com.br/orders`}
               </code>
               <p className="mt-2 text-[11px] text-gray-500">
                 Se <code className="text-gray-400">--app=</code> causar problemas, substitua por:{" "}
-                <code className="text-gray-400">--kiosk --kiosk-printing https://app.foocci.com.br/pedidos</code>
+                <code className="text-gray-400">--kiosk --kiosk-printing https://foocci.com.br/orders</code>
               </p>
             </div>
 

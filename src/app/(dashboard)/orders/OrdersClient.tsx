@@ -5,6 +5,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
+import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
 
@@ -1734,6 +1735,9 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     const saved = localStorage.getItem("foocci_autoprint_on_accept");
     return saved === null ? true : saved === "true";
   });
+  // Tracks order IDs that triggered auto-print this session — prevents double-print on re-render.
+  const autoPrintGuard = useRef(createAutoPrintGuard());
+  const [printToast, setPrintToast] = useState<string | null>(null);
 
   // Manual payment confirm dialog — enriched with order context for staff review
   const [manualConfirmDialog, setManualConfirmDialog] = useState<{
@@ -1932,21 +1936,33 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   }, [filtered, statusFilter, searchQuery]);
   const selectedOrder = orders.find((o) => o.id === selectedId) ?? null;
 
-  async function persistStatus(id: string, status: OrderStatus, cancelReason?: string) {
+  async function persistStatus(id: string, status: OrderStatus, cancelReason?: string): Promise<boolean> {
     try {
-      await fetch(`/api/orders/${id}`, {
+      const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, ...(cancelReason ? { cancelReason } : {}) }),
       });
+      return res.ok;
     } catch (err) {
       console.error("[OrdersClient] status persist failed", err);
+      return false;
     }
   }
 
-  function handleAction(id: string, next: OrderStatus) {
+  function triggerAutoPrint(orderId: string) {
+    if (!autoPrintGuard.current.claim(orderId)) return;
+    printOrder(orderId);
+    setPrintToast("Impressão enviada ✓");
+    setTimeout(() => setPrintToast(null), 3000);
+  }
+
+  async function handleAction(id: string, next: OrderStatus) {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: next } : o)));
-    void persistStatus(id, next);
+    const ok = await persistStatus(id, next);
+    if (ok && autoPrintOnAccept && next === "CONFIRMED") {
+      triggerAutoPrint(id);
+    }
   }
 
   function handleCancel(id: string) {
@@ -2023,7 +2039,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       setOrders((prev) =>
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: nextStatus } : o))
       );
-      if (autoPrintOnAccept) printOrder(modalOrder.id);
+      if (autoPrintOnAccept) triggerAutoPrint(modalOrder.id);
       setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalAccepting(false);
@@ -2229,6 +2245,13 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       {reconcileToast && (
         <div className="mx-4 mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 shadow-sm">
           {reconcileToast}
+        </div>
+      )}
+
+      {/* Auto-print toast */}
+      {printToast && (
+        <div className="mx-4 mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-800 shadow-sm">
+          🖨️ {printToast}
         </div>
       )}
 
