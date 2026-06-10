@@ -7,8 +7,15 @@
  * protagonist. No metrics, no fake data.
  */
 
-import { HeartIcon, ChatIcon, RepeatIcon, TrendingUpIcon } from "./icons";
-import { DotGrid, Halo, Eyebrow, PremiumCard, MascotPanel } from "./premium";
+import { HeartIcon, ChatIcon, RepeatIcon, TrendingUpIcon, ChartIcon, SparklesIcon, UsersIcon, CheckIcon } from "./icons";
+import { DotGrid, Halo, Eyebrow, PremiumCard, MascotPanel, GradientRule } from "./premium";
+
+const TRUST = [
+  { icon: ChartIcon, label: "Foco em resultados reais" },
+  { icon: SparklesIcon, label: "Implantação rápida e simples" },
+  { icon: UsersIcon, label: "Suporte próximo e especialista" },
+  { icon: CheckIcon, label: "Segurança e conformidade" },
+];
 
 const CARDS = [
   {
@@ -71,6 +78,24 @@ export function HospitalitySection() {
                 </PremiumCard>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Trust strip — generic value statements (no metrics, no testimonials) */}
+        <div className="mt-16">
+          <GradientRule className="via-amber-200/60" />
+          <p className="mt-8 text-center text-base font-medium text-gray-700">
+            Feito para restaurantes que querem crescer com propósito e encantar sempre.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+            {TRUST.map(({ icon: Icon, label }) => (
+              <span key={label} className="inline-flex items-center gap-2 text-sm font-medium text-gray-500">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <Icon className="h-4 w-4" />
+                </span>
+                {label}
+              </span>
+            ))}
           </div>
         </div>
       </div>
