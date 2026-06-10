@@ -83,23 +83,6 @@ export async function evaluateScenario(opts: {
       : "",
   ].filter(Boolean).join("\n");
 
-  let raw: string;
-  try {
-    const response = await openai.chat.completions.create({
-      model:       EVALUATOR_MODEL,
-      messages:    [
-        { role: "system", content: EVALUATION_SYSTEM_PROMPT },
-        { role: "user",   content: userMessage },
-      ],
-      temperature: 0.1,
-      max_tokens:  600,
-    });
-    raw = response.choices[0]?.message?.content ?? "{}";
-  } catch (err) {
-    console.error("[AgentTrainingEvaluator] OpenAI error:", err);
-    throw new Error(`Evaluator OpenAI call failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
   let parsed: Partial<EvaluationScores & {
     verdict:          string;
     strengths:        string | null;
@@ -110,10 +93,28 @@ export async function evaluateScenario(opts: {
     recommendation:   string | null;
   }>;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    console.error("[AgentTrainingEvaluator] Failed to parse LLM response:", raw);
-    throw new Error(`Evaluator failed to parse GPT-4o response: ${raw.slice(0, 120)}`);
+    const response = await openai.chat.completions.create({
+      model:           EVALUATOR_MODEL,
+      messages:        [
+        { role: "system", content: EVALUATION_SYSTEM_PROMPT },
+        { role: "user",   content: userMessage },
+      ],
+      temperature:     0.1,
+      max_tokens:      600,
+      response_format: { type: "json_object" },
+    });
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    // Strip markdown fences defensively (belt + suspenders alongside json_object)
+    const clean = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    parsed = JSON.parse(clean);
+  } catch (err) {
+    console.error("[AgentTrainingEvaluator] GPT parse failed — using fallback scores:", err);
+    // Fallback: store conservative 50-point scores so the scenario stays WARN and
+    // can be re-evaluated later, rather than crashing the whole batch.
+    parsed = {
+      verdict:    "WARN",
+      weaknesses: "Avaliação GPT-4o indisponível — scores de fallback aplicados.",
+    };
   }
 
   const scoreJson: EvaluationScores = {
