@@ -95,6 +95,31 @@ export async function GET(req: NextRequest) {
     .slice(0, 5)
     .map(([category, count]) => ({ category, count }));
 
+  // WARN/FAIL backlog: scenarios in last 7 days not covered by any proposal
+  const since7d = new Date(Date.now() - 7 * 24 * 3_600_000);
+  const [recentWarnFail, recentProposals, warnFailWithoutEval] = await Promise.all([
+    prisma.agentTrainingScenario.findMany({
+      where:  { status: { in: ["WARN", "FAIL"] }, createdAt: { gte: since7d } },
+      select: { id: true },
+      take:   500,
+    }),
+    prisma.agentImprovementProposal.findMany({
+      where:  { createdAt: { gte: since7d } },
+      select: { sourceScenarioIds: true },
+    }),
+    prisma.agentTrainingScenario.count({
+      where: {
+        status:      { in: ["WARN", "FAIL"] },
+        createdAt:   { gte: since7d },
+        evaluations: { none: {} },
+      },
+    }),
+  ]);
+  const coveredIds = new Set(
+    recentProposals.flatMap((p) => (p.sourceScenarioIds as string[] | null) ?? []),
+  );
+  const unproposedWarnFail = recentWarnFail.filter((s) => !coveredIds.has(s.id)).length;
+
   return NextResponse.json({
     activeRun:                 activeRun ?? null,
     runsToday,
@@ -119,5 +144,13 @@ export async function GET(req: NextRequest) {
     scenariosToday,
     warnFailToday,
     proposalsCreatedToday,
+    // Pipeline backlog (7-day window)
+    unproposedWarnFail,
+    warnFailWithoutEval,
+    automationHealth: {
+      autoDiagnoseOnFailure: trainingConfig?.autoDiagnoseOnFailure ?? true,
+      autoCreateProposals:   trainingConfig?.autoCreateProposals   ?? true,
+      continuousEnabled:     trainingConfig?.enableContinuousTraining ?? false,
+    },
   });
 }

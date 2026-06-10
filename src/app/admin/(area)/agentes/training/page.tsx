@@ -48,6 +48,22 @@ interface DashboardData {
   scenariosToday: number;
   warnFailToday: number;
   proposalsCreatedToday: number;
+  unproposedWarnFail: number;
+  warnFailWithoutEval: number;
+  automationHealth: {
+    autoDiagnoseOnFailure: boolean;
+    autoCreateProposals: boolean;
+    continuousEnabled: boolean;
+  };
+}
+
+interface BackfillResult {
+  ok: boolean;
+  scenariosScanned?: number;
+  evaluationsCreated?: number;
+  proposalsCreated?: number;
+  proposalsSkipped?: Array<{ category: string; reason: string }>;
+  error?: string;
 }
 
 interface TrainingConfig {
@@ -158,7 +174,7 @@ const TRAINING_FLOW_STEPS = [
   { icon: "🧪", label: "Sandbox aplicado",    desc: "Testado antes de qualquer produção" },
 ];
 
-function VisaoGeralTab({ data, onRunBatch, running, onRunNightly, runningNightly, onRunMining, runningMining, onPause, onResume, onSwitchToCasos }: {
+function VisaoGeralTab({ data, onRunBatch, running, onRunNightly, runningNightly, onRunMining, runningMining, onPause, onResume, onSwitchToCasos, onBackfill, backfilling, backfillResult }: {
   data: DashboardData | null;
   onRunBatch: () => void;
   running: boolean;
@@ -169,6 +185,9 @@ function VisaoGeralTab({ data, onRunBatch, running, onRunNightly, runningNightly
   onPause: () => void;
   onResume: () => void;
   onSwitchToCasos: () => void;
+  onBackfill: () => void;
+  backfilling: boolean;
+  backfillResult: BackfillResult | null;
 }) {
   if (!data) return <div className="text-gray-500 text-sm p-4">Carregando…</div>;
 
@@ -239,6 +258,40 @@ function VisaoGeralTab({ data, onRunBatch, running, onRunNightly, runningNightly
           >
             Ver casos →
           </button>
+        </div>
+      )}
+
+      {/* Unproposed WARN/FAIL backlog alert */}
+      {data.unproposedWarnFail > 0 && (
+        <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-400">💡</span>
+              <span className="text-sm text-yellow-300">
+                <b>{data.unproposedWarnFail}</b> falha{data.unproposedWarnFail > 1 ? "s" : ""} sem proposta de melhoria
+                {data.warnFailWithoutEval > 0 && (
+                  <span className="text-yellow-500"> · {data.warnFailWithoutEval} sem diagnóstico</span>
+                )}
+              </span>
+            </div>
+            <button
+              onClick={onBackfill}
+              disabled={backfilling}
+              className="shrink-0 rounded-lg bg-yellow-800/60 px-3 py-1.5 text-xs font-semibold text-yellow-300 hover:bg-yellow-800 disabled:opacity-50 transition-colors"
+            >
+              {backfilling ? "Gerando melhorias…" : "⚡ Gerar melhorias agora"}
+            </button>
+          </div>
+          {backfillResult && (
+            <p className={`text-xs ${backfillResult.ok ? "text-green-400" : "text-red-400"}`}>
+              {backfillResult.ok
+                ? `✓ ${backfillResult.evaluationsCreated ?? 0} diagnóstico(s) + ${backfillResult.proposalsCreated ?? 0} proposta(s) criada(s)` +
+                  ((backfillResult.proposalsSkipped?.length ?? 0) > 0
+                    ? ` · ${backfillResult.proposalsSkipped!.length} pulada(s): ${backfillResult.proposalsSkipped![0]?.reason ?? ""}`
+                    : "")
+                : `Erro: ${backfillResult.error ?? "falha"}`}
+            </p>
+          )}
         </div>
       )}
 
@@ -508,6 +561,33 @@ function MelhoriasTab() {
   const [problems, setProblems]       = useState<ProblemGroup[]>([]);
   const [generatingGroup, setGeneratingGroup] = useState<string | null>(null);
   const [groupMsg, setGroupMsg]       = useState<string | null>(null);
+  const [unproposedCount, setUnproposedCount] = useState(0);
+  const [backfilling, setBackfilling]         = useState(false);
+  const [backfillMsg, setBackfillMsg]         = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/admin/training/dashboard")
+      .then((r) => r.json())
+      .then((d: { unproposedWarnFail?: number }) => setUnproposedCount(d.unproposedWarnFail ?? 0));
+  }, []);
+
+  const runBackfill = async () => {
+    setBackfilling(true);
+    setBackfillMsg(null);
+    try {
+      const res  = await fetch("/api/admin/training/backfill-proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const data = await res.json() as BackfillResult;
+      setBackfillMsg(data.ok
+        ? `✓ ${data.evaluationsCreated ?? 0} diagnóstico(s) + ${data.proposalsCreated ?? 0} proposta(s) criada(s)`
+        : `Erro: ${data.error ?? "falha"}`);
+      void load();
+      const dash = await fetch("/api/admin/training/dashboard").then((r) => r.json()) as { unproposedWarnFail?: number };
+      setUnproposedCount(dash.unproposedWarnFail ?? 0);
+    } catch {
+      setBackfillMsg("Erro: falha de rede");
+    }
+    setBackfilling(false);
+  };
 
   useEffect(() => {
     void fetch("/api/admin/training/scenarios/problems")
@@ -674,11 +754,33 @@ function MelhoriasTab() {
         ))}
       </div>
 
-      {proposals.length === 0 && filter === "PENDING_APPROVAL" && (
+      {proposals.length === 0 && filter === "PENDING_APPROVAL" && unproposedCount === 0 && (
         <div className="rounded-xl border border-dashed border-gray-700 py-10 text-center space-y-2">
           <p className="text-2xl">✓</p>
           <p className="text-sm font-semibold text-gray-300">Fila limpa</p>
           <p className="text-xs text-gray-500">Nenhuma melhoria aguardando aprovação. O agente vai gerando novas propostas conforme identifica falhas.</p>
+        </div>
+      )}
+
+      {proposals.length === 0 && filter === "PENDING_APPROVAL" && unproposedCount > 0 && (
+        <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 py-8 px-4 text-center space-y-3">
+          <p className="text-2xl">⚠</p>
+          <p className="text-sm font-semibold text-yellow-300">
+            Há {unproposedCount} WARN/FAIL sem proposta gerada
+          </p>
+          <p className="text-xs text-yellow-500">
+            Falhas foram detectadas mas ainda não viraram melhorias. Gere automaticamente:
+          </p>
+          <button
+            onClick={() => void runBackfill()}
+            disabled={backfilling}
+            className="rounded-lg bg-yellow-800/60 px-4 py-2 text-xs font-semibold text-yellow-300 hover:bg-yellow-800 disabled:opacity-50 transition-colors"
+          >
+            {backfilling ? "Gerando melhorias…" : "⚡ Gerar melhorias agora"}
+          </button>
+          {backfillMsg && (
+            <p className={`text-xs ${backfillMsg.startsWith("Erro") ? "text-red-400" : "text-green-400"}`}>{backfillMsg}</p>
+          )}
         </div>
       )}
 
@@ -2117,6 +2219,8 @@ export default function AgentTrainingPage() {
   const [runningNightly, setRunningNightly] = useState(false);
   const [runningMining, setRunningMining]   = useState(false);
   const [pendingCount, setPendingCount]     = useState(0);
+  const [backfilling, setBackfilling]       = useState(false);
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
 
   const loadDashboard = useCallback(async () => {
     const res = await fetch("/api/admin/training/dashboard");
@@ -2166,6 +2270,24 @@ export default function AgentTrainingPage() {
       body:    JSON.stringify({ enableContinuousTraining: false }),
     });
     void loadDashboard();
+  };
+
+  const triggerBackfill = async () => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const res = await fetch("/api/admin/training/backfill-proposals", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({}),
+      });
+      setBackfillResult(await res.json());
+    } catch {
+      setBackfillResult({ ok: false, error: "Falha de rede" });
+    }
+    setBackfilling(false);
+    void loadDashboard();
+    void loadPendingCount();
   };
 
   const resumeTraining = async () => {
@@ -2237,6 +2359,9 @@ export default function AgentTrainingPage() {
             onPause={pauseTraining}
             onResume={resumeTraining}
             onSwitchToCasos={() => setTab("casos")}
+            onBackfill={triggerBackfill}
+            backfilling={backfilling}
+            backfillResult={backfillResult}
           />
         )}
         {tab === "arena"         && <ArenaTab />}
