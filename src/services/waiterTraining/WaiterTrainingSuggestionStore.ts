@@ -9,8 +9,9 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { buildTrainingProposal } from "./WaiterRealCaseTrainingBuilder";
 import type { TranscriptTurn } from "@/services/simulation/types";
+import { reasonAboutWaiterCase } from "@/services/agents/reasoning/WaiterReasoningService";
+import { mapReasoningToSuggestionFields } from "./reasoningSuggestionMapping";
 
 const AGENT = "waiter";
 
@@ -35,7 +36,11 @@ function firstExcerpts(sanitizedTranscript: string | null): { customer: string |
  * Idempotent via the unique (agentSlug, sourceType, sourceId) constraint. Reads the
  * already-sanitized examples — never touches raw data.
  */
-export async function generatePendingTrainingSuggestions(agentSlug = AGENT, limit = 100): Promise<{ created: number; scanned: number }> {
+export async function generatePendingTrainingSuggestions(
+  agentSlug = AGENT,
+  limit = 100,
+  options: { useLLM?: boolean } = {},
+): Promise<{ created: number; scanned: number }> {
   const examples = await prisma.agentSimulationExample.findMany({
     where: { agentSlug, sourceType: "REAL_CONVERSATION" },
     orderBy: { createdAt: "desc" },
@@ -57,30 +62,41 @@ export async function generatePendingTrainingSuggestions(agentSlug = AGENT, limi
   for (const ex of examples) {
     if (seen.has(ex.id)) continue;
     const { customer, waiter } = firstExcerpts(ex.sanitizedTranscript);
-    const p = buildTrainingProposal({
-      scenarioType: ex.scenarioType,
-      customerIntent: ex.intent,
-      customerExcerpt: customer,
-      waiterExcerpt: waiter,
-    });
+    if (!customer) continue;
+
+    // Reasoning Layer: intent guardrails + safe context + ideal answer + coherence.
+    // Default to the deterministic path in batch (safe, cheap); admin can opt-in to LLM.
+    const reasoning = await reasonAboutWaiterCase(
+      {
+        restaurantId: ex.restaurantId,
+        customerMessage: customer,
+        waiterResponse: waiter,
+        sanitizedConversation: ex.sanitizedTranscript,
+        sourceType: "REAL_CONVERSATION",
+      },
+      { useLLM: options.useLLM ?? false },
+    ).catch(() => null);
+    if (!reasoning) continue;
+
+    const f = mapReasoningToSuggestionFields(reasoning, { customerExcerpt: customer, waiterExcerpt: waiter });
     try {
       await prisma.waiterTrainingSuggestion.create({
         data: {
           agentSlug, restaurantId: ex.restaurantId, sourceType: "REAL_CONVERSATION", sourceId: ex.id,
           status: "PENDING_REVIEW",
-          title: p.title,
-          situationSummary: p.situationSummary,
-          customerIntent: ex.intent,
-          whatHappened: waiter ? `O Waiter respondeu: “${waiter}”` : "Não há resposta registrada do Waiter neste trecho.",
-          problemDetected: p.problemDetected,
-          idealResponse: p.idealResponse,
-          trainingRule: p.trainingRule,
-          expectedImpact: p.expectedImpact,
-          suggestedActionType: p.suggestedActionType,
-          riskLevel: p.riskLevel,
+          title: f.title,
+          situationSummary: f.situationSummary,
+          customerIntent: f.customerIntent,
+          whatHappened: f.whatHappened,
+          problemDetected: f.problemDetected,
+          idealResponse: f.idealResponse,
+          trainingRule: f.trainingRule,
+          expectedImpact: f.expectedImpact,
+          suggestedActionType: f.suggestedActionType,
+          riskLevel: f.riskLevel,
           sanitizedCustomerExcerpt: customer,
           sanitizedWaiterExcerpt: waiter,
-          technicalDetails: { scenarioType: ex.scenarioType, source: "real-case-builder" } as never,
+          technicalDetails: f.technicalDetails as never,
         },
       });
       created += 1;

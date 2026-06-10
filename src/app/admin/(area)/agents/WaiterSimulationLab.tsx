@@ -26,11 +26,17 @@ import {
   TRAINING_ACTION_MICROCOPY,
 } from "@/services/simulation/waiterTrainingDisplayLabels";
 
+interface SuggestionTechDetails {
+  reasoningMode?: string; primaryIntent?: string; confidence?: number;
+  availableContextUsed?: string[]; missingContext?: string[];
+  coherence?: { verdict?: string; reason?: string }; safetyNotes?: string[];
+}
 interface TrainingSuggestionRow {
   id: string; title: string; situationSummary: string; whatHappened: string;
   problemDetected: string; idealResponse: string; trainingRule: string; expectedImpact: string;
-  suggestedActionType: string; riskLevel: string; status: string;
+  suggestedActionType: string; riskLevel: string; status: string; customerIntent: string;
   sanitizedCustomerExcerpt: string | null; sanitizedWaiterExcerpt: string | null; createdAt: string;
+  technicalDetails: SuggestionTechDetails | null;
 }
 interface SuggestionStats { total: number; pending: number; approved: number; rejected: number }
 
@@ -315,16 +321,33 @@ export function WaiterSimulationLab() {
           {suggestions.length === 0 && (
             <p className="text-[12px] text-gray-500">Nenhum caso real para revisar agora. A coleta automática traz novos casos todos os dias.</p>
           )}
-          {suggestions.map((s) => (
-            <div key={s.id} className="rounded-lg border border-sky-100 bg-sky-50/40 p-3">
-              <p className="text-xs font-bold text-gray-900">{s.title}</p>
+          {suggestions.map((s) => {
+            const td = s.technicalDetails;
+            const coherenceFail = td?.coherence?.verdict === "FAIL";
+            const used = td?.availableContextUsed ?? [];
+            const missing = td?.missingContext ?? [];
+            return (
+            <div key={s.id} className={`rounded-lg border p-3 ${coherenceFail ? "border-amber-300 bg-amber-50/50" : "border-sky-100 bg-sky-50/40"}`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-gray-900">{s.title}</span>
+                <Pill tone="blue">{s.customerIntent}</Pill>
+                {s.riskLevel === "HIGH" && <Pill tone="red">Risco alto</Pill>}
+              </div>
+              {coherenceFail && (
+                <p className="mt-1.5 rounded border border-amber-300 bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                  ⚠️ Possível classificação errada. Revisar antes de aprovar.
+                </p>
+              )}
               <dl className="mt-2 space-y-1 text-[11px] leading-snug">
+                <Row label="Intenção detectada" value={s.customerIntent} />
                 <Row label="Situação real" value={s.situationSummary} />
                 <Row label="O que aconteceu" value={s.whatHappened} />
                 <Row label="Problema" value={s.problemDetected} />
                 <Row label="Resposta ideal sugerida" value={`“${s.idealResponse}”`} strong />
                 <Row label="Treinamento que o Waiter aprenderia" value={s.trainingRule} />
                 <Row label="Impacto esperado" value={s.expectedImpact} />
+                {used.length > 0 && <Row label="Contexto usado" value={used.join(", ")} />}
+                {missing.length > 0 && <Row label="Contexto ausente (não inventado)" value={missing.join(", ")} />}
               </dl>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Btn tone="green" title={TRAINING_ACTION_MICROCOPY.APPROVED} onClick={() => void reviewSuggestion(s.id, "APPROVED")}>{trainingActionLabel("APPROVED")}</Btn>
@@ -333,10 +356,14 @@ export function WaiterSimulationLab() {
               </div>
               <details className="mt-1.5">
                 <summary className="cursor-pointer text-[10px] text-gray-400">Detalhe técnico</summary>
-                <p className="mt-0.5 text-[10px] text-gray-400">{s.suggestedActionType} · risco {s.riskLevel} · origem {fmt(s.createdAt)}</p>
+                <p className="mt-0.5 text-[10px] text-gray-400">
+                  raciocínio: {td?.reasoningMode ?? "—"} · intenção {td?.primaryIntent ?? "—"} · {s.suggestedActionType} · risco {s.riskLevel}
+                  {td?.coherence?.verdict ? ` · coerência ${td.coherence.verdict}` : ""} · {fmt(s.createdAt)}
+                </p>
               </details>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

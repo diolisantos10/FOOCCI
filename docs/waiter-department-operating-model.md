@@ -97,6 +97,26 @@ aprendizados aprovados** (`listApprovedLearnings`), reaproveitável depois para
 gerar técnica, compor uma versão Library-Assisted ou alimentar o simulador —
 **nunca injetado no runtime real automaticamente**.
 
+### Agent Reasoning Layer (v1)
+
+As propostas **não são mais template**: cada caso real passa pela **camada de
+raciocínio** (`WaiterReasoningService`) antes de virar proposta. API conectada não
+basta — o agente precisa de intenção semântica + contexto + validação:
+1. **Guardrails de intenção** (determinísticos): "Aceita Alelo Refeição?" é forçado
+   a `PAYMENT_BENEFIT_QUESTION` — nunca "cliente indeciso".
+2. **Contexto seguro** (read-only): formas de pagamento cadastradas, delivery, tom.
+   O schema **não tem vale-refeição** → o Waiter nunca afirma que aceita Alelo;
+   confirma sem inventar (entra em `missingContext`).
+3. **Resposta ideal**: LLM estruturado (`gpt-4o-mini`, JSON) quando há
+   `OPENAI_API_KEY`; senão **fallback determinístico correto por intenção**.
+4. **Coerência**: resposta fora do tema (ex.: pagamento respondido com prato) vira
+   **risco ALTO** + alerta "Possível classificação errada. Revisar antes de aprovar."
+
+A fila "Casos reais para revisar" mostra intenção detectada, contexto usado e
+ausente, e o alerta de coerência. Detalhes: `docs/agent-reasoning-layer.md`.
+**Aprovar continua não mudando o runtime.** No futuro, a mesma camada vai para
+CRM/WhatsApp/Analytics.
+
 ## O que APROVAR significa (e o que não muda)
 
 > **Aprovar não muda o atendimento real imediatamente.** A melhoria fica

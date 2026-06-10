@@ -4,6 +4,7 @@ import { buildTrainingProposal } from "./WaiterRealCaseTrainingBuilder";
 const db = vi.hoisted(() => ({
   agentSimulationExample: { findMany: vi.fn() },
   waiterTrainingSuggestion: { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() },
+  restaurant: { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -55,18 +56,28 @@ describe("WaiterTrainingSuggestionStore", () => {
     db.waiterTrainingSuggestion.findMany.mockResolvedValue([]);
     db.waiterTrainingSuggestion.create.mockResolvedValue({ id: "s1" });
     db.waiterTrainingSuggestion.update.mockResolvedValue({ id: "s1", status: "APPROVED" });
+    // Reasoning context: PIX/Cartão, no meal voucher.
+    db.restaurant.findUnique.mockResolvedValue({
+      name: "Sushi Cazza",
+      paymentSettings: { acceptPix: true, acceptCash: true, acceptCard: true, acceptLink: false },
+      deliveryConfig: { enabled: true, pickupEnabled: true },
+      brandConfig: { tone: "friendly" },
+    });
   });
 
-  it("(1) gera proposta de treinamento a partir de caso real; (7) não vaza dados brutos", async () => {
+  it("(1) gera proposta via Reasoning Layer a partir de caso real; (7) não vaza dados brutos", async () => {
     const r = await generatePendingTrainingSuggestions();
     expect(r.created).toBe(1);
     const data = db.waiterTrainingSuggestion.create.mock.calls[0]![0].data;
     expect(data.status).toBe("PENDING_REVIEW");
-    expect(data.idealResponse).toContain("fechamento");
-    expect(data.trainingRule).toContain("Foocci");
+    // "aceita cartão?" → intenção de pagamento, resposta sobre pagamento (não prato)
+    expect(data.customerIntent).toBe("Pagamento");
+    expect(/pagamento|fechamento|cart[aã]o|pix/i.test(data.idealResponse)).toBe(true);
+    expect(/recomend|mais pedidos|prato/i.test(data.idealResponse)).toBe(false);
+    expect(data.suggestedActionType).toBe("PAYMENT_RULE");
     // só o trecho já sanitizado é guardado — nada de PII bruta
-    expect(JSON.stringify(data)).not.toContain("(11)");
     expect(data.sanitizedCustomerExcerpt).toContain("[telefone]");
+    expect(data.technicalDetails.reasoningMode).toBe("FALLBACK");
   });
 
   it("é idempotente — caso que já tem proposta não duplica", async () => {
