@@ -261,25 +261,28 @@ function VisaoGeralTab({ data, onRunBatch, running, onRunNightly, runningNightly
         </div>
       )}
 
-      {/* Unproposed WARN/FAIL backlog alert */}
+      {/* Unproposed WARN/FAIL backlog — automation status */}
       {data.unproposedWarnFail > 0 && (
         <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 px-4 py-3 space-y-2">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-yellow-400">💡</span>
-              <span className="text-sm text-yellow-300">
-                <b>{data.unproposedWarnFail}</b> falha{data.unproposedWarnFail > 1 ? "s" : ""} sem proposta de melhoria
-                {data.warnFailWithoutEval > 0 && (
-                  <span className="text-yellow-500"> · {data.warnFailWithoutEval} sem diagnóstico</span>
-                )}
-              </span>
+              <div>
+                <span className="text-sm text-yellow-300">
+                  <b>{data.unproposedWarnFail}</b> falha{data.unproposedWarnFail > 1 ? "s" : ""} pendentes de proposta
+                  {data.warnFailWithoutEval > 0 && (
+                    <span className="text-yellow-500"> · {data.warnFailWithoutEval} sem diagnóstico</span>
+                  )}
+                </span>
+                <p className="text-[11px] text-yellow-600 mt-0.5">Processamento automático via cron a cada 30 min.</p>
+              </div>
             </div>
             <button
               onClick={onBackfill}
               disabled={backfilling}
-              className="shrink-0 rounded-lg bg-yellow-800/60 px-3 py-1.5 text-xs font-semibold text-yellow-300 hover:bg-yellow-800 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-yellow-700/50 px-3 py-1.5 text-xs font-semibold text-yellow-400 hover:bg-yellow-900/30 disabled:opacity-50 transition-colors"
             >
-              {backfilling ? "Gerando melhorias…" : "⚡ Gerar melhorias agora"}
+              {backfilling ? "Processando…" : "↺ Reprocessar agora"}
             </button>
           </div>
           {backfillResult && (
@@ -763,21 +766,28 @@ function MelhoriasTab() {
       )}
 
       {proposals.length === 0 && filter === "PENDING_APPROVAL" && unproposedCount > 0 && (
-        <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 py-8 px-4 text-center space-y-3">
-          <p className="text-2xl">⚠</p>
-          <p className="text-sm font-semibold text-yellow-300">
-            Há {unproposedCount} WARN/FAIL sem proposta gerada
-          </p>
-          <p className="text-xs text-yellow-500">
-            Falhas foram detectadas mas ainda não viraram melhorias. Gere automaticamente:
-          </p>
-          <button
-            onClick={() => void runBackfill()}
-            disabled={backfilling}
-            className="rounded-lg bg-yellow-800/60 px-4 py-2 text-xs font-semibold text-yellow-300 hover:bg-yellow-800 disabled:opacity-50 transition-colors"
-          >
-            {backfilling ? "Gerando melhorias…" : "⚡ Gerar melhorias agora"}
-          </button>
+        <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 py-8 px-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-400 text-xl">⚙</span>
+            <div>
+              <p className="text-sm font-semibold text-yellow-300">
+                {unproposedCount} falha{unproposedCount > 1 ? "s" : ""} em processamento automático
+              </p>
+              <p className="text-xs text-yellow-600 mt-0.5">
+                O sistema gera propostas automaticamente via cron (a cada 30 min). Nenhuma ação necessária.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={() => void runBackfill()}
+              disabled={backfilling}
+              className="rounded-lg border border-yellow-700/50 px-3 py-1.5 text-xs font-semibold text-yellow-400 hover:bg-yellow-900/30 disabled:opacity-50 transition-colors"
+            >
+              {backfilling ? "Processando…" : "↺ Reprocessar agora"}
+            </button>
+            <span className="text-[11px] text-yellow-700">ou aguarde o próximo ciclo automático</span>
+          </div>
           {backfillMsg && (
             <p className={`text-xs ${backfillMsg.startsWith("Erro") ? "text-red-400" : "text-green-400"}`}>{backfillMsg}</p>
           )}
@@ -1688,6 +1698,11 @@ function SetupCheckPanel() {
       "# Mineração (a cada 30min)",
       `Schedule: */30 * * * *`,
       `URL: POST https://foocci.com.br/api/cron/agent-training/mine-real-conversations`,
+      `Header: Authorization: Bearer $CRON_SECRET`,
+      "",
+      "# Processamento de backlog WARN/FAIL → propostas (a cada 30min)",
+      `Schedule: */30 * * * *`,
+      `URL: POST https://foocci.com.br/api/cron/agent-training/process-backlog`,
       `Header: Authorization: Bearer $CRON_SECRET`,
     ].join("\n");
     void navigator.clipboard.writeText(text);

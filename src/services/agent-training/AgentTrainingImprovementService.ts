@@ -77,6 +77,16 @@ export async function analyzeFailures(runId: string): Promise<FailureGroup[]> {
 
 // ── Generate one proposal from a group of failing scenarios ──────────────────
 
+function extractJsonFromLlmResponse(raw: string): string {
+  // Strip ```json ... ``` or ``` ... ``` markdown fences
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced?.[1]) return fenced[1].trim();
+  // Fall back to first {...} block in case of any other decoration
+  const brace = raw.match(/\{[\s\S]*\}/);
+  if (brace?.[0]) return brace[0];
+  return raw;
+}
+
 export async function generateProposal(opts: {
   runId:       string;
   agentType:   AgentType;
@@ -104,23 +114,6 @@ export async function generateProposal(opts: {
       : "",
   ].filter(Boolean).join("\n");
 
-  let raw: string;
-  try {
-    const response = await openai.chat.completions.create({
-      model:       TRAINER_MODEL,
-      messages:    [
-        { role: "system", content: TRAINER_SYSTEM_PROMPT },
-        { role: "user",   content: userMessage },
-      ],
-      temperature: 0.2,
-      max_tokens:  800,
-    });
-    raw = response.choices[0]?.message?.content ?? "{}";
-  } catch (err) {
-    console.error("[AgentTrainingImprovement] OpenAI error:", err);
-    throw new Error(`Improvement OpenAI call failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
   let parsed: {
     title?:              string;
     problemSummary?:     string;
@@ -132,11 +125,33 @@ export async function generateProposal(opts: {
     beforeScore?:        number;
     afterScoreEstimate?: number;
   };
+
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    console.error("[AgentTrainingImprovement] Failed to parse LLM response:", raw);
-    throw new Error(`Improvement failed to parse GPT-4o response: ${raw.slice(0, 120)}`);
+    const response = await openai.chat.completions.create({
+      model:           TRAINER_MODEL,
+      messages:        [
+        { role: "system", content: TRAINER_SYSTEM_PROMPT },
+        { role: "user",   content: userMessage },
+      ],
+      temperature:     0.2,
+      max_tokens:      800,
+      response_format: { type: "json_object" },
+    });
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    parsed = JSON.parse(extractJsonFromLlmResponse(raw));
+  } catch (err) {
+    // Deterministic fallback: always create a PENDING_APPROVAL proposal so the
+    // failure is visible in the queue rather than silently lost.
+    console.warn("[AgentTrainingImprovement] GPT parse failed — using fallback proposal:", err);
+    const hint = scenarios[0]?.failureSummary ?? scenarios.map((s) => s.title).join("; ");
+    parsed = {
+      title:              `Falha recorrente: ${hint.slice(0, 80)}`,
+      problemSummary:     `Proposta gerada automaticamente (análise GPT-4o indisponível). Cenários: ${scenarios.map((s) => s.title).join(", ").slice(0, 200)}.`,
+      rootCause:          scenarios[0]?.failureSummary ?? undefined,
+      proposedChangeType: "STATE_MACHINE_RULE" as ProposalChangeType,
+      riskLevel:          "MEDIUM",
+      expectedImpact:     "Requer análise humana para determinar impacto.",
+    };
   }
 
   await prisma.agentImprovementProposal.create({

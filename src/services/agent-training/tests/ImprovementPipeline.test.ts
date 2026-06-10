@@ -277,12 +277,12 @@ describe("G — backfill respects max open proposals", () => {
   });
 });
 
-// ── H. No silent failure ──────────────────────────────────────────────────────
+// ── H. No silent failure — fallback proposal created on GPT error ─────────────
 
 describe("H — proposal generation errors are captured, not swallowed", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("records skip reason when GPT call throws", async () => {
+  it("creates a fallback proposal when OpenAI call rejects (never silent failure)", async () => {
     setupDefaults({ failures: [warnScenario("s1", "UNKNOWN_INTENT")] });
     openaiMock.chat.completions.create.mockRejectedValue(new Error("rate limit"));
 
@@ -290,9 +290,13 @@ describe("H — proposal generation errors are captured, not swallowed", () => {
       runId: "run-1", agentType: "WHATSAPP_ORDERING",
     });
 
-    expect(summary.proposalsCreated).toBe(0);
-    expect(summary.skipped[0]?.category).toBe("UNKNOWN_INTENT");
-    expect(summary.skipped[0]?.reason).toContain("Erro na geração");
+    // Fallback proposal is created instead of skipping
+    expect(summary.proposalsCreated).toBe(1);
+    expect(summary.skipped).toHaveLength(0);
+    // Fallback data was passed to prisma.create
+    const createCall = prismaMock.agentImprovementProposal.create.mock.calls[0]?.[0];
+    expect(createCall?.data?.title).toContain("Falha recorrente");
+    expect(createCall?.data?.status).toBe("PENDING_APPROVAL");
   });
 });
 

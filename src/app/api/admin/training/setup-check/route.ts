@@ -21,9 +21,10 @@ import { prisma } from "@/lib/prisma";
 const CRON_BASE = "/api/cron/agent-training";
 
 const CRON_ENDPOINTS = {
-  "small-batch": `${CRON_BASE}/run-small-batch`,
-  nightly:       `${CRON_BASE}/run-nightly`,
-  mine:          `${CRON_BASE}/mine-real-conversations`,
+  "small-batch":      `${CRON_BASE}/run-small-batch`,
+  nightly:            `${CRON_BASE}/run-nightly`,
+  mine:               `${CRON_BASE}/mine-real-conversations`,
+  "process-backlog":  `${CRON_BASE}/process-backlog`,
 } as const;
 
 type CronKey = keyof typeof CRON_ENDPOINTS;
