@@ -12,8 +12,19 @@
 export * from "./core/BrainTypes";
 export * from "./core/BrainSafety";
 
-// director (governance)
+// director (governance) — persistent service is the canonical one
 export * from "./director/BrainChangeRequest";
+export {
+  createChangeRequest,
+  reviewChangeRequest,
+  approve as approveChangeRequest,
+  reject as rejectChangeRequest,
+  backlog as backlogChangeRequest,
+  markApplied,
+  markRolledBack,
+  listChangeRequests as listPersistedChangeRequests,
+  getRiskSummary,
+} from "./director/PersistentBrainDirectorService";
 export {
   submitChangeRequest,
   decideChangeRequest,

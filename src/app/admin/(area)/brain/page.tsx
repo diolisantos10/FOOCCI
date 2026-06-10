@@ -1,10 +1,13 @@
 /**
- * Admin → Brain — read-only status panel of the Foocci Brain v1.
+ * Admin → Brain — the Foocci Brain v1 panel.
  *
- * Pure server component, NO data mutation, NO client fetching: shows the
- * architecture status (what exists, who consumes it, what's next). The Brain
- * never touches the live runtime — this page is documentation that breathes.
+ * Server component for the architecture status + the Brain Director QUEUE
+ * (client component) where humans decide change requests. Deciding never applies
+ * a change — the Brain never touches the live runtime.
  */
+
+import { BrainDirectorQueue } from "./BrainDirectorQueue";
+import { AGENT_ENGINE_PREFERENCES } from "@/services/brain/engines/AIEngineRouter";
 
 const MODULES: Array<{ name: string; status: "PRONTO" | "PARCIAL" | "FUTURO"; detail: string }> = [
   { name: "Contrato cognitivo (BrainReasoningRequest/Result)", status: "PRONTO", detail: "Contrato raiz reutilizável; o Waiter já mapeia para ele." },
@@ -16,7 +19,7 @@ const MODULES: Array<{ name: string; status: "PRONTO" | "PARCIAL" | "FUTURO"; de
   { name: "Quality Gate (P0=0 antes de produção)", status: "PRONTO", detail: "Gate do Waiter exposto no contrato do Brain." },
   { name: "Evidence Layer (provas de resultado)", status: "PRONTO", detail: "Provas sanitizadas; uso comercial exige aprovação + flag pública." },
   { name: "CRM / WhatsApp / Analytics como consumidores", status: "FUTURO", detail: "Mesmo contrato, mesmos guardrails, mesmo Director." },
-  { name: "Persistência de change requests do Director", status: "FUTURO", detail: "v1 é in-memory por design — contrato antes de banco." },
+  { name: "Persistência de change requests do Director", status: "PRONTO", detail: "Solicitações são registros duráveis; fila operacional abaixo." },
 ];
 
 const AGENTS: Array<{ name: string; connected: boolean; note: string }> = [
@@ -44,6 +47,35 @@ export default function AdminBrainPage() {
         </p>
         <p className="mt-2 text-[11px] font-semibold text-green-700">
           🔒 Camada 100% segura: o Brain raciocina e propõe — nunca altera o atendimento real sozinho. Runtime intocado.
+        </p>
+      </section>
+
+      <BrainDirectorQueue />
+
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-900">⚙️ AI Engine Router</h2>
+        <p className="mt-1 text-xs text-gray-600">
+          Default atual: <strong>OpenAI · gpt-4o-mini</strong> (o mesmo de produção — nada mudou).
+          Trocar o motor de um agente <strong>exige um Change Request</strong> aprovado pelo Brain Director.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {Object.entries(AGENT_ENGINE_PREFERENCES).map(([agent, provider]) => (
+            <span key={agent} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+              {agent} → {provider}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-900">📚 Knowledge Base</h2>
+        <p className="mt-1 text-xs text-gray-600">
+          Adapter de restaurante <strong>ativo</strong> (read-only, sem PII). Contexto disponível: formas de pagamento
+          cadastradas, delivery/retirada, tamanho do cardápio, materiais da Biblioteca, evidências aprovadas.
+        </p>
+        <p className="mt-1 text-xs text-amber-700">
+          Contexto ausente conhecido: <strong>benefício refeição (Alelo/VR/Sodexo)</strong> não é cadastrável — nenhum
+          agente pode afirmar que aceita; a resposta segura é confirmar sem inventar.
         </p>
       </section>
 

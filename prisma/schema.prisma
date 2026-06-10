@@ -3509,3 +3509,35 @@ model WaiterTrainingSuggestion {
   @@index([restaurantId, status])
   @@map("waiter_training_suggestions")
 }
+
+// ── Brain Change Request — governança persistente do Foocci Brain ──────────────
+// Every structural change to the Brain becomes a durable record: proposed,
+// risk-classified, decided by a HUMAN, and only then applied elsewhere via the
+// governed path (test version + Quality Gate). Approving NEVER applies anything.
+// String fields (validated in the service) keep the migration light and additive.
+model BrainChangeRequest {
+  id                  String    @id @default(cuid())
+  businessId          String?
+  businessType        String    @default("RESTAURANT") // RESTAURANT | AGENCY | GENERIC
+  requestedByType     String // CEO | AGENT | SYSTEM | TRAINING_CENTER | BRAIN_DIRECTOR
+  requestedById       String?
+  target              String // REASONING_RULE | KNOWLEDGE_SCHEMA | AGENT_POLICY | QUALITY_GATE | TRAINING_RULE | AI_ENGINE_ROUTING | KNOWLEDGE_BASE | SIMULATION_RULE | EVIDENCE_RULE
+  summary             String
+  rationale           String
+  proposedChange      Json?
+  riskLevel           String    @default("LOW") // LOW | MEDIUM | HIGH | CRITICAL
+  status              String    @default("PENDING_APPROVAL") // DRAFT | PENDING_APPROVAL | APPROVED | REJECTED | BACKLOG | APPLIED | ROLLED_BACK
+  requiresQualityGate Boolean   @default(false)
+  runtimeImpact       String    @default("NONE") // NONE | TEST_VERSION_ONLY | PRODUCTION
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  decisionReason      String?
+  metadata            Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status, riskLevel])
+  @@index([target, status])
+  @@index([createdAt])
+  @@map("brain_change_requests")
+}

@@ -59,13 +59,41 @@ padrão de proposta+aprovação, o gate e o contrato de evidência. Cada um prec
 apenas de: (1) seu adapter de raciocínio; (2) sua extensão de Knowledge; (3) seus
 guardrails específicos.
 
+## Brain Director Governance (persistente)
+
+O Director agora é um sistema governado de verdade:
+
+- **Modelo:** `BrainChangeRequest` (tabela `brain_change_requests`, migration
+  aditiva) — businessId/Type, requestedByType (CEO/AGENT/SYSTEM/TRAINING_CENTER/
+  BRAIN_DIRECTOR), target (9 alvos: reasoning/knowledge/policy/gate/training/
+  engine-routing/knowledge-base/simulation/evidence), summary/rationale/
+  proposedChange, riskLevel, status (DRAFT→PENDING_APPROVAL→APPROVED/REJECTED/
+  BACKLOG→APPLIED/ROLLED_BACK), requiresQualityGate, runtimeImpact,
+  reviewedBy/At/decisionReason, metadata. Histórico nunca é apagado.
+- **Quem cria:** qualquer camada (CEO, Training Center, agente, sistema) — mas
+  **tudo entra PENDING_APPROVAL**; AGENT/SYSTEM jamais criam algo aprovado e
+  jamais geram risco LOW estrutural.
+- **Quem aprova:** só humano identificado (revisores "agent"/"system"/"bot"/"ai"
+  são recusados com erro). Toda decisão grava reviewedBy/reviewedAt/decisionReason.
+- **O que a aprovação FAZ:** muda status para APPROVED. Ponto.
+- **O que a aprovação NÃO faz:** não aplica a mudança, não toca prompt/runtime,
+  não ativa nada. Aplicar é um fluxo separado (versão de teste + Quality Gate +
+  ativação manual), registrado depois via `markApplied`/`markRolledBack`.
+- **Quando exige Quality Gate:** risco HIGH/CRITICAL e qualquer
+  `runtimeImpact ≠ NONE`. `PRODUCTION` força risco CRITICAL.
+- **Por que agentes não alteram o Brain:** o Brain é a arquitetura — se o
+  executor pudesse reescrever a própria governança, não haveria governança.
+- **APIs (admin):** `GET/POST /api/admin/brain/change-requests`,
+  `PATCH /api/admin/brain/change-requests/[id]` (approve/reject/backlog).
+- **Fila operacional:** seção "Brain Director — Solicitações de mudança" em
+  `/admin/brain` (pendentes, alto risco, impacto produção, últimas decisões).
+
 ## Ainda futuro (não nesta rodada)
 
-- Persistência dos change requests do Director (v1 in-memory por design);
 - CRM como segundo consumidor; WhatsApp; Analytics;
 - Engines CLAUDE/GEMINI reais no adapter (hoje só contrato + fallback);
 - Knowledge snapshot com horários detalhados/promoções;
-- UI de governança do Director (fila de change requests).
+- Fluxo de aplicação governada (APPROVED → versão de teste → APPLIED).
 
 ## Garantias verificadas por teste
 

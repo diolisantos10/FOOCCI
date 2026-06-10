@@ -4,7 +4,7 @@
  * then executed elsewhere via the governed path (test version + Quality Gate).
  */
 
-export type BrainChangeRequester = "CEO" | "AGENT" | "SYSTEM" | "TRAINING_CENTER";
+export type BrainChangeRequester = "CEO" | "AGENT" | "SYSTEM" | "TRAINING_CENTER" | "BRAIN_DIRECTOR";
 
 export type BrainChangeTarget =
   | "REASONING_RULE"
@@ -12,10 +12,20 @@ export type BrainChangeTarget =
   | "AGENT_POLICY"
   | "QUALITY_GATE"
   | "TRAINING_RULE"
-  | "AI_ENGINE_ROUTING";
+  | "AI_ENGINE_ROUTING"
+  | "KNOWLEDGE_BASE"
+  | "SIMULATION_RULE"
+  | "EVIDENCE_RULE";
 
 export type BrainChangeRisk = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-export type BrainChangeStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "BACKLOG";
+export type BrainChangeStatus =
+  | "DRAFT"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "BACKLOG"
+  | "APPLIED"
+  | "ROLLED_BACK";
 export type BrainChangeDecision = "APPROVED" | "REJECTED" | "BACKLOG";
 export type BrainRuntimeImpact = "NONE" | "TEST_VERSION_ONLY" | "PRODUCTION";
 

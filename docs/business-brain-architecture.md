@@ -54,6 +54,24 @@ entrada sanitizada (nunca PII bruta)
 7. **Fallback nunca é template errado** — sem motor, o raciocínio determinístico
    responde a intenção certa.
 
+## Brain Director Governance
+
+O ciclo de vida de uma mudança no Brain é um registro durável:
+
+```
+qualquer camada propõe (CEO, Training Center, agente, sistema)
+  → entra PENDING_APPROVAL (nunca nasce aprovado; agente nunca é risco LOW)
+  → Director classifica risco + decide se exige Quality Gate
+     (PRODUCTION ⇒ CRITICAL + gate; HIGH/CRITICAL ⇒ gate)
+  → HUMANO identificado decide: APPROVED | REJECTED | BACKLOG
+     (revisor "agent"/"system" é recusado; decisão grava quem/quando/por quê)
+  → APROVAR NÃO APLICA — aplicar é outro fluxo: versão de teste → Quality Gate
+     → ativação manual → status APPLIED (reversível → ROLLED_BACK)
+```
+
+Por que agentes não alteram o Brain: o Brain é a arquitetura. Se o executor
+pudesse reescrever a própria governança, não haveria governança.
+
 ## Contratos (resumo)
 
 - `BrainReasoningRequest/Result` — o contrato cognitivo único (intent, contexto
