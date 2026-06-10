@@ -48,7 +48,7 @@ export default function SobrePage() {
   return (
     <>
       <PageHero
-        badge="Sobre a Foocci"
+        badge="Hospitalidade digital inteligente"
         title="Tecnologia, relacionamento e hospitalidade para restaurantes criarem experiências que fidelizam."
         subtitle="A Foocci nasceu para ajudar restaurantes a transformar atendimento digital em venda, experiência e recorrência."
         primaryLabel="Ver como a Foocci funciona"
@@ -78,8 +78,9 @@ export default function SobrePage() {
               voltar, não desaparecer.
             </p>
             <p className="mt-4 text-base text-gray-500">
-              A tecnologia trabalha no bastidor. Quem aparece para o cliente é o seu
-              restaurante.
+              Tecnologia no bastidor, relacionamento no palco. O restaurante é o
+              protagonista — a Foocci é a anfitriã invisível que faz a experiência
+              acontecer.
             </p>
           </div>
         </div>

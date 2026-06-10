@@ -31,13 +31,13 @@ export const metadata: Metadata = {
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
+// V3 journey — cliente chega → pedido guiado → CRM ativo → campanha → cliente volta.
 const STEPS = [
-  { icon: QrIcon, title: "Cliente chega", desc: "Pelo WhatsApp, QR Code ou link do cardápio." },
-  { icon: SparklesIcon, title: "Foocci conduz o pedido", desc: "O cliente recebe uma experiência mais simples, visual e orientada à compra." },
-  { icon: MenuBookIcon, title: "O pedido fica mais completo", desc: "Sugestões de bebida, sobremesa e complementos podem aumentar o valor do pedido." },
-  { icon: UsersIcon, title: "O cliente entra no CRM", desc: "Histórico, dados e comportamento começam a formar uma base comercial." },
-  { icon: MegaphoneIcon, title: "O relacionamento continua", desc: "O restaurante pode criar campanhas, reativações e ações de retorno." },
-  { icon: ChartIcon, title: "O dono enxerga oportunidades", desc: "Dados simples ajudam a entender clientes, pedidos e campanhas." },
+  { icon: QrIcon, title: "Cliente chega", desc: "Recepção acolhedora e experiência personalizada desde o primeiro contato — pelo WhatsApp, QR Code ou link." },
+  { icon: SparklesIcon, title: "Pedido guiado", desc: "Cardápio inteligente e sugestões que aumentam satisfação e valor do pedido." },
+  { icon: UsersIcon, title: "CRM ativo", desc: "Dados que geram contexto e constroem relacionamentos relevantes." },
+  { icon: MegaphoneIcon, title: "Campanha", desc: "Comunicação no momento certo, com ofertas que fazem sentido." },
+  { icon: RepeatIcon, title: "Cliente volta", desc: "Experiências memoráveis criam preferência e geram recorrência natural." },
 ];
 
 const FLOW = [

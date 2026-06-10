@@ -21,6 +21,8 @@ export const DEMO_URL = "/site/demonstracao";
 /** Pre-launch CTA copy. */
 export const PRIMARY_CTA_LABEL = "Ver como a Foocci funciona";
 export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
+/** V3 hero secondary — follow-the-launch CTA (routes to the "em breve" page). */
+export const FOLLOW_LAUNCH_LABEL = "Acompanhar lançamento";
 
 /** Pre-launch messaging. */
 export const PRELAUNCH_BADGE = "Em breve para restaurantes selecionados";

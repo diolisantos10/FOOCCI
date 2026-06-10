@@ -2,6 +2,8 @@
 
 > Versão 2 · 2026-06-05 · Aplica-se a `/site`, `/site/*` e à prévia `/preview`.
 > Status: **pré-lançamento (piloto).** Correção de direção de arte (percepção de valor).
+> ⚠️ **Superada pela V3** — ver [`creative-direction-v3-hospitalidade.md`](./creative-direction-v3-hospitalidade.md).
+> Os primitivos (`premium.tsx`) e mockups criados aqui continuam em uso na V3.
 
 ## 1. Diagnóstico do problema visual anterior
 

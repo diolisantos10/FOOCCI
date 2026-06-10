@@ -3,6 +3,7 @@
  */
 
 import { SectionHeading } from "./SectionHeading";
+import { PremiumCard } from "./premium";
 
 const CARDS = [
   "Conversas que não viram pedido.",
@@ -14,20 +15,20 @@ const CARDS = [
 
 export function ProblemSection() {
   return (
-    <section aria-labelledby="problema-title" className="bg-gray-50 py-20">
+    <section aria-labelledby="problema-title" className="bg-white py-20 lg:py-24">
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <SectionHeading
           id="problema-title"
-          eyebrow="Antes da Foocci"
-          title="Seu restaurante pode estar perdendo vendas todos os dias sem perceber."
+          eyebrow="O problema"
+          title="Todos os dias, restaurantes perdem clientes que poderiam voltar."
           subtitle="Clientes desistem no WhatsApp, abandonam pedidos, esquecem de voltar e acabam comprando de outro lugar. A maioria dessas oportunidades desaparece sem registro, sem recuperação e sem relacionamento."
         />
 
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {CARDS.map((text, i) => (
-            <div
+            <PremiumCard
               key={text}
-              className={`flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-5 ring-1 ring-gray-900/[0.02] ${
+              className={`flex items-start gap-3 p-5 ${
                 i === CARDS.length - 1 ? "sm:col-span-2 lg:col-span-1" : ""
               }`}
             >
@@ -35,7 +36,7 @@ export function ProblemSection() {
                 {i + 1}
               </span>
               <p className="text-base font-medium text-gray-800">{text}</p>
-            </div>
+            </PremiumCard>
           ))}
         </div>
       </div>

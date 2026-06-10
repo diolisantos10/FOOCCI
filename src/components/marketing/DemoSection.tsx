@@ -32,10 +32,10 @@ export function DemoSection() {
   const current = TABS.find((t) => t.id === active) ?? TABS[0]!;
 
   return (
-    <section id="produto" aria-labelledby="produto-title" className="scroll-mt-20 bg-white py-20 lg:py-24">
+    <section id="produto" aria-labelledby="produto-title" className="scroll-mt-20 bg-gray-50 py-20 lg:py-24">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Produto</span>
+          <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Sistema inteligente</span>
           <h2 id="produto-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Veja a Foocci trabalhando no dia a dia do restaurante.
           </h2>
@@ -65,7 +65,7 @@ export function DemoSection() {
         </div>
 
         {/* Preview surface */}
-        <div className="mt-8 grid items-center gap-8 rounded-3xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-6 shadow-sm sm:p-10 lg:grid-cols-2 lg:gap-12">
+        <div className="mt-8 grid items-center gap-8 rounded-3xl border border-gray-200 bg-white p-6 shadow-[0_2px_4px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(15,23,42,0.22)] sm:p-10 lg:grid-cols-2 lg:gap-12">
           <div className="order-2 text-center lg:order-1 lg:text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
               {current.id}

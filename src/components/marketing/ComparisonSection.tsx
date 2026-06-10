@@ -24,7 +24,7 @@ const FOOCCI = [
 
 export function ComparisonSection() {
   return (
-    <section aria-labelledby="comparacao-title" className="bg-gray-50 py-20">
+    <section aria-labelledby="comparacao-title" className="bg-white py-20 lg:py-24">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
         <SectionHeading
           id="comparacao-title"

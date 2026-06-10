@@ -37,9 +37,9 @@ export default function DemonstracaoPage() {
   return (
     <>
       <PageHero
-        badge="Demonstração · em breve"
+        badge="Prévia · em breve"
         title="A demonstração comercial da Foocci será aberta em breve."
-        subtitle="Enquanto a Foocci está em fase piloto, você pode conhecer a proposta, os pilares e o funcionamento do sistema."
+        subtitle="Em breve, você poderá ver como a Foocci transforma atendimento, pedido e relacionamento na prática. Enquanto isso, conheça a proposta e o funcionamento do sistema."
         primaryLabel="Ver como a Foocci funciona"
         primaryHref={COMO_FUNCIONA_URL}
         secondaryLabel="Conhecer a proposta"
