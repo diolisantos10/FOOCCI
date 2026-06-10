@@ -1,0 +1,66 @@
+/**
+ * Foocci Brain — core types (v1).
+ *
+ * THE THESIS: the AI is not the product — the BRAIN is the product. The AI is the
+ * engine; the Brain is the architecture; the Brain Director is the guardian; the
+ * Knowledge Base is the truth; agents are executors; training improves; quality
+ * protects; evidence validates.
+ *
+ * This is the reusable ROOT cognitive contract every agent (Waiter, CRM,
+ * WhatsApp, Analytics, future) maps into. Specialized agents may keep richer
+ * local types, but they must be expressible as this contract.
+ */
+
+export type BusinessType = "RESTAURANT" | "AGENCY" | "GENERIC";
+
+export type BrainSourceType = "REAL_CONVERSATION" | "SIMULATION" | "MANUAL_TEST" | "SYSTEM_EVENT";
+
+export interface BrainReasoningRequest {
+  businessId: string;
+  businessType: BusinessType;
+  agentId: string;
+  agentRole: string;
+  sourceType: BrainSourceType;
+  /** ALWAYS sanitized — the Brain never receives raw PII. */
+  sanitizedInput: string;
+  currentResponse?: string;
+  contextHints?: string[];
+}
+
+export interface BrainCoherenceCheck {
+  answersUserQuestion: boolean;
+  matchesIntent: boolean;
+  doesNotInventFacts: boolean;
+  keepsBusinessObjective: boolean;
+  verdict: "PASS" | "FAIL" | "NEEDS_REVIEW";
+  reason: string;
+}
+
+export interface BrainReasoningResult {
+  primaryIntent: string;
+  secondaryIntents: string[];
+  confidence: number; // 0–1
+  customerNeed: string;
+  contextNeeded: string[];
+  availableContextUsed: string[];
+  missingContext: string[];
+  directAnswerStrategy: string;
+  idealResponse: string;
+  trainingRule: string;
+  expectedImpact: string;
+  safetyNotes: string[];
+  shouldEscalate: boolean;
+  escalationReason?: string;
+  coherenceCheck: BrainCoherenceCheck;
+  /** Hard invariant: Brain reasoning NEVER touches the live runtime. */
+  runtimeTouched: false;
+}
+
+/** The mandatory cognitive flow every Brain consumer follows. */
+export const BRAIN_COGNITIVE_FLOW = [
+  "1. Entender a intenção real (guardrails + semântica)",
+  "2. Buscar contexto verdadeiro na Knowledge Base (nunca inventar)",
+  "3. Raciocinar com o motor de IA roteado (ou fallback determinístico)",
+  "4. Validar coerência antes de qualquer saída",
+  "5. Registrar como proposta — humano aprova; runtime real só muda via versão de teste + Quality Gate",
+] as const;
