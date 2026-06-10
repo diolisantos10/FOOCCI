@@ -155,16 +155,17 @@ pausa de pedidos, confirmação de handoff.
 
 ## 10. Relação com o Foocci Brain
 
-**O WhatsApp Agent já é consumidor do Foocci Brain? NÃO.** Zero imports de
-`services/brain`. Ele tem lógica própria de intenção (`WhatsAppRoutingClassifier`,
-intents do recepcionista) que **não passa** pela Reasoning Layer, guardrails,
-coherence validator, Knowledge Base, Director, Quality Gate ou Evidence do Brain.
+> **Atualização (2026-06-10):** criado o **WhatsApp Brain Adapter v1** em
+> `src/services/whatsapp/brain/` — o WhatsApp já PODE consumir o Brain
+> (cognitivamente), mas em **shadow/off**: o webhook real ainda não o usa.
+> Detalhes em `docs/whatsapp-brain-adapter-v1.md`.
 
-**O que falta (WhatsApp Brain Adapter v1):** um adapter espelhando o
-`WaiterBrainReasoningAdapter` — `BrainReasoningRequest` (sanitizedInput =
-mensagem do cliente) → reasoning (guardrails + contexto + coerência) →
-`BrainReasoningResult` para **classificar a intenção e decidir o próximo passo**,
-sem tocar o runtime de envio.
+**O WhatsApp Agent já é consumidor do Foocci Brain? Parcial — adapter criado, em
+shadow.** O fluxo de produção ainda usa a lógica própria
+(`WhatsAppRoutingClassifier`, intents do recepcionista). O novo
+`WhatsAppBrainReasoningAdapter` reaproveita os **guardrails do Brain** (o de
+pagamento/benefício resolve o Alelo) e é exercido por diagnósticos cron-safe +
+testes — **sem** tocar envio/Evolution/pedido/Pix/runtime.
 
 **Decisões que deveriam passar pelo Brain:** cliente quer pedido; quer atendente;
 pergunta horário; pergunta pagamento (o guardrail já resolve Alelo/VR!); reclama;
