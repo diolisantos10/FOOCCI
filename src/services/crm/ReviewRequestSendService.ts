@@ -380,6 +380,12 @@ export class ReviewRequestSendService {
           },
         }),
         prisma.cRMActionLog.create({ data: logRow, select: { id: true } }),
+        // Tag conversation so it appears in the CRM "mensagens enviadas" screen.
+        // Only set if null — avoids overwriting an active contextType (e.g. CART_RECOVERY).
+        prisma.conversation.updateMany({
+          where: { id: convId, contextType: null },
+          data:  { contextType: "CRM_REVIEW" },
+        }),
       ]);
 
       return {
@@ -499,10 +505,11 @@ async function findOrCreateReviewConversation(
     data: {
       restaurantId,
       customerId,
-      channel: "WHATSAPP",
-      status: ConversationStatus.OPEN,
+      channel:      "WHATSAPP",
+      status:       ConversationStatus.OPEN,
       customerPhone: phone,
-      customerName: name,
+      customerName:  name,
+      contextType:  "CRM_REVIEW",
     },
     select: { id: true },
   });

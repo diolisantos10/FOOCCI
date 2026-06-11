@@ -4,7 +4,7 @@
  * Verifies the "CRM enviado" filter is channel-independent and that existing
  * status/channel/search filters keep working.
  *
- *   A — crm flag → contextType IN (CRM_CAMPAIGN, CRM_AUTOMATION)
+ *   A — crm flag → contextType IN (all CRM_CONTEXT_TYPES)
  *   B — crm flag works with NO channel (channel-independent)
  *   C — crm + channel can coexist (CRM is additive, not channel-bound)
  *   D — no crm flag → no contextType constraint
@@ -26,20 +26,22 @@ const TENANT = "rest_123";
 // ─── A. CRM flag → contextType filter ─────────────────────────────────────────
 
 describe("A — crm flag restricts to CRM-origin conversations", () => {
-  it("crm='1' sets contextType IN (CRM_CAMPAIGN, CRM_AUTOMATION)", () => {
+  it("crm='1' sets contextType IN (all CRM_CONTEXT_TYPES)", () => {
     const where = buildConversationWhere(TENANT, { crm: "1" });
-    expect(where.contextType).toEqual({ in: ["CRM_CAMPAIGN", "CRM_AUTOMATION"] });
+    expect(where.contextType).toEqual({ in: [...CRM_CONTEXT_TYPES] });
   });
 
-  it("CRM_CONTEXT_TYPES covers campaign and automation", () => {
+  it("CRM_CONTEXT_TYPES covers campaign, automation, review, and cart recovery", () => {
     expect(CRM_CONTEXT_TYPES).toContain("CRM_CAMPAIGN");
     expect(CRM_CONTEXT_TYPES).toContain("CRM_AUTOMATION");
+    expect(CRM_CONTEXT_TYPES).toContain("CRM_REVIEW");
+    expect(CRM_CONTEXT_TYPES).toContain("CART_RECOVERY");
   });
 
   it("any truthy crm value enables the filter", () => {
     for (const v of ["1", "SENT", "REPLIED", "CRM", "true"]) {
       const where = buildConversationWhere(TENANT, { crm: v });
-      expect(where.contextType).toEqual({ in: ["CRM_CAMPAIGN", "CRM_AUTOMATION"] });
+      expect(where.contextType).toEqual({ in: [...CRM_CONTEXT_TYPES] });
     }
   });
 });
@@ -55,7 +57,7 @@ describe("B — crm filter works without a channel", () => {
 
   it("crm set with channel null/empty → still CRM-filtered, no channel", () => {
     const where = buildConversationWhere(TENANT, { crm: "1", channel: null });
-    expect(where.contextType).toEqual({ in: ["CRM_CAMPAIGN", "CRM_AUTOMATION"] });
+    expect(where.contextType).toEqual({ in: [...CRM_CONTEXT_TYPES] });
     expect(where.channel).toBeUndefined();
   });
 });
@@ -65,7 +67,7 @@ describe("B — crm filter works without a channel", () => {
 describe("C — crm and channel can coexist", () => {
   it("crm + WHATSAPP → both constraints present", () => {
     const where = buildConversationWhere(TENANT, { crm: "1", channel: "WHATSAPP" });
-    expect(where.contextType).toEqual({ in: ["CRM_CAMPAIGN", "CRM_AUTOMATION"] });
+    expect(where.contextType).toEqual({ in: [...CRM_CONTEXT_TYPES] });
     expect(where.channel).toBe("WHATSAPP");
   });
 });
@@ -133,7 +135,7 @@ describe("G — search builds an OR", () => {
 
   it("crm + search coexist", () => {
     const where = buildConversationWhere(TENANT, { crm: "1", search: "joao" });
-    expect(where.contextType).toEqual({ in: ["CRM_CAMPAIGN", "CRM_AUTOMATION"] });
+    expect(where.contextType).toEqual({ in: [...CRM_CONTEXT_TYPES] });
     expect(Array.isArray(where.OR)).toBe(true);
   });
 });

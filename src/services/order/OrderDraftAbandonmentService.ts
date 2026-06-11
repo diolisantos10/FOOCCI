@@ -113,13 +113,16 @@ export class OrderDraftAbandonmentService {
         continue;
       }
 
-      // Rule 4: a real order was placed after the draft was last updated
+      // Rule 4: a real order was placed at or around the time of this draft session.
+      // 30-min lookback guards against draft.updatedAt being bumped a few seconds
+      // AFTER order creation (same fix as OrderDraftRecoverySendService Rule 7).
+      const rule4Lookback = new Date(draft.updatedAt.getTime() - 30 * 60_000);
       const recentOrder = await prisma.order.findFirst({
         where: {
           restaurantId: draft.restaurantId,
           customerId:   draft.customerId,
           status:       { not: "CANCELLED" },
-          createdAt:    { gt: draft.updatedAt },
+          createdAt:    { gte: rule4Lookback },
         },
         select: { id: true },
       });

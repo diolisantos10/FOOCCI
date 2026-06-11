@@ -17,7 +17,12 @@
 import { Channel, ConversationStatus, Prisma } from "@prisma/client";
 
 /** Conversation.contextType values that mark a CRM-origin outbound conversation. */
-export const CRM_CONTEXT_TYPES = ["CRM_CAMPAIGN", "CRM_AUTOMATION"] as const;
+export const CRM_CONTEXT_TYPES = [
+  "CRM_CAMPAIGN",
+  "CRM_AUTOMATION",
+  "CRM_REVIEW",    // review-request sends (ReviewRequestSendService)
+  "CART_RECOVERY", // abandoned-cart recovery (OrderDraftRecoverySendService)
+] as const;
 
 export interface ConversationListFilters {
   status?:  string | null;
