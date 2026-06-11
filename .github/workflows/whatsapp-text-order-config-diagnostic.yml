@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — CONFIG diagnostic (read-only, manual)
+#
+# Reads the live readiness state for the controlled text-order test:
+# resolved config (enabled/mode/paused/allowlist count), official payment
+# options, sample products, optional saved-address availability for a test
+# phone (boolean only), risk level and canRunReplyOnly / canRunFullTest.
+# NEVER changes config, NEVER adds to the allowlist, NEVER switches mode.
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order Config Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug (ex.: sushi-cazza)"
+        required: true
+        default: "sushi-cazza"
+      phone:
+        description: "Optional test phone — checked against allowlist + saved address (booleans only, never logged)"
+        required: false
+        default: ""
+
+jobs:
+  config-diagnostic:
+    name: "Config Diagnostic (read-only)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "diag=${BASE_URL}/api/cron/whatsapp/text-order-config-diagnostic" >> "$GITHUB_OUTPUT"
+
+      - name: "Run config diagnostic (read-only)"
+        env:
+          URL: ${{ steps.params.outputs.diag }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          PHONE: ${{ inputs.phone }}
+        run: |
+          BODY=$(jq -nc --arg slug "$SLUG" --arg phone "$PHONE" \
+            '{restaurantSlug: $slug} + (if $phone != "" then {phone: $phone} else {} end)')
+          set +e
+          curl --connect-timeout 20 --max-time 120 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/diag.json -w "%{http_code}" > /tmp/dcode.txt
+          set -e
+          HTTP=$(cat /tmp/dcode.txt)
+          OK=$(jq -r '.ok' /tmp/diag.json 2>/dev/null)
+          echo "← HTTP                       : $HTTP"
+          echo "← ok                         : $OK"
+          echo "← restaurantName             : $(jq -r '.restaurantName' /tmp/diag.json)"
+          echo "← featureEnabled             : $(jq -r '.featureEnabled' /tmp/diag.json)"
+          echo "← globalKillSwitch / pause   : $(jq -r '.globalKillSwitch' /tmp/diag.json) / $(jq -r '.globalPause' /tmp/diag.json)"
+          echo "← paused                     : $(jq -r '.paused' /tmp/diag.json)"
+          echo "← mode                       : $(jq -r '.mode' /tmp/diag.json)"
+          echo "← scope                      : $(jq -r '.scope' /tmp/diag.json)"
+          echo "← allowlistCount             : $(jq -r '.allowlistCount' /tmp/diag.json)"
+          echo "← phoneInAllowlist           : $(jq -r '.phoneInAllowlist' /tmp/diag.json)"
+          echo "← paymentOptionsEnabled      : $(jq -r '.paymentOptionsEnabled' /tmp/diag.json) (pix=$(jq -r '.pixEnabled' /tmp/diag.json) cash=$(jq -r '.cashEnabled' /tmp/diag.json) card=$(jq -r '.cardEnabled' /tmp/diag.json))"
+          echo "← sampleProductsAvailable    : $(jq -r '.sampleProductsAvailable' /tmp/diag.json)"
+          echo "← savedAddressForTestPhone   : $(jq -r '.savedAddressAvailableForTestCustomer' /tmp/diag.json)"
+          echo "← riskLevel                  : $(jq -r '.riskLevel' /tmp/diag.json)"
+          echo "← canRunReplyOnly            : $(jq -r '.canRunReplyOnly' /tmp/diag.json)"
+          echo "← canRunFullTest             : $(jq -r '.canRunFullTest' /tmp/diag.json)"
+          echo "── falta para REPLY_ONLY ──"
+          jq -r '.missingForReplyOnly[]? | "  • " + .' /tmp/diag.json 2>/dev/null || true
+          echo "── falta para FULL_TEST ──"
+          jq -r '.missingForFullTest[]? | "  • " + .' /tmp/diag.json 2>/dev/null || true
+          echo "── rollback (30s) ──"
+          jq -r '.rollbackSteps[]? | "  • " + .' /tmp/diag.json 2>/dev/null || true
+          RUNTIME_TOUCHED=$(jq -r '.runtimeTouched' /tmp/diag.json 2>/dev/null)
+          echo "← runtimeTouched             : $RUNTIME_TOUCHED"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::config diagnostic non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$OK" != "true" ]]; then echo "::error::config diagnostic ok=$OK (restaurante não encontrado?)"; exit 1; fi
+          if [[ "$RUNTIME_TOUCHED" != "false" ]]; then echo "::error::runtimeTouched must be false"; exit 1; fi
+          echo "✅ Config diagnostic concluído — somente leitura, nada foi alterado."
