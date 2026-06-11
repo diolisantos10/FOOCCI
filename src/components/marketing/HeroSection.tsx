@@ -1,44 +1,63 @@
 /**
- * Hero (home) — Creative Direction V3 "Hospitalidade digital inteligente".
+ * Hero (home) — implements the APPROVED MOCKUP (official art direction).
  * Server component. Pre-launch.
  *
- * Left: eyebrow + the emotional essence as the headline, official definition as
- * subheadline, pre-launch CTAs and pilot note. Right: the mascot as a LARGE host
- * standing on a counter in a warm, restaurant-inspired CSS atmosphere (amber
- * gradient + soft "pendant light" bokeh + counter), greeting with a short speech
- * bubble, with the F anagram as a brand object. No photos, no fake data/metrics.
+ * Left: orange-rule eyebrow, essence headline, bold-segment subheadline, pill
+ * CTAs with icons (play / calendar), pilot microcopy. Right: warm restaurant
+ * scene with the mascot as a LARGE host standing BEHIND the counter, speech
+ * bubble on his left and the black F tile on the counter — exactly as in the
+ * mockup. The restaurant photograph renders automatically from the official
+ * asset slot (`SITE_ASSETS.heroRestaurant`) once the file is delivered; until
+ * then a faithful warm fallback keeps the same composition. No fake data.
  */
 
 import Image from "next/image";
 import { PrimaryCta, SecondaryCta } from "./Cta";
-import { PRELAUNCH_BADGE, FOLLOW_LAUNCH_LABEL, DEMO_URL } from "./config";
-import { RepeatIcon, HeartIcon } from "./icons";
-import { Eyebrow, BrandBadge } from "./premium";
+import { FOLLOW_LAUNCH_LABEL, DEMO_URL } from "./config";
+import { PlayCircleIcon, CalendarIcon } from "./icons";
+import { Eyebrow } from "./premium";
+import { hasAsset, SITE_ASSETS } from "./siteAssets";
 
 export function HeroSection() {
   return (
     <section aria-labelledby="hero-title" className="relative overflow-hidden bg-white">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-10 lg:min-h-[38rem] lg:grid-cols-2 lg:gap-8 lg:px-8 lg:pb-20 lg:pt-16">
-        {/* ── Left: emotional message ─────────────────────────────────────────── */}
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-10 lg:min-h-[37rem] lg:grid-cols-[1fr_1.05fr] lg:gap-6 lg:px-8 lg:pb-20 lg:pt-14">
+        {/* ── Left: message (per mockup) ─────────────────────────────────────── */}
         <div className="relative z-10 text-center lg:max-w-xl lg:text-left">
-          <Eyebrow>Hospitalidade digital inteligente</Eyebrow>
+          <span className="inline-flex items-center gap-3">
+            <span aria-hidden className="hidden h-0.5 w-6 rounded-full bg-brand-500 lg:block" />
+            <Eyebrow>Hospitalidade digital inteligente</Eyebrow>
+          </span>
 
           <h1
             id="hero-title"
-            className="mt-4 text-[2.2rem] font-semibold leading-[1.06] tracking-tight text-[#0B0B0B] sm:text-[2.9rem] lg:text-[3.5rem]"
+            className="mt-4 text-[2.2rem] font-semibold leading-[1.08] tracking-tight text-[#0B0B0B] sm:text-[2.8rem] lg:text-[3.3rem]"
           >
             Transformando pedidos em experiências que fazem{" "}
             <span className="text-brand-500">clientes voltarem.</span>
           </h1>
 
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-gray-600 sm:text-lg lg:mx-0">
-            Foocci é o sistema inteligente de vendas, relacionamento e fidelização que
-            coloca seu restaurante no centro da experiência do cliente.
+            Foocci é o{" "}
+            <strong className="font-semibold text-gray-800">
+              sistema inteligente de vendas, relacionamento e fidelização
+            </strong>{" "}
+            que coloca seu restaurante no centro da experiência do cliente.
           </p>
 
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
-            <PrimaryCta className="w-full sm:w-auto" />
-            <SecondaryCta label={FOLLOW_LAUNCH_LABEL} href={DEMO_URL} className="w-full sm:w-auto" />
+            <PrimaryCta
+              className="w-full gap-2.5 sm:w-auto"
+              withArrow={false}
+              label="Ver como a Foocci funciona"
+              icon={<PlayCircleIcon className="h-5 w-5" />}
+            />
+            <SecondaryCta
+              className="w-full gap-2.5 sm:w-auto"
+              label={FOLLOW_LAUNCH_LABEL}
+              href={DEMO_URL}
+              icon={<CalendarIcon className="h-5 w-5 text-gray-500" />}
+            />
           </div>
 
           <p className="mt-4 text-sm text-gray-500">
@@ -46,75 +65,83 @@ export function HeroSection() {
           </p>
         </div>
 
-        {/* ── Right: the host scene ───────────────────────────────────────────── */}
+        {/* ── Right: host scene (per mockup) ─────────────────────────────────── */}
         <HostScene />
       </div>
     </section>
   );
 }
 
-/* ── Host scene — warm restaurant atmosphere (CSS) + the mascot as host ────────── */
+/* ── Host scene — restaurant ambience, large mascot BEHIND the counter ───────── */
+
+const COUNTER_H = "24%"; // counter band height ≈ mockup proportion
 
 function HostScene() {
+  const photo = hasAsset(SITE_ASSETS.heroRestaurant);
+
   return (
-    <div className="relative mx-auto w-full max-w-xl">
-      {/* Warm restaurant atmosphere */}
-      <div className="relative h-[26rem] overflow-hidden rounded-[2.25rem] bg-gradient-to-b from-[#f7e7d2] via-[#fbf1e6] to-white ring-1 ring-black/[0.04] shadow-[0_2px_4px_rgba(15,23,42,0.04),0_30px_70px_-30px_rgba(120,72,20,0.45)] sm:h-[30rem] lg:h-[34rem]">
-        {/* warm wash + vignette */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-brand-100/40 via-transparent to-amber-100/30" />
-        {/* "pendant light" bokeh */}
-        <div aria-hidden className="pointer-events-none absolute -top-6 left-8 h-24 w-24 rounded-full bg-amber-200/60 blur-2xl" />
-        <div aria-hidden className="pointer-events-none absolute top-2 left-1/2 h-16 w-16 -translate-x-1/2 rounded-full bg-orange-200/60 blur-2xl" />
-        <div aria-hidden className="pointer-events-none absolute -top-4 right-10 h-20 w-20 rounded-full bg-amber-300/50 blur-2xl" />
-        <div aria-hidden className="pointer-events-none absolute top-20 right-6 h-2.5 w-2.5 rounded-full bg-amber-400/70 shadow-[0_0_24px_8px_rgba(251,191,36,0.45)]" />
-        <div aria-hidden className="pointer-events-none absolute top-12 left-12 h-2 w-2 rounded-full bg-orange-400/70 shadow-[0_0_20px_7px_rgba(251,146,60,0.45)]" />
+    <div className="relative mx-auto w-full max-w-2xl">
+      <div className="relative h-[26rem] overflow-hidden rounded-[2.25rem] sm:h-[30rem] lg:h-[33rem]">
+        {/* Background: official restaurant photo (slot) or faithful warm fallback */}
+        {photo ? (
+          <Image
+            src={`/${SITE_ASSETS.heroRestaurant}`}
+            alt=""
+            aria-hidden
+            fill
+            priority
+            sizes="(min-width: 1024px) 50vw, 100vw"
+            className="object-cover object-right"
+          />
+        ) : (
+          <>
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-[#f6e6d1] via-[#fbf1e6] to-[#f4e3cc]" />
+            <div aria-hidden className="pointer-events-none absolute -top-8 left-10 h-24 w-24 rounded-full bg-amber-200/60 blur-2xl" />
+            <div aria-hidden className="pointer-events-none absolute -top-4 right-14 h-20 w-20 rounded-full bg-orange-200/60 blur-2xl" />
+            <div aria-hidden className="pointer-events-none absolute top-16 right-8 h-2.5 w-2.5 rounded-full bg-amber-400/70 shadow-[0_0_24px_8px_rgba(251,191,36,0.45)]" />
+            {/* counter (fallback only — the photo already contains it) */}
+            <div aria-hidden className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-[#e9d4b7] to-[#d9bf9b]" style={{ height: COUNTER_H }} />
+            <div aria-hidden className="absolute inset-x-0 h-1 bg-white/60" style={{ bottom: COUNTER_H }} />
+          </>
+        )}
 
-        {/* pre-launch badge */}
-        <BrandBadge className="absolute left-5 top-5 z-30 bg-white/85 backdrop-blur">{PRELAUNCH_BADGE}</BrandBadge>
+        {/* soft white fade into the text column (per mockup) */}
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-white via-white/60 to-transparent" />
 
-        {/* counter / balcão */}
-        <div aria-hidden className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-[#e9d4b7] to-[#dcc3a0]" />
-        <div aria-hidden className="absolute inset-x-0 bottom-[6.5rem] h-px bg-white/50" />
-        <div aria-hidden className="absolute inset-x-6 bottom-[5.6rem] h-10 rounded-b-[2rem] bg-black/[0.04] blur-md" />
+        {/* Mascot — large host, legs clipped by the counter line ("behind the bar") */}
+        <div aria-hidden className="absolute inset-x-0 top-0 overflow-hidden" style={{ bottom: COUNTER_H }}>
+          <Image
+            src="/brand/foocci/foocci-mascot-cutout.png"
+            alt=""
+            width={196}
+            height={321}
+            priority
+            className="absolute -bottom-10 left-1/2 h-[19rem] w-auto -translate-x-[34%] sm:-bottom-12 sm:h-[23rem] lg:h-[26rem]"
+          />
+        </div>
+        <span className="sr-only">Mascote da Foocci recebendo no balcão do restaurante</span>
 
-        {/* the host — large mascot (transparent cutout) */}
-        <Image
-          src="/brand/foocci/foocci-mascot-cutout.png"
-          alt="Mascote da Foocci, anfitrião da marca"
-          width={196}
-          height={321}
-          priority
-          className="absolute bottom-10 left-1/2 z-20 h-[19rem] w-auto -translate-x-[58%] drop-shadow-[0_18px_22px_rgba(120,72,20,0.28)] sm:h-[22rem] lg:bottom-12 lg:h-[25rem]"
-        />
-
-        {/* speech bubble — the host greets */}
-        <div className="absolute left-3 top-24 z-30 max-w-[210px] rounded-2xl rounded-bl-sm border border-black/5 bg-white/95 p-4 text-left shadow-[0_14px_36px_-14px_rgba(120,72,20,0.45)] ring-1 ring-black/[0.03] backdrop-blur sm:left-6 sm:top-28 lg:max-w-[240px]">
-          <p className="text-sm font-semibold text-[#0B0B0B]">
+        {/* Speech bubble — left of the host, tail pointing to him (per mockup) */}
+        <div className="absolute left-2 top-[16%] z-30 max-w-[225px] rounded-2xl bg-white/97 p-4 text-left shadow-[0_16px_40px_-16px_rgba(120,72,20,0.45)] ring-1 ring-black/[0.04] sm:left-6 sm:top-[18%] sm:max-w-[250px] sm:p-5">
+          <span aria-hidden className="absolute -right-1.5 top-9 h-3.5 w-3.5 rotate-45 bg-white/97" />
+          <p className="text-base font-semibold text-[#0B0B0B] sm:text-lg">
             Olá! Sou a <span className="text-brand-500">Foocci</span>.
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-gray-600">
+          <p className="mt-1.5 text-[13px] leading-relaxed text-gray-600 sm:text-sm">
             Estou aqui para ajudar seu restaurante a criar conexões que geram resultados.
           </p>
         </div>
 
-        {/* F anagram tile on the counter */}
-        <span className="absolute bottom-12 right-8 z-20 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-[0_14px_30px_-12px_rgba(120,72,20,0.5)] ring-1 ring-black/[0.05] sm:right-12 lg:bottom-14">
-          <Image src="/brand/foocci/foocci-anagram.png" alt="" aria-hidden width={256} height={256} className="h-11 w-11" />
-        </span>
-
-        {/* outcome chips — relationship → return (approved labels, no numbers) */}
-        <span className="absolute right-5 top-1/2 z-30 hidden items-center gap-2 rounded-xl border border-black/5 bg-white/95 px-3 py-2 shadow-[0_10px_28px_-12px_rgba(120,72,20,0.45)] ring-1 ring-black/[0.03] backdrop-blur lg:flex">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-            <RepeatIcon className="h-4 w-4" />
-          </span>
-          <span className="text-xs font-semibold text-gray-800">Cliente recorrente</span>
-        </span>
-        <span className="absolute left-6 top-1/2 z-20 hidden items-center gap-2 rounded-xl border border-black/5 bg-white/95 px-3 py-2 shadow-[0_10px_28px_-12px_rgba(120,72,20,0.4)] ring-1 ring-black/[0.03] backdrop-blur lg:flex">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-            <HeartIcon className="h-4 w-4" />
-          </span>
-          <span className="text-xs font-semibold text-gray-800">Atendimento com contexto</span>
-        </span>
+        {/* Black F tile standing on the counter (per mockup) */}
+        <Image
+          src="/brand/foocci/foocci-anagram.png"
+          alt=""
+          aria-hidden
+          width={256}
+          height={256}
+          className="absolute right-[7%] z-20 h-16 w-16 drop-shadow-[0_14px_18px_rgba(80,48,12,0.35)] sm:h-20 sm:w-20"
+          style={{ bottom: `calc(${COUNTER_H} - 1.25rem)` }}
+        />
       </div>
     </div>
   );

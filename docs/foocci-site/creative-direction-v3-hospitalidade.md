@@ -107,3 +107,37 @@ risco", "Campanha enviada", "Pedido recuperado", "Histórico salvo").
 Ativação de vendas (WhatsApp/lead/demo), preços reais, troca `noindex`→`index`,
 `/site` → `/`, assets vetoriais (SVG) e variação escura do mascote, revisão jurídica
 final e analytics — ver `pre-launch-mode-v1.md` e `visual-signoff-checklist-v1.md`.
+
+---
+
+## 11. Mockup oficial + contrato de assets (atualização)
+
+O **print aprovado** (header com "Entrar" + "Acompanhar lançamento", hero com mascote
+anfitrião GRANDE atrás do balcão em restaurante real, jornada com medalhões
+fotográficos, faixa "Mais que tecnologia, hospitalidade" e trust strip) é a
+**referência principal de layout/composição/atmosfera**. A implementação segue o
+print sem reinterpretar.
+
+As **fotografias oficiais** entram por *asset slots* (`siteAssets.ts`). Basta colocar
+os arquivos em `public/brand/foocci/site/` com estes nomes — sem mudar código:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `hero-restaurant.jpg` | cena vazia do restaurante c/ balcão curvo (fundo do hero, ~16:9) |
+| `journey-1-cliente.jpg` | mulher sorrindo com celular |
+| `journey-2-pedido.jpg` | mão segurando o app Foocci |
+| `journey-3-crm.jpg` | homem com celular |
+| `journey-4-campanha.jpg` | prato premium (salmão) |
+| `journey-5-volta.jpg` | casal jantando |
+| `owner-tablet.jpg` | dono/chef com tablet (institucional) |
+| `app-phone.jpg` | app Foocci no celular em ambiente de restaurante |
+
+Enquanto um slot não existe, o componente usa um *fallback fiel* (mascote/anagrama
+oficiais + tons quentes) com a MESMA composição — nada quebra, nada genérico.
+
+Desvios conscientes do print (regras de negócio do pré-lançamento):
+- **Nav** mantém as rotas reais (`Como funciona / Soluções / CRM / Preços / Demonstração`);
+  os rótulos do print ("Recursos", "Conteúdo", "Empresa") apontariam para páginas que
+  não existem ainda.
+- Pílula **EM BREVE** no header e microcopy de piloto permanecem (obrigatórios no
+  pré-lançamento), mesmo não aparecendo no print.

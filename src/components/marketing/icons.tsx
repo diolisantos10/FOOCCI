@@ -185,3 +185,21 @@ export function WhatsAppIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function PlayCircleIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10.2 8.8 15 12l-4.8 3.2V8.8Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function CalendarIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+    </svg>
+  );
+}

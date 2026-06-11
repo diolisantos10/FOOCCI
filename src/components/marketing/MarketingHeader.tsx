@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LOGIN_URL, NAV_LINKS, PRIMARY_CTA_LABEL, COMO_FUNCIONA_URL } from "./config";
+import { LOGIN_URL, NAV_LINKS, FOLLOW_LAUNCH_LABEL, DEMO_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
@@ -58,15 +58,18 @@ export function MarketingHeader() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-4 lg:flex">
-          <Link href={LOGIN_URL} className={`rounded-md text-sm font-semibold text-gray-700 transition-colors hover:text-brand-600 ${FOCUS}`}>
+        <div className="hidden items-center gap-3 lg:flex">
+          <Link
+            href={LOGIN_URL}
+            className={`inline-flex items-center rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-gray-300 hover:bg-gray-50 ${FOCUS}`}
+          >
             Entrar
           </Link>
           <Link
-            href={COMO_FUNCIONA_URL}
-            className={`inline-flex items-center rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 ${FOCUS}`}
+            href={DEMO_URL}
+            className={`inline-flex items-center rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 ${FOCUS}`}
           >
-            {PRIMARY_CTA_LABEL}
+            {FOLLOW_LAUNCH_LABEL}
           </Link>
         </div>
 
@@ -103,11 +106,11 @@ export function MarketingHeader() {
                 Entrar
               </Link>
               <Link
-                href={COMO_FUNCIONA_URL}
+                href={DEMO_URL}
                 onClick={() => setOpen(false)}
-                className={`inline-flex items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600 ${FOCUS}`}
+                className={`inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600 ${FOCUS}`}
               >
-                {PRIMARY_CTA_LABEL}
+                {FOLLOW_LAUNCH_LABEL}
               </Link>
             </div>
           </nav>

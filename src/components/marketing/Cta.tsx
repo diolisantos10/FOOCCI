@@ -22,6 +22,8 @@ type BtnProps = {
   href?: string;
   withArrow?: boolean;
   block?: boolean;
+  /** Optional leading icon (mockup: play / calendar). */
+  icon?: React.ReactNode;
 };
 
 export function PrimaryCta({
@@ -30,6 +32,7 @@ export function PrimaryCta({
   href = COMO_FUNCIONA_URL,
   withArrow = true,
   block = false,
+  icon,
 }: BtnProps) {
   return (
     <a
@@ -38,6 +41,7 @@ export function PrimaryCta({
         block ? "w-full" : ""
       } ${className}`}
     >
+      {icon}
       {label}
       {withArrow && <ArrowRightIcon className="h-4 w-4" />}
     </a>
@@ -50,6 +54,7 @@ export function SecondaryCta({
   href = PROPOSTA_URL,
   withArrow = false,
   block = false,
+  icon,
 }: BtnProps) {
   return (
     <a
@@ -58,6 +63,7 @@ export function SecondaryCta({
         block ? "w-full" : ""
       } ${className}`}
     >
+      {icon}
       {label}
       {withArrow && <ArrowRightIcon className="h-4 w-4" />}
     </a>
