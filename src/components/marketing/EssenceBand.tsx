@@ -25,7 +25,7 @@ export function EssenceBand() {
       />
       <div className="relative mx-auto max-w-3xl px-5 text-center lg:px-8">
         <span className="text-sm font-semibold uppercase tracking-widest text-brand-400">
-          A essência da Foocci
+          A essência do Foocci
         </span>
         <h2
           id="essence-title"

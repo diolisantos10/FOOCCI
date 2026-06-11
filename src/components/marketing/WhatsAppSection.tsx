@@ -70,7 +70,7 @@ export function WhatsAppSection() {
             WhatsApp como canal de relacionamento e pedido direto.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            A Foocci ajuda a organizar conversas, direcionar clientes, registrar
+            O Foocci ajuda a organizar conversas, direcionar clientes, registrar
             histórico e manter oportunidades vivas.
           </p>
           <ul className="mt-6 space-y-3">

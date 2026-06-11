@@ -59,11 +59,11 @@ cliente." migrou para a seção comercial.
 - **Eyebrow:** "Hospitalidade digital inteligente"
 - **H1:** "Transformando pedidos em experiências que fazem clientes voltarem."
 - **Sub:** definição oficial (vendas, relacionamento e fidelização… conexões… recorrência)
-- **CTAs:** "Ver como a Foocci funciona" (primário) · "Acompanhar lançamento" (secundário → `/site/demonstracao`)
+- **CTAs:** "Ver como o Foocci funciona" (primário) · "Acompanhar lançamento" (secundário → `/site/demonstracao`)
 - **Microcopy:** "Produto em fase piloto. Lançamento comercial em breve."
 - **Direita — cena do anfitrião:** painel quente inspirado em restaurante (gradiente
   brand-50→branco, luz âmbar, dot-grid), **palco neutro** onde o mascote fica (a placa
-  clara do PNG funde sem emenda), **balão de fala** ("Olá! Sou a Foocci." / "Estou aqui
+  clara do PNG funde sem emenda), **balão de fala** ("Olá! Sou o Foocci." / "Estou aqui
   para ajudar seu restaurante a criar conexões que geram resultados."), **anagrama F**
   como objeto de marca, chip "Cliente recorrente" e badge "Em breve para restaurantes
   selecionados". Sem foto pesada — atmosfera 100% CSS + assets oficiais.
@@ -90,7 +90,7 @@ Nunca em fundo escuro (sem variação dark), nunca esticado, nunca infantil.
 ## 8. Como mantém o pré-lançamento
 
 Gate por senha (`MARKETING_PREVIEW_PASSWORD`) + `noindex` intactos; `/preview` → `/site`;
-CTAs apenas educacionais ("Ver como a Foocci funciona", "Acompanhar lançamento",
+CTAs apenas educacionais ("Ver como o Foocci funciona", "Acompanhar lançamento",
 "Conhecer a proposta"); **sem** WhatsApp, lead, preço, métrica ou depoimento; `/site`
 não movido para `/`. A seção comercial fala de faturamento **sem números** — apenas
 consequência de relacionamento + labels aprovados ("Cliente recorrente", "Cliente em
@@ -123,7 +123,7 @@ As **fotografias oficiais** entram por *asset slots* (`siteAssets.ts`), em
 
 | Arquivo | Conteúdo | Uso |
 |---|---|---|
-| `hero-restaurant-with-mascot.png` | cena completa: restaurante + mascote anfitrião + balão "Olá! Sou a Foocci" + anagrama F | **hero da home** (render flat — composição oficial, sem reinterpretar em CSS) |
+| `hero-restaurant-with-mascot.png` | cena completa: restaurante + mascote anfitrião + balão "Olá! Sou o Foocci" + anagrama F | **hero da home** (render flat — composição oficial, sem reinterpretar em CSS) |
 | `hero-restaurant-background.png` | restaurante vazio c/ balcão curvo (sem mascote/texto) | ambiência quente atrás do hero das **páginas internas** (`PageHero`, veladas em branco) |
 | `journey-1-cliente.jpg` | mulher sorrindo (Cliente chega) | medalhão da jornada |
 | `journey-2-pedido.jpg` | app/pedido (Pedido guiado) | medalhão da jornada |
@@ -144,3 +144,34 @@ Desvios conscientes do print (regras de negócio do pré-lançamento):
   não existem ainda.
 - Pílula **EM BREVE** no header e microcopy de piloto permanecem (obrigatórios no
   pré-lançamento), mesmo não aparecendo no print.
+
+---
+
+## 12. Voz da marca (gênero) + enriquecimento de produto (V4.1)
+
+**Gênero — Foocci é masculino.** No site público, a marca/personagem/produto é
+tratada no masculino: "o Foocci", "o sistema Foocci", "o assistente Foocci", "o
+agente Foocci". Evitar "a Foocci". O balão do hero foi corrigido para
+**"Olá! Sou o Foocci."** (ajuste cirúrgico de 1 letra no PNG — mesma arte, sem
+trocar o asset). Exceção: "a **marca** Foocci" pode permanecer feminino quando a
+frase fala explicitamente de "marca".
+
+**Enriquecimento — de "imagem + texto" para produto vivo.** Sem mudar a direção
+V4, o site ganhou prova visual de produto com componentes reutilizáveis (mockups
+CSS ilustrativos, sem dados/métricas reais, sem ações):
+
+- `FoocciProductShowcase` — celular de pedido guiado + painel de campanha/CRM +
+  chips de contexto + botão fake "Enviar campanha" (sem ação). Home e demonstração.
+- `ProductFlowCards` — 4 cards conectados (Pedido guiado · Cliente identificado ·
+  Campanha no momento certo · Oportunidade recuperada). Bloco "inteligência
+  trabalhando", logo após a jornada.
+- `RelationshipRevenuePanel` — visual da tese (relacionamento → recorrência →
+  faturamento) com nós conectados. Sobre e demonstração.
+- `MascotCallout` — mascote anfitrião institucional + callout. Sobre e como funciona.
+- `VisualStepCard` — passo numerado com ícone + visual. Jornadas/fluxos internos.
+- `InternalVisualHero` — hero de 2 colunas (texto + visual) para páginas de
+  produto (como funciona, demonstração), com o fundo de restaurante velado.
+
+Labels de interface permitidos (sem métrica/promessa falsa): Cliente identificado,
+Pedido guiado, CRM ativo, Campanha pronta, Cliente recorrente, Histórico salvo,
+Oportunidade recuperada, Sugestão inteligente.

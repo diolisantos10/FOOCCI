@@ -25,7 +25,7 @@ export function FinalCTASection() {
           Uma nova forma de vender, relacionar e fidelizar está chegando.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-gray-600">
-          A Foocci está sendo preparada para ajudar restaurantes a transformar
+          O Foocci está sendo preparado para ajudar restaurantes a transformar
           atendimento, pedidos e clientes em uma operação mais inteligente.
         </p>
 

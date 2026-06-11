@@ -2,22 +2,25 @@
  * /site/demonstracao — PRE-LAUNCH. Inherits /site/layout.tsx.
  *
  * The commercial demo is not open yet. There is intentionally NO lead form and
- * NO WhatsApp CTA here: the page presents what a future demo will show, gives a
- * clearly-labelled illustrative preview of the product, and routes to the
- * educational page. Nothing fakes a submission or implies availability.
+ * NO WhatsApp CTA here: the page presents a preview of the product experience
+ * (composed showcase + a three-step flow + illustrative screens) and routes to
+ * the educational page. Nothing fakes a submission or implies availability.
  */
 
 import type { Metadata } from "next";
-import { PageHero } from "@/components/marketing/PageHero";
+import { InternalVisualHero } from "@/components/marketing/InternalVisualHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
-import { CheckIcon } from "@/components/marketing/icons";
+import { CheckIcon, UsersIcon, SparklesIcon, RepeatIcon } from "@/components/marketing/icons";
 import { OrderMockup, CrmProfileMockup, InsightMockup } from "@/components/marketing/mockups";
-import { DotGrid, Halo } from "@/components/marketing/premium";
-import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { FoocciProductShowcase } from "@/components/marketing/FoocciProductShowcase";
+import { VisualStepCard } from "@/components/marketing/VisualStepCard";
+import { RelationshipRevenuePanel } from "@/components/marketing/RelationshipRevenuePanel";
+import { DotGrid, Halo, Eyebrow } from "@/components/marketing/premium";
+import { COMO_FUNCIONA_URL, PROPOSTA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
 const TITLE = "Demonstração Foocci em breve | Conheça a proposta";
 const DESCRIPTION =
-  "A demonstração comercial da Foocci será aberta em breve. Enquanto isso, conheça a proposta, os pilares e o funcionamento do sistema.";
+  "A demonstração comercial do Foocci será aberta em breve. Enquanto isso, conheça a proposta, os pilares e o funcionamento do sistema.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -25,8 +28,14 @@ export const metadata: Metadata = {
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
+const STEPS = [
+  { icon: UsersIcon, title: "Cliente escolhe", copy: "O pedido começa simples, guiado pelo cardápio do restaurante." },
+  { icon: SparklesIcon, title: "O sistema entende", copy: "O Foocci reconhece o cliente, salva o histórico e enxerga oportunidades." },
+  { icon: RepeatIcon, title: "O relacionamento continua", copy: "Campanhas e reativação no momento certo trazem o cliente de volta." },
+];
+
 const WILL_SHOW = [
-  "Como a Foocci conduz o pedido a partir do seu cardápio.",
+  "Como o Foocci conduz o pedido a partir do seu cardápio.",
   "Como o WhatsApp se torna um canal de relacionamento.",
   "Como o CRM organiza seus clientes e oportunidades.",
   "Como campanhas e reativação ajudam o cliente a voltar.",
@@ -36,25 +45,51 @@ const WILL_SHOW = [
 export default function DemonstracaoPage() {
   return (
     <>
-      <PageHero
+      <InternalVisualHero
         badge="Prévia · em breve"
-        title="A demonstração comercial da Foocci será aberta em breve."
-        subtitle="Em breve, você poderá ver como a Foocci transforma atendimento, pedido e relacionamento na prática. Enquanto isso, conheça a proposta e o funcionamento do sistema."
-        primaryLabel="Ver como a Foocci funciona"
+        title={
+          <>
+            Uma prévia da experiência <span className="text-brand-500">Foocci</span>.
+          </>
+        }
+        subtitle="Em breve, você poderá ver como o sistema Foocci transforma atendimento, pedido e relacionamento na prática. Enquanto isso, conheça a proposta e o funcionamento do sistema."
+        visual={<FoocciProductShowcase />}
+        primaryLabel="Ver como o Foocci funciona"
         primaryHref={COMO_FUNCIONA_URL}
         secondaryLabel="Conhecer a proposta"
+        secondaryHref={PROPOSTA_URL}
         note={PRELAUNCH_NOTE}
       />
 
-      {/* Illustrative product preview */}
+      {/* Three-step experience flow */}
+      <section aria-labelledby="fluxo-title" className="relative overflow-hidden bg-white py-20 lg:py-24">
+        <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <Eyebrow>Como a experiência acontece</Eyebrow>
+            <h2 id="fluxo-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+              Do pedido ao relacionamento, em três passos.
+            </h2>
+          </div>
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {STEPS.map((s, i) => (
+              <VisualStepCard key={s.title} index={i + 1} icon={s.icon} title={s.title} copy={s.copy} />
+            ))}
+          </div>
+          <div className="mt-10">
+            <RelationshipRevenuePanel />
+          </div>
+        </div>
+      </section>
+
+      {/* Illustrative product screens */}
       <section aria-labelledby="previa-title" className="relative overflow-hidden bg-gray-50 py-20 lg:py-24">
         <DotGrid className="[mask-image:radial-gradient(ellipse_at_center,black,transparent_72%)]" />
         <Halo className="left-1/2 top-0 h-64 w-[40rem] -translate-x-1/2" color="rgba(249,115,22,0.07)" />
         <div className="relative mx-auto max-w-5xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Prévia</span>
+            <Eyebrow>Prévia</Eyebrow>
             <h2 id="previa-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-              Uma prévia de como a Foocci se parece.
+              Uma prévia de como o Foocci se parece.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-gray-600">
               Pedido guiado, CRM e dados comerciais em uma só operação — pensados para
@@ -105,8 +140,8 @@ export default function DemonstracaoPage() {
       </section>
 
       <CtaBand
-        title="Quer entender se a Foocci faz sentido para o seu restaurante?"
-        label="Ver como a Foocci funciona"
+        title="Quer entender se o Foocci faz sentido para o seu restaurante?"
+        label="Ver como o Foocci funciona"
         href={COMO_FUNCIONA_URL}
       />
     </>

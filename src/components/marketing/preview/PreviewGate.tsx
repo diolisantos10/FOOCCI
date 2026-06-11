@@ -62,10 +62,10 @@ export function PreviewGate({ configured, next = "/site" }: { configured: boolea
 
         <div className="rounded-2xl border border-gray-200 bg-white p-7 shadow-sm ring-1 ring-gray-900/[0.03]">
           <h1 className="text-xl font-semibold tracking-tight text-[#0B0B0B]">
-            Prévia privada da Foocci
+            Prévia privada do Foocci
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-600">
-            Este ambiente é uma prévia interna do site da Foocci em fase de pré-lançamento.
+            Este ambiente é uma prévia interna do site do Foocci em fase de pré-lançamento.
           </p>
 
           {configured ? (

@@ -14,6 +14,7 @@ import type { Metadata } from "next";
 
 import { HeroSection } from "@/components/marketing/HeroSection";
 import { JourneySection } from "@/components/marketing/JourneySection";
+import { IntelligenceSection } from "@/components/marketing/IntelligenceSection";
 import { HospitalitySection } from "@/components/marketing/HospitalitySection";
 import { ProblemSection } from "@/components/marketing/ProblemSection";
 import { DemoSection } from "@/components/marketing/DemoSection";
@@ -55,7 +56,9 @@ export default function SitePage() {
       <HeroSection />
       {/* 2 · Jornada visual — relacionamento → recorrência */}
       <JourneySection />
-      {/* 3 · Mais que tecnologia, hospitalidade */}
+      {/* 3 · Inteligência trabalhando (produto: showcase + cards conectados) */}
+      <IntelligenceSection />
+      {/* 4 · Mais que tecnologia, hospitalidade */}
       <HospitalitySection />
       {/* 4 · Problema: restaurantes perdem relacionamento */}
       <ProblemSection />

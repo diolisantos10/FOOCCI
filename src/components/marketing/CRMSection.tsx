@@ -27,7 +27,7 @@ export function CRMSection() {
             Seus clientes não deveriam desaparecer depois do pedido.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            Com a Foocci, seu restaurante começa a construir uma base viva de clientes:
+            Com o Foocci, seu restaurante começa a construir uma base viva de clientes:
             quem comprou, quem voltou, quem sumiu e quem pode receber uma campanha especial.
           </p>
           <p className="mt-4 text-base text-gray-500">

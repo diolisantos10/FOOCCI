@@ -22,7 +22,7 @@ export function PricingTeaserSection() {
             Planos serão apresentados no lançamento comercial.
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            A Foocci está em fase piloto. Os planos oficiais serão definidos para
+            O Foocci está em fase piloto. Os planos oficiais serão definidos para
             diferentes momentos e tamanhos de operação.
           </p>
         </div>
@@ -45,7 +45,7 @@ export function PricingTeaserSection() {
         </div>
 
         <div className="mt-10 flex justify-center">
-          <PrimaryCta label="Conhecer como a Foocci funciona" href={COMO_FUNCIONA_URL} />
+          <PrimaryCta label="Conhecer como o Foocci funciona" href={COMO_FUNCIONA_URL} />
         </div>
       </div>
     </section>

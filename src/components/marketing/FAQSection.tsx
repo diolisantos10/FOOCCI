@@ -9,36 +9,36 @@ import { PlusIcon } from "./icons";
 
 const FAQS = [
   {
-    q: "A Foocci já está disponível?",
-    a: "A Foocci está em fase piloto e terá abertura comercial em breve.",
+    q: "O Foocci já está disponível?",
+    a: "O Foocci está em fase piloto e terá abertura comercial em breve.",
   },
   {
     q: "Posso contratar agora?",
-    a: "A contratação ainda não está aberta. Neste momento, o site apresenta a proposta, a visão e o funcionamento da Foocci.",
+    a: "A contratação ainda não está aberta. Neste momento, o site apresenta a proposta, a visão e o funcionamento do Foocci.",
   },
   {
     q: "Quando será o lançamento?",
     a: "O lançamento comercial será anunciado em breve.",
   },
   {
-    q: "A Foocci é um chatbot?",
-    a: "Não. A Foocci usa inteligência artificial, mas é um sistema de vendas, relacionamento e fidelização para restaurantes.",
+    q: "O Foocci é um chatbot?",
+    a: "Não. O Foocci usa inteligência artificial, mas é um sistema de vendas, relacionamento e fidelização para restaurantes.",
   },
   {
     q: "Preciso trocar meu sistema atual?",
-    a: "Não necessariamente. A Foocci pode atuar como uma camada comercial para melhorar pedido direto, atendimento e relacionamento.",
+    a: "Não necessariamente. O Foocci pode atuar como uma camada comercial para melhorar pedido direto, atendimento e relacionamento.",
   },
   {
-    q: "A Foocci funciona com WhatsApp?",
+    q: "O Foocci funciona com WhatsApp?",
     a: "Sim, o WhatsApp é um dos canais centrais da experiência Foocci, principalmente para atendimento, relacionamento e retorno de clientes.",
   },
   {
-    q: "A Foocci substitui meu atendente?",
-    a: "Não. Ela ajuda a equipe a atender melhor, vender com mais contexto e manter o restaurante no controle.",
+    q: "O Foocci substitui meu atendente?",
+    a: "Não. O assistente Foocci ajuda a equipe a atender melhor, vender com mais contexto e manter o restaurante no controle.",
   },
   {
-    q: "Ela serve para restaurante pequeno?",
-    a: "Sim. A Foocci foi pensada para simplificar vendas, relacionamento e recorrência sem exigir uma operação complexa.",
+    q: "O Foocci serve para restaurante pequeno?",
+    a: "Sim. O Foocci foi pensado para simplificar vendas, relacionamento e recorrência sem exigir uma operação complexa.",
   },
   {
     q: "Preciso entender de tecnologia?",

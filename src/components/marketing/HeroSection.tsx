@@ -5,7 +5,7 @@
  * Left: orange-rule eyebrow, essence headline, bold-segment subheadline, pill
  * CTAs with icons (play / calendar), pilot microcopy. Right: the approved scene
  * rendered as ONE composed photograph — a warm restaurant with the Foocci
- * mascot as host behind the curved counter, the "Olá! Sou a Foocci" speech
+ * mascot as host behind the curved counter, the "Olá! Sou o Foocci" speech
  * bubble and the black F tile, exactly as delivered (`SITE_ASSETS.heroComposed`).
  * Rendering the official composition flat keeps the art direction faithful — no
  * CSS reinterpretation. A warm fallback only shows if the asset is ever missing.
@@ -49,7 +49,7 @@ export function HeroSection() {
             <PrimaryCta
               className="w-full gap-2.5 sm:w-auto"
               withArrow={false}
-              label="Ver como a Foocci funciona"
+              label="Ver como o Foocci funciona"
               icon={<PlayCircleIcon className="h-5 w-5" />}
             />
             <SecondaryCta
@@ -88,7 +88,7 @@ function HostScene() {
         {composed ? (
           <Image
             src={`/${SITE_ASSETS.heroComposed}`}
-            alt="Mascote da Foocci recebendo clientes no balcão de um restaurante acolhedor, com o balão de fala: Olá! Sou a Foocci."
+            alt="Mascote do Foocci recebendo clientes no balcão de um restaurante acolhedor, com o balão de fala: Olá! Sou o Foocci."
             width={1672}
             height={941}
             priority

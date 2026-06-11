@@ -19,7 +19,7 @@ export const PROPOSTA_URL = "/site/sobre";
 export const DEMO_URL = "/site/demonstracao";
 
 /** Pre-launch CTA copy. */
-export const PRIMARY_CTA_LABEL = "Ver como a Foocci funciona";
+export const PRIMARY_CTA_LABEL = "Ver como o Foocci funciona";
 export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
 /** V3 hero secondary — follow-the-launch CTA (routes to the "em breve" page). */
 export const FOLLOW_LAUNCH_LABEL = "Acompanhar lançamento";
@@ -28,7 +28,7 @@ export const FOLLOW_LAUNCH_LABEL = "Acompanhar lançamento";
 export const PRELAUNCH_BADGE = "Em breve para restaurantes selecionados";
 export const PRELAUNCH_NOTE = "Lançamento comercial em breve.";
 
-const DEFAULT_WA_MESSAGE = "Olá! Quero saber mais sobre a Foocci.";
+const DEFAULT_WA_MESSAGE = "Olá! Quero saber mais sobre o Foocci.";
 
 /** RESERVED for launch. Returns a wa.me URL when a number is configured. */
 export function whatsappUrl(message: string = DEFAULT_WA_MESSAGE): string | null {

@@ -10,7 +10,7 @@ import type { Metadata } from "next";
 import { LegalShell, LegalBlock } from "@/components/marketing/LegalShell";
 
 const TITLE = "Termos de Uso | Foocci";
-const DESCRIPTION = "Veja os termos básicos de uso do site público da Foocci.";
+const DESCRIPTION = "Veja os termos básicos de uso do site público do Foocci.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -30,14 +30,14 @@ export default function TermosPage() {
 
       <LegalBlock heading="Finalidade do site">
         <p>
-          Este é o site institucional da Foocci, destinado a apresentar o produto e a
+          Este é o site institucional do Foocci, destinado a apresentar o produto e a
           proposta da empresa.
         </p>
       </LegalBlock>
 
       <LegalBlock heading="Status de pré-lançamento">
         <p>
-          A Foocci está em fase piloto e pré-lançamento. Neste momento, o site não
+          O Foocci está em fase piloto e pré-lançamento. Neste momento, o site não
           disponibiliza formulários, captação de leads, agendamento de demonstração ou
           canais de venda ativos.
         </p>
@@ -83,7 +83,7 @@ export default function TermosPage() {
       </LegalBlock>
 
       <LegalBlock heading="Contato">
-        <p>Em caso de dúvidas, fale com a gente pelos canais oficiais da Foocci.</p>
+        <p>Em caso de dúvidas, fale com a gente pelos canais oficiais do Foocci.</p>
       </LegalBlock>
     </LegalShell>
   );

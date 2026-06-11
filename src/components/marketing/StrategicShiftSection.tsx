@@ -50,7 +50,7 @@ export function StrategicShiftSection() {
 
           <div className="rounded-2xl border-2 border-brand-200 bg-white p-7 shadow-sm">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-brand-600">
-              Com a Foocci
+              Com o Foocci
             </h3>
             <ul className="mt-5 space-y-3">
               {SMART.map((item) => (
@@ -69,7 +69,7 @@ export function StrategicShiftSection() {
             <span className="text-brand-500">Relacionamento constrói cliente.</span>”
           </blockquote>
           <figcaption className="mt-3 text-sm text-gray-500">
-            A Foocci fortalece os seus canais diretos para você vender mais com margem.
+            O Foocci fortalece os seus canais diretos para você vender mais com margem.
           </figcaption>
         </figure>
       </div>

@@ -49,7 +49,7 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const message =
-      `Olá! Quero ver a Foocci funcionando no meu restaurante.\n` +
+      `Olá! Quero ver o Foocci funcionando no meu restaurante.\n` +
       `Nome: ${nome}\n` +
       `WhatsApp: ${whatsapp}\n` +
       `Restaurante: ${restaurante}\n` +

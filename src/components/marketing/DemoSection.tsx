@@ -37,7 +37,7 @@ export function DemoSection() {
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Sistema inteligente</span>
           <h2 id="produto-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Veja a Foocci trabalhando no dia a dia do restaurante.
+            Veja o Foocci trabalhando no dia a dia do restaurante.
           </h2>
         </div>
 

@@ -1,17 +1,21 @@
 /**
  * /site/precos — PRE-LAUNCH. Inherits /site/layout.tsx.
- * No prices and no sales language: plans are being defined for the launch.
+ * No prices and no sales language: plans are being defined for the launch. The
+ * page now carries more design — plan directions, a maturity ladder and a
+ * "value before price" band. Masculine voice ("o Foocci").
  */
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
-import { DotGrid } from "@/components/marketing/premium";
+import { VisualStepCard } from "@/components/marketing/VisualStepCard";
+import { DotGrid, Eyebrow } from "@/components/marketing/premium";
+import { TrendingUpIcon, UsersIcon, RepeatIcon } from "@/components/marketing/icons";
 import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
 const TITLE = "Preços Foocci | Planos em definição para lançamento";
 const DESCRIPTION =
-  "Os planos da Foocci serão definidos para o lançamento comercial, pensados para diferentes momentos e tamanhos de operação de restaurante.";
+  "Os planos do sistema Foocci serão definidos para o lançamento comercial, pensados para diferentes momentos e tamanhos de operação de restaurante.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -40,14 +44,20 @@ const PLANS = [
   },
 ];
 
+const MATURITY = [
+  { icon: TrendingUpIcon, title: "Começar a vender direto", copy: "Tirar o pedido do papel e vender melhor pelos canais diretos do restaurante." },
+  { icon: UsersIcon, title: "Organizar relacionamento", copy: "Reunir clientes, histórico e contexto em um só lugar." },
+  { icon: RepeatIcon, title: "Criar recorrência", copy: "Ativar campanhas e reativação para o cliente voltar com mais frequência." },
+];
+
 export default function PrecosPage() {
   return (
     <>
       <PageHero
         badge="Planos · em definição"
         title="Planos em definição para o lançamento comercial."
-        subtitle="A Foocci está em fase piloto. Os planos oficiais serão definidos para diferentes momentos, canais e tamanhos de operação."
-        primaryLabel="Ver como a Foocci funciona"
+        subtitle="O Foocci está em fase piloto. Os planos oficiais serão definidos para diferentes momentos, canais e tamanhos de operação."
+        primaryLabel="Ver como o Foocci funciona"
         primaryHref={COMO_FUNCIONA_URL}
         note={PRELAUNCH_NOTE}
       />
@@ -85,14 +95,47 @@ export default function PrecosPage() {
         </div>
       </section>
 
+      {/* Maturity ladder + value-before-price band */}
+      <section aria-labelledby="maturidade-title" className="bg-white py-20 lg:py-24">
+        <div className="mx-auto max-w-6xl px-5 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <Eyebrow>Antes de preço, proposta de valor</Eyebrow>
+            <h2 id="maturidade-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+              Planos que acompanham o momento do seu restaurante.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-gray-600">
+              Os planos do sistema Foocci estão em definição para o lançamento comercial.
+              A ideia é acompanhar o momento do restaurante — do pedido direto à
+              recorrência inteligente.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {MATURITY.map((m, i) => (
+              <VisualStepCard key={m.title} index={i + 1} icon={m.icon} title={m.title} copy={m.copy} />
+            ))}
+          </div>
+
+          <div className="mt-12 overflow-hidden rounded-3xl bg-[#0B0B0B] px-6 py-8 text-center sm:px-10">
+            <p className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Antes de preço, <span className="text-brand-400">proposta de valor.</span>
+            </p>
+            <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-gray-400">
+              Estamos no piloto justamente para definir planos que façam sentido de
+              verdade — sem promessas antes da hora.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Why plans are defined at launch */}
-      <section aria-labelledby="planos-porque-title" className="bg-white py-20">
+      <section aria-labelledby="planos-porque-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
           <h2 id="planos-porque-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Por que os planos serão definidos no lançamento?
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            Porque a Foocci se adapta ao tipo de restaurante, ao momento da operação,
+            Porque o Foocci se adapta ao tipo de restaurante, ao momento da operação,
             aos canais que você já usa e ao seu objetivo comercial. Estamos no piloto
             justamente para definir planos que façam sentido de verdade — sem promessas
             antes da hora.
@@ -101,8 +144,8 @@ export default function PrecosPage() {
       </section>
 
       <CtaBand
-        title="Quer entender o que a Foocci pode fazer pela sua operação?"
-        label="Conhecer como a Foocci funciona"
+        title="Quer entender o que o Foocci pode fazer pela sua operação?"
+        label="Conhecer como o Foocci funciona"
         href={COMO_FUNCIONA_URL}
       />
     </>

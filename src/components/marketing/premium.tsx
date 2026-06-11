@@ -117,7 +117,7 @@ export function MascotPanel({
   className = "",
   imgClassName = "h-44 w-auto",
   glow = true,
-  alt = "Mascote da Foocci",
+  alt = "Mascote do Foocci",
 }: {
   className?: string;
   imgClassName?: string;

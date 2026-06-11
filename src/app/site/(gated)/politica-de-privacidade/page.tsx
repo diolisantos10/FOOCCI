@@ -10,7 +10,7 @@ import type { Metadata } from "next";
 import { LegalShell, LegalBlock } from "@/components/marketing/LegalShell";
 
 const TITLE = "Política de Privacidade | Foocci";
-const DESCRIPTION = "Entenda como a Foocci trata informações enviadas pelo site e canais de contato.";
+const DESCRIPTION = "Entenda como o Foocci trata informações enviadas pelo site e canais de contato.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -23,7 +23,7 @@ export default function PoliticaPage() {
     <LegalShell title="Política de Privacidade" lastUpdated="4 de junho de 2026">
       <LegalBlock heading="Introdução">
         <p>
-          Esta Política de Privacidade explica, em linguagem simples, como a Foocci trata
+          Esta Política de Privacidade explica, em linguagem simples, como o Foocci trata
           as informações enviadas por meio deste site. Ao usar o site, você concorda com as
           práticas descritas aqui.
         </p>
@@ -31,7 +31,7 @@ export default function PoliticaPage() {
 
       <LegalBlock heading="Status de pré-lançamento">
         <p>
-          A Foocci está em fase piloto e pré-lançamento. Neste momento, o site apresenta a
+          O Foocci está em fase piloto e pré-lançamento. Neste momento, o site apresenta a
           proposta e informações institucionais e não possui formulários de captação,
           agendamento de demonstração, canais de venda ou atendimento por WhatsApp ativos.
         </p>
@@ -70,7 +70,7 @@ export default function PoliticaPage() {
       <LegalBlock heading="Finalidade do uso dos dados">
         <p>
           Quando dados forem coletados, serão usados para responder solicitações, apresentar
-          a Foocci e melhorar a experiência do site. Não vendemos seus dados.
+          o Foocci e melhorar a experiência do site. Não vendemos seus dados.
         </p>
       </LegalBlock>
 
@@ -99,7 +99,7 @@ export default function PoliticaPage() {
         <p>
           Enquanto o site está em pré-lançamento, esta Política pode ser atualizada antes da
           abertura comercial. Dúvidas sobre privacidade serão tratadas pelos canais oficiais
-          da Foocci quando disponibilizados.
+          do Foocci quando disponibilizados.
         </p>
       </LegalBlock>
     </LegalShell>
