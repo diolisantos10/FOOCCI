@@ -33,7 +33,7 @@ import { modePermissions } from "../WhatsAppTextOrderingRuntimeService";
 
 const BASE_READY = {
   globalKillSwitch: false, globalPause: false, enabled: true, paused: false,
-  mode: "ALLOWLIST_REPLY_ONLY", allowlistCount: 1,
+  mode: "ALLOWLIST_REPLY_ONLY", scope: "PHONE_ALLOWLIST", allowlistCount: 1,
   paymentOptionsEnabled: true, sampleProductsAvailable: 10,
 };
 
@@ -129,6 +129,16 @@ describe("assessReadiness — cada pré-condição bloqueia explicitamente", () 
     expect(assessReadiness({ ...BASE_READY, enabled: false }).canRunReplyOnly).toBe(false);
     expect(assessReadiness({ ...BASE_READY, paymentOptionsEnabled: false }).canRunReplyOnly).toBe(false);
     expect(assessReadiness({ ...BASE_READY, sampleProductsAvailable: 0 }).canRunReplyOnly).toBe(false);
+  });
+
+  it("scope=RESTAURANT_WIDE com feature viva → riskLevel=HIGH e bloqueia o teste controlado", () => {
+    const r = assessReadiness({ ...BASE_READY, scope: "RESTAURANT_WIDE" });
+    expect(r.riskLevel).toBe("HIGH");
+    expect(r.canRunReplyOnly).toBe(false);
+    expect(r.missingForReplyOnly.join(" ")).toContain("PHONE_ALLOWLIST");
+    // RESTAURANT_WIDE com feature desligada/pausada não é exposição imediata:
+    expect(assessReadiness({ ...BASE_READY, scope: "RESTAURANT_WIDE", paused: true }).riskLevel).toBe("LOW");
+    expect(assessReadiness({ ...BASE_READY, scope: "RESTAURANT_WIDE", mode: "DRY_RUN_ONLY" }).riskLevel).toBe("LOW");
   });
 
   it("DRY_RUN_ONLY pede a troca de modo; FULL_TEST pronto → riskLevel=MEDIUM", () => {

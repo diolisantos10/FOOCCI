@@ -59,6 +59,7 @@ export function assessReadiness(input: {
   enabled: boolean;
   paused: boolean;
   mode: string;
+  scope: string;
   allowlistCount: number;
   paymentOptionsEnabled: boolean;
   sampleProductsAvailable: number;
@@ -68,6 +69,11 @@ export function assessReadiness(input: {
   if (input.globalPause) missingForReplyOnly.push("desligar WHATSAPP_TEXT_ORDERING_PAUSED (env global)");
   if (!input.enabled) missingForReplyOnly.push("habilitar a feature para o restaurante (enabled=true)");
   if (input.paused) missingForReplyOnly.push("despausar o restaurante (paused=false)");
+  if (input.scope !== "PHONE_ALLOWLIST") {
+    missingForReplyOnly.push(
+      `trocar scope para PHONE_ALLOWLIST (atual: ${input.scope}) — RESTAURANT_WIDE deixa QUALQUER cliente real entrar no fluxo`,
+    );
+  }
   if (input.allowlistCount === 0) missingForReplyOnly.push("adicionar o telefone do Diego/time à allowlist");
   if (input.mode !== "ALLOWLIST_REPLY_ONLY" && input.mode !== "ALLOWLIST_FULL_TEST") {
     missingForReplyOnly.push(`trocar mode para ALLOWLIST_REPLY_ONLY (atual: ${input.mode})`);
@@ -83,10 +89,18 @@ export function assessReadiness(input: {
   }
   const canRunFullTest = missingForFullTest.length === 0;
 
-  // Risk: HIGH only if a real customer could enter (FULL_TEST without allowlist is
-  // impossible by design, but RESTAURANT_WIDE-like exposure would be HIGH).
+  // Risk for the CONTROLLED test:
+  //   HIGH   — a real customer can enter the flow right now (scope!=PHONE_ALLOWLIST
+  //            with the feature live: enabled, not paused, reply-capable mode).
+  //   MEDIUM — FULL_TEST mode (real order/Pix, but allowlist-gated).
+  //   LOW    — everything gated to the allowlist, reply-only or off.
+  const featureLive =
+    input.enabled && !input.paused && !input.globalKillSwitch && !input.globalPause &&
+    (input.mode === "ALLOWLIST_REPLY_ONLY" || input.mode === "ALLOWLIST_FULL_TEST");
   const riskLevel: "LOW" | "MEDIUM" | "HIGH" =
-    input.mode === "ALLOWLIST_FULL_TEST" ? "MEDIUM" : "LOW";
+    input.scope !== "PHONE_ALLOWLIST" && featureLive ? "HIGH"
+    : input.mode === "ALLOWLIST_FULL_TEST" ? "MEDIUM"
+    : "LOW";
 
   return { canRunReplyOnly, canRunFullTest, missingForReplyOnly, missingForFullTest, riskLevel };
 }
@@ -155,6 +169,7 @@ export async function runConfigDiagnostic(input: ConfigDiagnosticInput): Promise
     enabled: config.enabled,
     paused: config.paused,
     mode: config.mode,
+    scope: config.scope,
     allowlistCount,
     paymentOptionsEnabled,
     sampleProductsAvailable,

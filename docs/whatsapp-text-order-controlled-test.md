@@ -28,6 +28,8 @@ Rodar o diagnóstico de configuração (somente leitura — não altera nada):
 Conferir no resultado:
 
 - [ ] `featureEnabled`, `paused`, `mode`, `allowlistCount` — estado atual real.
+- [ ] `scope=PHONE_ALLOWLIST` — **`RESTAURANT_WIDE` deixa QUALQUER cliente real
+      entrar no fluxo** (o diagnóstico marca `riskLevel=HIGH` nesse caso).
 - [ ] `paymentOptionsEnabled=true` e quais formas (pix/cash/card) estão ligadas
       no PaymentSettings — a pergunta de pagamento do WhatsApp reflete SÓ essas.
 - [ ] `sampleProductsAvailable > 0` (cardápio com itens ativos/disponíveis).
