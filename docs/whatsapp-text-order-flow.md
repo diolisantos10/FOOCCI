@@ -61,6 +61,16 @@ telefones** + modos `DRY_RUN_ONLY` (não responde) → `ALLOWLIST_REPLY_ONLY`
 melhorias novas (rodapé/0/pagamento oficial/endereço salvo) são parte da máquina
 e dos metadados de sessão — nenhum modo foi alterado.
 
+## Eventos de timeline (observabilidade — `orderingEvents.ts`)
+
+Contrato puro de eventos (sem PII, sem DB, sem runtime) — fonte única do que
+acontece em cada turno, para o runtime/CRM persistir depois atrás dos mesmos
+gates: `text_order_started`, `item_matched`, `item_ambiguous`, `item_not_found`,
+`cart_reviewed`, `delivery_selected`, `saved_address_offered`, `payment_selected`,
+`order_confirmed`, `pix_generated`, `handoff_requested`, `menu_returned`,
+`flow_cancelled`. `deriveOrderingEvents(step)` é determinístico e deixa explícito
+se a ação foi IA / humano / sistema (`TimelineActor`).
+
 ## Diagnóstico seguro
 
 `POST /api/cron/whatsapp/text-order-diagnostic` (Bearer CRON_SECRET) — catálogo
@@ -101,6 +111,26 @@ Nenhum modo burla a allowlist (o guard de telefone roda antes de tudo); pedido e
 Pix só viram ações no FIM do fluxo confirmado (`CREATE_ORDER`/`GENERATE_PIX`),
 executadas pelo backend do Fute apenas em FULL_TEST.
 
+## Scope `RESTAURANT_WIDE` — exige aprovação explícita
+
+`RESTAURANT_WIDE` expõe o fluxo a QUALQUER cliente real. Por isso só é tratado
+como intencional quando há o marcador de aprovação `[RW_APPROVED]` no campo
+`notes` da config (sign-off humano auditável — ex.: change request do Brain
+Director aprovado). Sem o marcador, uma config `RESTAURANT_WIDE` viva (enabled,
+não pausada, modo que responde) é **exposição acidental → `riskLevel=HIGH`** no
+diagnóstico. Com o marcador, vira exposição intencional (`MEDIUM`).
+
+## Correção de segurança (somente reduz exposição) — `secureScope`
+
+`POST /api/cron/whatsapp/text-order-secure-scope` (Bearer CRON_SECRET, workflow
+`whatsapp-text-order-secure-scope.yml`) é o ÚNICO caminho de escrita disponível
+para CI (que não tem ADMIN_SECRET) e só consegue **reduzir** exposição: força
+`scope=PHONE_ALLOWLIST`, rebaixa o modo para no máximo `ALLOWLIST_REPLY_ONLY`,
+preserva a allowlist (opcionalmente adiciona um telefone do time). Nunca abre
+`RESTAURANT_WIDE`, nunca liga `FULL_TEST`, nunca envia/cria pedido/Pix.
+Idempotente. Para qualquer mudança que AUMENTE exposição, use o admin
+(`ADMIN_SECRET`) deliberadamente.
+
 ## Como ativar por allowlist
 
 1. Painel admin do restaurante: habilitar text-ordering, modo
@@ -119,11 +149,23 @@ executadas pelo backend do Fute apenas em FULL_TEST.
    ponta a ponta (pedido aparece na operação pela regra do Fute).
 3. ✅ ~~Popular metadata no runtime~~ — FEITO (ativação v1: `enrichSessionMetadata`
    ligado no RuntimeService).
-4. Resolver as 3 falhas pré-existentes do matcher de "menu question" (W8/W9).
-5. Só então ampliar a allowlist / RESTAURANT_WIDE.
+4. ✅ ~~Resolver as 3 falhas do matcher de "menu question" (W8/W9)~~ — FEITO
+   (pergunta de cardápio não cita mais a frase como produto inexistente).
+5. Só então ampliar a allowlist / `RESTAURANT_WIDE` **com `[RW_APPROVED]`**.
+
+## Readiness de produção — `POST /api/cron/whatsapp/text-order-readiness`
+
+Compõe o config diagnostic (config viva + risco) com o flow diagnostic (prova
+hermética da máquina) num checklist único: `replyOnlyReady`, `fullTestReady`,
+`restaurantWideReady` + `blockers` / `warnings` / `requiredNextActions`.
+`restaurantWideReady` exige `[RW_APPROVED]`, flow PASS (p0=0) e risco ≠ HIGH; os
+gates validados por humano (REPLY_ONLY/FULL_TEST no aparelho, sign-off do Brain
+Director) aparecem como ações requeridas, nunca são auto-aprovados. Somente
+leitura, `runtimeTouched=false`. Workflow `whatsapp-text-order-readiness.yml`.
 
 ## Pendências conhecidas
 
 - O retorno ao "menu principal" após `0` emite `MENU_RETURN`; a renderização do
   menu do recepcionista é do router (fora da máquina pura).
-- 3 falhas pré-existentes de matcher (W8-D/N, W9-O) — UX, não segurança.
+- Persistência da timeline (`orderingEvents`) no runtime/CRM ainda é passo
+  seguinte (atrás dos mesmos gates); hoje o contrato de eventos é puro/testado.

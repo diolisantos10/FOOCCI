@@ -1,0 +1,76 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — SECURE SCOPE (safety-only remediation, manual)
+#
+# Clamps a restaurant's text-order config toward safety: scope=PHONE_ALLOWLIST,
+# mode<=ALLOWLIST_REPLY_ONLY, preserving the allowlist (optionally appending one
+# team phone). It can NEVER open RESTAURANT_WIDE, enable FULL_TEST, send a
+# WhatsApp message, create an order, or generate a Pix. Manual only.
+# Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order Secure Scope
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug (ex.: sushi-cazza)"
+        required: true
+        default: "sushi-cazza"
+      add_phone:
+        description: "Optional team phone to add to allowlist (E.164, never logged)"
+        required: false
+        default: ""
+
+jobs:
+  secure-scope:
+    name: "Secure Scope (safety-only)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/text-order-secure-scope" >> "$GITHUB_OUTPUT"
+
+      - name: "Apply safe correction"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          ADDPHONE: ${{ inputs.add_phone }}
+        run: |
+          BODY=$(jq -nc --arg slug "$SLUG" --arg phone "$ADDPHONE" \
+            '{restaurantSlug: $slug} + (if $phone != "" then {addPhone: $phone} else {} end)')
+          set +e
+          curl --connect-timeout 20 --max-time 120 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          OK=$(jq -r '.ok' /tmp/r.json 2>/dev/null)
+          echo "← HTTP            : $HTTP"
+          echo "← ok              : $OK"
+          echo "← changed         : $(jq -r '.changed' /tmp/r.json)"
+          echo "── antes ──"
+          jq -r '.before | "  scope=\(.scope) mode=\(.mode) enabled=\(.enabled) paused=\(.paused) allowlist=\(.allowlistCount)"' /tmp/r.json 2>/dev/null || true
+          echo "── depois ──"
+          jq -r '.after  | "  scope=\(.scope) mode=\(.mode) enabled=\(.enabled) paused=\(.paused) allowlist=\(.allowlistCount)"' /tmp/r.json 2>/dev/null || true
+          echo "── ações ──"
+          jq -r '.actions[]? | "  • " + .' /tmp/r.json 2>/dev/null || true
+          echo "── diagnóstico pós-correção ──"
+          echo "  riskLevel       : $(jq -r '.diagnostic.riskLevel' /tmp/r.json)"
+          echo "  scope           : $(jq -r '.diagnostic.scope' /tmp/r.json)"
+          echo "  canRunReplyOnly : $(jq -r '.diagnostic.canRunReplyOnly' /tmp/r.json)"
+          echo "  canRunFullTest  : $(jq -r '.diagnostic.canRunFullTest' /tmp/r.json)"
+          RUNTIME_TOUCHED=$(jq -r '.runtimeTouched' /tmp/r.json 2>/dev/null)
+          echo "← runtimeTouched  : $RUNTIME_TOUCHED"
+          AFTER_SCOPE=$(jq -r '.after.scope' /tmp/r.json 2>/dev/null)
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::secure-scope non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$OK" != "true" ]]; then echo "::error::ok=$OK"; exit 1; fi
+          if [[ "$AFTER_SCOPE" != "PHONE_ALLOWLIST" ]]; then echo "::error::scope ainda exposto: $AFTER_SCOPE"; exit 1; fi
+          if [[ "$RUNTIME_TOUCHED" != "false" ]]; then echo "::error::runtimeTouched must be false"; exit 1; fi
+          echo "✅ Scope seguro aplicado — PHONE_ALLOWLIST, sem exposição de cliente real."

@@ -7,7 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { resolveWaConfig } from "./WhatsAppTextOrderingConfigService";
+import { resolveWaConfig, getRestaurantConfig } from "./WhatsAppTextOrderingConfigService";
 import { isGlobalKillSwitchEngaged, isGlobalPauseEngaged, isPhoneInList } from "@/lib/wa-text-ordering-flag";
 
 export interface ConfigDiagnosticInput {
@@ -27,6 +27,7 @@ export interface ConfigDiagnosticResult {
   paused: boolean;
   mode: string;
   scope: string;
+  restaurantWideApproved: boolean;
   allowlistCount: number;
   phoneInAllowlist: boolean | null;
   paymentOptionsEnabled: boolean;
@@ -42,6 +43,19 @@ export interface ConfigDiagnosticResult {
   missingForFullTest: string[];
   rollbackSteps: string[];
   runtimeTouched: false;
+}
+
+/**
+ * Approval marker for RESTAURANT_WIDE. A scope=RESTAURANT_WIDE config exposes the
+ * flow to EVERY real customer, so it is only considered "approved for production"
+ * when this marker is present in the config `notes` (a deliberate, auditable
+ * human sign-off — e.g. after a Brain Director change request). Without it, a live
+ * RESTAURANT_WIDE config is treated as accidental exposure → riskLevel=HIGH.
+ */
+export const RESTAURANT_WIDE_APPROVAL_MARKER = "[RW_APPROVED]";
+
+export function isRestaurantWideApproved(notes: string | null | undefined): boolean {
+  return typeof notes === "string" && notes.includes(RESTAURANT_WIDE_APPROVAL_MARKER);
 }
 
 export const ROLLBACK_STEPS = [
@@ -63,6 +77,8 @@ export function assessReadiness(input: {
   allowlistCount: number;
   paymentOptionsEnabled: boolean;
   sampleProductsAvailable: number;
+  /** RESTAURANT_WIDE only counts as intentional when a human approval marker is set. */
+  scopeApproved?: boolean;
 }): { canRunReplyOnly: boolean; canRunFullTest: boolean; missingForReplyOnly: string[]; missingForFullTest: string[]; riskLevel: "LOW" | "MEDIUM" | "HIGH" } {
   const missingForReplyOnly: string[] = [];
   if (input.globalKillSwitch) missingForReplyOnly.push("ligar WHATSAPP_TEXT_ORDERING_ENABLED=true (env global)");
@@ -90,15 +106,19 @@ export function assessReadiness(input: {
   const canRunFullTest = missingForFullTest.length === 0;
 
   // Risk for the CONTROLLED test:
-  //   HIGH   — a real customer can enter the flow right now (scope!=PHONE_ALLOWLIST
-  //            with the feature live: enabled, not paused, reply-capable mode).
-  //   MEDIUM — FULL_TEST mode (real order/Pix, but allowlist-gated).
+  //   HIGH   — a real customer can enter the flow right now: scope=RESTAURANT_WIDE
+  //            with the feature live (enabled, not paused, reply-capable mode) AND
+  //            no human approval marker → accidental exposure.
+  //   MEDIUM — intentional broad exposure (approved RESTAURANT_WIDE) or FULL_TEST
+  //            mode (real order/Pix, allowlist-gated).
   //   LOW    — everything gated to the allowlist, reply-only or off.
   const featureLive =
     input.enabled && !input.paused && !input.globalKillSwitch && !input.globalPause &&
     (input.mode === "ALLOWLIST_REPLY_ONLY" || input.mode === "ALLOWLIST_FULL_TEST");
+  const wideExposed = input.scope !== "PHONE_ALLOWLIST" && featureLive;
   const riskLevel: "LOW" | "MEDIUM" | "HIGH" =
-    input.scope !== "PHONE_ALLOWLIST" && featureLive ? "HIGH"
+    wideExposed && !input.scopeApproved ? "HIGH"
+    : wideExposed && input.scopeApproved ? "MEDIUM"
     : input.mode === "ALLOWLIST_FULL_TEST" ? "MEDIUM"
     : "LOW";
 
@@ -123,7 +143,7 @@ export async function runConfigDiagnostic(input: ConfigDiagnosticInput): Promise
   const empty: ConfigDiagnosticResult = {
     ok: false, restaurantId, restaurantName,
     featureEnabled: false, globalKillSwitch: isGlobalKillSwitchEngaged(), globalPause: isGlobalPauseEngaged(),
-    paused: false, mode: "?", scope: "?", allowlistCount: 0, phoneInAllowlist: null,
+    paused: false, mode: "?", scope: "?", restaurantWideApproved: false, allowlistCount: 0, phoneInAllowlist: null,
     paymentOptionsEnabled: false, pixEnabled: false, cashEnabled: false, cardEnabled: false,
     sampleProductsAvailable: 0, savedAddressAvailableForTestCustomer: null,
     riskLevel: "LOW", canRunReplyOnly: false, canRunFullTest: false,
@@ -132,13 +152,15 @@ export async function runConfigDiagnostic(input: ConfigDiagnosticInput): Promise
   };
   if (!restaurantId) return empty;
 
-  const [config, payment, sampleProductsAvailable] = await Promise.all([
+  const [config, rawConfig, payment, sampleProductsAvailable] = await Promise.all([
     resolveWaConfig(restaurantId),
+    getRestaurantConfig(restaurantId).catch(() => null),
     prisma.paymentSettings
       .findUnique({ where: { restaurantId }, select: { acceptPix: true, acceptCash: true, acceptCard: true } })
       .catch(() => null),
     prisma.menuItem.count({ where: { category: { restaurantId }, isAvailable: true } }).catch(() => 0),
   ]);
+  const restaurantWideApproved = isRestaurantWideApproved(rawConfig?.notes ?? null);
 
   // Saved-address availability for the (optional) test phone — boolean only, no PII.
   let savedAddressAvailableForTestCustomer: boolean | null = null;
@@ -173,6 +195,7 @@ export async function runConfigDiagnostic(input: ConfigDiagnosticInput): Promise
     allowlistCount,
     paymentOptionsEnabled,
     sampleProductsAvailable,
+    scopeApproved: restaurantWideApproved,
   });
 
   return {
@@ -185,6 +208,7 @@ export async function runConfigDiagnostic(input: ConfigDiagnosticInput): Promise
     paused: config.paused,
     mode: config.mode,
     scope: config.scope,
+    restaurantWideApproved,
     allowlistCount,
     phoneInAllowlist,
     paymentOptionsEnabled,

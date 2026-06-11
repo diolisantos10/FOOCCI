@@ -117,3 +117,29 @@ Na ordem de preferência — qualquer um deles para o fluxo na hora:
 
 Pós-rollback: rodar de novo o **Config Diagnostic** e conferir
 `canRunReplyOnly=false` / `paused=true` (estado seguro confirmado).
+
+---
+
+## 4) Correção rápida de exposição (`RESTAURANT_WIDE`)
+
+Se o diagnóstico apontar `scope=RESTAURANT_WIDE` com `riskLevel=HIGH` (cliente
+real entrando sem validação), rodar o workflow **WhatsApp Text Order Secure
+Scope** (`restaurant_slug=sushi-cazza`, opcional `add_phone`). Ele só REDUZ
+exposição: força `PHONE_ALLOWLIST`, rebaixa o modo para `ALLOWLIST_REPLY_ONLY`,
+preserva a allowlist. Nunca abre `RESTAURANT_WIDE`, nunca liga `FULL_TEST`, nunca
+envia/cria pedido/Pix. Endpoint: `POST /api/cron/whatsapp/text-order-secure-scope`.
+
+## 5) Critérios para liberar `RESTAURANT_WIDE`
+
+Só liberar (e exige o marcador `[RW_APPROVED]` no `notes` da config) quando TODOS:
+
+- [ ] W8/W9 matcher corrigido (pergunta de cardápio não vira "produto inexistente").
+- [ ] REPLY_ONLY validado no aparelho.
+- [ ] FULL_TEST validado ponta a ponta (pedido + Pix).
+- [ ] Quality P0=0 e Flow Diagnostic PASS.
+- [ ] Config Diagnostic `riskLevel` ≠ HIGH.
+- [ ] Change request do Brain Director aprovado.
+- [ ] Rollback documentado (seção 3).
+
+Conferência única: **Readiness Diagnostic**
+(`POST /api/cron/whatsapp/text-order-readiness`) → `restaurantWideReady=true`.

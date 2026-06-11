@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — READINESS (read-only checklist, manual)
+#
+# Composes the live CONFIG diagnostic with the hermetic FLOW diagnostic into a
+# single production-readiness verdict: replyOnlyReady / fullTestReady /
+# restaurantWideReady + blockers / warnings / requiredNextActions.
+# Never writes, sends, creates an order or generates a Pix. Manual only.
+# Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug (ex.: sushi-cazza)"
+        required: true
+        default: "sushi-cazza"
+      phone:
+        description: "Optional test phone (booleans only, never logged)"
+        required: false
+        default: ""
+
+jobs:
+  readiness:
+    name: "Readiness (read-only)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/text-order-readiness" >> "$GITHUB_OUTPUT"
+
+      - name: "Run readiness"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          PHONE: ${{ inputs.phone }}
+        run: |
+          BODY=$(jq -nc --arg slug "$SLUG" --arg phone "$PHONE" \
+            '{restaurantSlug: $slug} + (if $phone != "" then {phone: $phone} else {} end)')
+          set +e
+          curl --connect-timeout 20 --max-time 150 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP                  : $HTTP"
+          echo "← restaurantName        : $(jq -r '.restaurantName' /tmp/r.json)"
+          echo "← replyOnlyReady        : $(jq -r '.replyOnlyReady' /tmp/r.json)"
+          echo "← fullTestReady         : $(jq -r '.fullTestReady' /tmp/r.json)"
+          echo "← restaurantWideReady   : $(jq -r '.restaurantWideReady' /tmp/r.json)"
+          echo "← config.riskLevel      : $(jq -r '.config.riskLevel' /tmp/r.json)"
+          echo "← flow status/p0        : $(jq -r '.flowDiagnostic.status' /tmp/r.json)/$(jq -r '.flowDiagnostic.p0' /tmp/r.json)"
+          echo "← flow noSend/noOrder/noPix: $(jq -r '.flowDiagnostic.noSend' /tmp/r.json)/$(jq -r '.flowDiagnostic.noOrder' /tmp/r.json)/$(jq -r '.flowDiagnostic.noPix' /tmp/r.json)"
+          echo "── blockers ──"
+          jq -r '.blockers[]? | "  • " + .' /tmp/r.json 2>/dev/null || true
+          echo "── warnings ──"
+          jq -r '.warnings[]? | "  • " + .' /tmp/r.json 2>/dev/null || true
+          echo "── próximas ações ──"
+          jq -r '.requiredNextActions[]? | "  • " + .' /tmp/r.json 2>/dev/null || true
+          RUNTIME_TOUCHED=$(jq -r '.runtimeTouched' /tmp/r.json 2>/dev/null)
+          echo "← runtimeTouched        : $RUNTIME_TOUCHED"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::readiness non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$RUNTIME_TOUCHED" != "false" ]]; then echo "::error::runtimeTouched must be false"; exit 1; fi
+          echo "✅ Readiness concluído — somente leitura."

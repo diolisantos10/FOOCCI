@@ -788,7 +788,9 @@ function extractQuestionSubject(text: string): string {
 
 function buildPriceListReply(subject: string, candidates: WaMenuItem[]): string {
   if (candidates.length === 0) {
-    return `Não encontrei "${subject}" no cardápio. Quer ver o cardápio completo ou falar com um atendente?`;
+    // Menu QUESTION (not an order attempt): never quote the phrase as a missing
+    // product — answer honestly, name the subject unquoted, and offer the menu/atendente.
+    return `Não encontrei ${subject} no cardápio. Quer ver o cardápio completo ou falar com um atendente?`;
   }
 
   if (candidates.length === 1 && candidates[0]) {
@@ -830,8 +832,10 @@ function handleMenuQuestion(session: WaPersistedSession, text: string, menu: WaM
   const best = bestMenuMatch(normalizePluralAndSpelling(subject), menu);
 
   if (best.candidates.length === 0) {
+    // Menu QUESTION: answer honestly without quoting the phrase as a missing
+    // product (the quoted form is reserved for genuine order attempts).
     return done(session, "QUESTION",
-      `Não encontrei "${subject}" no cardápio. Quer ver o cardápio completo ou falar com um atendente?`, [], false);
+      `Não encontrei ${subject} no cardápio. Quer ver o cardápio completo ou falar com um atendente?`, [], false);
   }
 
   if (isPriceQuery) {
