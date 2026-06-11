@@ -9,7 +9,8 @@
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
-import { MascotCallout } from "@/components/marketing/MascotCallout";
+import { VisualStoryBlock } from "@/components/marketing/VisualStoryBlock";
+import { MascotHostScene } from "@/components/marketing/MascotHostScene";
 import { RelationshipRevenuePanel } from "@/components/marketing/RelationshipRevenuePanel";
 import { Eyebrow } from "@/components/marketing/premium";
 import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
@@ -62,23 +63,25 @@ export default function SobrePage() {
         note={PRELAUNCH_NOTE}
       />
 
-      {/* 1. What we believe — mascot as host */}
-      <section aria-labelledby="crenca-title" className="bg-gray-50 py-20 lg:py-24">
-        <div className="mx-auto max-w-6xl px-5 lg:px-8">
-          <MascotCallout eyebrow="No que acreditamos" title={<span id="crenca-title">Restaurante bom não precisa perder cliente por falta de relacionamento.</span>}>
-            <p>
-              A experiência do restaurante deveria continuar depois do pedido. É por isso
-              que o Foocci conecta venda, atendimento e relacionamento — para o cliente
-              voltar, não desaparecer.
-            </p>
-            <p className="text-base text-gray-500">
-              Tecnologia no bastidor, relacionamento no palco. O restaurante é o
-              protagonista — o Foocci é o anfitrião invisível que faz a experiência
-              acontecer.
-            </p>
-          </MascotCallout>
-        </div>
-      </section>
+      {/* 1. What we believe — premium visual story block (mascot host) */}
+      <VisualStoryBlock
+        tone="warm"
+        eyebrow="No que acreditamos"
+        titleId="crenca-title"
+        title="Restaurante bom não precisa perder cliente por falta de relacionamento."
+        visual={<MascotHostScene />}
+      >
+        <p>
+          A experiência do restaurante deveria continuar depois do pedido. É por isso
+          que o Foocci conecta venda, atendimento e relacionamento — para o cliente
+          voltar, não desaparecer.
+        </p>
+        <p className="text-base text-gray-500">
+          Tecnologia no bastidor, relacionamento no palco. O restaurante é o
+          protagonista — o Foocci é o anfitrião invisível que faz a experiência
+          acontecer.
+        </p>
+      </VisualStoryBlock>
 
       {/* 2. Manifesto — dark editorial band */}
       <section aria-labelledby="manifesto-title" className="relative overflow-hidden bg-[#0B0B0B] py-20 lg:py-24">

@@ -167,7 +167,12 @@ CSS ilustrativos, sem dados/métricas reais, sem ações):
   trabalhando", logo após a jornada.
 - `RelationshipRevenuePanel` — visual da tese (relacionamento → recorrência →
   faturamento) com nós conectados. Sobre e demonstração.
-- `MascotCallout` — mascote anfitrião institucional + callout. Sobre e como funciona.
+- `VisualStoryBlock` + `MascotHostScene` (V4.2) — bloco narrativo premium com
+  atmosfera quente velada (asset de restaurante) e o mascote como **anfitrião**
+  (cutout transparente — sem caixa branca) + anagrama F + cards de contexto
+  (Contexto salvo · Histórico organizado · Oportunidade identificada ·
+  Relacionamento mantido). Substitui o antigo card de mascote no "bastidor"
+  (como funciona) e na crença (sobre), trazendo a mesma força visual da home.
 - `VisualStepCard` — passo numerado com ícone + visual. Jornadas/fluxos internos.
 - `InternalVisualHero` — hero de 2 colunas (texto + visual) para páginas de
   produto (como funciona, demonstração), com o fundo de restaurante velado.

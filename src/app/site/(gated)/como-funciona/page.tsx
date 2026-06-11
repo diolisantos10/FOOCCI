@@ -21,7 +21,8 @@ import {
 } from "@/components/marketing/icons";
 import { FoocciProductShowcase } from "@/components/marketing/FoocciProductShowcase";
 import { VisualStepCard } from "@/components/marketing/VisualStepCard";
-import { MascotCallout } from "@/components/marketing/MascotCallout";
+import { VisualStoryBlock } from "@/components/marketing/VisualStoryBlock";
+import { MascotHostScene } from "@/components/marketing/MascotHostScene";
 import { DotGrid, Eyebrow, PremiumCard } from "@/components/marketing/premium";
 import { PROPOSTA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
@@ -82,22 +83,25 @@ export default function ComoFuncionaPage() {
         </div>
       </section>
 
-      {/* 2. Backstage — the mascot as host */}
-      <section aria-labelledby="bastidor-title" className="relative overflow-hidden bg-white py-20 lg:py-24">
-        <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
-          <MascotCallout eyebrow="Bastidor" title={<span id="bastidor-title">O Foocci trabalha no bastidor.</span>} reverse>
-            <p>
-              Enquanto o cliente vive uma experiência simples, o Foocci organiza
-              contexto, histórico e oportunidades no bastidor.
-            </p>
-            <p className="text-base text-gray-500">
-              O Foocci não rouba o protagonismo do restaurante. Ele apoia a experiência:
-              o cliente vê a sua marca e o seu atendimento, enquanto a inteligência
-              comercial trabalha por trás para conduzir a venda e manter o relacionamento.
-            </p>
-          </MascotCallout>
-        </div>
-      </section>
+      {/* 2. Backstage — premium visual story block (mascot host + context cards) */}
+      <VisualStoryBlock
+        tone="warm"
+        reverse
+        eyebrow="Bastidor"
+        titleId="bastidor-title"
+        title="O Foocci trabalha no bastidor."
+        visual={<MascotHostScene />}
+      >
+        <p>
+          Enquanto o cliente vive uma experiência simples, o Foocci organiza
+          contexto, histórico e oportunidades no bastidor.
+        </p>
+        <p className="text-base text-gray-500">
+          O Foocci não rouba o protagonismo do restaurante. Ele apoia a experiência:
+          o cliente vê a sua marca e o seu atendimento, enquanto a inteligência
+          comercial trabalha por trás para conduzir a venda e manter o relacionamento.
+        </p>
+      </VisualStoryBlock>
 
       {/* 3. Visual cycle — premium nodes + connectors */}
       <section aria-labelledby="fluxo-title" className="relative overflow-hidden bg-gray-50 py-20 lg:py-24">
