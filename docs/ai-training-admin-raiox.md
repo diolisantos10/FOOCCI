@@ -194,6 +194,17 @@ Justificativa: o Treinamento IA já é o sistema mais completo (loop 24h + avali
 sandbox + lock de produção). Em vez de criar um novo cockpit, **convergir** os demais para
 ele e para a governança do Brain elimina a duplicação sem reescrever o que já funciona.
 
+## 13b. Atualização (Production Closure v1)
+
+O primeiro passo da convergência foi feito: a aba **Arena** do Treinamento IA
+agora exibe o card **"WhatsApp · Pedido por Texto"** apontando para o WA Cockpit
+(`/admin/agents/whatsapp`) — *"Arena segura para validar o anotador de pedido sem
+enviar WhatsApp, sem criar pedido e sem gerar Pix."* (link via
+`src/services/agent-training/arenas.ts`, sem duplicar lógica nem tocar crons).
+Além disso, a abertura de RESTAURANT_WIDE do WhatsApp agora passa pelo **Brain
+Director** (`request-restaurant-wide` cria `BrainChangeRequest` CRITICAL/PRODUCTION
+pendente de aprovação humana) — primeira frente usando a fila única de governança.
+
 ## 14. Próximo prompt sugerido
 
 > "Unificar a governança de melhoria de agentes sob o Foocci Brain: (1) fazer a aprovação do

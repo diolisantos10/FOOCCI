@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — FULL_TEST readiness (hermetic, manual)
+#
+# Proves FULL_TEST behaviour WITHOUT a phone and WITHOUT any real side effect:
+# order/Pix only after final confirmation, REPLY_ONLY never creates, FULL_TEST
+# stays allowlist-bound, 0. menu + handoff intact, rollback documented.
+# Asserts PASS, p0=0, noRealOrder/noRealPix/noEvolution and runtimeTouched=false.
+# Manual only. Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order Full Test Readiness
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full-test-readiness:
+    name: "FULL_TEST Readiness (hermetic)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/text-order-full-test-readiness" >> "$GITHUB_OUTPUT"
+
+      - name: "Run readiness"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set +e
+          curl --connect-timeout 20 --max-time 150 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          STATUS=$(jq -r '.status' /tmp/r.json 2>/dev/null)
+          P0=$(jq -r '.p0' /tmp/r.json 2>/dev/null)
+          RT=$(jq -r '.runtimeTouched' /tmp/r.json 2>/dev/null)
+          echo "← HTTP          : $HTTP"
+          echo "← status        : $STATUS"
+          echo "← passed/total  : $(jq -r '.passed' /tmp/r.json)/$(jq -r '.total' /tmp/r.json)"
+          echo "← p0            : $P0"
+          echo "← noRealOrder/noRealPix/noEvolution: $(jq -r '.noRealOrder' /tmp/r.json)/$(jq -r '.noRealPix' /tmp/r.json)/$(jq -r '.noEvolution' /tmp/r.json)"
+          echo "← runtimeTouched: $RT"
+          echo "── checks ──"
+          jq -r '.checks[]? | "\(if .pass then "✓" else "✗" end) \(.name)\(if .pass then "" else " — " + .note end)"' /tmp/r.json 2>/dev/null || true
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$STATUS" != "PASS" || "$P0" != "0" ]]; then echo "::error::status=$STATUS p0=$P0"; exit 1; fi
+          if [[ "$RT" != "false" ]]; then echo "::error::runtimeTouched must be false"; exit 1; fi
+          echo "✅ FULL_TEST readiness: PASS — nada real criado/enviado."

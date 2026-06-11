@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { CycleValidationReport } from "@/app/api/admin/training/validate-cycle/route";
+import { EXTERNAL_ARENAS } from "@/services/agent-training/arenas";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1090,6 +1091,15 @@ function ArenaTab() {
         <p className="font-semibold">Arena de treinamento automático</p>
         <p className="text-violet-500">Clientes IA simulam atendimentos reais. O agente responde com o motor real em modo seguro. Você assiste, avalia e aprova melhorias. Não é um simulador manual — você não precisa digitar nada.</p>
       </div>
+
+      {/* External arenas — linked, never duplicated */}
+      {EXTERNAL_ARENAS.map((arena) => (
+        <a key={arena.id} href={arena.href}
+          className="block rounded-xl border border-sky-700/40 bg-sky-900/10 px-4 py-3 hover:border-sky-500/60 transition-colors">
+          <p className="text-xs font-semibold text-sky-300">🎛️ {arena.label} <span className="ml-1 text-[10px] text-sky-500">abrir cockpit →</span></p>
+          <p className="mt-0.5 text-xs text-sky-500">{arena.description}</p>
+        </a>
+      ))}
 
       {/* replay label */}
       {replayTitle && (

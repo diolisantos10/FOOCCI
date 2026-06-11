@@ -90,7 +90,15 @@ Critérios de aprovação da fase:
 
 ## 2) Fase FULL_TEST (só após REPLY_ONLY aprovado)
 
-Subir o modo — mesmos telefones, mesma allowlist:
+Subir o modo — **preferir a promoção governada** (roda todos os gates e audita):
+
+```
+POST /api/admin/whatsapp/text-order/promote-full-test
+{ "restaurantSlug": "sushi-cazza", "confirm": "PROMOTE_WHATSAPP_TEXT_ORDER_FULL_TEST" }
+```
+
+Antes, provar sem celular: workflow **WhatsApp Text Order Full Test Readiness**
+(PASS/p0=0 obrigatório). Alternativa manual (sem gates automáticos):
 
 ```
 PATCH …/config?restaurantSlug=sushi-cazza
@@ -118,6 +126,9 @@ Validar ponta a ponta (com pedidos de valor baixo):
 
 Na ordem de preferência — qualquer um deles para o fluxo na hora:
 
+0. **Rota dedicada (preferida):** `POST /api/admin/whatsapp/text-order/rollback`
+   `{ "restaurantSlug": "sushi-cazza", "confirm": "ROLLBACK_WHATSAPP_TEXT_ORDER" }`
+   → paused + DRY_RUN_ONLY + PHONE_ALLOWLIST (preserva allowlist/histórico).
 1. `PATCH …/config?restaurantSlug=sushi-cazza { "paused": true }` — pausa imediata.
 2. Ou `{ "mode": "DRY_RUN_ONLY" }` — engine continua viva, mas não responde nem cria nada.
 3. Ou `{ "allowlistedPhones": [] }` — ninguém entra no fluxo.
@@ -154,3 +165,8 @@ Só liberar (e exige o marcador `[RW_APPROVED]` no `notes` da config) quando TOD
 
 Conferência única: **Readiness Diagnostic**
 (`POST /api/cron/whatsapp/text-order-readiness`) → `restaurantWideReady=true`.
+
+Pedido formal de produção geral (cria a BrainChangeRequest, NÃO abre nada):
+`POST /api/admin/whatsapp/text-order/request-restaurant-wide`
+`{ "restaurantSlug": "sushi-cazza", "confirm": "REQUEST_WHATSAPP_TEXT_ORDER_RESTAURANT_WIDE" }`.
+Fluxo completo de encerramento: `docs/whatsapp-text-order-final-status.md`.
