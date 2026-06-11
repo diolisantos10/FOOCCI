@@ -167,6 +167,20 @@ export const upsertPoliciesSchema = z.object({
 
 export type UpsertPoliciesInput = z.infer<typeof upsertPoliciesSchema>;
 
+// ── Sound settings ─────────────────────────────────────────────────────────────
+
+export const upsertSoundSettingsSchema = z.object({
+  soundEnabled:                    z.boolean().optional(),
+  newOrderSoundEnabled:            z.boolean().optional(),
+  humanAttentionSoundEnabled:      z.boolean().optional(),
+  soundVolume:                     z.number().int().min(0).max(100).optional(),
+  repeatNewOrderSoundUntilAccepted: z.boolean().optional(),
+  repeatHumanAttentionUntilSeen:   z.boolean().optional(),
+  soundTheme:                      z.enum(["DEFAULT", "SOFT", "URGENT"]).optional(),
+});
+
+export type UpsertSoundSettingsInput = z.infer<typeof upsertSoundSettingsSchema>;
+
 // ── Default hours (Mon-Sat open 09-22, Sun closed) ─────────────────────────────
 
 export const DEFAULT_HOURS: DayHoursInput[] = [

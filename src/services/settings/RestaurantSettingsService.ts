@@ -10,6 +10,7 @@ import type {
   UpsertHoursInput,
   UpsertPaymentInput,
   UpsertPoliciesInput,
+  UpsertSoundSettingsInput,
 } from "@/validators/settings";
 import type {
   DeliveryConfig,
@@ -17,6 +18,7 @@ import type {
   BusinessHours,
   PaymentSettings,
   StorePolicies,
+  RestaurantSoundSettings,
 } from "@prisma/client";
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -374,6 +376,41 @@ export class RestaurantSettingsService {
     input: UpsertPoliciesInput
   ): Promise<ServiceResult<StorePolicies>> {
     const cfg = await prisma.storePolicies.upsert({
+      where:  { restaurantId },
+      create: { restaurantId, ...input },
+      update: { ...input },
+    });
+    return serviceOk(cfg);
+  }
+
+  // ── Sound settings ────────────────────────────────────────────────────────────
+
+  static async getSoundSettings(restaurantId: string): Promise<ServiceResult<RestaurantSoundSettings>> {
+    const cfg = await prisma.restaurantSoundSettings.findUnique({ where: { restaurantId } });
+    if (!cfg) {
+      // Return defaults if row not yet created — avoids 404 on first load
+      return serviceOk({
+        id: "",
+        restaurantId,
+        soundEnabled:                    true,
+        newOrderSoundEnabled:            true,
+        humanAttentionSoundEnabled:      true,
+        soundVolume:                     80,
+        repeatNewOrderSoundUntilAccepted: false,
+        repeatHumanAttentionUntilSeen:   false,
+        soundTheme:                      "DEFAULT",
+        createdAt:                       new Date(0),
+        updatedAt:                       new Date(0),
+      } as RestaurantSoundSettings);
+    }
+    return serviceOk(cfg);
+  }
+
+  static async upsertSoundSettings(
+    restaurantId: string,
+    input: UpsertSoundSettingsInput
+  ): Promise<ServiceResult<RestaurantSoundSettings>> {
+    const cfg = await prisma.restaurantSoundSettings.upsert({
       where:  { restaurantId },
       create: { restaurantId, ...input },
       update: { ...input },

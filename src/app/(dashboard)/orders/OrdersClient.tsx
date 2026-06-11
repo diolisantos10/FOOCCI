@@ -2201,9 +2201,10 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
           <button
             type="button"
             onClick={unlockAudio}
+            title="Clique para desbloquear áudio neste dispositivo. Configurações completas em Configurações → Sons e alertas."
             className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
           >
-            🔇 Ativar som de pedidos
+            🔇 Desbloquear áudio
           </button>
         )}
         <button

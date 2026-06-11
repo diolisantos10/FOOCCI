@@ -87,6 +87,7 @@ model Restaurant {
   agencyProjects         AgencyProject[]
   waOrderingSessions     WhatsAppOrderingSession[]
   waTextOrderingConfig   WhatsAppTextOrderingConfig?
+  soundSettings          RestaurantSoundSettings?
 
   @@map("restaurants")
 }
@@ -1426,6 +1427,31 @@ model PaymentSettings {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("payment_settings")
+}
+
+// ─── RestaurantSoundSettings ──────────────────────────────────────────────────
+//  Per-restaurant sound/notification preferences.
+//  Device-level audio permission state (blocked/unlocked) is tracked in
+//  localStorage only — it is browser-specific and intentionally not stored here.
+
+model RestaurantSoundSettings {
+  id           String   @id @default(cuid())
+  restaurantId String   @unique
+
+  soundEnabled                     Boolean @default(true)
+  newOrderSoundEnabled             Boolean @default(true)
+  humanAttentionSoundEnabled       Boolean @default(true)
+  soundVolume                      Int     @default(80)   // 0–100
+  repeatNewOrderSoundUntilAccepted Boolean @default(false)
+  repeatHumanAttentionUntilSeen    Boolean @default(false)
+  soundTheme                       String  @default("DEFAULT") // DEFAULT | SOFT | URGENT
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_sound_settings")
 }
 
 // ─── StoreProfile ─────────────────────────────────────────────────────────────
