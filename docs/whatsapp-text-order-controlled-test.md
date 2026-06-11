@@ -15,6 +15,17 @@
 
 ---
 
+## 0a) PRIMEIRA etapa: simulador (sem celular, sem teste manual)
+
+Antes de qualquer teste no aparelho, **rodar o simulador** — ele prova o fluxo
+inteiro num cardápio sintético, sem enviar WhatsApp e sem criar pedido/Pix:
+
+- Admin: **WA Cockpit** (`/admin/agents/whatsapp`) → "Rodar simulação completa".
+- Ou workflow **WhatsApp Text Order Simulator** (`CRON_SECRET`).
+
+Só seguir para o teste no aparelho quando o simulador estiver **PASS / p0=0**.
+Detalhes: `docs/whatsapp-text-order-simulator.md`.
+
 ## 0) Antes do teste
 
 Rodar o diagnóstico de configuração (somente leitura — não altera nada):

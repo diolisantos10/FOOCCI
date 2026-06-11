@@ -245,6 +245,7 @@ export async function analyzeTextOrder(input: WaAnalyzeInput): Promise<WaAnalyze
 // ════════════════════════════════════════════════════════════════════════════
 
 import { advanceSession } from "./WhatsAppOrderStateMachine";
+import { withMenuFooter } from "./menuFooter";
 import { buildFullDraft, checkCompleteness } from "./WhatsAppOrderDraftBuilder";
 import { quoteWhatsAppDelivery } from "./WhatsAppDeliveryService";
 import { createOrderFromSession } from "./WhatsAppOrderCreationService";
@@ -352,14 +353,15 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
       s.status = "AWAITING_CUSTOMER";
       // Rebuild draft with delivery fee now set so comanda shows the correct total
       const draftWithFee = buildFullDraft(s);
-      reply = `${draftWithFee.comandaText}\n\nVai pagar no Pix, cartão ou dinheiro?`;
+      // Active reply built here (bypasses the machine's done()) — keep the `0. menu` contract.
+      reply = withMenuFooter(`${draftWithFee.comandaText}\n\nVai pagar no Pix, cartão ou dinheiro?`);
     } else if (quote.status === "out_of_range" || quote.status === "blocked") {
       s.stage  = "HANDOFF_REQUIRED";
       s.status = "HANDOFF_REQUIRED";
       reply = "Esse endereço parece fora da nossa área de entrega. Quer retirar no restaurante ou prefere falar com um atendente?";
     } else {
       s.stage = "COLLECTING_ADDRESS";
-      reply = "Não consegui calcular a entrega para esse endereço. Pode confirmar a rua, número e bairro?";
+      reply = withMenuFooter("Não consegui calcular a entrega para esse endereço. Pode confirmar a rua, número e bairro?");
     }
   }
 
@@ -370,7 +372,7 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
 
     if (!completeness.ready) {
       s.status = "AWAITING_CUSTOMER";
-      reply = `Antes de finalizar, ainda falta: ${completeness.missing.join(", ")}.`;
+      reply = withMenuFooter(`Antes de finalizar, ainda falta: ${completeness.missing.join(", ")}.`);
     } else {
       const creation = await createOrderFromSession({
         session:      s,

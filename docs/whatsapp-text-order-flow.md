@@ -71,6 +71,14 @@ gates: `text_order_started`, `item_matched`, `item_ambiguous`, `item_not_found`,
 `flow_cancelled`. `deriveOrderingEvents(step)` é determinístico e deixa explícito
 se a ação foi IA / humano / sistema (`TimelineActor`).
 
+## Simulador (validação sem celular)
+
+O simulador roda a máquina real sobre cardápio/pagamento/endereço sintéticos e
+prova a jornada inteira (transcript + comanda + `WOULD_CREATE_ORDER`/
+`WOULD_GENERATE_PIX` + segurança) sem enviar WhatsApp nem criar pedido/Pix.
+Cockpit admin `/admin/agents/whatsapp`; cron `POST /api/cron/whatsapp/text-order-simulator`.
+É a **primeira etapa** de validação — ver `docs/whatsapp-text-order-simulator.md`.
+
 ## Diagnóstico seguro
 
 `POST /api/cron/whatsapp/text-order-diagnostic` (Bearer CRON_SECRET) — catálogo
