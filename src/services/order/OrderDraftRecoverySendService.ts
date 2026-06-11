@@ -51,20 +51,22 @@ function maskPhone(phone: string): string {
 }
 
 export interface RecoverySendResult {
-  checked:                 number;
-  eligible:                number;
-  sent:                    number;
-  skippedNoPhone:          number;
-  skippedAlreadySent:      number;
-  skippedDailyLimit:       number;
-  skippedOrderedAfter:     number;
-  skippedPendingPayment:   number;
-  skippedNoConfig:         number; // restaurant has no Evolution/WhatsApp integration configured
-  skippedRestaurantClosed: number; // restaurant is closed — recovery deferred, attempts NOT incremented
-  failed:                  number; // Evolution API was called but returned an error
-  dryRun:                  boolean;
-  inactivityMinutes:       number;
-  durationMs:              number;
+  checked:                    number;
+  eligible:                   number;
+  sent:                       number;
+  skippedNoPhone:             number;
+  skippedAlreadySent:         number;
+  skippedDailyLimit:          number;
+  skippedOrderedAfter:        number;
+  skippedPendingPayment:      number;
+  /** Combined: order found via Rule 7 + AWAITING_PAYMENT via Rule 8. */
+  skippedOrderOrPaymentExists: number;
+  skippedNoConfig:            number; // restaurant has no Evolution/WhatsApp integration configured
+  skippedRestaurantClosed:    number; // restaurant is closed — recovery deferred, attempts NOT incremented
+  failed:                     number; // Evolution API was called but returned an error
+  dryRun:                     boolean;
+  inactivityMinutes:          number;
+  durationMs:                 number;
 }
 
 // Unambiguous alphanumeric charset (no 0/O, 1/I/l)
@@ -216,8 +218,9 @@ export class OrderDraftRecoverySendService {
       return {
         checked: 0, eligible: 0, sent: 0,
         skippedNoPhone: 0, skippedAlreadySent: 0, skippedDailyLimit: 0,
-        skippedOrderedAfter: 0, skippedPendingPayment: 0, skippedNoConfig: 0,
-        skippedRestaurantClosed: 0, failed: 0,
+        skippedOrderedAfter: 0, skippedPendingPayment: 0,
+        skippedOrderOrPaymentExists: 0,
+        skippedNoConfig: 0, skippedRestaurantClosed: 0, failed: 0,
         dryRun, inactivityMinutes,
         durationMs: Date.now() - startMs,
       };
@@ -253,16 +256,17 @@ export class OrderDraftRecoverySendService {
     );
 
     // ── Step 4: per-draft eligibility + send ────────────────────────────────
-    let eligible                = 0;
-    let sent                    = 0;
-    let skippedNoPhone          = 0;
-    let skippedAlreadySent      = 0;
-    let skippedDailyLimit       = 0;
-    let skippedOrderedAfter     = 0;
-    let skippedPendingPayment   = 0;
-    let skippedNoConfig         = 0;
-    let skippedRestaurantClosed = 0;
-    let failed                  = 0;
+    let eligible                    = 0;
+    let sent                        = 0;
+    let skippedNoPhone              = 0;
+    let skippedAlreadySent          = 0;
+    let skippedDailyLimit           = 0;
+    let skippedOrderedAfter         = 0;
+    let skippedPendingPayment       = 0;
+    let skippedOrderOrPaymentExists = 0;
+    let skippedNoConfig             = 0;
+    let skippedRestaurantClosed     = 0;
+    let failed                      = 0;
 
     // Cache open/closed status per restaurant for this tick — avoids N DB round-trips
     // when multiple drafts belong to the same restaurant.
@@ -299,24 +303,37 @@ export class OrderDraftRecoverySendService {
         continue;
       }
 
-      // Rule 8: Pix/payment pending — do not interrupt
+      // Rule 8: Pix/payment pending — do not interrupt active payment flow
       if (pendingSet.has(key)) {
         skippedPendingPayment++;
+        skippedOrderOrPaymentExists++;
+        console.info(`[OrderDraftRecoverySendService] skip rule8 pending payment`, {
+          draftId: draft.id, customerId: draft.customerId, restaurantId: draft.restaurantId,
+        });
         continue;
       }
 
-      // Rule 7: non-cancelled order placed after draft was last touched
+      // Rule 7 (FIXED): non-cancelled order placed at or around the time of this draft session.
+      // Use a 30-minute lookback from draft.updatedAt to guard against the draft being
+      // synced a few seconds AFTER order creation — which previously caused gt to miss the order.
+      const rule7Lookback = new Date(draft.updatedAt.getTime() - 30 * 60_000);
       const recentOrder = await prisma.order.findFirst({
         where: {
           restaurantId: draft.restaurantId,
           customerId:   draft.customerId,
           status:       { not: "CANCELLED" },
-          createdAt:    { gt: draft.updatedAt },
+          createdAt:    { gte: rule7Lookback },
         },
         select: { id: true },
       });
       if (recentOrder) {
         skippedOrderedAfter++;
+        skippedOrderOrPaymentExists++;
+        console.info(`[OrderDraftRecoverySendService] skip rule7 recent order found`, {
+          draftId: draft.id, orderId: recentOrder.id,
+          customerId: draft.customerId, restaurantId: draft.restaurantId,
+          draftUpdatedAt: draft.updatedAt, lookbackDate: rule7Lookback,
+        });
         continue;
       }
 
@@ -421,7 +438,7 @@ export class OrderDraftRecoverySendService {
     }
 
     return {
-      checked:                 candidates.length,
+      checked:                    candidates.length,
       eligible,
       sent,
       skippedNoPhone,
@@ -429,6 +446,7 @@ export class OrderDraftRecoverySendService {
       skippedDailyLimit,
       skippedOrderedAfter,
       skippedPendingPayment,
+      skippedOrderOrPaymentExists,
       skippedNoConfig,
       skippedRestaurantClosed,
       failed,

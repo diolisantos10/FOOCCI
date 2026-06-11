@@ -554,7 +554,14 @@ export async function POST(
   void prisma.orderDraft.updateMany({
     where: { restaurantId, customerId, status: "OPEN" },
     data:  { status: "CONFIRMED", confirmedAt: new Date() },
-  }).catch(() => {});
+  }).catch((err) =>
+    console.warn("[finalize] draft close failed", {
+      restaurantId,
+      customerId,
+      orderId,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
 
   // ── pay_now: generate online payment link ──────────────────────
   if (paymentMode === "pay_now") {

@@ -345,6 +345,30 @@ export async function POST(req: NextRequest) {
   const result = await confirmMpPayment(payment, mpPaymentData);
   console.info(LOG, "done", { paymentId, orderId: payment.order.id, result });
 
+  // ── Step 7: close any OPEN draft after successful Pix confirmation ─────────
+  // Prevents abandonment recovery from firing for an order that was just paid.
+  if (result === "confirmed") {
+    const orderForDraft = await prisma.order.findUnique({
+      where:  { id: payment.order.id },
+      select: { customerId: true, restaurantId: true },
+    });
+    if (orderForDraft?.customerId) {
+      void prisma.orderDraft.updateMany({
+        where: {
+          restaurantId: orderForDraft.restaurantId,
+          customerId:   orderForDraft.customerId,
+          status:       "OPEN",
+        },
+        data: { status: "CONFIRMED", confirmedAt: new Date() },
+      }).catch((err) =>
+        console.warn(LOG, "draft close failed after payment", {
+          orderId: payment!.order!.id,
+          error:   err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
+
   return NextResponse.json({ received: true });
 }
 

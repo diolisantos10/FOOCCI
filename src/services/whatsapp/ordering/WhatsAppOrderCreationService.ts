@@ -112,6 +112,26 @@ export async function createOrderFromSession(
     ]);
   }
 
+  // Close any OPEN /pedido draft for this customer so abandonment recovery never fires
+  // after a WhatsApp order. Pix orders are covered too — Rule 8 already blocks recovery
+  // for AWAITING_PAYMENT, but closing the draft is cleaner and handles edge cases.
+  {
+    const { prisma } = await import("@/lib/prisma");
+    void prisma.orderDraft.updateMany({
+      where: {
+        restaurantId: session.restaurantId,
+        customerId:   created.customerId,
+        status:       "OPEN",
+      },
+      data: { status: "CONFIRMED", confirmedAt: new Date() },
+    }).catch((err) =>
+      console.warn("[WhatsAppOrderCreationService] draft close failed", {
+        orderId:  created.orderId,
+        error:    err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
   return {
     orderId:     created.orderId,
     status:      isPix ? "AWAITING_PAYMENT" : "CONFIRMED",
