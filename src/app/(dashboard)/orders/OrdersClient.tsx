@@ -6,10 +6,9 @@ import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
+import { SOUND_PREF_KEY } from "@/lib/sound-prefs";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
-
-const SOUND_PREF_KEY = "foocci_order_sound";
 const ALERT_WAV      = "/sounds/foocci-order-alert.wav";
 
 // Oscillator fallback — used when WAV file is unavailable or AudioContext is not suspended
@@ -2211,14 +2210,13 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
           type="button"
           onClick={toggleSound}
           title={soundEnabled ? "Desativar som dos pedidos" : "Ativar som dos pedidos"}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`rounded-lg p-1.5 text-base transition-colors ${
             soundEnabled
-              ? "bg-orange-50 text-orange-600 hover:bg-orange-100"
-              : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+              ? "text-orange-500 hover:bg-orange-50"
+              : "text-gray-400 hover:bg-gray-100"
           }`}
         >
           {soundEnabled ? "🔔" : "🔕"}
-          <span className="hidden sm:inline">{soundEnabled ? "Som ativo" : "Som desativado"}</span>
         </button>
         <button
           type="button"

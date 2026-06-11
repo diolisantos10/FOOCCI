@@ -385,7 +385,13 @@ export function AtendimentoClient({
   // ── Human-handoff alert sound ─────────────────────────────────────────────
   const handoffAudioRef       = useRef<HTMLAudioElement | null>(null);
   const [handoffAudioBlocked, setHandoffAudioBlocked] = useState(false);
-  const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(true);
+  const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const v = localStorage.getItem("handoff-sound-enabled");
+      return v === null ? true : v === "true";
+    } catch { return true; }
+  });
   // Track conversation statuses to detect new transitions to HUMAN
   const prevStatusRef    = useRef<Map<string, ConvStatus>>(new Map());
   const alertedIds       = useRef<Set<string>>(new Set());
@@ -500,11 +506,6 @@ export function AtendimentoClient({
   useEffect(() => {
     const audio = new Audio("/sounds/foocci-handoff-alert.wav");
     handoffAudioRef.current = audio;
-    // Restore user preference
-    try {
-      const stored = localStorage.getItem("handoff-sound-enabled");
-      if (stored === "false") setHandoffSoundEnabled(false);
-    } catch { /* ignore */ }
     return () => { audio.pause(); audio.src = ""; };
   }, []);
 

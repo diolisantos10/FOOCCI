@@ -24,6 +24,7 @@ const GROUPS: Group[] = [
       { href: "/settings/operation", label: "Operação",   icon: "⏰" },
       { href: "/settings/payments",     label: "Pagamentos",  icon: "💳" },
       { href: "/settings/impressoras", label: "Impressoras", icon: "🖨️" },
+      { href: "/settings/sons",       label: "Sons e alertas", icon: "🔔" },
     ],
   },
   {
@@ -31,12 +32,6 @@ const GROUPS: Group[] = [
     items: [
       { href: "/settings/team",     label: "Equipe",    icon: "👥" },
       { href: "/settings/policies", label: "Políticas", icon: "📄" },
-    ],
-  },
-  {
-    title: "CRM",
-    items: [
-      { href: "/settings/crm", label: "CRM", icon: "💬" },
     ],
   },
 ];
