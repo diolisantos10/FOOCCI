@@ -668,6 +668,7 @@ enum Channel {
   WEB_AGENT
   QR_AGENT
   MANUAL
+  INSTAGRAM_DIRECT
 }
 
 enum ConversationStatus {
@@ -3540,4 +3541,70 @@ model BrainChangeRequest {
   @@index([target, status])
   @@index([createdAt])
   @@map("brain_change_requests")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CUSTOMER CHANNEL IDENTITY — maps a customer to a per-channel external user id.
+//  Channel-agnostic: a customer can have a WhatsApp phone AND an Instagram scoped
+//  user id without forcing a phone. Soft references (no FK) follow the existing
+//  denormalized pattern; identity rows are additive and never delete a customer.
+//  No PII beyond what the channel exposes; raw tokens are NEVER stored here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CustomerChannelIdentity {
+  id                String   @id @default(cuid())
+  restaurantId      String
+  customerId        String? // soft ref to Customer.id — nullable until linked
+  channel           Channel
+  externalUserId    String // e.g. Instagram-scoped user id (IGSID) or phone JID
+  username          String?
+  displayName       String?
+  profilePictureUrl String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([restaurantId, channel, externalUserId])
+  @@index([restaurantId, channel])
+  @@index([customerId])
+  @@map("customer_channel_identities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INSTAGRAM CHANNEL CONFIG — per-restaurant Instagram Direct connection.
+//  Tokens are stored ENCRYPTED (AES-256-GCM via lib/crypto); the verify token is
+//  stored as a SHA-256 hash (compared, never displayed). Modes gate behaviour:
+//    DISABLED      — off.
+//    RECEIVE_ONLY  — inbound persisted, NO sending.
+//    REPLY_ONLY    — inbound + manual operator reply (no AI).
+//    FULL          — reserved for future AI/automation (NOT used in v1).
+//  Scope gates who is routed:
+//    TEST_ACCOUNT_ONLY — only allowlisted external user ids (safe default).
+//    RESTAURANT_WIDE   — all senders for the connected account.
+//  Nothing here sends a message, creates an order, or generates a Pix.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InstagramChannelConfig {
+  id                          String   @id @default(cuid())
+  restaurantId                String   @unique
+  enabled                     Boolean  @default(false)
+  paused                      Boolean  @default(false)
+  mode                        String   @default("DISABLED") // DISABLED|RECEIVE_ONLY|REPLY_ONLY|FULL
+  scope                       String   @default("TEST_ACCOUNT_ONLY") // TEST_ACCOUNT_ONLY|RESTAURANT_WIDE
+  instagramBusinessAccountId  String?
+  facebookPageId              String?
+  pageAccessTokenEncrypted    String? // AES-256-GCM ciphertext — never plaintext
+  verifyTokenHash             String? // SHA-256 hash of the webhook verify token
+  appId                       String?
+  appSecretRef                String? // name/ref of the env secret, NOT the secret itself
+  allowlistedExternalUserIds  Json     @default("[]") // string[]
+  lastWebhookAt               DateTime?
+  lastError                   String?
+  metadata                    Json?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([facebookPageId])
+  @@index([instagramBusinessAccountId])
+  @@map("instagram_channel_configs")
 }

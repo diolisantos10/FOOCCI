@@ -40,7 +40,7 @@ type ConvStatus =
   | "AI_ATENDENDO"
   | "HUMANO_ASSUMIU";
 
-type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
+type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT";
 
 type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED" | "LOCKED";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
@@ -148,12 +148,13 @@ interface ConvDetail extends ConvSummary {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
-  WHATSAPP:  { label: "WhatsApp", icon: "📱" },
-  EMAIL:     { label: "E-mail",   icon: "✉️"  },
-  SMS:       { label: "SMS",      icon: "💬"  },
-  QR_AGENT:  { label: "Cardápio", icon: "📋"  },
-  WEB_AGENT: { label: "Cardápio", icon: "📋"  },
-  MANUAL:    { label: "Manual",   icon: "✍️"  },
+  WHATSAPP:         { label: "WhatsApp",     icon: "📱" },
+  EMAIL:            { label: "E-mail",       icon: "✉️"  },
+  SMS:              { label: "SMS",          icon: "💬"  },
+  QR_AGENT:         { label: "Cardápio",     icon: "📋"  },
+  WEB_AGENT:        { label: "Cardápio",     icon: "📋"  },
+  MANUAL:           { label: "Manual",       icon: "✍️"  },
+  INSTAGRAM_DIRECT: { label: "Instagram DM", icon: "📷"  },
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [

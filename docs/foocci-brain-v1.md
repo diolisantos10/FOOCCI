@@ -102,3 +102,11 @@ auto-aprova e recusa decisão de AGENT/SYSTEM; PRODUCTION ⇒ CRITICAL + gate;
 router preserva default e faz fallback seguro; snapshot sem PII; caso Alelo
 preservado via adapter (PAYMENT_BENEFIT_QUESTION, coerência PASS,
 `runtimeTouched:false`); evidência só comercial com aprovação + flag.
+
+## Canais futuros do Brain
+
+O **Instagram Direct** (ver `docs/instagram-direct-integration-v1.md`) entra na
+v1 como **canal de atendimento manual** — o Brain **não** classifica nem responde
+automaticamente ainda. Quando habilitado, um `SocialChannelBrainAdapter` poderá
+classificar intenção, o Waiter assumir pedido e o CRM aproveitar o lead, sempre
+atrás de flag/config e sem auto-reply nesta fase.

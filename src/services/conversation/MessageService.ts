@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { sendManualReply as sendInstagramManualReply } from "@/services/instagram/InstagramChannelService";
 import type { SendMessageInput, MessageListQuery } from "@/validators/conversation";
 import { ConversationStatus, MessageType } from "@prisma/client";
 
@@ -104,6 +105,29 @@ export class MessageService {
     }
 
     const now = new Date();
+
+    // Instagram Direct: route the manual reply through the Instagram channel
+    // service (mode-gated, dry-run aware, persists the outbound itself). Never
+    // falls into the internal-only bucket below. WhatsApp path is untouched.
+    if (conv.channel === "INSTAGRAM_DIRECT") {
+      if (input.type !== "TEXT") {
+        return serviceFail("Instagram v1 suporta apenas resposta de texto.", 400);
+      }
+      const identity = await prisma.customerChannelIdentity.findFirst({
+        where: { restaurantId, channel: "INSTAGRAM_DIRECT", customerId: conv.customerId ?? undefined },
+        select: { externalUserId: true },
+        orderBy: { updatedAt: "desc" },
+      });
+      if (!identity) {
+        return serviceFail("Conversa do Instagram sem identidade vinculada — não é possível responder.", 422);
+      }
+      const result = await sendInstagramManualReply(restaurantId, conversationId, identity.externalUserId, input.content);
+      if (!result.ok) {
+        // Operational (not a crash): surface the reason; the outbound was persisted as pending/failed.
+        return serviceFail(result.reason ?? "Não foi possível enviar pelo Instagram.", 502);
+      }
+      return serviceOk({ id: result.messageId, _channel: "INSTAGRAM_DIRECT", _dryRun: result.send.dryRun });
+    }
 
     // Non-WhatsApp channels: persist internally. For Cardápio (QR/WEB agent)
     // conversations the message is delivered to the customer's /pedido chat via
