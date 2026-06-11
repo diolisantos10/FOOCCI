@@ -5,7 +5,9 @@
  */
 
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { PrimaryCta, SecondaryCta } from "./Cta";
+import { hasAsset, SITE_ASSETS } from "./siteAssets";
 
 type PageHeroProps = {
   badge: string;
@@ -16,6 +18,8 @@ type PageHeroProps = {
   secondaryLabel?: string;
   secondaryHref?: string;
   note?: string;
+  /** Warm restaurant ambiance behind the hero (hospitality system). Default on. */
+  ambient?: boolean;
 };
 
 export function PageHero({
@@ -27,14 +31,35 @@ export function PageHero({
   secondaryLabel,
   secondaryHref,
   note,
+  ambient = true,
 }: PageHeroProps) {
   const hasCta = Boolean(primaryLabel || secondaryLabel);
+  const warm = ambient && hasAsset(SITE_ASSETS.heroBackground);
   return (
     <section aria-labelledby="page-hero-title" className="relative overflow-hidden bg-white">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-gray-50 to-white"
-      />
+      {warm ? (
+        /* Restaurant as stage — softened far behind the content, fading to white */
+        <>
+          <Image
+            src={`/${SITE_ASSETS.heroBackground}`}
+            alt=""
+            aria-hidden
+            fill
+            priority
+            sizes="100vw"
+            className="-z-20 object-cover object-center opacity-30"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-white/75 via-white/88 to-white"
+          />
+        </>
+      ) : (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-gray-50 to-white"
+        />
+      )}
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.07),transparent)]"

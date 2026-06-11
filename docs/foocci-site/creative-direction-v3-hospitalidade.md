@@ -118,22 +118,25 @@ fotográficos, faixa "Mais que tecnologia, hospitalidade" e trust strip) é a
 **referência principal de layout/composição/atmosfera**. A implementação segue o
 print sem reinterpretar.
 
-As **fotografias oficiais** entram por *asset slots* (`siteAssets.ts`). Basta colocar
-os arquivos em `public/brand/foocci/site/` com estes nomes — sem mudar código:
+As **fotografias oficiais** entram por *asset slots* (`siteAssets.ts`), em
+`public/brand/foocci/site/`. **V4 (entregue e ativo):**
 
-| Arquivo | Conteúdo |
-|---|---|
-| `hero-restaurant.jpg` | cena vazia do restaurante c/ balcão curvo (fundo do hero, ~16:9) |
-| `journey-1-cliente.jpg` | mulher sorrindo com celular |
-| `journey-2-pedido.jpg` | mão segurando o app Foocci |
-| `journey-3-crm.jpg` | homem com celular |
-| `journey-4-campanha.jpg` | prato premium (salmão) |
-| `journey-5-volta.jpg` | casal jantando |
-| `owner-tablet.jpg` | dono/chef com tablet (institucional) |
-| `app-phone.jpg` | app Foocci no celular em ambiente de restaurante |
+| Arquivo | Conteúdo | Uso |
+|---|---|---|
+| `hero-restaurant-with-mascot.png` | cena completa: restaurante + mascote anfitrião + balão "Olá! Sou a Foocci" + anagrama F | **hero da home** (render flat — composição oficial, sem reinterpretar em CSS) |
+| `hero-restaurant-background.png` | restaurante vazio c/ balcão curvo (sem mascote/texto) | ambiência quente atrás do hero das **páginas internas** (`PageHero`, veladas em branco) |
+| `journey-1-cliente.jpg` | mulher sorrindo (Cliente chega) | medalhão da jornada |
+| `journey-2-pedido.jpg` | app/pedido (Pedido guiado) | medalhão da jornada |
+| `journey-3-crm.jpg` | CRM ativo | medalhão da jornada |
+| `journey-4-campanha.jpg` | prato premium (Campanha) | medalhão da jornada |
+| `journey-5-volta.jpg` | casal jantando (Cliente volta) | medalhão da jornada |
+| `owner-tablet.jpg` / `app-phone.jpg` | dono c/ tablet · app no celular | slots reservados (institucional) |
 
-Enquanto um slot não existe, o componente usa um *fallback fiel* (mascote/anagrama
-oficiais + tons quentes) com a MESMA composição — nada quebra, nada genérico.
+O hero deixou de compor mascote/balão/anagrama em CSS: agora renderiza a
+**fotografia composta oficial** (`hero-restaurant-with-mascot.png`), eliminando os
+defeitos de composição apontados (balão sobre o rosto, sombra "caixa", chips
+cruzando o corpo). Slots ainda ausentes caem em *fallback fiel* (tom quente, mesma
+composição) — nada quebra, nada genérico.
 
 Desvios conscientes do print (regras de negócio do pré-lançamento):
 - **Nav** mantém as rotas reais (`Como funciona / Soluções / CRM / Preços / Demonstração`);

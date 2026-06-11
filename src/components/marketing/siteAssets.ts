@@ -27,8 +27,17 @@ export function hasAsset(rel: string): boolean {
 
 /** Canonical asset slots (relative to /public). */
 export const SITE_ASSETS = {
-  /** Empty warm restaurant scene w/ curved counter (hero background, ~16:9). */
-  heroRestaurant: "brand/foocci/site/hero-restaurant.jpg",
+  /**
+   * Approved home hero — the FULL composed scene (restaurant ambience + mascot
+   * host + speech bubble + black F tile), exactly as in the official mockup.
+   * Rendered flat so the art direction is never reinterpreted in CSS.
+   */
+  heroComposed: "brand/foocci/site/hero-restaurant-with-mascot.png",
+  /**
+   * Empty warm restaurant scene (curved counter, no mascot/text) — the stage
+   * used as soft ambiance on internal pages so they share the home's language.
+   */
+  heroBackground: "brand/foocci/site/hero-restaurant-background.png",
   /** Journey medallions (square/circular crops). */
   journey: [
     "brand/foocci/site/journey-1-cliente.jpg",   // mulher sorrindo com celular
