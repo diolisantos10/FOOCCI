@@ -79,7 +79,9 @@ export async function runReadinessDiagnostic(input: ReadinessInput): Promise<Rea
   // FULL_TEST readiness: everything REPLY_ONLY needs + FULL_TEST mode.
   const fullTestReady = config.ok && config.canRunFullTest && flowPass && config.riskLevel !== "HIGH";
   if (!fullTestReady && replyOnlyReady) {
-    requiredNextActions.push("validar REPLY_ONLY no aparelho e então subir mode para ALLOWLIST_FULL_TEST");
+    requiredNextActions.push(
+      "revisar transcript e comanda dos cenários no simulador (WA Cockpit); aprovado, subir mode para ALLOWLIST_FULL_TEST controlado pelo admin — teste no celular é opcional, não obrigatório",
+    );
   }
 
   // RESTAURANT_WIDE readiness: the highest bar — needs the human approval marker,

@@ -55,6 +55,15 @@ export interface SimTranscriptLine { actor: "CUSTOMER" | "AGENT" | "SYSTEM"; tex
 export interface SimCheck { name: string; passed: boolean; severity: "P0" | "P1" | "P2"; message: string; }
 export interface SimSafety { noEvolution: boolean; noRealOrder: boolean; noRealPix: boolean; runtimeTouched: false; }
 
+/** Operator-facing summary of what the flow did (synthetic data only, no PII). */
+export interface SimScenarioSummary {
+  itemsFound: { name: string; quantity: number }[];
+  itemsAmbiguous: string[];
+  paymentMethod: string | null;
+  deliveryType: string | null;
+  addressUsed: string | null;
+}
+
 export interface SimScenarioResult {
   status: "PASS" | "WARNING" | "FAIL";
   scenarioId: string;
@@ -65,6 +74,7 @@ export interface SimScenarioResult {
   extractedEntities: unknown;
   orderDraft: unknown;
   actions: string[];
+  summary: SimScenarioSummary;
   safety: SimSafety;
   checks: SimCheck[];
 }
@@ -291,6 +301,15 @@ async function runFlowScenario(sc: FlowScenario, mode: SimMode): Promise<SimScen
     try { orderDraft = buildFullDraft(session); } catch { /* non-critical */ }
   }
 
+  const summary: SimScenarioSummary = {
+    itemsFound: finalItems,
+    itemsAmbiguous: (session?.unresolvedItems ?? []).map(u => u.rawText),
+    paymentMethod: session?.paymentMethod ?? null,
+    deliveryType: session?.deliveryType ?? null,
+    // Synthetic address only — never a real customer's.
+    addressUsed: session?.address?.street ? `${session.address.street}, ${session.address.number ?? ""}`.trim() : null,
+  };
+
   const wouldCreateOrder = actions.has("CREATE_ORDER");
   const wouldGeneratePix = actions.has("GENERATE_PIX");
   const entities = extractOrderEntities(sc.messages[0]!);
@@ -319,6 +338,7 @@ async function runFlowScenario(sc: FlowScenario, mode: SimMode): Promise<SimScen
     extractedEntities: entities,
     orderDraft,
     actions: displayActions,
+    summary,
     safety: { noEvolution: true, noRealOrder: !createdRealOrder, noRealPix: !createdRealPix, runtimeTouched: false },
     checks,
   };
@@ -338,6 +358,7 @@ function runConfigScenario(id: string, name: string, input: Parameters<typeof as
     extractedEntities: null,
     orderDraft: null,
     actions: [],
+    summary: { itemsFound: [], itemsAmbiguous: [], paymentMethod: null, deliveryType: null, addressUsed: null },
     safety: { noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false },
     checks,
   };
