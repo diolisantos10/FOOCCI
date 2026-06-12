@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos";
+type Provider = "whatsapp" | "instagram" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -42,6 +42,14 @@ const INTEGRATIONS: {
     icon:          "💬",
     color:         "bg-green-500",
     configureHref: "/integracoes/whatsapp",
+  },
+  {
+    provider:      "instagram",
+    name:          "Meta / Instagram",
+    description:   "Receba e responda mensagens do Instagram Direct pela Central de Atendimento.",
+    icon:          "📷",
+    color:         "bg-gradient-to-br from-purple-500 to-pink-500",
+    configureHref: "/integracoes/instagram",
   },
   {
     provider:    "stone",

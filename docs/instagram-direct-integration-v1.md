@@ -30,6 +30,10 @@ pela plataforma. A base fica pronta para, no futuro, plugar Brain/Waiter/CRM.
 - Sem merge automático de cliente WhatsApp ↔ Instagram.
 - Sem OAuth completo da Meta (configuração manual de IDs/token nesta fase).
 
+> **UI do lojista:** a tela de produto para conectar a Meta vive em
+> `/integracoes/instagram` (card "Meta / Instagram" na Central de Integrações).
+> Detalhes em `docs/instagram-meta-integration-admin.md`.
+
 ## Arquitetura
 
 ```
