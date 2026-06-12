@@ -1,0 +1,73 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — ROUTING diagnostic for one phone (read-only, manual)
+#
+# Answers: would a real message from this phone enter the Text Order engine
+# (and in which mode) or fall back to the receptionist — and why. Phone omitted
+# = self-test of the first allowlisted number. Logs only the MASKED phone.
+# Never sends WhatsApp, never creates order/Pix, never changes config.
+# Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order Routing Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug (ex.: sushi-cazza)"
+        required: true
+        default: "sushi-cazza"
+      phone:
+        description: "Telefone a testar (vazio = testa o 1º número da allowlist; nunca é logado em claro)"
+        required: false
+        default: ""
+
+jobs:
+  routing:
+    name: "Routing Diagnostic (read-only)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/text-order-routing-diagnostic" >> "$GITHUB_OUTPUT"
+
+      - name: "Run routing diagnostic"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          PHONE: ${{ inputs.phone }}
+        run: |
+          BODY=$(jq -nc --arg slug "$SLUG" --arg phone "$PHONE" \
+            '{restaurantSlug: $slug} + (if $phone != "" then {phone: $phone} else {} end)')
+          set +e
+          curl --connect-timeout 20 --max-time 120 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          OK=$(jq -r '.ok' /tmp/r.json 2>/dev/null)
+          echo "← HTTP                    : $HTTP"
+          echo "← ok                      : $OK"
+          echo "← restaurantName          : $(jq -r '.restaurantName' /tmp/r.json)"
+          echo "← phoneMasked (source)    : $(jq -r '.phoneMasked' /tmp/r.json) ($(jq -r '.phoneSource' /tmp/r.json))"
+          echo "← enabled/paused          : $(jq -r '.enabled' /tmp/r.json)/$(jq -r '.paused' /tmp/r.json)"
+          echo "← mode / scope            : $(jq -r '.mode' /tmp/r.json) / $(jq -r '.scope' /tmp/r.json)"
+          echo "← phoneInAllowlist        : $(jq -r '.phoneInAllowlist' /tmp/r.json)"
+          echo "← wouldEnterTextOrder     : $(jq -r '.wouldEnterTextOrder' /tmp/r.json)"
+          echo "← fallbackToReceptionist  : $(jq -r '.wouldFallbackToReceptionist' /tmp/r.json)"
+          echo "← effectiveDecision       : $(jq -r '.effectiveDecision' /tmp/r.json)"
+          echo "← hasActiveSession        : $(jq -r '.hasActiveSession' /tmp/r.json)"
+          echo "← firstStage              : $(jq -r '.firstStage' /tmp/r.json)"
+          echo "← declineReason           : $(jq -r '.declineReason' /tmp/r.json)"
+          echo "── bloqueios de conversa ──"
+          jq -r '.conversationBlocks[]? | "  ✗ \(.reason) → \(.suggestedUnblock)"' /tmp/r.json 2>/dev/null || true
+          echo "← safety                  : noEvolution=$(jq -r '.noEvolution' /tmp/r.json) noRealOrder=$(jq -r '.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.noRealPix' /tmp/r.json) runtimeTouched=$(jq -r '.runtimeTouched' /tmp/r.json)"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$OK" != "true" ]]; then echo "::error::ok=$OK — $(jq -r '.declineReason' /tmp/r.json)"; exit 1; fi
+          echo "✅ Routing diagnostic concluído — somente leitura, telefone mascarado."
