@@ -65,12 +65,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/menu-enhancement",  label: "Fotos do Cardápio", icon: "📸" },
     ],
   },
-  {
-    label: "Agência",
-    items: [
-      { href: "/agencia", label: "Projetos", icon: "🗂️" },
-    ],
-  },
 ];
 
 // ── Component ──────────────────────────────────────────────────────────────────
