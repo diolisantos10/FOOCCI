@@ -13,12 +13,22 @@ const startedAt = Date.now();
 
 export async function GET() {
   let dbOk = false;
+  let soundSettingsTableOk = false;
   try {
     await prisma.$queryRaw`SELECT 1`;
     dbOk = true;
   } catch {
     // DB check failed — still return 200 so Railway doesn't restart the container
     // on a transient connection issue. The dbOk flag surfaces it to operators.
+  }
+
+  if (dbOk) {
+    try {
+      await prisma.restaurantSoundSettings.count();
+      soundSettingsTableOk = true;
+    } catch {
+      // Table missing — migration not yet applied
+    }
   }
 
   return NextResponse.json(
@@ -36,6 +46,9 @@ export async function GET() {
         openaiKey:        !!process.env.OPENAI_API_KEY,
         databaseUrl:      !!process.env.DATABASE_URL,
         mpWebhookSecret:  !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+      },
+      tables: {
+        soundSettings: soundSettingsTableOk,
       },
     },
     { status: 200 }
