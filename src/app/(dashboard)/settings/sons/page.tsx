@@ -35,8 +35,16 @@ const DEFAULTS: SoundSettings = {
   soundTheme:                       "DEFAULT",
 };
 
+const VOLUME_PRESETS: { label: string; value: number; hint?: string }[] = [
+  { label: "Baixo",  value: 30 },
+  { label: "Médio",  value: 55 },
+  { label: "Alto",   value: 80 },
+  { label: "Máximo", value: 100, hint: "Para restaurantes barulhentos" },
+];
+
 export default function SonsPage() {
   const [settings,     setSettings]     = useState<SoundSettings>(DEFAULTS);
+  const [saved,        setSaved]        = useState<SoundSettings>(DEFAULTS);
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);
   const [feedback,     setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null);
@@ -46,7 +54,8 @@ export default function SonsPage() {
   const orderAudioRef   = useRef<HTMLAudioElement | null>(null);
   const handoffAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Diagnostics (localStorage, device-level)
+  const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
+
   const [diag, setDiag] = useState<{
     orderLastPlayed:   string | null;
     handoffLastPlayed: string | null;
@@ -74,7 +83,9 @@ export default function SonsPage() {
       .then((r) => r.json())
       .then((data) => {
         if (data && typeof data === "object") {
-          setSettings({ ...DEFAULTS, ...data });
+          const loaded = { ...DEFAULTS, ...data };
+          setSettings(loaded);
+          setSaved(loaded);
         }
       })
       .catch(() => { /* use defaults */ })
@@ -83,25 +94,27 @@ export default function SonsPage() {
 
   function showFeedback(ok: boolean, msg: string) {
     setFeedback({ ok, msg });
-    setTimeout(() => setFeedback(null), 4000);
+    setTimeout(() => setFeedback(null), 5000);
   }
 
-  async function save(patch: Partial<SoundSettings>) {
-    const next = { ...settings, ...patch };
-    setSettings(next);
-    // Sync localStorage mirrors for the operational screens (they read these directly)
-    writeSoundPref(SOUND_PREF_KEY, next.soundEnabled && next.newOrderSoundEnabled);
-    writeSoundPref(HANDOFF_SOUND_PREF_KEY, next.soundEnabled && next.humanAttentionSoundEnabled);
+  function patch(partial: Partial<SoundSettings>) {
+    setSettings((s) => ({ ...s, ...partial }));
+  }
 
+  async function handleSave() {
     setSaving(true);
     try {
       const res = await fetch("/api/settings/sounds", {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(patch),
+        body:    JSON.stringify(settings),
       });
       if (res.ok) {
-        showFeedback(true, "Configurações salvas.");
+        setSaved(settings);
+        // Mirror to localStorage so operational screens (OrdersClient, AtendimentoClient) pick up immediately
+        writeSoundPref(SOUND_PREF_KEY,        settings.soundEnabled && settings.newOrderSoundEnabled);
+        writeSoundPref(HANDOFF_SOUND_PREF_KEY, settings.soundEnabled && settings.humanAttentionSoundEnabled);
+        showFeedback(true, "Configurações de som salvas.");
       } else {
         showFeedback(false, "Erro ao salvar. Tente novamente.");
       }
@@ -112,6 +125,10 @@ export default function SonsPage() {
     }
   }
 
+  function handleReset() {
+    setSettings(DEFAULTS);
+  }
+
   async function testOrderSound() {
     const audio = orderAudioRef.current;
     if (!audio) return;
@@ -120,7 +137,7 @@ export default function SonsPage() {
     try {
       await audio.play();
       try { localStorage.setItem(SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
-      setTestMsg("Som de pedidos tocou com sucesso.");
+      setTestMsg("✓ Som de pedidos tocou com sucesso.");
       setAudioBlocked(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -145,7 +162,7 @@ export default function SonsPage() {
     try {
       await audio.play();
       try { localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
-      setTestMsg("Som de atendimento tocou com sucesso.");
+      setTestMsg("✓ Som de atendimento tocou com sucesso.");
       setAudioBlocked(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -186,6 +203,13 @@ export default function SonsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Unsaved changes banner */}
+      {dirty && !feedback && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          As alterações só entram em vigor depois de salvar.
+        </div>
+      )}
+
       {/* Feedback banner */}
       {feedback && (
         <div
@@ -211,8 +235,8 @@ export default function SonsPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <p className="text-sm font-semibold text-red-700">🔇 Navegador bloqueou o áudio</p>
           <p className="mt-1 text-xs text-red-600">
-            Por segurança, os navegadores bloqueiam áudio antes da primeira interação do usuário com
-            a página. Clique no botão abaixo para autorizar.
+            Por segurança, os navegadores bloqueiam áudio antes da primeira interação do usuário
+            com a página. Clique no botão abaixo para autorizar.
           </p>
           <button
             type="button"
@@ -234,29 +258,58 @@ export default function SonsPage() {
           label="Ativar todos os sons"
           desc="Liga ou desliga todos os alertas sonoros do restaurante."
           checked={settings.soundEnabled}
-          onChange={(v) => void save({ soundEnabled: v })}
+          onChange={(v) => patch({ soundEnabled: v })}
         />
-        {saving && <p className="mt-2 text-xs text-gray-400">Salvando…</p>}
+        <p className="mt-3 text-xs text-gray-400">
+          Se o navegador bloquear o áudio, clique em &ldquo;Testar som&rdquo; uma vez neste computador para reautorizar.
+        </p>
       </PageCard>
 
       {/* Volume */}
       <PageCard>
-        <SectionHeading title="Volume" subtitle="Ajusta o volume de todos os alertas (0 = mudo, 100 = máximo)." />
-        <div className="flex items-center gap-4">
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={settings.soundVolume}
-            disabled={!settings.soundEnabled}
-            onChange={(e) => setSettings((s) => ({ ...s, soundVolume: Number(e.target.value) }))}
-            onMouseUp={() => void save({ soundVolume: settings.soundVolume })}
-            onTouchEnd={() => void save({ soundVolume: settings.soundVolume })}
-            className="h-2 w-full cursor-pointer accent-orange-500 disabled:opacity-40"
-          />
-          <span className="w-10 shrink-0 text-right text-sm font-medium text-gray-700">
-            {settings.soundVolume}
-          </span>
+        <SectionHeading title="Volume" subtitle="Ajusta o volume de todos os alertas." />
+        <div className="space-y-4">
+          {/* Slider */}
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-gray-400 shrink-0 w-6">0</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={settings.soundVolume}
+              disabled={!settings.soundEnabled}
+              onChange={(e) => patch({ soundVolume: Number(e.target.value) })}
+              className="h-2 w-full cursor-pointer accent-orange-500 disabled:opacity-40"
+            />
+            <span className="w-10 shrink-0 text-right text-sm font-bold text-gray-800">
+              {settings.soundVolume}%
+            </span>
+          </div>
+
+          {/* Presets */}
+          <div className="flex flex-wrap gap-2">
+            {VOLUME_PRESETS.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                disabled={!settings.soundEnabled}
+                onClick={() => patch({ soundVolume: p.value })}
+                title={p.hint}
+                className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
+                  settings.soundVolume === p.value
+                    ? "border-orange-400 bg-orange-50 text-orange-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-xs text-gray-400">
+            Para restaurantes barulhentos, use <strong className="text-gray-600">Alto</strong> ou{" "}
+            <strong className="text-gray-600">Máximo</strong>.
+          </p>
         </div>
       </PageCard>
 
@@ -271,13 +324,13 @@ export default function SonsPage() {
             label="Ativar som de novo pedido"
             desc="Alerta ao receber um novo pedido que aguarda aceite."
             checked={settings.soundEnabled && settings.newOrderSoundEnabled}
-            onChange={(v) => void save({ newOrderSoundEnabled: v })}
+            onChange={(v) => patch({ newOrderSoundEnabled: v })}
           />
           <Toggle
             label="Repetir até pedido ser aceito"
             desc="Continua tocando em loop enquanto há pedido pendente sem aceite."
             checked={settings.repeatNewOrderSoundUntilAccepted}
-            onChange={(v) => void save({ repeatNewOrderSoundUntilAccepted: v })}
+            onChange={(v) => patch({ repeatNewOrderSoundUntilAccepted: v })}
           />
           <button
             type="button"
@@ -300,13 +353,13 @@ export default function SonsPage() {
             label="Ativar som de atendimento humano"
             desc="Alerta quando um cliente solicita atendimento humano ou é redirecionado pela IA."
             checked={settings.soundEnabled && settings.humanAttentionSoundEnabled}
-            onChange={(v) => void save({ humanAttentionSoundEnabled: v })}
+            onChange={(v) => patch({ humanAttentionSoundEnabled: v })}
           />
           <Toggle
             label="Repetir até conversa ser vista"
             desc="Continua tocando enquanto há conversas em modo humano não visualizadas."
             checked={settings.repeatHumanAttentionUntilSeen}
-            onChange={(v) => void save({ repeatHumanAttentionUntilSeen: v })}
+            onChange={(v) => patch({ repeatHumanAttentionUntilSeen: v })}
           />
           <button
             type="button"
@@ -326,7 +379,7 @@ export default function SonsPage() {
             <button
               key={theme}
               type="button"
-              onClick={() => void save({ soundTheme: theme })}
+              onClick={() => patch({ soundTheme: theme })}
               className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
                 settings.soundTheme === theme
                   ? "border-orange-400 bg-orange-50 text-orange-700"
@@ -338,6 +391,34 @@ export default function SonsPage() {
           ))}
         </div>
       </PageCard>
+
+      {/* Save row — sticky footer */}
+      <div className="sticky bottom-0 z-10 -mx-1 rounded-2xl border border-gray-100 bg-white/95 px-6 py-4 shadow-lg backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="text-xs text-gray-500">
+            {dirty
+              ? "Você tem alterações não salvas."
+              : "Todas as configurações estão salvas."}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition"
+            >
+              Restaurar padrão
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving || !dirty}
+              className="rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+            >
+              {saving ? "Salvando…" : "Salvar alterações"}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Diagnostics */}
       <PageCard>
@@ -366,7 +447,7 @@ export default function SonsPage() {
         <SectionHeading title="Sobre o áudio no navegador" />
         <p className="text-sm text-gray-600">
           Navegadores modernos bloqueiam o áudio automático até o usuário interagir com a página.
-          Se os sons pararem de funcionar após recarregar, use os botões <strong>Testar</strong>
+          Se os sons pararem de funcionar após recarregar, use os botões <strong>Testar</strong>{" "}
           acima para reautorizar. O botão mudo rápido (🔕) nas telas de Pedidos e Atendimento
           silencia o dispositivo sem alterar esta configuração.
         </p>
