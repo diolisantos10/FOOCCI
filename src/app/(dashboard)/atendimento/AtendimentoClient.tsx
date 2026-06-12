@@ -9,7 +9,10 @@ import {
   FormEvent,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 import { isGuestIdentifier } from "@/lib/guest";
+import { HANDOFF_SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
+import { playAlertAudio } from "@/lib/sound-player";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
@@ -385,13 +388,10 @@ export function AtendimentoClient({
   // ── Human-handoff alert sound ─────────────────────────────────────────────
   const handoffAudioRef       = useRef<HTMLAudioElement | null>(null);
   const [handoffAudioBlocked, setHandoffAudioBlocked] = useState(false);
-  const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const v = localStorage.getItem("handoff-sound-enabled");
-      return v === null ? true : v === "true";
-    } catch { return true; }
-  });
+  // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
+  // localStorage mirror is just the instant fallback before the API responds.
+  const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => readSoundPref(HANDOFF_SOUND_PREF_KEY, true));
+  const handoffVolumeRef = useRef(120);
   // Track conversation statuses to detect new transitions to HUMAN
   const prevStatusRef    = useRef<Map<string, ConvStatus>>(new Map());
   const alertedIds       = useRef<Set<string>>(new Set());
@@ -452,8 +452,7 @@ export function AtendimentoClient({
         if (newHandoffs.length > 0 && handoffSoundEnabled) {
           const audio = handoffAudioRef.current;
           if (audio) {
-            audio.currentTime = 0;
-            audio.play().catch((err: unknown) => {
+            playAlertAudio(audio, handoffVolumeRef.current).catch((err: unknown) => {
               if (err instanceof DOMException && err.name === "NotAllowedError") {
                 setHandoffAudioBlocked(true);
               }
@@ -507,6 +506,15 @@ export function AtendimentoClient({
     const audio = new Audio("/sounds/foocci-handoff-alert.wav");
     handoffAudioRef.current = audio;
     return () => { audio.pause(); audio.src = ""; };
+  }, []);
+
+  // Load DB-backed sound settings (Configurações → Sons e alertas) — source of truth
+  useEffect(() => {
+    void fetchRestaurantSoundSettings().then((s) => {
+      if (!s) return;
+      setHandoffSoundEnabled(s.soundEnabled && s.humanAttentionSoundEnabled);
+      handoffVolumeRef.current = s.soundVolume;
+    });
   }, []);
 
   // ── Inactivity-timeout pollers (run every 60 s while page is open) ──────
@@ -578,15 +586,6 @@ export function AtendimentoClient({
     () => conversations.filter((c) => c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU").length,
     [conversations],
   );
-
-  function unlockHandoffAudio() {
-    const audio = handoffAudioRef.current;
-    if (!audio) return;
-    audio.currentTime = 0;
-    audio.play()
-      .then(() => setHandoffAudioBlocked(false))
-      .catch(() => {});
-  }
 
   // ── Derived list — client-side filter + sort ──────────────────────────────
   const displayed = useMemo(() => {
@@ -908,37 +907,24 @@ export function AtendimentoClient({
           </div>
         </div>
 
-        {/* Human-handoff alert banner */}
+        {/* Audio blocked — config lives only in Configurações → Sons e alertas */}
         {handoffAudioBlocked && (
           <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5">
-            <button
-              type="button"
-              onClick={unlockHandoffAudio}
-              className="w-full rounded-md bg-amber-500 px-3 py-1 text-xs font-bold text-white hover:bg-amber-600 transition-colors"
+            <Link
+              href="/settings/sons"
+              className="block w-full rounded-md bg-amber-500 px-3 py-1 text-center text-xs font-bold text-white hover:bg-amber-600 transition-colors"
             >
-              🔔 Ativar sons de atendimento
-            </button>
+              🔇 Áudio bloqueado. Ative em Configurações → Sons e alertas.
+            </Link>
           </div>
         )}
 
-        {/* Human-handoff count + sound toggle */}
+        {/* Human-handoff count */}
         {humanHandoffCount > 0 && (
-          <div className="flex items-center justify-between border-b border-orange-200 bg-orange-50 px-3 py-1.5">
+          <div className="flex items-center border-b border-orange-200 bg-orange-50 px-3 py-1.5">
             <span className="text-xs font-semibold text-orange-700">
               🙋 {humanHandoffCount} aguardando atendimento humano
             </span>
-            <button
-              type="button"
-              title={handoffSoundEnabled ? "Desativar som de atendimento" : "Ativar som de atendimento"}
-              onClick={() => {
-                const next = !handoffSoundEnabled;
-                setHandoffSoundEnabled(next);
-                try { localStorage.setItem("handoff-sound-enabled", String(next)); } catch { /* ignore */ }
-              }}
-              className="ml-2 rounded p-0.5 text-orange-600 hover:bg-orange-100 transition-colors"
-            >
-              {handoffSoundEnabled ? "🔔" : "🔕"}
-            </button>
           </div>
         )}
 

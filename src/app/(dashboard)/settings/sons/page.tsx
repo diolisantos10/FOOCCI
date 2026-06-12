@@ -11,6 +11,7 @@ import {
   HANDOFF_SOUND_LAST_ERROR_KEY,
   writeSoundPref,
 } from "@/lib/sound-prefs";
+import { playAlertAudio, supportsVolumeBoost, MAX_VOLUME } from "@/lib/sound-player";
 
 const ORDER_WAV   = "/sounds/foocci-order-alert.m4a";
 const HANDOFF_WAV = "/sounds/foocci-handoff-alert.wav";
@@ -29,17 +30,18 @@ const DEFAULTS: SoundSettings = {
   soundEnabled:                     true,
   newOrderSoundEnabled:             true,
   humanAttentionSoundEnabled:       true,
-  soundVolume:                      80,
+  soundVolume:                      120,
   repeatNewOrderSoundUntilAccepted: false,
   repeatHumanAttentionUntilSeen:    false,
   soundTheme:                       "DEFAULT",
 };
 
+// >100% uses Web Audio gain boost (see sound-player.ts)
 const VOLUME_PRESETS: { label: string; value: number; hint?: string }[] = [
-  { label: "Baixo",  value: 30 },
-  { label: "Médio",  value: 55 },
-  { label: "Alto",   value: 80 },
-  { label: "Máximo", value: 100, hint: "Para restaurantes barulhentos" },
+  { label: "Baixo (50%)",   value: 50 },
+  { label: "Normal (100%)", value: 100 },
+  { label: "Alto (150%)",   value: 150, hint: "Para restaurantes barulhentos" },
+  { label: "Máximo (200%)", value: 200, hint: "Para restaurantes barulhentos" },
 ];
 
 export default function SonsPage() {
@@ -53,8 +55,10 @@ export default function SonsPage() {
 
   const orderAudioRef   = useRef<HTMLAudioElement | null>(null);
   const handoffAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [boostOk, setBoostOk] = useState(true);
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
+  const volumeMax = boostOk ? MAX_VOLUME : 100;
 
   const [diag, setDiag] = useState<{
     orderLastPlayed:   string | null;
@@ -77,13 +81,14 @@ export default function SonsPage() {
   useEffect(() => {
     orderAudioRef.current   = new Audio(ORDER_WAV);
     handoffAudioRef.current = new Audio(HANDOFF_WAV);
+    setBoostOk(supportsVolumeBoost());
     refreshDiag();
 
     fetch("/api/settings/sounds")
       .then((r) => r.json())
-      .then((data) => {
-        if (data && typeof data === "object") {
-          const loaded = { ...DEFAULTS, ...data };
+      .then((json: { data?: Partial<SoundSettings> }) => {
+        if (json?.data && typeof json.data === "object") {
+          const loaded = { ...DEFAULTS, ...json.data };
           setSettings(loaded);
           setSaved(loaded);
         }
@@ -109,11 +114,15 @@ export default function SonsPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(settings),
       });
-      if (res.ok) {
-        setSaved(settings);
+      const json: { data?: Partial<SoundSettings> } | null = await res.json().catch(() => null);
+      if (res.ok && json?.data && typeof json.data === "object") {
+        // Adopt the persisted values returned by the server, not the local draft
+        const persisted = { ...DEFAULTS, ...json.data };
+        setSettings(persisted);
+        setSaved(persisted);
         // Mirror to localStorage so operational screens (OrdersClient, AtendimentoClient) pick up immediately
-        writeSoundPref(SOUND_PREF_KEY,        settings.soundEnabled && settings.newOrderSoundEnabled);
-        writeSoundPref(HANDOFF_SOUND_PREF_KEY, settings.soundEnabled && settings.humanAttentionSoundEnabled);
+        writeSoundPref(SOUND_PREF_KEY,        persisted.soundEnabled && persisted.newOrderSoundEnabled);
+        writeSoundPref(HANDOFF_SOUND_PREF_KEY, persisted.soundEnabled && persisted.humanAttentionSoundEnabled);
         showFeedback(true, "Configurações de som salvas.");
       } else {
         showFeedback(false, "Erro ao salvar. Tente novamente.");
@@ -132,10 +141,8 @@ export default function SonsPage() {
   async function testOrderSound() {
     const audio = orderAudioRef.current;
     if (!audio) return;
-    audio.currentTime = 0;
-    audio.volume = settings.soundVolume / 100;
     try {
-      await audio.play();
+      await playAlertAudio(audio, settings.soundVolume);
       try { localStorage.setItem(SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
       setTestMsg("✓ Som de pedidos tocou com sucesso.");
       setAudioBlocked(false);
@@ -157,10 +164,8 @@ export default function SonsPage() {
   async function testHandoffSound() {
     const audio = handoffAudioRef.current;
     if (!audio) return;
-    audio.currentTime = 0;
-    audio.volume = settings.soundVolume / 100;
     try {
-      await audio.play();
+      await playAlertAudio(audio, settings.soundVolume);
       try { localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
       setTestMsg("✓ Som de atendimento tocou com sucesso.");
       setAudioBlocked(false);
@@ -267,28 +272,31 @@ export default function SonsPage() {
 
       {/* Volume */}
       <PageCard>
-        <SectionHeading title="Volume" subtitle="Ajusta o volume de todos os alertas." />
+        <SectionHeading
+          title="Volume"
+          subtitle="Ajusta o volume de todos os alertas. Acima de 100% o som é reforçado digitalmente."
+        />
         <div className="space-y-4">
           {/* Slider */}
           <div className="flex items-center gap-4">
-            <span className="text-xs text-gray-400 shrink-0 w-6">0</span>
+            <span className="text-xs text-gray-400 shrink-0 w-6">0%</span>
             <input
               type="range"
               min={0}
-              max={100}
-              value={settings.soundVolume}
+              max={volumeMax}
+              value={Math.min(settings.soundVolume, volumeMax)}
               disabled={!settings.soundEnabled}
               onChange={(e) => patch({ soundVolume: Number(e.target.value) })}
               className="h-2 w-full cursor-pointer accent-orange-500 disabled:opacity-40"
             />
-            <span className="w-10 shrink-0 text-right text-sm font-bold text-gray-800">
+            <span className="w-12 shrink-0 text-right text-sm font-bold text-gray-800">
               {settings.soundVolume}%
             </span>
           </div>
 
           {/* Presets */}
           <div className="flex flex-wrap gap-2">
-            {VOLUME_PRESETS.map((p) => (
+            {VOLUME_PRESETS.filter((p) => p.value <= volumeMax).map((p) => (
               <button
                 key={p.value}
                 type="button"
@@ -307,9 +315,14 @@ export default function SonsPage() {
           </div>
 
           <p className="text-xs text-gray-400">
-            Para restaurantes barulhentos, use <strong className="text-gray-600">Alto</strong> ou{" "}
-            <strong className="text-gray-600">Máximo</strong>.
+            Para restaurantes barulhentos, use <strong className="text-gray-600">Alto (150%)</strong> ou{" "}
+            <strong className="text-gray-600">Máximo (200%)</strong>. Recomendado: 120%.
           </p>
+          {!boostOk && (
+            <p className="text-xs text-amber-600">
+              Volume reforçado (acima de 100%) não disponível neste navegador.
+            </p>
+          )}
         </div>
       </PageCard>
 
@@ -448,8 +461,8 @@ export default function SonsPage() {
         <p className="text-sm text-gray-600">
           Navegadores modernos bloqueiam o áudio automático até o usuário interagir com a página.
           Se os sons pararem de funcionar após recarregar, use os botões <strong>Testar</strong>{" "}
-          acima para reautorizar. O botão mudo rápido (🔕) nas telas de Pedidos e Atendimento
-          silencia o dispositivo sem alterar esta configuração.
+          acima para reautorizar. Esta é a única tela que controla os sons — as telas de Pedidos
+          e Atendimento apenas tocam os alertas conforme configurado aqui.
         </p>
       </PageCard>
     </div>

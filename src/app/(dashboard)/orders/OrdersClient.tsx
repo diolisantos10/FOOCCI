@@ -6,7 +6,9 @@ import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
-import { SOUND_PREF_KEY } from "@/lib/sound-prefs";
+import Link from "next/link";
+import { SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
+import { playAlertAudio } from "@/lib/sound-player";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
 const ALERT_WAV      = "/sounds/foocci-order-alert.m4a";
@@ -1521,7 +1523,6 @@ function NewOrderModal({
   accepting,
   rejecting,
   audioBlocked,
-  onUnlockAudio,
 }: {
   order: MockOrder;
   queueLength: number;
@@ -1530,7 +1531,6 @@ function NewOrderModal({
   accepting: boolean;
   rejecting: boolean;
   audioBlocked: boolean;
-  onUnlockAudio: () => void;
 }) {
   const [confirmReject, setConfirmReject] = useState(false);
   const [rejectReason,  setRejectReason]  = useState("");
@@ -1547,13 +1547,12 @@ function NewOrderModal({
               <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
             </div>
             {audioBlocked && (
-              <button
-                type="button"
-                onClick={onUnlockAudio}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors animate-pulse"
+              <Link
+                href="/settings/sons"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors"
               >
-                🔇 Ativar som
-              </button>
+                🔇 Áudio bloqueado
+              </Link>
             )}
           </div>
           {queueLength > 1 ? (
@@ -1712,11 +1711,10 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   const [dateFrom,     setDateFrom]     = useState("");
   const [dateTo,       setDateTo]       = useState("");
   const [sortBy,       setSortBy]       = useState<SortKey>("recent");
-  const [soundEnabled, setSoundEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem(SOUND_PREF_KEY);
-    return saved === null ? true : saved === "true";
-  });
+  // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
+  // localStorage mirror is just the instant fallback before the API responds.
+  const [soundEnabled, setSoundEnabled] = useState(() => readSoundPref(SOUND_PREF_KEY, true));
+  const soundVolumeRef = useRef(120);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
@@ -1772,6 +1770,15 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     return () => { audio.pause(); audio.src = ""; };
   }, []);
 
+  // Load DB-backed sound settings (Configurações → Sons e alertas) — source of truth
+  useEffect(() => {
+    void fetchRestaurantSoundSettings().then((s) => {
+      if (!s) return;
+      setSoundEnabled(s.soundEnabled && s.newOrderSoundEnabled);
+      soundVolumeRef.current = s.soundVolume;
+    });
+  }, []);
+
   // Track pending count via ref so the alert effect can log it without adding orders to deps
   const pendingCountRef = useRef(0);
 
@@ -1802,10 +1809,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     const doPlay = () => {
       const audio = alertAudioRef.current;
       if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
-        audio.volume = 1.0;
-        audio.play().catch((err: unknown) => {
+        playAlertAudio(audio, soundVolumeRef.current).catch((err: unknown) => {
           if (err instanceof DOMException && err.name === "NotAllowedError") {
             setAudioBlocked(true);
           } else {
@@ -1827,29 +1831,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     };
   }, [hasPendingOrders, modalOrderId, soundEnabled]);
 
-  function toggleSound() {
-    setSoundEnabled((prev) => {
-      const next = !prev;
-      localStorage.setItem(SOUND_PREF_KEY, String(next));
-      return next;
-    });
-  }
-
-  // Called when operator clicks "Ativar som de pedidos" after browser blocks autoplay
-  function unlockAudio() {
-    setAudioBlocked(false);
-    localStorage.setItem(SOUND_PREF_KEY, "true");
-    const audio = alertAudioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.volume = 1.0;
-      audio.play().catch(() => playBeep());
-    } else {
-      playBeep();
-    }
-  }
-
   const fetchOrders = useCallback(() => {
     fetch("/api/orders?limit=100")
       .then((r) => r.json())
@@ -1865,10 +1846,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
             if (actionableNew.length > 0 && soundEnabled) {
               const audio = alertAudioRef.current;
               if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
-                audio.volume = 1.0;
-                audio.play().catch((err: unknown) => {
+                playAlertAudio(audio, soundVolumeRef.current).catch((err: unknown) => {
                   if (err instanceof DOMException && err.name === "NotAllowedError") {
                     setAudioBlocked(true);
                   } else {
@@ -2196,29 +2174,15 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
             🔊 Novo pedido aguardando aceite
           </span>
         )}
-        {/* Unlock button — shown when browser blocked autoplay */}
+        {/* Audio blocked — config lives only in Configurações → Sons e alertas */}
         {audioBlocked && (
-          <button
-            type="button"
-            onClick={unlockAudio}
-            title="Clique para desbloquear áudio neste dispositivo. Configurações completas em Configurações → Sons e alertas."
+          <Link
+            href="/settings/sons"
             className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
           >
-            🔇 Desbloquear áudio
-          </button>
+            🔇 Áudio bloqueado. Ative em Configurações → Sons e alertas.
+          </Link>
         )}
-        <button
-          type="button"
-          onClick={toggleSound}
-          title={soundEnabled ? "Desativar som dos pedidos" : "Ativar som dos pedidos"}
-          className={`rounded-lg p-1.5 text-base transition-colors ${
-            soundEnabled
-              ? "text-orange-500 hover:bg-orange-50"
-              : "text-gray-400 hover:bg-gray-100"
-          }`}
-        >
-          {soundEnabled ? "🔔" : "🔕"}
-        </button>
         <button
           type="button"
           onClick={() => {
@@ -2372,7 +2336,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
           accepting={modalAccepting}
           rejecting={modalRejecting}
           audioBlocked={audioBlocked}
-          onUnlockAudio={unlockAudio}
         />
       )}
 

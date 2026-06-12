@@ -395,7 +395,7 @@ export class RestaurantSettingsService {
         soundEnabled:                    true,
         newOrderSoundEnabled:            true,
         humanAttentionSoundEnabled:      true,
-        soundVolume:                     80,
+        soundVolume:                     120,
         repeatNewOrderSoundUntilAccepted: false,
         repeatHumanAttentionUntilSeen:   false,
         soundTheme:                      "DEFAULT",

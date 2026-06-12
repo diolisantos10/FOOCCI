@@ -1441,7 +1441,7 @@ model RestaurantSoundSettings {
   soundEnabled                     Boolean @default(true)
   newOrderSoundEnabled             Boolean @default(true)
   humanAttentionSoundEnabled       Boolean @default(true)
-  soundVolume                      Int     @default(80)   // 0–100
+  soundVolume                      Int     @default(120)  // 0–200, >100 = Web Audio gain boost
   repeatNewOrderSoundUntilAccepted Boolean @default(false)
   repeatHumanAttentionUntilSeen    Boolean @default(false)
   soundTheme                       String  @default("DEFAULT") // DEFAULT | SOFT | URGENT

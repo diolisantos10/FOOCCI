@@ -18,3 +18,31 @@ export function writeSoundPref(key: string, value: boolean): void {
   if (typeof window === "undefined") return;
   try { localStorage.setItem(key, String(value)); } catch { /* ignore */ }
 }
+
+export interface RestaurantSoundSettingsDto {
+  soundEnabled:                     boolean;
+  newOrderSoundEnabled:             boolean;
+  humanAttentionSoundEnabled:       boolean;
+  soundVolume:                      number;
+  repeatNewOrderSoundUntilAccepted: boolean;
+  repeatHumanAttentionUntilSeen:    boolean;
+  soundTheme:                       string;
+}
+
+/**
+ * Loads the restaurant sound settings from the DB-backed API.
+ * Operational screens (Pedidos, Atendimento) use this as the source of truth;
+ * the localStorage mirrors above are only the instant fallback before this resolves.
+ * Returns null on any failure so callers keep their fallback.
+ */
+export async function fetchRestaurantSoundSettings(): Promise<RestaurantSoundSettingsDto | null> {
+  try {
+    const res = await fetch("/api/settings/sounds");
+    if (!res.ok) return null;
+    const json: { data?: RestaurantSoundSettingsDto } = await res.json();
+    if (!json?.data || typeof json.data !== "object") return null;
+    return json.data;
+  } catch {
+    return null;
+  }
+}
