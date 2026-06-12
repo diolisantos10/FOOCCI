@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — PROMOTE to controlled FULL_TEST (governed, manual)
+#
+# Promotes REPLY_ONLY → ALLOWLIST_FULL_TEST through the governed service: the
+# run REFUSES unless every gate passes (PHONE_ALLOWLIST, allowlist>0, feature
+# live, risk!=HIGH, flow diagnostic PASS, cockpit PASS) and the operator typed
+# the exact confirm string as input. Config-only: no WhatsApp sent, no order,
+# no Pix, scope NEVER widened. Uses ADMIN_SECRET when available, else the
+# CRON_SECRET wrapper (same service, same gates).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order Promote Full Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug (ex.: sushi-cazza)"
+        required: true
+        default: "sushi-cazza"
+      confirm:
+        description: "Digite exatamente: PROMOTE_WHATSAPP_TEXT_ORDER_FULL_TEST"
+        required: true
+
+jobs:
+  promote:
+    name: "Promote FULL_TEST (governed)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URLs
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "admin=${BASE_URL}/api/admin/whatsapp/text-order/promote-full-test" >> "$GITHUB_OUTPUT"
+          echo "cron=${BASE_URL}/api/cron/whatsapp/text-order-promote-full-test" >> "$GITHUB_OUTPUT"
+
+      - name: "Promote (governed gates)"
+        env:
+          ADMIN_URL: ${{ steps.params.outputs.admin }}
+          CRON_URL: ${{ steps.params.outputs.cron }}
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ "$CONFIRM" != "PROMOTE_WHATSAPP_TEXT_ORDER_FULL_TEST" ]]; then
+            echo "::error::confirm digitado não confere — abortado, nada mudou."
+            exit 1
+          fi
+          BODY=$(jq -nc --arg slug "$SLUG" --arg c "$CONFIRM" '{restaurantSlug: $slug, confirm: $c}')
+          set +e
+          if [[ -n "$ADMIN_SECRET" ]]; then
+            echo "→ usando rota admin (ADMIN_SECRET presente)"
+            curl --connect-timeout 20 --max-time 150 -sS -X POST "$ADMIN_URL" \
+              -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" \
+              -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt
+          else
+            echo "→ usando wrapper cron (mesma função governada, mesmos gates)"
+            curl --connect-timeout 20 --max-time 150 -sS -X POST "$CRON_URL" \
+              -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+              -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt
+          fi
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          SUCCESS=$(jq -r '.success' /tmp/r.json 2>/dev/null)
+          echo "← HTTP          : $HTTP"
+          echo "← success       : $SUCCESS"
+          echo "← previousMode  : $(jq -r '.previousMode' /tmp/r.json)"
+          echo "← newMode       : $(jq -r '.newMode' /tmp/r.json)"
+          echo "← scope         : $(jq -r '.scope' /tmp/r.json)"
+          echo "← runtimeTouched: $(jq -r '.runtimeTouched' /tmp/r.json)"
+          echo "── gates ──"
+          jq -r '.gates | to_entries[]? | select(.key != "notes") | "  \(if .value == true then "✓" else "✗" end) \(.key)"' /tmp/r.json 2>/dev/null || true
+          jq -r '.gates.notes[]? | "  • " + .' /tmp/r.json 2>/dev/null || true
+          if [[ "$SUCCESS" != "true" ]]; then
+            echo "::error::promoção recusada — gates reprovados ou erro: $(jq -r '.error' /tmp/r.json)"
+            exit 1
+          fi
+          echo "✅ Promovido para ALLOWLIST_FULL_TEST mantendo PHONE_ALLOWLIST — só config, nada real."
