@@ -3634,3 +3634,29 @@ model InstagramChannelConfig {
   @@index([instagramBusinessAccountId])
   @@map("instagram_channel_configs")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  META OAUTH STATE — short-lived, single-use CSRF state for the "Conectar com
+//  Facebook" flow. Holds the discovered Page candidates (NO tokens) and the
+//  encrypted user access token between callback and page selection. Rows expire
+//  and are consumed on selection; nothing here sends a message or creates a
+//  customer/order/Pix. Tokens are NEVER stored in plaintext.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MetaOAuthState {
+  id                       String   @id @default(cuid())
+  restaurantId             String
+  userId                   String
+  state                    String   @unique
+  status                   String   @default("PENDING") // PENDING | AWAITING_SELECTION | CONSUMED
+  userAccessTokenEncrypted String? // AES-256-GCM — short-lived user token, never plaintext
+  candidates               Json?    // [{ pageId, pageName, instagramBusinessAccountId?, instagramUsername?, hasInstagram }]
+  error                    String?
+  expiresAt                DateTime
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([restaurantId, status])
+  @@index([expiresAt])
+  @@map("meta_oauth_states")
+}

@@ -30,6 +30,7 @@ export interface InstagramConfigRow {
   allowlistedExternalUserIds: string[];
   lastWebhookAt: Date | null;
   lastError: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 /** Operator-safe view — never includes the token. */
@@ -45,6 +46,11 @@ export interface InstagramConfigView {
   verifyTokenConfigured: boolean;
   appId: string | null;
   allowlistCount: number;
+  /** Display-only, from metadata — set by the one-click connect flow. */
+  connectedVia: string | null;
+  connectedAt: string | null;
+  facebookPageName: string | null;
+  instagramUsername: string | null;
   lastWebhookAt: Date | null;
   lastError: string | null;
 }
@@ -61,6 +67,8 @@ export interface InstagramConfigPatch {
   appId?: string | null;
   appSecretRef?: string | null;
   allowlistedExternalUserIds?: string[];
+  /** Non-secret display metadata (connectedAt, page/IG names). Merged, never tokens. */
+  metadata?: Record<string, unknown> | null;
 }
 
 export function sha256(value: string): string {
@@ -79,6 +87,7 @@ function rowToTyped(row: {
   instagramBusinessAccountId: string | null; facebookPageId: string | null;
   pageAccessTokenEncrypted: string | null; verifyTokenHash: string | null; appId: string | null;
   appSecretRef: string | null; allowlistedExternalUserIds: unknown; lastWebhookAt: Date | null; lastError: string | null;
+  metadata?: unknown;
 }): InstagramConfigRow {
   return {
     ...row,
@@ -86,6 +95,7 @@ function rowToTyped(row: {
     scope: normalizeScope(row.scope),
     allowlistedExternalUserIds: Array.isArray(row.allowlistedExternalUserIds)
       ? (row.allowlistedExternalUserIds as string[]) : [],
+    metadata: (row.metadata && typeof row.metadata === "object") ? (row.metadata as Record<string, unknown>) : null,
   };
 }
 
@@ -107,6 +117,10 @@ export function toView(row: InstagramConfigRow): InstagramConfigView {
     verifyTokenConfigured: !!row.verifyTokenHash,
     appId: row.appId,
     allowlistCount: row.allowlistedExternalUserIds.length,
+    connectedVia: (row.metadata?.connectedVia as string) ?? null,
+    connectedAt: (row.metadata?.connectedAt as string) ?? null,
+    facebookPageName: (row.metadata?.facebookPageName as string) ?? null,
+    instagramUsername: (row.metadata?.instagramUsername as string) ?? null,
     lastWebhookAt: row.lastWebhookAt,
     lastError: row.lastError,
   };
@@ -165,6 +179,12 @@ export async function upsertInstagramConfig(restaurantId: string, patch: Instagr
   }
   if (patch.verifyToken !== undefined && patch.verifyToken !== "") {
     data.verifyTokenHash = sha256(patch.verifyToken);
+  }
+  if (patch.metadata !== undefined) {
+    // Merge non-secret display metadata (never tokens).
+    const existing = await prisma.instagramChannelConfig.findUnique({ where: { restaurantId }, select: { metadata: true } }).catch(() => null);
+    const prev = (existing?.metadata && typeof existing.metadata === "object") ? (existing.metadata as Record<string, unknown>) : {};
+    data.metadata = { ...prev, ...(patch.metadata ?? {}) };
   }
 
   const row = await prisma.instagramChannelConfig.upsert({

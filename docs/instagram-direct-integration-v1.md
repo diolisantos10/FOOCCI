@@ -130,6 +130,11 @@ depois; os endpoints seguros já existem.)
 dry-run e (com `restaurantSlug`) um round-trip sintético de inbound **com cleanup**.
 Critérios: `PASS`, `noRealInstagramSend=true`, `runtimeTouched=false`.
 
+## Conectar com Facebook (one-click)
+
+O lojista pode conectar a Meta sem dados manuais via `/integracoes/instagram`
+("Conectar com Facebook"). Ver `docs/instagram-meta-one-click-connect.md`.
+
 ## Próximos passos
 
 - UI admin de Integrações (formulário de conexão + botão testar/pausar).

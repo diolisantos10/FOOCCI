@@ -91,3 +91,9 @@ Scope: **Conta de teste** (`TEST_ACCOUNT_ONLY`, só IGSIDs autorizados — padr�
 - IA automática no Instagram (FULL) — desabilitada por design nesta fase.
 - Envio real em testes — sempre dry-run.
 - Onboarding/OAuth automático da Meta — configuração manual de IDs/token por enquanto.
+
+## Conectar com Facebook (one-click)
+
+O caminho principal recomendado é o botão **Conectar com Facebook** (OAuth) —
+ver `docs/instagram-meta-one-click-connect.md`. Os campos manuais desta tela
+viraram "Configuração manual avançada".
