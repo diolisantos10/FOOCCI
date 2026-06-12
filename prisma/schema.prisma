@@ -1630,7 +1630,8 @@ model CRMAutomation {
   trigger          AutomationTrigger
   isEnabled        Boolean           @default(false)
   messageTemplate  String            @default("")
-  triggerAfterDays Int               @default(30)
+  triggerAfterDays         Int     @default(30)
+  oncePerCustomerLifetime  Boolean @default(false)
   discountType     String? // "PERCENTAGE" | "FIXED" | null
   discountValue    Decimal?          @db.Decimal(10, 2)
   scheduleConfig   Json? // { sendTime?, sendDays?, timezone? }

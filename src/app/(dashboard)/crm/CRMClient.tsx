@@ -4489,6 +4489,7 @@ type AutomationLocalRow = {
   isEnabled: boolean;
   messageTemplate: string;
   triggerAfterDays: number;
+  oncePerCustomerLifetime: boolean;
   sendTime: string;
   sendDays: number[];
 };
@@ -4519,8 +4520,8 @@ const AUTOMATION_META: Record<string, {
   },
   POST_ORDER: {
     emoji: "⭐",
-    label: "Pós-venda",
-    description: "Envia mensagem de avaliação após um pedido ser entregue.",
+    label: "Pós-pedido",
+    description: "Envia mensagem automaticamente após um pedido ser entregue. Com impacto único por cliente ativado, cada cliente recebe esta mensagem apenas uma vez na vida.",
     defaultDays: 1,
     daysLabel: "Dias após entrega para disparar",
     showDays: true,
@@ -4535,7 +4536,7 @@ function AutomacoesTab() {
     for (const trigger of AUTOMATION_TRIGGERS) {
       const meta = AUTOMATION_META[trigger];
       const defaultDays = meta?.defaultDays ?? 0;
-      init[trigger] = { trigger, isEnabled: false, messageTemplate: "", triggerAfterDays: defaultDays, sendTime: "08:00", sendDays: [0, 1, 2, 3, 4, 5, 6] };
+      init[trigger] = { trigger, isEnabled: false, messageTemplate: "", triggerAfterDays: defaultDays, oncePerCustomerLifetime: trigger === "POST_ORDER", sendTime: "08:00", sendDays: [0, 1, 2, 3, 4, 5, 6] };
     }
     return init;
   });
@@ -4546,18 +4547,19 @@ function AutomacoesTab() {
   useEffect(() => {
     fetch("/api/crm/automations")
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json: { data?: { trigger: string; isEnabled: boolean; messageTemplate: string; triggerAfterDays: number; scheduleConfig?: { sendTime?: string; sendDays?: number[] } | null }[] }) => {
+      .then((json: { data?: { trigger: string; isEnabled: boolean; messageTemplate: string; triggerAfterDays: number; oncePerCustomerLifetime?: boolean; scheduleConfig?: { sendTime?: string; sendDays?: number[] } | null }[] }) => {
         const rows = json.data ?? [];
         setLocal((prev) => {
           const next = { ...prev };
           for (const row of rows) {
             next[row.trigger] = {
-              trigger:          row.trigger,
-              isEnabled:        row.isEnabled,
-              messageTemplate:  row.messageTemplate,
-              triggerAfterDays: row.triggerAfterDays,
-              sendTime:         row.scheduleConfig?.sendTime  ?? prev[row.trigger]?.sendTime  ?? "08:00",
-              sendDays:         row.scheduleConfig?.sendDays  ?? prev[row.trigger]?.sendDays  ?? [0, 1, 2, 3, 4, 5, 6],
+              trigger:                 row.trigger,
+              isEnabled:               row.isEnabled,
+              messageTemplate:         row.messageTemplate,
+              triggerAfterDays:        row.triggerAfterDays,
+              oncePerCustomerLifetime: row.oncePerCustomerLifetime ?? (row.trigger === "POST_ORDER"),
+              sendTime:                row.scheduleConfig?.sendTime  ?? prev[row.trigger]?.sendTime  ?? "08:00",
+              sendDays:                row.scheduleConfig?.sendDays  ?? prev[row.trigger]?.sendDays  ?? [0, 1, 2, 3, 4, 5, 6],
             };
           }
           return next;
@@ -4583,10 +4585,11 @@ function AutomacoesTab() {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          isEnabled:        state.isEnabled,
-          messageTemplate:  state.messageTemplate,
-          triggerAfterDays: state.triggerAfterDays,
-          scheduleConfig:   {
+          isEnabled:               state.isEnabled,
+          messageTemplate:         state.messageTemplate,
+          triggerAfterDays:        state.triggerAfterDays,
+          oncePerCustomerLifetime: state.oncePerCustomerLifetime,
+          scheduleConfig:          {
             sendTime: state.sendTime,
             sendDays: state.sendDays,
             timezone: "America/Sao_Paulo",
@@ -4711,6 +4714,29 @@ function AutomacoesTab() {
               </div>
             </div>
 
+            {/* Lifetime impact rule — POST_ORDER only */}
+            {trigger === "POST_ORDER" && (
+              <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3">
+                <div>
+                  <p className="text-xs font-semibold text-gray-800">Impacto único por cliente</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Cada cliente recebe esta mensagem apenas uma vez na vida, independente da quantidade de pedidos.
+                  </p>
+                </div>
+                <button
+                  onClick={() => updateLocal(trigger, { oncePerCustomerLifetime: !state.oncePerCustomerLifetime })}
+                  aria-label={state.oncePerCustomerLifetime ? "Desativar impacto único" : "Ativar impacto único"}
+                  className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    state.oncePerCustomerLifetime ? "bg-brand-600" : "bg-gray-200"
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    state.oncePerCustomerLifetime ? "translate-x-6" : "translate-x-1"
+                  }`} />
+                </button>
+              </div>
+            )}
+
             {/* Message template */}
             <div>
               <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
@@ -4724,7 +4750,10 @@ function AutomacoesTab() {
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 resize-none focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100"
               />
               <p className="mt-1 text-[10px] text-gray-400">
-                Use <code className="rounded bg-gray-100 px-1">{"{nome}"}</code> para o nome do cliente.
+                Use <code className="rounded bg-gray-100 px-1">{"{nome}"}</code> para o nome do cliente
+                {trigger === "POST_ORDER" && (
+                  <>, <code className="rounded bg-gray-100 px-1">{"{instagram}"}</code> para o link do Instagram</>
+                )}.
               </p>
             </div>
 

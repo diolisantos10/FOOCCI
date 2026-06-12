@@ -200,6 +200,7 @@ export type UpsertAutomationInput = {
   isEnabled?: boolean;
   messageTemplate?: string;
   triggerAfterDays?: number;
+  oncePerCustomerLifetime?: boolean;
   discountType?: string | null;
   discountValue?: number | null;
   scheduleConfig?: { sendTime?: string; sendDays?: number[]; timezone?: string } | null;
@@ -454,6 +455,7 @@ export class CRMService {
       ...(input.isEnabled !== undefined && { isEnabled: input.isEnabled }),
       ...(input.messageTemplate !== undefined && { messageTemplate: input.messageTemplate }),
       ...(input.triggerAfterDays !== undefined && { triggerAfterDays: input.triggerAfterDays }),
+      ...(input.oncePerCustomerLifetime !== undefined && { oncePerCustomerLifetime: input.oncePerCustomerLifetime }),
       ...(input.discountType !== undefined && { discountType: input.discountType }),
       ...(input.discountValue !== undefined && {
         discountValue: input.discountValue != null ? new Decimal(input.discountValue) : null,

@@ -8,12 +8,13 @@ import type { AutomationTrigger } from "@prisma/client";
 const VALID_TRIGGERS: AutomationTrigger[] = ["REACTIVATION", "BIRTHDAY", "POST_ORDER"];
 
 const bodySchema = z.object({
-  isEnabled:        z.boolean().optional(),
-  messageTemplate:  z.string().max(1000).optional(),
-  triggerAfterDays: z.number().int().min(0).max(365).optional(),
-  discountType:     z.enum(["PERCENTAGE", "FIXED"]).nullable().optional(),
-  discountValue:    z.number().min(0).nullable().optional(),
-  scheduleConfig:   z.object({
+  isEnabled:               z.boolean().optional(),
+  messageTemplate:         z.string().max(2000).optional(),
+  triggerAfterDays:        z.number().int().min(0).max(365).optional(),
+  oncePerCustomerLifetime: z.boolean().optional(),
+  discountType:            z.enum(["PERCENTAGE", "FIXED"]).nullable().optional(),
+  discountValue:           z.number().min(0).nullable().optional(),
+  scheduleConfig:          z.object({
     sendTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     sendDays: z.array(z.number().int().min(0).max(6)).optional(),
     timezone: z.string().optional(),

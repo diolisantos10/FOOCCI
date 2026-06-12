@@ -270,9 +270,10 @@ export async function resolveAudience(
 // ─── message personalization ──────────────────────────────────
 
 interface MessageContext {
-  restaurantName: string;
-  pedidoUrl:      string;
+  restaurantName:  string;
+  pedidoUrl:       string;
   googleReviewUrl: string | null;
+  instagramUrl?:   string | null;
 }
 
 export function personalizeMessage(
@@ -308,7 +309,8 @@ export function personalizeMessage(
     .replace(/{nivel}/g,                tierLabels[customer.tier] ?? customer.tier)
     .replace(/{dias_sem_pedir}/g,       dias !== null ? String(dias) : "alguns")
     .replace(/{ultimo_pedido}/g,        lastOrderLabel)
-    .replace(/{produto_favorito}/g,     "nossos pratos");  // V1 simplified
+    .replace(/{produto_favorito}/g,     "nossos pratos")  // V1 simplified
+    .replace(/{instagram}/g,            ctx.instagramUrl ?? "");
 }
 
 // ─── campaign creation ────────────────────────────────────────

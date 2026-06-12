@@ -181,15 +181,16 @@ export class AutomationSchedulerService {
       }),
       prisma.restaurantBrandConfig.findUnique({
         where: { restaurantId },
-        select: { googleReviewUrl: true },
+        select: { googleReviewUrl: true, instagramUrl: true },
       }),
     ]);
 
     const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
     const ctx = {
-      restaurantName: restaurant?.name ?? "nossa loja",
+      restaurantName:  restaurant?.name ?? "nossa loja",
       pedidoUrl,
       googleReviewUrl: brandConfig?.googleReviewUrl ?? null,
+      instagramUrl:    brandConfig?.instagramUrl    ?? null,
     };
 
     const campaign = await prisma.$transaction(async (tx) => {
@@ -361,11 +362,16 @@ export class AutomationSchedulerService {
           })) as Row[]
         );
 
+        // null = lifetime (all-time) dedup when oncePerCustomerLifetime is set
+        const dedupWindow = automation.oncePerCustomerLifetime
+          ? null
+          : automation.triggerAfterDays;
+
         return AutomationSchedulerService._filterRecentlyContacted(
           restaurantId,
           candidates,
           `${AUTO_TAG}POST_ORDER`,
-          automation.triggerAfterDays
+          dedupWindow
         );
       }
 
@@ -390,16 +396,17 @@ export class AutomationSchedulerService {
       }),
       prisma.restaurantBrandConfig.findUnique({
         where: { restaurantId },
-        select: { googleReviewUrl: true },
+        select: { googleReviewUrl: true, instagramUrl: true },
       }),
     ]);
 
     const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
 
     return personalizeMessage(automation.messageTemplate, customer, {
-      restaurantName: restaurant?.name ?? "nossa loja",
+      restaurantName:  restaurant?.name ?? "nossa loja",
       pedidoUrl,
       googleReviewUrl: brandConfig?.googleReviewUrl ?? null,
+      instagramUrl:    brandConfig?.instagramUrl    ?? null,
     });
   }
 
@@ -407,18 +414,20 @@ export class AutomationSchedulerService {
    * Remove customers already contacted by this automation within the dedup window.
    * Looks up past CampaignExecution records tagged with the automation's templateId.
    */
+  /**
+   * Remove customers already contacted by this automation within the dedup window.
+   * withinDays = null means lifetime (all-time) — customer is never re-contacted.
+   */
   private static async _filterRecentlyContacted(
     restaurantId: string,
     customers: AudienceCustomer[],
     templateId: string,
-    withinDays: number
+    withinDays: number | null
   ): Promise<AudienceCustomer[]> {
     if (customers.length === 0) return [];
 
-    const cutoff = new Date(Date.now() - withinDays * 86_400_000);
     const customerIds = customers.map((c) => c.id);
 
-    // Find campaign IDs for this automation type
     const campaigns = await prisma.campaign.findMany({
       where: { restaurantId, templateId },
       select: { id: true },
@@ -427,20 +436,22 @@ export class AutomationSchedulerService {
 
     const campaignIds = campaigns.map((c) => c.id);
 
-    const recentlySent = await prisma.campaignExecution.findMany({
+    const alreadySent = await prisma.campaignExecution.findMany({
       where: {
         restaurantId,
         customerId: { in: customerIds },
         campaignId: { in: campaignIds },
         status: { in: ["SENT", "DELIVERED", "READ"] },
-        sentAt: { gte: cutoff },
+        ...(withinDays !== null
+          ? { sentAt: { gte: new Date(Date.now() - withinDays * 86_400_000) } }
+          : {}),
       },
       select: { customerId: true },
     });
 
-    const recentIds = new Set(
-      recentlySent.map((e) => e.customerId).filter(Boolean) as string[]
+    const impactedIds = new Set(
+      alreadySent.map((e) => e.customerId).filter(Boolean) as string[]
     );
-    return customers.filter((c) => !recentIds.has(c.id));
+    return customers.filter((c) => !impactedIds.has(c.id));
   }
 }
