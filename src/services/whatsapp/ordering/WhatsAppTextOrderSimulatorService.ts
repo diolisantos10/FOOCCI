@@ -194,7 +194,7 @@ const FLOW_SCENARIOS: FlowScenario[] = [
     name: "Produto ambíguo",
     messages: ["Quero uma coca"],
     check: (c) => [
-      check("lista opções numeradas reais", /1\s*[—.\-]/.test(c.joinedReplies), "P1", "não listou opções numeradas"),
+      check("lista opções numeradas reais", /1(️⃣)?\s*[—.\-]?\s/.test(c.joinedReplies), "P1", "não listou opções numeradas"),
       check("não escolhe sozinho", c.finalItems.length === 0, "P1", "escolheu uma opção sozinho"),
     ],
   },

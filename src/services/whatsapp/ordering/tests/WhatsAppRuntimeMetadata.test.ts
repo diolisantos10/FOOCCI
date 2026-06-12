@@ -51,9 +51,9 @@ describe("(1/4/5) Opções de pagamento vêm do PaymentSettings — nunca invent
   it("todas configuradas → 3 opções na ordem estável", async () => {
     const o = await getConfiguredPaymentOptions("r1");
     expect(o.order).toEqual(["PIX", "CARD", "CASH"]);
-    expect(o.question).toContain("1. Pix");
-    expect(o.question).toContain("2. Cartão na entrega");
-    expect(o.question).toContain("3. Dinheiro na entrega");
+    expect(o.question).toContain("1️⃣ Pix");
+    expect(o.question).toContain("2️⃣ Cartão na entrega");
+    expect(o.question).toContain("3️⃣ Dinheiro na entrega");
   });
 
   it("Pix desligado → Pix não aparece; cartão desligado → cartão não aparece", async () => {
@@ -95,7 +95,7 @@ describe("enrichSessionMetadata — injeção única, segura e não destrutiva",
     expect(r.paymentInjected).toBe(true);
     expect(r.savedAddressLoaded).toBe(true);
     expect(r.metadata.paymentOptionOrder).toEqual(["PIX", "CARD", "CASH"]);
-    expect(String(r.metadata.paymentQuestion)).toContain("Escolha a forma de pagamento");
+    expect(String(r.metadata.paymentQuestion)).toContain("Como você quer pagar");
     expect((r.metadata.savedAddress as { street: string }).street).toBe("Rua das Flores");
     expect(r.metadata.bridgeInjectedAt).toBeTruthy();
   });
@@ -154,7 +154,7 @@ describe("(2/3/11/12) Metadata injetada governa o fluxo na máquina", () => {
     (s as { deliveryType: string | null }).deliveryType = "PICKUP";
     // pergunta oficial renderizada
     const ask = advanceSession(s, "como pago?", MENU);
-    expect(ask.suggestedReply).toContain("Escolha a forma de pagamento");
+    expect(ask.suggestedReply).toContain("Como você quer pagar");
     expect(ask.suggestedReply).not.toContain("Cartão");
     // 2 = CASH (ordem injetada) → troco
     const pick = advanceSession(ask.session, "2", MENU);

@@ -101,14 +101,20 @@ describe("State machine — happy path", () => {
     const r = advanceSession(s, "é entrega", MENU);
     expect(r.session.deliveryType).toBe("DELIVERY");
     expect(r.session.stage).toBe("COLLECTING_ADDRESS");
-    expect(r.suggestedReply.toLowerCase()).toContain("endereço");
+    expect(r.suggestedReply.toLowerCase()).toMatch(/cep|endereço/);
   });
 
   it("complete address defers to delivery quote", () => {
     let s = advanceSession(freshSession(), "quero 1 yakisoba", MENU).session;
     s = advanceSession(s, "frango", MENU).session;
     s = advanceSession(s, "é entrega", MENU).session;
-    const r = advanceSession(s, "Rua das Flores, 123", MENU);
+    // CEP-first: loose street text asks for the CEP; the full address completes
+    // via cepAddress confirmation + house number, then defers to the quote.
+    const askCep = advanceSession(s, "Rua das Flores, 123", MENU);
+    expect(askCep.suggestedReply.toLowerCase()).toContain("cep");
+    s = askCep.session;
+    s.metadata = { ...(s.metadata ?? {}), addressFlow: "ASK_NUMBER", cepAddress: { street: "Rua das Flores", neighborhood: "Centro", city: "São Paulo", cep: "01310100" } };
+    const r = advanceSession(s, "123", MENU);
     expect(r.session.stage).toBe("CALCULATING_DELIVERY_FEE");
     expect(r.actions).toContain("QUOTE_DELIVERY");
     expect(r.session.address?.street).toMatch(/Flores/i);

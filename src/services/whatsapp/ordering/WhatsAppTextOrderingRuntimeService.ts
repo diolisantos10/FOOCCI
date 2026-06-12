@@ -29,6 +29,7 @@ import {
   resolveWaConfig,
 } from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
 import { processCustomerMessage } from "./WhatsAppTextOrderService";
+import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { WhatsAppOrderingSessionService } from "./WhatsAppOrderingSessionService";
 import type { WaProcessResult, WaRuntimeMode } from "./types";
 import { classifyTextOrderFailure } from "@/services/ai/UnknownFallbackHandler";
@@ -162,6 +163,11 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
   }
 
   // Process the turn. Real order/Pix only when full-test permissions allow.
+  // Business-hours gate BEFORE the engine starts/continues any comanda — a
+  // closed restaurant must never walk the customer to address/payment/Pix.
+  // DB failure → assume open (never silence the customer on infra errors).
+  const isOpen = await isRestaurantOpenNow(input.restaurantId).catch(() => true);
+
   const result = await processCustomerMessage({
     restaurantId:     input.restaurantId,
     phone:            input.phone,
@@ -171,6 +177,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     mode,
     currentSession:   session,
     allowSideEffects: canCreateOrder,
+    isOpen,
   });
 
   // Persist the updated session

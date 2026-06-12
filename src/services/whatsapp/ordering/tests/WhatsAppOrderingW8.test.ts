@@ -64,7 +64,7 @@ describe("W8 — mixed one-line order", () => {
     expect(r.finalStage).not.toBe("IDLE");
     expect(r.finalStage).toBe("COLLECTING_ADDRESS");
     expect(r.steps[0]!.suggestedReply.toLowerCase()).not.toMatch(/me diz o que (vai|quer)/);
-    expect(r.steps[0]!.suggestedReply.toLowerCase()).toContain("endereço");
+    expect(r.steps[0]!.suggestedReply.toLowerCase()).toMatch(/cep|endereço/);
   });
 
   it("B — captures products, delivery type and payment method", async () => {

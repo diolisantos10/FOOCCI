@@ -100,7 +100,7 @@ describe("A — COLLECTING_ADDRESS: add-item interrupt", () => {
     expect(r.session.selectedItems.some(i => i.menuItemName === "Yakisoba")).toBe(true);
     // Reply asks which Coca using numbered options
     expect(r.suggestedReply.toLowerCase()).toContain("coca");
-    expect(r.suggestedReply).toContain("1 —");
+    expect(r.suggestedReply).toContain("1️⃣ ");
   });
 });
 
@@ -123,7 +123,7 @@ describe("B — Resolving Coca ambiguity returns to address collection", () => {
     expect(r.session.selectedItems.some(i => i.menuItemName === "Coca-Cola 2L")).toBe(true);
     // Resumes address collection (delivery type set, no address yet)
     expect(r.session.stage).toBe("COLLECTING_ADDRESS");
-    expect(r.suggestedReply.toLowerCase()).toContain("endere");
+    expect(r.suggestedReply.toLowerCase()).toMatch(/cep|endere/);
   });
 });
 
@@ -236,8 +236,8 @@ describe("G — Format mismatch: 'Coca lata' when no lata variant exists", () =>
     // Format-mismatch message (not generic "Não entendi")
     expect(r.suggestedReply.toLowerCase()).toContain("versão");
     // Shows numbered options
-    expect(r.suggestedReply).toContain("1 —");
-    expect(r.suggestedReply).toContain("2 —");
+    expect(r.suggestedReply).toContain("1️⃣ ");
+    expect(r.suggestedReply).toContain("2️⃣ ");
   });
 });
 

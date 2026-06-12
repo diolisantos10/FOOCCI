@@ -324,6 +324,17 @@ export interface WaProcessInput {
    * creation, which stays gated by allowSideEffects + mode.
    */
   deliveryQuoter?: WaDeliveryQuoter;
+  /**
+   * Business-hours gate. When explicitly false, the engine refuses to start or
+   * continue an order draft (no comanda, no address, no payment, no Pix) and
+   * answers with the closed-message + menu hint. Undefined = open (no gate).
+   */
+  isOpen?: boolean;
+  /**
+   * Optional CEP lookup (delivery flow asks CEP first, like the Fute checkout).
+   * Defaults to the real ViaCEP-backed helper; tests inject a fake.
+   */
+  cepLookup?: (cep: string) => Promise<{ cep: string; street: string; neighborhood: string; city: string; uf: string } | null>;
 }
 
 export interface WaPaymentInfo {

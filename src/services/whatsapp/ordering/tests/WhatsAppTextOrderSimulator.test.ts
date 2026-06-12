@@ -93,7 +93,7 @@ describe("cenários de borda", () => {
 
   it("(9) produto ambíguo lista opções numeradas e não escolhe sozinho", () => {
     const s = byId("sim-ambiguous");
-    expect(agentReplies(s).join("\n")).toMatch(/1\s*[—.\-]/);
+    expect(agentReplies(s).join("\n")).toMatch(/1(️⃣)?\s*[—.\-]?\s/);
     expect(s.orderDraft).toBeNull();
   });
 

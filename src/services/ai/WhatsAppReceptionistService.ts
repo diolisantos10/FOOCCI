@@ -53,7 +53,7 @@ export const BACK_TO_MENU_RE =
 
 // Footer appended to every non-handoff branch reply so the customer always
 // has a clear exit from any menu sub-branch.
-export const BACK_TO_MENU_FOOTER = "\n\n0️⃣ Voltar ao menu principal";
+export const BACK_TO_MENU_FOOTER = "\n\n0. menu";
 
 // Shown when menuOptions is null/empty in DB — ensures the menu is always visible.
 const FALLBACK_MENU_OPTIONS: MenuOption[] = [
@@ -668,8 +668,13 @@ async function run(conversationId: string): Promise<void> {
   // the last 30 minutes (same active session).  After 30 min of silence the
   // menu can be shown again (customer may have returned / started a new intent).
   const MENU_COOLDOWN_MS = 30 * 60 * 1000;
+  const sameLocalDay = (a: Date, b: Date) =>
+    a.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) ===
+    b.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  // A new calendar day ALWAYS resets the conversation (menu shows again).
   const menuSentRecently = lastOutbound
-    ? nowDate.getTime() - lastOutbound.sentAt.getTime() < MENU_COOLDOWN_MS
+    ? nowDate.getTime() - lastOutbound.sentAt.getTime() < MENU_COOLDOWN_MS &&
+      sameLocalDay(nowDate, lastOutbound.sentAt)
     : false;
 
   // When paused, treat as closed for all intent handling
@@ -803,14 +808,9 @@ async function run(conversationId: string): Promise<void> {
 
         // Within the 30-min session: short re-engagement only — menu already visible,
         // no need to repeat the numbered list. Compact footer keeps the escape hatch.
-        if (intent === "GREETING" && menuSentRecently) {
-          const firstName = ctx.customerName?.split(" ")[0]?.trim() ?? null;
-          const shortGreet = firstName
-            ? `Estou aqui, ${firstName}! 😊 Como posso te ajudar?`
-            : "Estou aqui! 😊 Como posso te ajudar?";
-          replyText      = shortGreet + BACK_TO_MENU_FOOTER;
-          triggerHandoff = false;
-        } else if (useGpt) {
+        // P0 hotfix: a greeting ALWAYS opens the full menu (never the
+        // "Estou aqui!" continuation) — falls through to the template path below.
+        if (useGpt) {
           // For UNKNOWN in RECEPTIONIST_ONLY: check catalog before GPT to avoid false handoffs
           let gptNeeded = true;
           if (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED" && ctx.menuCatalog.length > 0) {

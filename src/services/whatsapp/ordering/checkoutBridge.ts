@@ -32,9 +32,11 @@ const LABELS: Record<WaPaymentOptionMethod, string> = {
 };
 
 /** Pure renderer (testable without DB). */
+const PAY_EMOJI = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"] as const;
+
 export function renderPaymentQuestion(order: WaPaymentOptionMethod[]): string {
-  const lines = order.map((m, i) => `${i + 1}. ${LABELS[m]}`);
-  return `Escolha a forma de pagamento:\n${lines.join("\n")}`;
+  const lines = order.map((m, i) => `${PAY_EMOJI[i] ?? `${i + 1}.`} ${LABELS[m]}`);
+  return `Como você quer pagar?\n${lines.join("\n")}`;
 }
 
 /**

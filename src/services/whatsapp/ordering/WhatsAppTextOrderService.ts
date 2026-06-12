@@ -246,6 +246,7 @@ export async function analyzeTextOrder(input: WaAnalyzeInput): Promise<WaAnalyze
 
 import { advanceSession } from "./WhatsAppOrderStateMachine";
 import { withMenuFooter } from "./menuFooter";
+import { lookupCep } from "@/lib/cep";
 import { buildFullDraft, checkCompleteness } from "./WhatsAppOrderDraftBuilder";
 import { quoteWhatsAppDelivery } from "./WhatsAppDeliveryService";
 import { createOrderFromSession } from "./WhatsAppOrderCreationService";
@@ -326,6 +327,33 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
   if (!canCreateOrder) safetyNotes.push("nenhum pedido real criado (modo não é FULL_TEST liberado)");
   if (!canCreatePix)   safetyNotes.push("nenhum Pix real gerado (modo não é FULL_TEST liberado)");
 
+  // ── Business-hours gate (BEFORE any comanda/address/payment/Pix) ─────────────
+  if (input.isOpen === false) {
+    const closedSession = input.currentSession ?? newTransientSession(input);
+    return {
+      session:          closedSession,
+      stage:            closedSession.stage,
+      intent:           "UNKNOWN",
+      parsedItems:      [],
+      matchedItems:     [],
+      unresolvedItems:  [],
+      missingQuestions: [],
+      draft:            null,
+      deliveryQuote:    null,
+      payment:          null,
+      order:            null,
+      estimatedTotal:   0,
+      suggestedReply:   withMenuFooter(
+        "Estamos fora do horário de atendimento agora 😊\n\nVocê pode ver nosso cardápio digitando:\n1️⃣ Cardápio",
+      ),
+      operatorSummary:  "Fora do horário — pedido bloqueado antes da comanda.",
+      actions:          [],
+      safetyNotes:      [...safetyNotes, "fora do horário — nenhuma comanda/pagamento/Pix iniciado"],
+      sideEffectsPerformed,
+      handoff:          false,
+    };
+  }
+
   const menu    = input.menu ?? await loadMenuForRestaurant(input.restaurantId);
   const session = input.currentSession ?? newTransientSession(input);
 
@@ -335,6 +363,21 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
   let reply    = advanced.suggestedReply;
   let payment: WaPaymentInfo | null = null;
   let order: WaProcessResult["order"] = null;
+
+  // ── Deferred action: CEP lookup (read-only; ViaCEP or injected fake) ─────────
+  if (advanced.actions.includes("LOOKUP_CEP")) {
+    const pendingCep = String((s.metadata as Record<string, unknown> | null)?.pendingCep ?? "");
+    const lookup = input.cepLookup ?? lookupCep;
+    const found = pendingCep ? await lookup(pendingCep).catch(() => null) : null;
+    if (found) {
+      s.metadata = { ...(s.metadata ?? {}), cepAddress: found, addressFlow: "CONFIRM_CEP", pendingCep: undefined };
+      const line = `${found.street}${found.neighborhood ? `, ${found.neighborhood}` : ""} — ${found.city}`;
+      reply = withMenuFooter(`Encontrei este endereço:\n${line}\n\n1️⃣ Sim, é esse\n2️⃣ Corrigir o CEP`);
+    } else {
+      s.metadata = { ...(s.metadata ?? {}), addressFlow: "AWAIT_CEP", pendingCep: undefined };
+      reply = withMenuFooter("Não encontrei esse CEP. Confere pra mim e me envia de novo, por favor.");
+    }
+  }
 
   // ── Deferred action: delivery quote (read-only — safe in every mode) ──────────
   if (advanced.actions.includes("QUOTE_DELIVERY") && s.address) {

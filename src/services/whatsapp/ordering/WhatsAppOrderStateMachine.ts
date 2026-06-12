@@ -26,7 +26,7 @@ import {
 } from "./parser";
 import { parsePaymentMethod } from "./WhatsAppPaymentService";
 import { parseAddressFragment } from "./addressParser";
-import { withMenuFooter, isMenuReturn } from "./menuFooter";
+import { withMenuFooter, isMenuReturn , formatOptionNumber } from "./menuFooter";
 import { channelPrice } from "@/services/menu/MenuPricingService";
 import type {
   WaPersistedSession,
@@ -38,7 +38,7 @@ import type {
   WaMissingQuestion,
 } from "./types";
 
-export type WaDeferredAction = "QUOTE_DELIVERY" | "CREATE_ORDER" | "GENERATE_PIX";
+export type WaDeferredAction = "QUOTE_DELIVERY" | "CREATE_ORDER" | "GENERATE_PIX" | "LOOKUP_CEP";
 
 export interface AdvanceResult {
   session:         WaPersistedSession;
@@ -96,14 +96,14 @@ export function advanceSession(
     // Anything else (including another `0`) → re-ask, keeping the draft safe.
     next.metadata = { ...(next.metadata ?? {}), menuReturnPending: true };
     return done(next, "QUESTION",
-      "Você tem um pedido em andamento.\n1. Continuar pedido\n2. Descartar pedido\n3. Falar com atendente", [], false);
+      "Você tem um pedido em andamento.\n1️⃣ Continuar pedido\n2️⃣ Descartar pedido\n3️⃣ Falar com atendente", [], false);
   }
   if (isMenuReturn(text)) {
     const hasDraft = next.selectedItems.length > 0 || next.unresolvedItems.length > 0 || next.stage !== "IDLE";
     if (hasDraft && next.stage !== "CANCELLED") {
       next.metadata = { ...(next.metadata ?? {}), menuReturnPending: true };
       return done(next, "QUESTION",
-        "Você tem um pedido em andamento.\n1. Continuar pedido\n2. Descartar pedido\n3. Falar com atendente", [], false);
+        "Você tem um pedido em andamento.\n1️⃣ Continuar pedido\n2️⃣ Descartar pedido\n3️⃣ Falar com atendente", [], false);
     }
     return done(next, "MENU_RETURN", "Voltando ao menu principal. 👋", [], false);
   }
@@ -342,7 +342,7 @@ function continueAfterItems(
         const price = item
           ? channelPrice({ price: item.price, priceDelivery: item.priceDelivery }, "DELIVERY")
           : null;
-        return `${i + 1} — ${titleCase(c)}${price !== null ? ` — R$ ${price.toFixed(2)}` : ""}`;
+        return `${formatOptionNumber(i + 1)} ${titleCase(c)}${price !== null ? ` — R$ ${price.toFixed(2)}` : ""}`;
       });
       if (hasDraft) numOpts.push(`${numOpts.length + 1} — Deixar sem ${label}`);
       const optsList = numOpts.join("\n");
@@ -525,22 +525,28 @@ function handleDeliveryType(session: WaPersistedSession, text: string, menu: WaM
   }
   if (DELIVERY_RE.test(text)) {
     session.deliveryType = "DELIVERY";
-    // Address already captured before items were ordered — skip asking for it
-    if (session.address?.street && session.address?.number) {
+    // Address already captured before items were ordered — only skip the CEP flow
+    // when it includes a CEP (official freight needs the CEP-grade address).
+    if (session.address?.street && session.address?.number && session.address?.cep) {
       session.stage  = "CALCULATING_DELIVERY_FEE";
       session.status = "ACTIVE";
       return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
     }
+    if (session.address?.street) session.address = null; // loose address → restart via CEP
     session.stage  = "COLLECTING_ADDRESS";
     session.status = "AWAITING_CUSTOMER";
     return done(session, "DELIVERY_INFO", askAddressReply(session), [], false);
   }
 
+  // Numeric answer to the numbered question: 1 = entrega, 2 = retirada.
+  if (/^\s*1\s*$/.test(text)) return handleDeliveryType(session, "entrega", menu);
+  if (/^\s*2\s*$/.test(text)) return handleDeliveryType(session, "retirada", menu);
+
   // Not a delivery/pickup answer — maybe the customer is modifying the order.
   const mod = tryModification(session, text, menu);
   if (mod) return mod;
 
-  return done(session, "UNKNOWN", "Vai ser entrega ou retirada?", [], false);
+  return done(session, "UNKNOWN", "Como você quer receber?\n1️⃣ Entrega\n2️⃣ Retirada", [], false);
 }
 
 // ── Order modifications (add / change item / change quantity) ────────────────────
@@ -674,12 +680,15 @@ function savedAddressOf(session: WaPersistedSession): WaSavedAddress | null {
 }
 
 /** The ask-address question — offers the saved address (1/2) when available. */
+const ASK_CEP_REPLY = "Para calcular a entrega certinho, me envie primeiro o CEP, por favor.";
+const CEP_IN_TEXT_RE = /\b\d{5}-?\d{3}\b/;
+
 function askAddressReply(session: WaPersistedSession): string {
   const saved = savedAddressOf(session);
   if (saved && !session.address?.street) {
-    return `Posso enviar para este endereço?\n${saved.formatted}\n1. Sim\n2. Usar outro endereço`;
+    return `Posso enviar para este endereço?\n${saved.formatted}\n1️⃣ Sim\n2️⃣ Usar outro endereço`;
   }
-  return "Me envia o endereço com rua, número e bairro, por favor.";
+  return ASK_CEP_REPLY;
 }
 
 function handleAddress(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
@@ -700,22 +709,65 @@ function handleAddress(session: WaPersistedSession, text: string, menu: WaMenuIt
   }
   // Add-item interrupt: if the message carries order content and does NOT look
   // like a street address, treat it as a new item request, not an address.
-  if ((ADD_RE.test(text) || hasOrderContent(text)) && !ADDRESS_LIKE_RE.test(text)) {
+  if ((ADD_RE.test(text) || hasOrderContent(text)) && !ADDRESS_LIKE_RE.test(text) && !CEP_IN_TEXT_RE.test(text)) {
     const mod = tryModification(session, text, menu);
     if (mod) return mod;
   }
-  const addr = parseAddressFragment(text);
-  session.address = { ...(session.address ?? {}), ...addr, raw: text };
 
-  if (!session.address.street || !session.address.number) {
+  const flow = (session.metadata?.addressFlow as string | undefined) ?? "AWAIT_CEP";
+  const meta = () => (session.metadata = { ...(session.metadata ?? {}) });
+
+  // Step 2 — confirm the address found for the CEP.
+  if (flow === "CONFIRM_CEP") {
+    const cepAddr = session.metadata?.cepAddress as { street: string; neighborhood: string; city: string; cep: string } | undefined;
+    if (/^\s*1\s*$/.test(text) && cepAddr) {
+      meta().addressFlow = "ASK_NUMBER";
+      return done(session, "DELIVERY_INFO", "Qual o número? (e complemento, se tiver)", [], false);
+    }
+    if (/^\s*2\s*$/.test(text) || CEP_IN_TEXT_RE.test(text)) {
+      meta().addressFlow = "AWAIT_CEP";
+      delete (session.metadata as Record<string, unknown>).cepAddress;
+      if (CEP_IN_TEXT_RE.test(text)) {
+        meta().pendingCep = text.match(CEP_IN_TEXT_RE)![0];
+        return done(session, "DELIVERY_INFO", "Um instante, buscando o endereço do CEP…", ["LOOKUP_CEP"], false);
+      }
+      return done(session, "DELIVERY_INFO", ASK_CEP_REPLY, [], false);
+    }
+    const found = cepAddr ? `${cepAddr.street}${cepAddr.neighborhood ? `, ${cepAddr.neighborhood}` : ""} — ${cepAddr.city}` : "";
     return done(session, "DELIVERY_INFO",
-      "Me envia o endereço com rua, número e bairro, por favor.", [], false);
+      `Encontrei este endereço:\n${found}\n\n1️⃣ Sim, é esse\n2️⃣ Corrigir o CEP`, [], false);
   }
 
-  // Address looks complete → defer to delivery quote (I/O)
-  session.stage  = "CALCULATING_DELIVERY_FEE";
-  session.status = "ACTIVE";
-  return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
+  // Step 3 — house number (+ optional complement) completes the address.
+  if (flow === "ASK_NUMBER") {
+    const cepAddr = session.metadata?.cepAddress as { street: string; neighborhood: string; city: string; cep: string } | undefined;
+    const numMatch = text.match(/\d{1,6}/);
+    if (!numMatch || !cepAddr) {
+      return done(session, "DELIVERY_INFO", "Qual o número? (e complemento, se tiver)", [], false);
+    }
+    const number = numMatch[0];
+    const complement = text.replace(numMatch[0], "").replace(/^[\s,.-]+|[\s,.-]+$/g, "").trim();
+    session.address = {
+      street: cepAddr.street,
+      number,
+      neighborhood: cepAddr.neighborhood || undefined,
+      cep: cepAddr.cep,
+      raw: `${cepAddr.street}, ${number}${complement ? ` ${complement}` : ""} - ${cepAddr.neighborhood}, ${cepAddr.city}`,
+    };
+    session.metadata = { ...(session.metadata ?? {}), addressFlow: undefined, cepAddress: undefined };
+    session.stage  = "CALCULATING_DELIVERY_FEE";
+    session.status = "ACTIVE";
+    return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
+  }
+
+  // Step 1 — CEP first (same flow as the Fute checkout).
+  if (CEP_IN_TEXT_RE.test(text)) {
+    meta().pendingCep = text.match(CEP_IN_TEXT_RE)![0];
+    meta().addressFlow = "AWAIT_CEP";
+    return done(session, "DELIVERY_INFO", "Um instante, buscando o endereço do CEP…", ["LOOKUP_CEP"], false);
+  }
+  // Street text without CEP → ask the CEP (never accept a loose address as main path).
+  return done(session, "DELIVERY_INFO", ASK_CEP_REPLY, [], false);
 }
 
 // ── Early-info handler (greeting/address/payment before items) ────────────────────
@@ -801,7 +853,7 @@ function buildPriceListReply(subject: string, candidates: WaMenuItem[]): string 
         .slice(0, 5)
         .map((v, i) => {
           const p = channelPrice({ price: v.price, priceDelivery: v.priceDelivery }, "DELIVERY");
-          return `${i + 1} — ${titleCase(v.name)} — R$ ${p.toFixed(2)}`;
+          return `${formatOptionNumber(i + 1)} ${titleCase(v.name)} — R$ ${p.toFixed(2)}`;
         })
         .join("\n");
       return `Temos estas opções de ${titleCase(item.name)}:\n\n${varLines}\n\nQuer pedir alguma?`;
@@ -813,7 +865,7 @@ function buildPriceListReply(subject: string, candidates: WaMenuItem[]): string 
   // Multiple candidates → numbered list with prices
   const lines = candidates.slice(0, 4).map((item, i) => {
     const p = channelPrice({ price: item.price, priceDelivery: item.priceDelivery }, "DELIVERY");
-    return `${i + 1} — ${titleCase(item.name)} — R$ ${p.toFixed(2)}`;
+    return `${formatOptionNumber(i + 1)} ${titleCase(item.name)} — R$ ${p.toFixed(2)}`;
   }).join("\n");
   return `Temos estas opções:\n\n${lines}\n\nQuer pedir alguma?`;
 }
@@ -888,7 +940,7 @@ function askPaymentReply(session: WaPersistedSession): string {
   const meta = (session.metadata ?? {}) as Record<string, unknown>;
   const declared = meta.declaredPayment as "PIX" | "CARD" | "CASH" | undefined;
   if (declared && !session.paymentMethod) {
-    return `Você informou ${PAYMENT_LABELS[declared].toLowerCase()}.\nConfirma essa forma de pagamento?\n1. Sim, ${PAYMENT_LABELS[declared].toLowerCase()}\n2. Escolher outra forma de pagamento`;
+    return `Você informou ${PAYMENT_LABELS[declared].toLowerCase()}.\nConfirma essa forma de pagamento?\n1️⃣ Sim, ${PAYMENT_LABELS[declared].toLowerCase()}\n2️⃣ Escolher outra forma de pagamento`;
   }
   if (typeof meta.paymentQuestion === "string" && meta.paymentQuestion.trim()) {
     return meta.paymentQuestion;
@@ -1081,7 +1133,7 @@ function handleAmbiguityAnswer(
   // No match — build numbered options list for re-ask
   const label      = titleCase(normalizePluralAndSpelling(stripQty(u.rawText)));
   const answerNorm = norm(text);
-  const numOpts    = u.candidates.slice(0, 3).map((c, i) => `${i + 1} — ${titleCase(c)}`);
+  const numOpts    = u.candidates.slice(0, 3).map((c, i) => `${formatOptionNumber(i + 1)} ${titleCase(c)}`);
   if (hasDraft) numOpts.push(`${numOpts.length + 1} — Deixar sem ${label}`);
   const optsList = numOpts.join("\n");
 

@@ -153,7 +153,7 @@ export async function runWhatsAppTextOrderDiagnostic(): Promise<TextOrderDiagnos
     );
     runtimeMetadataInjected = enriched.changed && Array.isArray(enriched.metadata.paymentOptionOrder);
     const q = String(enriched.metadata.paymentQuestion ?? "");
-    paymentOptionsFromFute = q.includes("1. Pix") && q.includes("2. Dinheiro na entrega") && !q.includes("Cartão");
+    paymentOptionsFromFute = q.includes("1️⃣ Pix") && q.includes("2️⃣ Dinheiro na entrega") && !q.includes("Cartão");
     savedAddressLoaded = enriched.savedAddressLoaded;
     add("runtime injeta metadados do Fute", runtimeMetadataInjected && paymentOptionsFromFute, q);
     add("endereço salvo carregado", savedAddressLoaded, "");

@@ -26,3 +26,17 @@ export function withMenuFooter(reply: string): string {
 export function isMenuReturn(text: string): boolean {
   return /^\s*0\s*$/.test(text ?? "");
 }
+
+// ── Numbered options (WhatsApp standard) ─────────────────────────────────────
+
+const OPTION_EMOJI = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"] as const;
+
+/** Emoji digit for a 1-based option number (falls back to `N.` past 9). */
+export function formatOptionNumber(n: number): string {
+  return OPTION_EMOJI[n - 1] ?? `${n}.`;
+}
+
+/** Renders options as `1️⃣ label` lines — the single WhatsApp numbering standard. */
+export function renderNumberedOptions(labels: string[]): string {
+  return labels.map((label, i) => `${formatOptionNumber(i + 1)} ${label}`).join("\n");
+}

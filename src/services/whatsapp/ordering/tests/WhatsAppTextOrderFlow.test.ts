@@ -73,8 +73,8 @@ describe("Brain adapter — pedido por texto livre", () => {
 describe("Máquina de estados — ambiguidade, footer e `0. menu`", () => {
   it("(6) produto ambíguo gera opções numeradas", () => {
     const r = advanceSession(fresh(), "quero 1 yakisoba", MENU);
-    expect(r.suggestedReply).toMatch(/1\s*[—.-]/);
-    expect(r.suggestedReply).toMatch(/2\s*[—.-]/);
+    expect(r.suggestedReply).toMatch(/1(️⃣)?\s*[—.-]?\s/);
+    expect(r.suggestedReply).toMatch(/2(️⃣)?\s*[—.-]?\s/);
     expect(r.suggestedReply.toLowerCase()).toContain("yakisoba");
   });
 
@@ -111,8 +111,8 @@ describe("Máquina de estados — ambiguidade, footer e `0. menu`", () => {
     const s1 = advanceSession(fresh(), "quero 1 coca-cola lata", MENU);
     const ask = advanceSession(s1.session, "0", MENU);
     expect(ask.suggestedReply).toMatch(/pedido em andamento/i);
-    expect(ask.suggestedReply).toMatch(/1\. Continuar pedido/);
-    expect(ask.suggestedReply).toMatch(/2\. Descartar pedido/);
+    expect(ask.suggestedReply).toMatch(/1️⃣ Continuar pedido/);
+    expect(ask.suggestedReply).toMatch(/2️⃣ Descartar pedido/);
     // 1 → continua (comanda preservada)
     const cont = advanceSession(ask.session, "1", MENU);
     expect(cont.session.stage).not.toBe("CANCELLED");
@@ -134,8 +134,8 @@ describe("Máquina de estados — ambiguidade, footer e `0. menu`", () => {
 describe("Pagamento — opções oficiais do Fute, declarado e troco", () => {
   it("(11) renderiza opções numeradas a partir das formas configuradas", () => {
     const q = renderPaymentQuestion(["PIX", "CASH"]);
-    expect(q).toContain("1. Pix");
-    expect(q).toContain("2. Dinheiro na entrega");
+    expect(q).toContain("1️⃣ Pix");
+    expect(q).toContain("2️⃣ Dinheiro na entrega");
     expect(q).not.toContain("Cartão");
   });
 
@@ -165,7 +165,7 @@ describe("Pagamento — opções oficiais do Fute, declarado e troco", () => {
     // resposta qualquer sem método → re-pergunta com a variante de confirmação
     const ask = advanceSession(s, "ok", MENU);
     expect(ask.suggestedReply).toMatch(/Você informou dinheiro/i);
-    expect(ask.suggestedReply).toMatch(/1\. Sim/);
+    expect(ask.suggestedReply).toMatch(/1️⃣ Sim/);
     // 1 → adota o declarado e segue para troco (dinheiro)
     const confirmed = advanceSession(ask.session, "1", MENU);
     expect(confirmed.session.paymentMethod).toBe("CASH");

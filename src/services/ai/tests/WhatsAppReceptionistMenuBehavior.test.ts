@@ -162,12 +162,12 @@ describe("BACK_TO_MENU_RE — should NOT match non-trigger text", () => {
 describe("appendBackToMainMenu", () => {
   it("appends the footer to a non-empty reply", () => {
     expect(appendBackToMainMenu("Aqui está nosso cardápio: https://x.com")).toBe(
-      "Aqui está nosso cardápio: https://x.com\n\n0️⃣ Voltar ao menu principal",
+      "Aqui está nosso cardápio: https://x.com\n\n0. menu",
     );
   });
 
   it("appends the footer to an empty string", () => {
-    expect(appendBackToMainMenu("")).toBe("\n\n0️⃣ Voltar ao menu principal");
+    expect(appendBackToMainMenu("")).toBe("\n\n0. menu");
   });
 
   it("BACK_TO_MENU_FOOTER is the exact suffix that gets appended", () => {
@@ -298,7 +298,7 @@ describe("buildFlowReply — handoff flow", () => {
   it("does NOT contain BACK_TO_MENU_FOOTER (handoff is exempt — no back option on escalation)", () => {
     const opt: MenuOption = { id: "h", label: "Atendente", flow: "handoff" };
     const reply = buildFlowReply(opt, makeCtx());
-    expect(reply).not.toContain("0️⃣ Voltar ao menu principal");
+    expect(reply).not.toContain("0. menu");
   });
 });
 
@@ -391,12 +391,12 @@ describe("non-handoff option replies contain BACK_TO_MENU_FOOTER", () => {
   it("menu flow reply ends with BACK_TO_MENU_FOOTER after appendBackToMainMenu", () => {
     const opt: MenuOption = { id: "m", label: "Cardápio", flow: "menu" };
     const reply = appendBackToMainMenu(buildFlowReply(opt, makeCtx()));
-    expect(reply).toContain("0️⃣ Voltar ao menu principal");
+    expect(reply).toContain("0. menu");
   });
 
   it("custom flow reply ends with BACK_TO_MENU_FOOTER after appendBackToMainMenu", () => {
     const opt: MenuOption = { id: "c", label: "Horário", flow: "custom", message: "Seg-Sex 18h-23h." };
     const reply = appendBackToMainMenu(buildFlowReply(opt, makeCtx()));
-    expect(reply).toContain("0️⃣ Voltar ao menu principal");
+    expect(reply).toContain("0. menu");
   });
 });

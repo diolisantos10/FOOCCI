@@ -149,6 +149,10 @@ export async function runScenario(
       allowSideEffects: false, // HARD invariant — never real
       menu:            ctx.menu,
       deliveryQuoter:  ctx.deliveryQuoter, // injected (audits/tests) — no DB
+      // Synthetic CEP lookup: keeps the CEP-first delivery flow hermetic in scenarios.
+      cepLookup: async (cep: string) => ({
+        cep: cep.replace(/\D/g, ""), street: "Rua Teste", neighborhood: "Centro", city: "São Paulo", uf: "SP",
+      }),
     });
 
     session = result.session;
