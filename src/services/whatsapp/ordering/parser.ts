@@ -10,7 +10,7 @@ import type { WaDetectedIntent, WaParsedItem } from "./types";
 // ── Intent detection ──────────────────────────────────────────────────────────
 
 const ORDER_PATTERNS: RegExp[] = [
-  /\b(quero|queria|pode me trazer|me traz|coloca|vai|pedir|pede|adiciona|me d[aá]|me manda|manda|quero pedir|vou querer|vou de)\b/i,
+  /\b(quero|queria|pode me trazer|me traz|pode mandar|pode ser|coloca|vai|pedir|pede|adiciona|me d[aá]|me manda|manda|quero pedir|vou querer|vou de)\b/i,
   /\b(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+\w{3}/i,
   /\b\d+\s*[xX×]\s*\w/,
   /\b(pedido|combo|prato|por[çc][aã]o|lanche|pizza|hambur[gq]uer|sushi|temaki|yakisoba|ramen|sashimi|uramaki|rodízio)\b/i,

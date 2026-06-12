@@ -41,6 +41,7 @@ import {
   classifyReceptionistFailure,
 } from "@/services/ai/UnknownFallbackHandler";
 import { captureFailure as captureTrainingFailure } from "@/services/agent-training/AgentTrainingFailureCaptureService";
+import { detectIntent as detectOrderingIntent } from "@/services/whatsapp/ordering/parser";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -112,6 +113,33 @@ export function detectIntent(text: string): Intent {
   if (PAYMENT_RE.test(t))      return "PAYMENT_INFO";
   if (ORDER_STATUS_RE.test(t)) return "ORDER_STATUS";
   return "UNKNOWN";
+}
+
+// Street-address shapes ("Rua X 123", "Av. Y, 45", a bare CEP) that a customer
+// may drop out of the blue. With no active order session the receptionist must
+// NOT answer with the restaurant's own address and must NOT hand off — it should
+// guide the customer to start an order so the CEP is collected at the right step.
+const STREET_PREFIX_RE =
+  /^\s*(rua|r\.|av\.?|avenida|alameda|al\.|travessa|tv\.|estrada|rod\.|rodovia|pra[çc]a|viela|vila|jardim|jd\.|loteamento)\s+/i;
+const CEP_RE = /\b\d{5}-?\d{3}\b/;
+
+/** True when the message looks like the customer's own delivery address. */
+export function looksLikeLooseAddress(text: string): boolean {
+  const t = (text ?? "").trim();
+  if (!t) return false;
+  if (CEP_RE.test(t)) return true;
+  // Street prefix AND a house-number-like digit somewhere in the message.
+  return STREET_PREFIX_RE.test(t) && /\d/.test(t);
+}
+
+/**
+ * True when the message is an explicit order ("quero 1 yakisoba", "manda 2
+ * temakis", "1x hot roll", "pode mandar um combinado"). Delegates to the shared
+ * ordering intent detector so the receptionist and the Text Order engine agree
+ * on what counts as an order. Pure questions ("tem temaki?") stay non-orders.
+ */
+export function isExplicitOrderMessage(text: string): boolean {
+  return detectOrderingIntent(text) === "ORDER_REQUEST";
 }
 
 /**
@@ -380,6 +408,34 @@ export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
 
 export function appendBackToMainMenu(text: string): string {
   return text + BACK_TO_MENU_FOOTER;
+}
+
+/**
+ * Reply for an explicit order when this phone is hosted by the receptionist
+ * (outside the Text Order allowlist, or the feature is off). NEVER dumps a raw
+ * cardápio URL as the primary body and NEVER claims "temos X sim" — it offers a
+ * clean numbered path so the customer is conducted, not redirected to a link.
+ */
+export function buildOrderIntentReply(_ctx: ReplyContext): string {
+  return (
+    "Claro 😊 Para fazer seu pedido, escolha uma opção:\n\n" +
+    "1️⃣ Fazer pedido pelo cardápio\n" +
+    "2️⃣ Falar com atendente"
+  );
+}
+
+/**
+ * Reply when the customer drops a street address with no active order session.
+ * Never exposes the restaurant's own location and never auto-hands off — guides
+ * the customer to start an order (the CEP is collected when we ask for it).
+ */
+export function buildLooseAddressReply(_ctx: ReplyContext): string {
+  return (
+    "Para calcular a entrega certinho, comece seu pedido pelo item desejado " +
+    "ou envie o CEP quando eu pedir 😊\n\n" +
+    "1️⃣ Fazer pedido\n" +
+    "2️⃣ Falar com atendente"
+  );
 }
 
 export function renderMainMenu(ctx: ReplyContext): string {
@@ -762,9 +818,33 @@ async function run(conversationId: string): Promise<void> {
     }
   } else {
     const intent = detectIntent(lastMessage.content);
+    const explicitOrder = isExplicitOrderMessage(lastMessage.content);
+    const looseAddress  = looksLikeLooseAddress(lastMessage.content);
 
+    // ── Loose address without an order session ────────────────────────────────
+    // The customer sent their own street address out of the blue. The receptionist
+    // is the host (a real Text Order session would have intercepted this), so we
+    // must NOT reply with the restaurant's location and must NOT hand off — guide
+    // them to start an order. Checked first so an address that also looks order-ish
+    // ("Rua X 60") never falls into the order or handoff branches.
+    if (looseAddress && intent !== "COMPLAINT" && intent !== "HUMAN_REQUEST") {
+      replyText      = appendBackToMainMenu(buildLooseAddressReply(ctx));
+      triggerHandoff = false;
+    }
+    // ── Explicit order outside the Text Order allowlist ──────────────────────
+    // "quero 1 rodízio", "manda 2 temakis", "1x hot roll" — never answer with a
+    // raw cardápio link or "temos X sim". Offer a clean numbered path instead.
+    else if (explicitOrder && intent !== "COMPLAINT" && intent !== "HUMAN_REQUEST") {
+      if (!effectivelyOpen) {
+        const base = ctx.closedMessage ?? "No momento estamos fechados.";
+        replyText = appendBackToMainMenu(base);
+      } else {
+        replyText = appendBackToMainMenu(buildOrderIntentReply(ctx));
+      }
+      triggerHandoff = false;
+    }
     // Hard handoff intents — never use GPT, always escalate immediately
-    if (needsHandoff(intent, agentMode)) {
+    else if (needsHandoff(intent, agentMode)) {
       // When closed, HUMAN_REQUEST cannot be served — inform the customer and
       // show the reduced closed-hours menu. COMPLAINT / ORDER_STATUS are
       // emergencies and still escalate unconditionally even when closed.

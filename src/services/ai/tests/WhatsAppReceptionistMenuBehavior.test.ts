@@ -64,8 +64,13 @@ import {
   renderMainMenu,
   buildFlowReply,
   detectIntent,
+  looksLikeLooseAddress,
+  isExplicitOrderMessage,
+  buildOrderIntentReply,
+  buildLooseAddressReply,
   type ReplyContext,
 } from "../WhatsAppReceptionistService";
+import { detectIntent as detectOrderingIntent } from "@/services/whatsapp/ordering/parser";
 import type { MenuOption } from "@/validators/whatsapp-agent";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -376,6 +381,106 @@ describe("detectIntent", () => {
 
   it("HUMAN_REQUEST takes priority over GREETING", () => {
     expect(detectIntent("Oi, quero falar com atendente")).toBe("HUMAN_REQUEST");
+  });
+});
+
+// ── Explicit-order routing fix (P0) ───────────────────────────────────────────
+// These guard the production bug where an explicit text order ("Quero 1 rodízio
+// completo... Temakis grelhados") fell to the receptionist and got a giant
+// cardápio link, and a loose address got the restaurant location + a handoff.
+
+describe("explicit-order classification (shared ordering intent)", () => {
+  const orders = [
+    "quero 1 yakisoba e uma coca",
+    "quero 1 rodízio completo por favor\nTemakis grelhados", // the exact print case
+    "manda 2 temakis",
+    "vou querer hot roll e coca",
+    "1 yakisoba frango",
+    "pode mandar um combinado",
+    "pode ser um combinado",
+    "1x temaki",
+  ];
+  for (const msg of orders) {
+    it(`"${msg.replace(/\n/g, " / ")}" → ORDER_REQUEST`, () => {
+      expect(detectOrderingIntent(msg)).toBe("ORDER_REQUEST");
+      expect(isExplicitOrderMessage(msg)).toBe(true);
+    });
+  }
+
+  const questions = ["tem temaki?", "tem rodízio?", "qual horário?", "aceita cartão?"];
+  for (const msg of questions) {
+    it(`"${msg}" stays a QUESTION, not an order`, () => {
+      expect(detectOrderingIntent(msg)).not.toBe("ORDER_REQUEST");
+      expect(isExplicitOrderMessage(msg)).toBe(false);
+    });
+  }
+});
+
+describe("buildOrderIntentReply — explicit order outside allowlist", () => {
+  it("never sends a raw cardápio URL as the primary body", () => {
+    expect(buildOrderIntentReply(makeCtx())).not.toContain("http");
+  });
+
+  it("offers a clean numbered path (cardápio + atendente)", () => {
+    const reply = buildOrderIntentReply(makeCtx());
+    expect(reply).toContain("1️⃣");
+    expect(reply.toLowerCase()).toContain("pedido");
+    expect(reply.toLowerCase()).toContain("atendente");
+  });
+
+  it("never claims existence ('temos X sim')", () => {
+    expect(buildOrderIntentReply(makeCtx()).toLowerCase()).not.toContain("temos");
+  });
+
+  it("ends with the 0. menu footer once wrapped", () => {
+    expect(appendBackToMainMenu(buildOrderIntentReply(makeCtx())).endsWith("0. menu")).toBe(true);
+  });
+});
+
+describe("looksLikeLooseAddress", () => {
+  const addresses = [
+    "Rua Araraquara 60\nCidade Kemel Poá", // the exact print case
+    "Av. Paulista, 1000",
+    "Avenida Brasil 250",
+    "01310-100",
+    "meu cep é 01310100",
+    "Travessa das Flores 12",
+  ];
+  for (const a of addresses) {
+    it(`detects "${a.replace(/\n/g, " / ")}" as a loose address`, () => {
+      expect(looksLikeLooseAddress(a)).toBe(true);
+    });
+  }
+
+  const notAddresses = [
+    "quero 1 rodízio completo",
+    "qual o endereço de vocês?",
+    "onde fica o restaurante",
+    "tem temaki?",
+    "",
+  ];
+  for (const n of notAddresses) {
+    it(`does NOT treat "${n}" as a loose address`, () => {
+      expect(looksLikeLooseAddress(n)).toBe(false);
+    });
+  }
+});
+
+describe("buildLooseAddressReply — address with no order session", () => {
+  it("never returns the restaurant's own location or a raw URL", () => {
+    const reply = buildLooseAddressReply(makeCtx({ address: "Rua do Restaurante, 1" }));
+    expect(reply).not.toContain("http");
+    expect(reply).not.toContain("Rua do Restaurante");
+  });
+
+  it("guides the customer to start the order / send CEP", () => {
+    const reply = buildLooseAddressReply(makeCtx()).toLowerCase();
+    expect(reply).toContain("pedido");
+    expect(reply).toContain("cep");
+  });
+
+  it("ends with the 0. menu footer once wrapped", () => {
+    expect(appendBackToMainMenu(buildLooseAddressReply(makeCtx())).endsWith("0. menu")).toBe(true);
   });
 });
 
