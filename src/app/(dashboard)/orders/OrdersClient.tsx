@@ -9,7 +9,7 @@ import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
 import { SOUND_PREF_KEY } from "@/lib/sound-prefs";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
-const ALERT_WAV      = "/sounds/foocci-order-alert.wav";
+const ALERT_WAV      = "/sounds/foocci-order-alert.m4a";
 
 // Oscillator fallback — used when WAV file is unavailable or AudioContext is not suspended
 function playBeep() {

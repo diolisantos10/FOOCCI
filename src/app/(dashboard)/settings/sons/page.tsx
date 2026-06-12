@@ -12,7 +12,7 @@ import {
   writeSoundPref,
 } from "@/lib/sound-prefs";
 
-const ORDER_WAV   = "/sounds/foocci-order-alert.wav";
+const ORDER_WAV   = "/sounds/foocci-order-alert.m4a";
 const HANDOFF_WAV = "/sounds/foocci-handoff-alert.wav";
 
 interface SoundSettings {
