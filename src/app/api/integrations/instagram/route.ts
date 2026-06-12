@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getTenantContext } from "@/lib/tenant";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
+import { getMetaEnvStatus } from "@/services/instagram/metaOAuth";
 import {
   getInstagramConfig,
   upsertInstagramConfig,
@@ -21,9 +23,10 @@ import { INSTAGRAM_MODES, INSTAGRAM_SCOPES } from "@/services/instagram/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function webhookUrl(req: NextRequest): string {
-  const base = process.env.FOOCCI_BASE_URL ?? req.nextUrl.origin;
-  return `${base.replace(/\/$/, "")}/api/webhooks/instagram`;
+function webhookUrl(req: NextRequest): string | null {
+  // Public base only — never a localhost/railway URL in production.
+  const base = getPublicBaseUrl(req.nextUrl.origin).url;
+  return base ? `${base}/api/webhooks/instagram` : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -62,7 +65,8 @@ export async function GET(req: NextRequest) {
       connectedAt: view?.connectedAt ?? null,
       facebookPageName: view?.facebookPageName ?? null,
       instagramUsername: view?.instagramUsername ?? null,
-      metaConnectAvailable: !!(process.env.META_APP_ID ?? process.env.FACEBOOK_APP_ID),
+      metaConnectAvailable: getMetaEnvStatus(req.nextUrl.origin).oauthReady,
+      missingEnv: getMetaEnvStatus(req.nextUrl.origin).missing,
       webhookUrl: webhookUrl(req),
       lastWebhookAt: view?.lastWebhookAt ?? null,
       lastError: view?.lastError ?? null,

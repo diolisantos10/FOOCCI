@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkAdminRequest } from "@/lib/admin-auth";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { prisma } from "@/lib/prisma";
 import {
   getInstagramConfig,
@@ -29,9 +30,10 @@ async function resolveRestaurant(slugOrId: string) {
   });
 }
 
-function webhookUrl(req: NextRequest): string {
-  const base = process.env.FOOCCI_BASE_URL ?? req.nextUrl.origin;
-  return `${base.replace(/\/$/, "")}/api/webhooks/instagram`;
+function webhookUrl(req: NextRequest): string | null {
+  // Public base only — never a localhost/railway URL in production.
+  const base = getPublicBaseUrl(req.nextUrl.origin).url;
+  return base ? `${base}/api/webhooks/instagram` : null;
 }
 
 export async function GET(req: NextRequest) {

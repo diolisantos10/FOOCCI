@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { handleMetaCallback, metaRedirectUri } from "@/services/instagram/metaOAuth";
 
 export const runtime = "nodejs";
@@ -16,7 +17,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
-  const settings = new URL("/integracoes/instagram", req.nextUrl.origin);
+  const returnBase = getPublicBaseUrl(req.nextUrl.origin).url ?? req.nextUrl.origin;
+  const settings = new URL("/integracoes/instagram", returnBase);
 
   const result = await handleMetaCallback({
     state: params.get("state") ?? "",

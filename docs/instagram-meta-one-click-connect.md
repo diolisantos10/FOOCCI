@@ -103,3 +103,27 @@ Verify Token — para quem prefere não usar o OAuth. Não é o caminho principa
 - Sem long-lived token exchange automático / refresh (token da Página é salvo como veio).
 - Sem seleção multi-conta simultânea (uma Página por restaurante).
 - Produção ampla depende de App Review da Meta.
+
+## Troubleshooting: `localhost` em produção / `blocked_env`
+
+Sintoma: clicar em "Conectar com Facebook" redireciona para
+`http://localhost:8080/...` ou a tela mostra "Conexão automática ainda não
+configurada".
+
+Causa: sem `FOOCCI_BASE_URL` no runtime da Railway, o servidor só enxerga o
+origin interno do proxy (`localhost:8080`). Desde esta correção o código usa
+`getPublicBaseUrl()` (FOOCCI_BASE_URL → NEXT_PUBLIC_APP_URL → APP_URL →
+NEXT_PUBLIC_SITE_URL → NEXTAUTH_URL; candidatos com localhost/.railway.app são
+rejeitados em produção) e, sem base válida, retorna o erro explícito
+`PUBLIC_BASE_URL_NOT_CONFIGURED` em vez de gerar link quebrado.
+
+Correção manual (Railway → serviço Foocci → Variables):
+
+```
+META_APP_ID=...
+META_APP_SECRET=...
+FOOCCI_BASE_URL=https://foocci.com.br
+```
+
+Verificação: `GET /api/admin/settings/integrations/instagram/env-diagnostic`
+(ADMIN_SECRET) retorna booleans + `missing[]` — nunca valores de secrets.

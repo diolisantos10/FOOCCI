@@ -29,7 +29,8 @@ interface ConfigView {
   facebookPageName: string | null;
   instagramUsername: string | null;
   metaConnectAvailable: boolean;
-  webhookUrl: string;
+  missingEnv: string[];
+  webhookUrl: string | null;
   lastWebhookAt: string | null;
   lastError: string | null;
 }
@@ -55,7 +56,8 @@ function isConnected(v: ConfigView | null): boolean {
 }
 
 const META_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> = {
-  blocked_env: { kind: "err", text: "A conexão com a Meta ainda não foi configurada no servidor (META_APP_ID/META_APP_SECRET). Fale com o suporte." },
+  blocked_env: { kind: "err", text: "Conexão automática ainda não configurada — faltam variáveis da Meta no servidor (veja a lista abaixo)." },
+  blocked_base_url: { kind: "err", text: "Configure FOOCCI_BASE_URL=https://foocci.com.br no Railway para habilitar a conexão." },
   error: { kind: "err", text: "Não foi possível concluir a conexão com a Meta. Tente novamente." },
   no_pages: { kind: "err", text: "Nenhuma Página do Facebook foi encontrada na sua conta." },
   forbidden: { kind: "err", text: "Apenas o proprietário ou gerente pode conectar." },
@@ -203,7 +205,14 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           </a>
           <p className="mt-2 text-xs text-gray-400">Você será direcionado para a Meta para autorizar o Foocci.</p>
           {view && !view.metaConnectAvailable && (
-            <p className="mt-2 text-xs text-amber-600">A conexão automática ainda não foi habilitada no servidor — use a configuração manual avançada abaixo.</p>
+            <div className="mx-auto mt-3 max-w-md rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">
+              <p className="font-semibold">Conexão automática ainda não configurada.</p>
+              <p className="mt-0.5">Faltam variáveis da Meta no servidor:</p>
+              <ul className="mt-0.5 list-disc pl-4 font-mono">
+                {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
+              </ul>
+              <p className="mt-1">Enquanto isso, dá para usar a configuração manual avançada abaixo.</p>
+            </div>
           )}
         </section>
       )}
@@ -261,10 +270,16 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold">Webhook</h2>
         <p className="mt-1 text-sm text-gray-500">Callback URL para o painel da Meta (configurada automaticamente quando você conecta).</p>
-        <div className="mt-2 flex items-center gap-2">
-          <code className="flex-1 overflow-x-auto rounded-md bg-gray-100 px-3 py-2 text-xs">{view?.webhookUrl}</code>
-          <button onClick={() => copy(view?.webhookUrl ?? "", "wh")} className="rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50">{copied === "wh" ? "Copiado!" : "Copiar"}</button>
-        </div>
+        {view?.webhookUrl ? (
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 overflow-x-auto rounded-md bg-gray-100 px-3 py-2 text-xs">{view.webhookUrl}</code>
+            <button onClick={() => copy(view.webhookUrl ?? "", "wh")} className="rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50">{copied === "wh" ? "Copiado!" : "Copiar"}</button>
+          </div>
+        ) : (
+          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Configure <code className="font-mono">FOOCCI_BASE_URL=https://foocci.com.br</code> no Railway para gerar a URL pública do webhook.
+          </p>
+        )}
       </section>
 
       {/* Configuração manual avançada (accordion) */}

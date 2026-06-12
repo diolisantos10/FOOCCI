@@ -13,6 +13,7 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { upsertInstagramConfig, getInstagramConfig, toView, type InstagramConfigView } from "./InstagramConfigService";
 
 const GRAPH_VERSION = "v21.0";
@@ -39,6 +40,36 @@ export function getMetaAppCreds(): MetaAppCreds | null {
 
 export function isMetaConnectConfigured(): boolean {
   return getMetaAppCreds() !== null;
+}
+
+/** Exactly which env vars are missing for one-click connect (names only, never values). */
+export interface MetaEnvStatus {
+  metaAppIdConfigured: boolean;
+  metaAppSecretConfigured: boolean;
+  publicBaseUrlConfigured: boolean;
+  publicBaseUrl: string | null;
+  usesLocalhostInProduction: boolean;
+  oauthReady: boolean;
+  missing: string[];
+}
+
+export function getMetaEnvStatus(originFallback?: string): MetaEnvStatus {
+  const appIdOk = !!(process.env.META_APP_ID ?? process.env.FACEBOOK_APP_ID);
+  const appSecretOk = !!(process.env.META_APP_SECRET ?? process.env.FACEBOOK_APP_SECRET);
+  const base = getPublicBaseUrl(originFallback);
+  const missing: string[] = [];
+  if (!appIdOk) missing.push("META_APP_ID");
+  if (!appSecretOk) missing.push("META_APP_SECRET");
+  if (!base.configured) missing.push("FOOCCI_BASE_URL=https://foocci.com.br");
+  return {
+    metaAppIdConfigured: appIdOk,
+    metaAppSecretConfigured: appSecretOk,
+    publicBaseUrlConfigured: base.configured,
+    publicBaseUrl: base.url,
+    usesLocalhostInProduction: base.usesLocalhostInProduction,
+    oauthReady: appIdOk && appSecretOk && base.url !== null,
+    missing,
+  };
 }
 
 /** A discovered Facebook Page + its connected Instagram (token kept internal only). */
@@ -116,13 +147,19 @@ export function buildAuthUrl(input: { appId: string; redirectUri: string; state:
 export interface StartResult {
   ok: boolean;
   authUrl?: string;
-  blocked?: "BLOCKED_BY_META_APP_ENV";
+  blocked?: "BLOCKED_BY_META_APP_ENV" | "PUBLIC_BASE_URL_NOT_CONFIGURED";
+  missing?: string[];
   error?: string;
 }
 
-export async function startMetaConnect(input: { restaurantId: string; userId: string; redirectUri: string }): Promise<StartResult> {
+export async function startMetaConnect(input: { restaurantId: string; userId: string; redirectUri: string | null }): Promise<StartResult> {
   const creds = getMetaAppCreds();
-  if (!creds) return { ok: false, blocked: "BLOCKED_BY_META_APP_ENV" };
+  if (!creds) return { ok: false, blocked: "BLOCKED_BY_META_APP_ENV", missing: getMetaEnvStatus().missing };
+  // Never build an OAuth dialog pointing at a broken/localhost redirect URI.
+  const redirectUri = input.redirectUri;
+  if (!redirectUri) {
+    return { ok: false, blocked: "PUBLIC_BASE_URL_NOT_CONFIGURED", missing: ["FOOCCI_BASE_URL=https://foocci.com.br"] };
+  }
 
   const state = randomBytes(24).toString("hex");
   await prisma.metaOAuthState.create({
@@ -134,7 +171,7 @@ export async function startMetaConnect(input: { restaurantId: string; userId: st
       expiresAt: new Date(Date.now() + STATE_TTL_MS),
     },
   });
-  return { ok: true, authUrl: buildAuthUrl({ appId: creds.appId, redirectUri: input.redirectUri, state }) };
+  return { ok: true, authUrl: buildAuthUrl({ appId: creds.appId, redirectUri, state }) };
 }
 
 // ── Callback ─────────────────────────────────────────────────────────────────
@@ -146,7 +183,7 @@ export interface CallbackResult {
 }
 
 export async function handleMetaCallback(
-  input: { state: string; code?: string | null; error?: string | null; redirectUri: string },
+  input: { state: string; code?: string | null; error?: string | null; redirectUri: string | null },
   graph: MetaGraph = realMetaGraph,
 ): Promise<CallbackResult> {
   if (!input.state) return { ok: false, restaurantId: null, candidateCount: 0, reason: "state ausente" };
@@ -161,7 +198,7 @@ export async function handleMetaCallback(
     return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Autorização cancelada na Meta." };
   }
   const creds = getMetaAppCreds();
-  if (!creds || !input.code) {
+  if (!creds || !input.code || !input.redirectUri) {
     return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Configuração da Meta ausente." };
   }
 
@@ -290,8 +327,12 @@ export async function disconnectMeta(restaurantId: string): Promise<DisconnectRe
   return { ok: true, conversationsPreserved: true };
 }
 
-/** Public base URL for building the OAuth redirect URI. */
-export function metaRedirectUri(origin: string): string {
-  const base = (process.env.FOOCCI_BASE_URL ?? process.env.NEXTAUTH_URL ?? origin).replace(/\/$/, "");
-  return `${base}/api/integrations/meta/oauth/callback`;
+/**
+ * OAuth redirect URI from the PUBLIC base URL (never localhost in production).
+ * Returns null when the public base URL is not configured in production.
+ */
+export function metaRedirectUri(origin: string): string | null {
+  const base = getPublicBaseUrl(origin);
+  if (!base.url) return null;
+  return `${base.url}/api/integrations/meta/oauth/callback`;
 }
