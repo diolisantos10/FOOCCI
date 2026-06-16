@@ -6,9 +6,8 @@ import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
-import Link from "next/link";
 import { SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
-import { playAlertAudio } from "@/lib/sound-player";
+import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
 const ALERT_WAV      = "/sounds/foocci-order-alert.m4a";
@@ -1522,7 +1521,6 @@ function NewOrderModal({
   onReject,
   accepting,
   rejecting,
-  audioBlocked,
 }: {
   order: MockOrder;
   queueLength: number;
@@ -1530,7 +1528,6 @@ function NewOrderModal({
   onReject: (reason?: string) => void;
   accepting: boolean;
   rejecting: boolean;
-  audioBlocked: boolean;
 }) {
   const [confirmReject, setConfirmReject] = useState(false);
   const [rejectReason,  setRejectReason]  = useState("");
@@ -1541,19 +1538,9 @@ function NewOrderModal({
 
         {/* Header */}
         <div className="bg-orange-500 px-6 py-4 text-white">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
-              <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
-            </div>
-            {audioBlocked && (
-              <Link
-                href="/settings/sons"
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors"
-              >
-                🔇 Áudio bloqueado
-              </Link>
-            )}
+          <div className="flex items-center gap-3">
+            <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
+            <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
           </div>
           {queueLength > 1 ? (
             <p className="mt-0.5 text-sm text-orange-100">
@@ -1715,7 +1702,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   // localStorage mirror is just the instant fallback before the API responds.
   const [soundEnabled, setSoundEnabled] = useState(() => readSoundPref(SOUND_PREF_KEY, true));
   const soundVolumeRef = useRef(120);
-  const [audioBlocked, setAudioBlocked] = useState(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
@@ -1761,12 +1747,14 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   const modalOrder = modalQueue[0] ?? null;
   const modalOrderId = modalOrder?.id ?? null;
 
-  // Initialise the WAV audio element once on mount
+  // Initialise the WAV audio element once on mount and install silent unlock
   useEffect(() => {
     const audio = new Audio(ALERT_WAV);
     audio.preload = "auto";
     audio.volume  = 1.0;
     alertAudioRef.current = audio;
+    // First user interaction silently unlocks browser autoplay — no UI required
+    installSilentUnlock(() => [audio]);
     return () => { audio.pause(); audio.src = ""; };
   }, []);
 
@@ -1811,7 +1799,8 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       if (audio) {
         playAlertAudio(audio, soundVolumeRef.current).catch((err: unknown) => {
           if (err instanceof DOMException && err.name === "NotAllowedError") {
-            setAudioBlocked(true);
+            // Autoplay blocked — silent unlock will resolve it on next interaction
+            console.debug("[order-alert] autoplay blocked, waiting for user gesture");
           } else {
             console.warn("[order-alert] audio play failed", err);
             playBeep();
@@ -1847,9 +1836,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
               const audio = alertAudioRef.current;
               if (audio) {
                 playAlertAudio(audio, soundVolumeRef.current).catch((err: unknown) => {
-                  if (err instanceof DOMException && err.name === "NotAllowedError") {
-                    setAudioBlocked(true);
-                  } else {
+                  if (!(err instanceof DOMException && err.name === "NotAllowedError")) {
                     playBeep();
                   }
                 });
@@ -2168,20 +2155,11 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
 
       {/* ── Alert toggles ── */}
       <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-2">
-        {/* Active alert banner */}
-        {hasPendingOrders && soundEnabled && !audioBlocked && (
+        {/* Active alert banner — sound-only visual cue, no config controls */}
+        {hasPendingOrders && soundEnabled && (
           <span className="flex items-center gap-1.5 rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 animate-pulse">
             🔊 Novo pedido aguardando aceite
           </span>
-        )}
-        {/* Audio blocked — config lives only in Configurações → Sons e alertas */}
-        {audioBlocked && (
-          <Link
-            href="/settings/sons"
-            className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
-          >
-            🔇 Áudio bloqueado. Ative em Configurações → Sons e alertas.
-          </Link>
         )}
         <button
           type="button"
@@ -2335,7 +2313,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
           onReject={handleModalReject}
           accepting={modalAccepting}
           rejecting={modalRejecting}
-          audioBlocked={audioBlocked}
         />
       )}
 

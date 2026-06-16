@@ -9,10 +9,9 @@ import {
   FormEvent,
   type ReactNode,
 } from "react";
-import Link from "next/link";
 import { isGuestIdentifier } from "@/lib/guest";
 import { HANDOFF_SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
-import { playAlertAudio } from "@/lib/sound-player";
+import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
@@ -386,8 +385,7 @@ export function AtendimentoClient({
   const [uploading,     setUploading]     = useState(false);
 
   // ── Human-handoff alert sound ─────────────────────────────────────────────
-  const handoffAudioRef       = useRef<HTMLAudioElement | null>(null);
-  const [handoffAudioBlocked, setHandoffAudioBlocked] = useState(false);
+  const handoffAudioRef    = useRef<HTMLAudioElement | null>(null);
   // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
   // localStorage mirror is just the instant fallback before the API responds.
   const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => readSoundPref(HANDOFF_SOUND_PREF_KEY, true));
@@ -452,11 +450,8 @@ export function AtendimentoClient({
         if (newHandoffs.length > 0 && handoffSoundEnabled) {
           const audio = handoffAudioRef.current;
           if (audio) {
-            playAlertAudio(audio, handoffVolumeRef.current).catch((err: unknown) => {
-              if (err instanceof DOMException && err.name === "NotAllowedError") {
-                setHandoffAudioBlocked(true);
-              }
-            });
+            // Autoplay blocks are handled by the silent unlock installed on mount
+            playAlertAudio(audio, handoffVolumeRef.current).catch(() => {});
           }
           newHandoffs.forEach((id) => alertedIds.current.add(id));
         }
@@ -505,6 +500,8 @@ export function AtendimentoClient({
   useEffect(() => {
     const audio = new Audio("/sounds/foocci-handoff-alert.wav");
     handoffAudioRef.current = audio;
+    // First user interaction silently unlocks browser autoplay — no UI required
+    installSilentUnlock(() => [audio]);
     return () => { audio.pause(); audio.src = ""; };
   }, []);
 
@@ -906,18 +903,6 @@ export function AtendimentoClient({
             </select>
           </div>
         </div>
-
-        {/* Audio blocked — config lives only in Configurações → Sons e alertas */}
-        {handoffAudioBlocked && (
-          <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5">
-            <Link
-              href="/settings/sons"
-              className="block w-full rounded-md bg-amber-500 px-3 py-1 text-center text-xs font-bold text-white hover:bg-amber-600 transition-colors"
-            >
-              🔇 Áudio bloqueado. Ative em Configurações → Sons e alertas.
-            </Link>
-          </div>
-        )}
 
         {/* Human-handoff count */}
         {humanHandoffCount > 0 && (

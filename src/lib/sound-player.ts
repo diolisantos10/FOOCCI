@@ -84,3 +84,60 @@ export async function playAlertAudio(audio: HTMLAudioElement, volumePercent: num
   wiring.gain.gain.value = v;
   await audio.play();
 }
+
+/**
+ * Installs a one-time pointerdown listener on window that silently unlocks
+ * browser autoplay policy without any visible UI.
+ *
+ * On the first user interaction:
+ *  1. Resumes (or creates) an AudioContext to satisfy Web Audio autoplay rules.
+ *  2. Plays each provided audio element at volume 0 then immediately pauses,
+ *     which satisfies the HTMLMediaElement autoplay policy in browsers that
+ *     require a user gesture before play() resolves.
+ *
+ * After the first interaction the listener removes itself — it runs at most once.
+ * Failures are silently swallowed; the operational code already handles the case
+ * where play() rejects (falls back to beep or logs internally).
+ */
+export function installSilentUnlock(getAudioElements: () => HTMLAudioElement[]): void {
+  if (typeof window === "undefined") return;
+
+  let done = false;
+
+  const handler = () => {
+    if (done) return;
+    done = true;
+    window.removeEventListener("pointerdown", handler, { capture: true });
+
+    const Ctor = getAudioContextCtor();
+    if (Ctor) {
+      try {
+        // Re-use a shared context if one was already wired, otherwise create one
+        const ctx = new Ctor();
+        if (ctx.state === "suspended") {
+          void ctx.resume().catch(() => {});
+        }
+        // Play a 1-sample silent buffer — resolves immediately
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+      } catch { /* ignore */ }
+    }
+
+    for (const audio of getAudioElements()) {
+      try {
+        const saved = audio.volume;
+        audio.volume = 0;
+        void audio.play().then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = saved;
+        }).catch(() => { audio.volume = saved; });
+      } catch { /* ignore */ }
+    }
+  };
+
+  window.addEventListener("pointerdown", handler, { capture: true, once: true });
+}
