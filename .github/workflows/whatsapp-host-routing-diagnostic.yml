@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Host Routing diagnostic — for a phone + message, which HOST replies
+# (Text Order / Receptionist / human-blocked) and, if receptionist, what TYPE of
+# reply (SAFE_MENU / LINK_CARDAPIO / HANDOFF / LOCATION / UNKNOWN). Read-only.
+# Phone empty = self-test the first allowlisted number (masked). Never sends
+# WhatsApp, never creates order/Pix, never changes config. Uses CRON_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Host Routing Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug"
+        required: true
+        default: "sushi-cazza"
+      non_allowlisted_phone:
+        description: "Telefone sintético FORA da allowlist (nunca logado em claro)"
+        required: false
+        default: "+5511999999999"
+
+jobs:
+  host-routing:
+    name: "Host Routing Diagnostic (read-only)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/host-routing-diagnostic" >> "$GITHUB_OUTPUT"
+
+      - name: "Run host-routing scenarios"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          OUT_PHONE: ${{ inputs.non_allowlisted_phone }}
+        run: |
+          set -e
+          fail=0
+          probe () {
+            local label="$1"; local phone="$2"; local message="$3"
+            local body
+            body=$(jq -nc --arg slug "$SLUG" --arg phone "$phone" --arg msg "$message" \
+              '{restaurantSlug:$slug, message:$msg} + (if $phone != "" then {phone:$phone} else {} end)')
+            curl --connect-timeout 20 --max-time 120 -sS -X POST "$URL" \
+              -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+              -d "$body" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt || true
+            local http; http=$(cat /tmp/code.txt)
+            echo "── $label ──"
+            echo "   HTTP                 : $http"
+            echo "   phoneMasked          : $(jq -r '.phoneMasked' /tmp/r.json)"
+            echo "   mode/scope/allowlist : $(jq -r '.config.mode' /tmp/r.json) / $(jq -r '.config.scope' /tmp/r.json) / inAllowlist=$(jq -r '.config.phoneInAllowlist' /tmp/r.json)"
+            echo "   host                 : $(jq -r '.decision.host' /tmp/r.json)"
+            echo "   reason               : $(jq -r '.decision.reason' /tmp/r.json)"
+            echo "   responseType         : $(jq -r '.receptionistPreview.responseType // "—"' /tmp/r.json)"
+            echo "   rawLink/handoff/loc   : $(jq -r '.receptionistPreview.containsRawLink // "—"' /tmp/r.json) / $(jq -r '.receptionistPreview.containsHandoff // "—"' /tmp/r.json) / $(jq -r '.receptionistPreview.containsRestaurantLocation // "—"' /tmp/r.json)"
+            echo "   safety               : noEvolution=$(jq -r '.safety.noEvolution' /tmp/r.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/r.json) runtimeTouched=$(jq -r '.safety.runtimeTouched' /tmp/r.json)"
+            if [[ "$http" -lt 200 || "$http" -ge 300 ]]; then echo "::error::$label non-2xx ($http)"; fail=1; fi
+            if [[ "$(jq -r '.ok' /tmp/r.json)" != "true" ]]; then echo "::error::$label ok != true"; fail=1; fi
+          }
+
+          # 1. allowlisted (self-test) + pedido explícito → espera TEXT_ORDER
+          probe "1. allowlisted + rodízio/temakis" "" "Quero 1 rodízio completo por favor
+          Temakis grelhados"
+          # 2. fora da allowlist + pedido explícito → espera RECEPTIONIST + SAFE_MENU
+          probe "2. fora-allowlist + rodízio/temakis" "$OUT_PHONE" "Quero 1 rodízio completo por favor
+          Temakis grelhados"
+          # 3. fora da allowlist + endereço solto → espera RECEPTIONIST + SAFE_MENU (orientação)
+          probe "3. fora-allowlist + endereço solto" "$OUT_PHONE" "Rua Araraquara 60
+          Cidade Kemel Poá"
+          # 4. fora da allowlist + yakisoba+coca → espera RECEPTIONIST + SAFE_MENU
+          probe "4. fora-allowlist + yakisoba+coca" "$OUT_PHONE" "quero 1 yakisoba e 1 coca cola"
+          # 5. allowlisted (self-test) + yakisoba+coca → espera TEXT_ORDER
+          probe "5. allowlisted + yakisoba+coca" "" "quero 1 yakisoba e 1 coca cola"
+
+          if [[ "$fail" -ne 0 ]]; then exit 1; fi
+          echo "✅ Host-routing diagnostic concluído — read-only, telefone mascarado."

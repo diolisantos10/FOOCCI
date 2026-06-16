@@ -234,3 +234,49 @@ Manter o WhatsApp em **`ALLOWLIST_FULL_TEST` apenas para `…223`**. **Não abri
 para clientes reais até concluir os itens P0 do §10. A causa raiz está entendida e
 o remendo já está em produção; o que falta é **fechar a lacuna de observabilidade**
 (diagnóstico do caminho do recepcionista) e **validar em campo**.
+
+---
+
+## 14. Host Routing Diagnostic (fecha a lacuna do §5/§11)
+
+Rota nova, read-only: **`POST /api/cron/whatsapp/host-routing-diagnostic`**
+(`CRON_SECRET`). Para um `telefone + mensagem`, responde **qual host responderia**
+e — quando é o recepcionista — **prevê e classifica a resposta**. É a primeira
+ferramenta que exercita o **caminho do recepcionista** com o **mesmo gate do
+webhook**.
+
+### O que agora é coberto
+- `decision.host`: `TEXT_ORDER` · `RECEPTIONIST` · `HUMAN_BLOCKED` · `IGNORED`,
+  com `reason` (fora da allowlist / pausado / mode / scope / conversa em HUMAN /
+  aiLocked / sem intenção).
+- `receptionistPreview.responseType`: `SAFE_MENU` · `LINK_CARDAPIO` · `HANDOFF` ·
+  `LOCATION` · `UNKNOWN`, mais flags `containsRawLink` / `containsHandoff` /
+  `containsRestaurantLocation` / `endsWithMenuFooter` e o `preview` do texto.
+- **Fonte única de verdade:** o recepcionista (`run()`) loga `responseType` via a
+  MESMA `classifyReplyText`, e o diagnóstico classifica o `previewReceptionistResponse`
+  com a mesma função → o diagnóstico **não diverge** da produção.
+
+### Diferença Text Order × Recepcionista
+- **Text Order** entra só com `routingEligible && (sessão || intenção de pedido)`
+  (telefone na allowlist + modo que responde). Anota pedido.
+- **Recepcionista** é o host padrão para todo o resto (fora da allowlist, saudação,
+  FAQ, endereço solto). Nunca cria pedido/Pix.
+
+### Como testar um telefone/mensagem
+```bash
+curl -X POST "$BASE/api/cron/whatsapp/host-routing-diagnostic" \
+  -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+  -d '{"restaurantSlug":"sushi-cazza","phone":"+55...","message":"Quero 1 rodízio completo\nTemakis grelhados"}'
+```
+`phone` vazio = self-test do primeiro allowlisted (mascarado). Workflow:
+`whatsapp-host-routing-diagnostic.yml` roda os 5 cenários canônicos.
+
+### Limitações
+- O **branch GPT/knowledge** do recepcionista é não-determinístico: o preview marca
+  `deterministic=false` / `responseType=UNKNOWN` (não tenta adivinhar a resposta do
+  GPT). O diagnóstico cobre com precisão os **branches determinísticos** (back-to-menu,
+  opção selecionada, endereço solto, pedido explícito, handoff, template, catálogo).
+- Não considera a base de conhecimento (`RestaurantKnowledgeService`) — uma resposta
+  de KB apareceria como `UNKNOWN` no preview.
+- Frete/Pix/horário do **Text Order** continuam cobertos pelas suites de ordering, não
+  por este diagnóstico (que é do caminho do recepcionista).

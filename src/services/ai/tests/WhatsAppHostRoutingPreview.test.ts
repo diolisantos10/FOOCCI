@@ -1,0 +1,145 @@
+/**
+ * WhatsAppHostRoutingPreview — golden tests for the receptionist-path
+ * observability layer (the P0 "host routing diagnostic" round).
+ *
+ * Asserts:
+ *  - previewReceptionistResponse() predicts the SAFE reply for the real cases
+ *    (explicit order outside allowlist, loose address, simple "tem X?");
+ *  - classifyReplyText() labels finished replies correctly (SAFE_MENU vs
+ *    LINK_CARDAPIO vs HANDOFF vs LOCATION);
+ *  - decideHost() maps a routing decision (+ human block) to the right host.
+ *
+ * Hermetic: no Evolution, no order, no Pix, no DB writes — pure functions.
+ */
+
+import { vi, describe, it, expect } from "vitest";
+
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+vi.mock("@/lib/openai", () => ({ openai: {} }));
+vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: class {} }));
+vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: class {} }));
+vi.mock("@/services/buildos/BuildCommandRouter", () => ({ detectBuildCommand: () => false }));
+vi.mock("@/services/knowledge/RestaurantKnowledgeService", () => ({ RestaurantKnowledgeService: class {} }));
+vi.mock("@/lib/handoff", () => ({ markConversationNeedsHuman: vi.fn() }));
+vi.mock("@/lib/wa-token", () => ({ signWaToken: vi.fn() }));
+vi.mock("@/services/ai/UnknownFallbackHandler", () => ({
+  P0_FALLBACK_REPLY: "Só um minutinho, vou chamar um atendente para te ajudar. 🤝",
+  isRepeatedClarificationLoop: vi.fn(() => false), classifyReceptionistFailure: vi.fn(),
+}));
+vi.mock("@/services/agent-training/AgentTrainingFailureCaptureService", () => ({ captureFailure: vi.fn() }));
+
+import {
+  previewReceptionistResponse,
+  classifyReplyText,
+  type ReplyContext,
+} from "../WhatsAppReceptionistService";
+import { decideHost } from "@/services/whatsapp/ordering/hostRoutingDiagnostic";
+import type { MessageAwareRouteDecision } from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
+import type { MenuOption } from "@/validators/whatsapp-agent";
+
+const OPTIONS: MenuOption[] = [
+  { id: "1", label: "Fazer pedido", flow: "order" },
+  { id: "2", label: "Ver cardápio", flow: "menu" },
+  { id: "3", label: "Falar com atendente", flow: "handoff" },
+];
+
+function ctx(overrides: Partial<ReplyContext> = {}): ReplyContext {
+  return {
+    restaurantName: "Sushi Cazza", agentName: "Bot", customerName: null,
+    pedidoUrl: "https://foocci.com.br/pedido/sushi-cazza", qrMenuUrl: null,
+    address: "Rua do Restaurante, 1, Centro", deliveryEnabled: true,
+    welcomeMessage: "Bem-vindo!", orderPreMessage: "Acesse o cardápio:", handoffMessage: "Estou chamando um atendente, aguarde um momento 🤝",
+    agentMode: "RECEPTIONIST_ONLY", menuOptions: OPTIONS, hoursText: null,
+    isCurrentlyOpen: true, closedMessage: null, isPaused: false, pauseReason: null,
+    menuCatalog: [{ name: "Temakis", items: [{ name: "Temaki Salmão" }] }],
+    instagramUrl: null, tiktokUrl: null, ...overrides,
+  };
+}
+
+// ── classifyReplyText ─────────────────────────────────────────────────────────
+describe("classifyReplyText", () => {
+  it("menu numerado sem link → SAFE_MENU", () => {
+    expect(classifyReplyText("Claro 😊 escolha:\n\n1️⃣ Fazer pedido\n2️⃣ Falar com atendente\n\n0. menu")).toBe("SAFE_MENU");
+  });
+  it("link de cardápio → LINK_CARDAPIO", () => {
+    expect(classifyReplyText("Acesse o cardápio:\n\nhttps://foocci.com.br/pedido/x\n\n0. menu")).toBe("LINK_CARDAPIO");
+  });
+  it("escalada para humano → HANDOFF", () => {
+    expect(classifyReplyText("Estou chamando um atendente, aguarde um momento 🤝")).toBe("HANDOFF");
+  });
+  it("expõe endereço do restaurante → LOCATION", () => {
+    expect(classifyReplyText("Estamos em: Rua do Restaurante, 1", "Rua do Restaurante, 1, Centro")).toBe("LOCATION");
+  });
+  it("um menu seguro que lista 'Falar com atendente' NÃO é HANDOFF", () => {
+    const safe = "Claro 😊 escolha:\n\n1️⃣ Fazer pedido pelo cardápio\n2️⃣ Falar com atendente\n\n0. menu";
+    expect(classifyReplyText(safe)).toBe("SAFE_MENU");
+  });
+});
+
+// ── previewReceptionistResponse — casos reais ─────────────────────────────────
+describe("previewReceptionistResponse — pedido explícito fora da allowlist", () => {
+  const p = previewReceptionistResponse("Quero 1 rodízio completo por favor\nTemakis grelhados", ctx());
+  it("responseType = SAFE_MENU", () => { expect(p.responseType).toBe("SAFE_MENU"); });
+  it("não contém link bruto", () => { expect(p.containsRawLink).toBe(false); });
+  it("não é handoff e termina com 0. menu", () => {
+    expect(p.containsHandoff).toBe(false);
+    expect(p.endsWithMenuFooter).toBe(true);
+  });
+});
+
+describe("previewReceptionistResponse — endereço solto", () => {
+  const p = previewReceptionistResponse("Rua Araraquara 60\nCidade Kemel Poá", ctx());
+  it("SAFE_MENU sem localização do restaurante e sem link", () => {
+    expect(p.responseType).toBe("SAFE_MENU");
+    expect(p.containsRestaurantLocation).toBe(false);
+    expect(p.containsRawLink).toBe(false);
+  });
+});
+
+describe("previewReceptionistResponse — 'tem temaki?'", () => {
+  const p = previewReceptionistResponse("tem temaki?", ctx());
+  it("não manda URL gigante como primeira resposta (SAFE_MENU)", () => {
+    expect(p.containsRawLink).toBe(false);
+    expect(p.responseType).toBe("SAFE_MENU");
+  });
+});
+
+describe("previewReceptionistResponse — saudação e handoff", () => {
+  it("'ola' → SAFE_MENU (menu)", () => {
+    expect(previewReceptionistResponse("ola", ctx()).responseType).toBe("SAFE_MENU");
+  });
+  it("'falar com atendente' → HANDOFF", () => {
+    expect(previewReceptionistResponse("falar com atendente", ctx()).responseType).toBe("HANDOFF");
+  });
+  it("opção 2 (cardápio) selecionada → LINK_CARDAPIO (cliente pediu o link)", () => {
+    expect(previewReceptionistResponse("2", ctx()).responseType).toBe("LINK_CARDAPIO");
+  });
+});
+
+// ── decideHost ────────────────────────────────────────────────────────────────
+function fakeDecision(over: Partial<MessageAwareRouteDecision> & { mode?: string }): MessageAwareRouteDecision {
+  return {
+    config: { mode: over.mode ?? "ALLOWLIST_FULL_TEST" } as MessageAwareRouteDecision["config"],
+    routingEligible: true, hasActiveSession: false, detectedIntent: "ORDER_REQUEST",
+    messageHasOrderIntent: true, wouldRouteToTextOrdering: true, finalHandler: "TEXT_ORDERING",
+    replyCapable: true, effectiveFinalHandler: "TEXT_ORDERING", declineReason: null, ...over,
+  } as MessageAwareRouteDecision;
+}
+
+describe("decideHost", () => {
+  it("conversa em HUMAN/aiLocked → HUMAN_BLOCKED", () => {
+    const r = decideHost(fakeDecision({}), { status: "HUMAN", aiEnabled: false, aiLocked: false, reason: "Conversa em atendimento humano." });
+    expect(r.host).toBe("HUMAN_BLOCKED");
+  });
+  it("effectiveFinalHandler TEXT_ORDERING → TEXT_ORDER", () => {
+    expect(decideHost(fakeDecision({ effectiveFinalHandler: "TEXT_ORDERING" }), null).host).toBe("TEXT_ORDER");
+  });
+  it("OLD_WHATSAPP_AGENT → RECEPTIONIST com motivo", () => {
+    const r = decideHost(fakeDecision({
+      effectiveFinalHandler: "OLD_WHATSAPP_AGENT", wouldRouteToTextOrdering: false,
+      declineReason: "Telefone não está na lista liberada",
+    }), null);
+    expect(r.host).toBe("RECEPTIONIST");
+    expect(r.reason).toContain("lista liberada");
+  });
+});

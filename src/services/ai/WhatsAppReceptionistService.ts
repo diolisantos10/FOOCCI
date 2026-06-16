@@ -348,16 +348,27 @@ function findCatalogMatch(
 
   for (const cat of catalog) {
     const catNorm = norm(cat.name);
-    if (!msgNorm.includes(catNorm)) continue;
+    // Tolerate singular/plural: "tem temaki?" should still match a "Temakis"
+    // category (and vice-versa) so a simple question gets a safe answer.
+    const catNormS = catNorm.length >= 5 ? catNorm.replace(/s$/, "") : catNorm;
+    const hitTerm = msgNorm.includes(catNorm)
+      ? catNorm
+      : catNormS !== catNorm && msgNorm.includes(catNormS)
+        ? catNormS
+        : null;
+    if (!hitTerm) continue;
 
     // Skip if the category name is negated right before it (e.g., "não tem combos")
-    const catIdx = msgNorm.indexOf(catNorm);
+    const catIdx = msgNorm.indexOf(hitTerm);
     const before = msgNorm.slice(Math.max(0, catIdx - 20), catIdx);
     if (/\bn[aã]o\b/.test(before)) continue;
 
     const catDisplay = cat.name.charAt(0).toUpperCase() + cat.name.slice(1);
+    // Confirm existence WITHOUT leading with a raw cardápio URL — a simple
+    // "tem X?" must not get a giant link as the primary body. The customer is
+    // offered a clean numbered path (tapping 1 opens the cardápio link).
     return pedidoUrl
-      ? `Temos ${catDisplay} sim 😊 Você pode ver as opções e fazer seu pedido diretamente pelo cardápio:\n${pedidoUrl}`
+      ? `Temos ${catDisplay} sim 😊 Para ver as opções e pedir, escolha:\n\n1️⃣ Fazer pedido pelo cardápio\n2️⃣ Falar com atendente`
       : `Temos ${catDisplay} sim 😊 É só nos perguntar mais detalhes!`;
   }
   return null;
@@ -442,6 +453,141 @@ export function renderMainMenu(ctx: ReplyContext): string {
   const menuList = buildMenuList(ctx.menuOptions);
   if (!menuList) return ctx.welcomeMessage;
   return "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
+}
+
+// ── Receptionist response observability (single source of truth) ──────────────
+//
+// classifyReplyText labels what a FINISHED receptionist reply IS, by inspecting
+// the text only. run() logs it for every live reply and the host-routing
+// diagnostic classifies its hermetic preview with the SAME function — so the
+// diagnostic can never silently drift from production behaviour.
+
+export type ReceptionistResponseType =
+  | "SAFE_MENU"      // numbered options / orientation — no raw link, no location
+  | "LINK_CARDAPIO"  // a cardápio/pedido URL is a primary body
+  | "HANDOFF"        // escalating to a human
+  | "LOCATION"       // exposes the restaurant's own address
+  | "UNKNOWN";       // generic / GPT / hours — non-deterministic
+
+const HANDOFF_TEXT_RE =
+  /chamando (um |o )?atendente|vou (deixar|chamar).*(atendente|equipe)|aguarde um momento|um minutinho, vou chamar/i;
+
+/** True when `text` contains a raw http(s) link (cardápio/pedido). */
+function textHasRawLink(text: string): boolean {
+  return /https?:\/\//i.test(text ?? "");
+}
+
+/** True when `text` exposes the restaurant's own street address. */
+function textHasRestaurantLocation(text: string, address: string | null): boolean {
+  const t = text ?? "";
+  if (/estamos em:/i.test(t)) return true;
+  const street = address?.split(",")[0]?.trim();
+  return !!street && street.length >= 4 && t.includes(street);
+}
+
+/**
+ * Labels a finished receptionist reply by inspecting its text. Order matters: a
+ * safe numbered menu lists "Falar com atendente" as an OPTION but is NOT a
+ * handoff; a real handoff is a short escalation line with no menu footer/link.
+ */
+export function classifyReplyText(text: string, address: string | null = null): ReceptionistResponseType {
+  const t = (text ?? "").trim();
+  if (!t) return "UNKNOWN";
+  if (textHasRestaurantLocation(t, address)) return "LOCATION";
+  if (textHasRawLink(t)) return "LINK_CARDAPIO";
+  const looksLikeMenu =
+    /1️⃣/.test(t) ||
+    /escolha uma op[çc][aã]o|para calcular a entrega|menu principal|responda com o n[uú]mero|\n0\.\s*menu/i.test(t);
+  if (looksLikeMenu) return "SAFE_MENU";
+  if (HANDOFF_TEXT_RE.test(t)) return "HANDOFF";
+  return "UNKNOWN";
+}
+
+export interface ReceptionistPreview {
+  responseType:               ReceptionistResponseType;
+  containsRawLink:            boolean;
+  containsHandoff:            boolean;
+  containsRestaurantLocation: boolean;
+  endsWithMenuFooter:         boolean;
+  /** False for the knowledge-base / GPT branches (non-deterministic). */
+  deterministic:              boolean;
+  preview:                    string;
+}
+
+/**
+ * Hermetically predicts the receptionist reply for a TEXT message, mirroring the
+ * DETERMINISTIC branch order of run() (back-to-menu, selected option, loose
+ * address, explicit order, handoff, template). The knowledge-base and GPT
+ * branches are non-deterministic → flagged deterministic=false with a marker.
+ * Pure: no DB, no Evolution, no GPT, no order/Pix.
+ */
+export function previewReceptionistResponse(message: string, ctx: ReplyContext): ReceptionistPreview {
+  const raw = (message ?? "").trim();
+  const intent = detectIntent(raw);
+  let text = "";
+  let deterministic = true;
+
+  if (BACK_TO_MENU_RE.test(raw)) {
+    text = renderMainMenu(ctx);
+  } else {
+    const selectedOpt = detectSelectedOption(raw, ctx.menuOptions);
+    if (selectedOpt) {
+      text = buildFlowReply(selectedOpt, ctx);
+      if (selectedOpt.flow !== "handoff") text = appendBackToMainMenu(text);
+    } else {
+      const explicitOrder = isExplicitOrderMessage(raw);
+      const looseAddress  = looksLikeLooseAddress(raw);
+      if (looseAddress && intent !== "COMPLAINT" && intent !== "HUMAN_REQUEST") {
+        text = appendBackToMainMenu(buildLooseAddressReply(ctx));
+      } else if (explicitOrder && intent !== "COMPLAINT" && intent !== "HUMAN_REQUEST") {
+        text = ctx.isCurrentlyOpen
+          ? appendBackToMainMenu(buildOrderIntentReply(ctx))
+          : appendBackToMainMenu(ctx.closedMessage ?? "No momento estamos fechados.");
+      } else if (needsHandoff(intent, ctx.agentMode)) {
+        if (!ctx.isCurrentlyOpen && intent === "HUMAN_REQUEST") {
+          text = appendBackToMainMenu(
+            (ctx.closedMessage ?? "No momento estamos fechados.") +
+              "\n\nNosso atendimento humano retorna quando estivermos abertos.",
+          );
+        } else {
+          text = ctx.handoffMessage;
+        }
+      } else {
+        const templateReply = buildTemplateReply(intent, ctx);
+        const useGpt =
+          (intent === "UNKNOWN" && ctx.agentMode !== "HUMAN_ASSISTED") ||
+          (templateReply === null && intent !== "GREETING");
+        if (useGpt) {
+          // UNKNOWN may be short-circuited by a catalog match (→ link) before GPT.
+          const catalog =
+            intent === "UNKNOWN" && ctx.agentMode !== "HUMAN_ASSISTED" && ctx.menuCatalog.length > 0
+              ? findCatalogMatch(raw, ctx.menuCatalog, ctx.pedidoUrl)
+              : null;
+          if (catalog) {
+            text = appendBackToMainMenu(catalog);
+          } else {
+            deterministic = false;
+            text = "(resposta gerada via GPT — não-determinística; pode incluir menu/handoff)";
+          }
+        } else if (intent === "GREETING") {
+          text = renderMainMenu(ctx); // representative: a greeting always opens the menu
+        } else {
+          text = appendBackToMainMenu(templateReply ?? ctx.welcomeMessage);
+        }
+      }
+    }
+  }
+
+  const responseType = deterministic ? classifyReplyText(text, ctx.address) : "UNKNOWN";
+  return {
+    responseType,
+    containsRawLink:            textHasRawLink(text),
+    containsHandoff:            responseType === "HANDOFF",
+    containsRestaurantLocation: textHasRestaurantLocation(text, ctx.address),
+    endsWithMenuFooter:         /\n0\.\s*menu\s*$/i.test(text),
+    deterministic,
+    preview:                    text,
+  };
 }
 
 function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
@@ -1104,6 +1250,7 @@ async function run(conversationId: string): Promise<void> {
   // Log final reply state before sending.
   console.info("[WhatsAppReceptionistService] sending-reply", {
     conversationId,
+    responseType:      classifyReplyText(replyText, ctx.address),
     replyHasPedidoUrl: replyText.includes("/pedido/"),
     replyHasWaToken:   replyText.includes("waToken="),
     guardRepaired:     replyMetadata?.guardRepaired ?? false,
