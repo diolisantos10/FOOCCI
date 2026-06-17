@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Text Order — OPEN to final customers (scope → RESTAURANT_WIDE).
+# DANGEROUS / owner-authorized. Requires the exact confirm string AND all three
+# acknowledgments AND every gate PASS (p0=0). Config-only: never sends WhatsApp,
+# never creates order/Pix. Real order/Pix happen only after the customer's final
+# confirmation, in the field. Uses CRON_SECRET. Manual only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Text Order — OPEN Restaurant-Wide
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug"
+        required: true
+        default: "sushi-cazza"
+      confirm:
+        description: "Digite EXATAMENTE: OPEN_WHATSAPP_TEXT_ORDER_RESTAURANT_WIDE"
+        required: true
+        default: ""
+      acknowledge_real_customers:
+        description: "Reconheço que clientes reais entrarão (digite: true)"
+        required: true
+        default: "false"
+      acknowledge_real_orders:
+        description: "Reconheço que pedidos reais serão criados após confirmação (digite: true)"
+        required: true
+        default: "false"
+      acknowledge_real_pix:
+        description: "Reconheço que Pix real será gerado após confirmação (digite: true)"
+        required: true
+        default: "false"
+
+jobs:
+  open-wide:
+    name: "Open Restaurant-Wide (config-only, gated)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/text-order-open-restaurant-wide" >> "$GITHUB_OUTPUT"
+
+      - name: "Open restaurant-wide"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug }}
+          CONFIRM: ${{ inputs.confirm }}
+          ACK_C: ${{ inputs.acknowledge_real_customers }}
+          ACK_O: ${{ inputs.acknowledge_real_orders }}
+          ACK_P: ${{ inputs.acknowledge_real_pix }}
+        run: |
+          set -e
+          BODY=$(jq -nc --arg slug "$SLUG" --arg confirm "$CONFIRM" \
+            --argjson ackc "${ACK_C:-false}" --argjson acko "${ACK_O:-false}" --argjson ackp "${ACK_P:-false}" \
+            '{restaurantSlug:$slug, confirm:$confirm, acknowledgeRealCustomers:$ackc, acknowledgeRealOrders:$acko, acknowledgeRealPix:$ackp}')
+          curl --connect-timeout 20 --max-time 120 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt || true
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP            : $HTTP"
+          echo "← success         : $(jq -r '.success' /tmp/r.json)"
+          echo "← previous        : $(jq -rc '.previousConfig' /tmp/r.json)"
+          echo "← new             : $(jq -rc '.newConfig' /tmp/r.json)"
+          echo "← gates.allPass   : $(jq -r '.gates.allPass // "—"' /tmp/r.json)"
+          echo "← changeRequestId : $(jq -r '.changeRequestId // "—"' /tmp/r.json)"
+          echo "← runtimeTouched  : $(jq -r '.runtimeTouched' /tmp/r.json)"
+          echo "← rollback        : $(jq -rc '.rollback' /tmp/r.json)"
+          echo "← error           : $(jq -r '.error // "—"' /tmp/r.json)"
+          if [[ "$(jq -r '.success' /tmp/r.json)" != "true" ]]; then echo "::error::open falhou: $(jq -r '.error' /tmp/r.json)"; exit 1; fi
+          if [[ "$(jq -r '.newConfig.scope' /tmp/r.json)" != "RESTAURANT_WIDE" ]]; then echo "::error::scope não virou RESTAURANT_WIDE"; exit 1; fi
+          if [[ "$(jq -r '.runtimeTouched' /tmp/r.json)" != "false" ]]; then echo "::error::runtimeTouched != false"; exit 1; fi
+          echo "✅ Aberto para clientes finais (scope=RESTAURANT_WIDE). Pedido/Pix reais só após confirmação final."

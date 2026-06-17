@@ -120,9 +120,73 @@ Nenhuma dessas ações é executada por diagnóstico — são manuais/painel.
 
 ---
 
-## 8. Status final
+## 8. Go-Live runbook — abrir para clientes finais (RESTAURANT_WIDE)
+
+> Decisão do CEO/Diego: abrir o Text Order para clientes finais. A abertura é
+> **config-only** (não envia WhatsApp, não cria pedido/Pix); pedido/Pix reais só
+> acontecem **após a confirmação final do cliente**, no campo.
+
+### Como abrir (gated)
+1. Workflow **`whatsapp-text-order-open-restaurant-wide.yml`** (manual), inputs:
+   - `confirm = OPEN_WHATSAPP_TEXT_ORDER_RESTAURANT_WIDE`
+   - `acknowledge_real_customers = true`, `acknowledge_real_orders = true`, `acknowledge_real_pix = true`
+2. A rota `POST /api/cron|admin/whatsapp/text-order/open-restaurant-wide` roda os
+   **gates de promoção** (config risk ≠ HIGH, flow PASS p0=0, cockpit p0=0) e só
+   abre se todos passarem. Resultado: `scope=RESTAURANT_WIDE`, `mode=ALLOWLIST_FULL_TEST`,
+   `enabled=true`, `paused=false`. Registra Brain Director CR + audit em `notes`.
+3. Se **qualquer** gate falhar → **não abre** e reporta o blocker.
+
+> Nota de modo: não existe um modo `RESTAURANT_WIDE_FULL_PRODUCTION` separado.
+> `ALLOWLIST_FULL_TEST` é o modo que cria pedido/Pix reais **somente após
+> confirmação final**; com `scope=RESTAURANT_WIDE` ele passa a valer para **todos**
+> os clientes. Esse é o "equivalente existente".
+
+### Honestidade operacional (risco assumido)
+O Full Agent Diagnostic recomenda **EXPAND_ALLOWLIST** porque a **validação de
+campo** (cliente real fora da allowlist + pedido real allowlisted ponta-a-ponta)
+**ainda não foi feita**. Abrir geral agora é uma decisão humana que **pula esse
+gate**, aceitando o risco com monitoramento full-time + rollback de 30s. Pix/order
+após confirmação final estão provados por testes unitários, **não** em campo.
+
+## 9. Live monitoring (primeiras horas)
+
+Monitor read-only (sem PII): **`GET /api/admin/whatsapp/text-order/live-status?restaurantSlug=sushi-cazza`**
+→ última hora: `conversationsEnteredTextOrder`, `ordersCreated`, `pixGenerated`,
+`handoffs`, `errors`, `unknownResponses`, + `lastErrors[]` (id interno + motivo, sem dados pessoais).
+
+Checklist do Diego durante o go-live:
+- [ ] conversas entrando no Text Order (sobe?)
+- [ ] pedidos criados batem com pedidos reais recebidos
+- [ ] Pix gerado só após o resumo/confirmação
+- [ ] handoffs (cliente pediu atendente) aparecem na Central
+- [ ] `errors`/`lastErrors` — investigar cada um
+- [ ] mensagens estranhas/UNKNOWN → trazer print
+- [ ] abandono no CEP / no Pix (olhar `lastErrors` + Central)
+
+Onde olhar: live-status (números), Central de Atendimento (conversas/handoffs),
+e os logs `[WhatsAppReceptionistService] sending-reply { responseType }` para o
+caminho do recepcionista.
+
+## 10. Fallback para atendente
+
+Frases que disparam handoff (recepcionista **e** Text Order): `atendente`,
+`falar com atendente`, `humano`, `quero falar com alguém`, `quero falar com ...`.
+Efeito: conversa → HUMAN, IA para, mensagem clara, aparece na Central. (Coberto por
+`detectIntent → HUMAN_REQUEST` no recepcionista e pelo handoff do Text Order.)
+
+## 11. Rollback emergencial (30 segundos)
+
+Workflow **`whatsapp-text-order-rollback.yml`** (ou `POST .../text-order/rollback`),
+`confirm = ROLLBACK_WHATSAPP_TEXT_ORDER`. Aplica `paused=true` + `DRY_RUN_ONLY` +
+`PHONE_ALLOWLIST`. Efeito imediato: Text Order para para clientes finais; o
+recepcionista normal continua; allowlist/config/**histórico preservados**; nenhum
+pedido é apagado.
+
+## 12. Status final
 
 - ✅ Os dois caminhos cobertos por diagnóstico hermético (Host + Full Agent).
+- ✅ Máquina de abertura/rollback/monitoramento pronta e **gated** (config-only).
 - ✅ Segurança garantida nos diagnósticos (sem Evolution/pedido/Pix/runtime).
-- ⏳ **Validação de campo pendente** — gate P0 para qualquer ampliação real.
-- 🚫 RESTAURANT_WIDE **não** liberado.
+- ⏳ **Validação de campo pendente** — o sistema recomenda EXPAND_ALLOWLIST; abrir
+  geral é decisão humana que assume esse risco.
+- 🔁 Rollback de 30s sempre disponível.

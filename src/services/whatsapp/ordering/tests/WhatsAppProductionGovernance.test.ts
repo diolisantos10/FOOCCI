@@ -24,9 +24,11 @@ import {
   promoteToFullTest,
   rollbackTextOrder,
   requestRestaurantWide,
+  openRestaurantWide,
   PROMOTE_CONFIRM,
   ROLLBACK_CONFIRM,
   REQUEST_WIDE_CONFIRM,
+  OPEN_WIDE_CONFIRM,
 } from "../productionGovernance";
 import { runFullTestReadiness } from "../fullTestReadiness";
 import { WHATSAPP_TEXT_ORDER_ARENA, EXTERNAL_ARENAS } from "@/services/agent-training/arenas";
@@ -146,6 +148,53 @@ describe("(8/9) request RESTAURANT_WIDE — governança via Brain Director", () 
     const r = await requestRestaurantWide({ restaurantSlug: "sushi-cazza", confirm: REQUEST_WIDE_CONFIRM });
     expect(r.success).toBe(false);
     expect(db.brainChangeRequest.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("open RESTAURANT_WIDE — abrir para clientes finais (gated)", () => {
+  const ACK = { acknowledgeRealCustomers: true, acknowledgeRealOrders: true, acknowledgeRealPix: true };
+
+  it("(1) sem confirm exato não abre", async () => {
+    db.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(configRow({ mode: "ALLOWLIST_FULL_TEST" }));
+    const r = await openRestaurantWide({ restaurantSlug: "sushi-cazza", confirm: "abrir", ...ACK });
+    expect(r.success).toBe(false);
+    expect(db.whatsAppTextOrderingConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("(2) sem os 3 acknowledgments não abre", async () => {
+    db.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(configRow({ mode: "ALLOWLIST_FULL_TEST" }));
+    const r = await openRestaurantWide({ restaurantSlug: "sushi-cazza", confirm: OPEN_WIDE_CONFIRM, acknowledgeRealCustomers: true, acknowledgeRealOrders: true });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/reconhecimentos/i);
+    expect(db.whatsAppTextOrderingConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("(3) exige FULL_TEST validado antes — REPLY_ONLY reprova", async () => {
+    db.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(configRow({ mode: "ALLOWLIST_REPLY_ONLY" }));
+    const r = await openRestaurantWide({ restaurantSlug: "sushi-cazza", confirm: OPEN_WIDE_CONFIRM, ...ACK });
+    expect(r.success).toBe(false);
+    expect(db.whatsAppTextOrderingConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("(3b) gate reprovado (pausado) não abre", async () => {
+    db.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(configRow({ mode: "ALLOWLIST_FULL_TEST", paused: true }));
+    const r = await openRestaurantWide({ restaurantSlug: "sushi-cazza", confirm: OPEN_WIDE_CONFIRM, ...ACK });
+    expect(r.success).toBe(false);
+    expect(r.gates?.featureEnabledNotPaused).toBe(false);
+    expect(db.whatsAppTextOrderingConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("(4/5/6) gates PASS → scope RESTAURANT_WIDE, FULL_TEST, sem envio/pedido/Pix", async () => {
+    db.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(configRow({ mode: "ALLOWLIST_FULL_TEST" }));
+    const r = await openRestaurantWide({ restaurantSlug: "sushi-cazza", confirm: OPEN_WIDE_CONFIRM, ...ACK });
+    expect(r.success).toBe(true);
+    expect(r.newConfig?.scope).toBe("RESTAURANT_WIDE");
+    expect(r.newConfig?.mode).toBe("ALLOWLIST_FULL_TEST");
+    expect(r.runtimeTouched).toBe(false);
+    const arg = JSON.stringify(db.whatsAppTextOrderingConfig.upsert.mock.calls[0][0]);
+    expect(arg).toContain("RESTAURANT_WIDE");
+    expect(db.message.create).not.toHaveBeenCalled(); // nada enviado
+    expect(r.rollback.confirm).toBe(ROLLBACK_CONFIRM); // rollback sempre disponível
   });
 });
 

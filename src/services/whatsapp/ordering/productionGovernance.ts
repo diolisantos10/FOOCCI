@@ -28,6 +28,7 @@ import { createChangeRequest } from "@/services/brain/director/PersistentBrainDi
 export const PROMOTE_CONFIRM = "PROMOTE_WHATSAPP_TEXT_ORDER_FULL_TEST";
 export const ROLLBACK_CONFIRM = "ROLLBACK_WHATSAPP_TEXT_ORDER";
 export const REQUEST_WIDE_CONFIRM = "REQUEST_WHATSAPP_TEXT_ORDER_RESTAURANT_WIDE";
+export const OPEN_WIDE_CONFIRM = "OPEN_WHATSAPP_TEXT_ORDER_RESTAURANT_WIDE";
 
 export interface GovernanceGates {
   scopeIsPhoneAllowlist: boolean;
@@ -127,6 +128,129 @@ export async function promoteToFullTest(input: {
     newMode: "ALLOWLIST_FULL_TEST",
     scope: "PHONE_ALLOWLIST",
     gates,
+    error: null,
+    runtimeTouched: false,
+  };
+}
+
+// ── Open to final customers (RESTAURANT_WIDE) ────────────────────────────────
+
+const ROLLBACK_INFO = {
+  endpoint: "/api/admin/whatsapp/text-order/rollback",
+  cronEndpoint: "/api/cron/whatsapp/text-order-rollback",
+  confirm: ROLLBACK_CONFIRM,
+  appliesTo: { paused: true, mode: "DRY_RUN_ONLY", scope: "PHONE_ALLOWLIST" },
+} as const;
+
+interface ConfigSnapshot { mode: string; scope: string; enabled: boolean; paused: boolean; allowlistCount: number }
+
+export interface OpenWideResult {
+  success: boolean;
+  previousConfig: ConfigSnapshot | null;
+  newConfig: ConfigSnapshot | null;
+  gates: GovernanceGates | null;
+  changeRequestId: string | null;
+  rollback: typeof ROLLBACK_INFO;
+  error: string | null;
+  runtimeTouched: false;
+}
+
+/**
+ * Opens the WhatsApp Text Order to FINAL CUSTOMERS: scope → RESTAURANT_WIDE,
+ * mode stays ALLOWLIST_FULL_TEST (the existing mode that creates a real order
+ * and a real Pix ONLY after the customer's final confirmation), enabled=true,
+ * paused=false.
+ *
+ * Hard gates (no bypass): exact confirm string; explicit acknowledgments of real
+ * customers/orders/Pix; current mode already ALLOWLIST_FULL_TEST (the validated
+ * stage); and every promotion gate PASS (config risk not HIGH, flow PASS p0=0,
+ * cockpit p0=0). Config-only — sends nothing, creates no order, generates no Pix
+ * (runtimeTouched=false). Records a Brain Director audit trail and returns the
+ * one-step rollback. Refuses (no change) if any gate or acknowledgment is missing.
+ */
+export async function openRestaurantWide(input: {
+  restaurantId?: string;
+  restaurantSlug?: string;
+  confirm: string;
+  acknowledgeRealCustomers?: boolean;
+  acknowledgeRealOrders?: boolean;
+  acknowledgeRealPix?: boolean;
+}): Promise<OpenWideResult> {
+  const fail = (error: string, gates: GovernanceGates | null = null, prev: ConfigSnapshot | null = null): OpenWideResult =>
+    ({ success: false, previousConfig: prev, newConfig: null, gates, changeRequestId: null, rollback: ROLLBACK_INFO, error, runtimeTouched: false });
+
+  if (input.confirm !== OPEN_WIDE_CONFIRM) {
+    return fail(`Confirmação inválida — envie confirm: "${OPEN_WIDE_CONFIRM}".`);
+  }
+  if (!(input.acknowledgeRealCustomers === true && input.acknowledgeRealOrders === true && input.acknowledgeRealPix === true)) {
+    return fail("Faltam reconhecimentos explícitos: acknowledgeRealCustomers, acknowledgeRealOrders e acknowledgeRealPix devem ser true.");
+  }
+  const restaurantId = await resolveRestaurantId(input);
+  if (!restaurantId) return fail("Restaurante não encontrado.");
+
+  const current = await resolveWaConfig(restaurantId);
+  const prev: ConfigSnapshot = {
+    mode: current.mode, scope: current.scope, enabled: current.enabled, paused: current.paused, allowlistCount: current.allowlistedPhones.length,
+  };
+
+  // Must already be on the validated FULL_TEST stage before opening to everyone.
+  if (current.mode !== "ALLOWLIST_FULL_TEST") {
+    return fail(`mode atual ${current.mode} — valide FULL_TEST controlado antes de abrir para clientes finais.`, null, prev);
+  }
+
+  // Pre-open gates run while still PHONE_ALLOWLIST (config risk MEDIUM, flow/cockpit p0=0).
+  const gates = await runPromotionGates(restaurantId);
+  if (!gates.allPass) {
+    return fail(`Gates reprovados (não abrir): ${gates.notes.join("; ")}`, gates, prev);
+  }
+
+  // Governance audit trail (best-effort — never blocks the open).
+  let changeRequestId: string | null = null;
+  try {
+    const cr = await createChangeRequest({
+      businessId: restaurantId,
+      businessType: "RESTAURANT",
+      requestedByType: "CEO",
+      requestedById: "admin",
+      target: "AGENT_POLICY",
+      summary: "Open WhatsApp Text Order to final customers for Sushi Cazza",
+      rationale:
+        "Abertura para clientes finais por decisão explícita do CEO (confirm + acknowledge real " +
+        "customers/orders/Pix). Gates PASS (flow + cockpit p0=0). Pedido/Pix reais SOMENTE após " +
+        "confirmação final do cliente. Rollback de 30s disponível (paused + DRY_RUN_ONLY).",
+      proposedChange: {
+        restaurantId,
+        from: { mode: current.mode, scope: current.scope },
+        to: { mode: "ALLOWLIST_FULL_TEST", scope: "RESTAURANT_WIDE" },
+        rollback: ROLLBACK_INFO.appliesTo,
+      },
+      riskLevel: "CRITICAL",
+      runtimeImpact: "PRODUCTION",
+      metadata: { executed: true, acknowledgements: { realCustomers: true, realOrders: true, realPix: true }, gates },
+    });
+    changeRequestId = cr?.id ?? null;
+  } catch {
+    changeRequestId = null;
+  }
+
+  const existing = await getRestaurantConfig(restaurantId);
+  const audit = `[RW_OPENED ${new Date().toISOString()}] scope→RESTAURANT_WIDE (confirm + ack real customers/orders/Pix, gates PASS${changeRequestId ? `, CR:${changeRequestId}` : ""})`;
+  await upsertRestaurantConfig(restaurantId, {
+    scope: "RESTAURANT_WIDE",
+    mode: "ALLOWLIST_FULL_TEST", // real order/Pix ONLY after the customer's final confirmation
+    enabled: true,
+    paused: false,
+    notes: existing?.notes ? `${existing.notes}\n${audit}`.slice(-2000) : audit,
+  });
+
+  return {
+    success: true,
+    previousConfig: prev,
+    // Reflects exactly what was just written (avoids a stale re-read).
+    newConfig: { mode: "ALLOWLIST_FULL_TEST", scope: "RESTAURANT_WIDE", enabled: true, paused: false, allowlistCount: prev.allowlistCount },
+    gates,
+    changeRequestId,
+    rollback: ROLLBACK_INFO,
     error: null,
     runtimeTouched: false,
   };
