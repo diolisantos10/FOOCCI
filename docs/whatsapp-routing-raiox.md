@@ -280,3 +280,16 @@ curl -X POST "$BASE/api/cron/whatsapp/host-routing-diagnostic" \
   de KB apareceria como `UNKNOWN` no preview.
 - Frete/Pix/horário do **Text Order** continuam cobertos pelas suites de ordering, não
   por este diagnóstico (que é do caminho do recepcionista).
+
+---
+
+## 15. Full Agent Diagnostic (bateria consolidada + decisão operacional)
+
+`POST /api/cron/whatsapp/full-agent-diagnostic` roda os **dois caminhos** (Text
+Order + Recepcionista) em **dois perfis** (allowlisted self-test + sintético fora
+da allowlist) num só relatório, com `summary` (PASS/WARNING/FAIL, p0/p1/p2) e
+`recommendation` operacional (`KEEP_ALLOWLIST` / `EXPAND_ALLOWLIST` /
+`READY_FOR_RESTAURANT_WIDE_REQUEST` / `ROLLBACK_OR_PAUSE`). Decisão, matriz,
+rollback e o que falta para abrir geral estão em
+`docs/whatsapp-agent-production-readiness.md`. Workflow:
+`whatsapp-full-agent-diagnostic.yml` (falha se `p0>0` ou segurança violada).
