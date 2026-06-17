@@ -19,9 +19,15 @@ describe("classifyExecution — safety blocks are NOT send failures", () => {
     expect(c.kind).toBe("BLOCKED");
   });
 
-  it("(2) Evolution HTTP 400 → FAILED_PROVIDER (kind FAILED)", () => {
+  it("(2) Evolution HTTP 400 (new structured code) → EVOLUTION_BAD_REQUEST (kind FAILED)", () => {
+    const c = classifyExecution({ status: "FAILED", failedReason: "HTTP 400: {\"message\":\"jid inválido\"}", errorMessage: "EVOLUTION_HTTP_400" });
+    expect(c.category).toBe("EVOLUTION_BAD_REQUEST");
+    expect(c.kind).toBe("FAILED");
+  });
+
+  it("(2-legacy) old free-text Evolution 400 → EVOLUTION_BAD_REQUEST via text heuristic", () => {
     const c = classifyExecution({ status: "FAILED", failedReason: "Evolution API POST /message/sendText/sushicazza → HTTP 400", errorMessage: "Evolution API POST /message/sendText/sushicazza → HTTP 400" });
-    expect(c.category).toBe("FAILED_PROVIDER");
+    expect(c.category).toBe("EVOLUTION_BAD_REQUEST");
     expect(c.kind).toBe("FAILED");
   });
 

@@ -2082,7 +2082,9 @@ function CampaignManageModal({
                             ))}
                           </div>
                           {isRecurring && (
-                            <p className="text-[10px] text-red-400 leading-snug">Total histórico acumulado de todos os ciclos.</p>
+                            <p className="text-[10px] text-red-400 leading-snug">
+                              Esta campanha é recorrente. Falhas históricas incluem todos os ciclos anteriores e podem exceder o público atual. Veja a aba <strong>Performance → Último ciclo</strong> para o ciclo corrente.
+                            </p>
                           )}
                         </div>
                       );

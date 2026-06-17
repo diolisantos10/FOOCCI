@@ -14,6 +14,11 @@
 export type ExecutionCategory =
   | "SENT"
   | "FAILED_PROVIDER"
+  | "EVOLUTION_BAD_REQUEST"
+  | "EVOLUTION_INSTANCE_DISCONNECTED"
+  | "EVOLUTION_AUTH_ERROR"
+  | "EVOLUTION_RATE_LIMITED"
+  | "EMPTY_MESSAGE"
   | "BLOCKED_SAFETY"
   | "BLOCKED_COOLDOWN"
   | "BLOCKED_WEEKLY_LIMIT"
@@ -42,6 +47,11 @@ export interface ExecutionClassification {
 const CATEGORY_META: Record<ExecutionCategory, { kind: ExecutionKind; badge: string }> = {
   SENT: { kind: "SENT", badge: "Enviado" },
   FAILED_PROVIDER: { kind: "FAILED", badge: "Falhou" },
+  EVOLUTION_BAD_REQUEST: { kind: "FAILED", badge: "Bad request (400)" },
+  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED", badge: "Instância desconectada" },
+  EVOLUTION_AUTH_ERROR: { kind: "FAILED", badge: "Erro de autenticação" },
+  EVOLUTION_RATE_LIMITED: { kind: "BLOCKED", badge: "Rate limit" },
+  EMPTY_MESSAGE: { kind: "FAILED", badge: "Mensagem vazia" },
   BLOCKED_INVALID_PHONE: { kind: "FAILED", badge: "Telefone inválido" },
   BLOCKED_SAFETY: { kind: "BLOCKED", badge: "Bloqueado" },
   BLOCKED_COOLDOWN: { kind: "BLOCKED", badge: "Bloqueado (cooldown)" },
@@ -52,7 +62,7 @@ const CATEGORY_META: Record<ExecutionCategory, { kind: ExecutionKind; badge: str
   SKIPPED_NOT_ELIGIBLE: { kind: "SKIPPED", badge: "Ignorado" },
 };
 
-/** Maps a machine ContactBlockReason to a category. */
+/** Maps a machine ContactBlockReason or provider error code to a category. */
 function fromMachineReason(reason: string): ExecutionCategory | null {
   switch (reason) {
     case "CUSTOMER_WEEKLY_CAP_REACHED": return "BLOCKED_WEEKLY_LIMIT";
@@ -62,6 +72,11 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "CUSTOMER_OPTED_OUT": return "BLOCKED_OPT_OUT";
     case "MISSING_PHONE":
     case "INVALID_PHONE_FORMAT": return "BLOCKED_INVALID_PHONE";
+    case "EMPTY_MESSAGE_AFTER_RENDER": return "EMPTY_MESSAGE";
+    case "EVOLUTION_HTTP_400": return "EVOLUTION_BAD_REQUEST";
+    case "EVOLUTION_HTTP_401":
+    case "EVOLUTION_HTTP_403": return "EVOLUTION_AUTH_ERROR";
+    case "EVOLUTION_HTTP_429": return "EVOLUTION_RATE_LIMITED";
     case "CUSTOMER_NOT_CONTACTABLE":
     case "NO_EVOLUTION_CONFIG":
     case "QUIET_HOURS":
@@ -86,11 +101,21 @@ function fromText(text: string): ExecutionCategory {
   if (t.includes("cap global") || t.includes("global")) return "BLOCKED_DAILY_GLOBAL_CAP";
   if (t.includes("limite diário") || t.includes("limite diario") || t.includes("daily limit")) return "BLOCKED_CAMPAIGN_DAILY_LIMIT";
   if (t.includes("quiet") || t.includes("silenc") || t.includes("janela") || t.includes("weekend") || t.includes("fim de semana") || t.includes("duplicad")) return "BLOCKED_SAFETY";
+  // Instance/connectivity failures.
+  if (t.includes("disconnected") || t.includes("desconectado") || t.includes("instance not found") || t.includes("instância não encontrada")) return "EVOLUTION_INSTANCE_DISCONNECTED";
+  // Auth failures.
+  if (t.includes("401") || t.includes("403") || t.includes("unauthorized") || t.includes("forbidden") || t.includes("não autorizado")) return "EVOLUTION_AUTH_ERROR";
+  // Rate limit.
+  if (t.includes("rate limit") || t.includes("too many") || t.includes("429")) return "EVOLUTION_RATE_LIMITED";
+  // Empty/unrendered message.
+  if (t.includes("vazia") || t.includes("empty message") || t.includes("mensagem vazia")) return "EMPTY_MESSAGE";
   // Provider failures — distinguish an invalid-number error from a generic 4xx/5xx.
   const looksLikePhoneError =
     t.includes("invalid number") || t.includes("número inválido") || t.includes("numero invalido") ||
     t.includes("not a valid") || t.includes("jid") || t.includes("não existe no whatsapp") || t.includes("exists\":false");
   if (looksLikePhoneError) return "BLOCKED_INVALID_PHONE";
+  // 400 bad request patterns.
+  if (t.includes("400") || t.includes("bad request")) return "EVOLUTION_BAD_REQUEST";
   if (t.includes("http") || t.includes("evolution") || t.includes("timeout") || t.includes("econn")) return "FAILED_PROVIDER";
   return "FAILED_PROVIDER";
 }
@@ -133,9 +158,21 @@ export interface ExecutionSummary {
 }
 
 const EMPTY_BY_CATEGORY = (): Record<ExecutionCategory, number> => ({
-  SENT: 0, FAILED_PROVIDER: 0, BLOCKED_SAFETY: 0, BLOCKED_COOLDOWN: 0, BLOCKED_WEEKLY_LIMIT: 0,
-  BLOCKED_DAILY_GLOBAL_CAP: 0, BLOCKED_CAMPAIGN_DAILY_LIMIT: 0, BLOCKED_OPT_OUT: 0,
-  BLOCKED_INVALID_PHONE: 0, SKIPPED_NOT_ELIGIBLE: 0,
+  SENT: 0,
+  FAILED_PROVIDER: 0,
+  EVOLUTION_BAD_REQUEST: 0,
+  EVOLUTION_INSTANCE_DISCONNECTED: 0,
+  EVOLUTION_AUTH_ERROR: 0,
+  EVOLUTION_RATE_LIMITED: 0,
+  EMPTY_MESSAGE: 0,
+  BLOCKED_SAFETY: 0,
+  BLOCKED_COOLDOWN: 0,
+  BLOCKED_WEEKLY_LIMIT: 0,
+  BLOCKED_DAILY_GLOBAL_CAP: 0,
+  BLOCKED_CAMPAIGN_DAILY_LIMIT: 0,
+  BLOCKED_OPT_OUT: 0,
+  BLOCKED_INVALID_PHONE: 0,
+  SKIPPED_NOT_ELIGIBLE: 0,
 });
 
 /** Aggregates a list of executions into the split the Performance UI needs. */

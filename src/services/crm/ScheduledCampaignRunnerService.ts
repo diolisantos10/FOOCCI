@@ -583,6 +583,27 @@ export class ScheduledCampaignRunnerService {
 
       const messageText = personalizeMessage(campaign.message, customer, msgCtx);
 
+      if (!messageText.trim()) {
+        const unresolved = (campaign.message.match(/\{[^}]+\}/g) ?? []).join(", ");
+        await prisma.campaignExecution.create({
+          data: {
+            campaignId:    campaign.id,
+            restaurantId:  campaign.restaurantId,
+            customerId:    customer.id,
+            customerName:  customer.name,
+            customerPhone: customer.phone,
+            messageText:   "",
+            status:        "FAILED",
+            failedReason:  unresolved
+              ? `Mensagem vazia após substituição de variáveis (não resolvidas: ${unresolved})`
+              : "Mensagem vazia após substituição de variáveis",
+            errorMessage:  "EMPTY_MESSAGE_AFTER_RENDER",
+          },
+        });
+        failed++;
+        continue;
+      }
+
       // Inter-send delay BEFORE each message except the first.
       // Placing delay here (not after) guarantees no sleep after the last send,
       // which was the cause of Railway proxy timeouts (exit 56).
