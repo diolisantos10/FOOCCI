@@ -42,24 +42,30 @@ export interface ExecutionClassification {
   kind: ExecutionKind;
   /** Short PT-BR badge word. */
   badge: string;
+  /**
+   * Whether the send is worth retrying automatically.
+   * false for data errors (bad phone, empty message, auth key) — retrying won't help until data is fixed.
+   * true for transient failures (disconnected instance, rate limit, generic 5xx).
+   */
+  retryable: boolean;
 }
 
-const CATEGORY_META: Record<ExecutionCategory, { kind: ExecutionKind; badge: string }> = {
-  SENT: { kind: "SENT", badge: "Enviado" },
-  FAILED_PROVIDER: { kind: "FAILED", badge: "Falhou" },
-  EVOLUTION_BAD_REQUEST: { kind: "FAILED", badge: "Bad request (400)" },
-  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED", badge: "Instância desconectada" },
-  EVOLUTION_AUTH_ERROR: { kind: "FAILED", badge: "Erro de autenticação" },
-  EVOLUTION_RATE_LIMITED: { kind: "BLOCKED", badge: "Rate limit" },
-  EMPTY_MESSAGE: { kind: "FAILED", badge: "Mensagem vazia" },
-  BLOCKED_INVALID_PHONE: { kind: "FAILED", badge: "Telefone inválido" },
-  BLOCKED_SAFETY: { kind: "BLOCKED", badge: "Bloqueado" },
-  BLOCKED_COOLDOWN: { kind: "BLOCKED", badge: "Bloqueado (cooldown)" },
-  BLOCKED_WEEKLY_LIMIT: { kind: "BLOCKED", badge: "Bloqueado (limite semanal)" },
-  BLOCKED_DAILY_GLOBAL_CAP: { kind: "BLOCKED", badge: "Bloqueado (cap global)" },
-  BLOCKED_CAMPAIGN_DAILY_LIMIT: { kind: "BLOCKED", badge: "Bloqueado (limite da campanha)" },
-  BLOCKED_OPT_OUT: { kind: "BLOCKED", badge: "Opt-out" },
-  SKIPPED_NOT_ELIGIBLE: { kind: "SKIPPED", badge: "Ignorado" },
+const CATEGORY_META: Record<ExecutionCategory, { kind: ExecutionKind; badge: string; retryable: boolean }> = {
+  SENT:                         { kind: "SENT",    badge: "Enviado",                      retryable: false },
+  FAILED_PROVIDER:              { kind: "FAILED",  badge: "Falhou",                       retryable: true  },
+  EVOLUTION_BAD_REQUEST:        { kind: "FAILED",  badge: "Bad request (400)",             retryable: false },
+  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED", badge: "Instância desconectada",      retryable: true  },
+  EVOLUTION_AUTH_ERROR:         { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false },
+  EVOLUTION_RATE_LIMITED:       { kind: "BLOCKED", badge: "Rate limit",                   retryable: true  },
+  EMPTY_MESSAGE:                { kind: "FAILED",  badge: "Mensagem vazia",               retryable: false },
+  BLOCKED_INVALID_PHONE:        { kind: "FAILED",  badge: "Telefone inválido",            retryable: false },
+  BLOCKED_SAFETY:               { kind: "BLOCKED", badge: "Bloqueado",                   retryable: false },
+  BLOCKED_COOLDOWN:             { kind: "BLOCKED", badge: "Bloqueado (cooldown)",         retryable: false },
+  BLOCKED_WEEKLY_LIMIT:         { kind: "BLOCKED", badge: "Bloqueado (limite semanal)",   retryable: false },
+  BLOCKED_DAILY_GLOBAL_CAP:     { kind: "BLOCKED", badge: "Bloqueado (cap global)",       retryable: false },
+  BLOCKED_CAMPAIGN_DAILY_LIMIT: { kind: "BLOCKED", badge: "Bloqueado (limite da campanha)", retryable: false },
+  BLOCKED_OPT_OUT:              { kind: "BLOCKED", badge: "Opt-out",                     retryable: false },
+  SKIPPED_NOT_ELIGIBLE:         { kind: "SKIPPED", badge: "Ignorado",                    retryable: false },
 };
 
 /** Maps a machine ContactBlockReason or provider error code to a category. */
