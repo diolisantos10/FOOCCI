@@ -70,7 +70,9 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "DUPLICATE_CAMPAIGN_RECIPIENT":
     case "RESTAURANT_CLOSED":
     case "UNKNOWN_ERROR": return "BLOCKED_SAFETY";
-    default: return null;
+    default:
+      if (reason.startsWith("EVOLUTION_HTTP_")) return "FAILED_PROVIDER";
+      return null;
   }
 }
 

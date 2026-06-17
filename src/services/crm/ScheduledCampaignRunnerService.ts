@@ -16,7 +16,8 @@
 import { prisma } from "@/lib/prisma";
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { Prisma, ConversationStatus } from "@prisma/client";
 import {
   resolveAudience,
@@ -363,6 +364,9 @@ export class ScheduledCampaignRunnerService {
       };
     }
 
+    // Mark the start of this cycle so the detail API can filter current-cycle executions.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { lastRunAt: new Date() } });
+
     // Send batch
     const override = readOverridePolicy(campaign.scheduleConfig);
     const { sent, failed, blocked = 0 } = await this._sendBatch(campaign, batch, safety, {
@@ -558,8 +562,21 @@ export class ScheduledCampaignRunnerService {
         continue;
       }
 
-      const phone = customer.phone.replace(/^\+/, "");
-      if (!phone) {
+      const phone = normalizePhoneForEvolution(customer.phone);
+      if (!isValidEvolutionPhone(phone)) {
+        await prisma.campaignExecution.create({
+          data: {
+            campaignId:    campaign.id,
+            restaurantId:  campaign.restaurantId,
+            customerId:    customer.id,
+            customerName:  customer.name,
+            customerPhone: customer.phone,
+            messageText:   "",
+            status:        "FAILED",
+            failedReason:  "Telefone inválido ou ausente",
+            errorMessage:  "INVALID_PHONE_FORMAT",
+          },
+        });
         failed++;
         continue;
       }
@@ -635,7 +652,11 @@ export class ScheduledCampaignRunnerService {
         sent++;
       } catch (err) {
         // A real provider/Evolution failure (e.g. HTTP 400 invalid number).
-        const errMsg = err instanceof Error ? err.message : "Erro desconhecido";
+        const isEvoErr = err instanceof EvolutionApiError;
+        const errMsg = isEvoErr
+          ? `HTTP ${(err as EvolutionApiError).status}: ${typeof (err as EvolutionApiError).body === "string" ? (err as EvolutionApiError).body : JSON.stringify((err as EvolutionApiError).body ?? {}).slice(0, 500)}`
+          : (err instanceof Error ? err.message : "Erro desconhecido");
+        const errorCode = isEvoErr ? `EVOLUTION_HTTP_${(err as EvolutionApiError).status}` : errMsg;
         await prisma.campaignExecution.create({
           data: {
             campaignId:    campaign.id,
@@ -646,7 +667,7 @@ export class ScheduledCampaignRunnerService {
             messageText:   "",
             status:        "FAILED",
             failedReason:  errMsg,
-            errorMessage:  errMsg, // raw provider detail (status/endpoint) for classification
+            errorMessage:  errorCode,
           },
         });
         failed++;

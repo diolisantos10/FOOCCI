@@ -13,7 +13,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { isGuestIdentifier } from "@/lib/guest";
@@ -566,8 +567,8 @@ export class CrmCampaignService {
         continue;
       }
 
-      const phone = exec.customerPhone?.replace(/^\+/, "");
-      if (!phone) {
+      const phone = normalizePhoneForEvolution(exec.customerPhone);
+      if (!isValidEvolutionPhone(phone)) {
         await prisma.campaignExecution.update({
           where: { id: exec.id },
           data:  { status: "FAILED", failedReason: "Telefone inválido ou ausente", errorMessage: "INVALID_PHONE_FORMAT" },
@@ -633,10 +634,14 @@ export class CrmCampaignService {
         totalSent++;
         results.push({ id: exec.id, status: "SENT" });
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : "Erro desconhecido";
+        const isEvoErr = err instanceof EvolutionApiError;
+        const errMsg = isEvoErr
+          ? `HTTP ${(err as EvolutionApiError).status}: ${typeof (err as EvolutionApiError).body === "string" ? (err as EvolutionApiError).body : JSON.stringify((err as EvolutionApiError).body ?? {}).slice(0, 500)}`
+          : (err instanceof Error ? err.message : "Erro desconhecido");
+        const errorCode = isEvoErr ? `EVOLUTION_HTTP_${(err as EvolutionApiError).status}` : errMsg;
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: errMsg, errorMessage: errMsg },
+          data:  { status: "FAILED", failedReason: errMsg, errorMessage: errorCode },
         });
         totalFailed++;
         results.push({ id: exec.id, status: "FAILED", error: errMsg });

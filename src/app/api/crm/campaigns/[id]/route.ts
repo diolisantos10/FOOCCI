@@ -44,6 +44,7 @@ export async function GET(
         totalRevenue:   true,
         createdAt:      true,
         sentAt:         true,
+        lastRunAt:      true,
         executions: {
           orderBy: { createdAt: "asc" },
           select: {
@@ -54,6 +55,7 @@ export async function GET(
             messageText:      true,
             status:           true,
             sentAt:           true,
+            createdAt:        true,
             failedReason:     true,
             errorMessage:     true,
             converted:        true,
@@ -82,6 +84,17 @@ export async function GET(
     const converted = campaign.totalConverted;
     const conversionRate = performance.sent > 0 ? Math.round((converted / performance.sent) * 100) : 0;
 
+    // For recurring campaigns, also expose current-cycle metrics (executions since lastRunAt).
+    const isRecurring = (campaign.scheduleConfig as { mode?: string } | null)?.mode === "RECURRING";
+    let currentCyclePerformance = null;
+    if (isRecurring && campaign.lastRunAt) {
+      const cycleStart = new Date(campaign.lastRunAt);
+      const cycleExecs = campaign.executions.filter((e) => new Date(e.createdAt) >= cycleStart);
+      currentCyclePerformance = summarizeExecutions(
+        cycleExecs.map((e) => ({ status: e.status, failedReason: e.failedReason, errorMessage: e.errorMessage })),
+      );
+    }
+
     return ok({
       ...campaign,
       executions,
@@ -96,6 +109,13 @@ export async function GET(
         conversionRate,
         reasonGroups:   performance.reasonGroups,
       },
+      currentCyclePerformance: currentCyclePerformance ? {
+        sent:           currentCyclePerformance.sent,
+        blockedSafety:  currentCyclePerformance.blockedSafety,
+        failedProvider: currentCyclePerformance.failedProvider,
+        reasonGroups:   currentCyclePerformance.reasonGroups,
+      } : null,
+      lastRunAt: campaign.lastRunAt,
     });
   } catch (err) {
     console.error("[GET /api/crm/campaigns/[id]]", err);
