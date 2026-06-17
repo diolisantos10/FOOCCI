@@ -46,6 +46,15 @@ describe("battery covers both profiles", () => {
   it("(2) tem cenários non-allowlisted", () => {
     expect(FULL_AGENT_SCENARIOS.some(s => s.phoneProfile === "NON_ALLOWLISTED")).toBe(true);
   });
+  it("(1c) inclui A6-delivery, A7-pix, A8-handoff, B5-closed; não inclui A6-handoff nem B5-order-2", () => {
+    const ids = FULL_AGENT_SCENARIOS.map(s => s.id);
+    expect(ids).toContain("A6-delivery");
+    expect(ids).toContain("A7-pix");
+    expect(ids).toContain("A8-handoff");
+    expect(ids).toContain("B5-closed");
+    expect(ids).not.toContain("A6-handoff");
+    expect(ids).not.toContain("B5-order-2");
+  });
 });
 
 describe("evaluateScenario", () => {
@@ -114,16 +123,57 @@ describe("evaluateScenario", () => {
     );
     expect(r.severity).toBe("P0");
   });
+
+  it("(A6) allowlisted · pedido para entrega → TEXT_ORDER passa", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A6-delivery")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true });
+    expect(r.passed).toBe(true);
+    expect(r.severity).toBe("OK");
+  });
+
+  it("(A6b) allowlisted · entrega que vira RECEPTIONIST é P0", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A6-delivery")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: true, receptionistPreview: recep({}) });
+    expect(r.severity).toBe("P0");
+  });
+
+  it("(A7) allowlisted · Pix antes do pedido → RECEPTIONIST+SAFE_MENU passa (sem Pix real)", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A7-pix")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: true, receptionistPreview: recep({}) });
+    expect(r.passed).toBe(true);
+  });
+
+  it("(B5) fora-allowlist · fora do horário → RECEPTIONIST+SAFE_MENU passa", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "B5-closed")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: false, receptionistPreview: recep({}) });
+    expect(r.passed).toBe(true);
+  });
+
+  it("(B5b) fora-allowlist · fora do horário + link gigante é P0", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "B5-closed")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: false, receptionistPreview: recep({ responseType: "LINK_CARDAPIO", containsRawLink: true }) });
+    expect(r.severity).toBe("P0");
+  });
 });
 
 describe("computeSummary — recomendação operacional", () => {
   const pass = (sev: ScenarioResult["severity"]): ScenarioResult =>
     ({ id: "x", name: "x", phoneProfile: "NON_ALLOWLISTED", host: "RECEPTIONIST", passed: sev === "OK", failures: [], severity: sev });
 
-  it("(8) segurança violada → ROLLBACK_OR_PAUSE", () => {
+  it("(8) segurança violada (noRealPix) → ROLLBACK_OR_PAUSE", () => {
     const s = computeSummary([pass("OK")], { ...SAFE, noRealPix: false }, false);
     expect(s.recommendation).toBe("ROLLBACK_OR_PAUSE");
     expect(s.status).toBe("FAIL");
+  });
+
+  it("(8c) noEvolution=false → ROLLBACK_OR_PAUSE", () => {
+    const s = computeSummary([pass("OK")], { ...SAFE, noEvolution: false }, false);
+    expect(s.recommendation).toBe("ROLLBACK_OR_PAUSE");
+  });
+
+  it("(8d) noRealOrder=false → ROLLBACK_OR_PAUSE", () => {
+    const s = computeSummary([pass("OK")], { ...SAFE, noRealOrder: false }, false);
+    expect(s.recommendation).toBe("ROLLBACK_OR_PAUSE");
   });
 
   it("(9) P0 comportamental → KEEP_ALLOWLIST (FAIL)", () => {

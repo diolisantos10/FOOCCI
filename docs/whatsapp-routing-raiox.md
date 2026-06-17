@@ -287,9 +287,13 @@ curl -X POST "$BASE/api/cron/whatsapp/host-routing-diagnostic" \
 
 `POST /api/cron/whatsapp/full-agent-diagnostic` roda os **dois caminhos** (Text
 Order + Recepcionista) em **dois perfis** (allowlisted self-test + sintético fora
-da allowlist) num só relatório, com `summary` (PASS/WARNING/FAIL, p0/p1/p2) e
+da allowlist) num só relatório — **13 cenários** (A1–A8 allowlisted, B1–B5
+non-allowlisted) — com `summary` (PASS/WARNING/FAIL, p0/p1/p2) e
 `recommendation` operacional (`KEEP_ALLOWLIST` / `EXPAND_ALLOWLIST` /
-`READY_FOR_RESTAURANT_WIDE_REQUEST` / `ROLLBACK_OR_PAUSE`). Decisão, matriz,
-rollback e o que falta para abrir geral estão em
-`docs/whatsapp-agent-production-readiness.md`. Workflow:
+`READY_FOR_RESTAURANT_WIDE_REQUEST` / `ROLLBACK_OR_PAUSE`).
+
+Cenários novos vs. v1: A6-delivery (pedido para entrega → TEXT_ORDER), A7-pix
+(Pix antes do pedido → RECEPTIONIST/sem Pix real), B5-closed (fora do horário +
+pedido → RECEPTIONIST seguro). Decisão, matriz, rollback e o que falta para abrir
+geral estão em `docs/whatsapp-agent-production-readiness.md`. Workflow:
 `whatsapp-full-agent-diagnostic.yml` (falha se `p0>0` ou segurança violada).

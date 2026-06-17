@@ -43,13 +43,17 @@ Todos: `noEvolution=true`, `noRealOrder=true`, `noRealPix=true`,
 
 ## 3. Full Agent Diagnostic
 
-`POST /api/cron/whatsapp/full-agent-diagnostic` (`CRON_SECRET`). Roda **11
+`POST /api/cron/whatsapp/full-agent-diagnostic` (`CRON_SECRET`). Roda **13
 cenários** em dois perfis (allowlisted self-test + sintético fora da allowlist),
 avalia cada um (P0/P1/P2/OK) e emite **summary** + **recommendation**.
 
-Cenários: saudação, pedido (yakisoba+coca, typo, rodízio+temakis), endereço
-solto, handoff — no perfil allowlisted; pedido, rodízio, `tem temaki?`, endereço
-solto, pedido explícito — no perfil non-allowlisted.
+Cenários allowlisted (A1–A8): saudação, pedido direto (yakisoba+coca), pedido
+com typo, rodízio+temakis, endereço solto, pedido para entrega (→ TEXT_ORDER;
+CEP/frete/Pix cobertos pelas suites de ordering), Pix antes do pedido (→
+RECEPTIONIST, sem Pix real), handoff.
+
+Cenários non-allowlisted (B1–B5): pedido direto, rodízio, `tem temaki?`, endereço
+solto, fora do horário + pedido (→ RECEPTIONIST sempre, gate-de-horário nas suites).
 
 ### Critérios de falha
 - **P0:** pedido allowlisted não vira TEXT_ORDER; pedido non-allowlisted não vira

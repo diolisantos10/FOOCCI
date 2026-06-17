@@ -100,7 +100,15 @@ export const FULL_AGENT_SCENARIOS: ScenarioSpec[] = [
     expect: { host: "TEXT_ORDER" } },
   { id: "A5-address", name: "allowlisted · endereço solto", phoneProfile: "ALLOWLISTED", message: LOOSE_ADDRESS,
     expect: { host: "RECEPTIONIST", responseTypeIn: ["SAFE_MENU"], noLocation: true, noHandoff: true, noRawLink: true } },
-  { id: "A6-handoff", name: "allowlisted · falar com atendente", phoneProfile: "ALLOWLISTED", message: "falar com atendente",
+  // A6: delivery-intent order → host routes to TEXT_ORDER; the CEP-first / frete / Pix sequencing
+  // is covered by the ordering suites (not this routing battery).
+  { id: "A6-delivery", name: "allowlisted · pedido para entrega", phoneProfile: "ALLOWLISTED", message: "quero 1 yakisoba para entrega",
+    expect: { host: "TEXT_ORDER" } },
+  // A7: Pix question without an active order session → no order intent → RECEPTIONIST (never TEXT_ORDER).
+  // Proves no real Pix is generated from a standalone Pix query even for allowlisted phones.
+  { id: "A7-pix", name: "allowlisted · Pix antes do pedido", phoneProfile: "ALLOWLISTED", message: "posso pagar com Pix?",
+    expect: { host: "RECEPTIONIST", responseTypeIn: ["SAFE_MENU", "UNKNOWN"], noRawLink: true } },
+  { id: "A8-handoff", name: "allowlisted · falar com atendente", phoneProfile: "ALLOWLISTED", message: "falar com atendente",
     expect: { host: "RECEPTIONIST", responseTypeIn: ["HANDOFF"] } },
 
   // ── B. Non-allowlisted ──
@@ -113,8 +121,11 @@ export const FULL_AGENT_SCENARIOS: ScenarioSpec[] = [
     expect: { host: "RECEPTIONIST", responseTypeIn: ["SAFE_MENU", "UNKNOWN"], noRawLink: true } },
   { id: "B4-address", name: "fora-allowlist · endereço solto", phoneProfile: "NON_ALLOWLISTED", message: LOOSE_ADDRESS,
     expect: { host: "RECEPTIONIST", responseTypeIn: ["SAFE_MENU"], noLocation: true, noHandoff: true, noRawLink: true } },
-  { id: "B5-order-2", name: "fora-allowlist · pedido explícito (host seguro)", phoneProfile: "NON_ALLOWLISTED", message: "quero 2 temakis",
-    expect: { host: "RECEPTIONIST", responseTypeIn: ["SAFE_MENU"], noRawLink: true } },
+  // B5: non-allowlisted phone attempting an order outside business hours → RECEPTIONIST always
+  // intercepts before any ordering/payment. Gate-de-horário depth is in the ordering suites.
+  { id: "B5-closed", name: "fora-allowlist · fora do horário + pedido", phoneProfile: "NON_ALLOWLISTED",
+    message: "vocês estão abertos agora? quero 2 temakis",
+    expect: { host: "RECEPTIONIST", responseTypeIn: ["SAFE_MENU", "UNKNOWN"], noRawLink: true } },
 ];
 
 // ── Pure evaluation ───────────────────────────────────────────────────────────
