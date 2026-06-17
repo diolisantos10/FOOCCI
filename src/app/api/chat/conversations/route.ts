@@ -80,10 +80,12 @@ async function fetchRows(
       relatedCampaignId: true,
       customer: { select: { id: true, name: true, phone: true, tier: true } },
       // SYSTEM messages (handoff events) excluded from preview.
+      // take: 5 so isConvMultichannel can detect CUSTOMER_CARDAPIO messages
+      // even when the most recent message is from WhatsApp.
       messages: {
         where:   { senderType: { not: "SYSTEM" } },
         orderBy: { sentAt: "desc" },
-        take: 1,
+        take: 5,
         select: { content: true, senderType: true, direction: true, sentAt: true, type: true },
       },
       // Count of INBOUND (customer) messages — used to compute hasCustomerReplied
