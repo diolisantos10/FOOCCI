@@ -111,6 +111,13 @@ describe("previewReceptionistResponse — saudação e handoff", () => {
   it("'falar com atendente' → HANDOFF", () => {
     expect(previewReceptionistResponse("falar com atendente", ctx()).responseType).toBe("HANDOFF");
   });
+  it("HANDOFF vem do BRANCH, não da cópia — copy custom ainda é HANDOFF", () => {
+    // Regression: a custom handoff message a text-classifier could miss must still
+    // be labeled HANDOFF because the branch is the ground truth (live A6 blocker).
+    const p = previewReceptionistResponse("falar com atendente", ctx({ handoffMessage: "Já vou te transferir, um instante 😊" }));
+    expect(p.responseType).toBe("HANDOFF");
+    expect(p.containsHandoff).toBe(true);
+  });
   it("opção 2 (cardápio) selecionada → LINK_CARDAPIO (cliente pediu o link)", () => {
     expect(previewReceptionistResponse("2", ctx()).responseType).toBe("LINK_CARDAPIO");
   });

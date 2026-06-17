@@ -470,7 +470,7 @@ export type ReceptionistResponseType =
   | "UNKNOWN";       // generic / GPT / hours — non-deterministic
 
 const HANDOFF_TEXT_RE =
-  /chamando (um |o )?atendente|vou (deixar|chamar).*(atendente|equipe)|aguarde um momento|um minutinho, vou chamar/i;
+  /chamando (um |o )?atendente|vou (deixar|chamar|te (passar|transferir)).*(atendente|equipe|algu[eé]m)|transferindo.*(atendente|equipe)|aguarde um momento|um minutinho|\batendente\b/i;
 
 /** True when `text` contains a raw http(s) link (cardápio/pedido). */
 function textHasRawLink(text: string): boolean {
@@ -526,6 +526,10 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
   const intent = detectIntent(raw);
   let text = "";
   let deterministic = true;
+  // When a branch IS a handoff, the branch is ground truth — the responseType is
+  // HANDOFF regardless of the restaurant's custom handoff copy (which a text
+  // classifier could miss). Avoids mislabeling a real handoff as SAFE_MENU.
+  let forcedType: ReceptionistResponseType | null = null;
 
   if (BACK_TO_MENU_RE.test(raw)) {
     text = renderMainMenu(ctx);
@@ -534,6 +538,7 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
     if (selectedOpt) {
       text = buildFlowReply(selectedOpt, ctx);
       if (selectedOpt.flow !== "handoff") text = appendBackToMainMenu(text);
+      else forcedType = "HANDOFF";
     } else {
       const explicitOrder = isExplicitOrderMessage(raw);
       const looseAddress  = looksLikeLooseAddress(raw);
@@ -551,6 +556,7 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
           );
         } else {
           text = ctx.handoffMessage;
+          forcedType = "HANDOFF";
         }
       } else {
         const templateReply = buildTemplateReply(intent, ctx);
@@ -578,7 +584,7 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
     }
   }
 
-  const responseType = deterministic ? classifyReplyText(text, ctx.address) : "UNKNOWN";
+  const responseType = forcedType ?? (deterministic ? classifyReplyText(text, ctx.address) : "UNKNOWN");
   return {
     responseType,
     containsRawLink:            textHasRawLink(text),
