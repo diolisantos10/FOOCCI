@@ -712,29 +712,29 @@ enum MessageType {
 // ═══════════════════════════════════════════
 
 model Campaign {
-  id             String         @id @default(cuid())
-  restaurantId   String
-  name           String
-  message        String
-  objective      String? // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | OUTRO
-  channel        String         @default("WHATSAPP")
-  targetSegment  String? // FRIO | MORNO | QUENTE | VIP | PRIMEIRO_PEDIDO | RECENTE_AVALIACAO | RECORRENTE_SUMIDO | TODOS | etc.
-  templateId     String? // links back to the action template id (e.g. "recuperar-frios")
-  segmentId      String?
-  scheduledAt    DateTime?
-  sentAt         DateTime?
-  status         CampaignStatus @default(DRAFT)
-  totalAudience  Int            @default(0)
-  totalSent      Int            @default(0)
-  totalFailed    Int            @default(0)
-  totalRead      Int            @default(0)
-  totalResponded Int            @default(0)
-  totalConverted Int            @default(0)
-  totalRevenue   Decimal        @default(0) @db.Decimal(12, 2)
-  couponCode     String? // soft link to Promotion.couponCode for attribution
-  promotionId    String? // soft FK to Promotion.id for attribution (no cascade)
-  scheduleConfig Json? // { mode, ..., dailyLimit?, priority?, allowWeeklyCustomerCapOverride?, overrideReason? }
-  audienceConfig Json? // { templateId?, segment?, filters? }
+  id                 String         @id @default(cuid())
+  restaurantId       String
+  name               String
+  message            String
+  objective          String? // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | OUTRO
+  channel            String         @default("WHATSAPP")
+  targetSegment      String? // FRIO | MORNO | QUENTE | VIP | PRIMEIRO_PEDIDO | RECENTE_AVALIACAO | RECORRENTE_SUMIDO | TODOS | etc.
+  templateId         String? // links back to the action template id (e.g. "recuperar-frios")
+  segmentId          String?
+  scheduledAt        DateTime?
+  sentAt             DateTime?
+  status             CampaignStatus @default(DRAFT)
+  totalAudience      Int            @default(0)
+  totalSent          Int            @default(0)
+  totalFailed        Int            @default(0)
+  totalRead          Int            @default(0)
+  totalResponded     Int            @default(0)
+  totalConverted     Int            @default(0)
+  totalRevenue       Decimal        @default(0) @db.Decimal(12, 2)
+  couponCode         String? // soft link to Promotion.couponCode for attribution
+  promotionId        String? // soft FK to Promotion.id for attribution (no cascade)
+  scheduleConfig     Json? // { mode, ..., dailyLimit?, priority?, allowWeeklyCustomerCapOverride?, overrideReason? }
+  audienceConfig     Json? // { templateId?, segment?, filters? }
   // ── Governance / impact-memory identity (additive) ─────────────────────────
   // Stable concept key (e.g. "pascoa-2026") so a deleted/recreated campaign still
   // knows who was already impacted by the CONCEPT, not just by this campaignId.
@@ -743,10 +743,10 @@ model Campaign {
   // is recognised as a duplicate.
   messageFingerprint String?
   // { dedupeByConcept?, dedupeByMessage?, dedupeWindowDays?, allowResendToImpacted? }
-  dedupePolicy   Json?
-  lastRunAt      DateTime?      // set at the start of each recurring batch; defines cycle boundary
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  dedupePolicy       Json?
+  lastRunAt          DateTime? // set at the start of each recurring batch; defines cycle boundary
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   segment    CustomerSegment?    @relation(fields: [segmentId], references: [id])
@@ -763,24 +763,24 @@ model Campaign {
 // Intentionally has NO foreign keys: deleting a campaign or customer NEVER erases
 // the ledger (it is audit + dedupe memory). Stores no full message text.
 model CRMContactLedger {
-  id                 String    @id @default(cuid())
-  restaurantId       String
-  customerId         String?
-  phone              String?
-  campaignId         String? // soft reference (no FK / no cascade)
-  campaignFamilyKey  String?
-  messageFingerprint String?
-  channel            String    @default("WHATSAPP")
-  contactType        String // CAMPAIGN | AUTOMATION | BIRTHDAY | REACTIVATION | REVIEW_REQUEST | POST_ORDER | MANUAL
-  status             String // SENT | BLOCKED | FAILED | SKIPPED
-  reasonCode         String? // canonical reason code (see crmReasonCodes)
-  usedPriorityOverride Boolean @default(false)
-  sentAt             DateTime?
-  blockedAt          DateTime?
-  failedAt           DateTime?
-  sourceExecutionId  String?
-  metadata           Json?
-  createdAt          DateTime  @default(now())
+  id                   String    @id @default(cuid())
+  restaurantId         String
+  customerId           String?
+  phone                String?
+  campaignId           String? // soft reference (no FK / no cascade)
+  campaignFamilyKey    String?
+  messageFingerprint   String?
+  channel              String    @default("WHATSAPP")
+  contactType          String // CAMPAIGN | AUTOMATION | BIRTHDAY | REACTIVATION | REVIEW_REQUEST | POST_ORDER | MANUAL
+  status               String // SENT | BLOCKED | FAILED | SKIPPED
+  reasonCode           String? // canonical reason code (see crmReasonCodes)
+  usedPriorityOverride Boolean   @default(false)
+  sentAt               DateTime?
+  blockedAt            DateTime?
+  failedAt             DateTime?
+  sourceExecutionId    String?
+  metadata             Json?
+  createdAt            DateTime  @default(now())
 
   @@index([restaurantId, customerId])
   @@index([restaurantId, campaignFamilyKey, customerId])
@@ -1436,13 +1436,13 @@ model PaymentSettings {
 //  localStorage only — it is browser-specific and intentionally not stored here.
 
 model RestaurantSoundSettings {
-  id           String   @id @default(cuid())
-  restaurantId String   @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
   soundEnabled                     Boolean @default(true)
   newOrderSoundEnabled             Boolean @default(true)
   humanAttentionSoundEnabled       Boolean @default(true)
-  soundVolume                      Int     @default(120)  // 0–200, >100 = Web Audio gain boost
+  soundVolume                      Int     @default(120) // 0–200, >100 = Web Audio gain boost
   repeatNewOrderSoundUntilAccepted Boolean @default(false)
   repeatHumanAttentionUntilSeen    Boolean @default(false)
   soundTheme                       String  @default("DEFAULT") // DEFAULT | SOFT | URGENT
@@ -1626,18 +1626,18 @@ enum AutomationTrigger {
 }
 
 model CRMAutomation {
-  id               String            @id @default(cuid())
-  restaurantId     String
-  trigger          AutomationTrigger
-  isEnabled        Boolean           @default(false)
-  messageTemplate  String            @default("")
-  triggerAfterDays         Int     @default(30)
-  oncePerCustomerLifetime  Boolean @default(false)
-  discountType     String? // "PERCENTAGE" | "FIXED" | null
-  discountValue    Decimal?          @db.Decimal(10, 2)
-  scheduleConfig   Json? // { sendTime?, sendDays?, timezone? }
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                      String            @id @default(cuid())
+  restaurantId            String
+  trigger                 AutomationTrigger
+  isEnabled               Boolean           @default(false)
+  messageTemplate         String            @default("")
+  triggerAfterDays        Int               @default(30)
+  oncePerCustomerLifetime Boolean           @default(false)
+  discountType            String? // "PERCENTAGE" | "FIXED" | null
+  discountValue           Decimal?          @db.Decimal(10, 2)
+  scheduleConfig          Json? // { sendTime?, sendDays?, timezone? }
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -2795,38 +2795,38 @@ model AgentLibraryFile {
 }
 
 model AgentLibraryTechnique {
-  id            String                      @id @default(cuid())
-  agentSlug     String
-  sourceId      String
-  category      String?
-  techniqueName String
-  purpose       String?
-  principle     String?
-  application   String?
-  usageRule     String?
-  qualityTest   String?
-  goodExample   String?
-  badExample    String?
-  confidence    Float?
-  status        AgentLibraryTechniqueStatus @default(EXTRACTED)
+  id              String                      @id @default(cuid())
+  agentSlug       String
+  sourceId        String
+  category        String?
+  techniqueName   String
+  purpose         String?
+  principle       String?
+  application     String?
+  usageRule       String?
+  qualityTest     String?
+  goodExample     String?
+  badExample      String?
+  confidence      Float?
+  status          AgentLibraryTechniqueStatus @default(EXTRACTED)
   // ── Curation / runtime governance (additive) ───────────────────────────────
   // A technique only reaches the Waiter prompt when status=ACTIVE AND
   // runtimeEnabled=true AND it is selected by an ACTIVE LIBRARY_ASSISTED version.
-  runtimeEnabled  Boolean   @default(false)
-  runtimePriority Int       @default(0)
+  runtimeEnabled  Boolean                     @default(false)
+  runtimePriority Int                         @default(0)
   approvedAt      DateTime?
   approvedBy      String?
   rejectedAt      DateTime?
   rejectionReason String?
   lastUsedAt      DateTime?
-  usageCount      Int       @default(0)
+  usageCount      Int                         @default(0)
   qualityScore    Float?
   tags            String? // JSON-encoded string[] (kept as String for SQLite/Postgres parity)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
 
-  source              AgentLibrarySource             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  versionAssignments  WaiterRuntimeVersionTechnique[]
+  source             AgentLibrarySource              @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  versionAssignments WaiterRuntimeVersionTechnique[]
 
   @@index([agentSlug])
   @@index([sourceId])
@@ -2850,21 +2850,21 @@ model WaiterRuntimeVersion {
   isActive     Boolean                    @default(false)
 
   // Library governance knobs
-  libraryEnabled          Boolean @default(false)
-  maxTechniques           Int     @default(6)
+  libraryEnabled           Boolean @default(false)
+  maxTechniques            Int     @default(6)
   techniqueSelectionPolicy String  @default("PRIORITY_DESC") // how techniques are ordered/picked
-  promptPolicy            String? // JSON-encoded prompt assembly knobs
-  safetyPolicy            String? // JSON-encoded safety constraints
-  metadata                String? // JSON-encoded free-form metadata
+  promptPolicy             String? // JSON-encoded prompt assembly knobs
+  safetyPolicy             String? // JSON-encoded safety constraints
+  metadata                 String? // JSON-encoded free-form metadata
 
   // Lifecycle / audit
-  activatedAt        DateTime?
-  activatedBy        String?
-  rolledBackAt       DateTime?
+  activatedAt         DateTime?
+  activatedBy         String?
+  rolledBackAt        DateTime?
   rollbackToVersionId String?
 
   // Quality gate snapshot
-  qualityStatus   String? // PASS | FAIL | UNKNOWN at last gate check
+  qualityStatus    String? // PASS | FAIL | UNKNOWN at last gate check
   lastQualityRunAt DateTime?
 
   createdAt DateTime @default(now())
@@ -2956,27 +2956,27 @@ enum AgentSimulationOpportunityStatus {
 }
 
 model AgentSimulationRun {
-  id             String                   @id @default(cuid())
-  agentSlug      String
-  departmentSlug String
-  restaurantId   String? // null = synthetic/global (no real restaurant)
-  mode           AgentSimulationMode      @default(MANUAL)
-  driver         AgentSimulationDriver    @default(SERVICE)
-  status         AgentSimulationRunStatus @default(RUNNING)
-  seed           String?
-  startedAt      DateTime                 @default(now())
-  finishedAt     DateTime?
-  durationMs     Int                      @default(0)
-  scenariosTotal    Int @default(0)
-  scenariosPassed   Int @default(0)
-  scenariosWarning  Int @default(0)
-  scenariosFailed   Int @default(0)
-  p0Count           Int @default(0)
-  p1Count           Int @default(0)
-  p2Count           Int @default(0)
-  opportunityCount  Int @default(0)
-  metadata       String? // JSON-encoded
-  createdAt      DateTime @default(now())
+  id               String                   @id @default(cuid())
+  agentSlug        String
+  departmentSlug   String
+  restaurantId     String? // null = synthetic/global (no real restaurant)
+  mode             AgentSimulationMode      @default(MANUAL)
+  driver           AgentSimulationDriver    @default(SERVICE)
+  status           AgentSimulationRunStatus @default(RUNNING)
+  seed             String?
+  startedAt        DateTime                 @default(now())
+  finishedAt       DateTime?
+  durationMs       Int                      @default(0)
+  scenariosTotal   Int                      @default(0)
+  scenariosPassed  Int                      @default(0)
+  scenariosWarning Int                      @default(0)
+  scenariosFailed  Int                      @default(0)
+  p0Count          Int                      @default(0)
+  p1Count          Int                      @default(0)
+  p2Count          Int                      @default(0)
+  opportunityCount Int                      @default(0)
+  metadata         String? // JSON-encoded
+  createdAt        DateTime                 @default(now())
 
   scenarios     AgentSimulationScenario[]
   opportunities AgentSimulationOpportunity[]
@@ -3058,34 +3058,33 @@ enum AgentSimulationExampleStatus {
 }
 
 model AgentSimulationExample {
-  id            String                            @id @default(cuid())
-  agentSlug     String
-  restaurantId  String?
-  sourceType    AgentSimulationExampleSourceType  @default(REAL_CONVERSATION)
-  sourceId      String? // e.g. the originating Conversation id (for dedupe)
-  channel       String                            @default("UNKNOWN") // WHATSAPP | WEB_AGENT | QR_AGENT | MANUAL | UNKNOWN
-  intent        String
-  scenarioType  String
-  customerProfile String?
+  id                      String                           @id @default(cuid())
+  agentSlug               String
+  restaurantId            String?
+  sourceType              AgentSimulationExampleSourceType @default(REAL_CONVERSATION)
+  sourceId                String? // e.g. the originating Conversation id (for dedupe)
+  channel                 String                           @default("UNKNOWN") // WHATSAPP | WEB_AGENT | QR_AGENT | MANUAL | UNKNOWN
+  intent                  String
+  scenarioType            String
+  customerProfile         String?
   // Sanitized ONLY — raw transcript is NEVER stored.
-  sanitizedTranscript String? // JSON-encoded TranscriptTurn[]
-  summary       String
-  labels        String? // JSON-encoded string[]
-  riskFlags     String? // JSON-encoded string[] (what was masked)
-  qualityNotes  String?
-  status        AgentSimulationExampleStatus      @default(PENDING_REVIEW)
-  isApprovedForSimulation Boolean                 @default(false)
-  reviewedAt    DateTime?
-  reviewedBy    String?
-  createdAt     DateTime                          @default(now())
-  updatedAt     DateTime                          @updatedAt
+  sanitizedTranscript     String? // JSON-encoded TranscriptTurn[]
+  summary                 String
+  labels                  String? // JSON-encoded string[]
+  riskFlags               String? // JSON-encoded string[] (what was masked)
+  qualityNotes            String?
+  status                  AgentSimulationExampleStatus     @default(PENDING_REVIEW)
+  isApprovedForSimulation Boolean                          @default(false)
+  reviewedAt              DateTime?
+  reviewedBy              String?
+  createdAt               DateTime                         @default(now())
+  updatedAt               DateTime                         @updatedAt
 
   @@unique([agentSlug, sourceType, sourceId])
   @@index([agentSlug, status])
   @@index([agentSlug, isApprovedForSimulation])
   @@map("agent_simulation_examples")
 }
-
 
 //  Durable state for the WhatsApp AI text-ordering engine (controlled rollout).
 //  Additive only — no existing table is altered. Behind feature flag/allowlist;
@@ -3311,21 +3310,21 @@ model AgentLibraryChunkTechniqueCandidate {
 // ── Training run (one execution batch) ───────────────────────────────────────
 
 model AgentTrainingRun {
-  id             String   @id @default(cuid())
-  agentType      String   // AgentType enum value
+  id             String    @id @default(cuid())
+  agentType      String // AgentType enum value
   restaurantId   String?
-  status         String   @default("QUEUED") // QUEUED|RUNNING|COMPLETED|FAILED|CANCELLED
-  source         String   // REAL_CONVERSATION|AI_SIMULATION|MIXED|REGRESSION
-  mode           String?  // QUICK|REGRESSION|REAL_CONVERSATION_REPLAY|AI_SIMULATION_BATCH|NIGHTLY|CONTINUOUS
+  status         String    @default("QUEUED") // QUEUED|RUNNING|COMPLETED|FAILED|CANCELLED
+  source         String // REAL_CONVERSATION|AI_SIMULATION|MIXED|REGRESSION
+  mode           String? // QUICK|REGRESSION|REAL_CONVERSATION_REPLAY|AI_SIMULATION_BATCH|NIGHTLY|CONTINUOUS
   startedAt      DateTime?
   completedAt    DateTime?
-  totalScenarios Int      @default(0)
-  passCount      Int      @default(0)
-  warnCount      Int      @default(0)
-  failCount      Int      @default(0)
+  totalScenarios Int       @default(0)
+  passCount      Int       @default(0)
+  warnCount      Int       @default(0)
+  failCount      Int       @default(0)
   score          Float?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   scenarios AgentTrainingScenario[]
   proposals AgentImprovementProposal[]
@@ -3342,12 +3341,12 @@ model AgentTrainingScenario {
   id                   String   @id @default(cuid())
   runId                String
   restaurantId         String?
-  source               String   // REAL_CONVERSATION|AI_SIMULATION
-  sourceConversationId String?  // FK to Conversation.id (nullable — simulator scenarios have none)
+  source               String // REAL_CONVERSATION|AI_SIMULATION
+  sourceConversationId String? // FK to Conversation.id (nullable — simulator scenarios have none)
   title                String
   customerPersona      String?
   goal                 String?
-  transcriptJson       Json     // array of {role, content, ts} turn objects
+  transcriptJson       Json // array of {role, content, ts} turn objects
   expectedOutcomeJson  Json?
   actualOutcomeJson    Json?
   status               String   @default("PENDING") // PENDING|PASS|WARN|FAIL
@@ -3356,7 +3355,7 @@ model AgentTrainingScenario {
   failureSummary       String?
   createdAt            DateTime @default(now())
 
-  run         AgentTrainingRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run         AgentTrainingRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
   evaluations AgentTrainingEvaluation[]
 
   @@index([runId])
@@ -3370,9 +3369,9 @@ model AgentTrainingScenario {
 model AgentTrainingEvaluation {
   id               String   @id @default(cuid())
   scenarioId       String
-  evaluatorModel   String   // e.g. "gpt-4o"
-  scoreJson        Json     // {conversionScore, clarityScore, safetyScore, frictionScore, menuAccuracyScore, orderCompletionScore, handoffScore, overallScore}
-  verdict          String   // PASS|WARN|FAIL
+  evaluatorModel   String // e.g. "gpt-4o"
+  scoreJson        Json // {conversionScore, clarityScore, safetyScore, frictionScore, menuAccuracyScore, orderCompletionScore, handoffScore, overallScore}
+  verdict          String // PASS|WARN|FAIL
   strengths        String?
   weaknesses       String?
   safetyIssues     String?
@@ -3391,14 +3390,14 @@ model AgentTrainingEvaluation {
 
 model AgentImprovementProposal {
   id                 String    @id @default(cuid())
-  agentType          String    // AgentType enum value
+  agentType          String // AgentType enum value
   restaurantId       String?
   sourceRunId        String
-  sourceScenarioIds  Json      // string[]
+  sourceScenarioIds  Json // string[]
   title              String
   problemSummary     String
   rootCause          String?
-  proposedChangeType String    // PROMPT_PATCH|ROUTING_RULE|STATE_MACHINE_RULE|COPY_CHANGE|MENU_MATCHING_RULE|HANDOFF_RULE|CONFIG_CHANGE
+  proposedChangeType String // PROMPT_PATCH|ROUTING_RULE|STATE_MACHINE_RULE|COPY_CHANGE|MENU_MATCHING_RULE|HANDOFF_RULE|CONFIG_CHANGE
   proposedPatchText  String?   @db.Text
   proposedConfigJson Json?
   riskLevel          String    @default("MEDIUM") // LOW|MEDIUM|HIGH
@@ -3412,7 +3411,7 @@ model AgentImprovementProposal {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  sourceRun     AgentTrainingRun  @relation(fields: [sourceRunId], references: [id], onDelete: Cascade)
+  sourceRun     AgentTrainingRun    @relation(fields: [sourceRunId], references: [id], onDelete: Cascade)
   brainVersions AgentBrainVersion[]
 
   @@index([status])
@@ -3426,7 +3425,7 @@ model AgentImprovementProposal {
 
 model AgentBrainVersion {
   id               String    @id @default(cuid())
-  agentType        String    // AgentType enum value
+  agentType        String // AgentType enum value
   restaurantId     String?
   versionLabel     String
   status           String    @default("DRAFT") // DRAFT|SANDBOX|ACTIVE|ARCHIVED
@@ -3455,7 +3454,7 @@ model AgentTrainingConfig {
   autoCreateProposals       Boolean  @default(true)
   autoApplySandbox          Boolean  @default(false)
   autoApplyProduction       Boolean  @default(false) // always false in v1
-  enabledRestaurantIds      Json     @default("[]")  // string[] — empty = all
+  enabledRestaurantIds      Json     @default("[]") // string[] — empty = all
   autoRunArenaOnCapture     Boolean  @default(false)
   autoDiagnoseOnFailure     Boolean  @default(true)
   smallBatchEveryHours      Int?
@@ -3509,29 +3508,29 @@ model WaiterResultEvidence {
 // only (no PII, no raw transcript). Approving is a HUMAN decision that records an
 // "approved learning" — it NEVER changes the real runtime or the live prompt.
 model WaiterTrainingSuggestion {
-  id                      String    @id @default(cuid())
-  restaurantId            String?
-  agentSlug               String    @default("waiter")
-  sourceType              String // REAL_CONVERSATION | SIMULATION | LIBRARY | RESULT_EVIDENCE
-  sourceId                String? // e.g. the originating AgentSimulationExample id (dedupe)
-  status                  String    @default("PENDING_REVIEW") // PENDING_REVIEW | APPROVED | REJECTED | BACKLOG
-  title                   String
-  situationSummary        String
-  customerIntent          String
-  whatHappened            String
-  problemDetected         String
-  idealResponse           String
-  trainingRule            String
-  expectedImpact          String
-  suggestedActionType     String // RESPONSE_PATTERN | PAYMENT_RULE | MENU_GUIDANCE | UPSELL_BEHAVIOR | OBJECTION_HANDLING | RESTRICTION_HANDLING | CHECKOUT_GUIDANCE | TONE_ADJUSTMENT
-  riskLevel               String    @default("LOW") // LOW | MEDIUM | HIGH
+  id                       String    @id @default(cuid())
+  restaurantId             String?
+  agentSlug                String    @default("waiter")
+  sourceType               String // REAL_CONVERSATION | SIMULATION | LIBRARY | RESULT_EVIDENCE
+  sourceId                 String? // e.g. the originating AgentSimulationExample id (dedupe)
+  status                   String    @default("PENDING_REVIEW") // PENDING_REVIEW | APPROVED | REJECTED | BACKLOG
+  title                    String
+  situationSummary         String
+  customerIntent           String
+  whatHappened             String
+  problemDetected          String
+  idealResponse            String
+  trainingRule             String
+  expectedImpact           String
+  suggestedActionType      String // RESPONSE_PATTERN | PAYMENT_RULE | MENU_GUIDANCE | UPSELL_BEHAVIOR | OBJECTION_HANDLING | RESTRICTION_HANDLING | CHECKOUT_GUIDANCE | TONE_ADJUSTMENT
+  riskLevel                String    @default("LOW") // LOW | MEDIUM | HIGH
   sanitizedCustomerExcerpt String?
   sanitizedWaiterExcerpt   String?
-  technicalDetails        Json?
-  reviewedAt              DateTime?
-  reviewedBy              String?
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  technicalDetails         Json?
+  reviewedAt               DateTime?
+  reviewedBy               String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@unique([agentSlug, sourceType, sourceId])
   @@index([agentSlug, status])
@@ -3613,24 +3612,24 @@ model CustomerChannelIdentity {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model InstagramChannelConfig {
-  id                          String   @id @default(cuid())
-  restaurantId                String   @unique
-  enabled                     Boolean  @default(false)
-  paused                      Boolean  @default(false)
-  mode                        String   @default("DISABLED") // DISABLED|RECEIVE_ONLY|REPLY_ONLY|FULL
-  scope                       String   @default("TEST_ACCOUNT_ONLY") // TEST_ACCOUNT_ONLY|RESTAURANT_WIDE
-  instagramBusinessAccountId  String?
-  facebookPageId              String?
-  pageAccessTokenEncrypted    String? // AES-256-GCM ciphertext — never plaintext
-  verifyTokenHash             String? // SHA-256 hash of the webhook verify token
-  appId                       String?
-  appSecretRef                String? // name/ref of the env secret, NOT the secret itself
-  allowlistedExternalUserIds  Json     @default("[]") // string[]
-  lastWebhookAt               DateTime?
-  lastError                   String?
-  metadata                    Json?
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id                         String    @id @default(cuid())
+  restaurantId               String    @unique
+  enabled                    Boolean   @default(false)
+  paused                     Boolean   @default(false)
+  mode                       String    @default("DISABLED") // DISABLED|RECEIVE_ONLY|REPLY_ONLY|FULL
+  scope                      String    @default("TEST_ACCOUNT_ONLY") // TEST_ACCOUNT_ONLY|RESTAURANT_WIDE
+  instagramBusinessAccountId String?
+  facebookPageId             String?
+  pageAccessTokenEncrypted   String? // AES-256-GCM ciphertext — never plaintext
+  verifyTokenHash            String? // SHA-256 hash of the webhook verify token
+  appId                      String?
+  appSecretRef               String? // name/ref of the env secret, NOT the secret itself
+  allowlistedExternalUserIds Json      @default("[]") // string[]
+  lastWebhookAt              DateTime?
+  lastError                  String?
+  metadata                   Json?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   @@index([facebookPageId])
   @@index([instagramBusinessAccountId])
@@ -3652,7 +3651,7 @@ model MetaOAuthState {
   state                    String   @unique
   status                   String   @default("PENDING") // PENDING | AWAITING_SELECTION | CONSUMED
   userAccessTokenEncrypted String? // AES-256-GCM — short-lived user token, never plaintext
-  candidates               Json?    // [{ pageId, pageName, instagramBusinessAccountId?, instagramUsername?, hasInstagram }]
+  candidates               Json? // [{ pageId, pageName, instagramBusinessAccountId?, instagramUsername?, hasInstagram }]
   error                    String?
   expiresAt                DateTime
   createdAt                DateTime @default(now())
