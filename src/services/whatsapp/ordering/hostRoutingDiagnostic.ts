@@ -50,6 +50,10 @@ export interface HostRoutingResult {
     reason: string;
     wouldEnterTextOrder: boolean;
     wouldFallbackToReceptionist: boolean;
+    /** True when an active WhatsApp ordering session existed for this phone. */
+    hasActiveSession: boolean;
+    /** True when the message itself triggered the TEXT_ORDER route (ORDER_REQUEST intent). */
+    messageHasOrderIntent: boolean;
   };
   receptionistPreview?: ReceptionistPreview;
   safety: { noEvolution: true; noRealOrder: true; noRealPix: true; runtimeTouched: false };
@@ -202,7 +206,7 @@ export async function runHostRoutingDiagnostic(input: HostRoutingInput): Promise
     ok: false,
     phoneMasked: input.phone ? maskPhone(input.phone) : null,
     config: { mode: "?", scope: "?", enabled: false, paused: false, phoneInAllowlist: false },
-    decision: { host: "IGNORED", reason: "", wouldEnterTextOrder: false, wouldFallbackToReceptionist: true },
+    decision: { host: "IGNORED", reason: "", wouldEnterTextOrder: false, wouldFallbackToReceptionist: true, hasActiveSession: false, messageHasOrderIntent: false },
     safety: { noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false },
   };
 
@@ -247,6 +251,8 @@ export async function runHostRoutingDiagnostic(input: HostRoutingInput): Promise
   base.decision.wouldEnterTextOrder = decision.wouldRouteToTextOrdering;
   base.decision.wouldFallbackToReceptionist =
     !decision.wouldRouteToTextOrdering || decision.effectiveFinalHandler === "OLD_WHATSAPP_AGENT";
+  base.decision.hasActiveSession = decision.hasActiveSession;
+  base.decision.messageHasOrderIntent = decision.messageHasOrderIntent;
 
   const block = await findHumanBlock(restaurantId, phone);
   const { host, reason } = decideHost(decision, block);

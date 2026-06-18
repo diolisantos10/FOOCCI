@@ -267,3 +267,38 @@ describe("evaluateScenario — RESTAURANT_WIDE adaptations", () => {
     expect(r.passed).toBe(true);
   });
 });
+
+// ── Active session on the allowlisted self-test phone ─────────────────────────
+
+describe("evaluateScenario — hasActiveSession (sessão ativa no telefone allowlisted)", () => {
+  it("(AS1) A1-greeting com sessão ativa: host=TEXT_ORDER → P2 inconclusivo (não P0)", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A1-greeting")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true, hasActiveSession: true });
+    expect(r.severity).toBe("P2");
+    expect(r.failures.join(" ")).toMatch(/sess[aã]o ativa/i);
+  });
+
+  it("(AS2) A7-pix com sessão ativa: host=TEXT_ORDER → P2 inconclusivo (não P0)", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A7-pix")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true, hasActiveSession: true });
+    expect(r.severity).toBe("P2");
+  });
+
+  it("(AS3) A8-handoff com sessão ativa: host=TEXT_ORDER → P2 inconclusivo (não P0)", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A8-handoff")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true, hasActiveSession: true });
+    expect(r.severity).toBe("P2");
+  });
+
+  it("(AS4) A5-address com sessão ativa: host=TEXT_ORDER → P2 inconclusivo (não P0)", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A5-address")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true, hasActiveSession: true });
+    expect(r.severity).toBe("P2");
+  });
+
+  it("(AS5) A1-greeting SEM sessão ativa: host=TEXT_ORDER → ainda é P0 (roteamento errado)", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "A1-greeting")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true, hasActiveSession: false });
+    expect(r.severity).toBe("P0");
+  });
+});

@@ -140,6 +140,13 @@ export interface EvaluableResult {
    * legitimately route to TEXT_ORDER.
    */
   restaurantWide?: boolean;
+  /**
+   * True when an active ordering session existed for the self-test phone.
+   * Under an active session ALL messages route to TEXT_ORDER (including
+   * greetings, loose addresses, payment questions) — that is correct behavior,
+   * not a routing failure for scenarios that expect RECEPTIONIST.
+   */
+  hasActiveSession?: boolean;
   receptionistPreview?: {
     responseType: ReceptionistResponseType;
     containsRawLink: boolean;
@@ -169,12 +176,25 @@ export function evaluateScenario(spec: ScenarioSpec, result: EvaluableResult): S
   if (spec.expect.host) {
     // Under RESTAURANT_WIDE, a NON_ALLOWLISTED order message legitimately routes to
     // TEXT_ORDER (all phones are eligible). Accept that without flagging P0.
-    const hostOk =
-      result.host === spec.expect.host ||
-      (isRestaurantWide && spec.phoneProfile === "NON_ALLOWLISTED" && result.host === "TEXT_ORDER");
+    const nonAllowlistOrderUnderRW =
+      isRestaurantWide && spec.phoneProfile === "NON_ALLOWLISTED" && result.host === "TEXT_ORDER";
+    // When the self-test (allowlisted) phone has an active ordering session, ALL
+    // messages route to TEXT_ORDER — that is correct production behavior. Scenarios
+    // expecting RECEPTIONIST (greeting, loose address, payment question, handoff)
+    // are inconclusivez when the phone carries an active session; treat as OK so
+    // that a live session in production does not generate spurious P0s.
+    const textOrderDueToActiveSession =
+      spec.phoneProfile === "ALLOWLISTED" &&
+      spec.expect.host === "RECEPTIONIST" &&
+      result.host === "TEXT_ORDER" &&
+      result.hasActiveSession === true;
+    const hostOk = result.host === spec.expect.host || nonAllowlistOrderUnderRW || textOrderDueToActiveSession;
     if (!hostOk) {
       failures.push(`host=${result.host}, esperado ${spec.expect.host}`);
       bump("P0");
+    } else if (textOrderDueToActiveSession) {
+      failures.push("telefone allowlisted tem sessão ativa — cenário encaminhado para TEXT_ORDER (inconclusivo mas não P0)");
+      bump("P2");
     }
   }
 
@@ -301,6 +321,7 @@ export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<Ful
       host: host.decision.host,
       phoneInAllowlist: host.config.phoneInAllowlist,
       restaurantWide,
+      hasActiveSession: host.decision.hasActiveSession,
       receptionistPreview: host.receptionistPreview
         ? {
             responseType:               host.receptionistPreview.responseType,
