@@ -58,7 +58,10 @@ const CATEGORY_META: Record<ExecutionCategory, { kind: ExecutionKind; badge: str
   EVOLUTION_AUTH_ERROR:         { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false },
   EVOLUTION_RATE_LIMITED:       { kind: "BLOCKED", badge: "Rate limit",                   retryable: true  },
   EMPTY_MESSAGE:                { kind: "FAILED",  badge: "Mensagem vazia",               retryable: false },
-  BLOCKED_INVALID_PHONE:        { kind: "FAILED",  badge: "Telefone inválido",            retryable: false },
+  // Invalid / missing phone is a RECIPIENT DATA problem, not a provider failure.
+  // It is skipped BEFORE any Evolution call, so it must never inflate the
+  // provider-failure count. Surfaced as SKIPPED and never retried.
+  BLOCKED_INVALID_PHONE:        { kind: "SKIPPED", badge: "Telefone inválido",            retryable: false },
   BLOCKED_SAFETY:               { kind: "BLOCKED", badge: "Bloqueado",                   retryable: false },
   BLOCKED_COOLDOWN:             { kind: "BLOCKED", badge: "Bloqueado (cooldown)",         retryable: false },
   BLOCKED_WEEKLY_LIMIT:         { kind: "BLOCKED", badge: "Bloqueado (limite semanal)",   retryable: false },
@@ -157,6 +160,8 @@ export interface ExecutionSummary {
   sent: number;
   blockedSafety: number;
   failedProvider: number;
+  /** Recipients skipped before any provider call (invalid/missing phone, not eligible). */
+  skipped: number;
   /** Count per fine-grained category. */
   byCategory: Record<ExecutionCategory, number>;
   /** Human-friendly reason groups for the UI ("Limite semanal: X", ...). */
@@ -186,13 +191,14 @@ export function summarizeExecutions(rows: ExecutionInput[]): ExecutionSummary {
   const byCategory = EMPTY_BY_CATEGORY();
   for (const r of rows) byCategory[classifyExecution(r).category] += 1;
 
-  let sent = 0, blockedSafety = 0, failedProvider = 0;
+  let sent = 0, blockedSafety = 0, failedProvider = 0, skipped = 0;
   for (const cat of Object.keys(byCategory) as ExecutionCategory[]) {
     const n = byCategory[cat];
     const kind = CATEGORY_META[cat].kind;
     if (kind === "SENT") sent += n;
     else if (kind === "BLOCKED") blockedSafety += n;
-    else if (kind === "FAILED") failedProvider += n; // includes BLOCKED_INVALID_PHONE (a real provider/phone failure)
+    else if (kind === "FAILED") failedProvider += n; // real provider/data failures only
+    else if (kind === "SKIPPED") skipped += n;       // invalid phone / not eligible — never a "failure"
   }
 
   const reasonGroups = (Object.keys(byCategory) as ExecutionCategory[])
@@ -200,7 +206,7 @@ export function summarizeExecutions(rows: ExecutionInput[]): ExecutionSummary {
     .map((c) => ({ category: c, badge: CATEGORY_META[c].badge, count: byCategory[c], kind: CATEGORY_META[c].kind }))
     .sort((a, b) => b.count - a.count);
 
-  return { total: rows.length, sent, blockedSafety, failedProvider, byCategory, reasonGroups };
+  return { total: rows.length, sent, blockedSafety, failedProvider, skipped, byCategory, reasonGroups };
 }
 
 /** Aggregates pre-grouped { reason → count } maps (from a DB groupBy). */
@@ -211,7 +217,7 @@ export function summarizeFromReasonCounts(
   for (const g of groups) byCategory[classifyExecution(g).category] += g.count;
   const rows: ExecutionInput[] = [];
   // Rebuild a flat summary using the per-category counts.
-  let sent = 0, blockedSafety = 0, failedProvider = 0, total = 0;
+  let sent = 0, blockedSafety = 0, failedProvider = 0, skipped = 0, total = 0;
   for (const cat of Object.keys(byCategory) as ExecutionCategory[]) {
     const n = byCategory[cat];
     total += n;
@@ -219,11 +225,12 @@ export function summarizeFromReasonCounts(
     if (kind === "SENT") sent += n;
     else if (kind === "BLOCKED") blockedSafety += n;
     else if (kind === "FAILED") failedProvider += n;
+    else if (kind === "SKIPPED") skipped += n;
   }
   void rows;
   const reasonGroups = (Object.keys(byCategory) as ExecutionCategory[])
     .filter((c) => byCategory[c] > 0 && c !== "SENT")
     .map((c) => ({ category: c, badge: CATEGORY_META[c].badge, count: byCategory[c], kind: CATEGORY_META[c].kind }))
     .sort((a, b) => b.count - a.count);
-  return { total, sent, blockedSafety, failedProvider, byCategory, reasonGroups };
+  return { total, sent, blockedSafety, failedProvider, skipped, byCategory, reasonGroups };
 }

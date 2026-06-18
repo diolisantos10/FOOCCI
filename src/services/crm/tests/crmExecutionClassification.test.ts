@@ -48,10 +48,10 @@ describe("classifyExecution — BLOCKED statuses with machine reason", () => {
 });
 
 describe("classifyExecution — FAILED statuses with machine reason", () => {
-  it("INVALID_PHONE_FORMAT → BLOCKED_INVALID_PHONE (kind FAILED)", () => {
+  it("INVALID_PHONE_FORMAT → BLOCKED_INVALID_PHONE (kind SKIPPED — not a provider failure)", () => {
     const r = classifyExecution({ status: "FAILED", errorMessage: "INVALID_PHONE_FORMAT" });
     expect(r.category).toBe("BLOCKED_INVALID_PHONE");
-    expect(r.kind).toBe("FAILED");
+    expect(r.kind).toBe("SKIPPED");
   });
 
   it("EVOLUTION_HTTP_400 → EVOLUTION_BAD_REQUEST", () => {
@@ -110,10 +110,10 @@ describe("classifyExecution — text-based heuristics for legacy rows", () => {
     expect(r.kind).toBe("BLOCKED");
   });
 
-  it("failedReason with JID → BLOCKED_INVALID_PHONE", () => {
+  it("failedReason with JID → BLOCKED_INVALID_PHONE (kind SKIPPED)", () => {
     const r = classifyExecution({ status: "FAILED", failedReason: "invalid jid format" });
     expect(r.category).toBe("BLOCKED_INVALID_PHONE");
-    expect(r.kind).toBe("FAILED");
+    expect(r.kind).toBe("SKIPPED");
   });
 });
 
@@ -132,9 +132,10 @@ describe("summarizeExecutions — recurring campaign cycle vs lifetime invariant
     ];
     const summary = summarizeExecutions(rows);
     expect(summary.sent).toBe(2);
-    // BLOCKED_INVALID_PHONE has kind FAILED so it counts toward failedProvider
-    expect(summary.failedProvider).toBe(3); // 2 bad requests + 1 invalid phone
-    expect(summary.blockedSafety).toBe(1);  // weekly cap only (invalid phone is kind FAILED)
+    // Invalid phone is SKIPPED (recipient data problem), not a provider failure.
+    expect(summary.failedProvider).toBe(2); // 2 bad requests only
+    expect(summary.skipped).toBe(1);        // 1 invalid phone
+    expect(summary.blockedSafety).toBe(1);  // weekly cap only
     expect(summary.total).toBe(6);
     expect(summary.byCategory["EVOLUTION_BAD_REQUEST"]).toBe(2);
     expect(summary.byCategory["BLOCKED_INVALID_PHONE"]).toBe(1);

@@ -31,10 +31,10 @@ describe("classifyExecution — safety blocks are NOT send failures", () => {
     expect(c.kind).toBe("FAILED");
   });
 
-  it("(2b) invalid-number provider error → BLOCKED_INVALID_PHONE (kind FAILED, badge 'Telefone inválido')", () => {
+  it("(2b) invalid-number provider error → BLOCKED_INVALID_PHONE (kind SKIPPED, badge 'Telefone inválido')", () => {
     const c = classifyExecution({ status: "FAILED", failedReason: 'HTTP 400 {"exists":false}', errorMessage: "INVALID_PHONE_FORMAT" });
     expect(c.category).toBe("BLOCKED_INVALID_PHONE");
-    expect(c.kind).toBe("FAILED");
+    expect(c.kind).toBe("SKIPPED");
     expect(c.badge).toMatch(/inválido/i);
   });
 
