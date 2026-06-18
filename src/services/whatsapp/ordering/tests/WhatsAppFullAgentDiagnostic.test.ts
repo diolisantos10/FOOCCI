@@ -204,3 +204,66 @@ describe("computeSummary — recomendação operacional", () => {
     expect(s.recommendation).toBe("ROLLBACK_OR_PAUSE");
   });
 });
+
+// ── RESTAURANT_WIDE mode ──────────────────────────────────────────────────────
+
+describe("evaluateScenario — RESTAURANT_WIDE adaptations", () => {
+  it("(RW1) NON_ALLOWLISTED + phoneInAllowlist=true + restaurantWide=true → OK (não P0)", () => {
+    const r = evaluateScenario(
+      spec({ phoneProfile: "NON_ALLOWLISTED", expect: { host: "RECEPTIONIST" } }),
+      { host: "RECEPTIONIST", phoneInAllowlist: true, restaurantWide: true, receptionistPreview: recep({}) },
+    );
+    expect(r.passed).toBe(true);
+    expect(r.severity).toBe("OK");
+  });
+
+  it("(RW2) NON_ALLOWLISTED order → TEXT_ORDER + restaurantWide=true → OK (comportamento correto)", () => {
+    const r = evaluateScenario(
+      spec({ phoneProfile: "NON_ALLOWLISTED", expect: { host: "RECEPTIONIST" } }),
+      { host: "TEXT_ORDER", phoneInAllowlist: true, restaurantWide: true },
+    );
+    expect(r.passed).toBe(true);
+    expect(r.severity).toBe("OK");
+  });
+
+  it("(RW3) NON_ALLOWLISTED + restaurantWide=false: phoneInAllowlist=true ainda é P0 (perfil errado)", () => {
+    const r = evaluateScenario(
+      spec({ phoneProfile: "NON_ALLOWLISTED", expect: { host: "RECEPTIONIST" } }),
+      { host: "RECEPTIONIST", phoneInAllowlist: true, restaurantWide: false, receptionistPreview: recep({}) },
+    );
+    expect(r.severity).toBe("P0");
+  });
+
+  it("(RW4) NON_ALLOWLISTED + restaurantWide=true + RECEPTIONIST → checks de qualidade continuam: link gigante é P0", () => {
+    const r = evaluateScenario(
+      spec({ phoneProfile: "NON_ALLOWLISTED", expect: { host: "RECEPTIONIST", noRawLink: true } }),
+      { host: "RECEPTIONIST", phoneInAllowlist: true, restaurantWide: true, receptionistPreview: recep({ responseType: "LINK_CARDAPIO", containsRawLink: true }) },
+    );
+    expect(r.severity).toBe("P0");
+    expect(r.failures.join(" ")).toMatch(/link gigante/i);
+  });
+
+  it("(RW5) B1-order em RESTAURANT_WIDE: host=TEXT_ORDER com phoneInAllowlist=true → passes", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "B1-order")!;
+    const r = evaluateScenario(s, { host: "TEXT_ORDER", phoneInAllowlist: true, restaurantWide: true });
+    expect(r.passed).toBe(true);
+  });
+
+  it("(RW6) B3-question em RESTAURANT_WIDE: host=RECEPTIONIST+SAFE_MENU → passes", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "B3-question")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: true, restaurantWide: true, receptionistPreview: recep({}) });
+    expect(r.passed).toBe(true);
+  });
+
+  it("(RW7) B4-address em RESTAURANT_WIDE: host=RECEPTIONIST, noLocation → passes", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "B4-address")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: true, restaurantWide: true, receptionistPreview: recep({}) });
+    expect(r.passed).toBe(true);
+  });
+
+  it("(RW8) B5-closed em RESTAURANT_WIDE: host=RECEPTIONIST+SAFE_MENU → passes", () => {
+    const s = FULL_AGENT_SCENARIOS.find(x => x.id === "B5-closed")!;
+    const r = evaluateScenario(s, { host: "RECEPTIONIST", phoneInAllowlist: true, restaurantWide: true, receptionistPreview: recep({}) });
+    expect(r.passed).toBe(true);
+  });
+});

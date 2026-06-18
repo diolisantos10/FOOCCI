@@ -53,12 +53,19 @@ CEP/frete/Pix cobertos pelas suites de ordering), Pix antes do pedido (→
 RECEPTIONIST, sem Pix real), handoff.
 
 Cenários non-allowlisted (B1–B5): pedido direto, rodízio, `tem temaki?`, endereço
-solto, fora do horário + pedido (→ RECEPTIONIST sempre, gate-de-horário nas suites).
+solto, fora do horário + pedido. Com `scope=PHONE_ALLOWLIST` → RECEPTIONIST sempre.
+Com `scope=RESTAURANT_WIDE` → B1/B2 (pedido) vão para TEXT_ORDER (comportamento
+correto); B3/B4/B5 (não-pedido, endereço, fora do horário) continuam RECEPTIONIST.
+
+> **RESTAURANT_WIDE mode:** quando `scope=RESTAURANT_WIDE` está ativo, todos os
+> telefones são elegíveis para Text Order. A bateria detecta isso automaticamente e
+> adapta os cenários B: o perfil NON_ALLOWLISTED não é mais uma falha de integridade
+> (P0), e pedidos de não-allowlisted → TEXT_ORDER é comportamento **correto** (não P0).
+> Os checks de qualidade do recepcionista (noRawLink, noLocation, noHandoff) continuam
+> aplicados para todos os cenários RECEPTIONIST.
 
 ### Critérios de falha
-- **P0:** pedido allowlisted não vira TEXT_ORDER; pedido non-allowlisted não vira
-  SAFE_MENU; link gigante na 1ª resposta; endereço solto → LOCATION; handoff
-  indevido; perfil incorreto; qualquer violação de segurança.
+- **P0:** pedido allowlisted não vira TEXT_ORDER; pedido non-allowlisted (em PHONE_ALLOWLIST) não vira SAFE_MENU; link gigante na 1ª resposta; endereço solto → LOCATION; handoff indevido; perfil incorreto; qualquer violação de segurança.
 - **P1:** caso crítico cai no branch GPT (UNKNOWN — não-determinístico).
 - **P2:** polimento.
 
@@ -191,6 +198,8 @@ pedido é apagado.
 - ✅ Os dois caminhos cobertos por diagnóstico hermético (Host + Full Agent).
 - ✅ Máquina de abertura/rollback/monitoramento pronta e **gated** (config-only).
 - ✅ Segurança garantida nos diagnósticos (sem Evolution/pedido/Pix/runtime).
+- ✅ **A7-pix P0 corrigido:** pergunta de pagamento/Pix → SAFE_MENU (não LINK_CARDAPIO).
+- ✅ **Diagnóstico RESTAURANT_WIDE-aware:** B-cenários adaptados quando scope=RESTAURANT_WIDE.
 - ⏳ **Validação de campo pendente** — o sistema recomenda EXPAND_ALLOWLIST; abrir
   geral é decisão humana que assume esse risco.
 - 🔁 Rollback de 30s sempre disponível.

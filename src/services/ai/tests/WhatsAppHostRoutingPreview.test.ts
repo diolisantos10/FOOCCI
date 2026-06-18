@@ -123,6 +123,33 @@ describe("previewReceptionistResponse — saudação e handoff", () => {
   });
 });
 
+// ── previewReceptionistResponse — pagamento / Pix (A7-pix P0 fix) ────────────
+describe("previewReceptionistResponse — pergunta de pagamento/Pix", () => {
+  it("'posso pagar com Pix?' → SAFE_MENU (não LINK_CARDAPIO)", () => {
+    const p = previewReceptionistResponse("posso pagar com Pix?", ctx());
+    expect(p.responseType).toBe("SAFE_MENU");
+    expect(p.containsRawLink).toBe(false);
+  });
+
+  it("'aceita cartão?' → SAFE_MENU sem link bruto", () => {
+    const p = previewReceptionistResponse("aceita cartão?", ctx());
+    expect(p.responseType).toBe("SAFE_MENU");
+    expect(p.containsRawLink).toBe(false);
+  });
+
+  it("'formas de pagamento?' → deterministic, ends with 0. menu", () => {
+    const p = previewReceptionistResponse("formas de pagamento?", ctx());
+    expect(p.deterministic).toBe(true);
+    expect(p.endsWithMenuFooter).toBe(true);
+  });
+
+  it("resposta de pagamento menciona Pix e oferece opções numeradas", () => {
+    const p = previewReceptionistResponse("posso pagar com Pix?", ctx());
+    expect(p.preview).toMatch(/pix/i);
+    expect(p.preview).toMatch(/1️⃣/);
+  });
+});
+
 // ── decideHost ────────────────────────────────────────────────────────────────
 function fakeDecision(over: Partial<MessageAwareRouteDecision> & { mode?: string }): MessageAwareRouteDecision {
   return {

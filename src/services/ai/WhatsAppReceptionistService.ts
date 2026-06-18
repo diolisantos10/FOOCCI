@@ -626,9 +626,15 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
       return null;
 
     case "PAYMENT_INFO":
-      return ctx.pedidoUrl
-        ? `As opções de pagamento ficam visíveis ao finalizar o pedido no nosso cardápio:\n${ctx.pedidoUrl}`
-        : null;
+      // Never expose a raw cardápio URL for a payment question — that triggers
+      // LINK_CARDAPIO classification and is a P0 failure. Offer a safe numbered
+      // menu instead so the customer is conducted, not redirected to a link.
+      return (
+        "Aceitamos Pix 😊\n\n" +
+        "Para fazer seu pedido, escolha uma opção:\n\n" +
+        "1️⃣ Fazer pedido agora\n" +
+        "2️⃣ Falar com atendente"
+      );
 
     default:
       return null;

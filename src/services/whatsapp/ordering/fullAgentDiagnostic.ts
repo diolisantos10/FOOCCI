@@ -133,6 +133,13 @@ export const FULL_AGENT_SCENARIOS: ScenarioSpec[] = [
 export interface EvaluableResult {
   host: HostDecision;
   phoneInAllowlist: boolean;
+  /**
+   * True when scope=RESTAURANT_WIDE is active. In this mode every phone is
+   * effectively allowlisted, so NON_ALLOWLISTED profile integrity cannot be
+   * checked the same way and order messages from "non-allowlisted" phones
+   * legitimately route to TEXT_ORDER.
+   */
+  restaurantWide?: boolean;
   receptionistPreview?: {
     responseType: ReceptionistResponseType;
     containsRawLink: boolean;
@@ -150,17 +157,25 @@ export function evaluateScenario(spec: ScenarioSpec, result: EvaluableResult): S
     if (rank[sev] > rank[worst]) worst = sev;
   };
 
-  // Profile integrity (a self-test that found no allowlist, or a "synthetic"
-  // phone that turns out to be allowlisted, invalidates the scenario).
-  const expectedInAllowlist = spec.phoneProfile === "ALLOWLISTED";
+  // Profile integrity: under RESTAURANT_WIDE every phone is allowlisted, so
+  // the NON_ALLOWLISTED profile's phoneInAllowlist=true is expected — not an error.
+  const isRestaurantWide = result.restaurantWide === true;
+  const expectedInAllowlist = spec.phoneProfile === "ALLOWLISTED" || isRestaurantWide;
   if (result.phoneInAllowlist !== expectedInAllowlist) {
     failures.push(`perfil incorreto: phoneInAllowlist=${result.phoneInAllowlist}, esperado ${expectedInAllowlist}`);
     bump("P0");
   }
 
-  if (spec.expect.host && result.host !== spec.expect.host) {
-    failures.push(`host=${result.host}, esperado ${spec.expect.host}`);
-    bump("P0");
+  if (spec.expect.host) {
+    // Under RESTAURANT_WIDE, a NON_ALLOWLISTED order message legitimately routes to
+    // TEXT_ORDER (all phones are eligible). Accept that without flagging P0.
+    const hostOk =
+      result.host === spec.expect.host ||
+      (isRestaurantWide && spec.phoneProfile === "NON_ALLOWLISTED" && result.host === "TEXT_ORDER");
+    if (!hostOk) {
+      failures.push(`host=${result.host}, esperado ${spec.expect.host}`);
+      bump("P0");
+    }
   }
 
   const prev = result.receptionistPreview;
@@ -250,6 +265,7 @@ export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<Ful
 
   const scenarios: ScenarioResult[] = [];
   let restaurantResolved = false;
+  let restaurantWide = false;
 
   for (const spec of FULL_AGENT_SCENARIOS) {
     // ALLOWLISTED → empty phone self-tests the first allowlisted number (masked).
@@ -261,7 +277,10 @@ export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<Ful
       message:        spec.message,
     });
 
-    if (host.ok) restaurantResolved = true;
+    if (host.ok) {
+      restaurantResolved = true;
+      if (host.config.scope === "RESTAURANT_WIDE") restaurantWide = true;
+    }
 
     // Fold each result's safety into the global safety (any false fails the run).
     safety.noEvolution    &&= host.safety.noEvolution;
@@ -281,6 +300,7 @@ export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<Ful
     scenarios.push(evaluateScenario(spec, {
       host: host.decision.host,
       phoneInAllowlist: host.config.phoneInAllowlist,
+      restaurantWide,
       receptionistPreview: host.receptionistPreview
         ? {
             responseType:               host.receptionistPreview.responseType,
@@ -296,6 +316,13 @@ export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<Ful
     "Bateria de nível ROTEAMENTO/HOST. Fluxo profundo do Text Order " +
     "(CEP→frete, Pix após resumo, gate de horário) é coberto pelas suites de ordering.",
   );
+  if (restaurantWide) {
+    notes.push(
+      "scope=RESTAURANT_WIDE ativo: todos os telefones são elegíveis para Text Order. " +
+      "Cenários NON_ALLOWLISTED com intenção de pedido → TEXT_ORDER é comportamento correto (não P0). " +
+      "Checks de qualidade do recepcionista (no-link, no-location, no-handoff) são mantidos.",
+    );
+  }
   if (scenarios.some(s => s.responseType === "UNKNOWN")) {
     notes.push("Um ou mais cenários caíram no branch GPT (UNKNOWN) — resposta não-determinística (P1).");
   }
