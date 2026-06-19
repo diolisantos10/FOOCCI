@@ -21,6 +21,7 @@ import { toE164 } from "@/lib/phone";
 import { isGuestIdentifier } from "@/lib/guest";
 import { assignOrderNumber } from "@/lib/order-number";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
+import { invalidateMenuBestSellers } from "@/services/menu/menuBestSellers";
 
 export interface CreateOrderAddress {
   street:       string;
@@ -215,6 +216,11 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Create
 
     return { orderId: order.id, customerId: resolvedCustomerId };
   });
+
+  // Best-effort freshness: a new order may change the bestsellers — drop the
+  // cached "Mais vendidos" so the public menu reflects it within seconds rather
+  // than waiting for the TTL. Never allow this to affect the order result.
+  try { invalidateMenuBestSellers(input.restaurantId); } catch { /* ignore */ }
 
   return result;
 }

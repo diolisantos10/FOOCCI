@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { QRMenuClient } from "./QRMenuClient";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { channelPrice } from "@/services/menu/MenuPricingService";
+import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 
 export const dynamic = "force-dynamic";
 
@@ -100,25 +101,12 @@ export default async function QRMenuPage({
     },
   });
 
-  // Fetch active promotions + real best sellers in parallel
-  const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const [activePromotions, topSoldRows] = await Promise.all([
+  // Fetch active promotions + dynamic best sellers in parallel. Best sellers use
+  // the Analytics-consistent aggregation (30-day Foocci real sales, valid orders),
+  // ranked by units sold — see services/menu/menuBestSellers.
+  const [activePromotions, bestSellerRows] = await Promise.all([
     getActiveMenuPromotions(restaurant.id, "QR_MENU"),
-    prisma.orderItem.groupBy({
-      by: ["menuItemId"],
-      where: {
-        order: {
-          restaurantId: restaurant.id,
-          status: { notIn: ["CANCELLED", "AWAITING_PAYMENT"] },
-          createdAt: { gte: sevenDaysAgo },
-        },
-        menuItemId: { not: null },
-      },
-      _sum: { quantity: true },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: 30,
-    }),
+    getMenuBestSellerRows(restaurant.id),
   ]);
 
   // Build promo map from all raw items with their home categoryId
@@ -157,11 +145,11 @@ export default async function QRMenuPage({
   // Build flat item lookup for best-sellers
   const allItemsFlat = new Map(categories.flatMap((c) => c.items.map((i) => [i.id, i])));
 
-  // Real 7-day best sellers
-  const featured = topSoldRows
-    .map((r) => (r.menuItemId ? allItemsFlat.get(r.menuItemId) : undefined))
-    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined)
-    .slice(0, 10);
+  // Dynamic "Mais vendidos": keep only products still orderable in this menu
+  // (drops unavailable/deleted), ranked by units sold then revenue, top 10.
+  const featured = rankBestSellers(bestSellerRows, new Set(allItemsFlat.keys()), MENU_BESTSELLER_LIMIT)
+    .map((r) => allItemsFlat.get(r.menuItemId))
+    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined);
 
   // Promoted items for the "🔥 Promoções" section — deduplicate across categories (placements can repeat an item)
   const seenPromo = new Set<string>();

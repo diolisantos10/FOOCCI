@@ -16,6 +16,7 @@ import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } fr
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
 import { channelPrice } from "@/services/menu/MenuPricingService";
+import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 
 export const dynamic = "force-dynamic";
 
@@ -357,24 +358,12 @@ export default async function PedidoPage({
     },
   });
 
-  // Fetch active promotions + real best sellers in parallel
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const [activePromotions, topSoldRows] = await Promise.all([
+  // Fetch active promotions + dynamic best sellers in parallel. "Mais vendidos"
+  // uses the Analytics-consistent aggregation (30-day Foocci real sales, valid
+  // operational orders), ranked by units sold — see services/menu/menuBestSellers.
+  const [activePromotions, bestSellerRows] = await Promise.all([
     getActiveMenuPromotions(restaurant.id, "DELIVERY"),
-    prisma.orderItem.groupBy({
-      by: ["menuItemId"],
-      where: {
-        order: {
-          restaurantId: restaurant.id,
-          status: { notIn: ["CANCELLED", "AWAITING_PAYMENT"] },
-          createdAt: { gte: sevenDaysAgo },
-        },
-        menuItemId: { not: null },
-      },
-      _sum: { quantity: true },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: 30,
-    }),
+    getMenuBestSellerRows(restaurant.id),
   ]);
 
   // Collect all raw items with their home categoryId for building the promotion map
@@ -421,11 +410,11 @@ export default async function PedidoPage({
   // Build a flat item lookup for best-sellers + promotions virtual categories
   const allItemsFlat = new Map(categories.flatMap((c) => c.items.map((i) => [i.id, i])));
 
-  // Real 7-day best sellers (sorted by actual order volume)
-  const bestSellers = topSoldRows
-    .map((r) => (r.menuItemId ? allItemsFlat.get(r.menuItemId) : undefined))
-    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined)
-    .slice(0, 10);
+  // Dynamic "Mais vendidos": keep only products still orderable in this menu
+  // (drops unavailable/deleted), ranked by units sold then revenue, top 10.
+  const bestSellers = rankBestSellers(bestSellerRows, new Set(allItemsFlat.keys()), MENU_BESTSELLER_LIMIT)
+    .map((r) => allItemsFlat.get(r.menuItemId))
+    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined);
 
   // Promoted items virtual category — deduplicate across categories (placements can repeat an item)
   const seenPromo = new Set<string>();
@@ -440,7 +429,7 @@ export default async function PedidoPage({
     virtualCategories.push({ id: "__promotions__", name: "🔥 Promoções", description: null, imageUrl: null, items: promotedItems });
   }
   if (bestSellers.length > 0) {
-    virtualCategories.push({ id: "__best__", name: "⭐ Mais pedidos", description: null, imageUrl: null, items: bestSellers });
+    virtualCategories.push({ id: "__best__", name: "⭐ Mais vendidos", description: null, imageUrl: null, items: bestSellers });
   }
 
   const allCategories = [...virtualCategories, ...categories];

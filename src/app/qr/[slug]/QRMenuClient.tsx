@@ -840,7 +840,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
           {featured.length > 0 && (
             <div className="mx-auto max-w-2xl px-4 pb-6">
               <p className="mb-3 text-sm font-bold text-gray-700">
-                ⭐ Mais pedidos
+                ⭐ Mais vendidos
               </p>
               <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
                 {featured.map((item) => (
