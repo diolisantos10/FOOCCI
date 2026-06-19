@@ -39,6 +39,14 @@ describe("pendingHumanRequestIds", () => {
     expect(ids).toEqual([]);
   });
 
+  it("excludes Staff/equipe (aiLocked) conversations even when status is HUMAN", () => {
+    const ids = pendingHumanRequestIds([
+      { id: "staff",    status: "HUMAN", aiLocked: true },  // Staff/equipe → never alarms
+      { id: "customer", status: "HUMAN", aiLocked: false }, // real pending request
+    ]);
+    expect(ids).toEqual(["customer"]);
+  });
+
   it("returns [] for no conversations", () => {
     expect(pendingHumanRequestIds([])).toEqual([]);
   });

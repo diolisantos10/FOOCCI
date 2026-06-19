@@ -522,17 +522,50 @@ export function AtendimentoClient({
     });
   }, []);
 
-  // Conversations waiting for a human (status === "HUMAN"), unassumed. Drives the
-  // alarm: plays immediately, repeats while any remain, stops when assumed/resolved
-  // (status leaves HUMAN) — NOT when the page is open or the conversation is viewed.
+  // Conversations waiting for a human (status === "HUMAN", not Staff/equipe),
+  // unassumed. This is the visible pending queue AND the base of the alarm.
   const pendingHumanIds = useMemo(
     () => pendingHumanRequestIds(conversations),
     [conversations],
   );
 
+  // "Estou ciente" acknowledges the CURRENT pending batch — it silences the alarm
+  // for those conversations WITHOUT resolving them, reactivating IA, or removing
+  // the visual "Aguardando". A new pending request (not in this set) re-arms it.
+  const [acknowledgedHumanIds, setAcknowledgedHumanIds] = useState<Set<string>>(new Set());
+
+  // Drop acknowledgements once a conversation leaves the pending queue (assumed/
+  // resolved), so if it later returns to HUMAN it rings again.
   useEffect(() => {
-    handoffControllerRef.current?.sync(handoffSoundEnabled ? pendingHumanIds : []);
-  }, [pendingHumanIds, handoffSoundEnabled]);
+    setAcknowledgedHumanIds((prev) => {
+      if (prev.size === 0) return prev;
+      const pending = new Set(pendingHumanIds);
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) { if (pending.has(id)) next.add(id); else changed = true; }
+      return changed ? next : prev;
+    });
+  }, [pendingHumanIds]);
+
+  // The alarm rings for pending requests MINUS the acknowledged batch. Plays
+  // immediately on a new request, repeats while any remain, stops when assumed/
+  // resolved/acknowledged — never because the page is open or a conversation is viewed.
+  const alarmingHumanIds = useMemo(
+    () => pendingHumanIds.filter((id) => !acknowledgedHumanIds.has(id)),
+    [pendingHumanIds, acknowledgedHumanIds],
+  );
+
+  useEffect(() => {
+    handoffControllerRef.current?.sync(handoffSoundEnabled ? alarmingHumanIds : []);
+  }, [alarmingHumanIds, handoffSoundEnabled]);
+
+  const acknowledgePendingHuman = useCallback(() => {
+    setAcknowledgedHumanIds(new Set(pendingHumanIds));
+  }, [pendingHumanIds]);
+
+  const viewFirstPendingHuman = useCallback(() => {
+    if (pendingHumanIds[0]) setSelectedId(pendingHumanIds[0]);
+  }, [pendingHumanIds]);
 
   // ── Inactivity-timeout pollers (run every 60 s while page is open) ──────
   // check-timeouts:            human hasn't replied → customer waiting → return to AI
@@ -598,7 +631,8 @@ export function AtendimentoClient({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread?.messages?.length]);
 
-  // ── Human-handoff badge count ─────────────────────────────────────────────
+  // Count for the "Humano" filter chip — all human-handled conversations
+  // (pending + already assumed). The pending-only alarm queue is pendingHumanIds.
   const humanHandoffCount = useMemo(
     () => conversations.filter((c) => c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU").length,
     [conversations],
@@ -928,12 +962,33 @@ export function AtendimentoClient({
           </div>
         </div>
 
-        {/* Human-handoff count */}
-        {humanHandoffCount > 0 && (
-          <div className="flex items-center border-b border-orange-200 bg-orange-50 px-3 py-1.5">
+        {/* Pending human-attendance queue + quick actions to stop the alarm
+            without hunting. "Ver pendentes" jumps to the first pending conversation
+            (where "Assumir atendimento" is); "Estou ciente" silences the current
+            batch without resolving anything. */}
+        {pendingHumanIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-orange-200 bg-orange-50 px-3 py-1.5">
             <span className="text-xs font-semibold text-orange-700">
-              🙋 {humanHandoffCount} aguardando atendimento humano
+              🙋 {pendingHumanIds.length} aguardando atendimento humano
             </span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={viewFirstPendingHuman}
+                className="rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600 transition-colors"
+              >
+                Ver pendentes
+              </button>
+              <button
+                type="button"
+                onClick={acknowledgePendingHuman}
+                disabled={alarmingHumanIds.length === 0}
+                title="Silencia o alarme do lote atual sem resolver as conversas nem reativar a IA"
+                className="rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-[11px] font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors"
+              >
+                {alarmingHumanIds.length === 0 ? "Silenciado ✓" : "Estou ciente"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1587,8 +1642,13 @@ function ThreadPanel({
   const channel        = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
   const isResolved     = thread.status === "RESOLVED";
   const isLocked       = thread.aiLocked === true;
+  // Pending human request: customer asked for a human and NO operator has assumed
+  // yet (status HUMAN). Escalation turns aiEnabled off, so this used to fall into
+  // "human handling" and only offered "Devolver para IA" — the bug. This is the
+  // status that keeps the alarm ringing → it must offer "Assumir atendimento".
+  const isPendingHuman = thread.status === "HUMAN" && !isResolved && !isLocked;
   // A locked conversation is neither AI-active nor a normal temporary takeover.
-  const isAIActive     = thread.aiEnabled && !isResolved && !isLocked;
+  const isAIActive     = thread.aiEnabled && !isResolved && !isLocked && !isPendingHuman;
   const isHumanHandling = !thread.aiEnabled && !isResolved && !isLocked;
   const isMultichannel = thread.channel === "WHATSAPP" &&
     thread.messages.some((m) => m.senderType === "CUSTOMER_CARDAPIO");
@@ -1692,17 +1752,18 @@ function ThreadPanel({
               Voltar a tratar como cliente (reativa IA)
             </button>
           )}
-          {isAIActive && (
+          {(isPendingHuman || isAIActive) && (
             <button
               type="button"
               onClick={() => onAIAction("takeover")}
               disabled={actionLoading}
+              title={isPendingHuman ? "Assumir este atendimento humano e silenciar o alerta" : "Assumir o atendimento desta conversa"}
               className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-colors"
             >
               Assumir atendimento
             </button>
           )}
-          {isHumanHandling && (
+          {isHumanHandling && !isPendingHuman && (
             <button
               type="button"
               onClick={() => onAIAction("release")}

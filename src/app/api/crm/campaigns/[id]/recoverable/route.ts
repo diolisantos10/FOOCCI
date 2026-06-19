@@ -8,9 +8,10 @@
  * retry is wired to an action.
  *
  * Recoverable = provider failures that are transient (FAILED kind + RETRYABLE_LATER:
- * generic 5xx, timeout, unknown). It NEVER includes invalid phone (permanent),
- * opt-out (never), HTTP 400 / auth / disconnected (need a fix first), or safety
- * blocks (those auto-retry on the next cron cycle).
+ * generic 5xx, timeout, unknown, and a dropped-session "instance disconnected" —
+ * the live POST gate only sends those once the instance is reconnected). It NEVER
+ * includes invalid phone (permanent), opt-out (never), validation HTTP 400 / auth
+ * (need a fix first), or safety blocks (those auto-retry on the next cron cycle).
  */
 
 import { NextRequest } from "next/server";

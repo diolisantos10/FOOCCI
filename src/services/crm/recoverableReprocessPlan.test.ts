@@ -64,9 +64,10 @@ describe("computeRecoverablePlan", () => {
   });
 
   it("excludes opt-out, invalid phone, no phone, not contactable, validation 400, auth", () => {
-    // NOTE: instance-disconnected / session errors are NOT excluded — they are
-    // transient (RETRYABLE_LATER) and ARE the recoverable pool (see §8). Covered by
-    // the "includes transient" test below.
+    // A plain validation HTTP 400 (bad request) → RETRYABLE_AFTER_FIX, never retried.
+    // Instance-disconnected / dropped-session errors are NOT excluded — they are
+    // transient (RETRYABLE_LATER) and ARE the recoverable pool; see the
+    // "includes transient … session-disconnect" test below.
     const rows = [
       row({ customerId: "ok", errorMessage: "EVOLUTION_HTTP_503" }),       // recoverable
       row({ customerId: "optout", status: "BLOCKED", errorMessage: "CUSTOMER_OPTED_OUT" }),
