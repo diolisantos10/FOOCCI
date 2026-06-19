@@ -30,6 +30,9 @@ yarn-error.log*
 *.swp
 *.swo
 
+# Claude Code worktrees (agent isolation, not source code)
+.claude/worktrees/
+
 # OS
 .DS_Store
 Thumbs.db
