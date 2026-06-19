@@ -10,10 +10,10 @@ export const HANDOFF_SOUND_LAST_ERROR_KEY  = "foocci_handoff_sound_last_error";
  *  diagnostics panel in Configurações → Sons e alertas. */
 export const ORDER_ALERT_DIAG_KEY        = "foocci_order_alert_diag";
 
-/** Single source of truth for the NEW ORDER alert asset (loud, normalized).
+/** Single source of truth for the NEW ORDER alert asset (official Foocci sound).
  *  The Pedidos screen and the settings "Testar som de pedido" button both use
  *  this exact file through the same gain-aware engine — keep them in sync here. */
-export const ORDER_ALERT_ASSET           = "/sounds/foocci-order-alert-loud.wav";
+export const ORDER_ALERT_ASSET           = "/sounds/foocci-order-alert-custom.mp4";
 /** Human-handoff (atendimento) alert asset — intentionally separate & unchanged. */
 export const HANDOFF_ALERT_ASSET         = "/sounds/foocci-handoff-alert.wav";
 

@@ -44,8 +44,8 @@ describe("effectiveAlertVolume (theme gain)", () => {
 });
 
 describe("alert assets (A — test/real parity, G — atendimento unchanged)", () => {
-  it("new-order asset is the loud normalized file and exists on disk", () => {
-    expect(ORDER_ALERT_ASSET).toBe("/sounds/foocci-order-alert-loud.wav");
+  it("new-order asset is the official Foocci order sound and exists on disk", () => {
+    expect(ORDER_ALERT_ASSET).toBe("/sounds/foocci-order-alert-custom.mp4");
     const onDisk = path.join(process.cwd(), "public", ORDER_ALERT_ASSET);
     expect(fs.existsSync(onDisk)).toBe(true);
   });

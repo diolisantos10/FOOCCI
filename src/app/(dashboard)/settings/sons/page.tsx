@@ -17,8 +17,8 @@ import {
 import { playAlertAudio, supportsVolumeBoost, MAX_VOLUME, effectiveAlertVolume } from "@/lib/sound-player";
 import type { OrderAlertDiagnostics } from "@/lib/order-alert-loop";
 
-// New-order alert uses the loud, normalized asset. The test button below plays
-// THIS exact file through the same engine (playAlertAudio) as a real new order.
+// New-order alert uses the official Foocci order sound. The test button below
+// plays THIS exact file through the same engine (playAlertAudio) as a real order.
 const ORDER_WAV   = ORDER_ALERT_ASSET;
 const HANDOFF_WAV = HANDOFF_ALERT_ASSET;
 

@@ -19,9 +19,9 @@ import { playAlertAudio, installSilentUnlock, effectiveAlertVolume } from "@/lib
 import { OrderAlertController } from "@/lib/order-alert-loop";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
-// Loud, normalized, kitchen-grade asset — already loud at 100% (see
-// scripts/generate-order-alert.py). The new-order alert and the settings test
-// button play THIS exact file through the same gain-aware engine (playAlertAudio).
+// Official Foocci order sound. The new-order alert and the settings test button
+// play THIS exact file through the same gain-aware engine (playAlertAudio), and
+// Web Audio gain (>100%) drives it louder for noisy kitchens.
 const ALERT_WAV      = ORDER_ALERT_ASSET;
 
 // Oscillator fallback — used when WAV file is unavailable or AudioContext is not suspended
