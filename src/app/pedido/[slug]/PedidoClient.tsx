@@ -336,6 +336,7 @@ type UIState = "idle" | "thinking";
 type Stage =
   | "BROWSE"
   | "DELIVERY_TYPE"
+  | "SAVED_ADDRESS_OFFER"
   | "CEP_INPUT"
   | "ADDRESS_COMPLETE"
   | "ADDRESS_CONFIRM"
@@ -533,10 +534,11 @@ function itemMinPrice(item: MenuItem): number {
 // the chat directly from client state — they never vary or hallucinate.
 
 const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
-  DELIVERY_TYPE:    "Vai receber em casa ou prefere retirar? 👇",
-  CEP_INPUT:        "Qual é o seu CEP? 📍",
-  ADDRESS_COMPLETE: "Confirme o endereço de entrega 👇",
-  ADDRESS_CONFIRM:  "Endereço certo? Confirma para seguir 👇",
+  DELIVERY_TYPE:        "Vai receber em casa ou prefere retirar? 👇",
+  SAVED_ADDRESS_OFFER:  "Posso entregar no seu último endereço? 👇",
+  CEP_INPUT:            "Qual é o seu CEP? 📍",
+  ADDRESS_COMPLETE:     "Confirme o endereço de entrega 👇",
+  ADDRESS_CONFIRM:      "Endereço certo? Confirma para seguir 👇",
   ASK_NAME:         "Como posso te chamar? 😊",
   PAYMENT:               "Quer pagar agora ou na entrega? 👇",
   PAYMENT_METHOD:        "Como prefere pagar? 👇",
@@ -581,6 +583,7 @@ function computeResumeStage(
   if (deliveryMethod === "delivery") {
     if (!address.cep.trim())    return "CEP_INPUT";
     if (!address.number.trim()) return "ADDRESS_COMPLETE";
+    // SAVED_ADDRESS_OFFER is a transient entry stage — never a resume target.
   }
   if (!customerName.trim()) return "ASK_NAME";
   if (!paymentMode)                                    return "PAYMENT";
@@ -3362,9 +3365,14 @@ export function PedidoClient({
           pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
         }
       } else {
-        setStage("CEP_INPUT");
         pushUserMessage("🛵 Entrega");
-        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["CEP_INPUT"]!);
+        if (knownDefaultAddress?.cep) {
+          setStage("SAVED_ADDRESS_OFFER");
+          pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["SAVED_ADDRESS_OFFER"]!);
+        } else {
+          setStage("CEP_INPUT");
+          pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["CEP_INPUT"]!);
+        }
       }
     },
     [pushUserMessage, pushAssistantMessage, customerName],
@@ -3724,6 +3732,21 @@ export function PedidoClient({
     pushAssistantMessage("Informe o novo CEP de entrega. 📍");
   }, [pushAssistantMessage]);
 
+  const handleUseSavedAddress = useCallback(() => {
+    pushUserMessage("✅ Sim, entregar nesse endereço");
+    setStage("ADDRESS_CONFIRM");
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_CONFIRM"]!);
+    void runDeliveryQuote(address);
+  }, [pushUserMessage, pushAssistantMessage, runDeliveryQuote, address]);
+
+  const handleRejectSavedAddress = useCallback(() => {
+    setAddress({ cep: "", street: "", number: "", neighborhood: "", city: "", state: "", complement: "", referencePoint: "" });
+    setCepInputValue("");
+    pushUserMessage("📍 Usar outro endereço");
+    setStage("CEP_INPUT");
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["CEP_INPUT"]!);
+  }, [pushUserMessage, pushAssistantMessage]);
+
   // ── Input submit ──────────────────────────────────────────────────
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -3814,6 +3837,36 @@ export function PedidoClient({
               className="flex flex-col items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-100"
             >
               <span>🏪</span> Retirada
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (stage === "SAVED_ADDRESS_OFFER") {
+      return (
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+          <div className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            <p className="font-semibold">{address.street}, {address.number}</p>
+            {address.neighborhood && <p>{address.neighborhood}</p>}
+            {(address.city || address.state) && (
+              <p className="text-gray-500">{[address.city, address.state].filter(Boolean).join("/")} {address.cep ? `· ${address.cep}` : ""}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleUseSavedAddress}
+              className="flex flex-col items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              <span>✅</span> Sim, entregar aqui
+            </button>
+            <button
+              type="button"
+              onClick={handleRejectSavedAddress}
+              className="flex flex-col items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+            >
+              <span>📍</span> Usar outro endereço
             </button>
           </div>
         </div>

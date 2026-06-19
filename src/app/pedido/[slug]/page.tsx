@@ -150,6 +150,19 @@ export default async function PedidoPage({
             city:         addr.city,
             state:        addr.state,
           };
+        } else {
+          // No registered address — fall back to the same source WhatsApp uses:
+          // the customer's most recent delivery order address (read-only).
+          const { getSavedAddressForCustomer } = await import("@/services/whatsapp/ordering/checkoutBridge");
+          const lastAddr = await getSavedAddressForCustomer(customer.id).catch(() => null);
+          if (lastAddr) {
+            knownDefaultAddress = {
+              street:       lastAddr.street,
+              number:       lastAddr.number,
+              neighborhood: lastAddr.neighborhood ?? "",
+              complement:   "",
+            };
+          }
         }
       } else {
         // Phone known (WhatsApp link) but no customer record yet — upsert now.

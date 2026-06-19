@@ -204,7 +204,7 @@ describe("Endereço salvo", () => {
     (s2 as { selectedItems: unknown[] }).selectedItems = [{ menuItemId: "m4", name: "Coca-Cola lata", quantity: 1, unitPrice: 7, options: [], extras: [] }];
     (s2 as { deliveryType: string | null }).deliveryType = "DELIVERY";
     const other = advanceSession(s2, "2", MENU);
-    expect(other.suggestedReply).toMatch(/rua, número e bairro/i);
+    expect(other.suggestedReply).toMatch(/cep/i);
   });
 });
 

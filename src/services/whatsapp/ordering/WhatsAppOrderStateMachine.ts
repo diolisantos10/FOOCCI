@@ -802,7 +802,7 @@ const CEP_IN_TEXT_RE = /\b\d{5}-?\d{3}\b/;
 function askAddressReply(session: WaPersistedSession): string {
   const saved = savedAddressOf(session);
   if (saved && !session.address?.street) {
-    return `Posso enviar para este endereço?\n${saved.formatted}\n1️⃣ Sim\n2️⃣ Usar outro endereço`;
+    return `Posso entregar no seu último endereço?\n\n${saved.formatted}\n\n1️⃣ Sim, entregar nesse endereço\n2️⃣ Usar outro endereço`;
   }
   return ASK_CEP_REPLY;
 }
@@ -820,7 +820,7 @@ function handleAddress(session: WaPersistedSession, text: string, menu: WaMenuIt
     }
     if (/^\s*2\s*$/.test(text)) {
       session.metadata = { ...(session.metadata ?? {}), savedAddress: undefined };
-      return done(session, "DELIVERY_INFO", "Me envia o endereço com rua, número e bairro, por favor.", [], false);
+      return done(session, "DELIVERY_INFO", ASK_CEP_REPLY, [], false);
     }
   }
   // Add-item interrupt: if the message carries order content and does NOT look
