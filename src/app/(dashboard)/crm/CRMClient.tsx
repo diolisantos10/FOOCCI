@@ -223,8 +223,22 @@ type EligibilityMetrics = {
   failureBreakdown: { http400: number; http500: number; timeout: number; rateLimit: number; disconnected: number; auth: number; emptyMessage: number; unknown: number };
 };
 
-// ── Custom action types ───────────────────────────────────────────────────────
+type ReprocessPlan = {
+  campaignId: string;
+  campaignName: string;
+  instance: { name: string; state: string; connected: boolean };
+  recoverableExecutions: number;
+  distinctRecipients: number;
+  duplicatesRemoved: number;
+  alreadySentExcluded: number;
+  eligibleToReprocess: number;
+  batchLimit: number;
+  nextBatch: Array<{ customerId: string | null; customerName: string; maskedPhone: string; reason: string; retryability: string }>;
+  safeToSend: boolean;
+  message: string;
+};
 
+// ── Custom action types ───────────────────────────────────────────────────────
 type CustomActionRow = {
   id:            string;
   name:          string;
@@ -1807,6 +1821,22 @@ function CampaignManageModal({
   const [loadingDebug, setLoadingDebug] = useState(false);
   const [preflight,    setPreflight]    = useState<PreflightResult | null>(null);
 
+  // Reprocess preview (read-only — never sends).
+  const [reprocessPlan, setReprocessPlan] = useState<ReprocessPlan | null>(null);
+  const [loadingPlan,    setLoadingPlan]   = useState(false);
+  const [showReprocess,  setShowReprocess] = useState(false);
+
+  const loadReprocessPlan = useCallback(async (campaignId: string) => {
+    setLoadingPlan(true);
+    try {
+      const res  = await fetch(`/api/crm/campaigns/${campaignId}/reprocess-plan`);
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.data) { setReprocessPlan(json.data as ReprocessPlan); setShowReprocess(true); }
+    } finally {
+      setLoadingPlan(false);
+    }
+  }, []);
+
   // Edit – name
   const [editName,    setEditName]    = useState("");
   const [savingName,  setSavingName]  = useState(false);
@@ -2407,6 +2437,57 @@ function CampaignManageModal({
                                   <p className="rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700">
                                     Um <strong>ciclo</strong> é cada execução do robô de campanhas. No <strong>modo seguro WhatsApp Web</strong>, o Foocci envia até <strong>{detail.safeSend?.maxPerCycle ?? 5} mensagens por ciclo</strong> para evitar travamentos e reduzir risco de bloqueio.
                                   </p>
+                                  {el.recoverableFailures > 0 && (
+                                    <div className="rounded-xl border border-violet-200 bg-white px-3 py-2.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="text-[11px] font-semibold text-violet-800">{el.recoverableFailures} falha(s) recuperável(is) — pode reenviar depois.</p>
+                                        <button
+                                          type="button"
+                                          disabled={loadingPlan}
+                                          onClick={() => loadReprocessPlan(detail.id)}
+                                          className="rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                                        >
+                                          {loadingPlan ? "Preparando…" : showReprocess ? "Atualizar preview" : "Preparar reenvio"}
+                                        </button>
+                                      </div>
+                                      {showReprocess && reprocessPlan && (
+                                        <div className="mt-2.5 rounded-lg bg-violet-50 px-3 py-2.5">
+                                          <p className="text-[12px] font-bold text-violet-900">Reprocessar falhas recuperáveis?</p>
+                                          <p className="mt-1 text-[10px] text-violet-700">O Foocci vai reenviar apenas para clientes com falha temporária, removendo duplicados e respeitando o limite de {reprocessPlan.batchLimit} por ciclo.</p>
+                                          <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-violet-800 sm:grid-cols-4">
+                                            <div><span className="font-bold">{reprocessPlan.recoverableExecutions}</span> recuperáveis</div>
+                                            <div><span className="font-bold">{reprocessPlan.duplicatesRemoved}</span> duplicados removidos</div>
+                                            <div><span className="font-bold">{reprocessPlan.eligibleToReprocess}</span> elegíveis</div>
+                                            <div><span className="font-bold">{reprocessPlan.nextBatch.length}</span> no próximo lote</div>
+                                          </div>
+                                          <p className={`mt-2 text-[10px] font-semibold ${reprocessPlan.instance.connected ? "text-green-700" : "text-red-600"}`}>
+                                            Instância WhatsApp: {reprocessPlan.instance.connected ? "conectada ✓" : `desconectada (${reprocessPlan.instance.state}) — reconecte antes de reprocessar`}
+                                          </p>
+                                          {reprocessPlan.nextBatch.length > 0 && (
+                                            <div className="mt-2 space-y-0.5">
+                                              <p className="text-[9px] font-bold uppercase tracking-widest text-violet-500">Próximo lote</p>
+                                              {reprocessPlan.nextBatch.map((b, i) => (
+                                                <p key={i} className="text-[10px] text-violet-700">{b.customerName || "—"} · {b.maskedPhone} · {b.reason}</p>
+                                              ))}
+                                            </div>
+                                          )}
+                                          <div className="mt-2.5 flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              disabled={!reprocessPlan.safeToSend}
+                                              title={reprocessPlan.safeToSend ? "Disparo ao vivo será habilitado na próxima etapa" : reprocessPlan.message}
+                                              onClick={() => alert("Pré-visualização apenas. O disparo ao vivo ainda não está habilitado — será ligado na próxima etapa, mediante confirmação.")}
+                                              className="rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                              Reprocessar {reprocessPlan.nextBatch.length} agora
+                                            </button>
+                                            <button type="button" onClick={() => setShowReprocess(false)} className="rounded-lg border border-violet-200 px-3 py-1.5 text-[11px] font-semibold text-violet-700">Fechar</button>
+                                          </div>
+                                          <p className="mt-1.5 text-[9px] text-violet-500">{reprocessPlan.message} · Pré-visualização read-only — nada é enviado nesta etapa.</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })()}
