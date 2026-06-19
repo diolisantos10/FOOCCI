@@ -476,11 +476,11 @@ export class ScheduledCampaignRunnerService {
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
     governance?: { allowWeeklyCapOverride: boolean; campaignFamilyKey: string | null; messageFingerprint: string | null },
-  ): Promise<{ sent: number; failed: number; blocked: number }> {
+  ): Promise<{ sent: number; failed: number; blocked: number; skipped: number }> {
     const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
     if (!cfgResult.ok) {
       console.error(`[ScheduledCampaignRunner] WhatsApp not configured for restaurant ${campaign.restaurantId}`);
-      return { sent: 0, failed: customers.length, blocked: 0 };
+      return { sent: 0, failed: customers.length, blocked: 0, skipped: 0 };
     }
     const evoConfig = cfgResult.data;
 
@@ -522,6 +522,7 @@ export class ScheduledCampaignRunnerService {
     let sent        = 0;
     let failed      = 0; // REAL send failures (provider/Evolution) only
     let blocked     = 0; // safety blocks — never counted as failures
+    let skipped     = 0; // recipient-data skips (no/invalid phone) — never failures
     let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
 
     for (const customer of customers) {
@@ -577,6 +578,8 @@ export class ScheduledCampaignRunnerService {
 
       const phone = normalizePhoneForEvolution(customer.phone);
       if (!isValidEvolutionPhone(phone)) {
+        // Recipient-data problem — SKIP before any Evolution call. NOT a failure.
+        const hasRawPhone = Boolean((customer.phone ?? "").trim());
         await prisma.campaignExecution.create({
           data: {
             campaignId:    campaign.id,
@@ -585,12 +588,12 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
-            status:        "FAILED",
-            failedReason:  "Telefone inválido ou ausente",
-            errorMessage:  "INVALID_PHONE_FORMAT",
+            status:        "SKIPPED" as never,
+            failedReason:  hasRawPhone ? "Telefone inválido" : "Sem telefone",
+            errorMessage:  hasRawPhone ? "INVALID_PHONE_FORMAT" : "MISSING_PHONE",
           },
         });
-        failed++;
+        skipped++;
         continue;
       }
 
@@ -710,18 +713,18 @@ export class ScheduledCampaignRunnerService {
 
     // Single campaign counter update after batch. totalFailed counts REAL send
     // failures only — safety blocks are derived from BLOCKED executions, not here.
-    if (sent > 0 || failed > 0 || blocked > 0) {
+    if (sent > 0 || failed > 0 || blocked > 0 || skipped > 0) {
       await prisma.campaign.update({
         where: { id: campaign.id },
         data:  {
           totalSent:    { increment: sent },
-          totalFailed:  { increment: failed },
-          totalAudience: { increment: sent + failed + blocked },
+          totalFailed:  { increment: failed }, // recipient-data skips are NOT counted here
+          totalAudience: { increment: sent + failed + blocked + skipped },
         },
       });
     }
 
-    return { sent, failed, blocked };
+    return { sent, failed, blocked, skipped };
   }
 
   /**

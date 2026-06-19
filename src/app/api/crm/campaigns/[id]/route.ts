@@ -8,7 +8,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { classifyExecution, summarizeExecutions } from "@/services/crm/crmExecutionClassification";
+import { classifyExecution, summarizeExecutions, buildEligibilityMetrics } from "@/services/crm/crmExecutionClassification";
 import { EVOLUTION_WEB_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -123,6 +123,9 @@ export async function GET(
         reasonGroups:   currentCyclePerformance.reasonGroups,
       } : null,
       lastRunAt: campaign.lastRunAt,
+      // Eligibility funnel — separates ineligible skips (no phone / invalid / opt-out /
+      // not contactable) from real provider failures so "sem telefone" is never a "falha".
+      eligibility: buildEligibilityMetrics(performance, campaign.totalAudience),
       // Evolution Web safe-send cap surfaced for the UI (recurring campaigns run in batches).
       safeSend: {
         provider:    "EVOLUTION_WEB",

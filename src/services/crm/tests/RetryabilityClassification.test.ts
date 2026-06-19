@@ -2,17 +2,25 @@ import { describe, it, expect } from "vitest";
 import {
   classifyExecution,
   summarizeExecutions,
+  buildEligibilityMetrics,
   RETRYABILITY_LABEL,
 } from "../crmExecutionClassification";
 
 // P0 Evolution stabilization — failure classification + retry policy.
 
 describe("retryability policy per category", () => {
-  it("invalid phone → SKIPPED + PERMANENT (Não reenviar)", () => {
+  it("invalid phone → SKIPPED + RETRYABLE_AFTER_FIX (Precisa corrigir cadastro)", () => {
     const c = classifyExecution({ status: "FAILED", errorMessage: "INVALID_PHONE_FORMAT" });
     expect(c.kind).toBe("SKIPPED");
-    expect(c.retryability).toBe("PERMANENT");
-    expect(c.retryabilityLabel).toBe("Não reenviar");
+    expect(c.retryability).toBe("RETRYABLE_AFTER_FIX");
+    expect(c.retryabilityLabel).toBe("Precisa corrigir");
+  });
+
+  it("no phone → SKIPPED_NO_PHONE; not contactable → SKIPPED_NOT_CONTACTABLE", () => {
+    expect(classifyExecution({ status: "SKIPPED", errorMessage: "MISSING_PHONE" }).category).toBe("SKIPPED_NO_PHONE");
+    expect(classifyExecution({ status: "FAILED", errorMessage: "MISSING_PHONE" }).category).toBe("SKIPPED_NO_PHONE");
+    expect(classifyExecution({ status: "FAILED", errorMessage: "CUSTOMER_NOT_CONTACTABLE" }).category).toBe("SKIPPED_NOT_CONTACTABLE");
+    expect(classifyExecution({ status: "FAILED", errorMessage: "MISSING_PHONE" }).kind).toBe("SKIPPED");
   });
 
   it("opt-out → NEVER_RETRY", () => {
@@ -83,9 +91,41 @@ describe("summary — recoverableLater is the safe reprocess pool", () => {
     expect(s.skipped).toBe(1);            // invalid phone
     expect(s.blockedSafety).toBe(2);      // opt-out + weekly cap
     expect(s.failedProvider).toBe(4);     // 500 + 504 + timeout + 400
-    expect(s.byRetryability.PERMANENT).toBe(1);          // invalid phone
+    expect(s.byRetryability.PERMANENT).toBe(0);          // nothing permanent in this set
     expect(s.byRetryability.NEVER_RETRY).toBe(2);         // SENT (nothing to retry) + opt-out
-    expect(s.byRetryability.RETRYABLE_AFTER_FIX).toBe(1); // the 400
+    expect(s.byRetryability.RETRYABLE_AFTER_FIX).toBe(2); // the 400 + invalid phone (fix cadastro)
     expect(s.byRetryability.RETRYABLE_LATER).toBe(4);     // 3 provider transient + 1 weekly cap (safety)
+  });
+});
+
+describe("buildEligibilityMetrics — eligibility funnel separates skips from failures", () => {
+  it("no-phone / invalid-phone are skipped, never counted as provider failures", () => {
+    const rows = [
+      { status: "SENT" }, { status: "SENT" },
+      { status: "SKIPPED", errorMessage: "MISSING_PHONE" },        // no phone
+      { status: "SKIPPED", errorMessage: "MISSING_PHONE" },
+      { status: "SKIPPED", errorMessage: "INVALID_PHONE_FORMAT" }, // invalid
+      { status: "BLOCKED", errorMessage: "CUSTOMER_OPTED_OUT" },   // opt-out
+      { status: "FAILED",  errorMessage: "CUSTOMER_NOT_CONTACTABLE" }, // not contactable
+      { status: "FAILED",  errorMessage: "EVOLUTION_HTTP_500" },   // real failure (recoverable)
+      { status: "FAILED",  errorMessage: "EVOLUTION_HTTP_400" },   // real failure (needs fix)
+    ];
+    const s = summarizeExecutions(rows);
+    const m = buildEligibilityMetrics(s, 9);
+
+    expect(m.audienceTotal).toBe(9);
+    expect(m.sent).toBe(2);
+    expect(m.providerFailures).toBe(2);          // 500 + 400 ONLY
+    expect(m.recoverableFailures).toBe(1);       // 500
+    expect(m.permanentFailures).toBe(1);         // 400
+    expect(m.skipped).toBe(5);                   // 2 no-phone + 1 invalid + 1 opt-out + 1 not-contactable
+    expect(m.skippedBreakdown.noPhone).toBe(2);
+    expect(m.skippedBreakdown.invalidPhone).toBe(1);
+    expect(m.skippedBreakdown.optOut).toBe(1);
+    expect(m.skippedBreakdown.notContactable).toBe(1);
+    expect(m.failureBreakdown.http500).toBe(1);
+    expect(m.failureBreakdown.http400).toBe(1);
+    // eligible = audience minus the 5 ineligible skips
+    expect(m.whatsAppEligible).toBe(4);
   });
 });

@@ -206,6 +206,21 @@ type CampaignDetail = {
   executions:     CampaignExecutionRow[];
   performance?:   CampaignPerformance | null;
   currentCyclePerformance?: CycleSummary | null;
+  eligibility?: EligibilityMetrics | null;
+  safeSend?: { provider: string; maxPerCycle: number; note: string } | null;
+};
+
+type EligibilityMetrics = {
+  audienceTotal: number;
+  whatsAppEligible: number;
+  sent: number;
+  skipped: number;
+  blockedSafety: number;
+  providerFailures: number;
+  recoverableFailures: number;
+  permanentFailures: number;
+  skippedBreakdown: { noPhone: number; invalidPhone: number; optOut: number; notContactable: number; otherNotEligible: number };
+  failureBreakdown: { http400: number; http500: number; timeout: number; rateLimit: number; disconnected: number; auth: number; emptyMessage: number; unknown: number };
 };
 
 // ── Custom action types ───────────────────────────────────────────────────────
@@ -2049,7 +2064,7 @@ function CampaignManageModal({
                           { label: "Respostas",   value: detail.totalResponded, color: "text-indigo-700" },
                           { label: "Tx. Resp.",   value: responseRate ? `${responseRate}%` : "—", color: responseRate ? "text-green-700" : "text-gray-400" },
                           { label: "Pedidos",     value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-                          { label: isRecurring ? "Falhas (histórico)" : "Falhas", value: detail.totalFailed, color: detail.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
+                          { label: "Falhas reais", value: detail.eligibility?.providerFailures ?? detail.totalFailed, color: (detail.eligibility?.providerFailures ?? detail.totalFailed) > 0 ? "text-red-600" : "text-gray-400" },
                         ].map((m) => (
                           <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
                             <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
@@ -2316,14 +2331,14 @@ function CampaignManageModal({
                             </p>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                               {[
-                                { label: "Audiência total",        value: perf?.audience ?? detail.totalAudience, color: "text-gray-700" },
-                                { label: "Enviados",                value: sent,    color: "text-blue-700" },
-                                { label: "Bloqueados (segurança)",  value: blocked, color: blocked > 0 ? "text-amber-600" : "text-gray-400" },
-                                { label: "Falhas reais de envio",   value: failed,  color: failed > 0 ? "text-red-600" : "text-gray-400" },
-                                { label: "Lidos",                   value: detail.totalRead,      color: "text-indigo-700" },
-                                { label: "Respostas",               value: detail.totalResponded, color: "text-blue-600" },
-                                { label: "Compras",                 value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-                                { label: "Conversão",               value: convRate ? `${convRate}%` : "—", color: convRate ? "text-green-700" : "text-gray-400" },
+                                { label: "Audiência",          value: detail.eligibility?.audienceTotal ?? perf?.audience ?? detail.totalAudience, color: "text-gray-700" },
+                                { label: "Elegíveis WhatsApp", value: detail.eligibility?.whatsAppEligible ?? "—", color: "text-gray-700" },
+                                { label: "Enviados",           value: sent,    color: "text-blue-700" },
+                                { label: "Ignorados",          value: (detail.eligibility?.skipped ?? perf?.skipped ?? 0) + blocked, color: (detail.eligibility?.skipped ?? 0) + blocked > 0 ? "text-amber-600" : "text-gray-400" },
+                                { label: "Falhas reais",       value: detail.eligibility?.providerFailures ?? failed, color: (detail.eligibility?.providerFailures ?? failed) > 0 ? "text-red-600" : "text-gray-400" },
+                                { label: "Respostas",          value: detail.totalResponded, color: "text-blue-600" },
+                                { label: "Pedidos",            value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
+                                { label: "Conversão",          value: convRate ? `${convRate}%` : "—", color: convRate ? "text-green-700" : "text-gray-400" },
                               ].map((m) => (
                                 <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
                                   <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
@@ -2336,15 +2351,65 @@ function CampaignManageModal({
                                 ⓘ Bloqueios de segurança (limite semanal, cooldown, opt-out) <strong>não são falhas de envio</strong> — os clientes voltam a ficar elegíveis quando a janela expira.
                               </p>
                             )}
-                            {perf && perf.reasonGroups.length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-1.5">
-                                {perf.reasonGroups.map((g) => (
-                                  <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                                    {g.badge}: {g.count}{g.kind === "FAILED" && g.retryabilityLabel ? ` · ${g.retryabilityLabel}` : ""}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                            {detail.eligibility && (detail.eligibility.skipped > 0 || detail.eligibility.providerFailures > 0 || detail.eligibility.blockedSafety > 0) && (() => {
+                              const el = detail.eligibility;
+                              const sb = el.skippedBreakdown;
+                              const fb = el.failureBreakdown;
+                              const skipRows = [
+                                { label: "Sem telefone",     n: sb.noPhone,        tag: "Precisa corrigir cadastro" },
+                                { label: "Telefone inválido", n: sb.invalidPhone,   tag: "Precisa corrigir cadastro" },
+                                { label: "Opt-out",          n: sb.optOut,         tag: "Não reenviar" },
+                                { label: "Não contactável",  n: sb.notContactable, tag: "Precisa corrigir cadastro" },
+                                { label: "Não elegível",     n: sb.otherNotEligible, tag: "Ignorado" },
+                              ].filter((r) => r.n > 0);
+                              const failRows = [
+                                { label: "Erro temporário Evolution (5xx)", n: fb.http500,      tag: "Pode reenviar depois" },
+                                { label: "Timeout / conexão",               n: fb.timeout,      tag: "Pode reenviar depois" },
+                                { label: "Rate limit",                      n: fb.rateLimit,    tag: "Pode reenviar depois" },
+                                { label: "Instância desconectada",          n: fb.disconnected, tag: "Precisa corrigir" },
+                                { label: "Bad request (400)",               n: fb.http400,      tag: "Precisa corrigir" },
+                                { label: "Autenticação",                    n: fb.auth,         tag: "Precisa corrigir" },
+                                { label: "Mensagem vazia",                  n: fb.emptyMessage, tag: "Precisa corrigir" },
+                                { label: "Erro desconhecido",               n: fb.unknown,      tag: "Pode reenviar depois" },
+                              ].filter((r) => r.n > 0);
+                              return (
+                                <div className="mt-3 space-y-3">
+                                  <p className="rounded-lg bg-gray-50 px-3 py-2 text-[10px] text-gray-500">
+                                    <strong>Ignorados</strong> são clientes que não foram enviados por falta de telefone, opt-out ou regra de segurança.
+                                    <strong> Falhas reais</strong> são erros após a tentativa de envio pelo WhatsApp.
+                                  </p>
+                                  {(skipRows.length > 0 || el.blockedSafety > 0) && (
+                                    <div className="rounded-xl border border-amber-100 bg-amber-50/40 px-3 py-2.5">
+                                      <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Ignorados antes do envio · {el.skipped + el.blockedSafety}</p>
+                                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                        {skipRows.map((r) => (
+                                          <span key={r.label} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">{r.label}: {r.n} · {r.tag}</span>
+                                        ))}
+                                        {el.blockedSafety > 0 && (
+                                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">Limite de segurança: {el.blockedSafety} · Ignorado por segurança</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {failRows.length > 0 && (
+                                    <div className="rounded-xl border border-red-100 bg-red-50/40 px-3 py-2.5">
+                                      <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Falhas reais de envio · {el.providerFailures}</p>
+                                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                        {failRows.map((r) => (
+                                          <span key={r.label} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600 border border-red-200">{r.label}: {r.n} · {r.tag}</span>
+                                        ))}
+                                      </div>
+                                      <p className="mt-1.5 text-[10px] text-gray-500">
+                                        <strong className="text-violet-700">{el.recoverableFailures}</strong> podem ser reenviadas depois · <strong>{el.permanentFailures}</strong> precisam de correção.
+                                      </p>
+                                    </div>
+                                  )}
+                                  <p className="rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700">
+                                    Um <strong>ciclo</strong> é cada execução do robô de campanhas. No <strong>modo seguro WhatsApp Web</strong>, o Foocci envia até <strong>{detail.safeSend?.maxPerCycle ?? 5} mensagens por ciclo</strong> para evitar travamentos e reduzir risco de bloqueio.
+                                  </p>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </>
                       );

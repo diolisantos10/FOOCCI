@@ -73,8 +73,10 @@ export interface SendResult {
   totalFailed:      number;
   /** Safety blocks (weekly cap / cooldown / opt-out / dedupe) — NOT failures. */
   totalBlocked:     number;
+  /** Recipients skipped before any provider call (no/invalid phone) — NOT failures. */
+  totalSkipped:     number;
   duplicateSkipped: number;
-  results:          Array<{ id: string; status: "SENT" | "FAILED" | "BLOCKED"; error?: string }>;
+  results:          Array<{ id: string; status: "SENT" | "FAILED" | "BLOCKED" | "SKIPPED"; error?: string }>;
 }
 
 // ─── template → segment mapping ───────────────────────────────
@@ -514,6 +516,7 @@ export class CrmCampaignService {
     let totalSent        = 0;
     let totalFailed      = 0;
     let totalBlocked     = 0;
+    let totalSkipped     = 0;
     let duplicateSkipped = 0;
     const results: SendResult["results"] = [];
 
@@ -569,12 +572,17 @@ export class CrmCampaignService {
 
       const phone = normalizePhoneForEvolution(exec.customerPhone);
       if (!isValidEvolutionPhone(phone)) {
+        // Recipient-data problem — SKIP before any Evolution call. This is NOT a
+        // provider failure and must never be counted under "Falhas".
+        const hasRawPhone = Boolean((exec.customerPhone ?? "").trim());
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: "Telefone inválido ou ausente", errorMessage: "INVALID_PHONE_FORMAT" },
+          data:  hasRawPhone
+            ? { status: "SKIPPED" as never, failedReason: "Telefone inválido", errorMessage: "INVALID_PHONE_FORMAT" }
+            : { status: "SKIPPED" as never, failedReason: "Sem telefone",      errorMessage: "MISSING_PHONE" },
         });
-        totalFailed++;
-        results.push({ id: exec.id, status: "FAILED", error: "Telefone inválido" });
+        totalSkipped++;
+        results.push({ id: exec.id, status: "SKIPPED", error: hasRawPhone ? "Telefone inválido" : "Sem telefone" });
         continue;
       }
 
@@ -660,7 +668,7 @@ export class CrmCampaignService {
       },
     });
 
-    return { totalSent, totalFailed, totalBlocked, duplicateSkipped, results };
+    return { totalSent, totalFailed, totalBlocked, totalSkipped, duplicateSkipped, results };
   }
 }
 

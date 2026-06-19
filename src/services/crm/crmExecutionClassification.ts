@@ -29,6 +29,8 @@ export type ExecutionCategory =
   | "BLOCKED_CAMPAIGN_DAILY_LIMIT"
   | "BLOCKED_OPT_OUT"
   | "BLOCKED_INVALID_PHONE"
+  | "SKIPPED_NO_PHONE"
+  | "SKIPPED_NOT_CONTACTABLE"
   | "SKIPPED_NOT_ELIGIBLE";
 
 /** Coarse kind used by the UI to pick a badge colour/word. */
@@ -90,9 +92,13 @@ const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   EVOLUTION_AUTH_ERROR:            { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Rate limit",                    retryable: true,  retryability: "RETRYABLE_LATER" },
   EMPTY_MESSAGE:                   { kind: "FAILED",  badge: "Mensagem vazia",                retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
-  // Invalid / missing phone is a RECIPIENT DATA problem, not a provider failure.
-  // Skipped BEFORE any Evolution call, so it must never inflate the failure count.
-  BLOCKED_INVALID_PHONE:           { kind: "SKIPPED", badge: "Telefone inválido",             retryable: false, retryability: "PERMANENT" },
+  // Invalid / missing phone / not-contactable are RECIPIENT DATA problems, not
+  // provider failures. Skipped BEFORE any Evolution call, so they never inflate
+  // the failure count. They are fixable in the customer's cadastro → "Precisa
+  // corrigir" (RETRYABLE_AFTER_FIX), never auto-retried.
+  BLOCKED_INVALID_PHONE:           { kind: "SKIPPED", badge: "Telefone inválido",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
+  SKIPPED_NO_PHONE:                { kind: "SKIPPED", badge: "Sem telefone",                  retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
+  SKIPPED_NOT_CONTACTABLE:         { kind: "SKIPPED", badge: "Sem WhatsApp elegível",         retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   BLOCKED_SAFETY:                  { kind: "BLOCKED", badge: "Bloqueado",                     retryable: false, retryability: "RETRYABLE_LATER" },
   BLOCKED_COOLDOWN:                { kind: "BLOCKED", badge: "Bloqueado (cooldown)",          retryable: false, retryability: "RETRYABLE_LATER" },
   BLOCKED_WEEKLY_LIMIT:            { kind: "BLOCKED", badge: "Bloqueado (limite semanal)",    retryable: false, retryability: "RETRYABLE_LATER" },
@@ -110,8 +116,9 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "RECENT_CRM_MESSAGE_24H": return "BLOCKED_COOLDOWN";
     case "DAILY_GLOBAL_CAP_REACHED": return "BLOCKED_DAILY_GLOBAL_CAP";
     case "CUSTOMER_OPTED_OUT": return "BLOCKED_OPT_OUT";
-    case "MISSING_PHONE":
+    case "MISSING_PHONE": return "SKIPPED_NO_PHONE";
     case "INVALID_PHONE_FORMAT": return "BLOCKED_INVALID_PHONE";
+    case "CUSTOMER_NOT_CONTACTABLE": return "SKIPPED_NOT_CONTACTABLE";
     case "EMPTY_MESSAGE_AFTER_RENDER": return "EMPTY_MESSAGE";
     case "EVOLUTION_HTTP_400": return "EVOLUTION_BAD_REQUEST";
     case "EVOLUTION_HTTP_401":
@@ -121,7 +128,6 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "EVOLUTION_HTTP_504":
     case "EVOLUTION_HTTP_522":
     case "EVOLUTION_HTTP_524": return "FAILED_TIMEOUT";
-    case "CUSTOMER_NOT_CONTACTABLE":
     case "NO_EVOLUTION_CONFIG":
     case "QUIET_HOURS":
     case "WEEKEND_BLOCKED":
@@ -152,6 +158,9 @@ function fromText(text: string): ExecutionCategory {
   if (t.includes("401") || t.includes("403") || t.includes("unauthorized") || t.includes("forbidden") || t.includes("não autorizado")) return "EVOLUTION_AUTH_ERROR";
   // Rate limit.
   if (t.includes("rate limit") || t.includes("too many") || t.includes("429")) return "EVOLUTION_RATE_LIMITED";
+  // Recipient-data skips (no phone / not contactable) recorded as FAILED in legacy data.
+  if (t.includes("sem telefone") || t.includes("no phone") || t.includes("missing phone") || t.includes("telefone ausente")) return "SKIPPED_NO_PHONE";
+  if (t.includes("não contactável") || t.includes("nao contactavel") || t.includes("not contactable") || t.includes("não elegível") || t.includes("nao elegivel")) return "SKIPPED_NOT_CONTACTABLE";
   // Empty/unrendered message.
   if (t.includes("vazia") || t.includes("empty message") || t.includes("mensagem vazia")) return "EMPTY_MESSAGE";
   // Provider failures — distinguish an invalid-number error from a generic 4xx/5xx.
@@ -179,7 +188,11 @@ export function classifyExecution(input: ExecutionInput): ExecutionClassificatio
     return materialize("SENT");
   }
   if (status === "SKIPPED") {
-    return materialize("SKIPPED_NOT_ELIGIBLE");
+    // Preserve the specific skip reason (no phone / invalid phone / not contactable)
+    // when it was recorded; fall back to the generic not-eligible bucket.
+    const m = (input.errorMessage ?? "").trim();
+    const cat = m ? fromMachineReason(m) : null;
+    return materialize(cat && CATEGORY_META[cat].kind === "SKIPPED" ? cat : "SKIPPED_NOT_ELIGIBLE");
   }
 
   // Prefer the machine reason (new rows store it on errorMessage).
@@ -255,6 +268,8 @@ const EMPTY_BY_CATEGORY = (): Record<ExecutionCategory, number> => ({
   BLOCKED_CAMPAIGN_DAILY_LIMIT: 0,
   BLOCKED_OPT_OUT: 0,
   BLOCKED_INVALID_PHONE: 0,
+  SKIPPED_NO_PHONE: 0,
+  SKIPPED_NOT_CONTACTABLE: 0,
   SKIPPED_NOT_ELIGIBLE: 0,
 });
 
@@ -302,6 +317,75 @@ export function summarizeExecutions(rows: ExecutionInput[]): ExecutionSummary {
   const byCategory = EMPTY_BY_CATEGORY();
   for (const r of rows) byCategory[classifyExecution(r).category] += 1;
   return buildSummary(byCategory, rows.length);
+}
+
+/**
+ * Eligibility funnel for the campaign detail UI. Separates customers who were
+ * never WhatsApp-eligible (no phone / invalid phone / not contactable / opt-out)
+ * from real provider failures (Evolution was called and errored). This is what
+ * stops the owner from reading "sem telefone" as "WhatsApp falhou".
+ *
+ *  audienceTotal     — segment size stored on the campaign.
+ *  whatsAppEligible  — audience minus the ineligible skips below.
+ *  sent              — provider accepted the message.
+ *  skipped           — ineligible: noPhone + invalidPhone + notContactable + optOut.
+ *  blockedSafety     — eligible but held by a safety rule (cap/cooldown/quiet) — retry next cycle.
+ *  providerFailures  — Evolution was called and returned an error.
+ *  recoverableFailures / permanentFailures — split of providerFailures by retry policy.
+ */
+export interface CampaignEligibilityMetrics {
+  audienceTotal: number;
+  whatsAppEligible: number;
+  sent: number;
+  skipped: number;
+  blockedSafety: number;
+  providerFailures: number;
+  recoverableFailures: number;
+  permanentFailures: number;
+  skippedBreakdown: { noPhone: number; invalidPhone: number; optOut: number; notContactable: number; otherNotEligible: number };
+  failureBreakdown: { http400: number; http500: number; timeout: number; rateLimit: number; disconnected: number; auth: number; emptyMessage: number; unknown: number };
+}
+
+export function buildEligibilityMetrics(summary: ExecutionSummary, audienceTotal: number): CampaignEligibilityMetrics {
+  const c = summary.byCategory;
+  const noPhone        = c.SKIPPED_NO_PHONE;
+  const invalidPhone   = c.BLOCKED_INVALID_PHONE;
+  const notContactable = c.SKIPPED_NOT_CONTACTABLE;
+  const optOut         = c.BLOCKED_OPT_OUT;
+  const otherNotEligible = c.SKIPPED_NOT_ELIGIBLE;
+
+  // Ineligible = never attemptable on WhatsApp (data/consent), NOT a provider failure.
+  const ineligibleSkipped = noPhone + invalidPhone + notContactable + optOut + otherNotEligible;
+
+  // Rate-limit is a transient hold (kind BLOCKED) but it IS a provider signal; keep it
+  // in blockedSafety for the headline split, and surface it under failureBreakdown too.
+  const providerFailures = summary.failedProvider; // kind FAILED only
+  const recoverableFailures = summary.recoverableLater;
+  const permanentFailures = providerFailures - recoverableFailures;
+
+  const whatsAppEligible = Math.max(0, audienceTotal - ineligibleSkipped);
+
+  return {
+    audienceTotal,
+    whatsAppEligible,
+    sent: summary.sent,
+    skipped: ineligibleSkipped,
+    blockedSafety: summary.blockedSafety,
+    providerFailures,
+    recoverableFailures,
+    permanentFailures,
+    skippedBreakdown: { noPhone, invalidPhone, optOut, notContactable, otherNotEligible },
+    failureBreakdown: {
+      http400:     c.EVOLUTION_BAD_REQUEST,
+      http500:     c.FAILED_PROVIDER,
+      timeout:     c.FAILED_TIMEOUT,
+      rateLimit:   c.EVOLUTION_RATE_LIMITED,
+      disconnected:c.EVOLUTION_INSTANCE_DISCONNECTED,
+      auth:        c.EVOLUTION_AUTH_ERROR,
+      emptyMessage:c.EMPTY_MESSAGE,
+      unknown:     c.FAILED_UNKNOWN,
+    },
+  };
 }
 
 /** Aggregates pre-grouped { reason → count } maps (from a DB groupBy). */
