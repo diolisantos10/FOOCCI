@@ -10,8 +10,17 @@ import {
   type ReactNode,
 } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
-import { HANDOFF_SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
+import {
+  HANDOFF_SOUND_PREF_KEY,
+  readSoundPref,
+  fetchRestaurantSoundSettings,
+  HANDOFF_ALERT_ASSET,
+  HANDOFF_SOUND_LAST_PLAYED_KEY,
+  HANDOFF_SOUND_LAST_ERROR_KEY,
+} from "@/lib/sound-prefs";
 import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
+import { AlertLoopController } from "@/lib/alert-loop";
+import { pendingHumanRequestIds } from "@/lib/handoff-alert";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
@@ -384,16 +393,15 @@ export function AtendimentoClient({
   const [attachment,    setAttachment]    = useState<AttachmentState | null>(null);
   const [uploading,     setUploading]     = useState(false);
 
-  // ── Human-handoff alert sound ─────────────────────────────────────────────
-  const handoffAudioRef    = useRef<HTMLAudioElement | null>(null);
-  // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
-  // localStorage mirror is just the instant fallback before the API responds.
+  // ── Human-attention alarm sound ───────────────────────────────────────────
+  // Repeats until an operator assumes/resolves the conversation. Config lives
+  // ONLY in Configurações → Sons e alertas (DB-backed); the localStorage mirror
+  // is just the instant fallback before the API responds. No sound UI here.
+  const handoffAudioRef      = useRef<HTMLAudioElement | null>(null);
+  const handoffControllerRef = useRef<AlertLoopController | null>(null);
   const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => readSoundPref(HANDOFF_SOUND_PREF_KEY, true));
   const handoffVolumeRef = useRef(120);
-  // Track conversation statuses to detect new transitions to HUMAN
-  const prevStatusRef    = useRef<Map<string, ConvStatus>>(new Map());
-  const alertedIds       = useRef<Set<string>>(new Set());
-  const isFirstListLoad  = useRef(true);
+  const repeatHandoffRef = useRef(true);
 
   const [leftWidth,     setLeftWidth]     = useState<number>(320);
   const [isDesktop,     setIsDesktop]     = useState<boolean>(false);
@@ -422,46 +430,14 @@ export function AtendimentoClient({
 
       setFetchError(null);
       setConversations(items);
-
-      // ── Human-handoff sound detection ──────────────────────────────────────
-      if (isFirstListLoad.current) {
-        // On first load: seed the status map and alerted set WITHOUT playing sound
-        for (const c of items) {
-          prevStatusRef.current.set(c.id, c.status);
-          if (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU") {
-            alertedIds.current.add(c.id);
-          }
-        }
-        isFirstListLoad.current = false;
-      } else {
-        const newHandoffs: string[] = [];
-        for (const c of items) {
-          const prev = prevStatusRef.current.get(c.id);
-          const isHumanNow = c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU";
-          const wasHumanBefore = prev === "HUMAN" || prev === "HUMANO_ASSUMIU";
-          // New conversation OR status just changed to HUMAN
-          if (isHumanNow && !wasHumanBefore && !alertedIds.current.has(c.id)) {
-            newHandoffs.push(c.id);
-          }
-          prevStatusRef.current.set(c.id, c.status);
-          // Clear alert tracking when conversation returns to AI
-          if (!isHumanNow) alertedIds.current.delete(c.id);
-        }
-        if (newHandoffs.length > 0 && handoffSoundEnabled) {
-          const audio = handoffAudioRef.current;
-          if (audio) {
-            // Autoplay blocks are handled by the silent unlock installed on mount
-            playAlertAudio(audio, handoffVolumeRef.current).catch(() => {});
-          }
-          newHandoffs.forEach((id) => alertedIds.current.add(id));
-        }
-      }
+      // Sound is driven by the alarm controller off conversation status (see the
+      // `pendingHumanIds` effect below), not from message/transition detection here.
     } catch {
       setFetchError("Falha ao carregar conversas.");
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, handoffSoundEnabled]);
+  }, [statusFilter]);
 
   // Immediate refetch when filter/search changes
   useEffect(() => {
@@ -496,13 +472,44 @@ export function AtendimentoClient({
     try { localStorage.setItem("atendimento-left-width", String(leftWidth)); } catch { /* ignore */ }
   }, [leftWidth, isDesktop]);
 
-  // ── Handoff alert sound initialization ────────────────────────────────────
+  // ── Human-attention alarm: audio element + repeat controller ──────────────
   useEffect(() => {
-    const audio = new Audio("/sounds/foocci-handoff-alert.wav");
+    const audio = new Audio(HANDOFF_ALERT_ASSET);
+    audio.preload = "auto";
     handoffAudioRef.current = audio;
     // First user interaction silently unlocks browser autoplay — no UI required
     installSilentUnlock(() => [audio]);
-    return () => { audio.pause(); audio.src = ""; };
+
+    const controller = new AlertLoopController({
+      // Uses the existing atendimento sound + saved volume/gain (no theme).
+      play: async (vol) => {
+        const a = handoffAudioRef.current;
+        if (!a) return;
+        await playAlertAudio(a, vol);
+      },
+      getVolume:       () => handoffVolumeRef.current,
+      isRepeatEnabled: () => repeatHandoffRef.current,
+      assetPath:       HANDOFF_ALERT_ASSET,
+      intervalMs:      9_000,    // repeat every 9 s (8–10 s window)
+      maxDurationMs:   300_000,  // backstop: stop a single alarm after 5 min
+      onDiagnostics: (d) => {
+        try {
+          if (d.lastResult === "success" && d.lastAttemptAt) {
+            localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date(d.lastAttemptAt).toISOString());
+          } else if (d.lastResult === "error" && d.lastError) {
+            localStorage.setItem(HANDOFF_SOUND_LAST_ERROR_KEY, `${new Date().toISOString()}: ${d.lastError}`);
+          }
+        } catch { /* storage unavailable */ }
+      },
+    });
+    handoffControllerRef.current = controller;
+
+    return () => {
+      controller.dispose();           // stop reason → PAGE_UNMOUNT, clears loop
+      handoffControllerRef.current = null;
+      audio.pause();
+      audio.src = "";
+    };
   }, []);
 
   // Load DB-backed sound settings (Configurações → Sons e alertas) — source of truth
@@ -511,8 +518,21 @@ export function AtendimentoClient({
       if (!s) return;
       setHandoffSoundEnabled(s.soundEnabled && s.humanAttentionSoundEnabled);
       handoffVolumeRef.current = s.soundVolume;
+      repeatHandoffRef.current = s.repeatHumanAttentionUntilSeen;
     });
   }, []);
+
+  // Conversations waiting for a human (status === "HUMAN"), unassumed. Drives the
+  // alarm: plays immediately, repeats while any remain, stops when assumed/resolved
+  // (status leaves HUMAN) — NOT when the page is open or the conversation is viewed.
+  const pendingHumanIds = useMemo(
+    () => pendingHumanRequestIds(conversations),
+    [conversations],
+  );
+
+  useEffect(() => {
+    handoffControllerRef.current?.sync(handoffSoundEnabled ? pendingHumanIds : []);
+  }, [pendingHumanIds, handoffSoundEnabled]);
 
   // ── Inactivity-timeout pollers (run every 60 s while page is open) ──────
   // check-timeouts:            human hasn't replied → customer waiting → return to AI
@@ -675,6 +695,8 @@ export function AtendimentoClient({
           ...(action === "assign" ? { userId } : {}),
         }),
       });
+      // Resolving the conversation is a clear operator action → silence its alarm.
+      if (action === "resolve") handoffControllerRef.current?.resolve(selectedId, "RESOLVED");
       await Promise.all([fetchThread(selectedId), fetchList()]);
     } finally {
       setActionLoading(false);
@@ -688,6 +710,8 @@ export function AtendimentoClient({
       await fetch(`/api/chat/conversations/${selectedId}/${action}`, {
         method: "POST",
       });
+      // "Assumir atendimento" (takeover) acknowledges the request → silence its alarm.
+      if (action === "takeover") handoffControllerRef.current?.resolve(selectedId, "ASSUMED");
       await Promise.all([fetchThread(selectedId), fetchList()]);
     } finally {
       setActionLoading(false);

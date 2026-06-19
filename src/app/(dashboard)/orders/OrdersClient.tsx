@@ -16,7 +16,7 @@ import {
   SOUND_LAST_ERROR_KEY,
 } from "@/lib/sound-prefs";
 import { playAlertAudio, installSilentUnlock, effectiveAlertVolume } from "@/lib/sound-player";
-import { OrderAlertController } from "@/lib/order-alert-loop";
+import { AlertLoopController } from "@/lib/alert-loop";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
 // Official Foocci order sound. The new-order alert and the settings test button
@@ -1717,7 +1717,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   const soundThemeRef = useRef<string>("DEFAULT");
   const repeatNewOrderRef = useRef(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
-  const alertControllerRef = useRef<OrderAlertController | null>(null);
+  const alertControllerRef = useRef<AlertLoopController | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
   const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string } | null>(null);
@@ -1770,7 +1770,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     // First user interaction silently unlocks browser autoplay — no UI required
     installSilentUnlock(() => [audio]);
 
-    const controller = new OrderAlertController({
+    const controller = new AlertLoopController({
       // Every new-order play goes through the shared gain-aware engine.
       play: async (vol) => {
         const a = alertAudioRef.current;

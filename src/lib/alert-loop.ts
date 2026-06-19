@@ -1,60 +1,57 @@
 /**
- * OrderAlertController — reliable, idempotent repeat-until-action loop for the
- * NEW ORDER alert sound.
+ * AlertLoopController — reliable, idempotent repeat-until-action alarm loop.
  *
- * Why this exists
- * ---------------
- * The old logic gated the repeat loop on `status === "PENDING"`, so orders that
- * arrived already CONFIRMED never repeated, and the `repeatNewOrderSoundUntilAccepted`
- * setting was never wired. This controller centralizes the behavior:
+ * Generic engine shared by operational alerts that must keep ringing until an
+ * operator acts (new-order alert, human-attention alert). It is intentionally
+ * framework-agnostic (no DOM/Audio/React imports) so it can be unit-tested with
+ * fake timers. The caller injects `play` (the gain-aware player), `getVolume`
+ * and `isRepeatEnabled`, and feeds it the live set of items requiring action.
  *
- *   • plays immediately when a new order requires action;
- *   • repeats every `intervalMs` while at least one order still requires action
+ *   • plays immediately when a new item requires action;
+ *   • repeats every `intervalMs` while at least one item still requires action
  *     (only when repeat is enabled);
- *   • stops on ACCEPTED / REJECTED / SEEN / MAX_DURATION / PAGE_UNMOUNT;
+ *   • stops on an explicit reason (e.g. ACCEPTED/ASSUMED/RESOLVED) or an
+ *     internal one (SEEN / MAX_DURATION / PAGE_UNMOUNT / IDLE);
  *   • never overlaps audio (single in-flight guard);
- *   • is idempotent — the same orderId re-appearing does not start a second loop,
- *     and multiple pending orders share ONE loop (no chaotic overlap).
- *
- * It is intentionally framework-agnostic (no DOM/Audio/React imports) so it can be
- * unit-tested with fake timers. The caller injects `play` (the gain-aware player),
- * `getVolume` (theme-adjusted %) and `isRepeatEnabled`.
+ *   • is idempotent — the same id re-appearing does not start a second loop,
+ *     and multiple pending items share ONE loop (no chaotic overlap).
  */
 
-export type OrderAlertStopReason =
-  | "ACCEPTED"
-  | "REJECTED"
+/** Internal stop reasons are well-known; callers may supply any domain reason
+ *  via resolve() (e.g. "ACCEPTED", "REJECTED", "ASSUMED", "RESOLVED"). */
+export type AlertStopReason =
   | "SEEN"
   | "MAX_DURATION"
   | "PAGE_UNMOUNT"
-  | "IDLE";
+  | "IDLE"
+  | (string & {});
 
-export interface OrderAlertDiagnostics {
-  loopActive:       boolean;
-  activeOrderCount: number;
-  lastAttemptAt:    number | null;
-  lastResult:       "success" | "error" | null;
-  lastError:        string | null;
-  lastStopReason:   OrderAlertStopReason | null;
-  effectiveVolume:  number;
-  assetPath:        string;
+export interface AlertLoopDiagnostics {
+  loopActive:      boolean;
+  activeCount:     number;
+  lastAttemptAt:   number | null;
+  lastResult:      "success" | "error" | null;
+  lastError:       string | null;
+  lastStopReason:  AlertStopReason | null;
+  effectiveVolume: number;
+  assetPath:       string;
 }
 
-export interface OrderAlertControllerOptions {
+export interface AlertLoopControllerOptions {
   /** Gain-aware player. Resolves on success, rejects on failure (e.g. autoplay block). */
   play: (volumePercent: number) => Promise<void>;
-  /** Current effective volume % (already theme-adjusted). Read fresh on every play. */
+  /** Current effective volume %. Read fresh on every play. */
   getVolume: () => number;
-  /** Whether the alert should repeat until the order is handled. Read fresh each sync. */
+  /** Whether the alert should repeat until handled. Read fresh each sync. */
   isRepeatEnabled: () => boolean;
   /** Asset path — diagnostics only. */
   assetPath: string;
-  /** Repeat interval in ms. Default 10_000 (within the 8–12 s window). */
+  /** Repeat interval in ms. Default 10_000. */
   intervalMs?: number;
   /** Max time the loop may run before auto-stopping. Default 180_000 (3 min). */
   maxDurationMs?: number;
   /** Called whenever diagnostics change (attempt, result, stop). */
-  onDiagnostics?: (d: OrderAlertDiagnostics) => void;
+  onDiagnostics?: (d: AlertLoopDiagnostics) => void;
   /** Injectable clock for tests. */
   now?: () => number;
 }
@@ -62,17 +59,17 @@ export interface OrderAlertControllerOptions {
 const DEFAULT_INTERVAL_MS = 10_000;
 const DEFAULT_MAX_DURATION_MS = 180_000;
 
-export class OrderAlertController {
-  private readonly opts: Required<Pick<OrderAlertControllerOptions,
+export class AlertLoopController {
+  private readonly opts: Required<Pick<AlertLoopControllerOptions,
     "play" | "getVolume" | "isRepeatEnabled" | "assetPath" | "intervalMs" | "maxDurationMs" | "now">>
-    & Pick<OrderAlertControllerOptions, "onDiagnostics">;
+    & Pick<AlertLoopControllerOptions, "onDiagnostics">;
 
-  /** Orders that currently require action. One shared loop covers all of them. */
+  /** Items that currently require action. One shared loop covers all of them. */
   private activeIds = new Set<string>();
-  /** Orders whose immediate (one-shot) alert already fired — idempotency guard. */
+  /** Items whose immediate (one-shot) alert already fired — idempotency guard. */
   private alertedIds = new Set<string>();
   /** Explicit stop reasons recorded via resolve(), consumed when the set empties. */
-  private reasons = new Map<string, OrderAlertStopReason>();
+  private reasons = new Map<string, AlertStopReason>();
 
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private loopStartedAt: number | null = null;
@@ -82,10 +79,10 @@ export class OrderAlertController {
   private lastAttemptAt: number | null = null;
   private lastResult: "success" | "error" | null = null;
   private lastError: string | null = null;
-  private lastStopReason: OrderAlertStopReason | null = null;
+  private lastStopReason: AlertStopReason | null = null;
   private effectiveVolume = 0;
 
-  constructor(options: OrderAlertControllerOptions) {
+  constructor(options: AlertLoopControllerOptions) {
     this.opts = {
       play:            options.play,
       getVolume:       options.getVolume,
@@ -99,19 +96,19 @@ export class OrderAlertController {
   }
 
   /**
-   * Reconcile the controller with the current set of orders requiring action.
-   * Call this on every render with the live set of actionable order IDs.
+   * Reconcile the controller with the current set of items requiring action.
+   * Call this on every render with the live set of actionable IDs.
    */
-  sync(orderIds: string[]): void {
+  sync(ids: string[]): void {
     if (this.disposed) return;
 
-    const incoming = new Set(orderIds);
+    const incoming = new Set(ids);
     const removed = [...this.activeIds].filter((id) => !incoming.has(id));
     for (const id of removed) this.alertedIds.delete(id);
     this.activeIds = incoming;
 
-    // Brand-new actionable orders fire one immediate alert (idempotent).
-    const trulyNew = orderIds.filter((id) => !this.alertedIds.has(id));
+    // Brand-new actionable items fire one immediate alert (idempotent).
+    const trulyNew = ids.filter((id) => !this.alertedIds.has(id));
     if (trulyNew.length > 0) {
       for (const id of trulyNew) this.alertedIds.add(id);
       this.fire();
@@ -122,8 +119,8 @@ export class OrderAlertController {
     if (incoming.size === 0) {
       // Nothing requires action — stop with the most specific known reason.
       // Skip when already idle with nothing removed this call, so a prior
-      // explicit resolve() reason (ACCEPTED/REJECTED) isn't clobbered by the
-      // follow-up empty sync from React's re-render.
+      // explicit resolve() reason isn't clobbered by the follow-up empty sync
+      // from React's re-render.
       if (removed.length > 0 || this.intervalHandle !== null) {
         this.stop(this.consumeReason(removed) ?? "SEEN");
       }
@@ -133,14 +130,14 @@ export class OrderAlertController {
     this.ensureLoop();
   }
 
-  /** Mark an order handled (e.g. accepted/rejected) so the loop stops with that reason. */
-  resolve(orderId: string, reason: OrderAlertStopReason): void {
+  /** Mark an item handled (e.g. accepted/assumed/resolved) so the loop stops with that reason. */
+  resolve(id: string, reason: AlertStopReason): void {
     if (this.disposed) return;
-    this.reasons.set(orderId, reason);
-    this.activeIds.delete(orderId);
-    this.alertedIds.delete(orderId);
+    this.reasons.set(id, reason);
+    this.activeIds.delete(id);
+    this.alertedIds.delete(id);
     if (this.activeIds.size === 0) {
-      this.stop(this.consumeReason([orderId]) ?? reason);
+      this.stop(this.consumeReason([id]) ?? reason);
     } else {
       this.emit();
     }
@@ -159,16 +156,16 @@ export class OrderAlertController {
     this.emit();
   }
 
-  getDiagnostics(): OrderAlertDiagnostics {
+  getDiagnostics(): AlertLoopDiagnostics {
     return {
-      loopActive:       this.intervalHandle !== null,
-      activeOrderCount: this.activeIds.size,
-      lastAttemptAt:    this.lastAttemptAt,
-      lastResult:       this.lastResult,
-      lastError:        this.lastError,
-      lastStopReason:   this.lastStopReason,
-      effectiveVolume:  this.effectiveVolume,
-      assetPath:        this.opts.assetPath,
+      loopActive:      this.intervalHandle !== null,
+      activeCount:     this.activeIds.size,
+      lastAttemptAt:   this.lastAttemptAt,
+      lastResult:      this.lastResult,
+      lastError:       this.lastError,
+      lastStopReason:  this.lastStopReason,
+      effectiveVolume: this.effectiveVolume,
+      assetPath:       this.opts.assetPath,
     };
   }
 
@@ -215,7 +212,7 @@ export class OrderAlertController {
       .finally(() => { this.inFlight = false; this.emit(); });
   }
 
-  private stop(reason: OrderAlertStopReason): void {
+  private stop(reason: AlertStopReason): void {
     this.clearInterval();
     this.loopStartedAt = null;
     this.lastStopReason = reason;
@@ -230,13 +227,13 @@ export class OrderAlertController {
   }
 
   /** Pick the most meaningful explicit reason among the given ids, consuming them. */
-  private consumeReason(ids: string[]): OrderAlertStopReason | null {
-    let picked: OrderAlertStopReason | null = null;
+  private consumeReason(ids: string[]): AlertStopReason | null {
+    let picked: AlertStopReason | null = null;
     for (const id of ids) {
       const r = this.reasons.get(id);
       if (r) {
         this.reasons.delete(id);
-        // ACCEPTED/REJECTED are more specific than a bare SEEN.
+        // An explicit domain reason is more specific than a bare SEEN.
         if (!picked || picked === "SEEN") picked = r;
       }
     }

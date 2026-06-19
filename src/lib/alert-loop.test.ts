@@ -1,16 +1,17 @@
 /**
- * OrderAlertController — repeat-until-action behavior for the NEW ORDER alert.
+ * AlertLoopController — repeat-until-action behavior (shared by the new-order and
+ * human-attention alerts).
  *
- * Covers the P0 requirements:
- *   C. repeats while an order requires action
- *   D. stops when the order is accepted (and records the reason)
+ * Covers:
+ *   C. repeats while an item requires action
+ *   D. stops when the item is handled (and records the reason)
  *   E. duplicate renders do NOT create duplicate loops
  *   F. page unmount clears the loop
  *   + idempotent immediate play, max-duration cap, no audio overlap, repeat-off.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { OrderAlertController, type OrderAlertDiagnostics } from "@/lib/order-alert-loop";
+import { AlertLoopController, type AlertLoopDiagnostics } from "@/lib/alert-loop";
 
 const INTERVAL = 10_000;
 
@@ -21,12 +22,12 @@ function makeController(opts?: {
   maxDurationMs?: number;
 }) {
   const play = opts?.play ?? vi.fn().mockResolvedValue(undefined);
-  let diag: OrderAlertDiagnostics | null = null;
-  const controller = new OrderAlertController({
+  let diag: AlertLoopDiagnostics | null = null;
+  const controller = new AlertLoopController({
     play,
     getVolume:       () => opts?.volume ?? 150,
     isRepeatEnabled: () => opts?.repeat ?? true,
-    assetPath:       "/sounds/foocci-order-alert-loud.wav",
+    assetPath:       "/sounds/foocci-order-alert-custom.mp4",
     intervalMs:      INTERVAL,
     maxDurationMs:   opts?.maxDurationMs ?? 180_000,
     onDiagnostics:   (d) => { diag = d; },

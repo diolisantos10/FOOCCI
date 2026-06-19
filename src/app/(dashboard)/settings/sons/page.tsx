@@ -15,7 +15,7 @@ import {
   writeSoundPref,
 } from "@/lib/sound-prefs";
 import { playAlertAudio, supportsVolumeBoost, MAX_VOLUME, effectiveAlertVolume } from "@/lib/sound-player";
-import type { OrderAlertDiagnostics } from "@/lib/order-alert-loop";
+import type { AlertLoopDiagnostics } from "@/lib/alert-loop";
 
 // New-order alert uses the official Foocci order sound. The test button below
 // plays THIS exact file through the same engine (playAlertAudio) as a real order.
@@ -38,7 +38,7 @@ const DEFAULTS: SoundSettings = {
   humanAttentionSoundEnabled:       true,
   soundVolume:                      120,
   repeatNewOrderSoundUntilAccepted: true,
-  repeatHumanAttentionUntilSeen:    false,
+  repeatHumanAttentionUntilSeen:    true,
   soundTheme:                       "DEFAULT",
 };
 
@@ -73,12 +73,12 @@ export default function SonsPage() {
     handoffLastPlayed: string | null;
     orderLastError:    string | null;
     handoffLastError:  string | null;
-    orderLoop:         (OrderAlertDiagnostics & { updatedAt?: string }) | null;
+    orderLoop:         (AlertLoopDiagnostics & { updatedAt?: string }) | null;
   } | null>(null);
 
   const refreshDiag = useCallback(() => {
     try {
-      let orderLoop: (OrderAlertDiagnostics & { updatedAt?: string }) | null = null;
+      let orderLoop: (AlertLoopDiagnostics & { updatedAt?: string }) | null = null;
       const raw = localStorage.getItem(ORDER_ALERT_DIAG_KEY);
       if (raw) {
         try { orderLoop = JSON.parse(raw); } catch { orderLoop = null; }
@@ -472,7 +472,7 @@ export default function SonsPage() {
               </div>
               <div><span className="font-semibold text-gray-700">resultado:</span> {diag.orderLoop?.lastResult ?? "—"}{diag.orderLoop?.lastError ? ` (${diag.orderLoop.lastError})` : ""}</div>
               <div><span className="font-semibold text-gray-700">loop ativo:</span> {diag.orderLoop ? (diag.orderLoop.loopActive ? "sim" : "não") : "—"}</div>
-              <div><span className="font-semibold text-gray-700">pedidos aguardando:</span> {diag.orderLoop?.activeOrderCount ?? "—"}</div>
+              <div><span className="font-semibold text-gray-700">pedidos aguardando:</span> {diag.orderLoop?.activeCount ?? "—"}</div>
               <div><span className="font-semibold text-gray-700">último motivo de parada:</span> {diag.orderLoop?.lastStopReason ?? "—"}</div>
             </div>
             {/* Last-played / last-error mirrors */}

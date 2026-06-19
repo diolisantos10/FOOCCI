@@ -1444,7 +1444,7 @@ model RestaurantSoundSettings {
   humanAttentionSoundEnabled       Boolean @default(true)
   soundVolume                      Int     @default(120) // 0–400, >100 = Web Audio gain boost
   repeatNewOrderSoundUntilAccepted Boolean @default(true) // new-order alert repeats until accepted (P0: reliable)
-  repeatHumanAttentionUntilSeen    Boolean @default(false)
+  repeatHumanAttentionUntilSeen    Boolean @default(true)  // human-attention alarm repeats until assumed/resolved (P0)
   soundTheme                       String  @default("DEFAULT") // DEFAULT | SOFT | URGENT
 
   createdAt DateTime @default(now())
