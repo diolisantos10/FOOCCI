@@ -9,6 +9,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions } from "@/services/crm/crmExecutionClassification";
+import { EVOLUTION_WEB_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,12 @@ export async function GET(
         reasonGroups:   currentCyclePerformance.reasonGroups,
       } : null,
       lastRunAt: campaign.lastRunAt,
+      // Evolution Web safe-send cap surfaced for the UI (recurring campaigns run in batches).
+      safeSend: {
+        provider:    "EVOLUTION_WEB",
+        maxPerCycle: EVOLUTION_WEB_MAX_PER_RUN,
+        note:        `Modo seguro WhatsApp Web: até ${EVOLUTION_WEB_MAX_PER_RUN} envios por ciclo.`,
+      },
     });
   } catch (err) {
     console.error("[GET /api/crm/campaigns/[id]]", err);

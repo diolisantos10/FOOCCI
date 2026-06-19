@@ -2123,28 +2123,31 @@ function MessageBubble({
   const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
   const msgSource   = msg.metadata?.source; // "CARDAPIO" | "WHATSAPP" | undefined
   const crmCtx      = msg.metadata?.contextType as string | undefined;
-  const crmActorLabel = crmCtx === "CRM_CAMPAIGN" ? "Campanha" : crmCtx === "CRM_AUTOMATION" ? "Automação" : "CRM";
+  // CRM outbound is stored with senderType "AI" (+ CRM metadata) or "CRM"; either
+  // way it must read as a campaign/automation, never as the IA Waiter agent.
+  const isCrmMsg    = isOutbound && (msg.senderType === "CRM" || crmCtx === "CRM_CAMPAIGN" || crmCtx === "CRM_AUTOMATION");
+  const crmActorLabel = crmCtx === "CRM_AUTOMATION" ? "Automação enviada" : "Campanha enviada";
   const senderLabel = isOutbound
-    ? (msg.senderType === "AI"
+    ? (isCrmMsg ? crmActorLabel
+        : msg.senderType === "AI"
         ? (msgSource === "PEDIDO_TEXTO" ? "IA · Pedido Texto"
            : msgSource === "CARDAPIO"   ? "IA · Cardápio"
            :                              "IA · WhatsApp")
         : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
-        : msg.senderType === "CRM" ? crmActorLabel
         : msg.senderType === "HUMAN"
           ? (msgSource === "CARDAPIO" ? "Operador · Cardápio" : "Operador · WhatsApp")
           : "Operador")
     : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
   const senderBadgeCls = isOutbound
-    ? (msg.senderType === "AI"
+    ? (isCrmMsg
+        ? "bg-violet-50 border border-violet-200 text-violet-700"
+        : msg.senderType === "AI"
         ? (msgSource === "PEDIDO_TEXTO"
             ? "bg-sky-50 border border-sky-200 text-sky-700"
             : "bg-orange-50 border border-orange-200 text-orange-600")
         : msg.senderType === "HUMAN_EXTERNAL"
           ? "bg-teal-50 border border-teal-200 text-teal-700"
-          : msg.senderType === "CRM"
-            ? "bg-violet-50 border border-violet-200 text-violet-700"
-            : "bg-gray-700 border border-gray-600 text-white")
+          : "bg-gray-700 border border-gray-600 text-white")
     : (msg.senderType === "CUSTOMER_CARDAPIO"
         ? "bg-purple-50 border border-purple-200 text-purple-700"
         : "bg-green-50 border border-green-200 text-green-700");

@@ -19,7 +19,7 @@ import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageF
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
-import { assignConversationContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
+import { markConversationCrmContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
 import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
 import { isBirthdayCampaign } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
@@ -599,8 +599,9 @@ export class CrmCampaignService {
           restaurantId, exec.customerId, exec.customerPhone!, campaignId
         );
 
-        // Tag conversation with CRM context (first-write-wins, idempotent)
-        await assignConversationContext(convId, "CRM_CAMPAIGN", { relatedCampaignId: campaignId });
+        // Force CRM context on the (re)used conversation so the AI greeting guard
+        // fires on the customer's reply and Central shows the "Campanha enviada" badge.
+        await markConversationCrmContext(convId, "CRM_CAMPAIGN", { relatedCampaignId: campaignId });
 
         // Log outbound message in Chat Inbox.
         // Intentionally do NOT update Conversation.lastMessageAt here — CRM outbound

@@ -36,7 +36,7 @@ vi.mock("@/lib/crm-safety", () => safety);
 vi.mock("@/services/crm/ContactSafetyService", () => contact);
 vi.mock("@/lib/public-url", () => ({ getPublicMenuUrl: () => "", getPublicSiteUrl: () => "" }));
 vi.mock("@/services/agents/AgentRoutingService", () => ({
-  assignConversationContext: vi.fn(), buildConversationMetadataForCrmSend: vi.fn(() => ({})), CONTEXT_TYPE: {},
+  markConversationCrmContext: vi.fn(), buildConversationMetadataForCrmSend: vi.fn(() => ({})), CONTEXT_TYPE: {},
 }));
 vi.mock("../CRMContactLedgerService", () => ledger);
 

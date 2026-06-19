@@ -24,7 +24,7 @@ import {
   personalizeMessage,
 } from "./CrmCampaignService";
 import {
-  assignConversationContext,
+  markConversationCrmContext,
   buildConversationMetadataForCrmSend,
   CONTEXT_TYPE,
 } from "@/services/agents/AgentRoutingService";
@@ -72,6 +72,17 @@ export interface CampaignBatchResult {
 /** Recently-blocked customers are not re-attempted for this many hours (avoids
  *  re-creating a block row every cron tick and inflating the failure count). */
 const BLOCK_RETRY_WINDOW_HOURS = 24;
+
+/**
+ * Hard ceiling on messages sent per run for the Evolution Web / Baileys provider.
+ * Evolution Web rides a real WhatsApp-Web session — bursts freeze the phone and
+ * raise spam/block risk — so a recurring batch never sends more than this in one
+ * run, regardless of the caller-supplied limit or the campaign's daily limit.
+ * A lower configured limit is still respected (we take the min).
+ * NOTE: this cap is provider-specific; an official Meta Cloud API provider (when
+ * added) should gate on its own limits, not this constant.
+ */
+export const EVOLUTION_WEB_MAX_PER_RUN = 5;
 
 export interface ScheduledCampaignRunSummary {
   dryRun:             boolean;
@@ -274,7 +285,9 @@ export class ScheduledCampaignRunnerService {
     }
 
     const remainingToday = dailyLimit - todaySent;
-    const batchCap       = Math.min(remainingToday, limit ?? remainingToday);
+    // Evolution Web hard cap: never more than EVOLUTION_WEB_MAX_PER_RUN per run,
+    // even if a caller passes a larger limit or the daily limit is higher.
+    const batchCap       = Math.min(remainingToday, limit ?? remainingToday, EVOLUTION_WEB_MAX_PER_RUN);
 
     // Resolve full eligible audience at execution time
     const allEligible = await resolveAudience(
@@ -622,7 +635,7 @@ export class ScheduledCampaignRunnerService {
         const convId = await findOrCreateBatchConversation(
           campaign.restaurantId, customer.id, customer.phone, campaign.id
         );
-        await assignConversationContext(convId, "CRM_CAMPAIGN", { relatedCampaignId: campaign.id });
+        await markConversationCrmContext(convId, "CRM_CAMPAIGN", { relatedCampaignId: campaign.id });
 
         const exec = await prisma.campaignExecution.create({
           data: {

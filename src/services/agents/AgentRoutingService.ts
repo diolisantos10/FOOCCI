@@ -65,6 +65,34 @@ export async function assignConversationContext(
 }
 
 /**
+ * Force-tag a (re)used conversation with a CRM context on every CRM outbound send.
+ *
+ * Unlike `assignConversationContext` (first-write-wins), this REFRESHES the
+ * contextType so that when a CRM campaign reuses an existing conversation whose
+ * contextType is null or a stale non-order value, the AI greeting guard
+ * (`shouldAiRespond` → CRM_CONTEXT) still fires on the customer's reply, and the
+ * Central de Conversas "Campanha/Automação enviada" badge shows correctly.
+ *
+ * Safety: it never overwrites an ORDER_SUPPORT context, so an active Waiter order
+ * conversation is left untouched. It does not touch aiEnabled/aiLocked/status, so
+ * human-takeover and the persistent Staff/Supplier lock are unaffected.
+ */
+export async function markConversationCrmContext(
+  conversationId: string,
+  contextType: "CRM_CAMPAIGN" | "CRM_AUTOMATION",
+  opts?: { relatedCampaignId?: string }
+): Promise<void> {
+  await prisma.conversation.updateMany({
+    // Prisma `not` is null-inclusive, so this also matches contextType = null.
+    where: { id: conversationId, contextType: { not: CONTEXT_TYPE.ORDER_SUPPORT } },
+    data: {
+      contextType,
+      ...(opts?.relatedCampaignId ? { relatedCampaignId: opts.relatedCampaignId } : {}),
+    },
+  });
+}
+
+/**
  * When an inbound message arrives, check if the conversation was created by a
  * CRM send and, if so:
  *   1. Mark the most recent PENDING CampaignExecution for this conversation's
