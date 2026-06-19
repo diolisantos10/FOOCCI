@@ -301,9 +301,23 @@ describe("H. retryable policy — data errors false, transient errors true", () 
     expect(c.category).toBe("EVOLUTION_INSTANCE_DISCONNECTED");
   });
 
-  it("generic FAILED_PROVIDER → retryable=true (unknown transient)", () => {
+  it("timeout text → FAILED_TIMEOUT, retryable=true (transient)", () => {
     const c = classifyExecution({ status: "FAILED", failedReason: "evolution timeout" });
     expect(c.retryable).toBe(true);
+    expect(c.category).toBe("FAILED_TIMEOUT");
+    expect(c.retryability).toBe("RETRYABLE_LATER");
+  });
+
+  it("generic provider text → FAILED_PROVIDER, retryable=true (transient)", () => {
+    const c = classifyExecution({ status: "FAILED", failedReason: "evolution http 502" });
+    expect(c.retryable).toBe(true);
     expect(c.category).toBe("FAILED_PROVIDER");
+    expect(c.retryability).toBe("RETRYABLE_LATER");
+  });
+
+  it("unrecognized text → FAILED_UNKNOWN, retryable with caution", () => {
+    const c = classifyExecution({ status: "FAILED", failedReason: "¯\\_(ツ)_/¯ something odd" });
+    expect(c.category).toBe("FAILED_UNKNOWN");
+    expect(c.retryability).toBe("RETRYABLE_LATER");
   });
 });

@@ -163,15 +163,22 @@ type CampaignExecutionRow = {
   classification?:  { category: string; kind: string; badge: string } | null;
 };
 
+type ReasonGroup = {
+  category: string; badge: string; count: number; kind: string;
+  retryability?: string; retryabilityLabel?: string;
+};
+
 type CampaignPerformance = {
   audience: number; sent: number; blockedSafety: number; failedProvider: number;
+  skipped?: number; recoverableLater?: number;
   read: number; responded: number; converted: number; conversionRate: number;
-  reasonGroups: Array<{ category: string; badge: string; count: number; kind: string }>;
+  reasonGroups: ReasonGroup[];
 };
 
 type CycleSummary = {
   sent: number; blockedSafety: number; failedProvider: number;
-  reasonGroups: Array<{ category: string; badge: string; count: number; kind: string }>;
+  skipped?: number; recoverableLater?: number;
+  reasonGroups: ReasonGroup[];
 };
 
 type CampaignDetail = {
@@ -2295,7 +2302,7 @@ function CampaignManageModal({
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {cycle.reasonGroups.map((g) => (
                                     <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                                      {g.badge}: {g.count}
+                                      {g.badge}: {g.count}{g.kind === "FAILED" && g.retryabilityLabel ? ` · ${g.retryabilityLabel}` : ""}
                                     </span>
                                   ))}
                                 </div>
@@ -2333,7 +2340,7 @@ function CampaignManageModal({
                               <div className="mt-3 flex flex-wrap gap-1.5">
                                 {perf.reasonGroups.map((g) => (
                                   <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                                    {g.badge}: {g.count}
+                                    {g.badge}: {g.count}{g.kind === "FAILED" && g.retryabilityLabel ? ` · ${g.retryabilityLabel}` : ""}
                                   </span>
                                 ))}
                               </div>
@@ -2441,7 +2448,7 @@ function CampaignManageModal({
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {detail.performance.reasonGroups.map((g) => (
                                 <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                                  {g.badge}: {g.count}
+                                  {g.badge}: {g.count}{g.kind === "FAILED" && g.retryabilityLabel ? ` · ${g.retryabilityLabel}` : ""}
                                 </span>
                               ))}
                             </div>
@@ -2449,6 +2456,13 @@ function CampaignManageModal({
                               <strong className="text-amber-700">{detail.performance.blockedSafety}</strong> bloqueio(s) de segurança (não é falha — voltam a ser elegíveis quando a janela expira) ·
                               <strong className="text-red-600"> {detail.performance.failedProvider}</strong> falha(s) real(is) de envio.
                             </p>
+                            <div className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-800">
+                              <p>
+                                <strong>{detail.performance.recoverableLater ?? 0}</strong> falha(s) temporária(s) podem ser reenviadas depois ·
+                                <strong> {detail.performance.skipped ?? 0}</strong> ignorada(s) (telefone inválido / não elegível — não reenviar).
+                              </p>
+                              <p className="mt-1 text-violet-600">Modo seguro WhatsApp Web: até 5 envios por ciclo. Falhas temporárias (Evolution 5xx, timeout) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e 400 não são reenviados automaticamente.</p>
+                            </div>
                             {detail.performance.reasonGroups.some((g) => g.category === "BLOCKED_WEEKLY_LIMIT") && (
                               <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
                                 <p className="font-semibold">Como destravar (a maioria está no limite semanal por cliente):</p>

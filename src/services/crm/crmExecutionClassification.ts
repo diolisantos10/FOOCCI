@@ -1,23 +1,26 @@
 /**
  * CRM execution classification — the single source of truth that separates a real
- * SEND FAILURE from an expected SAFETY BLOCK.
+ * SEND FAILURE from an expected SAFETY BLOCK, and assigns a retry policy.
  *
- * A campaign execution today is stored as a status + failedReason (human) +
- * errorMessage (machine ContactBlockReason, for new rows). This module maps any
- * execution — new (status BLOCKED + machine code) OR legacy (status FAILED + human
- * text like "Limite semanal atingido (1/1)") — into a clear category, so the UI
- * never again shows a weekly-cap block as a "failure".
+ * A campaign execution is stored as a status + failedReason (human) + errorMessage
+ * (machine ContactBlockReason / provider code). This module maps any execution —
+ * new (status BLOCKED/FAILED + machine code) OR legacy (status FAILED + human text)
+ * — into a clear category + coarse kind + retry policy, so the UI never shows a
+ * weekly-cap block as a "failure", an invalid phone as a provider failure, or a
+ * transient 5xx as permanent.
  *
  * Pure module: no DB, no side effects.
  */
 
 export type ExecutionCategory =
   | "SENT"
-  | "FAILED_PROVIDER"
-  | "EVOLUTION_BAD_REQUEST"
+  | "FAILED_PROVIDER"        // generic / 5xx provider error — retry later
+  | "FAILED_TIMEOUT"         // network timeout / connection dropped — retry later
+  | "FAILED_UNKNOWN"         // unrecognized failure — retry later with caution
+  | "EVOLUTION_BAD_REQUEST"  // HTTP 400 — fix payload/phone first
   | "EVOLUTION_INSTANCE_DISCONNECTED"
-  | "EVOLUTION_AUTH_ERROR"
-  | "EVOLUTION_RATE_LIMITED"
+  | "EVOLUTION_AUTH_ERROR"   // HTTP 401/403
+  | "EVOLUTION_RATE_LIMITED" // HTTP 429
   | "EMPTY_MESSAGE"
   | "BLOCKED_SAFETY"
   | "BLOCKED_COOLDOWN"
@@ -31,6 +34,23 @@ export type ExecutionCategory =
 /** Coarse kind used by the UI to pick a badge colour/word. */
 export type ExecutionKind = "SENT" | "BLOCKED" | "FAILED" | "SKIPPED";
 
+/**
+ * Retry policy for a recipient.
+ *  - PERMANENT          : data is wrong/impossible — never auto-retry (e.g. invalid phone).
+ *  - RETRYABLE_LATER    : transient — safe to retry in a later cron cycle (5xx, timeout, rate, safety cap).
+ *  - RETRYABLE_AFTER_FIX: needs an operator action first (fix payload, reconnect instance, fix template).
+ *  - NEVER_RETRY        : must not be contacted again (opt-out) or nothing to retry (sent).
+ */
+export type Retryability = "PERMANENT" | "RETRYABLE_LATER" | "RETRYABLE_AFTER_FIX" | "NEVER_RETRY";
+
+/** Owner-friendly PT-BR label for each retry policy. */
+export const RETRYABILITY_LABEL: Record<Retryability, string> = {
+  RETRYABLE_LATER:     "Pode reenviar depois",
+  RETRYABLE_AFTER_FIX: "Precisa corrigir",
+  PERMANENT:           "Não reenviar",
+  NEVER_RETRY:         "Não reenviar",
+};
+
 export interface ExecutionInput {
   status: string;
   failedReason?: string | null;
@@ -43,32 +63,43 @@ export interface ExecutionClassification {
   /** Short PT-BR badge word. */
   badge: string;
   /**
-   * Whether the send is worth retrying automatically.
-   * false for data errors (bad phone, empty message, auth key) — retrying won't help until data is fixed.
-   * true for transient failures (disconnected instance, rate limit, generic 5xx).
+   * Legacy boolean: whether an automatic retry is worthwhile at all.
+   * Kept for back-compat; prefer `retryability` for the precise policy.
    */
   retryable: boolean;
+  /** Precise retry policy — drives the "Reprocessar falhas recuperáveis" action. */
+  retryability: Retryability;
+  /** Owner-friendly retry label ("Pode reenviar depois" / "Precisa corrigir" / ...). */
+  retryabilityLabel: string;
 }
 
-const CATEGORY_META: Record<ExecutionCategory, { kind: ExecutionKind; badge: string; retryable: boolean }> = {
-  SENT:                         { kind: "SENT",    badge: "Enviado",                      retryable: false },
-  FAILED_PROVIDER:              { kind: "FAILED",  badge: "Falhou",                       retryable: true  },
-  EVOLUTION_BAD_REQUEST:        { kind: "FAILED",  badge: "Bad request (400)",             retryable: false },
-  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED", badge: "Instância desconectada",      retryable: true  },
-  EVOLUTION_AUTH_ERROR:         { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false },
-  EVOLUTION_RATE_LIMITED:       { kind: "BLOCKED", badge: "Rate limit",                   retryable: true  },
-  EMPTY_MESSAGE:                { kind: "FAILED",  badge: "Mensagem vazia",               retryable: false },
+interface CategoryMeta {
+  kind: ExecutionKind;
+  badge: string;
+  retryable: boolean;
+  retryability: Retryability;
+}
+
+const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
+  SENT:                            { kind: "SENT",    badge: "Enviado",                       retryable: false, retryability: "NEVER_RETRY" },
+  FAILED_PROVIDER:                 { kind: "FAILED",  badge: "Erro temporário da Evolution",  retryable: true,  retryability: "RETRYABLE_LATER" },
+  FAILED_TIMEOUT:                  { kind: "FAILED",  badge: "Tempo esgotado / conexão",      retryable: true,  retryability: "RETRYABLE_LATER" },
+  FAILED_UNKNOWN:                  { kind: "FAILED",  badge: "Erro desconhecido",             retryable: true,  retryability: "RETRYABLE_LATER" },
+  EVOLUTION_BAD_REQUEST:           { kind: "FAILED",  badge: "Bad request (400)",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
+  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED",  badge: "Instância desconectada",        retryable: true,  retryability: "RETRYABLE_AFTER_FIX" },
+  EVOLUTION_AUTH_ERROR:            { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
+  EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Rate limit",                    retryable: true,  retryability: "RETRYABLE_LATER" },
+  EMPTY_MESSAGE:                   { kind: "FAILED",  badge: "Mensagem vazia",                retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   // Invalid / missing phone is a RECIPIENT DATA problem, not a provider failure.
-  // It is skipped BEFORE any Evolution call, so it must never inflate the
-  // provider-failure count. Surfaced as SKIPPED and never retried.
-  BLOCKED_INVALID_PHONE:        { kind: "SKIPPED", badge: "Telefone inválido",            retryable: false },
-  BLOCKED_SAFETY:               { kind: "BLOCKED", badge: "Bloqueado",                   retryable: false },
-  BLOCKED_COOLDOWN:             { kind: "BLOCKED", badge: "Bloqueado (cooldown)",         retryable: false },
-  BLOCKED_WEEKLY_LIMIT:         { kind: "BLOCKED", badge: "Bloqueado (limite semanal)",   retryable: false },
-  BLOCKED_DAILY_GLOBAL_CAP:     { kind: "BLOCKED", badge: "Bloqueado (cap global)",       retryable: false },
-  BLOCKED_CAMPAIGN_DAILY_LIMIT: { kind: "BLOCKED", badge: "Bloqueado (limite da campanha)", retryable: false },
-  BLOCKED_OPT_OUT:              { kind: "BLOCKED", badge: "Opt-out",                     retryable: false },
-  SKIPPED_NOT_ELIGIBLE:         { kind: "SKIPPED", badge: "Ignorado",                    retryable: false },
+  // Skipped BEFORE any Evolution call, so it must never inflate the failure count.
+  BLOCKED_INVALID_PHONE:           { kind: "SKIPPED", badge: "Telefone inválido",             retryable: false, retryability: "PERMANENT" },
+  BLOCKED_SAFETY:                  { kind: "BLOCKED", badge: "Bloqueado",                     retryable: false, retryability: "RETRYABLE_LATER" },
+  BLOCKED_COOLDOWN:                { kind: "BLOCKED", badge: "Bloqueado (cooldown)",          retryable: false, retryability: "RETRYABLE_LATER" },
+  BLOCKED_WEEKLY_LIMIT:            { kind: "BLOCKED", badge: "Bloqueado (limite semanal)",    retryable: false, retryability: "RETRYABLE_LATER" },
+  BLOCKED_DAILY_GLOBAL_CAP:        { kind: "BLOCKED", badge: "Bloqueado (cap global)",        retryable: false, retryability: "RETRYABLE_LATER" },
+  BLOCKED_CAMPAIGN_DAILY_LIMIT:    { kind: "BLOCKED", badge: "Bloqueado (limite da campanha)", retryable: false, retryability: "RETRYABLE_LATER" },
+  BLOCKED_OPT_OUT:                 { kind: "BLOCKED", badge: "Opt-out",                       retryable: false, retryability: "NEVER_RETRY" },
+  SKIPPED_NOT_ELIGIBLE:            { kind: "SKIPPED", badge: "Ignorado",                      retryable: false, retryability: "PERMANENT" },
 };
 
 /** Maps a machine ContactBlockReason or provider error code to a category. */
@@ -86,6 +117,10 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "EVOLUTION_HTTP_401":
     case "EVOLUTION_HTTP_403": return "EVOLUTION_AUTH_ERROR";
     case "EVOLUTION_HTTP_429": return "EVOLUTION_RATE_LIMITED";
+    case "EVOLUTION_HTTP_408":
+    case "EVOLUTION_HTTP_504":
+    case "EVOLUTION_HTTP_522":
+    case "EVOLUTION_HTTP_524": return "FAILED_TIMEOUT";
     case "CUSTOMER_NOT_CONTACTABLE":
     case "NO_EVOLUTION_CONFIG":
     case "QUIET_HOURS":
@@ -95,6 +130,7 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "RESTAURANT_CLOSED":
     case "UNKNOWN_ERROR": return "BLOCKED_SAFETY";
     default:
+      // 5xx (and any other EVOLUTION_HTTP_*) → generic provider failure (retry later).
       if (reason.startsWith("EVOLUTION_HTTP_")) return "FAILED_PROVIDER";
       return null;
   }
@@ -123,20 +159,27 @@ function fromText(text: string): ExecutionCategory {
     t.includes("invalid number") || t.includes("número inválido") || t.includes("numero invalido") ||
     t.includes("not a valid") || t.includes("jid") || t.includes("não existe no whatsapp") || t.includes("exists\":false");
   if (looksLikePhoneError) return "BLOCKED_INVALID_PHONE";
+  // Timeout / dropped connection — its own retryable category.
+  if (t.includes("timeout") || t.includes("timed out") || t.includes("etimedout") ||
+      t.includes("econnreset") || t.includes("econnrefused") || t.includes("socket hang up") ||
+      t.includes("aborted") || t.includes("network")) return "FAILED_TIMEOUT";
   // 400 bad request patterns.
   if (t.includes("400") || t.includes("bad request")) return "EVOLUTION_BAD_REQUEST";
-  if (t.includes("http") || t.includes("evolution") || t.includes("timeout") || t.includes("econn")) return "FAILED_PROVIDER";
-  return "FAILED_PROVIDER";
+  // Recognizable provider error → generic provider failure (retry later).
+  if (t.includes("http") || t.includes("evolution") || t.includes("econn") || t.includes("5xx") ||
+      t.includes("500") || t.includes("502") || t.includes("503")) return "FAILED_PROVIDER";
+  // Nothing matched — unknown failure.
+  return "FAILED_UNKNOWN";
 }
 
 /** Classifies one execution row. Never throws. */
 export function classifyExecution(input: ExecutionInput): ExecutionClassification {
   const status = (input.status ?? "").toUpperCase();
   if (status === "SENT" || status === "DELIVERED" || status === "READ") {
-    return { category: "SENT", ...CATEGORY_META.SENT };
+    return materialize("SENT");
   }
   if (status === "SKIPPED") {
-    return { category: "SKIPPED_NOT_ELIGIBLE", ...CATEGORY_META.SKIPPED_NOT_ELIGIBLE };
+    return materialize("SKIPPED_NOT_ELIGIBLE");
   }
 
   // Prefer the machine reason (new rows store it on errorMessage).
@@ -149,10 +192,22 @@ export function classifyExecution(input: ExecutionInput): ExecutionClassificatio
   // FAILED/PENDING (legacy) → classify from the human text.
   if (!category) {
     const text = `${input.errorMessage ?? ""} ${input.failedReason ?? ""}`.trim();
-    category = text ? fromText(text) : "FAILED_PROVIDER";
+    category = text ? fromText(text) : "FAILED_UNKNOWN";
   }
 
-  return { category, ...CATEGORY_META[category] };
+  return materialize(category);
+}
+
+function materialize(category: ExecutionCategory): ExecutionClassification {
+  const meta = CATEGORY_META[category];
+  return {
+    category,
+    kind: meta.kind,
+    badge: meta.badge,
+    retryable: meta.retryable,
+    retryability: meta.retryability,
+    retryabilityLabel: RETRYABILITY_LABEL[meta.retryability],
+  };
 }
 
 export interface ExecutionSummary {
@@ -162,15 +217,32 @@ export interface ExecutionSummary {
   failedProvider: number;
   /** Recipients skipped before any provider call (invalid/missing phone, not eligible). */
   skipped: number;
+  /**
+   * Provider failures that are safe to reprocess in a later cycle
+   * (FAILED kind + RETRYABLE_LATER: generic 5xx, timeout, unknown). This is the
+   * exact pool the "Reprocessar falhas recuperáveis" action targets.
+   */
+  recoverableLater: number;
   /** Count per fine-grained category. */
   byCategory: Record<ExecutionCategory, number>;
+  /** Count per retry policy. */
+  byRetryability: Record<Retryability, number>;
   /** Human-friendly reason groups for the UI ("Limite semanal: X", ...). */
-  reasonGroups: Array<{ category: ExecutionCategory; badge: string; count: number; kind: ExecutionKind }>;
+  reasonGroups: Array<{
+    category: ExecutionCategory;
+    badge: string;
+    count: number;
+    kind: ExecutionKind;
+    retryability: Retryability;
+    retryabilityLabel: string;
+  }>;
 }
 
 const EMPTY_BY_CATEGORY = (): Record<ExecutionCategory, number> => ({
   SENT: 0,
   FAILED_PROVIDER: 0,
+  FAILED_TIMEOUT: 0,
+  FAILED_UNKNOWN: 0,
   EVOLUTION_BAD_REQUEST: 0,
   EVOLUTION_INSTANCE_DISCONNECTED: 0,
   EVOLUTION_AUTH_ERROR: 0,
@@ -186,27 +258,50 @@ const EMPTY_BY_CATEGORY = (): Record<ExecutionCategory, number> => ({
   SKIPPED_NOT_ELIGIBLE: 0,
 });
 
-/** Aggregates a list of executions into the split the Performance UI needs. */
-export function summarizeExecutions(rows: ExecutionInput[]): ExecutionSummary {
-  const byCategory = EMPTY_BY_CATEGORY();
-  for (const r of rows) byCategory[classifyExecution(r).category] += 1;
+const EMPTY_BY_RETRYABILITY = (): Record<Retryability, number> => ({
+  PERMANENT: 0,
+  RETRYABLE_LATER: 0,
+  RETRYABLE_AFTER_FIX: 0,
+  NEVER_RETRY: 0,
+});
 
-  let sent = 0, blockedSafety = 0, failedProvider = 0, skipped = 0;
+function buildSummary(byCategory: Record<ExecutionCategory, number>, total: number): ExecutionSummary {
+  let sent = 0, blockedSafety = 0, failedProvider = 0, skipped = 0, recoverableLater = 0;
+  const byRetryability = EMPTY_BY_RETRYABILITY();
+
   for (const cat of Object.keys(byCategory) as ExecutionCategory[]) {
     const n = byCategory[cat];
-    const kind = CATEGORY_META[cat].kind;
-    if (kind === "SENT") sent += n;
-    else if (kind === "BLOCKED") blockedSafety += n;
-    else if (kind === "FAILED") failedProvider += n; // real provider/data failures only
-    else if (kind === "SKIPPED") skipped += n;       // invalid phone / not eligible — never a "failure"
+    if (n === 0) continue;
+    const meta = CATEGORY_META[cat];
+    byRetryability[meta.retryability] += n;
+    if (meta.kind === "SENT") sent += n;
+    else if (meta.kind === "BLOCKED") blockedSafety += n;
+    else if (meta.kind === "FAILED") failedProvider += n; // real provider/data failures only
+    else if (meta.kind === "SKIPPED") skipped += n;        // invalid phone / not eligible — never a "failure"
+    // Reprocessable pool: provider failures that are transient (not 400/auth/disconnected).
+    if (meta.kind === "FAILED" && meta.retryability === "RETRYABLE_LATER") recoverableLater += n;
   }
 
   const reasonGroups = (Object.keys(byCategory) as ExecutionCategory[])
     .filter((c) => byCategory[c] > 0 && c !== "SENT")
-    .map((c) => ({ category: c, badge: CATEGORY_META[c].badge, count: byCategory[c], kind: CATEGORY_META[c].kind }))
+    .map((c) => ({
+      category: c,
+      badge: CATEGORY_META[c].badge,
+      count: byCategory[c],
+      kind: CATEGORY_META[c].kind,
+      retryability: CATEGORY_META[c].retryability,
+      retryabilityLabel: RETRYABILITY_LABEL[CATEGORY_META[c].retryability],
+    }))
     .sort((a, b) => b.count - a.count);
 
-  return { total: rows.length, sent, blockedSafety, failedProvider, skipped, byCategory, reasonGroups };
+  return { total, sent, blockedSafety, failedProvider, skipped, recoverableLater, byCategory, byRetryability, reasonGroups };
+}
+
+/** Aggregates a list of executions into the split the Performance UI needs. */
+export function summarizeExecutions(rows: ExecutionInput[]): ExecutionSummary {
+  const byCategory = EMPTY_BY_CATEGORY();
+  for (const r of rows) byCategory[classifyExecution(r).category] += 1;
+  return buildSummary(byCategory, rows.length);
 }
 
 /** Aggregates pre-grouped { reason → count } maps (from a DB groupBy). */
@@ -214,23 +309,10 @@ export function summarizeFromReasonCounts(
   groups: Array<{ status: string; failedReason?: string | null; errorMessage?: string | null; count: number }>,
 ): ExecutionSummary {
   const byCategory = EMPTY_BY_CATEGORY();
-  for (const g of groups) byCategory[classifyExecution(g).category] += g.count;
-  const rows: ExecutionInput[] = [];
-  // Rebuild a flat summary using the per-category counts.
-  let sent = 0, blockedSafety = 0, failedProvider = 0, skipped = 0, total = 0;
-  for (const cat of Object.keys(byCategory) as ExecutionCategory[]) {
-    const n = byCategory[cat];
-    total += n;
-    const kind = CATEGORY_META[cat].kind;
-    if (kind === "SENT") sent += n;
-    else if (kind === "BLOCKED") blockedSafety += n;
-    else if (kind === "FAILED") failedProvider += n;
-    else if (kind === "SKIPPED") skipped += n;
+  let total = 0;
+  for (const g of groups) {
+    byCategory[classifyExecution(g).category] += g.count;
+    total += g.count;
   }
-  void rows;
-  const reasonGroups = (Object.keys(byCategory) as ExecutionCategory[])
-    .filter((c) => byCategory[c] > 0 && c !== "SENT")
-    .map((c) => ({ category: c, badge: CATEGORY_META[c].badge, count: byCategory[c], kind: CATEGORY_META[c].kind }))
-    .sort((a, b) => b.count - a.count);
-  return { total, sent, blockedSafety, failedProvider, skipped, byCategory, reasonGroups };
+  return buildSummary(byCategory, total);
 }
