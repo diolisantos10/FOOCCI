@@ -1896,6 +1896,18 @@ function CampaignManageModal({
       .catch(() => {});
   }, [detailId]);
 
+  // Refresh campaign detail + diagnostics after a live reprocess (no tab reset).
+  const reloadDetail = useCallback(() => {
+    fetch(`/api/crm/campaigns/${detailId}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setDetail(json.data as CampaignDetail))
+      .catch(() => {});
+    fetch(`/api/crm/campaigns/${detailId}/debug`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setDebug(json.data ?? null))
+      .catch(() => {});
+  }, [detailId]);
+
   const sc           = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-gray-100", text: "text-gray-600" }) : null;
   const cfg          = detail?.scheduleConfig as ScheduleCfg | null | undefined;
   const isRecurring  = cfg?.mode === "RECURRING";
@@ -2434,6 +2446,7 @@ function CampaignManageModal({
                                       </p>
                                     </div>
                                   )}
+                                  <RecoverableReprocessPanel campaignId={detail.id} onDone={reloadDetail} />
                                   <p className="rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700">
                                     Um <strong>ciclo</strong> é cada execução do robô de campanhas. No <strong>modo seguro WhatsApp Web</strong>, o Foocci envia até <strong>{detail.safeSend?.maxPerCycle ?? 5} mensagens por ciclo</strong> para evitar travamentos e reduzir risco de bloqueio.
                                   </p>
@@ -5822,6 +5835,144 @@ export function CRMClient({
         onClose={() => setShowImport(false)}
         onComplete={() => { setShowImport(false); router.refresh(); }}
       />
+    </div>
+  );
+}
+
+// ─── Recoverable reprocess (live, owner-confirmed safe send) ──────────────────
+
+interface ReprocessPreview {
+  plan?:           { recoverableExecutions: number; distinctRecipients: number; duplicatesRemoved: number; cap: number; nextBatchCount: number };
+  instance?:       { connected: boolean; state: string | null };
+  safeToSend?:     boolean;
+  campaignStatus?: string;
+}
+
+interface ReprocessRunResult {
+  ok:         boolean;
+  message?:   string;
+  requested:  number;
+  sent:       number;
+  ignored:    number;
+  failed:     number;
+  aborted:    boolean;
+  recipients: Array<{ customerName: string; phoneMasked: string; status: string; detail: string }>;
+}
+
+/**
+ * Self-contained panel for the campaign detail: loads the read-only recoverable
+ * preview, and (only when safe) lets the owner reprocess the next batch via the
+ * confirmed POST. Enables the action ONLY when safeToSend && nextBatch>0 &&
+ * instance connected. Sends nothing without an explicit click + confirm.
+ */
+function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string; onDone?: () => void }) {
+  const [preview, setPreview] = useState<ReprocessPreview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [result,  setResult]  = useState<ReprocessRunResult | null>(null);
+  const [err,     setErr]     = useState<string | null>(null);
+
+  const loadPreview = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/crm/campaigns/${campaignId}/recoverable`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setPreview(json.data as ReprocessPreview))
+      .catch(() => setPreview(null))
+      .finally(() => setLoading(false));
+  }, [campaignId]);
+
+  useEffect(() => { loadPreview(); }, [loadPreview]);
+
+  const plan      = preview?.plan;
+  const n         = plan?.nextBatchCount ?? 0;
+  const connected = preview?.instance?.connected ?? false;
+  const canSend   = Boolean(preview?.safeToSend) && n > 0 && connected && !sending;
+
+  async function handleReprocess() {
+    if (!canSend) return;
+    const confirmed = window.confirm(
+      `Reenviar agora para até ${n} cliente(s) com falha temporária recuperável?\n\n` +
+      `Modo seguro WhatsApp Web — no máximo ${plan?.cap ?? 5} por vez. Opt-out, telefone inválido e quem já recebeu são ignorados automaticamente.`,
+    );
+    if (!confirmed) return;
+    setSending(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/crm/campaigns/${campaignId}/reprocess-recoverable`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ confirm: true }),
+      });
+      const json = await res.json().catch(() => null);
+      const data = (json?.data ?? null) as ReprocessRunResult | null;
+      if (res.ok && data) {
+        setResult(data);
+        loadPreview();
+        onDone?.();
+      } else {
+        setErr(json?.error ?? data?.message ?? "Falha ao reprocessar.");
+        if (data) setResult(data);
+      }
+    } catch {
+      setErr("Sem conexão. Tente novamente.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-[10px] text-gray-400">Carregando reenvio seguro…</div>;
+  }
+  if (!plan || (plan.distinctRecipients === 0 && plan.recoverableExecutions === 0)) return null;
+
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-3 py-3 space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-violet-700">Reenvio de falhas recuperáveis</p>
+      <div className="flex flex-wrap gap-1.5 text-[10px]">
+        <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Recuperáveis: {plan.distinctRecipients}</span>
+        {plan.duplicatesRemoved > 0 && (
+          <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-gray-500 border border-gray-200">Duplicados removidos: {plan.duplicatesRemoved}</span>
+        )}
+        <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Próximo lote: {n}</span>
+        <span className={`rounded-full px-2 py-0.5 font-semibold border ${connected ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+          {connected ? "WhatsApp conectado" : "WhatsApp desconectado"}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        disabled={!canSend}
+        onClick={() => void handleReprocess()}
+        className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+      >
+        {sending ? "Reprocessando…" : `Reprocessar ${n} agora`}
+      </button>
+      {!canSend && !sending && (
+        <p className="text-[10px] text-gray-500">
+          {n === 0 ? "Nenhuma falha recuperável agora." : !connected ? "Conecte o WhatsApp (instância) para poder reenviar." : "Reenvio indisponível no momento."}
+        </p>
+      )}
+
+      {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-[10px] text-red-600">{err}</p>}
+
+      {result && (
+        <div className="rounded-lg bg-white px-3 py-2 border border-gray-100 space-y-1">
+          <p className="text-[10px] font-semibold text-gray-700">
+            Enviados: <span className="text-green-700">{result.sent}</span> · Ignorados: <span className="text-amber-700">{result.ignored}</span> · Falhas: <span className="text-red-600">{result.failed}</span>
+            {result.aborted ? " · ⚠️ interrompido (instância caiu)" : ""}
+          </p>
+          {result.message && <p className="text-[10px] text-gray-500">{result.message}</p>}
+          {result.recipients.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {result.recipients.map((r, i) => (
+                <span key={i} className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${r.status === "SENT" ? "bg-green-50 text-green-700" : r.status === "FAILED" ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"}`}>
+                  {(r.customerName || r.phoneMasked)}: {r.status}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,9 @@ import { ok, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions } from "@/services/crm/crmExecutionClassification";
 import { EVOLUTION_WEB_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
+import { computeRecoverablePlan, REPROCESSABLE_CAMPAIGN_STATUSES } from "@/services/crm/recoverableReprocessPlan";
+import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -29,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const campaign = await prisma.campaign.findUnique({
       where:  { id: params.id },
       select: {
-        id: true, restaurantId: true, name: true,
+        id: true, restaurantId: true, name: true, status: true,
         executions: {
           orderBy: { createdAt: "asc" },
           select: {
@@ -73,14 +76,51 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       };
     });
 
+    // Deduped reprocess plan — the EXACT recipients a live reprocess would attempt.
+    // Same pure function the POST recomputes from, so preview and send agree.
+    const plan = computeRecoverablePlan(
+      campaign.executions.map((e) => ({
+        id: e.id, customerId: e.customerId, customerName: e.customerName,
+        customerPhone: e.customerPhone, status: e.status,
+        failedReason: e.failedReason, errorMessage: e.errorMessage,
+      })),
+      EVOLUTION_WEB_MAX_PER_RUN,
+    );
+
+    // Live, read-only Evolution connection state so the UI can gate the action.
+    let instanceConnected = false;
+    let instanceState: string | null = null;
+    try {
+      const snap = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
+      if (snap.ok) {
+        const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
+        instanceState = status?.state ?? null;
+        instanceConnected = instanceState === "open";
+      }
+    } catch { /* read-only probe — treat any failure as not connected */ }
+
+    const campaignReprocessable = REPROCESSABLE_CAMPAIGN_STATUSES.has(campaign.status);
+    const safeToSend = campaignReprocessable && instanceConnected && plan.nextBatchCount > 0;
+
     return ok({
       campaignId:   campaign.id,
       campaignName: campaign.name,
+      campaignStatus: campaign.status,
       safeSend: {
         provider:    "EVOLUTION_WEB",
         maxPerCycle: EVOLUTION_WEB_MAX_PER_RUN,
         note:        `Modo seguro WhatsApp Web: até ${EVOLUTION_WEB_MAX_PER_RUN} envios por ciclo.`,
       },
+      // Deduped plan + live gate for the "Reprocessar N agora" action.
+      plan: {
+        recoverableExecutions: plan.recoverableExecutions,
+        distinctRecipients:    plan.distinctRecipients,
+        duplicatesRemoved:     plan.duplicatesRemoved,
+        cap:                   plan.cap,
+        nextBatchCount:        plan.nextBatchCount,
+      },
+      instance:   { connected: instanceConnected, state: instanceState },
+      safeToSend,
       diagnostics: {
         sent:             summary.sent,
         skipped:          summary.skipped,

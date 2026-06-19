@@ -42,6 +42,13 @@ import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { readDedupePolicy, readOverridePolicy } from "./crmDedupePolicy";
 import { generateMessageFingerprint } from "./messageFingerprint";
 import { getImpactedByConcept, getImpactedByMessage, recordLedger } from "./CRMContactLedgerService";
+import { classifyExecution } from "./crmExecutionClassification";
+import {
+  computeRecoverablePlan,
+  assertReprocessAllowed,
+  type ReprocessBlockReason,
+} from "./recoverableReprocessPlan";
+import { maskPhone } from "@/lib/wa-text-ordering-flag";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -73,6 +80,10 @@ export interface CampaignBatchResult {
  *  re-creating a block row every cron tick and inflating the failure count). */
 const BLOCK_RETRY_WINDOW_HOURS = 24;
 
+/** In-process guard against parallel live reprocess runs for the same campaign
+ *  (closes the duplicate-send race a double-submit could otherwise open). */
+const REPROCESSING_CAMPAIGNS = new Set<string>();
+
 /**
  * Hard ceiling on messages sent per run for the Evolution Web / Baileys provider.
  * Evolution Web rides a real WhatsApp-Web session — bursts freeze the phone and
@@ -99,6 +110,41 @@ export interface StuckSendingRecoveryResult {
   recovered:   number;
   dryRun:      boolean;
   campaignIds: string[];
+}
+
+export interface ReprocessRecipientResult {
+  customerName: string;
+  phoneMasked:  string;
+  status:       "SENT" | "FAILED" | "BLOCKED" | "SKIPPED" | "IGNORED";
+  detail:       string;
+}
+
+export interface ReprocessRecoverableResult {
+  ok:           boolean;
+  /** Set when a gate blocked the run (ok=false). */
+  reason?:      ReprocessBlockReason | "NOT_FOUND" | "IN_PROGRESS";
+  message?:     string;
+  /** HTTP status the route should return. */
+  httpStatus:   number;
+  campaignId:   string;
+  campaignName: string;
+  plan: {
+    recoverableExecutions: number;
+    distinctRecipients:    number;
+    duplicatesRemoved:     number;
+    cap:                   number;
+    nextBatchCount:        number;
+  };
+  instanceState: string | null;
+  /** Recipients actually attempted via the safe send path. */
+  requested:     number;
+  sent:          number;
+  /** Safety blocks + recipient-data skips + revalidation exclusions. */
+  ignored:       number;
+  failed:        number;
+  /** True when a mid-batch instance collapse stopped the remaining sends. */
+  aborted:       boolean;
+  recipients:    ReprocessRecipientResult[];
 }
 
 // ─── Timezone helpers ─────────────────────────────────────────
@@ -466,6 +512,194 @@ export class ScheduledCampaignRunnerService {
     };
   }
 
+  /**
+   * Owner-initiated SAFE reprocess of a campaign's recoverable failures.
+   *
+   * Recomputes the recoverable plan from fresh DB rows (never trusts the client),
+   * checks the live Evolution instance state immediately before sending, sends only
+   * the next safe batch (cap EVOLUTION_WEB_MAX_PER_RUN) through the SAME battle-tested
+   * `_sendBatch` path (opt-out / phone / cooldown / weekly-cap / cross-campaign dedup
+   * gates, Central de Conversas logging, failure classification), creating NEW
+   * execution rows only — old failed rows are never mutated. Aborts the remaining
+   * sends if the instance collapses mid-batch and returns a partial result.
+   *
+   * Sends NOTHING unless `confirm === true`, the campaign is reprocessable, there is
+   * a non-empty batch, and the instance is connected.
+   */
+  static async reprocessRecoverableBatch(
+    campaignId: string,
+    ctx: { restaurantId: string; confirm: unknown },
+  ): Promise<ReprocessRecoverableResult> {
+    const cap = EVOLUTION_WEB_MAX_PER_RUN;
+    const emptyPlan = { recoverableExecutions: 0, distinctRecipients: 0, duplicatesRemoved: 0, cap, nextBatchCount: 0 };
+    let lockHeld = false;
+
+    const campaign = await prisma.campaign.findUnique({
+      where:  { id: campaignId },
+      select: {
+        id: true, restaurantId: true, name: true, status: true,
+        message: true, templateId: true, targetSegment: true,
+        scheduleConfig: true, campaignFamilyKey: true, messageFingerprint: true,
+        executions: {
+          orderBy: { createdAt: "asc" },
+          select: { id: true, customerId: true, customerName: true, customerPhone: true, status: true, failedReason: true, errorMessage: true },
+        },
+      },
+    });
+
+    const blocked = (
+      reason: ReprocessBlockReason | "NOT_FOUND" | "IN_PROGRESS",
+      message: string,
+      httpStatus: number,
+      extra: Partial<ReprocessRecoverableResult> = {},
+    ): ReprocessRecoverableResult => ({
+      ok: false, reason, message, httpStatus,
+      campaignId, campaignName: campaign?.name ?? "",
+      plan: emptyPlan, instanceState: null,
+      requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [],
+      ...extra,
+    });
+
+    // Tenant scope — never touch another restaurant's campaign.
+    if (!campaign || campaign.restaurantId !== ctx.restaurantId) {
+      return blocked("NOT_FOUND", "Campanha não encontrada.", 404);
+    }
+
+    // Recompute the plan server-side from fresh rows (client preview is ignored).
+    const plan = computeRecoverablePlan(
+      campaign.executions.map((e) => ({
+        id: e.id, customerId: e.customerId, customerName: e.customerName,
+        customerPhone: e.customerPhone, status: e.status,
+        failedReason: e.failedReason, errorMessage: e.errorMessage,
+      })),
+      cap,
+    );
+    const planOut = {
+      recoverableExecutions: plan.recoverableExecutions,
+      distinctRecipients:    plan.distinctRecipients,
+      duplicatesRemoved:     plan.duplicatesRemoved,
+      cap:                   plan.cap,
+      nextBatchCount:        plan.nextBatchCount,
+    };
+
+    // Confirmation + campaign-status gates first (cheap, no side effects, no network).
+    if (ctx.confirm !== true) {
+      return blocked("NOT_CONFIRMED", "Confirmação explícita obrigatória ({ confirm: true }).", 400, { plan: planOut });
+    }
+    if (!assertReprocessAllowed({ confirm: true, campaignStatus: campaign.status, nextBatchCount: 1, instanceState: "open" }).ok) {
+      return blocked("CAMPAIGN_NOT_REPROCESSABLE", `Campanha em status ${campaign.status} não pode reprocessar.`, 409, { plan: planOut });
+    }
+    if (plan.nextBatchCount === 0) {
+      // Not an error — simply nothing safe to send right now.
+      return { ok: true, httpStatus: 200, message: "Nenhum destinatário recuperável no momento.", campaignId, campaignName: campaign.name, plan: planOut, instanceState: null, requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [] };
+    }
+
+    // No parallel live reprocess for the same campaign (anti-duplicate guard).
+    if (REPROCESSING_CAMPAIGNS.has(campaignId)) {
+      return blocked("IN_PROGRESS", "Já existe um reprocessamento em andamento para esta campanha.", 409, { plan: planOut });
+    }
+    REPROCESSING_CAMPAIGNS.add(campaignId);
+    lockHeld = true;
+    try {
+    // Live Evolution instance gate — IMMEDIATELY before sending.
+    let instanceState: string | null = null;
+    const snap = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
+    if (snap.ok) {
+      const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
+      instanceState = status?.state ?? null;
+    }
+    const gate = assertReprocessAllowed({ confirm: true, campaignStatus: campaign.status, nextBatchCount: plan.nextBatchCount, instanceState });
+    if (!gate.ok) {
+      return blocked(gate.reason, gate.message, gate.reason === "INSTANCE_NOT_CONNECTED" ? 409 : 400, { plan: planOut, instanceState });
+    }
+
+    // Revalidate each recipient against the CURRENT cadastro: contactable, not
+    // opted-out, has a phone — and not already successfully sent on this campaign.
+    const batchIds = plan.nextBatch.map((r) => r.customerId);
+    const [contactable, alreadySentRows] = await Promise.all([
+      prisma.customer.findMany({
+        where: {
+          id: { in: batchIds }, restaurantId: campaign.restaurantId,
+          isGuest: false, isActive: true, hasOptedOut: false, crmContactable: true,
+          phone: { not: null },
+        },
+        select: { id: true, name: true, phone: true, tier: true, segment: true, totalOrders: true, totalSpend: true, lastOrderAt: true, importedLastOrderAt: true },
+      }),
+      prisma.campaignExecution.findMany({
+        where: { campaignId, customerId: { in: batchIds }, status: { in: ["SENT", "DELIVERED", "READ"] } },
+        select: { customerId: true },
+      }),
+    ]);
+    const alreadySent = new Set(alreadySentRows.map((e) => e.customerId));
+    const contactableById = new Map(contactable.map((c) => [c.id, c]));
+
+    const customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }> = [];
+    const revalidationExcluded: ReprocessRecipientResult[] = [];
+    for (const r of plan.nextBatch) {
+      const c = contactableById.get(r.customerId);
+      if (!c || alreadySent.has(r.customerId)) {
+        revalidationExcluded.push({
+          customerName: r.customerName, phoneMasked: maskPhone(r.customerPhone),
+          status: "IGNORED",
+          detail: alreadySent.has(r.customerId) ? "Já enviado com sucesso" : "Opt-out / sem WhatsApp elegível",
+        });
+        continue;
+      }
+      customers.push({
+        id: c.id, name: c.name, phone: c.phone as string, tier: c.tier, segment: c.segment,
+        totalOrders: c.totalOrders, totalSpend: c.totalSpend.toNumber(),
+        lastOrderAt: (c.lastOrderAt ?? c.importedLastOrderAt)?.toISOString() ?? null,
+      });
+    }
+
+    if (customers.length === 0) {
+      return { ok: true, httpStatus: 200, message: "Todos os recuperáveis foram ignorados na revalidação.", campaignId, campaignName: campaign.name, plan: planOut, instanceState, requested: 0, sent: 0, ignored: revalidationExcluded.length, failed: 0, aborted: false, recipients: revalidationExcluded };
+    }
+
+    // Send via the SAME safe path used by the cron, with mid-batch abort enabled.
+    const safety = await getSafetyConfig(campaign.restaurantId);
+    const override = readOverridePolicy(campaign.scheduleConfig);
+    const fingerprint = campaign.messageFingerprint || generateMessageFingerprint(campaign.message);
+    const startedAt = new Date();
+
+    const send = await this._sendBatch(
+      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment },
+      customers,
+      safety,
+      { allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride, campaignFamilyKey: campaign.campaignFamilyKey ?? null, messageFingerprint: fingerprint || null },
+      { abortOnInstanceCollapse: true },
+    );
+
+    // Per-recipient log = the NEW execution rows created during this run.
+    const created = await prisma.campaignExecution.findMany({
+      where:  { campaignId, customerId: { in: customers.map((c) => c.id) }, createdAt: { gte: startedAt } },
+      orderBy: { createdAt: "asc" },
+      select: { customerName: true, customerPhone: true, status: true, failedReason: true, errorMessage: true },
+    });
+    const sentRecipients: ReprocessRecipientResult[] = created.map((e) => {
+      const c = classifyExecution({ status: e.status, failedReason: e.failedReason, errorMessage: e.errorMessage });
+      const status: ReprocessRecipientResult["status"] =
+        c.kind === "SENT" ? "SENT" : c.kind === "BLOCKED" ? "BLOCKED" : c.kind === "SKIPPED" ? "SKIPPED" : "FAILED";
+      return { customerName: e.customerName ?? "", phoneMasked: maskPhone(e.customerPhone ?? ""), status, detail: c.badge };
+    });
+
+    return {
+      ok: true, httpStatus: 200,
+      message: send.aborted ? "Instância desconectou durante o envio — lote interrompido com resultado parcial." : undefined,
+      campaignId, campaignName: campaign.name,
+      plan: planOut, instanceState,
+      requested: customers.length,
+      sent: send.sent,
+      ignored: send.blocked + send.skipped + revalidationExcluded.length,
+      failed: send.failed,
+      aborted: send.aborted,
+      recipients: [...sentRecipients, ...revalidationExcluded],
+    };
+    } finally {
+      if (lockHeld) REPROCESSING_CAMPAIGNS.delete(campaignId);
+    }
+  }
+
   // ── private ──────────────────────────────────────────────────
 
   private static async _sendBatch(
@@ -476,11 +710,12 @@ export class ScheduledCampaignRunnerService {
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
     governance?: { allowWeeklyCapOverride: boolean; campaignFamilyKey: string | null; messageFingerprint: string | null },
-  ): Promise<{ sent: number; failed: number; blocked: number; skipped: number }> {
+    runOpts: { abortOnInstanceCollapse?: boolean } = {},
+  ): Promise<{ sent: number; failed: number; blocked: number; skipped: number; aborted: boolean }> {
     const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
     if (!cfgResult.ok) {
       console.error(`[ScheduledCampaignRunner] WhatsApp not configured for restaurant ${campaign.restaurantId}`);
-      return { sent: 0, failed: customers.length, blocked: 0, skipped: 0 };
+      return { sent: 0, failed: customers.length, blocked: 0, skipped: 0, aborted: false };
     }
     const evoConfig = cfgResult.data;
 
@@ -524,6 +759,7 @@ export class ScheduledCampaignRunnerService {
     let blocked     = 0; // safety blocks — never counted as failures
     let skipped     = 0; // recipient-data skips (no/invalid phone) — never failures
     let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
+    let aborted     = false; // set when a hard instance collapse stops the batch early
 
     for (const customer of customers) {
       // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
@@ -708,6 +944,14 @@ export class ScheduledCampaignRunnerService {
           },
         });
         failed++;
+
+        // Manual reprocess only: if the Evolution instance has hard-collapsed
+        // mid-batch, stop remaining sends and return a partial result instead of
+        // hammering a dead session. The cron path passes no flag → unchanged.
+        if (runOpts.abortOnInstanceCollapse) {
+          const liveStatus = await EvolutionClient.getInstanceStatus(evoConfig).catch(() => null);
+          if (!liveStatus || liveStatus.state !== "open") { aborted = true; break; }
+        }
       }
     }
 
@@ -724,7 +968,7 @@ export class ScheduledCampaignRunnerService {
       });
     }
 
-    return { sent, failed, blocked, skipped };
+    return { sent, failed, blocked, skipped, aborted };
   }
 
   /**
