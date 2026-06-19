@@ -44,17 +44,20 @@ function simulateOldAgent(customerName: string, messageText: string): string {
   if (/^(oi+|ol[aá]+|bom\s+dia|boa\s+tarde|boa\s+noite|hey|hi|e\s*a[íi]|eai|opa|tudo\s+bem)[\s!.,?]*$/i.test(t)) {
     return (
       `Olá, ${name}! Tudo bem? 😊 Como posso te ajudar hoje?\n\n` +
-      `1️⃣ Cardápio. Faça seu pedido.\n` +
-      `2️⃣ Rodízio Presencial\n` +
-      `3️⃣ Horário de funcionamento\n` +
-      `4️⃣ Redes Sociais\n` +
-      `5️⃣ Cazza Club\n` +
-      `6️⃣ Falar com atendente\n\n` +
-      `Responda com o número da opção 😊`
+      `1️⃣ Já sei o que quero pedir\n` +
+      `2️⃣ Ver cardápio\n\n` +
+      `────────────\n\n` +
+      `Outras opções:\n` +
+      `3️⃣ Rodízio presencial\n` +
+      `4️⃣ Horário de funcionamento\n` +
+      `5️⃣ Promoções\n` +
+      `6️⃣ Cazza Club\n` +
+      `7️⃣ Falar com atendente\n\n` +
+      `0. menu`
     );
   }
 
-  if (/\b(card[aá]pio|menu|opcoes|opções|^1$)\b/i.test(t)) {
+  if (/\b(card[aá]pio|menu|^2$)\b/i.test(t)) {
     return (
       `Perfeito! 😊 Clique no link abaixo para ver nosso cardápio e fazer seu pedido:\n\n` +
       `🍣 https://foocci.com.br/pedido/sushi-cazza\n\n` +
@@ -62,7 +65,7 @@ function simulateOldAgent(customerName: string, messageText: string): string {
     );
   }
 
-  if (/\b(hor[aá]rio|funciona(mento)?|abre|fecha|^3$)\b/i.test(t)) {
+  if (/\b(hor[aá]rio|funciona(mento)?|abre|fecha|^4$)\b/i.test(t)) {
     return (
       `⏰ *Horários de funcionamento:*\n\n` +
       `Terça a Sexta: 18h às 23h\n` +
@@ -71,37 +74,40 @@ function simulateOldAgent(customerName: string, messageText: string): string {
     );
   }
 
-  if (/\b(rod[ií]zio|^2$)\b/i.test(t)) {
+  if (/\b(rod[ií]zio|^3$)\b/i.test(t)) {
     return (
       `🥢 *Rodízio Presencial*\n\n` +
       `Disponível aos sábados e domingos no almoço a partir das 12h.\n` +
       `Reservas pelo telefone ou DM no Instagram.\n\n` +
-      `Quer saber mais? Responda "6" para falar com um atendente! 😊`
+      `Quer saber mais? Responda "7" para falar com um atendente! 😊`
     );
   }
 
-  if (/\b(redes?\s+sociais?|instagram|^4$)\b/i.test(t)) {
-    return `Nos encontre nas redes sociais! 📱\n\nInstagram: @sushicazza\n\nSempre por lá com novidades e promoções! 🍣`;
+  if (/\b(promo[çc][oõ]e?s?|promo|desconto|^5$)\b/i.test(t)) {
+    return `Confira nossas promoções no cardápio! 🎉\n\nhttps://foocci.com.br/pedido/sushi-cazza`;
   }
 
-  if (/\b(cazza\s*club|^5$)\b/i.test(t)) {
+  if (/\b(cazza\s*club|^6$)\b/i.test(t)) {
     return `🏆 *Cazza Club*\n\nO programa de fidelidade do Sushi Cazza!\n\nAcumule pontos a cada pedido e troque por desconto. Entre em contato para saber mais! 😊`;
   }
 
-  if (/\b(atendente|humano|pessoa|falar|^6$)\b/i.test(t)) {
+  if (/\b(atendente|humano|pessoa|falar|^7$)\b/i.test(t)) {
     return `Claro! Vou te transferir para um atendente agora. 🤝\n\nAguarda um momentinho...`;
   }
 
   // Generic fallback
   return (
     `Olá, ${name}! 😊 Como posso te ajudar?\n\n` +
-    `1️⃣ Cardápio. Faça seu pedido.\n` +
-    `2️⃣ Rodízio Presencial\n` +
-    `3️⃣ Horário de funcionamento\n` +
-    `4️⃣ Redes Sociais\n` +
-    `5️⃣ Cazza Club\n` +
-    `6️⃣ Falar com atendente\n\n` +
-    `Responda com o número da opção 😊`
+    `1️⃣ Já sei o que quero pedir\n` +
+    `2️⃣ Ver cardápio\n\n` +
+    `────────────\n\n` +
+    `Outras opções:\n` +
+    `3️⃣ Rodízio presencial\n` +
+    `4️⃣ Horário de funcionamento\n` +
+    `5️⃣ Promoções\n` +
+    `6️⃣ Cazza Club\n` +
+    `7️⃣ Falar com atendente\n\n` +
+    `0. menu`
   );
 }
 

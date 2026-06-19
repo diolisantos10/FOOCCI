@@ -273,12 +273,20 @@ describe("renderMainMenu", () => {
     expect(result).toContain("3️⃣ Falar com atendente");
   });
 
+  it("ends with '0. menu' footer", () => {
+    expect(renderMainMenu(makeCtx()).endsWith("0. menu")).toBe(true);
+  });
+
   it("does NOT contain the old 'Voltando ao menu principal' text", () => {
     expect(renderMainMenu(makeCtx())).not.toContain("Voltando ao menu principal");
   });
 
   it("does NOT contain 'Responda com o número da opção'", () => {
     expect(renderMainMenu(makeCtx())).not.toContain("Responda com o número da opção");
+  });
+
+  it("does NOT contain 'Cardápio. Faça seu pedido'", () => {
+    expect(renderMainMenu(makeCtx())).not.toContain("Cardápio. Faça seu pedido");
   });
 
   it("falls back to welcomeMessage when menuOptions is empty", () => {
@@ -615,6 +623,52 @@ describe("7-option menu with separator", () => {
     expect(result).toContain("Como você prefere começar?");
     expect(result).toContain("7️⃣ Falar com atendente");
     expect(result).toContain("────────────");
+  });
+
+  it("approved menu: option 1 = Já sei o que quero pedir (text_order)", () => {
+    const opt = detectSelectedOption("1", SEVEN_OPTIONS);
+    expect(opt?.label).toBe("Já sei o que quero pedir");
+    expect(opt?.flow).toBe("text_order");
+  });
+
+  it("approved menu: option 2 = Ver cardápio (menu)", () => {
+    const opt = detectSelectedOption("2", SEVEN_OPTIONS);
+    expect(opt?.label).toBe("Ver cardápio");
+    expect(opt?.flow).toBe("menu");
+  });
+
+  it("approved menu: option 3 = Rodízio presencial (rodizio)", () => {
+    const opt = detectSelectedOption("3", SEVEN_OPTIONS);
+    expect(opt?.label).toBe("Rodízio presencial");
+    expect(opt?.flow).toBe("rodizio");
+  });
+
+  it("approved menu: option 7 = Falar com atendente (handoff)", () => {
+    const opt = detectSelectedOption("7", SEVEN_OPTIONS);
+    expect(opt?.flow).toBe("handoff");
+  });
+
+  it("approved menu: option 1 reply instructs text ordering, not a URL", () => {
+    const opt = detectSelectedOption("1", SEVEN_OPTIONS)!;
+    const reply = buildFlowReply(opt, makeCtx({ menuOptions: SEVEN_OPTIONS }));
+    expect(reply.toLowerCase()).toContain("me manda seu pedido");
+    expect(reply).not.toContain("http");
+  });
+
+  it("approved menu: option 2 reply sends cardápio URL", () => {
+    const opt = detectSelectedOption("2", SEVEN_OPTIONS)!;
+    const reply = buildFlowReply(opt, makeCtx({ menuOptions: SEVEN_OPTIONS }));
+    expect(reply).toContain("https://foocci.com.br/pedido/sushi-cazza");
+  });
+
+  it("approved menu: renderMainMenu ends with '0. menu'", () => {
+    const ctx = makeCtx({ menuOptions: SEVEN_OPTIONS });
+    expect(renderMainMenu(ctx).endsWith("0. menu")).toBe(true);
+  });
+
+  it("approved menu: does NOT contain 'Cardápio. Faça seu pedido'", () => {
+    const ctx = makeCtx({ menuOptions: SEVEN_OPTIONS });
+    expect(renderMainMenu(ctx)).not.toContain("Cardápio. Faça seu pedido");
   });
 });
 

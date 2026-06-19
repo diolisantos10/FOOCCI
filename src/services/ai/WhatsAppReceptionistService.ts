@@ -519,7 +519,7 @@ export function buildLooseAddressReply(_ctx: ReplyContext): string {
 export function renderMainMenu(ctx: ReplyContext): string {
   const menuList = buildMenuList(ctx.menuOptions);
   if (!menuList) return ctx.welcomeMessage;
-  return "Oi! 😊 Como você prefere começar?" + menuList;
+  return "Oi! 😊 Como você prefere começar?" + menuList + BACK_TO_MENU_FOOTER;
 }
 
 // ── Receptionist response observability (single source of truth) ──────────────
@@ -1231,7 +1231,7 @@ async function run(conversationId: string): Promise<void> {
             const menuList = buildMenuList(effectiveMenuOptions);
             let greet = greetLine;
             if (menuList) {
-              greet += menuList;
+              greet += menuList + BACK_TO_MENU_FOOTER;
             } else if (ctx.pedidoUrl) {
               greet += `\n\nCardápio: ${ctx.pedidoUrl}`;
             }
