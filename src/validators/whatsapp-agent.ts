@@ -5,7 +5,7 @@ import { z } from "zod";
 export const AGENT_MODES  = ["RECEPTIONIST_ONLY", "HUMAN_ASSISTED", "AI_ORDERING_EXPERIMENTAL"] as const;
 export const AGENT_TONES  = ["informal", "neutral", "premium"] as const;
 export const AGENT_STYLES = ["direct", "consultive", "sales_driven"] as const;
-export const FLOW_TYPES   = ["order", "handoff", "menu", "promotions", "custom"] as const;
+export const FLOW_TYPES   = ["order", "handoff", "menu", "promotions", "custom", "text_order", "rodizio", "club"] as const;
 
 export type AgentMode = (typeof AGENT_MODES)[number];
 

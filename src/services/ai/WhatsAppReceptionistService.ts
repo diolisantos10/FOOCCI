@@ -58,9 +58,13 @@ export const BACK_TO_MENU_FOOTER = "\n\n0. menu";
 
 // Shown when menuOptions is null/empty in DB — ensures the menu is always visible.
 const FALLBACK_MENU_OPTIONS: MenuOption[] = [
-  { id: "fallback-menu",    label: "Ver cardápio",             flow: "menu"    },
-  { id: "fallback-hours",   label: "Horário de funcionamento", flow: "custom"  },
-  { id: "fallback-handoff", label: "Falar com atendente",      flow: "handoff" },
+  { id: "fallback-text-order", label: "Já sei o que quero pedir",  flow: "text_order" },
+  { id: "fallback-menu",       label: "Ver cardápio",               flow: "menu"       },
+  { id: "fallback-rodizio",    label: "Rodízio presencial",         flow: "rodizio"    },
+  { id: "fallback-hours",      label: "Horário de funcionamento",   flow: "custom"     },
+  { id: "fallback-promo",      label: "Promoções",                  flow: "promotions" },
+  { id: "fallback-club",       label: "Cazza Club",                 flow: "club"       },
+  { id: "fallback-handoff",    label: "Falar com atendente",        flow: "handoff"    },
 ];
 
 // ─── intent detection ─────────────────────────────────────────
@@ -83,7 +87,7 @@ const COMPLAINT_RE =
 const HUMAN_RE =
   /atendente|atendimento humano|falar com (alguém|alguem|pessoa|humano)|quero ser atendido|chamar (a )?equipe|responsável|responsavel|gerente|quero falar com/i;
 const GREETING_RE =
-  /^(oi|olá|ola|oii|bom dia|boa tarde|boa noite|hey|hi|hello|e aí|eai|tudo bem|tudo bom|pode ajudar|boas|fala|test(e)?|começar|inicio|ajuda|help)\b/i;
+  /^(oi|opa|olá|ola|oii|bom dia|boa tarde|boa noite|hey|hi|hello|e aí|eai|tudo bem|tudo bom|pode ajudar|boas|fala|test(e)?|começar|inicio|ajuda|help)\b/i;
 const ORDER_RE =
   /quero (pedir|comprar)|fazer (um )?pedido|como (peço|fa[çc]o pedido)|link do pedido|quero fazer pedido/i;
 const MENU_RE =
@@ -324,10 +328,19 @@ function buildIdentifiedPedidoUrl(
   }
 }
 
-/** Formats the configured menu options as an emoji-numbered text list. */
+/** Formats the configured menu options as an emoji-numbered text list.
+ * Inserts a visual separator between option 2 and option 3 when ≥3 options,
+ * grouping primary order actions (1-2) from secondary options (3+). */
 export function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
-  return "\n\n" + options.map((o, i) => `${formatOptionNumber(i + 1)} ${o.label}`).join("\n");
+  const lines: string[] = [];
+  for (let i = 0; i < options.length; i++) {
+    if (i === 2 && options.length > 2) {
+      lines.push("\n────────────\n\nOutras opções:");
+    }
+    lines.push(`${formatOptionNumber(i + 1)} ${options[i]!.label}`);
+  }
+  return "\n\n" + lines.join("\n");
 }
 
 /**
@@ -374,6 +387,33 @@ function findCatalogMatch(
   return null;
 }
 
+/** Reply when the customer selects "Já sei o que quero pedir" (text ordering). */
+export function buildTextOrderConfirmationReply(): string {
+  return (
+    "Perfeito 😊 Me manda seu pedido por mensagem.\n\n" +
+    "Ex: 1 yakisoba de frango e 1 coca-cola\n\n" +
+    "Vou anotando sua comanda por aqui."
+  );
+}
+
+/** Reply for the "Rodízio presencial" menu option. */
+export function buildRodizioReply(ctx: ReplyContext): string {
+  const parts: string[] = ["O rodízio é presencial 😊 Venha nos visitar!"];
+  if (ctx.address)   parts.push(`📍 ${ctx.address}`);
+  if (ctx.hoursText) parts.push(ctx.hoursText);
+  parts.push("Qualquer dúvida, entre em contato:");
+  return parts.join("\n\n");
+}
+
+/** Reply for the "Cazza Club" menu option. */
+export function buildClubReply(_ctx: ReplyContext): string {
+  return (
+    "Cazza Club é o nosso programa de fidelidade 🎉\n\n" +
+    "Acumule pontos a cada pedido e troque por recompensas!\n\n" +
+    "Para saber mais ou se cadastrar, fale com nossa equipe:"
+  );
+}
+
 /** Builds the reply for a specific selected menu option (by number or label). */
 export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
   const { orderPreMessage, pedidoUrl, handoffMessage } = ctx;
@@ -395,9 +435,7 @@ export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
         return (
           base +
           "\n\nNosso atendimento humano retorna quando estivermos abertos." +
-          (menuList
-            ? `\n\nEnquanto isso, posso te ajudar:${menuList}\n\nResponda com o número da opção 😊`
-            : "")
+          (menuList ? `\n\nEnquanto isso, posso te ajudar:${menuList}` : "")
         );
       }
       return handoffMessage;
@@ -412,6 +450,12 @@ export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
     case "custom":
       if (opt.message?.trim()) return opt.message.trim();
       return ctx.hoursText ?? ctx.welcomeMessage;
+    case "text_order":
+      return buildTextOrderConfirmationReply();
+    case "rodizio":
+      return buildRodizioReply(ctx);
+    case "club":
+      return buildClubReply(ctx);
     default:
       return ctx.welcomeMessage;
   }
@@ -430,7 +474,7 @@ export function appendBackToMainMenu(text: string): string {
 export function buildOrderIntentReply(_ctx: ReplyContext): string {
   return (
     "Claro 😊 Para fazer seu pedido, escolha uma opção:\n\n" +
-    renderNumberedOptions(["Fazer pedido pelo cardápio", "Falar com atendente"])
+    renderNumberedOptions(["Já sei o que quero pedir", "Fazer pedido pelo cardápio", "Falar com atendente"])
   );
 }
 
@@ -475,7 +519,7 @@ export function buildLooseAddressReply(_ctx: ReplyContext): string {
 export function renderMainMenu(ctx: ReplyContext): string {
   const menuList = buildMenuList(ctx.menuOptions);
   if (!menuList) return ctx.welcomeMessage;
-  return "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
+  return "Oi! 😊 Como você prefere começar?" + menuList;
 }
 
 // ── Receptionist response observability (single source of truth) ──────────────
@@ -573,9 +617,12 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
           : appendBackToMainMenu(ctx.closedMessage ?? "No momento estamos fechados.");
       } else if (needsHandoff(intent, ctx.agentMode)) {
         if (!ctx.isCurrentlyOpen && intent === "HUMAN_REQUEST") {
-          text = appendBackToMainMenu(
+          const closedBase =
             (ctx.closedMessage ?? "No momento estamos fechados.") +
-              "\n\nNosso atendimento humano retorna quando estivermos abertos.",
+            "\n\nNosso atendimento humano retorna quando estivermos abertos.";
+          const closedMenu = buildMenuList(ctx.menuOptions);
+          text = appendBackToMainMenu(
+            closedBase + (closedMenu ? `\n\nEnquanto isso, posso te ajudar:${closedMenu}` : ""),
           );
         } else {
           text = ctx.handoffMessage;
@@ -1029,9 +1076,7 @@ async function run(conversationId: string): Promise<void> {
         replyText =
           base +
           "\n\nNosso atendimento humano retorna quando estivermos abertos." +
-          (closedMenuList
-            ? `\n\nEnquanto isso, posso te ajudar:${closedMenuList}\n\nResponda com o número da opção 😊`
-            : "");
+          (closedMenuList ? `\n\nEnquanto isso, posso te ajudar:${closedMenuList}` : "");
         triggerHandoff = false;
       } else {
         replyText      = ctx.handoffMessage;
@@ -1136,7 +1181,7 @@ async function run(conversationId: string): Promise<void> {
             if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http") && !menuSentRecently) {
               const menuList = buildMenuList(effectiveMenuOptions);
               if (menuList) {
-                replyText += "\n\nComo posso te ajudar?" + menuList + "\n\nResponda com o número da opção 😊";
+                replyText += "\n\nComo posso te ajudar?" + menuList;
                 fullMenuAppended = true;
               }
             }
@@ -1186,7 +1231,7 @@ async function run(conversationId: string): Promise<void> {
             const menuList = buildMenuList(effectiveMenuOptions);
             let greet = greetLine;
             if (menuList) {
-              greet += menuList + "\n\nResponda com o número da opção 😊";
+              greet += menuList;
             } else if (ctx.pedidoUrl) {
               greet += `\n\nCardápio: ${ctx.pedidoUrl}`;
             }

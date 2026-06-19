@@ -68,6 +68,9 @@ import {
   isExplicitOrderMessage,
   buildOrderIntentReply,
   buildLooseAddressReply,
+  buildTextOrderConfirmationReply,
+  buildRodizioReply,
+  buildClubReply,
   type ReplyContext,
 } from "../WhatsAppReceptionistService";
 import { detectIntent as detectOrderingIntent } from "@/services/whatsapp/ordering/parser";
@@ -202,10 +205,23 @@ describe("buildMenuList", () => {
     expect(result).toContain("3️⃣ Falar com atendente");
   });
 
-  it("separates options with newlines", () => {
+  it("includes a visual separator and 'Outras opções:' header for 3+ options", () => {
     const result = buildMenuList(THREE_OPTIONS);
-    const lines = result.trim().split("\n");
-    expect(lines).toHaveLength(3);
+    expect(result).toContain("────────────");
+    expect(result).toContain("Outras opções:");
+    expect(result).toContain("1️⃣");
+    expect(result).toContain("2️⃣");
+    expect(result).toContain("3️⃣");
+  });
+
+  it("does NOT add separator for 2-option menus", () => {
+    const twoOpts: MenuOption[] = [
+      { id: "a", label: "Opção A", flow: "order"   },
+      { id: "b", label: "Opção B", flow: "handoff" },
+    ];
+    const result = buildMenuList(twoOpts);
+    expect(result).not.toContain("────────────");
+    expect(result).not.toContain("Outras opções:");
   });
 });
 
@@ -249,17 +265,20 @@ describe("detectSelectedOption", () => {
 // ── renderMainMenu ────────────────────────────────────────────────────────────
 
 describe("renderMainMenu", () => {
-  it("returns the 'Voltando ao menu principal' header with numbered list", () => {
+  it("uses new greeting 'Como você prefere começar?' header with numbered list", () => {
     const result = renderMainMenu(makeCtx());
-    expect(result).toContain("Voltando ao menu principal");
+    expect(result).toContain("Como você prefere começar?");
     expect(result).toContain("1️⃣ Fazer pedido");
     expect(result).toContain("2️⃣ Ver cardápio");
     expect(result).toContain("3️⃣ Falar com atendente");
   });
 
-  it("ends with the respond-by-number prompt", () => {
-    const result = renderMainMenu(makeCtx());
-    expect(result).toContain("Responda com o número da opção 😊");
+  it("does NOT contain the old 'Voltando ao menu principal' text", () => {
+    expect(renderMainMenu(makeCtx())).not.toContain("Voltando ao menu principal");
+  });
+
+  it("does NOT contain 'Responda com o número da opção'", () => {
+    expect(renderMainMenu(makeCtx())).not.toContain("Responda com o número da opção");
   });
 
   it("falls back to welcomeMessage when menuOptions is empty", () => {
@@ -347,6 +366,8 @@ describe("buildFlowReply — promotions flow", () => {
 describe("detectIntent", () => {
   const cases: [string, string][] = [
     ["Oi",                           "GREETING"],
+    ["opa",                          "GREETING"],
+    ["Opa, tudo bem?",               "GREETING"],
     ["Bom dia",                      "GREETING"],
     ["ola",                          "GREETING"],
     ["Quero fazer pedido",           "ORDER"],
@@ -421,10 +442,11 @@ describe("buildOrderIntentReply — explicit order outside allowlist", () => {
     expect(buildOrderIntentReply(makeCtx())).not.toContain("http");
   });
 
-  it("offers a clean numbered path (cardápio + atendente)", () => {
+  it("offers a clean numbered path (text order + cardápio + atendente)", () => {
     const reply = buildOrderIntentReply(makeCtx());
     expect(reply).toContain("1️⃣");
-    expect(reply.toLowerCase()).toContain("pedido");
+    expect(reply.toLowerCase()).toContain("já sei");
+    expect(reply.toLowerCase()).toContain("cardápio");
     expect(reply.toLowerCase()).toContain("atendente");
   });
 
@@ -481,6 +503,118 @@ describe("buildLooseAddressReply — address with no order session", () => {
 
   it("ends with the 0. menu footer once wrapped", () => {
     expect(appendBackToMainMenu(buildLooseAddressReply(makeCtx())).endsWith("0. menu")).toBe(true);
+  });
+});
+
+// ── New flow types (text_order / rodizio / club) ──────────────────────────────
+
+describe("buildFlowReply — text_order flow", () => {
+  it("returns the text order confirmation message", () => {
+    const opt: MenuOption = { id: "t", label: "Já sei o que quero pedir", flow: "text_order" };
+    const result = buildFlowReply(opt, makeCtx());
+    expect(result.toLowerCase()).toContain("me manda seu pedido");
+    expect(result.toLowerCase()).toContain("yakisoba");
+  });
+
+  it("does not contain a raw URL", () => {
+    const opt: MenuOption = { id: "t", label: "Já sei o que quero pedir", flow: "text_order" };
+    expect(buildFlowReply(opt, makeCtx())).not.toContain("http");
+  });
+});
+
+describe("buildFlowReply — rodizio flow", () => {
+  it("mentions presencial", () => {
+    const opt: MenuOption = { id: "r", label: "Rodízio presencial", flow: "rodizio" };
+    const result = buildFlowReply(opt, makeCtx());
+    expect(result.toLowerCase()).toContain("presencial");
+  });
+
+  it("includes address when available", () => {
+    const opt: MenuOption = { id: "r", label: "Rodízio presencial", flow: "rodizio" };
+    const result = buildFlowReply(opt, makeCtx({ address: "Rua das Flores, 123" }));
+    expect(result).toContain("Rua das Flores, 123");
+  });
+
+  it("omits address line when null", () => {
+    const opt: MenuOption = { id: "r", label: "Rodízio presencial", flow: "rodizio" };
+    const result = buildFlowReply(opt, makeCtx({ address: null }));
+    expect(result).not.toContain("📍");
+  });
+});
+
+describe("buildFlowReply — club flow", () => {
+  it("mentions Cazza Club fidelidade", () => {
+    const opt: MenuOption = { id: "c", label: "Cazza Club", flow: "club" };
+    const result = buildFlowReply(opt, makeCtx());
+    expect(result.toLowerCase()).toContain("cazza club");
+    expect(result.toLowerCase()).toContain("fidelidade");
+  });
+});
+
+describe("buildTextOrderConfirmationReply", () => {
+  it("instructs customer to send order by message", () => {
+    const reply = buildTextOrderConfirmationReply();
+    expect(reply.toLowerCase()).toContain("me manda");
+    expect(reply.toLowerCase()).toContain("yakisoba");
+  });
+});
+
+describe("buildRodizioReply", () => {
+  it("explains rodízio is presencial", () => {
+    expect(buildRodizioReply(makeCtx())).toContain("presencial");
+  });
+});
+
+describe("buildClubReply", () => {
+  it("mentions the fidelity program", () => {
+    expect(buildClubReply(makeCtx()).toLowerCase()).toContain("fidelidade");
+  });
+});
+
+describe("7-option menu with separator", () => {
+  const SEVEN_OPTIONS: MenuOption[] = [
+    { id: "1", label: "Já sei o que quero pedir",  flow: "text_order"  },
+    { id: "2", label: "Ver cardápio",               flow: "menu"        },
+    { id: "3", label: "Rodízio presencial",         flow: "rodizio"     },
+    { id: "4", label: "Horário de funcionamento",   flow: "custom"      },
+    { id: "5", label: "Promoções",                  flow: "promotions"  },
+    { id: "6", label: "Cazza Club",                 flow: "club"        },
+    { id: "7", label: "Falar com atendente",        flow: "handoff"     },
+  ];
+
+  it("buildMenuList renders all 7 options", () => {
+    const result = buildMenuList(SEVEN_OPTIONS);
+    for (let i = 1; i <= 7; i++) {
+      expect(result).toContain(`${["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣"][i-1]}`);
+    }
+  });
+
+  it("separator appears between option 2 and option 3", () => {
+    const result = buildMenuList(SEVEN_OPTIONS);
+    const pos2 = result.indexOf("2️⃣");
+    const posSep = result.indexOf("────────────");
+    const pos3 = result.indexOf("3️⃣");
+    expect(pos2).toBeGreaterThan(0);
+    expect(posSep).toBeGreaterThan(pos2);
+    expect(pos3).toBeGreaterThan(posSep);
+  });
+
+  it("detectSelectedOption maps '7' to handoff option", () => {
+    const opt = detectSelectedOption("7", SEVEN_OPTIONS);
+    expect(opt?.flow).toBe("handoff");
+  });
+
+  it("detectSelectedOption maps '1' to text_order", () => {
+    const opt = detectSelectedOption("1", SEVEN_OPTIONS);
+    expect(opt?.flow).toBe("text_order");
+  });
+
+  it("renderMainMenu shows 'Como você prefere começar?' with 7-option list", () => {
+    const ctx = makeCtx({ menuOptions: SEVEN_OPTIONS });
+    const result = renderMainMenu(ctx);
+    expect(result).toContain("Como você prefere começar?");
+    expect(result).toContain("7️⃣ Falar com atendente");
+    expect(result).toContain("────────────");
   });
 });
 

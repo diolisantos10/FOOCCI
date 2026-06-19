@@ -152,11 +152,14 @@ const AGENT_MODE_OPTIONS: Array<{ value: AgentMode; label: string; desc: string 
 ];
 
 const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string }> = {
-  order:      { icon: "🛒", label: "Fazer pedido",          desc: "Envia msg de pedido + link do cardápio" },
-  handoff:    { icon: "👤", label: "Falar com atendente",   desc: "Encaminha para o número configurado"    },
-  menu:       { icon: "📋", label: "Ver cardápio",           desc: "Envia o link do cardápio"               },
-  promotions: { icon: "🎁", label: "Ver promoções",          desc: "O agente lista as promoções ativas"     },
-  custom:     { icon: "💬", label: "Mensagem personalizada", desc: "Envia um texto livre definido aqui"     },
+  order:      { icon: "🛒", label: "Fazer pedido",           desc: "Envia msg de pedido + link do cardápio"   },
+  handoff:    { icon: "👤", label: "Falar com atendente",    desc: "Encaminha para o número configurado"      },
+  menu:       { icon: "📋", label: "Ver cardápio",            desc: "Envia o link do cardápio"                 },
+  promotions: { icon: "🎁", label: "Ver promoções",           desc: "O agente lista as promoções ativas"       },
+  custom:     { icon: "💬", label: "Mensagem personalizada",  desc: "Envia um texto livre definido aqui"       },
+  text_order: { icon: "✍️", label: "Pedido por mensagem",    desc: "Cliente digita o pedido diretamente no chat" },
+  rodizio:    { icon: "🍽️", label: "Rodízio presencial",     desc: "Informa sobre o rodízio e horários"       },
+  club:       { icon: "⭐", label: "Cazza Club",              desc: "Informa sobre o programa de fidelidade"   },
 };
 
 const PRESETS_AGENT: Array<{ label: string; flow: FlowType; message?: string }> = [
