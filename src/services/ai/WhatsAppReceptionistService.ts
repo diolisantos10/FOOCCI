@@ -42,10 +42,10 @@ import {
 } from "@/services/ai/UnknownFallbackHandler";
 import { captureFailure as captureTrainingFailure } from "@/services/agent-training/AgentTrainingFailureCaptureService";
 import { detectIntent as detectOrderingIntent } from "@/services/whatsapp/ordering/parser";
+import { formatOptionNumber, renderNumberedOptions } from "@/services/whatsapp/ordering/menuFooter";
 
 // ─── constants ────────────────────────────────────────────────
 
-const EMOJI_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"] as const;
 const DAY_NAMES_PT  = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
 // "0" / "voltar" / "menu" / "menu principal" → re-render the WhatsApp host menu.
@@ -327,7 +327,7 @@ function buildIdentifiedPedidoUrl(
 /** Formats the configured menu options as an emoji-numbered text list. */
 export function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
-  return "\n\n" + options.map((o, i) => `${EMOJI_NUMBERS[i] ?? `${i + 1}.`} ${o.label}`).join("\n");
+  return "\n\n" + options.map((o, i) => `${formatOptionNumber(i + 1)} ${o.label}`).join("\n");
 }
 
 /**
@@ -368,7 +368,7 @@ function findCatalogMatch(
     // "tem X?" must not get a giant link as the primary body. The customer is
     // offered a clean numbered path (tapping 1 opens the cardápio link).
     return pedidoUrl
-      ? `Temos ${catDisplay} sim 😊 Para ver as opções e pedir, escolha:\n\n1️⃣ Fazer pedido pelo cardápio\n2️⃣ Falar com atendente`
+      ? `Temos ${catDisplay} sim 😊 Para ver as opções e pedir, escolha:\n\n${renderNumberedOptions(["Fazer pedido pelo cardápio", "Falar com atendente"])}`
       : `Temos ${catDisplay} sim 😊 É só nos perguntar mais detalhes!`;
   }
   return null;
@@ -430,8 +430,7 @@ export function appendBackToMainMenu(text: string): string {
 export function buildOrderIntentReply(_ctx: ReplyContext): string {
   return (
     "Claro 😊 Para fazer seu pedido, escolha uma opção:\n\n" +
-    "1️⃣ Fazer pedido pelo cardápio\n" +
-    "2️⃣ Falar com atendente"
+    renderNumberedOptions(["Fazer pedido pelo cardápio", "Falar com atendente"])
   );
 }
 
@@ -456,8 +455,7 @@ export function buildPaymentInfoReply(message: string): string {
 
   return (
     `${head} Quer fazer seu pedido agora?\n\n` +
-    "1️⃣ Fazer pedido\n" +
-    "2️⃣ Falar com atendente"
+    renderNumberedOptions(["Fazer pedido", "Falar com atendente"])
   );
 }
 
@@ -470,8 +468,7 @@ export function buildLooseAddressReply(_ctx: ReplyContext): string {
   return (
     "Para calcular a entrega certinho, comece seu pedido pelo item desejado " +
     "ou envie o CEP quando eu pedir 😊\n\n" +
-    "1️⃣ Fazer pedido\n" +
-    "2️⃣ Falar com atendente"
+    renderNumberedOptions(["Fazer pedido", "Falar com atendente"])
   );
 }
 

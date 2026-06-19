@@ -118,6 +118,14 @@ export function advanceSession(
       if (next.unresolvedItems[0]?.reason === "AMBIGUOUS") {
         return handleAmbiguityAnswer(next, text, menu);
       }
+      // PARTE 1: greeting must never reach the product matcher mid-order.
+      if (GREETING_ONLY_RE.test(text)) return continueAfterItems(next, null, menu);
+      // PARTE 2: order-status / follow-up must never reach the product matcher.
+      if (ORDER_FOLLOWUP_RE.test(text)) {
+        next.status = "HANDOFF_REQUIRED";
+        next.stage  = "HANDOFF_REQUIRED";
+        return done(next, "HUMAN_REQUEST", "Vou chamar um atendente para verificar o status do seu pedido. 🤝", [], true);
+      }
       return handleItemCollection(next, text, menu);
     case "COLLECTING_DELIVERY_TYPE":
       return handleDeliveryType(next, text, menu);
@@ -132,24 +140,42 @@ export function advanceSession(
 
     default: {
       // IDLE / INTENT_DETECTED / PARSING_ITEMS / fresh order
+      // Priority: greeting → follow-up/status → question → early-info → product
+
+      // PARTE 1: Greeting guard — must never reach the product matcher, whether the
+      // cart is empty or has items (prevents "não encontrei 'oi' no cardápio").
+      if (GREETING_ONLY_RE.test(text)) {
+        if (next.selectedItems.length === 0) {
+          return done(
+            next,
+            "UNKNOWN",
+            "Olá! Pode me mandar seu pedido por aqui que eu anoto pra você. 😊",
+            [],
+            false,
+          );
+        }
+        // Active cart: resume context — show the next required question.
+        return continueAfterItems(next, null, menu);
+      }
+
+      // PARTE 2: Order-status / follow-up guard — must never reach the product matcher.
+      // "cadê", "ué", "onde está", "quanto tempo falta" etc. are status signals, not
+      // product names, and would otherwise produce "Não encontrei 'cadê' no cardápio".
+      if (ORDER_FOLLOWUP_RE.test(text)) {
+        if (next.selectedItems.length > 0) {
+          next.status = "HANDOFF_REQUIRED";
+          next.stage  = "HANDOFF_REQUIRED";
+          return done(next, "HUMAN_REQUEST", "Vou chamar um atendente para verificar o status do seu pedido. 🤝", [], true);
+        }
+        next.stage = "IDLE";
+        return done(next, "UNKNOWN", "Ainda não temos um pedido em andamento. Pode me dizer o que vai querer pedir? 😊", [], false);
+      }
+
       // Intent-first: a menu question must never be run through the product matcher.
       if (intent === "QUESTION" && next.selectedItems.length === 0) {
         return handleMenuQuestion(next, text, menu);
       }
-      // Defense-in-depth: a bare greeting must never be fed to the product matcher
-      // (which would answer "não encontrei 'Bom dia' no cardápio"). The live router
-      // already keeps greetings with the old WhatsApp Agent; this is the safety net
-      // for any greeting that still reaches the engine (e.g. an idle active session).
-      if (next.selectedItems.length === 0 && GREETING_ONLY_RE.test(text)) {
-        return done(
-          next,
-          "UNKNOWN",
-          "Olá! Pode me mandar seu pedido por aqui que eu anoto pra você. 😊",
-          [],
-          false,
-        );
-      }
-      // Early info: greeting / address / payment that arrives before any item.
+      // Early info: address / payment that arrives before any item.
       const early = handleEarlyInfo(next, text, menu);
       if (early) return early;
       return handleItemCollection(next, text, menu);
@@ -1162,6 +1188,17 @@ const FORMAT_KEYWORD_RE = /\b(lata|garrafa|2\s*l(?:itro)?s?|1\s*l(?:itro)?|500\s
 // the whole string so "quero 1 coca, bom dia" is NOT caught — only pure greetings.
 const GREETING_ONLY_RE =
   /^(oi+|ol[aá]+|ola+|bom dia|boa tarde|boa noite|hey|hi|hello|e a[íi]|eai|opa|al[oô]|tudo bem|tudo bom|boas|fala|menu|in[ií]cio|inicio|come[çc]ar)[\s!?.,]*$/i;
+
+// Order-status / follow-up signals — must NEVER be fed to the product matcher.
+// Catches "cadê", "ué", "onde está", "quanto tempo falta", etc. — phrases that
+// are meaningful status questions but would produce "Não encontrei 'cadê' no
+// cardápio" if sent to handleItemCollection.
+// Notes:
+//   - `(?!\w)` is used after accented chars (ê/é/á are \W in JS, so `\b` after
+//     them never matches — the negative lookahead is the correct alternative).
+//   - Alternatives that end in a regular word char use the normal `\b`.
+const ORDER_FOLLOWUP_RE =
+  /\bcad[eê](?!\w)|\bu[eé](?!\w)|\bonde est[aá](?!\w)|\be o pedido\b|\bt[aá] saindo\b|\best[aá] demorando\b|\bquanto tempo falta\b|\bprevis[aã]o de entrega\b|\bstatus do pedido\b/i;
 
 function classify(text: string, stage: string, hasPendingQuestion: boolean): WaDetectedIntent {
   if (CANCEL_RE.test(text)) return "CANCEL";
