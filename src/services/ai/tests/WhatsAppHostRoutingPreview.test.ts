@@ -148,6 +148,25 @@ describe("previewReceptionistResponse — pergunta de pagamento/Pix", () => {
     expect(p.preview).toMatch(/pix/i);
     expect(p.preview).toMatch(/1️⃣/);
   });
+
+  it("(PART8.3) responde o pagamento ANTES de oferecer o menu de venda", () => {
+    const p = previewReceptionistResponse("posso pagar com Pix?", ctx());
+    const answerIdx = p.preview.toLowerCase().indexOf("aceitamos");
+    const menuIdx = p.preview.indexOf("1️⃣");
+    expect(answerIdx).toBeGreaterThanOrEqual(0);
+    expect(menuIdx).toBeGreaterThan(answerIdx); // pagamento respondido primeiro, depois conduz
+  });
+});
+
+// ── rodízio presencial não vira delivery/link errado (PART 8.6) ───────────────
+describe("previewReceptionistResponse — rodízio", () => {
+  it("'quero rodízio' fora de sessão → SAFE_MENU conduzido (sem link, sem delivery automático)", () => {
+    const p = previewReceptionistResponse("quero 1 rodízio", ctx());
+    expect(p.responseType).toBe("SAFE_MENU");
+    expect(p.containsRawLink).toBe(false);
+    // não despeja link de cardápio nem cria fluxo de entrega — apenas conduz com opções.
+    expect(p.preview).toMatch(/1️⃣/);
+  });
 });
 
 // ── decideHost ────────────────────────────────────────────────────────────────

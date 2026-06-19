@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Live Learning Review — daily routine that reads recent REAL WhatsApp
+# conversations, classifies outcomes, extracts learning cards, deduplicates them
+# and queues DISTINCT learnings for HUMAN approval. NEVER sends WhatsApp, NEVER
+# creates an order/Pix, NEVER changes the live agent. PII is masked.
+#   - Scheduled run persists learnings to the approval queue.
+#   - Manual run supports dryRun=true (analyze, persist nothing).
+# Uses CRON_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Live Learning Review
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # daily 09:00 UTC (06:00 BRT)
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug"
+        required: true
+        default: "sushi-cazza"
+      window_hours:
+        description: "Janela de conversas analisadas (horas)"
+        required: false
+        default: "24"
+      dry_run:
+        description: "true = analisa e NÃO grava aprendizados"
+        required: false
+        default: "false"
+
+jobs:
+  learning-review:
+    name: "Live Learning Review"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/live-learning-review" >> "$GITHUB_OUTPUT"
+
+      - name: "Run live learning review"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLUG: ${{ inputs.restaurant_slug || 'sushi-cazza' }}
+          WINDOW: ${{ inputs.window_hours || '24' }}
+          DRY: ${{ inputs.dry_run || 'false' }}
+        run: |
+          set -e
+          BODY=$(jq -nc --arg slug "$SLUG" --argjson win "${WINDOW:-24}" --argjson dry "${DRY:-false}" \
+            '{restaurantSlug:$slug, windowHours:$win, dryRun:$dry}')
+          curl --connect-timeout 20 --max-time 150 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/r.json -w "%{http_code}" > /tmp/code.txt || true
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP                  : $HTTP"
+          echo "← ok                    : $(jq -r '.ok' /tmp/r.json)"
+          echo "← dryRun                : $(jq -r '.dryRun' /tmp/r.json)"
+          echo "← conversationsReviewed : $(jq -r '.conversationsReviewed' /tmp/r.json)"
+          echo "← created/updated/skip  : $(jq -r '.created' /tmp/r.json)/$(jq -r '.updated' /tmp/r.json)/$(jq -r '.skippedAlreadyDecided' /tmp/r.json)"
+          echo "← safety                : noEvolution=$(jq -r '.safety.noEvolution' /tmp/r.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/r.json) noMessageSent=$(jq -r '.safety.noMessageSent' /tmp/r.json)"
+          echo "── aprendizados ──"
+          jq -r '.learnings[]? | "  [\(.card.severity)] \(.card.title) — \(.occurrences) conversa(s)"' /tmp/r.json
+          echo "── notes ──"; jq -r '.notes[]?' /tmp/r.json
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::non-2xx ($HTTP)"; exit 1; fi
+          NE=$(jq -r '.safety.noEvolution' /tmp/r.json); NO=$(jq -r '.safety.noRealOrder' /tmp/r.json)
+          NP=$(jq -r '.safety.noRealPix' /tmp/r.json);   NM=$(jq -r '.safety.noMessageSent' /tmp/r.json)
+          if [[ "$NE" != "true" || "$NO" != "true" || "$NP" != "true" || "$NM" != "true" ]]; then echo "::error::safety violada"; exit 1; fi
+          echo "✅ Live Learning Review concluído — read-only para produção, aprendizados na fila."

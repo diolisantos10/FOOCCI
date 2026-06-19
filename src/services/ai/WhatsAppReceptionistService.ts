@@ -436,6 +436,32 @@ export function buildOrderIntentReply(_ctx: ReplyContext): string {
 }
 
 /**
+ * Reply for a payment/Pix question with NO active order session. Answers the
+ * actual question first (method-aware), never sends a raw cardápio link, then
+ * conducts the customer to the next sales step. A consultative-sales response,
+ * not a régua: "responder a pergunta real → conduzir para o pedido".
+ */
+export function buildPaymentInfoReply(message: string): string {
+  const t = (message ?? "").toLowerCase();
+  const asksPix  = /pix/.test(t);
+  const asksCard = /cart[aã]o|cr[eé]dito|d[eé]bito|parcel/.test(t);
+  const asksCash = /dinheiro|esp[eé]cie/.test(t);
+
+  // Answer the specific method asked; otherwise affirm the common methods.
+  let head: string;
+  if (asksPix && !asksCard && !asksCash)       head = "Sim, aceitamos Pix 😊";
+  else if (asksCard && !asksPix && !asksCash)  head = "Sim, aceitamos cartão 😊";
+  else if (asksCash && !asksPix && !asksCard)  head = "Sim, aceitamos dinheiro 😊";
+  else                                          head = "Aceitamos Pix, cartão e dinheiro 😊";
+
+  return (
+    `${head} Quer fazer seu pedido agora?\n\n` +
+    "1️⃣ Fazer pedido\n" +
+    "2️⃣ Falar com atendente"
+  );
+}
+
+/**
  * Reply when the customer drops a street address with no active order session.
  * Never exposes the restaurant's own location and never auto-hands off — guides
  * the customer to start an order (the CEP is collected when we ask for it).
@@ -559,7 +585,7 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
           forcedType = "HANDOFF";
         }
       } else {
-        const templateReply = buildTemplateReply(intent, ctx);
+        const templateReply = buildTemplateReply(intent, ctx, raw);
         const useGpt =
           (intent === "UNKNOWN" && ctx.agentMode !== "HUMAN_ASSISTED") ||
           (templateReply === null && intent !== "GREETING");
@@ -596,7 +622,7 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
   };
 }
 
-function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
+function buildTemplateReply(intent: Intent, ctx: ReplyContext, message: string = ""): string | null {
   // Block ordering attempts outside business hours — reply with details + allow browsing
   if (!ctx.isCurrentlyOpen && (intent === "ORDER" || intent === "MENU_REQUEST")) {
     const base = ctx.closedMessage ?? "No momento estamos fechados.";
@@ -626,15 +652,9 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
       return null;
 
     case "PAYMENT_INFO":
-      // Never expose a raw cardápio URL for a payment question — that triggers
-      // LINK_CARDAPIO classification and is a P0 failure. Offer a safe numbered
-      // menu instead so the customer is conducted, not redirected to a link.
-      return (
-        "Aceitamos Pix 😊\n\n" +
-        "Para fazer seu pedido, escolha uma opção:\n\n" +
-        "1️⃣ Fazer pedido agora\n" +
-        "2️⃣ Falar com atendente"
-      );
+      // Answer the actual payment question (method-aware) and conduct to the
+      // order — NEVER a raw cardápio link (that triggers LINK_CARDAPIO, a P0).
+      return buildPaymentInfoReply(message);
 
     default:
       return null;
@@ -1032,7 +1052,7 @@ async function run(conversationId: string): Promise<void> {
         RestaurantKnowledgeService.incrementUsage(knowledgeMatch.id).catch(() => {});
       } else {
         // Try deterministic template for data-backed intents (hours, address, menu link, etc.)
-        const templateReply = buildTemplateReply(intent, ctx);
+        const templateReply = buildTemplateReply(intent, ctx, lastMessage.content);
 
         // GPT is used for:
         //   - UNKNOWN intent in RECEPTIONIST_ONLY mode
