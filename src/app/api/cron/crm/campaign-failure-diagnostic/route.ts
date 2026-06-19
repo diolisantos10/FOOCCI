@@ -19,6 +19,8 @@ import { prisma } from "@/lib/prisma";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { classifyExecution, type ExecutionCategory, type Retryability } from "@/services/crm/crmExecutionClassification";
 
 function checkCronAuth(req: NextRequest): { ok: true } | { ok: false; status: 401 | 503; error: string } {
   const secret = process.env.CRON_SECRET;
@@ -78,6 +80,20 @@ export async function POST(req: NextRequest) {
     const cfg = await EvolutionConfigService.getSnapshot(restaurant.id).catch(() => null);
     const instanceName = cfg?.ok ? cfg.data.instanceName : "unknown";
 
+    // Read-only live instance state (GET /instance/connectionState). No secret exposed.
+    let instanceState = "unknown";
+    let instanceConnected = false;
+    let instanceCheckError: string | null = null;
+    if (cfg?.ok) {
+      try {
+        const st = await EvolutionClient.getInstanceStatus(cfg.data);
+        instanceState = st.state;
+        instanceConnected = st.state === "open";
+      } catch (e) {
+        instanceCheckError = e instanceof Error ? e.message.slice(0, 120) : "unreachable";
+      }
+    }
+
     const code = `EVOLUTION_HTTP_${status}`;
     const execs = await prisma.campaignExecution.findMany({
       where: {
@@ -88,7 +104,7 @@ export async function POST(req: NextRequest) {
           ...(status === "400" ? [{ failedReason: { contains: "Bad Request" } as never }] : []),
         ],
       },
-      select: { id: true, customerId: true, customerPhone: true, failedReason: true, errorMessage: true, sentAt: true, createdAt: true },
+      select: { id: true, status: true, customerId: true, customerPhone: true, failedReason: true, errorMessage: true, sentAt: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -99,7 +115,12 @@ export async function POST(req: NextRequest) {
     const normCounts = new Map<string, number>();           // full normalized phone → occurrences (duplicate detection)
     const messageEmpty = !campaign.message?.trim();
 
-    const samples: Array<{ rawMasked: string; normMasked: string; phoneValid: boolean; subReason: string; bodySnippet: string; lastAttemptAt: string | null }> = [];
+    const samples: Array<{ rawMasked: string; normMasked: string; phoneValid: boolean; subReason: string; category: string; retryabilityLabel: string; bodySnippet: string; lastAttemptAt: string | null }> = [];
+
+    // Real classification (same engine as the UI) so the report shows the post-fix labels.
+    const catCounts = new Map<ExecutionCategory, number>();
+    const retryCounts = new Map<Retryability, number>();
+    let recoverableCount = 0;
 
     for (const e of execs) {
       const raw  = e.customerPhone ?? "";
@@ -121,12 +142,20 @@ export async function POST(req: NextRequest) {
       if (g) g.count++;
       else bodyGroups.set(key, { subReason, count: 1, sample: providerBody.slice(0, 300) });
 
+      // Real classification (post-fix): session-error 400s now map to INSTANCE_DISCONNECTED/RETRYABLE_LATER.
+      const cls = classifyExecution({ status: e.status, failedReason: e.failedReason, errorMessage: e.errorMessage });
+      catCounts.set(cls.category, (catCounts.get(cls.category) ?? 0) + 1);
+      retryCounts.set(cls.retryability, (retryCounts.get(cls.retryability) ?? 0) + 1);
+      if (cls.kind === "FAILED" && cls.retryability === "RETRYABLE_LATER") recoverableCount++;
+
       if (samples.length < 8) {
         samples.push({
           rawMasked:  maskPhone(raw),
           normMasked: norm ? maskPhone(norm) : "(não normalizável)",
           phoneValid: valid,
           subReason,
+          category: cls.category,
+          retryabilityLabel: cls.retryabilityLabel,
           bodySnippet: providerBody.slice(0, 200),
           lastAttemptAt: (e.sentAt ?? e.createdAt)?.toISOString() ?? null,
         });
@@ -145,6 +174,19 @@ export async function POST(req: NextRequest) {
         payloadShape: '{ "number": "<E.164 digits>", "text": "<message>" }',
         instanceName,
       },
+      instance: {
+        name:      instanceName,
+        state:     instanceState,            // open | close | connecting | unknown
+        connected: instanceConnected,
+        checkError: instanceCheckError,
+      },
+      classification: {
+        byCategory:     Object.fromEntries([...catCounts.entries()].sort((a, b) => b[1] - a[1])),
+        byRetryability: Object.fromEntries([...retryCounts.entries()].sort((a, b) => b[1] - a[1])),
+        recoverableCount,
+      },
+      // Safe to reprocess only when the instance is connected AND there are recoverable rows.
+      safeToReprocess: instanceConnected && recoverableCount > 0,
       status,
       total: execs.length,
       message: { empty: messageEmpty, length: campaign.message?.length ?? 0 },

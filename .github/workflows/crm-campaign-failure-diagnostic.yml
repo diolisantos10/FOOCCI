@@ -57,11 +57,16 @@ jobs:
           echo "← campaign    : $(jq -r '.campaign.name // "-"' /tmp/r.json) ($(jq -r '.campaign.id // "-"' /tmp/r.json))"
           echo "← status/total: $(jq -r '.status // "-"' /tmp/r.json) / $(jq -r '.total // "-"' /tmp/r.json)"
           echo "← provider    : $(jq -r '.provider.endpoint // "-"' /tmp/r.json) | payload $(jq -rc '.provider.payloadShape // "-"' /tmp/r.json)"
+          echo "← instance    : name=$(jq -r '.instance.name' /tmp/r.json) state=$(jq -r '.instance.state' /tmp/r.json) connected=$(jq -r '.instance.connected' /tmp/r.json) checkError=$(jq -r '.instance.checkError // "-"' /tmp/r.json)"
           echo "← message     : empty=$(jq -r '.message.empty' /tmp/r.json) length=$(jq -r '.message.length // 0' /tmp/r.json)"
           echo "← phones      : valid=$(jq -r '.phones.valid' /tmp/r.json) invalid=$(jq -r '.phones.invalid' /tmp/r.json) missing=$(jq -r '.phones.missing' /tmp/r.json) distinct=$(jq -r '.phones.distinct' /tmp/r.json) duplicates=$(jq -r '.phones.duplicates' /tmp/r.json)"
-          echo "── sub-reasons ──"; jq -r '.subReasons | to_entries[]? | "  \(.key): \(.value)"' /tmp/r.json
+          echo "← recoverable : $(jq -r '.classification.recoverableCount' /tmp/r.json)"
+          echo "← SAFE TO REPROCESS: $(jq -r '.safeToReprocess' /tmp/r.json)"
+          echo "── classification byCategory ──";     jq -r '.classification.byCategory | to_entries[]? | "  \(.key): \(.value)"' /tmp/r.json
+          echo "── classification byRetryability ──"; jq -r '.classification.byRetryability | to_entries[]? | "  \(.key): \(.value)"' /tmp/r.json
+          echo "── sub-reasons (provider body) ──"; jq -r '.subReasons | to_entries[]? | "  \(.key): \(.value)"' /tmp/r.json
           echo "── distinct provider bodies ──"; jq -r '.distinctBodies[]? | "  [\(.subReason)] x\(.count): \(.sample)"' /tmp/r.json
-          echo "── samples (masked) ──"; jq -r '.samples[]? | "  raw=\(.rawMasked) norm=\(.normMasked) valid=\(.phoneValid) [\(.subReason)] body=\(.bodySnippet)"' /tmp/r.json
+          echo "── samples (masked) ──"; jq -r '.samples[]? | "  raw=\(.rawMasked) norm=\(.normMasked) valid=\(.phoneValid) [\(.subReason) → \(.category) · \(.retryabilityLabel)] body=\(.bodySnippet)"' /tmp/r.json
           HTTP=$(cat /tmp/code.txt)
           if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::non-2xx ($HTTP)"; jq . /tmp/r.json 2>/dev/null || cat /tmp/r.json; exit 1; fi
           echo "✅ Read-only diagnostic concluído — telefones mascarados, nada enviado."
