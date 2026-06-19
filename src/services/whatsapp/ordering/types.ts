@@ -22,7 +22,8 @@ export type WaOrderStage =
   | "READY_TO_CREATE_ORDER"
   | "HANDOFF_REQUIRED"
   | "COMPLETED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "BUILDING_CART";
 
 // Persistent session status (mirrors the DB column values)
 export type WaSessionStatus =

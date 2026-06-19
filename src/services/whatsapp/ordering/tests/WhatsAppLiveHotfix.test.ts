@@ -109,9 +109,10 @@ describe("(7) entrega segue o fluxo do Fute: CEP primeiro", () => {
   };
 
   it("endereço textual sem CEP pede CEP; CEP puxa endereço; confirmação; número; frete oficial", async () => {
-    // monta a comanda e escolhe entrega
+    // monta a comanda; "entrega" captura tipo mas fica no BUILDING_CART; "9" finaliza e pede CEP
     let r = await processCustomerMessage({ ...base, messageText: "quero 1 temaki", currentSession: null });
     r = await processCustomerMessage({ ...base, messageText: "entrega", currentSession: r.session });
+    r = await processCustomerMessage({ ...base, messageText: "9", currentSession: r.session });
     expect(r.suggestedReply.toLowerCase()).toContain("cep");
 
     // rua solta sem CEP → re-pede CEP (nunca aceita endereço solto como caminho principal)
@@ -142,6 +143,7 @@ describe("(7) entrega segue o fluxo do Fute: CEP primeiro", () => {
   it("CEP não encontrado pede o CEP de novo (sem travar)", async () => {
     let r = await processCustomerMessage({ ...base, cepLookup: async () => null, messageText: "quero 1 temaki", currentSession: null });
     r = await processCustomerMessage({ ...base, cepLookup: async () => null, messageText: "entrega", currentSession: r.session });
+    r = await processCustomerMessage({ ...base, cepLookup: async () => null, messageText: "9", currentSession: r.session });
     r = await processCustomerMessage({ ...base, cepLookup: async () => null, messageText: "99999-999", currentSession: r.session });
     expect(r.suggestedReply.toLowerCase()).toContain("não encontrei esse cep");
     expect(r.suggestedReply).toContain(MENU_FOOTER);

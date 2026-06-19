@@ -137,6 +137,8 @@ export function advanceSession(
       return handleReview(next, text, intent, menu);
     case "AWAITING_PIX_PAYMENT":
       return handleAwaitingPixPayment(next, text);
+    case "BUILDING_CART":
+      return handleBuildingCart(next, text, menu);
 
     default: {
       // IDLE / INTENT_DETECTED / PARSING_ITEMS / fresh order
@@ -300,6 +302,78 @@ function inlineComanda(session: WaPersistedSession): string {
   return lines.join("\n");
 }
 
+// ── BUILDING_CART constants ──────────────────────────────────────────────────────
+
+const FINALIZE_CART_RE =
+  /^\s*9[️⃣]*\s*$|\b(finalizar(\s+pedido)?|fechar\s+pedido|quero\s+finalizar|confirmar\s+pedido)\b/i;
+
+const BEVERAGE_KEYWORDS_RE =
+  /\b(coca|suco|cerveja|chopp|[aá]gua|caipirinha|drink|vinho|whisky|cacha[çc]a|limonada|refrigerante|soda|guaran[aá]|heineken|skol|brahma|pepsi|sprite|fanta|monster|red\s*bull|energ[eé]tico|[aá]lcool)\b/i;
+
+const DESSERT_KEYWORDS_RE =
+  /\b(sobremesa|doce|pudim|sorvete|mousse|torta|brownie|cheesecake|churros|brigadeiro|fondue|crepe|petit\s*gateau|tapioca|a[çc]a[ií])\b/i;
+
+function buildCartReply(session: WaPersistedSession): string {
+  const parts: string[] = ["Anotei até agora:"];
+  for (const item of session.selectedItems) {
+    const variant = item.variantName ? ` ${item.variantName}` : "";
+    const opts = item.options.length > 0 ? ` (${item.options.map(o => o.optionName).join(", ")})` : "";
+    const price = item.lineTotal.toFixed(2).replace(".", ",");
+    parts.push(`${item.quantity}× ${item.menuItemName}${variant}${opts} — R$ ${price}`);
+  }
+  parts.push("\nQuer adicionar mais alguma coisa?");
+  parts.push("");
+  parts.push("1️⃣ Adicionar mais itens");
+  parts.push("2️⃣ Ver bebidas");
+  parts.push("3️⃣ Ver sobremesas");
+  parts.push("9️⃣ Finalizar pedido");
+  return parts.join("\n");
+}
+
+function showCategoryItems(
+  session: WaPersistedSession,
+  menu: WaMenuItem[],
+  category: "BEVERAGE" | "DESSERT",
+): AdvanceResult {
+  const filter = category === "BEVERAGE" ? BEVERAGE_KEYWORDS_RE : DESSERT_KEYWORDS_RE;
+  const label = category === "BEVERAGE" ? "Bebidas" : "Sobremesas";
+  const items = menu.filter(m => m.isAvailable && filter.test(m.name));
+  if (items.length === 0) {
+    return done(session, "ORDER_REQUEST",
+      `Não temos ${label.toLowerCase()} disponíveis no momento.\n\n9️⃣ Finalizar pedido`, [], false);
+  }
+  const lines = items.slice(0, 6).map((item, i) => {
+    const p = channelPrice({ price: item.price, priceDelivery: item.priceDelivery }, "DELIVERY");
+    return `${formatOptionNumber(i + 1)} ${titleCase(item.name)} — R$ ${p.toFixed(2)}`;
+  });
+  return done(session, "ORDER_REQUEST",
+    `${label} disponíveis:\n\n${lines.join("\n")}\n\nQual você quer adicionar? Ou:\n9️⃣ Finalizar pedido`, [], false);
+}
+
+function handleBuildingCart(
+  session: WaPersistedSession,
+  text: string,
+  menu: WaMenuItem[],
+): AdvanceResult {
+  if (FINALIZE_CART_RE.test(text)) {
+    session.metadata = { ...(session.metadata ?? {}), cartFinalized: true };
+    return startCheckout(session);
+  }
+  if (/^\s*1[️⃣]*\s*$/.test(text)) {
+    return done(session, "ORDER_REQUEST", "Claro! O que mais vai querer?", [], false);
+  }
+  if (/^\s*2[️⃣]*\s*$/.test(text)) {
+    return showCategoryItems(session, menu, "BEVERAGE");
+  }
+  if (/^\s*3[️⃣]*\s*$/.test(text)) {
+    return showCategoryItems(session, menu, "DESSERT");
+  }
+  captureDeliveryPayment(session, text);
+  const mod = tryModification(session, text, menu);
+  if (mod) return mod;
+  return handleItemCollection(session, text, menu);
+}
+
 // ── Item collection ─────────────────────────────────────────────────────────────
 
 function handleItemCollection(
@@ -395,22 +469,11 @@ function continueAfterItems(
   return routeAfterResolved(session, justAdded);
 }
 
-/**
- * Drives the flow once all items are resolved, using whatever delivery/payment
- * info we already captured (so a one-line "...entrega, pix" jumps straight to the
- * next missing piece instead of re-asking "entrega ou retirada?").
- */
-function routeAfterResolved(
-  session: WaPersistedSession,
-  justAdded: WaOrderItem[] | null,
-): AdvanceResult {
-  const addedNew = justAdded && justAdded.length > 0 && session.selectedItems.length > justAdded.length;
-  const confirm = addedNew ? `Adicionei ${listItems(justAdded!)}.` : confirmItems(session);
-
+function startCheckout(session: WaPersistedSession): AdvanceResult {
   if (!session.deliveryType) {
     session.stage  = "COLLECTING_DELIVERY_TYPE";
     session.status = "AWAITING_CUSTOMER";
-    return done(session, "ORDER_REQUEST", `${confirm} Vai ser entrega ou retirada?`.trim(), [], false);
+    return done(session, "ORDER_REQUEST", "Vai ser entrega ou retirada?", [], false);
   }
 
   if (session.deliveryType === "DELIVERY") {
@@ -435,6 +498,25 @@ function routeAfterResolved(
   }
 
   return finalizePayment(session);
+}
+
+/**
+ * Drives the flow once all items are resolved, using whatever delivery/payment
+ * info we already captured (so a one-line "...entrega, pix" jumps straight to the
+ * next missing piece instead of re-asking "entrega ou retirada?").
+ */
+function routeAfterResolved(
+  session: WaPersistedSession,
+  justAdded: WaOrderItem[] | null,
+): AdvanceResult {
+  void justAdded;
+  const cartFinalized = (session.metadata as Record<string, unknown> | null)?.cartFinalized === true;
+  if (!cartFinalized) {
+    session.stage  = "BUILDING_CART";
+    session.status = "AWAITING_CUSTOMER";
+    return done(session, "ORDER_REQUEST", buildCartReply(session), [], false);
+  }
+  return startCheckout(session);
 }
 
 // ── Option answers ──────────────────────────────────────────────────────────────
@@ -622,8 +704,11 @@ function changeQuantity(session: WaPersistedSession, text: string): AdvanceResul
   target.lineTotal = round(target.unitPrice * n);
 
   const routed = routeAfterResolved(session, null);
-  const tail = routed.suggestedReply.replace(/^(Anotei:[^.]*\.|Adicionei[^.]*\.)\s*/, "");
   const ack  = `Atualizei para ${n} unidade${n !== 1 ? "s" : ""}.`;
+  if (routed.suggestedReply.startsWith("Anotei até agora:")) {
+    return done(session, "ORDER_MODIFICATION", `${ack}\n\n${routed.suggestedReply}`, routed.actions, false);
+  }
+  const tail = routed.suggestedReply.replace(/^(Anotei:[^.]*\.|Adicionei[^.]*\.)\s*/, "");
   return done(session, "ORDER_MODIFICATION", `${ack} ${tail}`.trim(), routed.actions, false);
 }
 
@@ -663,9 +748,12 @@ function changeItem(session: WaPersistedSession, text: string, menu: WaMenuItem[
   if (session.missingQuestions[0]) return continueAfterItems(session, null, menu);
 
   const routed = routeAfterResolved(session, null);
+  const ack = `Troquei para ${titleCase(menuItem.name)}.`;
+  if (routed.suggestedReply.startsWith("Anotei até agora:")) {
+    return done(session, "ORDER_MODIFICATION", `${ack}\n\n${routed.suggestedReply}`, routed.actions, false);
+  }
   const tail = routed.suggestedReply.replace(/^(Anotei:[^.]*\.|Adicionei[^.]*\.)\s*/, "");
-  return done(session, "ORDER_MODIFICATION",
-    `Troquei para ${titleCase(menuItem.name)}. ${tail}`.trim(), routed.actions, false);
+  return done(session, "ORDER_MODIFICATION", `${ack} ${tail}`.trim(), routed.actions, false);
 }
 
 // ── Cancel pending unresolved item (item-level cancel during ambiguity) ───────────
@@ -684,7 +772,9 @@ function cancelPendingItem(session: WaPersistedSession, menu: WaMenuItem[]): Adv
 
   const routed = continueAfterItems(session, null, menu);
   // Prepend ack + inline comanda so customer sees what remains
-  const replyHasComanda = routed.suggestedReply.includes("*Resumo do pedido:*");
+  const replyHasComanda =
+    routed.suggestedReply.includes("*Resumo do pedido:*") ||
+    routed.suggestedReply.startsWith("Anotei até agora:");
   if (replyHasComanda) {
     routed.suggestedReply = `${ack}\n\n${routed.suggestedReply}`;
   } else {

@@ -114,6 +114,7 @@ describe("B — Resolving Coca ambiguity returns to address collection", () => {
       selectedItems: [YAKI_ITEM],
       unresolvedItems: [COCA_UNRESOLVED],
       missingQuestions: [],
+      metadata: { cartFinalized: true },
     });
     const r = advanceSession(s, "1", MENU);
 
@@ -164,6 +165,7 @@ describe("D — 'Não quero mais' during Coca ambiguity cancels only Coca", () =
       selectedItems: [YAKI_ITEM],
       unresolvedItems: [COCA_UNRESOLVED],
       missingQuestions: [],
+      metadata: { cartFinalized: true },
     });
     const r = advanceSession(s, "Não quero mais", MENU);
 
@@ -187,6 +189,7 @@ describe("E — After cancelling Coca, Yakisoba and delivery fee are preserved",
       selectedItems: [YAKI_ITEM],
       unresolvedItems: [COCA_UNRESOLVED],
       missingQuestions: [],
+      metadata: { cartFinalized: true },
     });
     const r = advanceSession(s, "Não quero mais", MENU);
 
@@ -210,6 +213,7 @@ describe("F — After cancelling Coca, flow asks for payment method", () => {
       selectedItems: [YAKI_ITEM],
       unresolvedItems: [COCA_UNRESOLVED],
       missingQuestions: [],
+      metadata: { cartFinalized: true },
     });
     const r = advanceSession(s, "Não quero mais", MENU);
 
@@ -253,6 +257,7 @@ describe("H — Numeric '3' (Deixar sem Coca) cancels pending Coca", () => {
       selectedItems: [YAKI_ITEM],
       unresolvedItems: [COCA_UNRESOLVED],
       missingQuestions: [],
+      metadata: { cartFinalized: true },
     });
     const r = advanceSession(s, "3", MENU);
 
@@ -303,6 +308,9 @@ describe("J — Full flow: state machine schedules deferred actions; runtime gat
     expect(s.stage).toBe("COLLECTING_REQUIRED_OPTIONS");
 
     s = advanceSession(s, "frango", MENU).session;
+    expect(s.stage).toBe("BUILDING_CART");
+
+    s = advanceSession(s, "9", MENU).session;
     expect(s.stage).toBe("COLLECTING_DELIVERY_TYPE");
 
     s = advanceSession(s, "retirada", MENU).session;

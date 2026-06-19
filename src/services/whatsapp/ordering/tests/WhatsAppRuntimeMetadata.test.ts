@@ -166,7 +166,8 @@ describe("(2/3/11/12) Metadata injetada governa o fluxo na máquina", () => {
     const a1 = advanceSession(fresh(), "Quero 1 coca-cola lata", MENU);
     expect(a1.actions).not.toContain("CREATE_ORDER");
     const a2 = advanceSession(a1.session, "retirada", MENU);
-    const a3 = advanceSession(a2.session, "pix", MENU);
+    const a2b = advanceSession(a2.session, "9", MENU);
+    const a3 = advanceSession(a2b.session, "pix", MENU);
     expect(a3.actions).toEqual(expect.arrayContaining(["CREATE_ORDER", "GENERATE_PIX"]));
   });
 });

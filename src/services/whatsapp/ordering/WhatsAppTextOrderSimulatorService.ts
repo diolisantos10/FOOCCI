@@ -146,7 +146,7 @@ const FLOW_SCENARIOS: FlowScenario[] = [
     // Cenário 1 (completo): dinheiro + entrega + endereço salvo + troco, até montar a comanda.
     id: "sim-cash-delivery",
     name: "Pedido + dinheiro + entrega + endereço salvo",
-    messages: ["Quero um combinado", "entrega", "1", "dinheiro", "1"],
+    messages: ["Quero um combinado", "9", "entrega", "1", "dinheiro", "1"],
     withSavedAddress: true,
     check: (c) => [
       check("oferece endereço salvo", has(c.joinedReplies, "Rua das Flores"), "P1", "não ofereceu o endereço salvo"),
@@ -160,7 +160,7 @@ const FLOW_SCENARIOS: FlowScenario[] = [
     // Cenário 2: Pix — só gera após o resumo/confirmação, e em simulação é stub.
     id: "sim-pix-pickup",
     name: "Pedido + Pix",
-    messages: ["Quero um temaki", "retirada", "pix"],
+    messages: ["Quero um temaki", "retirada", "9", "pix"],
     check: (c) => [
       check("Pix sinalizado (WOULD_GENERATE_PIX)", c.wouldGeneratePix, "P1", "não sinalizou geração de Pix"),
       check("Pix só após o resumo do pedido", c.pixTurnIndex >= 0 && has(c.repliesBefore(c.pixTurnIndex), "resumo do pedido"), "P1", "Pix antes do resumo"),
@@ -171,7 +171,7 @@ const FLOW_SCENARIOS: FlowScenario[] = [
     // Cenário 3: retirada — sem endereço, vai direto para pagamento.
     id: "sim-pickup",
     name: "Retirada",
-    messages: ["Quero um combinado", "retirada", "dinheiro", "1"],
+    messages: ["Quero um combinado", "retirada", "9", "dinheiro", "1"],
     check: (c) => [
       check("não pede endereço na retirada", !has(c.joinedReplies, "endereço de entrega") && !has(c.joinedReplies, "Rua das Flores"), "P1", "pediu endereço na retirada"),
       check("montaria o pedido (WOULD_CREATE_ORDER)", c.wouldCreateOrder, "P1", "não chegou a montar pedido"),

@@ -69,13 +69,13 @@ describe("State machine — happy path", () => {
     expect(r.suggestedReply.toLowerCase()).toContain("yakisoba");
   });
 
-  it("answering the option advances toward delivery type", () => {
+  it("answering the option shows cart and waits for finalization", () => {
     let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", MENU).session;
     const r = advanceSession(s, "frango", MENU);
-    // yakisoba option resolved → asks delivery (no more missing)
+    // yakisoba option resolved → shows cart (no more missing)
     expect(r.session.missingQuestions.length).toBe(0);
-    expect(r.session.stage).toBe("COLLECTING_DELIVERY_TYPE");
-    expect(r.suggestedReply.toLowerCase()).toMatch(/entrega ou retirada/);
+    expect(r.session.stage).toBe("BUILDING_CART");
+    expect(r.suggestedReply).toMatch(/9️⃣|Anotei/);
   });
 
   it("option price is applied to the matched item", () => {
@@ -88,7 +88,8 @@ describe("State machine — happy path", () => {
 
   it("pickup skips freight and asks payment", () => {
     let s = advanceSession(freshSession(), "quero 1 yakisoba", MENU).session;
-    s = advanceSession(s, "frango", MENU).session;
+    s = advanceSession(s, "frango", MENU).session;    // BUILDING_CART
+    s = advanceSession(s, "9", MENU).session;          // finalize → COLLECTING_DELIVERY_TYPE
     const r = advanceSession(s, "vou retirar", MENU);
     expect(r.session.deliveryType).toBe("PICKUP");
     expect(r.session.deliveryQuote?.fee).toBe(0);
@@ -97,7 +98,8 @@ describe("State machine — happy path", () => {
 
   it("delivery asks for address", () => {
     let s = advanceSession(freshSession(), "quero 1 yakisoba", MENU).session;
-    s = advanceSession(s, "frango", MENU).session;
+    s = advanceSession(s, "frango", MENU).session;    // BUILDING_CART
+    s = advanceSession(s, "9", MENU).session;          // finalize → COLLECTING_DELIVERY_TYPE
     const r = advanceSession(s, "é entrega", MENU);
     expect(r.session.deliveryType).toBe("DELIVERY");
     expect(r.session.stage).toBe("COLLECTING_ADDRESS");
@@ -106,7 +108,8 @@ describe("State machine — happy path", () => {
 
   it("complete address defers to delivery quote", () => {
     let s = advanceSession(freshSession(), "quero 1 yakisoba", MENU).session;
-    s = advanceSession(s, "frango", MENU).session;
+    s = advanceSession(s, "frango", MENU).session;    // BUILDING_CART
+    s = advanceSession(s, "9", MENU).session;          // finalize → COLLECTING_DELIVERY_TYPE
     s = advanceSession(s, "é entrega", MENU).session;
     // CEP-first: loose street text asks for the CEP; the full address completes
     // via cepAddress confirmation + house number, then defers to the quote.
@@ -150,7 +153,7 @@ describe("State machine — happy path", () => {
 describe("State machine — modifications", () => {
   it("N. customer can add an item mid-flow", () => {
     let s = advanceSession(freshSession(), "quero 1 yakisoba", MENU).session;
-    s = advanceSession(s, "frango", MENU).session; // now COLLECTING_DELIVERY_TYPE
+    s = advanceSession(s, "frango", MENU).session; // now BUILDING_CART
     // Add another item by going back through review path
     s.stage = "REVIEWING_ORDER";
     const r = advanceSession(s, "manda uma coca também", MENU);
@@ -543,8 +546,8 @@ describe("Ambiguity queue — multi-item", () => {
     expect(yaki?.quantity).toBe(2);
     expect(cola?.quantity).toBe(1);
     expect(s.unresolvedItems).toHaveLength(0);
-    // All resolved → should advance to COLLECTING_DELIVERY_TYPE
-    expect(s.stage).toBe("COLLECTING_DELIVERY_TYPE");
+    // All resolved → enters cart-building mode
+    expect(s.stage).toBe("BUILDING_CART");
   });
 
   // I. Dry-run: no side effects in the state machine (pure)

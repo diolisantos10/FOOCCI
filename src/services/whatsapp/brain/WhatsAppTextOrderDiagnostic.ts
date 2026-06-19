@@ -177,7 +177,8 @@ export async function runWhatsAppTextOrderDiagnostic(): Promise<TextOrderDiagnos
     const annotationClean = !s1.actions.includes("CREATE_ORDER") && !s1.actions.includes("GENERATE_PIX");
     let s2 = advanceSession(s1.session, "retirada", CATALOG);
     const midClean = !s2.actions.includes("CREATE_ORDER");
-    const s3 = advanceSession(s2.session, "pix", CATALOG);
+    const s2b = advanceSession(s2.session, "9", CATALOG);
+    const s3 = advanceSession(s2b.session, "pix", CATALOG);
     const endHasActions = s3.actions.includes("CREATE_ORDER") && s3.actions.includes("GENERATE_PIX");
     fullTestOrderOnlyAfterConfirmation = annotationClean && midClean && endHasActions;
     pixOnlyAfterConfirmation = annotationClean && endHasActions;

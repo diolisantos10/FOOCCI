@@ -62,9 +62,9 @@ describe("W8 — mixed one-line order", () => {
   it("A — does NOT return to IDLE asking what to order", async () => {
     const r = await runScenario(byId("edge-mixed-order-one-line"), CTX);
     expect(r.finalStage).not.toBe("IDLE");
-    expect(r.finalStage).toBe("COLLECTING_ADDRESS");
+    expect(r.finalStage).toBe("BUILDING_CART");
     expect(r.steps[0]!.suggestedReply.toLowerCase()).not.toMatch(/me diz o que (vai|quer)/);
-    expect(r.steps[0]!.suggestedReply.toLowerCase()).toMatch(/cep|endereço/);
+    expect(r.steps[0]!.suggestedReply).toMatch(/Anotei até agora|9️⃣/);
   });
 
   it("B — captures products, delivery type and payment method", async () => {
@@ -104,7 +104,7 @@ describe("W8 — carne e frango resolution", () => {
     expect(r.session.selectedItems).toHaveLength(1);
     expect(r.session.selectedItems[0]!.menuItemName).toBe("Yakisoba Carne e Frango");
     expect(r.session.unresolvedItems).toHaveLength(0);
-    expect(r.session.stage).toBe("COLLECTING_DELIVERY_TYPE");
+    expect(r.session.stage).toBe("BUILDING_CART");
   });
 
   it("F — does NOT ask about 'Frango Empanado'", () => {
@@ -122,7 +122,7 @@ describe("W8 — add item", () => {
     expect(r.finalItems).toHaveLength(2);
     expect(names.some(n => n.includes("coca-cola") || n === "coca cola")).toBe(true);
     expect(names.some(n => n.includes("zero"))).toBe(true);
-    expect(r.steps[r.steps.length - 1]!.suggestedReply).toMatch(/Adicionei/i);
+    expect(r.steps[r.steps.length - 1]!.suggestedReply).toMatch(/Adicionei|Anotei/i);
     expect(r.verdict).not.toBe("FAIL");
   });
 });
