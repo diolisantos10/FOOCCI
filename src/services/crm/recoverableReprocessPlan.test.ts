@@ -63,16 +63,18 @@ describe("computeRecoverablePlan", () => {
     expect(plan.distinctRecipients).toBe(1);
   });
 
-  it("excludes opt-out, invalid phone, no phone, not contactable, 400, auth, disconnected", () => {
+  it("excludes opt-out, invalid phone, no phone, not contactable, validation 400, auth", () => {
+    // NOTE: instance-disconnected / session errors are NOT excluded — they are
+    // transient (RETRYABLE_LATER) and ARE the recoverable pool (see §8). Covered by
+    // the "includes transient" test below.
     const rows = [
       row({ customerId: "ok", errorMessage: "EVOLUTION_HTTP_503" }),       // recoverable
       row({ customerId: "optout", status: "BLOCKED", errorMessage: "CUSTOMER_OPTED_OUT" }),
       row({ customerId: "invalid", status: "SKIPPED", errorMessage: "INVALID_PHONE_FORMAT" }),
       row({ customerId: "nophone", status: "SKIPPED", errorMessage: "MISSING_PHONE", customerPhone: "" }),
       row({ customerId: "notcontact", status: "SKIPPED", errorMessage: "CUSTOMER_NOT_CONTACTABLE" }),
-      row({ customerId: "badreq", status: "FAILED", errorMessage: "EVOLUTION_HTTP_400" }),
+      row({ customerId: "badreq", status: "FAILED", errorMessage: "EVOLUTION_HTTP_400", failedReason: "number must be valid" }),
       row({ customerId: "auth", status: "FAILED", errorMessage: "EVOLUTION_HTTP_403" }),
-      row({ customerId: "disc", status: "FAILED", errorMessage: "EVOLUTION_INSTANCE_DISCONNECTED" }),
     ];
     const plan = computeRecoverablePlan(rows, 5);
     expect(plan.distinctRecipients).toBe(1);
@@ -90,14 +92,17 @@ describe("computeRecoverablePlan", () => {
     expect(plan.nextBatch[0]?.customerId).toBe("pending");
   });
 
-  it("includes transient 5xx / timeout / unknown only", () => {
+  it("includes transient 5xx / timeout / unknown / session-disconnect (§8)", () => {
     const rows = [
       row({ customerId: "p5xx", errorMessage: "EVOLUTION_HTTP_500" }),
       row({ customerId: "ptimeout", errorMessage: "EVOLUTION_HTTP_504" }),
       row({ customerId: "punknown", status: "FAILED", errorMessage: null, failedReason: "algo estranho" }),
+      // Evolution/Baileys wraps a dropped session in a 400 — reclassified as a
+      // transient instance error (RETRYABLE_LATER), so it IS recoverable.
+      row({ customerId: "pdisc", status: "FAILED", errorMessage: "EVOLUTION_HTTP_400", failedReason: "Error: Connection Closed" }),
     ];
     const plan = computeRecoverablePlan(rows, 5);
-    expect(plan.distinctRecipients).toBe(3);
+    expect(plan.distinctRecipients).toBe(4);
   });
 
   it("matches the documented 25 → 14 / 11 shape", () => {
