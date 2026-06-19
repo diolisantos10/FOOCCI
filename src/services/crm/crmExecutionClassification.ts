@@ -88,7 +88,7 @@ const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   FAILED_TIMEOUT:                  { kind: "FAILED",  badge: "Tempo esgotado / conexão",      retryable: true,  retryability: "RETRYABLE_LATER" },
   FAILED_UNKNOWN:                  { kind: "FAILED",  badge: "Erro desconhecido",             retryable: true,  retryability: "RETRYABLE_LATER" },
   EVOLUTION_BAD_REQUEST:           { kind: "FAILED",  badge: "Bad request (400)",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
-  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED",  badge: "Instância desconectada",        retryable: true,  retryability: "RETRYABLE_AFTER_FIX" },
+  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED",  badge: "Instância desconectada",        retryable: true,  retryability: "RETRYABLE_LATER" },
   EVOLUTION_AUTH_ERROR:            { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Rate limit",                    retryable: true,  retryability: "RETRYABLE_LATER" },
   EMPTY_MESSAGE:                   { kind: "FAILED",  badge: "Mensagem vazia",                retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
@@ -142,9 +142,38 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
   }
 }
 
+/**
+ * Detects Evolution/Baileys SESSION/socket runtime errors. This Evolution build
+ * wraps a dropped/unhealthy WhatsApp-Web session in an HTTP 400 "Bad Request",
+ * e.g. `"Error: Connection Closed"` or `"TypeError: Cannot read properties of
+ * undefined (reading 'id')"`. Those are transient instance problems (retry after
+ * reconnect), NOT a payload/validation 400.
+ */
+function isInstanceSessionError(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("connection closed") ||
+    t.includes("connection terminated") ||
+    t.includes("connection lost") ||
+    t.includes("lost connection") ||
+    t.includes("cannot read properties of undefined") ||
+    t.includes("reading 'id'") ||
+    t.includes("reading \"id\"") ||
+    t.includes("socket") ||
+    t.includes("websocket") ||
+    t.includes("baileys") ||
+    t.includes("stream errored") ||
+    t.includes("session closed") ||
+    t.includes("not connected") ||
+    t.includes("no session")
+  );
+}
+
 /** Best-effort mapping of a free-text reason (legacy FAILED rows / provider errors). */
 function fromText(text: string): ExecutionCategory {
   const t = text.toLowerCase();
+  // Session/socket runtime errors (often wrapped in a 400) → instance disconnected.
+  if (isInstanceSessionError(t)) return "EVOLUTION_INSTANCE_DISCONNECTED";
   // Safety blocks recorded as FAILED in legacy data.
   if (t.includes("limite semanal") || t.includes("weekly")) return "BLOCKED_WEEKLY_LIMIT";
   if (t.includes("opt-out") || t.includes("opt out") || t.includes("optou")) return "BLOCKED_OPT_OUT";
@@ -198,6 +227,14 @@ export function classifyExecution(input: ExecutionInput): ExecutionClassificatio
   // Prefer the machine reason (new rows store it on errorMessage).
   const machine = (input.errorMessage ?? "").trim();
   let category = machine ? fromMachineReason(machine) : null;
+
+  // A machine EVOLUTION_HTTP_400 is only a TRUE bad-request when the provider body
+  // is a validation error. Evolution wraps a dropped Baileys session in a 400
+  // ("Connection Closed", "Cannot read properties of undefined (reading 'id')") —
+  // reclassify those as a transient instance problem (retry after reconnect).
+  if (category === "EVOLUTION_BAD_REQUEST" && isInstanceSessionError(`${input.errorMessage ?? ""} ${input.failedReason ?? ""}`)) {
+    category = "EVOLUTION_INSTANCE_DISCONNECTED";
+  }
 
   // BLOCKED status without a recognized machine code → generic safety block.
   if (!category && status === "BLOCKED") category = "BLOCKED_SAFETY";

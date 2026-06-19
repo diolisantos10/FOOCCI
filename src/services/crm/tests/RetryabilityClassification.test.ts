@@ -129,3 +129,47 @@ describe("buildEligibilityMetrics — eligibility funnel separates skips from fa
     expect(m.whatsAppEligible).toBe(4);
   });
 });
+
+describe("HTTP 400 session-error reclassification (Evolution/Baileys wraps a dropped session in a 400)", () => {
+  it("'Connection Closed' 400 → EVOLUTION_INSTANCE_DISCONNECTED / RETRYABLE_LATER", () => {
+    const c = classifyExecution({
+      status: "FAILED",
+      errorMessage: "EVOLUTION_HTTP_400",
+      failedReason: 'HTTP 400: {"status":400,"error":"Bad Request","response":{"message":["Error: Connection Closed"]}}',
+    });
+    expect(c.category).toBe("EVOLUTION_INSTANCE_DISCONNECTED");
+    expect(c.retryability).toBe("RETRYABLE_LATER");
+    expect(c.retryabilityLabel).toBe("Pode reenviar depois");
+  });
+
+  it("Baileys \"Cannot read properties of undefined (reading 'id')\" 400 → disconnected / RETRYABLE_LATER", () => {
+    const c = classifyExecution({
+      status: "FAILED",
+      errorMessage: "EVOLUTION_HTTP_400",
+      failedReason: `HTTP 400: {"status":400,"error":"Bad Request","response":{"message":["TypeError: Cannot read properties of undefined (reading 'id')"]}}`,
+    });
+    expect(c.category).toBe("EVOLUTION_INSTANCE_DISCONNECTED");
+    expect(c.retryability).toBe("RETRYABLE_LATER");
+  });
+
+  it("genuine validation 400 (number/text) stays EVOLUTION_BAD_REQUEST / RETRYABLE_AFTER_FIX", () => {
+    const c = classifyExecution({
+      status: "FAILED",
+      errorMessage: "EVOLUTION_HTTP_400",
+      failedReason: 'HTTP 400: {"status":400,"error":"Bad Request","response":{"message":["number must be a valid WhatsApp number"]}}',
+    });
+    expect(c.category).toBe("EVOLUTION_BAD_REQUEST");
+    expect(c.retryability).toBe("RETRYABLE_AFTER_FIX");
+    expect(c.retryabilityLabel).toBe("Precisa corrigir");
+  });
+
+  it("session-error 400 enters the recoverable reprocess pool; validation 400 does not", () => {
+    const s = summarizeExecutions([
+      { status: "FAILED", errorMessage: "EVOLUTION_HTTP_400", failedReason: "Error: Connection Closed" },
+      { status: "FAILED", errorMessage: "EVOLUTION_HTTP_400", failedReason: "number must be valid" },
+    ]);
+    expect(s.recoverableLater).toBe(1);
+    expect(s.byCategory.EVOLUTION_INSTANCE_DISCONNECTED).toBe(1);
+    expect(s.byCategory.EVOLUTION_BAD_REQUEST).toBe(1);
+  });
+});

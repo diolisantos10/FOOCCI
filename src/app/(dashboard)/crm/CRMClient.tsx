@@ -2366,7 +2366,7 @@ function CampaignManageModal({
                                 { label: "Erro temporário Evolution (5xx)", n: fb.http500,      tag: "Pode reenviar depois" },
                                 { label: "Timeout / conexão",               n: fb.timeout,      tag: "Pode reenviar depois" },
                                 { label: "Rate limit",                      n: fb.rateLimit,    tag: "Pode reenviar depois" },
-                                { label: "Instância desconectada",          n: fb.disconnected, tag: "Precisa corrigir" },
+                                { label: "Instância desconectada",          n: fb.disconnected, tag: "Pode reenviar depois" },
                                 { label: "Bad request (400)",               n: fb.http400,      tag: "Precisa corrigir" },
                                 { label: "Autenticação",                    n: fb.auth,         tag: "Precisa corrigir" },
                                 { label: "Mensagem vazia",                  n: fb.emptyMessage, tag: "Precisa corrigir" },

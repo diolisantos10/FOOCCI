@@ -31,6 +31,11 @@ function checkCronAuth(req: NextRequest): { ok: true } | { ok: false; status: 40
 /** Categorise a provider 400 body into an actionable sub-reason. */
 function classifyBody(text: string): string {
   const t = text.toLowerCase();
+  // Evolution/Baileys wraps a dropped/unhealthy session in a 400 — transient, retry after reconnect.
+  if (t.includes("connection closed") || t.includes("connection terminated") || t.includes("lost connection") ||
+      t.includes("cannot read properties of undefined") || t.includes("reading 'id'") || t.includes("socket") ||
+      t.includes("websocket") || t.includes("baileys") || t.includes("stream errored") ||
+      t.includes("session closed") || t.includes("not connected")) return "INSTANCE_SESSION_ERROR";
   if (t.includes("exists\":false") || t.includes("not registered") || t.includes("not on whatsapp") ||
       t.includes("não existe no whatsapp") || t.includes("no account") || t.includes("invalid wuid") ||
       t.includes("number does not exist")) return "NUMBER_NOT_ON_WHATSAPP";
