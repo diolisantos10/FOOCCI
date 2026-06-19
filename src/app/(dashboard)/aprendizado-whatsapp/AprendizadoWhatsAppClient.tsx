@@ -1,20 +1,29 @@
 "use client";
 
 /**
- * Central de Aprendizado WhatsApp — gestor-facing, business-language view of the
- * WhatsApp sales agent. Three tabs:
- *   1. Conversas de hoje  — recent conversations + outcome (masked).
- *   2. Aprendizados pendentes — error/opportunity cards to approve/reject/keep.
- *   3. Saúde do WhatsApp  — health metrics (conversas, pedidos, receita, erros).
+ * Agentes → WhatsApp — gestor-facing, business-language view of the WhatsApp
+ * sales agent.
  *
- * Technical terms are hidden inside a "Detalhes técnicos" collapse; the main copy
+ * Seven tabs:
+ *   1. Visão Geral        — status, KPIs, pending learnings count.
+ *   2. Conversas de hoje  — recent conversations + masked outcome.
+ *   3. Aprendizados pendentes — error/opportunity cards to approve/reject/keep.
+ *   4. Simulador          — try a message, see what the agent would say.
+ *   5. Saúde do WhatsApp  — 24 h metrics, top errors.
+ *   6. Configurações      — minimal WA config (read-mostly, current state).
+ *   7. Modo avançado      — links to technical admin diagnostics (admin only).
+ *
+ * Technical terms are hidden inside "Detalhes técnicos" collapses; the main copy
  * stays in plain business language. This screen never sends WhatsApp and never
  * creates orders/Pix — it only reads conversations and manages the learning queue.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { WA_TABS, APPROVAL_DISCLAIMER, MODO_AVANCADO_LINKS } from "./wa-agent-ux.constants";
+import type { WaTabId } from "./wa-agent-ux.constants";
 
-type Tab = "conversas" | "aprendizados" | "saude";
+// ── shared types ──────────────────────────────────────────────────────────────
 
 interface LearningCard {
   id: string;
@@ -53,61 +62,176 @@ interface HealthSnapshot {
   pendingLearnings: number;
 }
 
-const OUTCOME_TONE: Record<string, string> = {
-  VENDA_CONCLUIDA: "bg-green-100 text-green-800",
-  ATENDENTE_ASSUMIU: "bg-blue-100 text-blue-800",
-  OK_SEM_ACAO: "bg-gray-100 text-gray-700",
-};
-function outcomeTone(o: string): string {
-  if (OUTCOME_TONE[o]) return OUTCOME_TONE[o];
-  if (o.startsWith("ERRO") || o === "LOOP") return "bg-red-100 text-red-800";
-  return "bg-amber-100 text-amber-800"; // abandono / oportunidade / pergunta
+interface AgentConfig {
+  agentName?: string;
+  agentMode?: string;
+  handoffPhone?: string;
+  menuUrl?: string;
 }
+
+interface SimMessage {
+  id: string;
+  role: "customer" | "bot";
+  text: string;
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+const SEVERITY_LABEL: Record<string, string> = {
+  P0: "crítico",
+  P1: "atenção",
+  P2: "melhoria",
+};
+
 const SEVERITY_TONE: Record<string, string> = {
   P0: "bg-red-100 text-red-800",
   P1: "bg-amber-100 text-amber-800",
   P2: "bg-gray-100 text-gray-700",
 };
 
+const OUTCOME_TONE: Record<string, string> = {
+  VENDA_CONCLUIDA: "bg-green-100 text-green-800",
+  ATENDENTE_ASSUMIU: "bg-blue-100 text-blue-800",
+  OK_SEM_ACAO: "bg-gray-100 text-gray-700",
+};
+
+function outcomeTone(o: string): string {
+  if (OUTCOME_TONE[o]) return OUTCOME_TONE[o];
+  if (o.startsWith("ERRO") || o === "LOOP") return "bg-red-100 text-red-800";
+  return "bg-amber-100 text-amber-800";
+}
+
 const moneyBR = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+// ── root component ────────────────────────────────────────────────────────────
+
 export function AprendizadoWhatsAppClient() {
-  const [tab, setTab] = useState<Tab>("aprendizados");
+  const [tab, setTab] = useState<WaTabId>("visao-geral");
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <p className="text-sm text-gray-500 mb-4">
-        Erros e oportunidades encontrados nas conversas reais. Aprove o que o agente deve aprender.
+        Acompanhe o desempenho do agente, revise aprendizados e ajuste configurações do WhatsApp.
       </p>
 
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
-        <TabButton active={tab === "conversas"} onClick={() => setTab("conversas")}>Conversas de hoje</TabButton>
-        <TabButton active={tab === "aprendizados"} onClick={() => setTab("aprendizados")}>Aprendizados pendentes</TabButton>
-        <TabButton active={tab === "saude"} onClick={() => setTab("saude")}>Saúde do WhatsApp</TabButton>
+      {/* Tab bar */}
+      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
+        {WA_TABS.map((t) => (
+          <TabButton key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
+            <span className="mr-1.5">{t.icon}</span>
+            {t.label}
+          </TabButton>
+        ))}
       </div>
 
-      {tab === "conversas" && <ConversasTab />}
-      {tab === "aprendizados" && <AprendizadosTab />}
-      {tab === "saude" && <SaudeTab />}
+      {tab === "visao-geral"   && <VisaoGeralTab onTabChange={setTab} />}
+      {tab === "conversas"     && <ConversasTab />}
+      {tab === "aprendizados"  && <AprendizadosTab />}
+      {tab === "simulador"     && <SimuladorTab />}
+      {tab === "saude"         && <SaudeTab />}
+      {tab === "configuracoes" && <ConfiguracoesTab />}
+      {tab === "modo-avancado" && <ModoAvancadoTab />}
     </div>
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+// ── Tab 1: Visão Geral ────────────────────────────────────────────────────────
+
+function VisaoGeralTab({ onTabChange }: { onTabChange: (t: WaTabId) => void }) {
+  const [snap, setSnap] = useState<HealthSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/whatsapp/learning/health?period=24h")
+      .then((r) => r.json())
+      .then((j) => setSnap(j?.data?.snapshot ?? null))
+      .catch(() => setError("Não foi possível carregar o resumo do WhatsApp."));
+  }, []);
+
+  if (error) return <Empty>{error}</Empty>;
+  if (!snap) return <Empty>Carregando…</Empty>;
+
+  const rateFormatted = `${Math.round(snap.conversationToOrderRate * 100)}%`;
+
+  return (
+    <div className="space-y-6">
+      {snap.pendingLearnings > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {snap.pendingLearnings} aprendizado{snap.pendingLearnings > 1 ? "s" : ""} aguardando revisão
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Revise e aprove para a IA melhorar nas próximas conversas.
+            </p>
+          </div>
+          <button
+            onClick={() => onTabChange("aprendizados")}
+            className="shrink-0 ml-4 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+          >
+            Revisar agora
+          </button>
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">WhatsApp hoje (últimas 24h)</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Metric label="Clientes atendidos"   value={String(snap.conversations)} />
+          <Metric label="Pedidos gerados"       value={String(snap.ordersGenerated)} />
+          <Metric label="Receita gerada"        value={moneyBR(snap.revenue)} />
+          <Metric label="Conversa → pedido"     value={rateFormatted} />
+          <Metric label="Transferências humanas" value={String(snap.handoffs)} />
+          <Metric label="Conversas abandonadas" value={String(snap.abandonos)} />
+        </div>
+      </div>
+
+      {snap.topErrors.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">Erros detectados hoje</h2>
+          <ul className="space-y-1">
+            {snap.topErrors.slice(0, 3).map((e) => (
+              <li key={e.category} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                <span className="text-gray-700">{e.label}</span>
+                <span className="font-semibold text-red-600">{e.count}</span>
+              </li>
+            ))}
+          </ul>
+          {snap.topErrors.length > 3 && (
+            <button
+              onClick={() => onTabChange("saude")}
+              className="mt-2 text-xs text-brand-600 hover:underline"
+            >
+              Ver todos os erros →
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <QuickAction icon="💬" label="Conversas de hoje"        onClick={() => onTabChange("conversas")} />
+        <QuickAction icon="🧠" label="Aprendizados pendentes"   onClick={() => onTabChange("aprendizados")} />
+        <QuickAction icon="🧪" label="Testar uma mensagem"      onClick={() => onTabChange("simulador")} />
+      </div>
+    </div>
+  );
+}
+
+function QuickAction({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition ${
-        active ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-500 hover:text-gray-700"
-      }`}
+      className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors text-left"
     >
-      {children}
+      <span className="text-base">{icon}</span>
+      {label}
     </button>
   );
 }
 
-// ── Tab 1: Conversas de hoje ──────────────────────────────────────────────────
+// ── Tab 2: Conversas de hoje ──────────────────────────────────────────────────
+
 function ConversasTab() {
   const [items, setItems] = useState<FeedItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,16 +257,19 @@ function ConversasTab() {
             </span>
             <p className="mt-1 text-xs text-gray-500">{it.outcomeReason}</p>
           </div>
-          {it.issueCount > 0 && (
-            <span className="text-xs text-red-600">{it.issueCount} ponto(s) de aprendizado</span>
-          )}
+          <div className="flex items-center gap-3">
+            {it.issueCount > 0 && (
+              <span className="text-xs text-red-600">{it.issueCount} ponto(s) de aprendizado</span>
+            )}
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-// ── Tab 2: Aprendizados pendentes ─────────────────────────────────────────────
+// ── Tab 3: Aprendizados pendentes ─────────────────────────────────────────────
+
 function AprendizadosTab() {
   const [cards, setCards] = useState<LearningCard[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +292,7 @@ function AprendizadosTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
       });
-      setCards((prev) => (prev ? prev.filter((c) => c.id !== id) : prev));
+      setCards((prev) => prev ? prev.filter((c) => c.id !== id) : prev);
     } finally {
       setBusy(null);
     }
@@ -180,7 +307,9 @@ function AprendizadosTab() {
       {cards.map((c) => (
         <div key={c.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
-            <span className={`rounded px-2 py-0.5 text-xs font-semibold ${SEVERITY_TONE[c.severity]}`}>{c.severity}</span>
+            <span className={`rounded px-2 py-0.5 text-xs font-semibold ${SEVERITY_TONE[c.severity]}`}>
+              {SEVERITY_LABEL[c.severity] ?? c.severity}
+            </span>
             <h3 className="text-base font-semibold text-gray-900">{c.title}</h3>
             {c.occurrences > 1 && (
               <span className="ml-auto text-xs text-gray-500">{c.occurrences} conversas</span>
@@ -188,11 +317,12 @@ function AprendizadosTab() {
           </div>
 
           <dl className="space-y-2 text-sm">
-            <Row label="Situação">{c.situationSummary}</Row>
             <Row label="O que o cliente queria">{c.customerWanted}</Row>
             <Row label="O que a IA respondeu">{c.agentAnswered}</Row>
             <Row label="Qual foi o erro">{c.problem}</Row>
-            <Row label="Resposta ideal"><span className="text-emerald-700">{c.idealAnswer}</span></Row>
+            <Row label="Resposta ideal">
+              <span className="text-emerald-700">{c.idealAnswer}</span>
+            </Row>
             <Row label="Aprendizado sugerido">{c.learningRule}</Row>
             <Row label="Impacto na venda">{c.salesImpact}</Row>
           </dl>
@@ -204,41 +334,178 @@ function AprendizadosTab() {
             </pre>
           </details>
 
-          <div className="mt-4 flex gap-2">
-            <button
-              disabled={busy === c.id}
-              onClick={() => decide(c.id, "APPROVE")}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              Aprovar aprendizado
-            </button>
-            <button
-              disabled={busy === c.id}
-              onClick={() => decide(c.id, "REJECT")}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Rejeitar
-            </button>
-            <button
-              disabled={busy === c.id}
-              onClick={() => decide(c.id, "BACKLOG")}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Guardar para depois
-            </button>
+          <div className="mt-4 space-y-3">
+            <div className="flex gap-2">
+              <button
+                disabled={busy === c.id}
+                onClick={() => decide(c.id, "APPROVE")}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Aprovar aprendizado
+              </button>
+              <button
+                disabled={busy === c.id}
+                onClick={() => decide(c.id, "REJECT")}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Rejeitar
+              </button>
+              <button
+                disabled={busy === c.id}
+                onClick={() => decide(c.id, "BACKLOG")}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Guardar para depois
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 border-t border-gray-100 pt-2">
+              ℹ️ {APPROVAL_DISCLAIMER}
+            </p>
           </div>
         </div>
       ))}
-
-      <p className="pt-2 text-xs text-gray-400">
-        Aprovar significa: este aprendizado entra na base de treinamento do WhatsApp Agent e será usado na
-        próxima rodada de melhoria. Não altera a produção automaticamente.
-      </p>
     </div>
   );
 }
 
-// ── Tab 3: Saúde do WhatsApp ──────────────────────────────────────────────────
+// ── Tab 4: Simulador ──────────────────────────────────────────────────────────
+
+function SimuladorTab() {
+  const [messages, setMessages] = useState<SimMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput("");
+    setError(null);
+
+    const customerMsg: SimMessage = { id: `c-${Date.now()}`, role: "customer", text };
+    setMessages((prev) => [...prev, customerMsg]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/whatsapp/simulate/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageText: text, currentSession: session }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro na simulação");
+      const botMsg: SimMessage = { id: `b-${Date.now()}`, role: "bot", text: json.data?.reply ?? "…" };
+      setMessages((prev) => [...prev, botMsg]);
+      if (json.data?.session) setSession(json.data.session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function reset() {
+    setMessages([]);
+    setSession(null);
+    setError(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <strong>Modo simulação</strong> — nenhuma mensagem real é enviada, nenhum pedido é criado.
+        Teste como o agente responderia a diferentes situações.
+      </div>
+
+      {/* WA-style chat window */}
+      <div className="rounded-2xl bg-[#e5ddd5] min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-2">
+        {messages.length === 0 && (
+          <p className="text-center text-xs text-gray-400 pt-8">
+            Digite uma mensagem abaixo para simular uma conversa no WhatsApp.
+          </p>
+        )}
+        {messages.map((m) => (
+          <div key={m.id} className={`flex ${m.role === "customer" ? "justify-end" : "justify-start"}`}>
+            <div
+              className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm whitespace-pre-wrap ${
+                m.role === "customer"
+                  ? "rounded-tr-none bg-[#dcf8c6] text-gray-800"
+                  : "rounded-tl-none bg-white text-gray-800"
+              }`}
+            >
+              {m.role === "bot" && (
+                <p className="mb-0.5 text-[10px] font-semibold text-[#075e54]">WhatsApp Agent</p>
+              )}
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="rounded-2xl rounded-tl-none bg-white px-3 py-2 text-xs text-gray-400 shadow-sm">
+              Simulando…
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-600 rounded-lg border border-red-200 bg-red-50 px-3 py-2">{error}</p>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
+          placeholder="Digite uma mensagem…"
+          disabled={loading}
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+        />
+        <button
+          onClick={send}
+          disabled={loading || !input.trim()}
+          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          Enviar
+        </button>
+        {messages.length > 0 && (
+          <button
+            onClick={reset}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Reiniciar
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {[
+          "Olá", "Quero fazer um pedido", "Qual é o cardápio?", "Cadê meu pedido?", "Preciso falar com um atendente",
+        ].map((q) => (
+          <button
+            key={q}
+            onClick={() => { setInput(q); }}
+            className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 hover:border-emerald-300 hover:text-emerald-700 transition-colors"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Tab 5: Saúde do WhatsApp ──────────────────────────────────────────────────
+
 function SaudeTab() {
   const [snap, setSnap] = useState<HealthSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -256,23 +523,23 @@ function SaudeTab() {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Metric label="Conversas (24h)" value={String(snap.conversations)} />
-        <Metric label="Pedidos gerados" value={String(snap.ordersGenerated)} />
-        <Metric label="Receita" value={moneyBR(snap.revenue)} />
-        <Metric label="Conversa → pedido" value={`${Math.round(snap.conversationToOrderRate * 100)}%`} />
-        <Metric label="Atendentes acionados" value={String(snap.handoffs)} />
-        <Metric label="Abandonos" value={String(snap.abandonos)} />
-        <Metric label="Aprendizados pendentes" value={String(snap.pendingLearnings)} />
+        <Metric label="Clientes atendidos (24h)"  value={String(snap.conversations)} />
+        <Metric label="Pedidos gerados"            value={String(snap.ordersGenerated)} />
+        <Metric label="Receita gerada"             value={moneyBR(snap.revenue)} />
+        <Metric label="Conversa → pedido"          value={`${Math.round(snap.conversationToOrderRate * 100)}%`} />
+        <Metric label="Transferências humanas"     value={String(snap.handoffs)} />
+        <Metric label="Conversas abandonadas"      value={String(snap.abandonos)} />
+        <Metric label="Aprendizados pendentes"     value={String(snap.pendingLearnings)} />
       </div>
 
-      <h3 className="mt-6 mb-2 text-sm font-semibold text-gray-700">Top erros detectados</h3>
+      <h3 className="mt-6 mb-2 text-sm font-semibold text-gray-700">Erros detectados nas últimas 24h</h3>
       {snap.topErrors.length === 0 ? (
         <Empty>Nenhum erro detectado nas últimas 24h 🎉</Empty>
       ) : (
         <ul className="space-y-1">
           {snap.topErrors.map((e) => (
             <li key={e.category} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-2 text-sm">
-              <span>{e.label}</span>
+              <span className="text-gray-700">{e.label}</span>
               <span className="font-semibold text-red-600">{e.count}</span>
             </li>
           ))}
@@ -282,7 +549,108 @@ function SaudeTab() {
   );
 }
 
-// ── small presentational helpers ──────────────────────────────────────────────
+// ── Tab 6: Configurações ──────────────────────────────────────────────────────
+
+function ConfiguracoesTab() {
+  const [config, setConfig] = useState<AgentConfig | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/whatsapp-agent")
+      .then((r) => r.json())
+      .then((j) => setConfig(j?.data ?? null))
+      .catch(() => setError("Não foi possível carregar as configurações."));
+  }, []);
+
+  if (error) return <Empty>{error}</Empty>;
+  if (!config) return <Empty>Carregando…</Empty>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-gray-900">Configuração atual do WhatsApp</h2>
+        <dl className="space-y-3 text-sm">
+          <ConfigRow label="Nome do agente">
+            {config.agentName || <span className="text-gray-400">Não configurado</span>}
+          </ConfigRow>
+          <ConfigRow label="Modo de operação">
+            {config.agentMode === "RECEPTIONIST_ONLY"
+              ? "Recepcionista automático"
+              : config.agentMode === "HUMAN_ASSISTED"
+              ? "Com suporte humano"
+              : config.agentMode ?? <span className="text-gray-400">Padrão</span>}
+          </ConfigRow>
+          <ConfigRow label="Telefone de transferência">
+            {config.handoffPhone
+              ? <span className="font-mono text-xs">{config.handoffPhone}</span>
+              : <span className="text-gray-400">Não configurado</span>}
+          </ConfigRow>
+          <ConfigRow label="Link do cardápio">
+            {config.menuUrl
+              ? <a href={config.menuUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs">{config.menuUrl}</a>
+              : <span className="text-gray-400">Não configurado</span>}
+          </ConfigRow>
+        </dl>
+      </div>
+
+      <p className="text-xs text-gray-400 text-center">
+        Para editar as configurações do agente, acesse{" "}
+        <Link href="/agente-ia" className="text-brand-600 hover:underline">
+          Agentes IA → WhatsApp Host
+        </Link>.
+      </p>
+    </div>
+  );
+}
+
+// ── Tab 7: Modo avançado ──────────────────────────────────────────────────────
+
+function ModoAvancadoTab() {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-gray-200 bg-amber-50 px-4 py-3">
+        <p className="text-sm font-semibold text-amber-800">Área técnica</p>
+        <p className="text-xs text-amber-700 mt-0.5">
+          Estas ferramentas são para equipe técnica e administradores. Modificações aqui podem
+          afetar o comportamento do agente em produção.
+        </p>
+      </div>
+
+      <ul className="space-y-2">
+        {MODO_AVANCADO_LINKS.map((link) => (
+          <li key={link.href}>
+            <Link
+              href={link.href}
+              className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
+            >
+              <span className="mt-0.5 text-gray-400 group-hover:text-gray-600">→</span>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{link.label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{link.desc}</p>
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── shared presentational helpers ─────────────────────────────────────────────
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`whitespace-nowrap px-4 py-2 text-sm font-medium -mb-px border-b-2 transition ${
+        active ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-500 hover:text-gray-700"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[160px_1fr] gap-2">
@@ -291,6 +659,16 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     </div>
   );
 }
+
+function ConfigRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 border-b border-gray-100 last:border-0">
+      <dt className="text-gray-500 shrink-0">{label}</dt>
+      <dd className="text-gray-900 text-right">{children}</dd>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -299,6 +677,11 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">{children}</div>;
+  return (
+    <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
+      {children}
+    </div>
+  );
 }

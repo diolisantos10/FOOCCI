@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { AprendizadoWhatsAppClient } from "./AprendizadoWhatsAppClient";
 
-export const metadata = { title: "Central de Aprendizado WhatsApp" };
+export const metadata = { title: "WhatsApp · Agentes" };
 
 export default async function AprendizadoWhatsAppPage() {
   const session = await getServerSession(authOptions);
@@ -12,7 +12,7 @@ export default async function AprendizadoWhatsAppPage() {
 
   return (
     <>
-      <TopBar title="Central de Aprendizado WhatsApp" />
+      <TopBar title="WhatsApp" />
       <AprendizadoWhatsAppClient />
     </>
   );
