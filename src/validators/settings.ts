@@ -173,8 +173,8 @@ export const upsertSoundSettingsSchema = z.object({
   soundEnabled:                    z.boolean().optional(),
   newOrderSoundEnabled:            z.boolean().optional(),
   humanAttentionSoundEnabled:      z.boolean().optional(),
-  // 0–200: values above 100 use Web Audio gain boost on the client
-  soundVolume:                     z.number().int().min(0).max(200).optional(),
+  // 0–400: values above 100 use Web Audio gain boost on the client (kitchen-loud)
+  soundVolume:                     z.number().int().min(0).max(400).optional(),
   repeatNewOrderSoundUntilAccepted: z.boolean().optional(),
   repeatHumanAttentionUntilSeen:   z.boolean().optional(),
   soundTheme:                      z.enum(["DEFAULT", "SOFT", "URGENT"]).optional(),

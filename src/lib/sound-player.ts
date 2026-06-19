@@ -1,16 +1,36 @@
 /**
  * Shared alert sound player with volume boost.
  *
- * Volume is a percentage 0–200:
+ * Volume is a percentage 0–400:
  *   ≤100 → HTMLAudioElement.volume (native, no Web Audio needed)
- *   >100 → Web Audio API GainNode (gain up to 2.0)
+ *   >100 → Web Audio API GainNode (gain up to 4.0)
+ *
+ * The 400% ceiling exists so a noisy restaurant kitchen can drive the alert
+ * well past unity. Gains above ~1/peak intentionally soft-clip the (already
+ * normalized) asset — for an alert that extra harshness aids audibility.
  *
  * Once an element is routed through an AudioContext it stays routed
  * (createMediaElementSource is irreversible), so subsequent plays at any
  * volume go through the gain node.
  */
 
-export const MAX_VOLUME = 200;
+export const MAX_VOLUME = 400;
+
+/** Per-theme loudness multipliers applied on top of the saved volume. */
+const THEME_GAIN: Record<string, number> = {
+  DEFAULT: 1.0,
+  SOFT:    0.6,
+  URGENT:  1.5,
+};
+
+/**
+ * Effective alert volume % after applying the sound theme, clamped to MAX_VOLUME.
+ * URGENT pushes the new-order alert louder; SOFT pulls it back.
+ */
+export function effectiveAlertVolume(volumePercent: number, theme: string): number {
+  const factor = THEME_GAIN[theme] ?? 1.0;
+  return clampVolume(volumePercent * factor);
+}
 
 const wired = new WeakMap<HTMLAudioElement, { ctx: AudioContext; gain: GainNode }>();
 

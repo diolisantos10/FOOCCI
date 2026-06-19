@@ -9,12 +9,18 @@ import {
   HANDOFF_SOUND_LAST_PLAYED_KEY,
   SOUND_LAST_ERROR_KEY,
   HANDOFF_SOUND_LAST_ERROR_KEY,
+  ORDER_ALERT_DIAG_KEY,
+  ORDER_ALERT_ASSET,
+  HANDOFF_ALERT_ASSET,
   writeSoundPref,
 } from "@/lib/sound-prefs";
-import { playAlertAudio, supportsVolumeBoost, MAX_VOLUME } from "@/lib/sound-player";
+import { playAlertAudio, supportsVolumeBoost, MAX_VOLUME, effectiveAlertVolume } from "@/lib/sound-player";
+import type { OrderAlertDiagnostics } from "@/lib/order-alert-loop";
 
-const ORDER_WAV   = "/sounds/foocci-order-alert.m4a";
-const HANDOFF_WAV = "/sounds/foocci-handoff-alert.wav";
+// New-order alert uses the loud, normalized asset. The test button below plays
+// THIS exact file through the same engine (playAlertAudio) as a real new order.
+const ORDER_WAV   = ORDER_ALERT_ASSET;
+const HANDOFF_WAV = HANDOFF_ALERT_ASSET;
 
 interface SoundSettings {
   soundEnabled:                     boolean;
@@ -31,17 +37,19 @@ const DEFAULTS: SoundSettings = {
   newOrderSoundEnabled:             true,
   humanAttentionSoundEnabled:       true,
   soundVolume:                      120,
-  repeatNewOrderSoundUntilAccepted: false,
+  repeatNewOrderSoundUntilAccepted: true,
   repeatHumanAttentionUntilSeen:    false,
   soundTheme:                       "DEFAULT",
 };
 
 // >100% uses Web Audio gain boost (see sound-player.ts)
 const VOLUME_PRESETS: { label: string; value: number; hint?: string }[] = [
-  { label: "Baixo (50%)",   value: 50 },
-  { label: "Normal (100%)", value: 100 },
-  { label: "Alto (150%)",   value: 150, hint: "Para restaurantes barulhentos" },
-  { label: "Máximo (200%)", value: 200, hint: "Para restaurantes barulhentos" },
+  { label: "Baixo (50%)",       value: 50 },
+  { label: "Normal (100%)",     value: 100 },
+  { label: "Alto (150%)",       value: 150, hint: "Para restaurantes movimentados" },
+  { label: "Muito alto (200%)", value: 200, hint: "Para restaurantes barulhentos" },
+  { label: "Turbo (300%)",      value: 300, hint: "Cozinha muito barulhenta" },
+  { label: "Máximo (400%)",     value: 400, hint: "Cozinha muito barulhenta — pode distorcer um pouco" },
 ];
 
 export default function SonsPage() {
@@ -65,15 +73,22 @@ export default function SonsPage() {
     handoffLastPlayed: string | null;
     orderLastError:    string | null;
     handoffLastError:  string | null;
+    orderLoop:         (OrderAlertDiagnostics & { updatedAt?: string }) | null;
   } | null>(null);
 
   const refreshDiag = useCallback(() => {
     try {
+      let orderLoop: (OrderAlertDiagnostics & { updatedAt?: string }) | null = null;
+      const raw = localStorage.getItem(ORDER_ALERT_DIAG_KEY);
+      if (raw) {
+        try { orderLoop = JSON.parse(raw); } catch { orderLoop = null; }
+      }
       setDiag({
         orderLastPlayed:   localStorage.getItem(SOUND_LAST_PLAYED_KEY),
         handoffLastPlayed: localStorage.getItem(HANDOFF_SOUND_LAST_PLAYED_KEY),
         orderLastError:    localStorage.getItem(SOUND_LAST_ERROR_KEY),
         handoffLastError:  localStorage.getItem(HANDOFF_SOUND_LAST_ERROR_KEY),
+        orderLoop,
       });
     } catch { /* ignore */ }
   }, []);
@@ -315,8 +330,9 @@ export default function SonsPage() {
           </div>
 
           <p className="text-xs text-gray-400">
-            Para restaurantes barulhentos, use <strong className="text-gray-600">Alto (150%)</strong> ou{" "}
-            <strong className="text-gray-600">Máximo (200%)</strong>. Recomendado: 120%.
+            O som de novo pedido já é alto em <strong className="text-gray-600">100%</strong>. Para cozinhas
+            barulhentas, use <strong className="text-gray-600">200%</strong> a{" "}
+            <strong className="text-gray-600">400%</strong>. Recomendado: 150%.
           </p>
           {!boostOk && (
             <p className="text-xs text-amber-600">
@@ -386,7 +402,10 @@ export default function SonsPage() {
 
       {/* Sound theme */}
       <PageCard>
-        <SectionHeading title="Tema sonoro" subtitle="Escolha o tipo de alerta." />
+        <SectionHeading
+          title="Tema sonoro"
+          subtitle="Afeta apenas o alerta de novo pedido. URGENTE toca mais alto e repete até o pedido ser aceito (ideal para cozinha)."
+        />
         <div className="flex flex-wrap gap-3">
           {(["DEFAULT", "SOFT", "URGENT"] as const).map((theme) => (
             <button
@@ -437,11 +456,32 @@ export default function SonsPage() {
       <PageCard>
         <SectionHeading title="Diagnóstico" subtitle="Última atividade dos alertas neste dispositivo." />
         {diag ? (
-          <div className="space-y-1.5 text-xs text-gray-500 font-mono">
-            <div><span className="font-semibold text-gray-700">pedido · último toque:</span> {diag.orderLastPlayed ?? "—"}</div>
-            <div><span className="font-semibold text-gray-700">pedido · último erro:</span> {diag.orderLastError ?? "—"}</div>
-            <div><span className="font-semibold text-gray-700">atendimento · último toque:</span> {diag.handoffLastPlayed ?? "—"}</div>
-            <div><span className="font-semibold text-gray-700">atendimento · último erro:</span> {diag.handoffLastError ?? "—"}</div>
+          <div className="space-y-3 text-xs text-gray-500 font-mono">
+            {/* New-order alert loop */}
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Novo pedido (alerta)</p>
+              <div><span className="font-semibold text-gray-700">volume salvo:</span> {settings.soundVolume}%</div>
+              <div>
+                <span className="font-semibold text-gray-700">ganho efetivo ({settings.soundTheme}):</span>{" "}
+                {effectiveAlertVolume(settings.soundVolume, settings.soundTheme)}%
+              </div>
+              <div><span className="font-semibold text-gray-700">arquivo de áudio:</span> {diag.orderLoop?.assetPath ?? ORDER_WAV}</div>
+              <div>
+                <span className="font-semibold text-gray-700">última tentativa:</span>{" "}
+                {diag.orderLoop?.lastAttemptAt ? new Date(diag.orderLoop.lastAttemptAt).toLocaleString("pt-BR") : "—"}
+              </div>
+              <div><span className="font-semibold text-gray-700">resultado:</span> {diag.orderLoop?.lastResult ?? "—"}{diag.orderLoop?.lastError ? ` (${diag.orderLoop.lastError})` : ""}</div>
+              <div><span className="font-semibold text-gray-700">loop ativo:</span> {diag.orderLoop ? (diag.orderLoop.loopActive ? "sim" : "não") : "—"}</div>
+              <div><span className="font-semibold text-gray-700">pedidos aguardando:</span> {diag.orderLoop?.activeOrderCount ?? "—"}</div>
+              <div><span className="font-semibold text-gray-700">último motivo de parada:</span> {diag.orderLoop?.lastStopReason ?? "—"}</div>
+            </div>
+            {/* Last-played / last-error mirrors */}
+            <div className="space-y-1.5 border-t border-gray-100 pt-3">
+              <div><span className="font-semibold text-gray-700">pedido · último toque:</span> {diag.orderLastPlayed ?? "—"}</div>
+              <div><span className="font-semibold text-gray-700">pedido · último erro:</span> {diag.orderLastError ?? "—"}</div>
+              <div><span className="font-semibold text-gray-700">atendimento · último toque:</span> {diag.handoffLastPlayed ?? "—"}</div>
+              <div><span className="font-semibold text-gray-700">atendimento · último erro:</span> {diag.handoffLastError ?? "—"}</div>
+            </div>
           </div>
         ) : (
           <p className="text-xs text-gray-400">Carregando…</p>

@@ -6,11 +6,23 @@ import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
-import { SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
-import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
+import {
+  SOUND_PREF_KEY,
+  readSoundPref,
+  fetchRestaurantSoundSettings,
+  ORDER_ALERT_DIAG_KEY,
+  ORDER_ALERT_ASSET,
+  SOUND_LAST_PLAYED_KEY,
+  SOUND_LAST_ERROR_KEY,
+} from "@/lib/sound-prefs";
+import { playAlertAudio, installSilentUnlock, effectiveAlertVolume } from "@/lib/sound-player";
+import { OrderAlertController } from "@/lib/order-alert-loop";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
-const ALERT_WAV      = "/sounds/foocci-order-alert.m4a";
+// Loud, normalized, kitchen-grade asset — already loud at 100% (see
+// scripts/generate-order-alert.py). The new-order alert and the settings test
+// button play THIS exact file through the same gain-aware engine (playAlertAudio).
+const ALERT_WAV      = ORDER_ALERT_ASSET;
 
 // Oscillator fallback — used when WAV file is unavailable or AudioContext is not suspended
 function playBeep() {
@@ -1702,7 +1714,10 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   // localStorage mirror is just the instant fallback before the API responds.
   const [soundEnabled, setSoundEnabled] = useState(() => readSoundPref(SOUND_PREF_KEY, true));
   const soundVolumeRef = useRef(120);
+  const soundThemeRef = useRef<string>("DEFAULT");
+  const repeatNewOrderRef = useRef(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
+  const alertControllerRef = useRef<OrderAlertController | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
   const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string } | null>(null);
@@ -1745,9 +1760,8 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   const [reconcileToast, setReconcileToast] = useState<string | null>(null);
 
   const modalOrder = modalQueue[0] ?? null;
-  const modalOrderId = modalOrder?.id ?? null;
 
-  // Initialise the WAV audio element once on mount and install silent unlock
+  // Initialise the WAV audio element + alert controller once on mount.
   useEffect(() => {
     const audio = new Audio(ALERT_WAV);
     audio.preload = "auto";
@@ -1755,7 +1769,45 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     alertAudioRef.current = audio;
     // First user interaction silently unlocks browser autoplay — no UI required
     installSilentUnlock(() => [audio]);
-    return () => { audio.pause(); audio.src = ""; };
+
+    const controller = new OrderAlertController({
+      // Every new-order play goes through the shared gain-aware engine.
+      play: async (vol) => {
+        const a = alertAudioRef.current;
+        if (!a) { playBeep(); return; }
+        try {
+          await playAlertAudio(a, vol);
+        } catch (err) {
+          // Autoplay block: re-throw so it's recorded; silent unlock fixes it on
+          // the next user gesture. Any other failure → oscillator fallback beep.
+          if (err instanceof DOMException && err.name === "NotAllowedError") throw err;
+          playBeep();
+        }
+      },
+      getVolume:       () => effectiveAlertVolume(soundVolumeRef.current, soundThemeRef.current),
+      isRepeatEnabled: () => repeatNewOrderRef.current || soundThemeRef.current === "URGENT",
+      assetPath:       ALERT_WAV,
+      intervalMs:      10_000,   // repeat every 10 s (8–12 s window)
+      maxDurationMs:   180_000,  // safety cap: stop after 3 min
+      onDiagnostics: (d) => {
+        try {
+          localStorage.setItem(ORDER_ALERT_DIAG_KEY, JSON.stringify({ ...d, updatedAt: new Date().toISOString() }));
+          if (d.lastResult === "success" && d.lastAttemptAt) {
+            localStorage.setItem(SOUND_LAST_PLAYED_KEY, new Date(d.lastAttemptAt).toISOString());
+          } else if (d.lastResult === "error" && d.lastError) {
+            localStorage.setItem(SOUND_LAST_ERROR_KEY, `${new Date().toISOString()}: ${d.lastError}`);
+          }
+        } catch { /* storage unavailable */ }
+      },
+    });
+    alertControllerRef.current = controller;
+
+    return () => {
+      controller.dispose();           // stop reason → PAGE_UNMOUNT, clears loop
+      alertControllerRef.current = null;
+      audio.pause();
+      audio.src = "";
+    };
   }, []);
 
   // Load DB-backed sound settings (Configurações → Sons e alertas) — source of truth
@@ -1764,61 +1816,36 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       if (!s) return;
       setSoundEnabled(s.soundEnabled && s.newOrderSoundEnabled);
       soundVolumeRef.current = s.soundVolume;
+      soundThemeRef.current = s.soundTheme || "DEFAULT";
+      repeatNewOrderRef.current = s.repeatNewOrderSoundUntilAccepted;
     });
   }, []);
 
-  // Track pending count via ref so the alert effect can log it without adding orders to deps
-  const pendingCountRef = useRef(0);
-
-  // Whether there is at least one order waiting for acceptance
-  const hasPendingOrders = useMemo(() => {
-    const count = orders.filter((o) => o.status === "PENDING").length;
-    pendingCountRef.current = count;
-    return count > 0;
-  }, [orders]);
-
-  // Loop alert every 5 s while modal is open OR there are pending orders.
-  // Deps include both so the interval restarts each time a new modal order appears.
-  // Cleanup pauses audio immediately when the condition becomes false (accepted/rejected).
-  useEffect(() => {
-    const active = hasPendingOrders || !!modalOrderId;
-    if (!active || !soundEnabled) return;
-
-    if (process.env.NODE_ENV !== "production") {
-      console.debug("[order-alert-loop]", {
-        hasPendingOrders,
-        soundEnabled,
-        modalOrderId,
-        intervalActive: true,
-        audioPath: ALERT_WAV,
-      });
+  // Orders that currently require staff action — drives both the alert loop and
+  // the visual banner. Includes PENDING (non-payment) orders AND newly-arrived
+  // orders queued in the accept/reject modal, so orders that land already
+  // CONFIRMED (e.g. paid online) still alert and repeat reliably.
+  const actionableAlertIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const o of orders) {
+      if (o.status === "PENDING" && !isPaymentPendingOrder(o)) ids.add(o.id);
     }
+    // Newly-arrived orders in the modal (incl. those that landed CONFIRMED), but
+    // never sound for unpaid Pix orders awaiting confirmation.
+    for (const o of modalQueue) {
+      if (!isPaymentPendingOrder(o)) ids.add(o.id);
+    }
+    return [...ids];
+  }, [orders, modalQueue]);
 
-    const doPlay = () => {
-      const audio = alertAudioRef.current;
-      if (audio) {
-        playAlertAudio(audio, soundVolumeRef.current).catch((err: unknown) => {
-          if (err instanceof DOMException && err.name === "NotAllowedError") {
-            // Autoplay blocked — silent unlock will resolve it on next interaction
-            console.debug("[order-alert] autoplay blocked, waiting for user gesture");
-          } else {
-            console.warn("[order-alert] audio play failed", err);
-            playBeep();
-          }
-        });
-      } else {
-        playBeep();
-      }
-    };
+  const hasPendingOrders = actionableAlertIds.length > 0;
 
-    doPlay();
-    const id = setInterval(doPlay, 5_000);
-    return () => {
-      clearInterval(id);
-      const audio = alertAudioRef.current;
-      if (audio) { audio.pause(); audio.currentTime = 0; }
-    };
-  }, [hasPendingOrders, modalOrderId, soundEnabled]);
+  // Feed the controller the live set. It fires once immediately on a new order,
+  // repeats every 10 s while any remain (when repeat/URGENT is on), and stops on
+  // accept/reject/seen/max-duration/unmount — one shared loop, no overlap.
+  useEffect(() => {
+    alertControllerRef.current?.sync(soundEnabled ? actionableAlertIds : []);
+  }, [actionableAlertIds, soundEnabled]);
 
   const fetchOrders = useCallback(() => {
     fetch("/api/orders?limit=100")
@@ -1827,23 +1854,13 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         if (res.success && Array.isArray(res.data?.data)) {
           const incoming = res.data.data.map(apiOrderToMock);
 
-          // Immediate alert on new order arrival (interval handles repeat)
+          // Queue newly-arrived orders for the accept/reject modal. Adding them
+          // here flows into `actionableAlertIds`, which drives the alert
+          // controller (it owns the immediate play + repeat). No direct
+          // audio.play() here — a single engine prevents overlapping sounds.
+          // (Modal-queue selection is unchanged from before this refactor.)
           if (hasFetched.current) {
             const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
-            // No sound for AWAITING_PAYMENT — payment not confirmed, not yet operational.
-            const actionableNew = newOnes.filter((o) => !isPaymentPendingOrder(o));
-            if (actionableNew.length > 0 && soundEnabled) {
-              const audio = alertAudioRef.current;
-              if (audio) {
-                playAlertAudio(audio, soundVolumeRef.current).catch((err: unknown) => {
-                  if (!(err instanceof DOMException && err.name === "NotAllowedError")) {
-                    playBeep();
-                  }
-                });
-              } else {
-                playBeep();
-              }
-            }
             const newPending = newOnes.filter(
               (o) =>
                 (o.status === "PENDING" || o.status === "CONFIRMED") &&
@@ -1861,7 +1878,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         }
       })
       .catch((err) => console.error("[OrdersClient] fetch failed", err));
-  }, [soundEnabled]);
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -2004,6 +2021,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: nextStatus } : o))
       );
       if (autoPrintOnAccept) triggerAutoPrint(modalOrder.id);
+      alertControllerRef.current?.resolve(modalOrder.id, "ACCEPTED");
       setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalAccepting(false);
@@ -2019,6 +2037,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CANCELLED" as OrderStatus } : o))
       );
       if (selectedId === modalOrder.id) setSelectedId(null);
+      alertControllerRef.current?.resolve(modalOrder.id, "REJECTED");
       setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalRejecting(false);
