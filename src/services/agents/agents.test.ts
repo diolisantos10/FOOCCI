@@ -55,8 +55,8 @@ describe("Agent registry (code-defined defaults)", () => {
     }
   });
 
-  it("the fully-defined agents (Waiter, CRM) are ACTIVE; the rest are DRAFT placeholders", () => {
-    const ACTIVE_SLUGS = new Set(["waiter", "crm"]);
+  it("the fully-defined agents (Waiter, CRM, WhatsApp) are ACTIVE; the rest are DRAFT placeholders", () => {
+    const ACTIVE_SLUGS = new Set(["waiter", "crm", "whatsapp"]);
     for (const profile of getDefaultAgentProfiles()) {
       if (ACTIVE_SLUGS.has(profile.slug)) expect(profile.status).toBe("ACTIVE");
       else expect(profile.status).toBe("DRAFT");

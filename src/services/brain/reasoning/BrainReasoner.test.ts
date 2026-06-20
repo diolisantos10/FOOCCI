@@ -102,4 +102,19 @@ describe("BrainReasoner — the single reasoning gateway", () => {
     expect(out.result.primaryIntent).toBe("RELATIONSHIP_FOLLOWUP");
     expect(out.result.runtimeTouched).toBe(false);
   });
+
+  it("reasons as the WhatsApp receptionist (real scope) — not as a menu matcher", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    ai.create.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        primaryIntent: "PAYMENT_VOUCHER_QUESTION",
+        idealResponse: "No momento aceitamos Pix, cartão e dinheiro — vale-refeição não está cadastrado por aqui. 😊",
+        shouldEscalate: false,
+      }) } }],
+    });
+    const out = await reasonAsAgent({ ...baseReq, agentId: "whatsapp", agentRole: "WhatsApp" });
+    expect(out.reasoningMode).toBe("LLM");
+    expect(out.result.idealResponse).toMatch(/pix/i);
+    expect(out.result.runtimeTouched).toBe(false);
+  });
 });
