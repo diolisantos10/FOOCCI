@@ -45,7 +45,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/atendimento", label: "Central de Conversas", icon: "🎧" },
       { href: "/menu",        label: "Cardápio",   icon: "🍽️" },
       { href: "/agente-ia",   label: "Agentes IA", icon: "✨", ignoreSubpaths: ["/agente-ia/whatsapp"] },
-      { href: "/aprendizado-whatsapp", label: "WhatsApp", icon: "📱", extraActivePaths: ["/aprendizado-whatsapp"] },
       { href: "/analytics",   label: "Analytics",  icon: "📈" },
     ],
   },

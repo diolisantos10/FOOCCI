@@ -865,6 +865,19 @@ export function AgentePage() {
       ════════════════════════════════════════════════════════════════════ */}
       {activeTab === "whatsapp-host" && (
         <>
+        {/* Entry point to the detailed WhatsApp agent management view — kept under
+            Agentes (it used to be a misplaced standalone "WhatsApp" sidebar tab). */}
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
+          <p className="text-xs text-gray-600">
+            Acompanhe conversas, saúde e aprendizados do agente no WhatsApp.
+          </p>
+          <Link
+            href="/aprendizado-whatsapp"
+            className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700 transition"
+          >
+            Abrir gestão do WhatsApp →
+          </Link>
+        </div>
         <form onSubmit={saveAgentConfig} className="space-y-6">
 
           {agentOk && (
