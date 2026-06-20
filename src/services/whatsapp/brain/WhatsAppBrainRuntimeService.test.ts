@@ -52,10 +52,10 @@ beforeEach(() => {
 });
 
 describe("isWhatsAppBrainEnabled (the safety switch)", () => {
-  it("is OFF unless the flag is exactly 'true'", () => {
-    expect(isWhatsAppBrainEnabled({} as NodeJS.ProcessEnv)).toBe(false);
-    expect(isWhatsAppBrainEnabled({ WHATSAPP_BRAIN_ENABLED: "1" } as unknown as NodeJS.ProcessEnv)).toBe(false);
+  it("is ON for everyone by default; OFF only when explicitly set to 'false'", () => {
+    expect(isWhatsAppBrainEnabled({} as NodeJS.ProcessEnv)).toBe(true);
     expect(isWhatsAppBrainEnabled({ WHATSAPP_BRAIN_ENABLED: "true" } as unknown as NodeJS.ProcessEnv)).toBe(true);
+    expect(isWhatsAppBrainEnabled({ WHATSAPP_BRAIN_ENABLED: "false" } as unknown as NodeJS.ProcessEnv)).toBe(false);
   });
 });
 

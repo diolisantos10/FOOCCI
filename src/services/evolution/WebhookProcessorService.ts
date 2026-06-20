@@ -390,11 +390,11 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         .catch((err) =>
           console.error("[WebhookProcessor] AI ordering module load failed:", err)
         );
-    } else if (process.env.WHATSAPP_BRAIN_ENABLED === "true" && event.messageType === "TEXT") {
-      // Brain front door (flag-gated cutover, default OFF). When ON, the Brain is
-      // the intelligent default host for TEXT messages: it reasons about the real
-      // intent and answers from the restaurant knowledge instead of matching the
-      // menu. Non-TEXT (media/audio) still falls through to the legacy receptionist.
+    } else if (process.env.WHATSAPP_BRAIN_ENABLED !== "false" && event.messageType === "TEXT") {
+      // Brain front door (ON by default; set WHATSAPP_BRAIN_ENABLED=false to disable).
+      // The Brain is the intelligent default host for TEXT messages: it reasons about
+      // the real intent and answers from the restaurant knowledge instead of matching
+      // the menu. Non-TEXT (media/audio) still falls through to the legacy receptionist.
       void import("@/services/whatsapp/brain/WhatsAppBrainRuntimeService")
         .then(({ WhatsAppBrainRuntimeService }) =>
           WhatsAppBrainRuntimeService.respond(conversation.id).catch((err) =>

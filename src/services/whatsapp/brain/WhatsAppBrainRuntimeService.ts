@@ -1,7 +1,7 @@
 /**
  * WhatsAppBrainRuntimeService — the Brain as the WhatsApp front door.
  *
- * Flag-gated cutover (WHATSAPP_BRAIN_ENABLED, default OFF). When ON, this REPLACES
+ * Cutover (ON by default; set WHATSAPP_BRAIN_ENABLED=false to disable). When ON, this REPLACES
  * the old rule-based Receptionist as the intelligent default host: every TEXT
  * message that is not active order-building is answered by the Brain
  * (reasonAsAgent with the WhatsApp scope) — understanding the real intent, using
@@ -24,9 +24,9 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
 
-/** The live cutover is OFF until an operator turns it on (env: WHATSAPP_BRAIN_ENABLED=true). */
+/** The Brain front door is ON for everyone by default; set WHATSAPP_BRAIN_ENABLED=false to disable. */
 export function isWhatsAppBrainEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.WHATSAPP_BRAIN_ENABLED === "true";
+  return env.WHATSAPP_BRAIN_ENABLED !== "false";
 }
 
 export interface BrainReplyOutcome {
