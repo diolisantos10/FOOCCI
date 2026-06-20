@@ -17,7 +17,10 @@ import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { ConversationStatus, Prisma } from "@prisma/client";
-import { buildConversationWhere } from "@/services/conversation/conversationListFilter";
+import { buildConversationWhere, CRM_CONTEXT_TYPES } from "@/services/conversation/conversationListFilter";
+import { getCrmSentCustomerIds } from "@/services/conversation/crmSentRecipients";
+
+const CRM_CONTEXT_SET = new Set<string>(CRM_CONTEXT_TYPES);
 
 // ── Dedup rank: lower = higher priority when multiple conversations share a customer ──
 //
@@ -106,14 +109,18 @@ export async function GET(req: NextRequest) {
     const status  = sp.get("status")  ?? undefined;
     const channel = sp.get("channel") ?? undefined;
     const search  = sp.get("search")  ?? undefined;
-    // crm=1 restricts to CRM-origin conversations (contextType-based, channel
-    // independent) so "CRM enviado" works without also selecting WhatsApp.
+    // crm=1 restricts to "CRM enviado": conversations tagged with a CRM contextType
+    // OR whose customer has any CRM send log (CampaignExecution / CRMActionLog).
+    // Channel-independent so it works without also selecting WhatsApp.
     const crm     = sp.get("crm")     ?? undefined;
     const page    = Math.max(1, parseInt(sp.get("page")  ?? "1", 10));
     const limit   = Math.min(100, Math.max(1, parseInt(sp.get("limit") ?? "30", 10)));
     const skip    = (page - 1) * limit;
 
-    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm });
+    // Canonical "has CRM sent" recipients — only needed when the CRM filter is active.
+    const crmRecipientCustomerIds = crm ? await getCrmSentCustomerIds(ctx.restaurantId) : undefined;
+
+    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm }, crmRecipientCustomerIds);
 
     // Fetch more rows than requested so deduplication leaves enough results.
     const fetchLimit = Math.min(limit * 4, 400);
@@ -147,10 +154,13 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    // Map to response shape: compute hasCustomerReplied, strip internal _count.
+    // Map to response shape: compute hasCustomerReplied + crmSent, strip _count.
+    // crmSent drives the generic "CRM enviado" badge. On the CRM tab every row
+    // matched the filter, so it is true; elsewhere it reflects a CRM contextType.
     const paged = deduped.slice(skip, skip + limit).map(({ _count, ...rest }) => ({
       ...rest,
       hasCustomerReplied: _count.messages > 0,
+      crmSent: Boolean(crm) || (rest.contextType != null && CRM_CONTEXT_SET.has(rest.contextType)),
     }));
 
     const total = deduped.length;

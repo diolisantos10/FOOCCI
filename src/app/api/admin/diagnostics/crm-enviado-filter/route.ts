@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { buildConversationWhere, CRM_CONTEXT_TYPES } from "@/services/conversation/conversationListFilter";
+import { getCrmSentCustomerIds } from "@/services/conversation/crmSentRecipients";
 
 export async function GET(req: NextRequest) {
   if (!process.env.ADMIN_SECRET) {
@@ -47,21 +48,27 @@ export async function GET(req: NextRequest) {
     }
 
     const crmWhere = { restaurantId: resolvedRestaurantId, contextType: { in: [...CRM_CONTEXT_TYPES] } };
+    // Canonical CRM-send recipients (CampaignExecution ∪ CRMActionLog) — the same
+    // set the live route uses to make the filter complete.
+    const crmRecipientCustomerIds = await getCrmSentCustomerIds(resolvedRestaurantId);
+    const filterWhere = buildConversationWhere(resolvedRestaurantId, { crm: "1" }, crmRecipientCustomerIds);
 
-    const [crmConversationCount, campaignExecutionSentCount, filterWhereRows, sampleRows] = await Promise.all([
-      // CRM-origin conversations for this tenant
+    const [crmConversationCount, campaignExecutionSentCount, crmActionLogCount, filterWhereRows, sampleRows] = await Promise.all([
+      // CRM-origin conversations by contextType only (the OLD, incomplete signal)
       prisma.conversation.count({ where: crmWhere }),
       // CampaignExecution rows that represent a real send
       prisma.campaignExecution.count({
-        where: { restaurantId: resolvedRestaurantId, status: { in: ["SENT", "DELIVERED", "READ"] } },
+        where: { campaign: { restaurantId: resolvedRestaurantId }, status: { in: ["SENT", "DELIVERED", "READ"] } },
       }),
-      // Conversations the server-side crm=1 filter would return (same builder the route uses)
-      prisma.conversation.count({
-        where: buildConversationWhere(resolvedRestaurantId, { crm: "1" }),
+      // CRMActionLog rows (review + adaptive CRM) targeting a customer
+      prisma.cRMActionLog.count({
+        where: { restaurantId: resolvedRestaurantId, customerId: { not: null } },
       }),
-      // Latest 10 CRM conversations with reply detection
+      // Conversations the server-side crm=1 filter NOW returns (contextType OR log-backed)
+      prisma.conversation.count({ where: filterWhere }),
+      // Latest 10 conversations the (new) filter returns, with reply detection
       prisma.conversation.findMany({
-        where:   crmWhere,
+        where:   filterWhere,
         orderBy: { createdAt: "desc" },
         take:    10,
         select: {
@@ -100,13 +107,17 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       restaurantId:               resolvedRestaurantId,
-      crmConversationCount,
-      campaignExecutionSentCount,
-      matchedByFilterCount:       filterWhereRows,
+      crmConversationCount,                 // by contextType only (old, incomplete signal)
+      campaignExecutionSentCount,           // campaign/automation/birthday sends
+      crmActionLogCount,                    // review + adaptive CRM sends
+      crmRecipientCustomerCount:  crmRecipientCustomerIds.length,
+      matchedByFilterCount:       filterWhereRows, // what "CRM enviado" now returns
       crmContextTypes:            CRM_CONTEXT_TYPES,
       sample,
-      verdict: crmConversationCount === filterWhereRows ? "PASS" : "WARN",
-      note: "wouldAppearInAtendimento reflects the server-side crm=1 filter (contextType-based, channel-independent).",
+      // The fixed filter is log-backed, so it should cover at least every
+      // contextType-tagged conversation.
+      verdict: filterWhereRows >= crmConversationCount ? "PASS" : "WARN",
+      note: "wouldAppearInAtendimento reflects the server-side crm=1 filter: contextType OR a CRM send log (CampaignExecution ∪ CRMActionLog), channel-independent.",
     });
   } catch (err) {
     console.error("[GET /api/admin/diagnostics/crm-enviado-filter]", err);

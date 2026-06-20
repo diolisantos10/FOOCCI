@@ -104,6 +104,8 @@ interface ConvSummary {
   customerPhone:       string | null;
   contextType:         string | null;
   hasCustomerReplied?: boolean;
+  /** True when the conversation received any CRM outbound (contextType OR send log). */
+  crmSent?:            boolean;
   customer:            { name: string; phone: string } | null;
   messages:            { content: string; direction: string; senderType: string | null; type: string }[];
 }
@@ -255,14 +257,25 @@ const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
   HUMAN_SUPPORT: { label: "Suporte",   cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
 };
 
+const CRM_CONTEXT_BADGE: Record<string, string> = {
+  CRM_CAMPAIGN:   "Campanha enviada",
+  CRM_AUTOMATION: "Automação enviada",
+  CRM_REVIEW:     "Avaliação enviada",
+  CART_RECOVERY:  "Recuperação enviada",
+};
+
 function getCrmBadge(c: ConvSummary): { label: string; cls: string } | null {
-  if (c.contextType !== "CRM_CAMPAIGN" && c.contextType !== "CRM_AUTOMATION") return null;
-  const isAuto = c.contextType === "CRM_AUTOMATION";
+  const ct = c.contextType ?? "";
+  const specific = CRM_CONTEXT_BADGE[ct];
+  // Show a badge for any CRM-sent conversation: a specific one when the context is
+  // known, else a generic "CRM enviado" for log-backed sends (post-order, review,
+  // coupon, manual, …) that did not set a CRM contextType.
+  if (!specific && !c.crmSent) return null;
   if (convHasCustomerReply(c)) {
     return { label: "Resposta CRM", cls: "bg-amber-100 text-amber-700 border-amber-200" };
   }
   return {
-    label: isAuto ? "Automação enviada" : "Campanha enviada",
+    label: specific ?? "CRM enviado",
     cls:   "bg-violet-100 text-violet-700 border-violet-200",
   };
 }
