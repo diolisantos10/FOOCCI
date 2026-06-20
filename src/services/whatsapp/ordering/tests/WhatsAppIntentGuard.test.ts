@@ -146,3 +146,131 @@ describe("PARTE 4 — renderNumberedOptions / formatOptionNumber central helpers
     );
   });
 });
+
+// ── PARTE 5: Thanks / closing guard ──────────────────────────────────────────
+
+describe("PARTE 5 — thanks / closing guard (must never hit product matcher)", () => {
+  it("'obrigada' alone → friendly ack, NOT 'não encontrei'", () => {
+    const r = advanceSession(fresh(), "obrigada", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.handoff).toBe(false);
+    expect(r.suggestedReply).toMatch(/imagina|qualquer coisa/i);
+  });
+
+  it("'Entendi, muitoooo obrigada' → friendly ack (real failure case)", () => {
+    const r = advanceSession(fresh(), "Entendi, muitoooo obrigada", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.suggestedReply).toMatch(/imagina|qualquer coisa/i);
+  });
+
+  it("'valeu!' → friendly ack, NOT 'não encontrei'", () => {
+    const r = advanceSession(fresh(), "valeu!", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.suggestedReply).toMatch(/imagina|qualquer coisa/i);
+  });
+
+  it("'perfeito' alone → friendly ack, NOT 'não encontrei'", () => {
+    const r = advanceSession(fresh(), "perfeito", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.handoff).toBe(false);
+  });
+
+  it("thanks reply contains '0. menu' footer", () => {
+    const r = advanceSession(fresh(), "obrigada", MENU);
+    expect(r.suggestedReply).toContain("0. menu");
+  });
+});
+
+// ── PARTE 6: Praise guard ─────────────────────────────────────────────────────
+
+describe("PARTE 6 — praise guard (must never hit product matcher)", () => {
+  it("'Tudo aí é maravilhoso, obrigada' → praise ack (real failure case)", () => {
+    const r = advanceSession(fresh(), "Tudo aí é maravilhoso, obrigada", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.handoff).toBe(false);
+  });
+
+  it("praise reply contains '0. menu' footer", () => {
+    const r = advanceSession(fresh(), "Tudo aí é maravilhoso, obrigada", MENU);
+    expect(r.suggestedReply).toContain("0. menu");
+  });
+});
+
+// ── PARTE 7: Payment / voucher guard ─────────────────────────────────────────
+
+describe("PARTE 7 — payment / voucher guard (must never hit product matcher)", () => {
+  it("'aceita voucher?' → payment info, NOT 'não encontrei'", () => {
+    const r = advanceSession(fresh(), "aceita voucher?", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.handoff).toBe(false);
+  });
+
+  it("'vocês aceitam vale-refeição?' → payment info (real failure case)", () => {
+    const r = advanceSession(fresh(), "vocês aceitam vale-refeição?", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.suggestedReply).toMatch(/pix|cart[aã]o|dinheiro/i);
+  });
+
+  it("'aceitam VR?' → payment info", () => {
+    const r = advanceSession(fresh(), "aceitam VR?", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.suggestedReply).toMatch(/pix|cart[aã]o|dinheiro/i);
+  });
+
+  it("'aceita alelo?' → payment info", () => {
+    const r = advanceSession(fresh(), "aceita alelo?", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.suggestedReply).not.toMatch(/não encontrei.*alelo/i);
+  });
+
+  it("voucher reply includes short menu options and '0. menu' footer", () => {
+    const r = advanceSession(fresh(), "aceita voucher?", MENU);
+    expect(r.suggestedReply).toContain("0. menu");
+    expect(r.suggestedReply).toMatch(/1️⃣.*pedir|fazer.*pedido/i);
+  });
+});
+
+// ── PARTE 8: Contextual personal message guard ───────────────────────────────
+
+describe("PARTE 8 — contextual personal message guard (must never hit product matcher)", () => {
+  it("'kely eu achei o sushi' → contextual ack, NOT 'não encontrei'", () => {
+    const r = advanceSession(fresh(), "kely eu achei o sushi", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.handoff).toBe(false);
+  });
+
+  it("'vou confirmar com ela' → contextual ack, NOT 'não encontrei'", () => {
+    const r = advanceSession(fresh(), "vou confirmar com ela", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.suggestedReply).toContain("0. menu");
+  });
+
+  it("'será que é esse?' → contextual ack", () => {
+    const r = advanceSession(fresh(), "será que é esse?", MENU);
+    expect(r.suggestedReply).not.toMatch(/não encontrei/i);
+    expect(r.handoff).toBe(false);
+  });
+});
+
+// ── PARTE 9: Real products must still work after new guards ──────────────────
+
+describe("PARTE 9 — real products still resolved after intent guards", () => {
+  it("'1 yakisoba carne' → matched, NOT a guard reply", () => {
+    const r = advanceSession(fresh(), "1 yakisoba carne", MENU);
+    expect(r.suggestedReply).not.toMatch(/imagina|qualquer coisa/i);
+    expect(r.suggestedReply).not.toMatch(/obrigado|carinho/i);
+    expect(r.session.selectedItems.length + r.session.unresolvedItems.length).toBeGreaterThan(0);
+  });
+
+  it("'temaki salmão e coca-cola lata' → at least one item resolved", () => {
+    const r = advanceSession(fresh(), "temaki salmão e coca-cola lata", MENU);
+    expect(r.suggestedReply).not.toMatch(/imagina|qualquer coisa/i);
+    expect(r.session.selectedItems.length + r.session.unresolvedItems.length).toBeGreaterThan(0);
+  });
+
+  it("'quero 2 temaki' → product resolution (NOT a guard)", () => {
+    const r = advanceSession(fresh(), "quero 2 temaki", MENU);
+    expect(r.suggestedReply).not.toMatch(/imagina|qualquer coisa/i);
+    expect(r.session.selectedItems.length + r.session.unresolvedItems.length).toBeGreaterThan(0);
+  });
+});

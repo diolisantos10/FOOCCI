@@ -173,6 +173,48 @@ export function advanceSession(
         return done(next, "UNKNOWN", "Ainda não temos um pedido em andamento. Pode me dizer o que vai querer pedir? 😊", [], false);
       }
 
+      // PARTE 3: Thanks / closing — gratitude messages must never hit the product matcher.
+      // "obrigada", "valeu", "Entendi muitoooo obrigada" etc. are social closings.
+      if (THANKS_WORD_RE.test(text) && !THANKS_ORDERING_BLOCKER_RE.test(text)) {
+        return done(next, "UNKNOWN", "Imagina 😊 Qualquer coisa, estou por aqui.\n\n0. menu", [], false);
+      }
+
+      // PARTE 4: Praise — compliments must never hit the product matcher.
+      if (PRAISE_RE.test(text)) {
+        return done(
+          next,
+          "UNKNOWN",
+          "Que carinho bom de receber 😍 Muito obrigado!\nQuando quiser pedir de novo, é só me chamar.\n\n0. menu",
+          [],
+          false,
+        );
+      }
+
+      // PARTE 5: Payment / voucher question — "aceita vale-refeição?" etc.
+      // Must not produce "Não encontrei 'voucher' no cardápio".
+      if (PAYMENT_VOUCHER_RE.test(text)) {
+        return done(
+          next,
+          "PAYMENT_INFO",
+          "Infelizmente não aceitamos vale-refeição/voucher no momento 😕\nMas aceitamos Pix, cartão e dinheiro.\n\nQuer fazer seu pedido agora?\n\n1️⃣ Já sei o que quero pedir\n2️⃣ Ver cardápio\n7️⃣ Falar com atendente\n\n0. menu",
+          [],
+          false,
+        );
+      }
+
+      // PARTE 6: Contextual personal messages — side-channel messages that reference
+      // people or confirmations the bot has no context for ("kely disse que...",
+      // "vou confirmar com ela", "será que é esse?"). Must not hit the product matcher.
+      if (CONTEXTUAL_MESSAGE_RE.test(text)) {
+        return done(
+          next,
+          "UNKNOWN",
+          "Entendi 😊 Se quiser, me diga o nome do item que você quer pedir ou escolha uma opção:\n\n1️⃣ Já sei o que quero pedir\n2️⃣ Ver cardápio\n7️⃣ Falar com atendente\n\n0. menu",
+          [],
+          false,
+        );
+      }
+
       // Intent-first: a menu question must never be run through the product matcher.
       if (intent === "QUESTION" && next.selectedItems.length === 0) {
         return handleMenuQuestion(next, text, menu);
@@ -1289,6 +1331,31 @@ const GREETING_ONLY_RE =
 //   - Alternatives that end in a regular word char use the normal `\b`.
 const ORDER_FOLLOWUP_RE =
   /\bcad[eê](?!\w)|\bu[eé](?!\w)|\bonde est[aá](?!\w)|\be o pedido\b|\bt[aá] saindo\b|\best[aá] demorando\b|\bquanto tempo falta\b|\bprevis[aã]o de entrega\b|\bstatus do pedido\b/i;
+
+// Gratitude / social closing — must never reach the product matcher.
+// Two-part check: message CONTAINS a thanks/ack word AND does NOT contain an
+// ordering verb. This handles compound forms like "Entendi, muitoooo obrigada"
+// that an anchored regex would miss.
+const THANKS_WORD_RE =
+  /\b(?:obrigad[ao]|obg|valeu|entendi(?:do?)?|perfeito|t[aá]\s+bom|combinado|bl[zé]|beleza|[oó]timo)\b/i;
+const THANKS_ORDERING_BLOCKER_RE =
+  /\b(?:quero|queria|peço|pedir|mandar?|coloca(?:r|ndo)?|traz(?:er|endo)?|me\s+(?:manda|traz|d[aá]))\b/i;
+
+// Compliment / praise — must never reach the product matcher.
+const PRAISE_RE =
+  /\b(?:tudo\s+(?:a[íi]|l[aá]|nele|nela)\s+[eé]\s+maravilhos[ao]|amo\s+voc[eê]s|adoro\s+voc[eê]s|voc[eê]s?\s+s[aã]o\s+(?:ótim[ao]s?|incr[ií]veis?|demais|maravilhos[ao]s?)|comida\s+maravilhos[ao]|voc[eê]s?\s+s[aã]o\s+(?:lind[ao]s?|amad[ao]s?))\b/i;
+
+// Payment / voucher question — "aceita vale-refeição?", "aceita VR?", etc.
+// Caught before handleItemCollection to avoid "Não encontrei 'voucher' no cardápio".
+// Uses [\s\S] instead of /s flag for ES2017 compatibility.
+const PAYMENT_VOUCHER_RE =
+  /\b(?:aceita?m?|aceit[ao]|posso\s+pagar\s+com|forma[s]?\s+de\s+pagamento)\b[\s\S]{0,40}(?:voucher|vale[\s-]?refei[çc][aã]o|\bVR\b|alelo|sodexo|ticket[\s-]?restaurante|ticket[\s-]?alimenta[çc][aã]o|benef[ií]cio|vale\s+alimenta[çc][aã]o)/i;
+
+// Contextual personal messages — side-channel messages referencing people or
+// situations the bot has no context for. Must not hit the product matcher.
+// Note: no trailing \b — accented chars like "é" are \W in JS, breaking \b.
+const CONTEXTUAL_MESSAGE_RE =
+  /\b(?:kely|confirmando|vou\s+confirm(?:ar)?|ser[aá]\s+que\s+[eé]|acho\s+que\s+[eé]|vou\s+ver\s+com|vou\s+verific(?:ar)?|vou\s+chec(?:ar)?)/i;
 
 function classify(text: string, stage: string, hasPendingQuestion: boolean): WaDetectedIntent {
   if (CANCEL_RE.test(text)) return "CANCEL";

@@ -56,6 +56,12 @@ export const BACK_TO_MENU_RE =
 // has a clear exit from any menu sub-branch.
 export const BACK_TO_MENU_FOOTER = "\n\n0. menu";
 
+// Sent when the customer sends any non-text message (image, audio, document).
+// Does NOT include pedidoUrl — keeps the reply short and actionable.
+export const MEDIA_MESSAGE_REPLY =
+  "Recebi a imagem 😊\nMe diga rapidinho como posso te ajudar com ela:\n\n" +
+  "1️⃣ Quero pedir esse item\n2️⃣ Tenho uma dúvida\n7️⃣ Falar com atendente\n\n0. menu";
+
 // Shown when menuOptions is null/empty in DB — ensures the menu is always visible.
 const FALLBACK_MENU_OPTIONS: MenuOption[] = [
   { id: "fallback-text-order", label: "Já sei o que quero pedir",  flow: "text_order" },
@@ -994,10 +1000,7 @@ async function run(conversationId: string): Promise<void> {
 
   // Handle media messages — we cannot process images, audio, or documents.
   if (lastMessage.type !== "TEXT") {
-    const mediaReply = ctx.pedidoUrl
-      ? `Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. Para fazer seu pedido:\n${ctx.pedidoUrl}`
-      : "Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. É só digitar o que você precisa!";
-    await sendReply(evolutionResult.data, toPhone, mediaReply, conversationId);
+    await sendReply(evolutionResult.data, toPhone, MEDIA_MESSAGE_REPLY, conversationId);
     return;
   }
 

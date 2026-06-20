@@ -58,6 +58,7 @@ vi.mock("@/services/agent-training/AgentTrainingFailureCaptureService", () => ({
 import {
   BACK_TO_MENU_RE,
   BACK_TO_MENU_FOOTER,
+  MEDIA_MESSAGE_REPLY,
   appendBackToMainMenu,
   buildMenuList,
   detectSelectedOption,
@@ -691,5 +692,20 @@ describe("non-handoff option replies contain BACK_TO_MENU_FOOTER", () => {
     const opt: MenuOption = { id: "c", label: "Horário", flow: "custom", message: "Seg-Sex 18h-23h." };
     const reply = appendBackToMainMenu(buildFlowReply(opt, makeCtx()));
     expect(reply).toContain("0. menu");
+  });
+});
+
+// ── MEDIA_MESSAGE_REPLY — image / audio / document response ──────────────────
+
+describe("MEDIA_MESSAGE_REPLY — image reply contract", () => {
+  it("contains 3 short menu options without a URL", () => {
+    expect(MEDIA_MESSAGE_REPLY).toContain("1️⃣ Quero pedir esse item");
+    expect(MEDIA_MESSAGE_REPLY).toContain("2️⃣ Tenho uma dúvida");
+    expect(MEDIA_MESSAGE_REPLY).toContain("7️⃣ Falar com atendente");
+    expect(MEDIA_MESSAGE_REPLY).not.toMatch(/https?:\/\//);
+  });
+
+  it("ends with '0. menu' footer so customer can return to main menu", () => {
+    expect(MEDIA_MESSAGE_REPLY.endsWith("0. menu")).toBe(true);
   });
 });
