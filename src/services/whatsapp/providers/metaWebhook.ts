@@ -1,0 +1,142 @@
+/**
+ * Meta WhatsApp Cloud API — pure webhook helpers (verification, signature,
+ * normalization). No DB, no network — unit-testable. The route persists the
+ * normalized result.
+ *
+ * Official payload shape (object="whatsapp_business_account"):
+ *   entry[].changes[].value.metadata.phone_number_id  → maps to a restaurant
+ *   entry[].changes[].value.messages[]                → inbound customer messages
+ *   entry[].changes[].value.statuses[]                → delivery status for outbound
+ *   entry[].changes[].value.contacts[]               → profile name / wa_id
+ */
+
+import { createHmac, timingSafeEqual } from "crypto";
+
+// ── GET verification challenge ────────────────────────────────────────────────
+
+export interface MetaVerifyParams {
+  mode:      string | null; // hub.mode
+  token:     string | null; // hub.verify_token
+  challenge: string | null; // hub.challenge
+}
+
+/** Returns the challenge to echo back when the verify token matches, else null. */
+export function verifyMetaChallenge(params: MetaVerifyParams, expectedToken: string | undefined | null): string | null {
+  if (!expectedToken) return null;
+  if (params.mode === "subscribe" && params.token === expectedToken && params.challenge != null) {
+    return params.challenge;
+  }
+  return null;
+}
+
+// ── POST signature (X-Hub-Signature-256) ──────────────────────────────────────
+
+/** Validates the `sha256=<hex>` HMAC of the raw body using the app secret. */
+export function validateMetaSignature(
+  rawBody:         string,
+  signatureHeader: string | null | undefined,
+  appSecret:       string | undefined | null,
+): boolean {
+  if (!appSecret || !signatureHeader) return false;
+  const expected = signatureHeader.startsWith("sha256=") ? signatureHeader.slice(7) : signatureHeader;
+  const computed = createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
+  if (expected.length !== computed.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(computed, "hex"));
+  } catch {
+    return false;
+  }
+}
+
+// ── Normalization ─────────────────────────────────────────────────────────────
+
+export interface NormalizedInboundMessage {
+  providerMessageId: string;   // wamid... — dedupe key
+  fromPhone:         string;    // customer wa_id (digits)
+  phoneNumberId:     string;    // Meta phone_number_id → restaurant mapping
+  timestamp:         Date;
+  type:              string;    // text | image | interactive | ...
+  text:              string | null;
+  profileName:       string | null;
+}
+
+export interface NormalizedStatus {
+  providerMessageId: string;   // wamid... of an OUTBOUND message
+  status:            string;    // sent | delivered | read | failed
+  timestamp:         Date | null;
+  errorCode:         string | null;
+}
+
+export interface NormalizedMetaWebhook {
+  phoneNumberIds: string[];                  // all phone_number_ids seen
+  messages:       NormalizedInboundMessage[];
+  statuses:       NormalizedStatus[];
+}
+
+interface RawValue {
+  metadata?: { phone_number_id?: string; display_phone_number?: string };
+  contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
+  messages?: Array<{
+    from?: string; id?: string; timestamp?: string; type?: string;
+    text?: { body?: string };
+  }>;
+  statuses?: Array<{ id?: string; status?: string; timestamp?: string; errors?: Array<{ code?: number | string }> }>;
+}
+
+function tsToDate(ts?: string): Date | null {
+  if (!ts) return null;
+  const n = Number(ts);
+  return Number.isFinite(n) ? new Date(n * 1000) : null;
+}
+
+/** Normalizes a Meta webhook body into the internal inbound/status shape. */
+export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
+  const out: NormalizedMetaWebhook = { phoneNumberIds: [], messages: [], statuses: [] };
+  const body = payload as { object?: string; entry?: Array<{ changes?: Array<{ value?: RawValue }> }> };
+  if (!body?.entry || !Array.isArray(body.entry)) return out;
+
+  const seenPhoneIds = new Set<string>();
+
+  for (const entry of body.entry) {
+    for (const change of entry.changes ?? []) {
+      const value = change.value;
+      if (!value) continue;
+
+      const phoneNumberId = value.metadata?.phone_number_id ?? "";
+      if (phoneNumberId && !seenPhoneIds.has(phoneNumberId)) {
+        seenPhoneIds.add(phoneNumberId);
+        out.phoneNumberIds.push(phoneNumberId);
+      }
+
+      const profileByWaId = new Map<string, string>();
+      for (const c of value.contacts ?? []) {
+        if (c.wa_id && c.profile?.name) profileByWaId.set(c.wa_id, c.profile.name);
+      }
+
+      for (const m of value.messages ?? []) {
+        if (!m.id || !m.from) continue;
+        out.messages.push({
+          providerMessageId: m.id,
+          fromPhone:         m.from,
+          phoneNumberId,
+          timestamp:         tsToDate(m.timestamp) ?? new Date(),
+          type:              m.type ?? "unknown",
+          text:              m.text?.body ?? null,
+          profileName:       profileByWaId.get(m.from) ?? null,
+        });
+      }
+
+      for (const s of value.statuses ?? []) {
+        if (!s.id || !s.status) continue;
+        out.statuses.push({
+          providerMessageId: s.id,
+          status:            s.status,
+          timestamp:         tsToDate(s.timestamp),
+          errorCode:         s.errors?.[0]?.code != null ? String(s.errors[0].code) : null,
+        });
+      }
+    }
+  }
+
+  return out;
+}

@@ -46,6 +46,11 @@ model Restaurant {
   // Incremented atomically inside the order-creation transaction.
   lastOrderNumber Int @default(0)
 
+  // WhatsApp provider selection (dual-provider). EVOLUTION (default, current) |
+  // META_CLOUD_API (official Meta WhatsApp Business Platform). Existing restaurants
+  // stay on EVOLUTION until explicitly switched — additive, non-breaking.
+  whatsappProvider String @default("EVOLUTION")
+
   users                  User[]
   customers              Customer[]
   menuCategories         MenuCategory[]
@@ -57,6 +62,7 @@ model Restaurant {
   customerSegments       CustomerSegment[]
   aiLogs                 AIInteractionLog[]
   evolutionConfig        EvolutionConfig?
+  metaWhatsAppConfig     MetaWhatsAppConfig?
   brandConfig            RestaurantBrandConfig?
   agentConfig            WhatsAppAgentConfig?
   deliveryConfig         DeliveryConfig?
@@ -1031,6 +1037,42 @@ model EvolutionConfig {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("evolution_configs")
+}
+
+// ═══════════════════════════════════════════
+//  META WHATSAPP CLOUD API CONFIG  (official provider — parallel to Evolution)
+//  Stored per restaurant. Connected via Meta Embedded Signup. accessToken is
+//  AES-256-GCM encrypted (see lib/crypto). Raw token is NEVER returned to the
+//  client — only masked previews. Additive; does not touch EvolutionConfig.
+// ═══════════════════════════════════════════
+
+model MetaWhatsAppConfig {
+  id                 String  @id @default(cuid())
+  restaurantId       String  @unique
+
+  wabaId             String  // WhatsApp Business Account id
+  phoneNumberId      String  @unique // Graph API phone_number_id — routes inbound webhooks
+  displayPhoneNumber String? // human-readable connected number
+  businessId         String? // Meta Business (portfolio) id
+  configId           String? // Embedded Signup configuration id (if used)
+
+  accessToken        String  // AES-256-GCM encrypted long-lived/system-user token
+  tokenExpiresAt     DateTime?
+  webhookVerifyToken String  // AES-256-GCM encrypted per-restaurant verify token
+
+  connectionStatus   String   @default("PENDING") // PENDING | CONNECTED | ERROR | DISCONNECTED
+  lastHealthCheckAt  DateTime?
+  lastError          String?
+  qualityRating      String?  // GREEN | YELLOW | RED (when available)
+  messagingLimit     String?  // TIER_1K | TIER_10K | ... (when available)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([phoneNumberId])
+  @@map("meta_whatsapp_configs")
 }
 
 // ═══════════════════════════════════════════
