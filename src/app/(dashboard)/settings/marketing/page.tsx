@@ -11,8 +11,8 @@ import {
   PageCard,
   SectionHeading,
 } from "../_shared";
-import type { CRMWhatsAppSafetyConfig } from "@/lib/crm-safety";
-import { DEFAULT_SAFETY_CONFIG } from "@/lib/crm-safety";
+import type { CRMWhatsAppSafetyConfig, CRMWhatsAppBudgetConfig } from "@/lib/crm-safety";
+import { DEFAULT_SAFETY_CONFIG, DEFAULT_BUDGET_CONFIG } from "@/lib/crm-safety";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,14 @@ export default function MarketingSettingsPage() {
     setCfg((prev) => ({ ...prev, [key]: val }));
   }
 
+  const budget = cfg.crmWhatsAppSafety ?? DEFAULT_BUDGET_CONFIG;
+  function setBudget<K extends keyof CRMWhatsAppBudgetConfig>(key: K, val: CRMWhatsAppBudgetConfig[K]) {
+    setCfg((prev) => ({
+      ...prev,
+      crmWhatsAppSafety: { ...(prev.crmWhatsAppSafety ?? DEFAULT_BUDGET_CONFIG), [key]: val },
+    }));
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -91,6 +99,118 @@ export default function MarketingSettingsPage() {
       </div>
 
       <Feedback success={success} error={error} onDismiss={() => { setSuccess(null); setError(null); }} />
+
+      {/* ── Orçamento global de envio (modo seguro WhatsApp Web) ── */}
+      <PageCard>
+        <SectionHeading title="Orçamento de envio WhatsApp" />
+        <p className="mt-1 text-sm text-gray-500">
+          Estes limites protegem o WhatsApp enquanto o envio ainda usa WhatsApp Web/Evolution.
+          Quando o WhatsApp oficial da Meta estiver conectado, estes limites poderão ser ajustados.
+        </p>
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Um ciclo é cada execução do robô de campanhas. No modo WhatsApp Web, o limite por ciclo
+          é compartilhado entre todas as campanhas para evitar travamentos.
+        </p>
+
+        <div className="mt-4 space-y-4">
+          <Toggle
+            label="Modo seguro WhatsApp Web"
+            desc="Distribui um orçamento diário de envios entre as campanhas ativas e respeita o limite por ciclo. Desligue apenas quando estiver no WhatsApp oficial da Meta."
+            checked={budget.enabled}
+            onChange={(v) => setBudget("enabled", v)}
+          />
+
+          {budget.enabled && (
+            <>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Limite diário total"
+                  hint="Máximo de mensagens CRM enviadas em 24 h, somando todas as campanhas. Use 0 para sem limite. Padrão seguro: 50."
+                >
+                  <input
+                    type="number" min={0} max={10000}
+                    value={numStr(budget.globalDailyLimit)}
+                    onChange={(e) => setBudget("globalDailyLimit", parseNum(e.target.value, 50))}
+                    className={INPUT}
+                  />
+                </Field>
+
+                <Field
+                  label="Limite por ciclo"
+                  hint="Total de mensagens que TODO o CRM envia em cada execução do robô, somando todas as campanhas. Padrão seguro: 5."
+                >
+                  <input
+                    type="number" min={1} max={100}
+                    value={numStr(budget.globalCycleLimit)}
+                    onChange={(e) => setBudget("globalCycleLimit", parseNum(e.target.value, 5))}
+                    className={INPUT}
+                  />
+                </Field>
+
+                <Field
+                  label="Intervalo mínimo entre ciclos (minutos)"
+                  hint="Tempo mínimo entre duas execuções do robô. Padrão: 10."
+                >
+                  <input
+                    type="number" min={1} max={1440}
+                    value={numStr(budget.minMinutesBetweenCycles)}
+                    onChange={(e) => setBudget("minMinutesBetweenCycles", parseNum(e.target.value, 10))}
+                    className={INPUT}
+                  />
+                </Field>
+
+                <Field
+                  label="Distribuição do limite"
+                  hint="Como o orçamento diário é dividido entre as campanhas ativas."
+                >
+                  <select
+                    value={budget.distributionMode}
+                    onChange={(e) => setBudget("distributionMode", e.target.value as CRMWhatsAppBudgetConfig["distributionMode"])}
+                    className={INPUT}
+                  >
+                    <option value="EQUAL">Igualitária entre campanhas</option>
+                    <option value="PRIORITY">Por prioridade</option>
+                    <option value="MANUAL">Manual</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Toggle
+                label="Pausar se WhatsApp desconectar"
+                desc="Interrompe todos os envios imediatamente quando a instância do WhatsApp não está conectada."
+                checked={budget.stopOnInstanceDisconnected}
+                onChange={(v) => setBudget("stopOnInstanceDisconnected", v)}
+              />
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Pausar se taxa de falha passar de (%)"
+                  hint="Interrompe o restante do ciclo quando a taxa de falhas do provedor passa deste percentual. Use 0 para desligar."
+                >
+                  <input
+                    type="number" min={0} max={100}
+                    value={numStr(budget.pauseOnFailureRatePercent)}
+                    onChange={(e) => setBudget("pauseOnFailureRatePercent", parseNum(e.target.value, 50))}
+                    className={INPUT}
+                  />
+                </Field>
+
+                <Field
+                  label="Máximo de falhas consecutivas"
+                  hint="Quantas falhas do provedor em um ciclo disparam a pausa de segurança. Use 0 para desligar."
+                >
+                  <input
+                    type="number" min={0} max={100}
+                    value={numStr(budget.maxConsecutiveProviderFailures)}
+                    onChange={(e) => setBudget("maxConsecutiveProviderFailures", parseNum(e.target.value, 3))}
+                    className={INPUT}
+                  />
+                </Field>
+              </div>
+            </>
+          )}
+        </div>
+      </PageCard>
 
       {/* ── Limites diários ── */}
       <PageCard>

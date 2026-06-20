@@ -51,6 +51,14 @@ import {
   type ReprocessBlockReason,
 } from "./recoverableReprocessPlan";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
+import {
+  CRMWhatsAppBudgetPlanner,
+  evaluateCircuitBreaker,
+  inferCampaignPriority,
+  describeBudgetAllocation,
+  type BudgetCampaignInput,
+  type BudgetBlockReason,
+} from "./CRMWhatsAppBudgetPlanner";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -112,6 +120,26 @@ export interface StuckSendingRecoveryResult {
   recovered:   number;
   dryRun:      boolean;
   campaignIds: string[];
+}
+
+/** Read-only budget snapshot for the campaign detail UI (Section 9). */
+export interface BudgetSnapshot {
+  enabled:               boolean;
+  providerMode:          "EVOLUTION_WEB" | "META_CLOUD";
+  distributionMode:      "EQUAL" | "PRIORITY" | "MANUAL";
+  globalDailyUsed?:      number;
+  globalDailyLimit?:     number;
+  globalCycleLimit?:     number;
+  /** Remaining daily budget, or null when no daily cap is set. */
+  remainingDailyBudget?: number | null;
+  activeCampaigns?:      number;
+  campaign?: {
+    dailyQuota:          number;
+    alreadySentToday:    number;
+    nextCycleAllocation: number;
+    reason:              BudgetBlockReason | null;
+    reasonText:          string;
+  } | null;
 }
 
 export interface ReprocessRecipientResult {
@@ -257,9 +285,9 @@ export class ScheduledCampaignRunnerService {
    */
   static async runCampaignBatch(
     campaignId: string,
-    options: { dryRun?: boolean; limit?: number } = {}
+    options: { dryRun?: boolean; limit?: number; abortOnInstanceCollapse?: boolean } = {}
   ): Promise<CampaignBatchResult> {
-    const { dryRun = false, limit } = options;
+    const { dryRun = false, limit, abortOnInstanceCollapse = false } = options;
 
     const campaign = await prisma.campaign.findUnique({
       where:  { id: campaignId },
@@ -434,7 +462,7 @@ export class ScheduledCampaignRunnerService {
       allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride,
       campaignFamilyKey: familyKey || null,
       messageFingerprint: fingerprint || null,
-    });
+    }, { abortOnInstanceCollapse });
 
     // Check end conditions
     const totalSentAfter      = (campaign.totalSent ?? 0) + sent;
@@ -464,6 +492,13 @@ export class ScheduledCampaignRunnerService {
 
   /**
    * Find and execute all due recurring campaigns.
+   *
+   * When the global WhatsApp sending budget is enabled (crmWhatsAppSafety), each
+   * restaurant's due campaigns are run through the budget orchestrator — the cycle
+   * total never exceeds globalCycleLimit, the daily total never exceeds
+   * globalDailyLimit, the budget is split fairly across campaigns, unused slots are
+   * redistributed, and a failure/instance circuit breaker can pause the cycle.
+   * When disabled, the legacy parallel per-campaign path runs unchanged.
    */
   static async runDueCampaigns(
     options: { restaurantId?: string; dryRun?: boolean; limit?: number } = {}
@@ -477,7 +512,8 @@ export class ScheduledCampaignRunnerService {
         ...(restaurantId ? { restaurantId } : {}),
       },
       select: {
-        id: true, name: true, status: true,
+        id: true, name: true, status: true, restaurantId: true,
+        templateId: true, targetSegment: true,
         scheduleConfig: true, totalSent: true,
       },
     });
@@ -487,20 +523,40 @@ export class ScheduledCampaignRunnerService {
       return cfg?.mode === "RECURRING" && this.isCampaignDueNow(c);
     });
 
-    const results = await Promise.all(
-      due.map((c) =>
-        this.runCampaignBatch(c.id, { dryRun, limit }).catch((err): CampaignBatchResult => ({
-          campaignId:   c.id,
-          campaignName: c.name,
-          eligible:     0,
-          sent:         0,
-          failed:       0,
-          skipped:      0,
-          reason:       err instanceof Error ? err.message : "Unknown error",
-          completed:    false,
-        }))
-      )
-    );
+    // The budget is per-restaurant, so orchestrate each restaurant's due set on its own.
+    const byRestaurant = new Map<string, typeof due>();
+    for (const c of due) {
+      const arr = byRestaurant.get(c.restaurantId) ?? [];
+      arr.push(c);
+      byRestaurant.set(c.restaurantId, arr);
+    }
+
+    const results: CampaignBatchResult[] = [];
+    for (const [rid, group] of byRestaurant) {
+      const safety = await getSafetyConfig(rid);
+      const budget = safety.crmWhatsAppSafety;
+
+      if (budget?.enabled && budget.providerMode === "EVOLUTION_WEB") {
+        results.push(...await this._runOrchestratedCycle(rid, group, budget, { dryRun }));
+      } else {
+        // Legacy parallel path — preserved exactly for restaurants with the budget off.
+        const legacy = await Promise.all(
+          group.map((c) =>
+            this.runCampaignBatch(c.id, { dryRun, limit }).catch((err): CampaignBatchResult => ({
+              campaignId:   c.id,
+              campaignName: c.name,
+              eligible:     0,
+              sent:         0,
+              failed:       0,
+              skipped:      0,
+              reason:       err instanceof Error ? err.message : "Unknown error",
+              completed:    false,
+            }))
+          )
+        );
+        results.push(...legacy);
+      }
+    }
 
     return {
       dryRun,
@@ -512,6 +568,217 @@ export class ScheduledCampaignRunnerService {
       totalSkipped:       results.reduce((s, r) => s + r.skipped, 0),
       results,
     };
+  }
+
+  /**
+   * Run ONE budget-orchestrated cycle for a single restaurant.
+   *
+   * Sequential by design: the global cycle/daily budget and the failure circuit
+   * breaker must be accounted for as each campaign sends, which a parallel run
+   * cannot do safely. After every campaign the remaining cycle budget is re-planned
+   * over the campaigns left, so a campaign that could not use its slot (no eligible
+   * recipients) hands it to the others (Section 6 redistribution).
+   */
+  private static async _runOrchestratedCycle(
+    restaurantId: string,
+    due: Array<{ id: string; name: string; templateId: string | null; targetSegment: string | null }>,
+    budget: import("@/lib/crm-safety").CRMWhatsAppBudgetConfig,
+    opts: { dryRun?: boolean },
+  ): Promise<CampaignBatchResult[]> {
+    const { dryRun = false } = opts;
+    const byId = new Map(due.map((c) => [c.id, c]));
+
+    const skip = (
+      c: { id: string; name: string },
+      reason: BudgetBlockReason,
+    ): CampaignBatchResult => ({
+      campaignId:   c.id,
+      campaignName: c.name,
+      eligible:     0, sent: 0, failed: 0, blocked: 0, skipped: 0,
+      reason:       describeBudgetAllocation({ allocated: 0, reason }),
+      completed:    false,
+    });
+
+    // Instance connectivity is read once up front — a disconnected instance blocks
+    // the whole cycle with no provider calls at all (Section 7).
+    const instanceConnected = dryRun ? true : await this._isInstanceConnected(restaurantId);
+
+    // Counters that seed the planner.
+    const globalSentSeed = await getTodayGlobalSendCount(restaurantId);
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sentByCampaign = new Map<string, number>();
+    await Promise.all(
+      due.map(async (c) => {
+        sentByCampaign.set(
+          c.id,
+          await prisma.campaignExecution.count({
+            where: { campaignId: c.id, sentAt: { gte: cutoff24h }, status: { in: ["SENT", "DELIVERED", "READ"] } },
+          }),
+        );
+      }),
+    );
+
+    let pending: BudgetCampaignInput[] = due.map((c) => ({
+      campaignId:        c.id,
+      campaignName:      c.name,
+      priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
+      alreadySentToday:  sentByCampaign.get(c.id) ?? 0,
+      // Real eligible audience is discovered during the send; redistribution of an
+      // empty campaign's slot is handled by re-planning each iteration.
+      remainingAudience: Number.MAX_SAFE_INTEGER,
+    }));
+
+    const resultsById = new Map<string, CampaignBatchResult>();
+    let cycleSent = 0;
+    let cycleFailed = 0;
+    let breakerTripped = false;
+    let globalSent = globalSentSeed;
+
+    while (pending.length > 0) {
+      const remainingCycle = Math.max(0, budget.globalCycleLimit - cycleSent);
+      const plan = CRMWhatsAppBudgetPlanner.plan({
+        config:            { ...budget, globalCycleLimit: remainingCycle },
+        globalSentToday:   globalSent,
+        instanceConnected,
+        failureRatePaused: breakerTripped,
+        campaigns:         pending,
+      });
+
+      if (plan.globalBlockReason) {
+        for (const p of pending) resultsById.set(p.campaignId, skip(byId.get(p.campaignId)!, plan.globalBlockReason));
+        break;
+      }
+
+      // Serve the campaign with the largest allocation first (priority-weighted in
+      // PRIORITY mode); ties fall to input order.
+      let next = plan.perCampaign[0]!;
+      for (const a of plan.perCampaign) if (a.allocated > next.allocated) next = a;
+
+      if (next.allocated <= 0) {
+        for (const a of plan.perCampaign) {
+          resultsById.set(a.campaignId, skip(byId.get(a.campaignId)!, a.reason ?? "GLOBAL_CYCLE_LIMIT_REACHED"));
+        }
+        break;
+      }
+
+      const campaign = byId.get(next.campaignId)!;
+      const res = await this.runCampaignBatch(campaign.id, {
+        dryRun,
+        limit:                   next.allocated,
+        abortOnInstanceCollapse: true,
+      }).catch((err): CampaignBatchResult => ({
+        campaignId:   campaign.id,
+        campaignName: campaign.name,
+        eligible:     0, sent: 0, failed: 0, skipped: 0,
+        reason:       err instanceof Error ? err.message : "Unknown error",
+        completed:    false,
+      }));
+      resultsById.set(campaign.id, res);
+
+      cycleSent   += res.sent;
+      cycleFailed += res.failed;
+      globalSent  += res.sent;
+
+      if (!breakerTripped) {
+        const verdict = evaluateCircuitBreaker({ providerFailures: cycleFailed, sent: cycleSent }, budget);
+        if (verdict.tripped) breakerTripped = true;
+      }
+
+      // Drop the processed campaign so the freed budget redistributes to the rest.
+      pending = pending.filter((p) => p.campaignId !== campaign.id);
+    }
+
+    // Restore the original campaign order in the returned results.
+    return due.map((c) => resultsById.get(c.id) ?? skip(c, "GLOBAL_CYCLE_LIMIT_REACHED"));
+  }
+
+  /**
+   * Read-only budget snapshot for the campaign detail UI (Section 9).
+   *
+   * Computes — WITHOUT sending or touching the provider — how the global daily
+   * budget currently splits across the restaurant's active recurring campaigns and
+   * what THIS campaign would receive in the next cycle, plus an owner-facing reason.
+   * Remaining audience is treated as available (the real audience is only known at
+   * send time), so this is a planning view, not a guarantee.
+   */
+  static async getBudgetSnapshot(
+    restaurantId: string,
+    focusCampaignId: string,
+  ): Promise<BudgetSnapshot> {
+    const budget = (await getSafetyConfig(restaurantId)).crmWhatsAppSafety;
+    if (!budget?.enabled || budget.providerMode !== "EVOLUTION_WEB") {
+      return {
+        enabled:          false,
+        providerMode:     budget?.providerMode ?? "EVOLUTION_WEB",
+        distributionMode: budget?.distributionMode ?? "EQUAL",
+      };
+    }
+
+    const active = await prisma.campaign.findMany({
+      where: {
+        restaurantId,
+        status:         { in: ["ACTIVE", "SCHEDULED"] as never[] },
+        scheduleConfig: { not: Prisma.AnyNull },
+      },
+      select: { id: true, name: true, templateId: true, targetSegment: true, scheduleConfig: true },
+    });
+    const recurring = active.filter((c) => (c.scheduleConfig as RecurringScheduleConfig | null)?.mode === "RECURRING");
+
+    // The focus campaign may be active but not in the recurring set (e.g. one-time);
+    // still report the global figures so the UI can render them.
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [globalSentToday, sentCounts] = await Promise.all([
+      getTodayGlobalSendCount(restaurantId),
+      Promise.all(
+        recurring.map((c) =>
+          prisma.campaignExecution.count({
+            where: { campaignId: c.id, sentAt: { gte: cutoff24h }, status: { in: ["SENT", "DELIVERED", "READ"] } },
+          }),
+        ),
+      ),
+    ]);
+
+    const campaigns: BudgetCampaignInput[] = recurring.map((c, i) => ({
+      campaignId:        c.id,
+      campaignName:      c.name,
+      priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
+      alreadySentToday:  sentCounts[i] ?? 0,
+      remainingAudience: Number.MAX_SAFE_INTEGER,
+    }));
+
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config: budget, globalSentToday, instanceConnected: true, campaigns,
+    });
+
+    const focus = plan.perCampaign.find((p) => p.campaignId === focusCampaignId) ?? null;
+
+    return {
+      enabled:              true,
+      providerMode:         budget.providerMode,
+      distributionMode:     budget.distributionMode,
+      globalDailyUsed:      globalSentToday,
+      globalDailyLimit:     budget.globalDailyLimit,
+      globalCycleLimit:     budget.globalCycleLimit,
+      remainingDailyBudget: plan.dailyLimitEnabled ? plan.remainingDailyBudget : null,
+      activeCampaigns:      recurring.length,
+      campaign: focus
+        ? {
+            dailyQuota:          focus.dailyQuota,
+            alreadySentToday:    focus.alreadySentToday,
+            nextCycleAllocation: focus.allocated,
+            reason:              focus.reason ?? null,
+            reasonText:          describeBudgetAllocation({ allocated: focus.allocated, reason: focus.reason }),
+          }
+        : null,
+    };
+  }
+
+  /** True only when the restaurant's WhatsApp/Evolution instance reports state=open. */
+  private static async _isInstanceConnected(restaurantId: string): Promise<boolean> {
+    const snap = await EvolutionConfigService.getSnapshot(restaurantId);
+    if (!snap.ok) return false;
+    const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
+    return status?.state === "open";
   }
 
   /**
@@ -532,7 +799,19 @@ export class ScheduledCampaignRunnerService {
     campaignId: string,
     ctx: { restaurantId: string; confirm: unknown },
   ): Promise<ReprocessRecoverableResult> {
-    const cap = EVOLUTION_WEB_MAX_PER_RUN;
+    // Reprocess never bypasses the global WhatsApp budget: the per-run cap is the
+    // smaller of the Evolution Web hard ceiling, the configured cycle limit, and
+    // whatever is left of today's global daily budget (Section 10).
+    const budget = (await getSafetyConfig(ctx.restaurantId)).crmWhatsAppSafety;
+    let cap = EVOLUTION_WEB_MAX_PER_RUN;
+    let budgetExhausted = false;
+    if (budget?.enabled && budget.providerMode === "EVOLUTION_WEB") {
+      const remainingDaily = budget.globalDailyLimit > 0
+        ? Math.max(0, budget.globalDailyLimit - await getTodayGlobalSendCount(ctx.restaurantId))
+        : Number.MAX_SAFE_INTEGER;
+      cap = Math.max(0, Math.min(EVOLUTION_WEB_MAX_PER_RUN, budget.globalCycleLimit, remainingDaily));
+      budgetExhausted = remainingDaily <= 0;
+    }
     const emptyPlan = { recoverableExecutions: 0, distinctRecipients: 0, duplicatesRemoved: 0, cap, nextBatchCount: 0 };
     let lockHeld = false;
 
@@ -592,8 +871,12 @@ export class ScheduledCampaignRunnerService {
       return blocked("CAMPAIGN_NOT_REPROCESSABLE", `Campanha em status ${campaign.status} não pode reprocessar.`, 409, { plan: planOut });
     }
     if (plan.nextBatchCount === 0) {
-      // Not an error — simply nothing safe to send right now.
-      return { ok: true, httpStatus: 200, message: "Nenhum destinatário recuperável no momento.", campaignId, campaignName: campaign.name, plan: planOut, instanceState: null, requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [] };
+      // Not an error — simply nothing safe to send right now. Distinguish "no
+      // recoverable recipients" from "global daily budget already spent today".
+      const message = budgetExhausted
+        ? "Sem orçamento global de envio disponível hoje — limite diário do WhatsApp atingido."
+        : "Nenhum destinatário recuperável no momento.";
+      return { ok: true, httpStatus: 200, message, campaignId, campaignName: campaign.name, plan: planOut, instanceState: null, requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [] };
     }
 
     // No parallel live reprocess for the same campaign (anti-duplicate guard).

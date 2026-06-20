@@ -13,6 +13,44 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Config shape ─────────────────────────────────────────────────────────────
 
+/** Provider that actually delivers the WhatsApp message. */
+export type CRMProviderMode = "EVOLUTION_WEB" | "META_CLOUD";
+
+/** How the daily/cycle budget is split across the active campaigns. */
+export type CRMBudgetDistributionMode = "EQUAL" | "PRIORITY" | "MANUAL";
+
+/**
+ * Restaurant-level WhatsApp sending budget + orchestration.
+ *
+ * This is the global safety budget that keeps the WhatsApp number from freezing
+ * or being blocked while sends still ride the Evolution Web / WhatsApp Web bridge.
+ * It governs how the daily ceiling is shared across all active campaigns and how
+ * many messages the whole CRM may send per scheduler cycle (cron run).
+ *
+ * A "cycle" is one CRM scheduler/cron execution. In Evolution Web mode the cycle
+ * limit is the TOTAL across all campaigns in that run — not per campaign.
+ */
+export interface CRMWhatsAppBudgetConfig {
+  /** Master switch for the global budget orchestration. When off, legacy per-campaign behavior applies. */
+  enabled: boolean;
+  /** Active delivery provider. Evolution Web rides a real WhatsApp-Web session and needs tight limits. */
+  providerMode: CRMProviderMode;
+  /** Max CRM messages the whole restaurant may send in a 24h window. 0 = no daily cap. Default 50 for Evolution Web. */
+  globalDailyLimit: number;
+  /** Max CRM messages the whole CRM may send in ONE scheduler cycle, shared across all campaigns. Default 5. */
+  globalCycleLimit: number;
+  /** Minimum minutes between two scheduler cycles. Default 10. */
+  minMinutesBetweenCycles: number;
+  /** How the daily budget is divided among active campaigns. */
+  distributionMode: CRMBudgetDistributionMode;
+  /** Stop all sends immediately when the WhatsApp instance is not connected. */
+  stopOnInstanceDisconnected: boolean;
+  /** Pause the rest of the cycle when the provider failure rate exceeds this percent. 0 = off. */
+  pauseOnFailureRatePercent: number;
+  /** Trip the circuit breaker after this many provider failures in a cycle. 0 = off. */
+  maxConsecutiveProviderFailures: number;
+}
+
 export interface CRMWhatsAppSafetyConfig {
   /** Max CRM messages sent per 24-hour rolling window across ALL campaigns + automations. 0 = no cap. */
   dailyGlobalCap: number;
@@ -38,7 +76,21 @@ export interface CRMWhatsAppSafetyConfig {
   randomDelayMinSec: number;
   /** Upper bound of the random inter-send delay (seconds). */
   randomDelayMaxSec: number;
+  /** Global WhatsApp sending budget + orchestration (daily/cycle limits, distribution, circuit breaker). */
+  crmWhatsAppSafety: CRMWhatsAppBudgetConfig;
 }
+
+export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
+  enabled:                        true,
+  providerMode:                   "EVOLUTION_WEB",
+  globalDailyLimit:               50, // Evolution Web default — keep the number safe
+  globalCycleLimit:               5,  // total across ALL campaigns per cron run
+  minMinutesBetweenCycles:        10,
+  distributionMode:               "EQUAL",
+  stopOnInstanceDisconnected:     true,
+  pauseOnFailureRatePercent:      50,
+  maxConsecutiveProviderFailures: 3,
+};
 
 export const DEFAULT_SAFETY_CONFIG: Readonly<CRMWhatsAppSafetyConfig> = {
   dailyGlobalCap:        200,
@@ -54,15 +106,41 @@ export const DEFAULT_SAFETY_CONFIG: Readonly<CRMWhatsAppSafetyConfig> = {
   randomDelayEnabled:    true,
   randomDelayMinSec:     5,
   randomDelayMaxSec:     45,
+  crmWhatsAppSafety:     DEFAULT_BUDGET_CONFIG,
 };
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
-export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
-  const d = DEFAULT_SAFETY_CONFIG;
+export function parseBudgetConfig(raw: unknown): CRMWhatsAppBudgetConfig {
+  const d = DEFAULT_BUDGET_CONFIG;
   if (!raw || typeof raw !== "object") return { ...d };
   const r = raw as Record<string, unknown>;
+  const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : fallback);
+  const providerMode: CRMProviderMode =
+    r.providerMode === "META_CLOUD" || r.providerMode === "EVOLUTION_WEB" ? r.providerMode : d.providerMode;
+  const distributionMode: CRMBudgetDistributionMode =
+    r.distributionMode === "EQUAL" || r.distributionMode === "PRIORITY" || r.distributionMode === "MANUAL"
+      ? r.distributionMode
+      : d.distributionMode;
   return {
+    enabled:                        typeof r.enabled                    === "boolean" ? r.enabled : d.enabled,
+    providerMode,
+    globalDailyLimit:               num(r.globalDailyLimit,               d.globalDailyLimit),
+    globalCycleLimit:               Math.max(1, num(r.globalCycleLimit,   d.globalCycleLimit)),
+    minMinutesBetweenCycles:        num(r.minMinutesBetweenCycles,        d.minMinutesBetweenCycles),
+    distributionMode,
+    stopOnInstanceDisconnected:     typeof r.stopOnInstanceDisconnected === "boolean" ? r.stopOnInstanceDisconnected : d.stopOnInstanceDisconnected,
+    pauseOnFailureRatePercent:      Math.min(100, num(r.pauseOnFailureRatePercent, d.pauseOnFailureRatePercent)),
+    maxConsecutiveProviderFailures: num(r.maxConsecutiveProviderFailures, d.maxConsecutiveProviderFailures),
+  };
+}
+
+export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
+  const d = DEFAULT_SAFETY_CONFIG;
+  if (!raw || typeof raw !== "object") return { ...d, crmWhatsAppSafety: { ...DEFAULT_BUDGET_CONFIG } };
+  const r = raw as Record<string, unknown>;
+  return {
+    crmWhatsAppSafety:     parseBudgetConfig(r.crmWhatsAppSafety),
     dailyGlobalCap:        typeof r.dailyGlobalCap        === "number"  ? r.dailyGlobalCap        : d.dailyGlobalCap,
     weeklyGlobalCap:       typeof r.weeklyGlobalCap       === "number"  ? r.weeklyGlobalCap       : d.weeklyGlobalCap,
     customerCooldownHours: typeof r.customerCooldownHours === "number"  ? r.customerCooldownHours : d.customerCooldownHours,

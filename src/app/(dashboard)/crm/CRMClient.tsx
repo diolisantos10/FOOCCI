@@ -210,6 +210,25 @@ type CampaignDetail = {
   currentCyclePerformance?: CycleSummary | null;
   eligibility?: EligibilityMetrics | null;
   safeSend?: { provider: string; maxPerCycle: number; note: string } | null;
+  budget?: CampaignBudgetSnapshot | null;
+};
+
+type CampaignBudgetSnapshot = {
+  enabled: boolean;
+  providerMode: "EVOLUTION_WEB" | "META_CLOUD";
+  distributionMode: "EQUAL" | "PRIORITY" | "MANUAL";
+  globalDailyUsed?: number;
+  globalDailyLimit?: number;
+  globalCycleLimit?: number;
+  remainingDailyBudget?: number | null;
+  activeCampaigns?: number;
+  campaign?: {
+    dailyQuota: number;
+    alreadySentToday: number;
+    nextCycleAllocation: number;
+    reason: string | null;
+    reasonText: string;
+  } | null;
 };
 
 type EligibilityMetrics = {
@@ -2452,6 +2471,29 @@ function CampaignManageModal({
                                   <p className="rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700">
                                     Um <strong>ciclo</strong> é cada execução do robô de campanhas. No <strong>modo seguro WhatsApp Web</strong>, o Foocci envia até <strong>{detail.safeSend?.maxPerCycle ?? 5} mensagens por ciclo</strong> para evitar travamentos e reduzir risco de bloqueio.
                                   </p>
+                                  {detail.budget?.enabled && (
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
+                                      <p className="text-[11px] font-semibold text-emerald-800">Orçamento de envio WhatsApp</p>
+                                      <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-gray-700">
+                                        <span>Diário global usado</span>
+                                        <span className="text-right font-semibold">
+                                          {detail.budget.globalDailyUsed ?? 0}
+                                          {detail.budget.globalDailyLimit ? ` / ${detail.budget.globalDailyLimit}` : " (sem limite)"}
+                                        </span>
+                                        {detail.budget.campaign && (
+                                          <>
+                                            <span>Enviado hoje por esta campanha</span>
+                                            <span className="text-right font-semibold">
+                                              {detail.budget.campaign.alreadySentToday}
+                                              {detail.budget.campaign.dailyQuota > 0 ? ` / ${detail.budget.campaign.dailyQuota}` : ""}
+                                            </span>
+                                            <span>Próximo ciclo</span>
+                                            <span className="text-right font-semibold">{detail.budget.campaign.reasonText}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                   {el.recoverableFailures > 0 && (
                                     <div className="rounded-xl border border-violet-200 bg-paper px-3 py-2.5">
                                       <div className="flex items-center justify-between gap-2">

@@ -9,7 +9,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions, buildEligibilityMetrics } from "@/services/crm/crmExecutionClassification";
-import { EVOLUTION_WEB_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
+import { EVOLUTION_WEB_MAX_PER_RUN, ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -85,6 +85,12 @@ export async function GET(
     const converted = campaign.totalConverted;
     const conversionRate = performance.sent > 0 ? Math.round((converted / performance.sent) * 100) : 0;
 
+    // Read-only global budget snapshot (no send): how this campaign shares the
+    // restaurant's daily WhatsApp budget and what it gets in the next cycle.
+    const budget = await ScheduledCampaignRunnerService
+      .getBudgetSnapshot(ctx.restaurantId, campaign.id)
+      .catch(() => null);
+
     // For recurring campaigns, also expose current-cycle metrics (executions since lastRunAt).
     const isRecurring = (campaign.scheduleConfig as { mode?: string } | null)?.mode === "RECURRING";
     let currentCyclePerformance = null;
@@ -132,6 +138,9 @@ export async function GET(
         maxPerCycle: EVOLUTION_WEB_MAX_PER_RUN,
         note:        `Modo seguro WhatsApp Web: até ${EVOLUTION_WEB_MAX_PER_RUN} envios por ciclo.`,
       },
+      // Global WhatsApp budget snapshot (read-only): daily used/limit, this
+      // campaign's quota vs sent today, and its next-cycle allocation + reason.
+      budget,
     });
   } catch (err) {
     console.error("[GET /api/crm/campaigns/[id]]", err);
