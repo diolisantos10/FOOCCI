@@ -25,7 +25,7 @@ import { markConversationCrmContext, buildConversationMetadataForCrmSend, CONTEX
 import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
 import { isBirthdayCampaign } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
-import { buildInstagramUrl } from "@/lib/social";
+import { renderCrmMessage } from "./renderCrmMessage";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -287,36 +287,15 @@ export function personalizeMessage(
   customer: AudienceCustomer,
   ctx: MessageContext
 ): string {
-  const firstName = customer.name.split(" ")[0] ?? customer.name;
-
-  const dias = customer.lastOrderAt
-    ? Math.floor((Date.now() - new Date(customer.lastOrderAt).getTime()) / 86_400_000)
-    : null;
-
-  const lastOrderLabel = dias === null
-    ? "há algum tempo"
-    : dias === 0 ? "hoje"
-    : dias === 1 ? "ontem"
-    : dias < 30  ? `há ${dias} dias`
-    : dias < 365 ? `há ${Math.floor(dias / 30)} meses`
-    : `há mais de um ano`;
-
-  const tierLabels: Record<string, string> = {
-    BRONZE: "Bronze", PRATA: "Prata", OURO: "Ouro", DIAMANTE: "Diamante",
-  };
-
-  const reviewUrl = ctx.googleReviewUrl ?? ctx.pedidoUrl;
-
-  return template
-    .replace(/{nome}/g,                 firstName)
-    .replace(/{restaurante}/g,          ctx.restaurantName)
-    .replace(/{link_cardapio}/g,        ctx.pedidoUrl)
-    .replace(/{link_avaliacao_google}/g, reviewUrl)
-    .replace(/{nivel}/g,                tierLabels[customer.tier] ?? customer.tier)
-    .replace(/{dias_sem_pedir}/g,       dias !== null ? String(dias) : "alguns")
-    .replace(/{ultimo_pedido}/g,        lastOrderLabel)
-    .replace(/{produto_favorito}/g,     "nossos pratos")  // V1 simplified
-    .replace(/{instagram}/g,            buildInstagramUrl(ctx.instagramUrl) ?? "");
+  // Delegates to the single canonical CRM renderer so every send path (campaigns,
+  // automations, recurring runner) resolves variables, double braces and links
+  // identically ({instagram} goes through buildInstagramUrl inside the renderer).
+  // The exact saved template is rendered — no AI prefix, no rewrite.
+  return renderCrmMessage(
+    template,
+    { name: customer.name, tier: customer.tier, lastOrderAt: customer.lastOrderAt },
+    ctx,
+  );
 }
 
 // ─── campaign creation ────────────────────────────────────────

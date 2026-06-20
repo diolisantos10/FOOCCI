@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import type { CrmAction } from "@/services/crm/CrmActionCenterService";
+import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
@@ -5076,6 +5077,21 @@ function AutomacoesTab() {
                   <>, <code className="rounded bg-[#F4F4F2] px-1">{"{instagram}"}</code> para o link do Instagram</>
                 )}.
               </p>
+              {state.messageTemplate.trim() && (
+                <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Prévia com exemplo</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">
+                    {renderCrmMessage(
+                      state.messageTemplate,
+                      { name: "Diego", tier: "OURO", lastOrderAt: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+                      { restaurantName: "seu restaurante", pedidoUrl: "https://foocci.com.br", googleReviewUrl: null, instagramUrl: null },
+                    )}
+                  </p>
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    É exatamente assim que a mensagem será enviada (variáveis substituídas, links e emojis preservados).
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Save row */}
