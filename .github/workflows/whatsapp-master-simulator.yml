@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WhatsApp Master Simulator — continuous hermetic validation
+#
+# Runs the WhatsApp Master Simulator every hour, covering all areas:
+#   MENU         renderMainMenu contract: 7 options, no raw link, footer
+#   RECEPTIONIST Guard rules: voucher/thanks/praise/contextual/cadê → not product
+#   TEXT_ORDER   Free-text detection, ambiguous item handling, config safety
+#   PIX          Pix only after order summary; never real in simulation
+#   DELIVERY     Saved address offered; freight quoted; no real order
+#   HANDOFF      Escalation to human agent confirmed
+#   REAL_CASES   Unknown product: no invention; no quote as product name
+#
+# SAFETY (enforced in code, not here):
+#   runtimeTouched = false always
+#   No WhatsApp sent, no Evolution API called
+#   No real order created, no real Pix generated
+#
+# Required GitHub Secrets:
+#   FOOCCI_BASE_URL   e.g. https://foocci.com.br
+#   CRON_SECRET       Must match CRON_SECRET env var in Railway
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: WhatsApp Master Simulator
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # every hour at :00
+
+  workflow_dispatch:
+
+env:
+  CURL_OPTS: "--connect-timeout 20 --max-time 180 -sS"
+
+jobs:
+  master-simulator:
+    name: "WhatsApp Master Simulator"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE="${{ secrets.FOOCCI_BASE_URL }}"
+          echo "url=${BASE%/}/api/cron/whatsapp/master-simulator" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/whatsapp/master-simulator"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ $ENDPOINT_URL"
+          set +e
+          curl ${{ env.CURL_OPTS }} -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/resp.json -w "%{http_code}" > /tmp/code.txt
+          CURL_EXIT=$?
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP $HTTP"
+          jq . /tmp/resp.json 2>/dev/null || cat /tmp/resp.json
+          [[ $CURL_EXIT -ne 0 ]] && { echo "::error::curl exit $CURL_EXIT"; exit $CURL_EXIT; }
+          [[ $HTTP -lt 200 || $HTTP -ge 300 ]] && { echo "::error::non-2xx ($HTTP)"; exit 1; }
+          STATUS=$(jq -r '.status // "UNKNOWN"' /tmp/resp.json 2>/dev/null)
+          P0=$(jq -r '.p0 // 0' /tmp/resp.json 2>/dev/null)
+          TOTAL=$(jq -r '.total // 0' /tmp/resp.json 2>/dev/null)
+          PASSED=$(jq -r '.passed // 0' /tmp/resp.json 2>/dev/null)
+          FAILED=$(jq -r '.failed // 0' /tmp/resp.json 2>/dev/null)
+          echo "status=$STATUS  p0=$P0  total=$TOTAL  passed=$PASSED  failed=$FAILED"
+          if [[ "$STATUS" == "FAIL" || "$P0" -gt 0 ]]; then
+            echo "::error::Master simulator FAIL — p0=$P0 failed=$FAILED"
+            exit 1
+          fi
+          echo "✅ WhatsApp Master Simulator $STATUS — $PASSED/$TOTAL passed"
