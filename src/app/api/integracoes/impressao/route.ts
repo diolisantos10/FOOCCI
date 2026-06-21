@@ -13,6 +13,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateAgent, isOnline } from "@/services/print/PrintAgentService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +67,20 @@ export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
   if (!ctx) return unauthorized();
   try {
-    return ok({ stations: await loadStations(ctx.restaurantId) });
+    const [stations, agent] = await Promise.all([
+      loadStations(ctx.restaurantId),
+      getOrCreateAgent(ctx.restaurantId),
+    ]);
+    return ok({
+      stations,
+      agent: {
+        online: isOnline(agent),
+        lastSeenAt: agent.lastSeenAt,
+        printers: agent.reportedPrinters,
+        pairingCode: agent.pairingCode,
+        version: agent.agentVersion,
+      },
+    });
   } catch (err) {
     console.error("[GET integracoes/impressao]", err);
     return serverError();

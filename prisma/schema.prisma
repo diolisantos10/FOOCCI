@@ -101,6 +101,8 @@ model Restaurant {
   waTextOrderingConfig   WhatsAppTextOrderingConfig?
   soundSettings          RestaurantSoundSettings?
   printStations          PrintStation[]
+  printAgent             PrintAgent?
+  printJobs              PrintJob[]
 
   @@map("restaurants")
 }
@@ -1561,6 +1563,54 @@ model PrintStation {
   @@unique([restaurantId, key])
   @@index([restaurantId])
   @@map("print_stations")
+}
+
+// ─── PrintAgent ───────────────────────────────────────────────────────────────
+//  One local print agent ("Carteiro") per restaurant. It lives on the restaurant's
+//  PC and reaches OUT to Foocci (polling) — the cloud can't reach into the LAN.
+//  Pairing: the owner copies `pairingCode` from the panel into the Carteiro once;
+//  the agent receives a durable `token` and authenticates with it from then on.
+//  The agent reports the printers it sees (`reportedPrinters`) so the panel shows
+//  a real dropdown. `lastSeenAt` drives the online/offline badge.
+
+model PrintAgent {
+  id               String     @id @default(cuid())
+  restaurantId     String     @unique
+  pairingCode      String     @unique // short code the owner types into the Carteiro (single-use; rotates on pair)
+  token            String?    @unique // durable agent secret, issued after pairing
+  reportedPrinters String[] // printers the agent last saw on the PC
+  agentVersion     String?
+  lastSeenAt       DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("print_agents")
+}
+
+// ─── PrintJob ─────────────────────────────────────────────────────────────────
+//  A single ticket queued for the Carteiro to print. Created by Foocci (panel test
+//  or, later, on order accept); the agent claims PENDING jobs on poll, prints them,
+//  and acks (PRINTED/FAILED). Additive: no agent paired → jobs simply wait.
+
+model PrintJob {
+  id           String    @id @default(cuid())
+  restaurantId String
+  stationKey   String? // which station this came from (CAIXA, COZINHA_1, …)
+  printerName  String // target Windows printer
+  title        String // short label (e.g. "Pedido #123" / "TESTE")
+  body         String // the ticket text to print
+  status       String    @default("PENDING") // PENDING | CLAIMED | PRINTED | FAILED
+  error        String?
+  createdAt    DateTime  @default(now())
+  claimedAt    DateTime?
+  printedAt    DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, status])
+  @@map("print_jobs")
 }
 
 // ─── StoreProfile ─────────────────────────────────────────────────────────────

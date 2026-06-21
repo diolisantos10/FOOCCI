@@ -32,6 +32,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
   /^\/api\/payments\/mercadopago\/webhook$/, // Mercado Pago webhook (public — MP servers have no JWT)
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)
+  /^\/api\/print-agent(\/.*)?$/,      // Local print agent (Carteiro) — auth handled per-route via agent token
   /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
   /^\/api\/health$/,                   // Health check (post-deploy validation)
   /^\/api\/cron(\/.*)?$/,              // CRM cron endpoints — auth handled per-route via CRON_SECRET bearer token
