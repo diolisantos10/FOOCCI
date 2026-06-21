@@ -28,12 +28,31 @@ interface StatusResp {
   meta: MetaPublic | null;
 }
 
+interface DiagEnv {
+  featureEnabled:     boolean;
+  appId:              boolean;
+  appSecret:          boolean;
+  configId:           boolean;
+  webhookVerifyToken: boolean;
+  testPhone:          boolean;
+  publicAppId:        boolean;
+  publicConfigId:     boolean;
+  signatureEnforced:  boolean;
+  graphVersion:       string;
+}
+interface DiagResp {
+  env?:                      DiagEnv;
+  webhookConfigured?:        boolean;
+  templateRequiredFailures?: number;
+}
+
 declare global {
   interface Window { FB?: { init: (o: object) => void; login: (cb: (r: unknown) => void, o: object) => void } }
 }
 
 export function MetaProviderCard() {
   const [status, setStatus]   = useState<StatusResp | null>(null);
+  const [diag, setDiag]       = useState<DiagResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState<string | null>(null);
   const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
@@ -49,7 +68,14 @@ export function MetaProviderCard() {
       .catch(() => setStatus(null))
       .finally(() => setLoading(false));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  // Env-readiness (OWNER/MANAGER only; silently absent otherwise).
+  const loadDiag = useCallback(() => {
+    fetch("/api/integracoes/whatsapp/meta/diagnostics")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((j) => setDiag(j.data as DiagResp))
+      .catch(() => setDiag(null));
+  }, []);
+  useEffect(() => { load(); loadDiag(); }, [load, loadDiag]);
 
   const flash = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 6000); };
 
@@ -98,8 +124,24 @@ export function MetaProviderCard() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const j = await res.json().catch(() => null);
-      if (res.ok) { flash(true, okText); load(); }
+      if (res.ok) { flash(true, okText); load(); loadDiag(); }
       else flash(false, j?.error ?? "Falha na operação.");
+    } catch { flash(false, "Sem conexão."); }
+    finally { setBusy(null); }
+  }
+
+  // Safe inbound simulation — runs the real normalizer, no message sent, no persistence.
+  async function simulate() {
+    setBusy("simulate");
+    try {
+      const res = await fetch("/api/integracoes/whatsapp/meta/simulate", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      const j = await res.json().catch(() => null);
+      const r = j?.data?.routing as { restaurantMatched?: boolean; wouldDispatchBrain?: boolean } | undefined;
+      if (res.ok && r) {
+        flash(true, `Simulação OK — restaurante ${r.restaurantMatched ? "reconhecido" : "não reconhecido"}, Brain ${r.wouldDispatchBrain ? "responderia" : "não responderia"}. Nenhuma mensagem real foi enviada.`);
+      } else flash(false, j?.error ?? "Falha na simulação.");
     } catch { flash(false, "Sem conexão."); }
     finally { setBusy(null); }
   }
@@ -150,6 +192,10 @@ export function MetaProviderCard() {
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                   Testar conexão
                 </button>
+                <button type="button" disabled={!!busy} onClick={simulate}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  {busy === "simulate" ? "Simulando…" : "Simular recebimento"}
+                </button>
                 {!isMeta && (
                   <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "META_CLOUD_API", confirm: true }, "Meta definida como provedor.")}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
@@ -187,10 +233,38 @@ export function MetaProviderCard() {
               <div>qualidade: {meta.qualityRating ?? "—"}</div>
               {meta.lastError && <div className="text-red-500">último erro: {meta.lastError}</div>}
               <div>webhook: /api/webhooks/meta/whatsapp</div>
+              {diag?.env && (
+                <div className="mt-1 border-t border-gray-200 pt-1">
+                  <div className="mb-0.5 text-gray-400">configuração do servidor (Meta):</div>
+                  <EnvRow label="META_WHATSAPP_ENABLED"    on={diag.env.featureEnabled} />
+                  <EnvRow label="META_APP_ID"              on={diag.env.appId} />
+                  <EnvRow label="META_APP_SECRET (assina webhook)" on={diag.env.appSecret} />
+                  <EnvRow label="META_CONFIG_ID"           on={diag.env.configId} />
+                  <EnvRow label="META_WEBHOOK_VERIFY_TOKEN" on={diag.env.webhookVerifyToken} />
+                  <EnvRow label="META_TEST_PHONE"          on={diag.env.testPhone} />
+                  <EnvRow label="NEXT_PUBLIC_META_APP_ID (build)"    on={diag.env.publicAppId} />
+                  <EnvRow label="NEXT_PUBLIC_META_CONFIG_ID (build)" on={diag.env.publicConfigId} />
+                  <div>graph: {diag.env.graphVersion}</div>
+                  {typeof diag.templateRequiredFailures === "number" && (
+                    <div>bloqueios por template (24h): {diag.templateRequiredFailures}</div>
+                  )}
+                  {!diag.env.signatureEnforced && (
+                    <div className="text-amber-600">⚠ assinatura do webhook NÃO exigida (defina META_APP_SECRET)</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function EnvRow({ label, on }: { label: string; on: boolean }) {
+  return (
+    <div className={on ? "text-green-600" : "text-gray-400"}>
+      {on ? "✓" : "✗"} {label}
     </div>
   );
 }
