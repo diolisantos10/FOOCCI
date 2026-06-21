@@ -20,7 +20,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { WA_TABS, APPROVAL_DISCLAIMER, MODO_AVANCADO_LINKS } from "./wa-agent-ux.constants";
+import {
+  WA_TABS,
+  APPROVAL_DISCLAIMER,
+  MODO_AVANCADO_LINKS,
+  MASTER_STATUS_LABEL,
+  MASTER_AREA_LABEL,
+  MASTER_SEVERITY_LABEL,
+} from "./wa-agent-ux.constants";
 import type { WaTabId } from "./wa-agent-ux.constants";
 
 // ── shared types ──────────────────────────────────────────────────────────────
@@ -73,6 +80,36 @@ interface SimMessage {
   id: string;
   role: "customer" | "bot";
   text: string;
+}
+
+interface MasterScenarioResult {
+  id: string;
+  area: string;
+  status: "PASS" | "WARNING" | "FAIL";
+  severity: "P0" | "P1" | "P2";
+  what: string;
+  expected: string;
+  got: string;
+  recommendedFix?: string;
+}
+
+interface MasterAreaSummary {
+  area: string;
+  status: "PASS" | "WARNING" | "FAIL";
+  passed: number;
+  warned: number;
+  failed: number;
+}
+
+interface MasterReport {
+  status: "PASS" | "WARNING" | "FAIL";
+  p0: number; p1: number; p2: number;
+  total: number; passed: number; warned: number; failed: number;
+  scenarios: MasterScenarioResult[];
+  summary: MasterAreaSummary[];
+  safety: { noEvolution: boolean; noRealOrder: boolean; noRealPix: boolean; runtimeTouched: false };
+  runtimeTouched: false;
+  ranAt: string;
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -368,6 +405,186 @@ function AprendizadosTab() {
   );
 }
 
+// ── Master Simulator section (top of Simulador tab) ───────────────────────────
+
+const MASTER_STATUS_BG: Record<string, string> = {
+  PASS:    "bg-green-50 border-green-200",
+  WARNING: "bg-amber-50 border-amber-200",
+  FAIL:    "bg-red-50 border-red-200",
+};
+
+const MASTER_STATUS_TEXT: Record<string, string> = {
+  PASS:    "text-green-800",
+  WARNING: "text-amber-800",
+  FAIL:    "text-red-800",
+};
+
+const MASTER_STATUS_ICON: Record<string, string> = {
+  PASS:    "✅",
+  WARNING: "⚠️",
+  FAIL:    "❌",
+};
+
+const MASTER_SEVERITY_CHIP: Record<string, string> = {
+  P0: "bg-red-200 text-red-800",
+  P1: "bg-amber-200 text-amber-800",
+  P2: "bg-gray-200 text-gray-700",
+};
+
+function MasterSimuladorSection() {
+  const [report, setReport] = useState<MasterReport | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runCheck() {
+    setRunning(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/whatsapp/master-simulator/run", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? json.message ?? "Erro na verificação");
+      setReport(json as MasterReport);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const problems = report?.scenarios.filter((s) => s.status !== "PASS") ?? [];
+
+  return (
+    <div className="space-y-4 pb-6 border-b border-gray-200">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Verificação completa do agente</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Testa todas as áreas: cardápio, recepção, pedido, pagamento, entrega e transferência.
+            Seguro — nenhuma mensagem real é enviada.
+          </p>
+        </div>
+        <button
+          onClick={runCheck}
+          disabled={running}
+          className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {running ? "Verificando…" : "Executar verificação"}
+        </button>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-600 rounded-lg border border-red-200 bg-red-50 px-3 py-2">{error}</p>
+      )}
+
+      {!report && !running && !error && (
+        <p className="text-xs text-gray-400 text-center py-3">
+          Clique em &ldquo;Executar verificação&rdquo; para testar todas as áreas do agente WhatsApp.
+        </p>
+      )}
+
+      {report && (
+        <div className="space-y-4">
+          {/* Overall status card */}
+          <div className={`rounded-xl border px-4 py-3 flex items-center justify-between ${MASTER_STATUS_BG[report.status]}`}>
+            <div>
+              <p className={`text-base font-semibold ${MASTER_STATUS_TEXT[report.status]}`}>
+                {MASTER_STATUS_ICON[report.status]} {MASTER_STATUS_LABEL[report.status] ?? report.status}
+              </p>
+              <p className={`text-xs mt-0.5 ${MASTER_STATUS_TEXT[report.status]}`}>
+                {report.passed}/{report.total} verificações passaram
+                {report.p0 > 0 && ` · ${report.p0} crítico${report.p0 > 1 ? "s" : ""}`}
+                {report.p1 > 0 && report.p0 === 0 && ` · ${report.p1} atenção`}
+              </p>
+            </div>
+            <p className="text-xs text-gray-400 shrink-0 ml-4">
+              {new Date(report.ranAt).toLocaleString("pt-BR")}
+            </p>
+          </div>
+
+          {/* Area grid */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {report.summary.map((area) => {
+              const total = area.passed + area.warned + area.failed;
+              return (
+                <div key={area.area} className={`rounded-lg border p-3 ${MASTER_STATUS_BG[area.status]}`}>
+                  <p className={`text-xs font-semibold ${MASTER_STATUS_TEXT[area.status]}`}>
+                    {MASTER_STATUS_ICON[area.status]} {MASTER_AREA_LABEL[area.area] ?? area.area}
+                  </p>
+                  <p className={`text-[10px] mt-0.5 ${MASTER_STATUS_TEXT[area.status]}`}>
+                    {area.passed}/{total} ok
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Problem list */}
+          {problems.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-700">
+                {problems.length} situaç{problems.length > 1 ? "ões" : "ão"} para atenção
+              </h4>
+              {problems.map((s) => (
+                <div key={s.id} className={`rounded-lg border p-3 ${MASTER_STATUS_BG[s.status]}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${MASTER_SEVERITY_CHIP[s.severity] ?? "bg-gray-200 text-gray-700"}`}>
+                      {MASTER_SEVERITY_LABEL[s.severity] ?? s.severity}
+                    </span>
+                    <span className={`text-xs font-medium ${MASTER_STATUS_TEXT[s.status]}`}>
+                      {MASTER_AREA_LABEL[s.area] ?? s.area}
+                    </span>
+                  </div>
+                  <dl className="space-y-1 text-xs">
+                    <div>
+                      <dt className="text-gray-500 inline">Situação: </dt>
+                      <dd className="inline text-gray-800">{s.what}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500 inline">Esperado: </dt>
+                      <dd className="inline text-emerald-700">{s.expected}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500 inline">Aconteceu: </dt>
+                      <dd className="inline text-gray-700">{s.got}</dd>
+                    </div>
+                    {s.recommendedFix && (
+                      <div>
+                        <dt className="text-gray-500 inline">Correção sugerida: </dt>
+                        <dd className="inline text-gray-700">{s.recommendedFix}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Safety flags */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-xs font-semibold text-gray-700 mb-2">Garantias de segurança</p>
+            <ul className="space-y-1 text-xs text-gray-600">
+              <li>✅ Nenhuma mensagem WhatsApp foi enviada</li>
+              <li>✅ Nenhum pedido real foi criado</li>
+              <li>✅ Nenhum Pix real foi gerado</li>
+              <li>✅ Atendimento em produção não foi alterado</li>
+            </ul>
+          </div>
+
+          {/* Technical details accordion */}
+          <details className="rounded-xl border border-gray-200">
+            <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400">
+              Detalhes técnicos ({report.total} verificações)
+            </summary>
+            <pre className="overflow-auto rounded-b-xl bg-gray-50 p-3 text-[10px] text-gray-500 max-h-64">
+              {JSON.stringify({ safety: report.safety, scenarios: report.scenarios }, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Tab 4: Simulador ──────────────────────────────────────────────────────────
 
 function SimuladorTab() {
@@ -417,11 +634,16 @@ function SimuladorTab() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-        <strong>Modo simulação</strong> — nenhuma mensagem real é enviada, nenhum pedido é criado.
-        Teste como o agente responderia a diferentes situações.
-      </div>
+    <div className="space-y-6">
+      <MasterSimuladorSection />
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Simular uma conversa</h3>
+        <div className="space-y-4">
+        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <strong>Modo simulação</strong> — nenhuma mensagem real é enviada, nenhum pedido é criado.
+          Teste como o agente responderia a diferentes situações.
+        </div>
 
       {/* WA-style chat window */}
       <div className="rounded-2xl bg-[#e5ddd5] min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-2">
@@ -500,6 +722,8 @@ function SimuladorTab() {
           </button>
         ))}
       </div>
+        </div>{/* /space-y-4 */}
+      </div>{/* /chat section */}
     </div>
   );
 }

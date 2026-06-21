@@ -20,6 +20,9 @@ import {
   MODO_AVANCADO_LINKS,
   MAIN_LABEL_BLOCKLIST,
   TERM_REPLACEMENTS,
+  MASTER_STATUS_LABEL,
+  MASTER_AREA_LABEL,
+  MASTER_SEVERITY_LABEL,
 } from "./wa-agent-ux.constants";
 
 // Learning card field labels required on the Aprendizados tab (business-language).
@@ -116,5 +119,48 @@ describe("Agentes → WhatsApp — UX consolidation", () => {
       expect(WA_TABS.find((t) => t.id === id), `tab '${id}' is missing`).toBeDefined();
     }
     expect(WA_TABS).toHaveLength(7);
+  });
+});
+
+describe("Master Simulator UI labels", () => {
+  it("MASTER_STATUS_LABEL maps PASS to business language", () => {
+    expect(MASTER_STATUS_LABEL["PASS"]).toBe("Tudo certo");
+  });
+
+  it("MASTER_STATUS_LABEL maps WARNING to business language", () => {
+    expect(MASTER_STATUS_LABEL["WARNING"]).toBe("Atenção");
+  });
+
+  it("MASTER_STATUS_LABEL maps FAIL to business language", () => {
+    expect(MASTER_STATUS_LABEL["FAIL"]).toBe("Falha crítica");
+  });
+
+  it("MASTER_AREA_LABEL covers all 7 areas", () => {
+    const required = ["MENU", "RECEPTIONIST", "TEXT_ORDER", "PIX", "DELIVERY", "HANDOFF", "REAL_CASES"];
+    for (const area of required) {
+      expect(MASTER_AREA_LABEL[area], `area '${area}' label missing`).toBeDefined();
+      expect(MASTER_AREA_LABEL[area].length).toBeGreaterThan(3);
+    }
+  });
+
+  it("MASTER_AREA_LABEL maps MENU to 'Cardápio'", () => {
+    expect(MASTER_AREA_LABEL["MENU"]).toBe("Cardápio");
+  });
+
+  it("MASTER_AREA_LABEL maps TEXT_ORDER to business language (no technical jargon)", () => {
+    expect(MASTER_AREA_LABEL["TEXT_ORDER"]).toBe("Pedido por texto");
+    expect(MASTER_AREA_LABEL["TEXT_ORDER"]).not.toMatch(/TEXT_ORDER|textOrder/);
+  });
+
+  it("MASTER_SEVERITY_LABEL maps P0 to 'crítico'", () => {
+    expect(MASTER_SEVERITY_LABEL["P0"]).toBe("crítico");
+  });
+
+  it("MASTER_SEVERITY_LABEL maps P1 to 'atenção'", () => {
+    expect(MASTER_SEVERITY_LABEL["P1"]).toBe("atenção");
+  });
+
+  it("MASTER_SEVERITY_LABEL maps P2 to 'melhoria'", () => {
+    expect(MASTER_SEVERITY_LABEL["P2"]).toBe("melhoria");
   });
 });

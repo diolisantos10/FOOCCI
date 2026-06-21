@@ -32,6 +32,11 @@ export const MODO_AVANCADO_LINKS: Array<{ href: string; label: string; desc: str
     desc:  "Simule conversas passo a passo sem enviar nada de verdade.",
   },
   {
+    href:  "/admin/diagnostics/whatsapp-master",
+    label: "Simulador Master",
+    desc:  "Verificação técnica de todas as áreas: cardápio, pedido, Pix, entrega, transferência.",
+  },
+  {
     href:  "/admin/agents/whatsapp",
     label: "WA Cockpit",
     desc:  "Painel técnico do agente: configuração, escopo e testes completos.",
@@ -47,6 +52,38 @@ export const MODO_AVANCADO_LINKS: Array<{ href: string; label: string; desc: str
     desc:  "Verifica como o WhatsApp Host roteia cada tipo de mensagem.",
   },
 ];
+
+/** Business-language labels for the Master Simulator status. */
+export const MASTER_STATUS_LABEL: Record<string, string> = {
+  PASS:    "Tudo certo",
+  WARNING: "Atenção",
+  FAIL:    "Falha crítica",
+};
+
+/** Tailwind color tokens for each Master Simulator status. */
+export const MASTER_STATUS_COLOR: Record<string, string> = {
+  PASS:    "bg-green-50 border-green-200 text-green-800",
+  WARNING: "bg-amber-50 border-amber-200 text-amber-800",
+  FAIL:    "bg-red-50 border-red-200 text-red-800",
+};
+
+/** Business-language labels for each Master Simulator area. */
+export const MASTER_AREA_LABEL: Record<string, string> = {
+  MENU:        "Cardápio",
+  RECEPTIONIST:"Recepção",
+  TEXT_ORDER:  "Pedido por texto",
+  PIX:         "Pagamento Pix",
+  DELIVERY:    "Entrega",
+  HANDOFF:     "Transferência humana",
+  REAL_CASES:  "Casos reais",
+};
+
+/** Business-language labels for Master Simulator severity levels. */
+export const MASTER_SEVERITY_LABEL: Record<string, string> = {
+  P0: "crítico",
+  P1: "atenção",
+  P2: "melhoria",
+};
 
 /** Terms that must never appear raw in the main (non-collapsed) text of a learning card. */
 export const MAIN_LABEL_BLOCKLIST = ["intent", "runtime", "classifier", "UNKNOWN"] as const;
