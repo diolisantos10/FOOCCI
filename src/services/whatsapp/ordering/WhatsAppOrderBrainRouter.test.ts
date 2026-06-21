@@ -91,4 +91,48 @@ describe("advanceTurn — brain-aware router", () => {
     expect(r.session.stage).toBe("HANDOFF_REQUIRED");
     expect(r.suggestedReply).not.toMatch(/não encontrei/i);
   });
+
+  it('"0" with active cart → brain NOT called, legacy shows Continuar/Descartar', async () => {
+    const menuWithItem = [
+      ...menu,
+      menuItem("combo1", "Combinado Especial", 45),
+    ];
+    // Session already has an item in the cart (simulates active comanda)
+    const sessionWithCart = makeSession("BUILDING_CART", {
+      selectedItems: [{
+        rawText: "combinado", menuItemId: "combo1", menuItemName: "Combinado Especial",
+        quantity: 1, unitPrice: 45, lineTotal: 45, options: [], extras: [],
+      }],
+    });
+    const r = await advanceTurn(sessionWithCart, "0", menuWithItem, { brainEnabled: true });
+    expect(brain.reasonOrderTurn).not.toHaveBeenCalled();
+    const reply = r.suggestedReply.toLowerCase();
+    expect(reply).toMatch(/continuar|descartar/);
+  });
+
+  it("menuReturnPending → brain NOT called, legacy handles confirmation", async () => {
+    const sessionPending = makeSession("BUILDING_CART", {
+      metadata: { menuReturnPending: true },
+    });
+    const r = await advanceTurn(sessionPending, "1", menu, { brainEnabled: true });
+    expect(brain.reasonOrderTurn).not.toHaveBeenCalled();
+    expect(r.suggestedReply).toBeTruthy();
+  });
+
+  it("ADD_ITEMS with ambiguous term → brain pick rejected, legacy shows numbered options", async () => {
+    const ambiguousMenu = [
+      ...menu,
+      menuItem("coca2", "Coca-Cola 2L", 14),
+    ];
+    // Brain picked "Coca-Cola Lata" but the original message is ambiguous ("coca")
+    brain.reasonOrderTurn.mockResolvedValue(decision({
+      intent: "ADD_ITEMS",
+      items: [{ menuItemId: "coca1", menuItemName: "Coca-Cola Lata", quantity: 1 }],
+    }));
+    const r = await advanceTurn(makeSession(), "quero uma coca", ambiguousMenu, { brainEnabled: true });
+    // Legacy must show numbered options, not silently pick one
+    expect(r.suggestedReply).toMatch(/1\.|2\.|coca|lata|2l/i);
+    // Nothing should be added to the cart automatically
+    expect(r.session.selectedItems).toHaveLength(0);
+  });
 });

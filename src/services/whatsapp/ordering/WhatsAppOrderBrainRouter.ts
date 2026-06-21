@@ -18,6 +18,9 @@
 
 import { advanceSession, type AdvanceResult } from "./WhatsAppOrderStateMachine";
 import { reasonOrderTurn, type WaOrderKnowledge } from "./WhatsAppOrderBrain";
+import { isMenuReturn } from "./menuFooter";
+import { matchItems } from "./menuMatcher";
+import { parseTextItems } from "./parser";
 import type { WaMenuItem, WaPersistedSession, WaOrderStage } from "./types";
 
 /** Stages the legacy machine owns (clarification / finalization / terminal). */
@@ -78,6 +81,17 @@ export async function advanceTurn(
     return advanceSession(session, message, menu);
   }
 
+  // "0" (menu-return) must always reach advanceSession's isMenuReturn guard so the
+  // active-cart disambiguation flow (Continuar / Descartar / Atendente) fires correctly.
+  if (isMenuReturn(message)) {
+    return advanceSession(session, message, menu);
+  }
+
+  // Pending menu-return confirmation (customer previously typed "0") → legacy owns this turn.
+  if (session.metadata?.menuReturnPending === true) {
+    return advanceSession(session, message, menu);
+  }
+
   const decision = await reasonOrderTurn({
     message,
     menu,
@@ -100,6 +114,16 @@ export async function advanceTurn(
     case "ADD_ITEMS":
       if (decision.items.length === 0) {
         return decision.reply ? replyResult(session, decision.reply) : advanceSession(session, message, menu);
+      }
+      // Guard: if the original message is inherently ambiguous (e.g. "coca" matches
+      // Coca-Cola Lata AND Coca-Cola 2L), let the legacy machine show numbered options
+      // rather than letting the Brain pick one silently.
+      {
+        const parsed = parseTextItems(message);
+        const { unresolved } = matchItems(parsed, menu);
+        if (unresolved.some((u) => u.reason === "AMBIGUOUS")) {
+          return advanceSession(session, message, menu);
+        }
       }
       // Cleaned, exact item list → legacy builds the comanda + asks options + routes
       // to finalization (all reused, no "Não encontrei" because the names are exact).
