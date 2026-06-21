@@ -23,6 +23,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
   /^\/api\/restaurants\/register$/,    // self-service registration
   /^\/api\/webhooks\/evolution$/,      // Evolution API webhook receiver (verified by HMAC)
+  /^\/api\/webhooks\/meta\/whatsapp$/, // Meta WhatsApp Cloud API webhook (GET verify token + POST X-Hub-Signature-256)
   /^\/setup$/,                         // First-time browser setup (blocked after first restaurant exists)
   /^\/api\/setup$/,                    // Setup API
   /^\/qr(\/.*)?$/,                     // Public QR dine-in menu pages
