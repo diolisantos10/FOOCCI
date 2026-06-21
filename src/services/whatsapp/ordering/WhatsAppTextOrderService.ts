@@ -25,6 +25,7 @@
 
 import { matchItems } from "./menuMatcher";
 import { calculateDraftSummary } from "./orderCalculator";
+import { resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { detectIntent, parseTextItems } from "./parser";
 import type {
   WaAnalyzeInput,
@@ -86,8 +87,11 @@ export async function loadMenuForRestaurant(restaurantId: string): Promise<WaMen
         variants: item.variants.map(v => ({
           id:            v.id,
           name:          v.name,
-          price:         Number(v.price),
-          priceDelivery: v.priceDelivery != null ? Number(v.priceDelivery) : null,
+          // Variant price is optional — resolve with inheritance so a blank variant
+          // price falls back to the product's price (never 0). Both fields carry the
+          // resolved value so downstream pricing stays correct.
+          price:         resolveVariantPrice(item, v, "DEFAULT"),
+          priceDelivery: resolveVariantPrice(item, v, "DELIVERY"),
           isAvailable:   v.isAvailable,
         })),
         optionGroups: item.optionGroups.map(g => ({

@@ -320,7 +320,9 @@ model MenuItemVariant {
   id                    String   @id @default(cuid())
   menuItemId            String
   name                  String // e.g. "350ml", "600ml", "2L"
-  price                 Decimal  @db.Decimal(10, 2) // base/fallback variant price
+  // Optional. null = inherit the parent MenuItem's price for the channel/context
+  // (priceDelivery/priceDineIn/priceIfood → base). A value here OVERRIDES the product.
+  price                 Decimal? @db.Decimal(10, 2) // base/fallback variant price (null = inherit product)
   // ── Channel-based pricing for this variant (null = fall back to `price`) ──
   priceDelivery         Decimal? @db.Decimal(10, 2)
   priceDineIn           Decimal? @db.Decimal(10, 2)

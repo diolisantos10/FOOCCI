@@ -62,7 +62,8 @@ export class MenuItemVariantService {
       data: {
         menuItemId: itemId,
         name: input.name.trim(),
-        price: new Decimal(input.price),
+        // Optional — null means "inherit the product's price" (no override).
+        price: input.price == null ? null : new Decimal(input.price),
         priceDelivery: toChannelDecimal(input.priceDelivery) ?? null,
         priceDineIn:   toChannelDecimal(input.priceDineIn) ?? null,
         priceIfood:    toChannelDecimal(input.priceIfood) ?? null,
@@ -86,7 +87,7 @@ export class MenuItemVariantService {
       where: { id: variantId },
       data: {
         ...(input.name !== undefined && { name: input.name.trim() }),
-        ...(input.price !== undefined && { price: new Decimal(input.price) }),
+        ...(input.price !== undefined && { price: input.price === null ? null : new Decimal(input.price) }),
         ...(input.priceDelivery !== undefined && { priceDelivery: toChannelDecimal(input.priceDelivery) }),
         ...(input.priceDineIn   !== undefined && { priceDineIn:   toChannelDecimal(input.priceDineIn) }),
         ...(input.priceIfood    !== undefined && { priceIfood:    toChannelDecimal(input.priceIfood) }),

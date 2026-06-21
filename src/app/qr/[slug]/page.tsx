@@ -9,7 +9,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { QRMenuClient } from "./QRMenuClient";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
-import { channelPrice } from "@/services/menu/MenuPricingService";
+import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 
 export const dynamic = "force-dynamic";
@@ -129,7 +129,7 @@ export default async function QRMenuPage({
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
       promotion: promoMap.get(i.id) ?? null,
-      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: channelPrice(v, "DINE_IN"), isAvailable: v.isAvailable })),
+      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: resolveVariantPrice(i, v, "DINE_IN"), isAvailable: v.isAvailable })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, quantity: e.quantity, price: Number(e.price) })),
     };
   }

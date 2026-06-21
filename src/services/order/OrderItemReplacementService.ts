@@ -20,6 +20,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import type { ReplaceOrderItemInput } from "@/validators/order";
 
 // Orders in these statuses can be edited freely.
@@ -107,7 +108,8 @@ export class OrderItemReplacementService {
       if (!variant || variant.menuItemId !== newMenuItem.id) {
         return serviceFail("Variante inválida para este produto", 422);
       }
-      unitPrice = new Decimal(variant.price);
+      // Variant price is optional — a blank price inherits the product's price.
+      unitPrice = new Decimal(resolveVariantPrice(newMenuItem, variant, "DEFAULT"));
       resolvedVariantName = input.newVariantName ?? variant.name;
     } else if (input.newVariantName) {
       resolvedVariantName = input.newVariantName;

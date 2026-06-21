@@ -15,7 +15,7 @@ import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
-import { channelPrice } from "@/services/menu/MenuPricingService";
+import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 
 export const dynamic = "force-dynamic";
@@ -387,7 +387,7 @@ export default async function PedidoPage({
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
       promotion: promo,
-      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: channelPrice(v, "DELIVERY"), portion: v.portion ?? null })),
+      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: resolveVariantPrice(i, v, "DELIVERY"), portion: v.portion ?? null })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, price: Number(e.price), portion: e.portion ?? null, quantity: e.quantity })),
       optionGroups: i.optionGroups.map((g) => ({
         id: g.id, name: g.name, required: g.required, minSelect: g.minSelect, maxSelect: g.maxSelect,

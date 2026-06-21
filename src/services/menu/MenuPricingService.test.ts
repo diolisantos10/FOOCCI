@@ -17,7 +17,10 @@ import { describe, it, expect } from "vitest";
 import {
   resolveChannelPrice,
   channelPrice,
+  resolveVariantPrice,
+  resolveVariantPriceDetailed,
   type ChannelPriceable,
+  type VariantPriceable,
 } from "./MenuPricingService";
 
 // ─── A. No channel prices → base everywhere ───────────────────────────────────
@@ -97,6 +100,57 @@ describe("K — variant channel fallback", () => {
     const variantPlain:       ChannelPriceable = { price: 20 };
     expect(channelPrice(variantWithChannel, "DELIVERY")).toBe(24);
     expect(channelPrice(variantPlain, "DELIVERY")).toBe(20);
+  });
+});
+
+// ─── Variant price inheritance (optional variant price) ───────────────────────
+
+describe("resolveVariantPrice — optional variant price inheritance", () => {
+  // Product: Refrigerante — Delivery R$8, Salão/QR R$7.
+  const product: ChannelPriceable = { price: 8, priceDelivery: 8, priceDineIn: 7 };
+
+  it("E — null variant price inherits the product BASE price (DEFAULT channel)", () => {
+    const variant: VariantPriceable = { price: null };
+    expect(resolveVariantPrice(product, variant, "DEFAULT")).toBe(8);
+    expect(resolveVariantPriceDetailed(product, variant, "DEFAULT").source).toBe("INHERITED_PRODUCT");
+  });
+
+  it("F — null variant price inherits the product CHANNEL price", () => {
+    const variant: VariantPriceable = { price: null }; // e.g. Coca-Cola / Sprite (blank)
+    expect(resolveVariantPrice(product, variant, "DELIVERY")).toBe(8); // product delivery
+    expect(resolveVariantPrice(product, variant, "DINE_IN")).toBe(7);  // product salão/QR
+  });
+
+  it("undefined (omitted) variant price also inherits", () => {
+    const variant: VariantPriceable = {};
+    expect(resolveVariantPrice(product, variant, "DELIVERY")).toBe(8);
+    expect(resolveVariantPrice(product, variant, "DINE_IN")).toBe(7);
+  });
+
+  it("G — explicit variant price OVERRIDES the product/channel price everywhere", () => {
+    const variant: VariantPriceable = { price: 14 }; // e.g. Coca 2L
+    expect(resolveVariantPrice(product, variant, "DELIVERY")).toBe(14);
+    expect(resolveVariantPrice(product, variant, "DINE_IN")).toBe(14);
+    expect(resolveVariantPrice(product, variant, "DEFAULT")).toBe(14);
+    expect(resolveVariantPriceDetailed(product, variant, "DELIVERY").source).toBe("VARIANT_BASE");
+  });
+
+  it("variant channel override beats variant base and product", () => {
+    const variant: VariantPriceable = { price: 14, priceDelivery: 13 };
+    expect(resolveVariantPrice(product, variant, "DELIVERY")).toBe(13); // variant channel
+    expect(resolveVariantPrice(product, variant, "DINE_IN")).toBe(14);  // variant base
+    expect(resolveVariantPriceDetailed(product, variant, "DELIVERY").source).toBe("VARIANT_CHANNEL");
+  });
+
+  it("variant with a channel override but null base inherits product on other channels", () => {
+    const variant: VariantPriceable = { price: null, priceDelivery: 9 };
+    expect(resolveVariantPrice(product, variant, "DELIVERY")).toBe(9); // variant delivery override
+    expect(resolveVariantPrice(product, variant, "DINE_IN")).toBe(7);  // inherit product salão
+  });
+
+  it("explicit zero is a real override (not treated as blank)", () => {
+    const variant: VariantPriceable = { price: 0 };
+    expect(resolveVariantPrice(product, variant, "DELIVERY")).toBe(0);
   });
 });
 

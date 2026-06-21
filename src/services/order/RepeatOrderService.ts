@@ -17,7 +17,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { channelPrice } from "@/services/menu/MenuPricingService";
+import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { phoneCandidates } from "@/lib/phone";
 
 // Statuses that represent a real, confirmed order worth repeating.
@@ -163,7 +163,7 @@ export async function getRepeatableOrder(
       variantId   = v.id;
       variantName = v.name;
       useName     = `${live.name} — ${v.name}`;
-      usePrice    = channelPrice(v, "DELIVERY");
+      usePrice    = resolveVariantPrice(live, v, "DELIVERY");
     }
 
     if (Number(oi.price) !== usePrice) priceChanged = true;
@@ -333,7 +333,7 @@ export async function getRepeatableItemsForCustomer(params: {
       variantId = v.id;
       variantName = v.name;
       useName = `${live.name} — ${v.name}`;
-      usePrice = channelPrice(v, "DELIVERY");
+      usePrice = resolveVariantPrice(live, v, "DELIVERY");
     }
 
     const dedupeKey = `${agg.menuItemId}__${variantId ?? ""}`;

@@ -110,7 +110,8 @@ export async function POST(
         data: source.variants.map((v) => ({
           menuItemId:           created.id,
           name:                 v.name,
-          price:                new Decimal(v.price.toString()),
+          // Copy the variant price as-is — a null (inherited) price stays inherited.
+          price:                v.price === null ? null : new Decimal(v.price.toString()),
           portion:              v.portion,
           isAvailable:          v.isAvailable,
           sortOrder:            v.sortOrder,

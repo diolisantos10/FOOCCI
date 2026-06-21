@@ -27,7 +27,7 @@ type MenuSource = "MANUAL" | "EXTERNAL";
 type Variant = {
   id: string;
   name: string;
-  price: number;
+  price: number | null; // null = inherit the product's price for the channel
   priceDelivery?: number | null;
   priceDineIn?:   number | null;
   priceIfood?:    number | null;
@@ -828,10 +828,10 @@ function SortableItemRow({
         storytellingIA:       raw.storytellingIA       ?? null,
         hasActivePromo:    false,
         promoActiveToday:  false,
-        variants: (raw.variants ?? []).map((v: { id: string; name: string; price: string | number; isAvailable: boolean; sortOrder: number }) => ({
+        variants: (raw.variants ?? []).map((v: { id: string; name: string; price: string | number | null; isAvailable: boolean; sortOrder: number }) => ({
           id:          v.id,
           name:        v.name,
-          price:       Number(v.price),
+          price:       v.price == null ? null : Number(v.price), // null = inherits product price
           isAvailable: v.isAvailable,
           sortOrder:   v.sortOrder,
         })),
@@ -2124,7 +2124,7 @@ function SortableVariantRow({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: variant.name,
-    price: String(variant.price),
+    price: variant.price == null ? "" : String(variant.price),
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -2136,19 +2136,24 @@ function SortableVariantRow({
   };
 
   async function handleSave() {
-    const price = parseFloat(form.price);
-    if (!form.name.trim() || isNaN(price) || price <= 0) {
-      setError("Nome e preço válido são obrigatórios.");
-      return;
+    // Variant price is OPTIONAL — blank means "inherit the product's price".
+    const trimmedName = form.name.trim();
+    if (!trimmedName) { setError("Nome da variação é obrigatório."); return; }
+    const raw = form.price.trim();
+    let price: number | null = null;
+    if (raw !== "") {
+      const p = parseFloat(raw);
+      if (isNaN(p) || p < 0) { setError("Preço da variação inválido."); return; }
+      price = p;
     }
     setBusy(true);
     setError("");
     try {
       const data = await apiFetch(`/api/menu/variants/${variant.id}`, "PATCH", {
-        name: form.name.trim(),
-        price,
+        name: trimmedName,
+        price, // null clears the override → inherits the product price
       });
-      onUpdated({ ...variant, name: data.data.name, price: Number(data.data.price) });
+      onUpdated({ ...variant, name: data.data.name, price: data.data.price == null ? null : Number(data.data.price) });
       setEditing(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -2188,10 +2193,11 @@ function SortableVariantRow({
             <input
               value={form.price}
               onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-              placeholder="Preço"
+              placeholder="herda"
+              title="Deixe em branco para herdar o preço do produto"
               type="number"
               step="0.01"
-              min="0.01"
+              min="0"
               className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
           </div>
@@ -2210,7 +2216,7 @@ function SortableVariantRow({
               onClick={() => {
                 setEditing(false);
                 setError("");
-                setForm({ name: variant.name, price: String(variant.price) });
+                setForm({ name: variant.name, price: variant.price == null ? "" : String(variant.price) });
               }}
               className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
             >
@@ -2225,7 +2231,9 @@ function SortableVariantRow({
             {variant.name}
           </span>
           <span className="shrink-0 text-sm font-semibold text-gray-700">
-            R$ {Number(variant.price).toFixed(2)}
+            {variant.price == null
+              ? <span className="text-xs font-normal text-gray-400">herda do produto</span>
+              : `R$ ${Number(variant.price).toFixed(2)}`}
           </span>
           <button
             type="button"
@@ -2457,22 +2465,27 @@ function EditItemModal({
       setAddError("Item não encontrado.");
       return;
     }
-    const price = parseFloat(newVariant.price);
-    if (!newVariant.name.trim() || isNaN(price) || price <= 0) {
-      setAddError("Nome e preço válido são obrigatórios.");
-      return;
+    // Variant price is OPTIONAL — blank means "inherit the product's price".
+    const trimmedName = newVariant.name.trim();
+    if (!trimmedName) { setAddError("Nome da variação é obrigatório."); return; }
+    const raw = newVariant.price.trim();
+    let price: number | null = null;
+    if (raw !== "") {
+      const p = parseFloat(raw);
+      if (isNaN(p) || p < 0) { setAddError("Preço da variação inválido."); return; }
+      price = p;
     }
     setAddBusy(true);
     setAddError("");
     try {
       const data = await apiFetch(`/api/menu/items/${item.id}/variants`, "POST", {
-        name: newVariant.name.trim(),
-        price,
+        name: trimmedName,
+        price, // null = inherits the product price
         sortOrder: variants.length,
       });
       setVariants((vs) => [
         ...vs,
-        { ...data.data, price: Number(data.data.price) },
+        { ...data.data, price: data.data.price == null ? null : Number(data.data.price) },
       ]);
       setNewVariant({ name: "", price: "" });
       setAddingVariant(false);
@@ -3264,11 +3277,12 @@ function EditItemModal({
                         <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
                         <input
                           value={newVariant.price}
-                          onChange={(e) => setNewVariant((f) => ({ ...f, price: e.target.value }))}
-                          placeholder="0,00"
+                          onChange={(e) => { setAddError(""); setNewVariant((f) => ({ ...f, price: e.target.value })); }}
+                          placeholder="herda"
+                          title="Deixe em branco para herdar o preço do produto"
                           type="number"
                           step="0.01"
-                          min="0.01"
+                          min="0"
                           className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
                         />
                       </div>

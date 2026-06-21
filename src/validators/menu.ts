@@ -78,11 +78,16 @@ export const reorderItemsSchema = z.object({
 // ─── Variants ────────────────────────────────────────────────
 
 export const createVariantSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório").max(100),
+  name: z.string().min(1, "Nome da variação é obrigatório.").max(100),
+  // Optional. null/omitted = inherit the parent product's price for the channel.
+  // When provided it must be a valid non-negative price (blank is normalized to null
+  // by the client before it reaches here).
   price: z
-    .number()
-    .positive("Preço deve ser maior que zero")
-    .multipleOf(0.01, "Preço deve ter no máximo 2 casas decimais"),
+    .number({ invalid_type_error: "Preço da variação inválido." })
+    .nonnegative("Preço da variação inválido.")
+    .multipleOf(0.01, "Preço da variação inválido.")
+    .nullable()
+    .optional(),
   priceDelivery: channelPriceField,
   priceDineIn:   channelPriceField,
   priceIfood:    channelPriceField,

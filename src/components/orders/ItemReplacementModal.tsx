@@ -31,7 +31,7 @@ interface MenuItem {
 interface MenuItemVariant {
   id:    string;
   name:  string;
-  price: number;
+  price: number | null; // null = inherits the product's price
 }
 
 interface OptionGroupItem {
@@ -185,7 +185,8 @@ export function ItemReplacementModal({ orderId, orderTotal, currentItem, onClose
 
   // ── Derived price calculation (client-side preview only; server recalculates)
   const selectedVariant = variants.find((v) => v.id === selectedVariantId) ?? null;
-  const basePrice       = selectedVariant ? selectedVariant.price : (selectedItem?.price ?? 0);
+  // A variant with no price inherits the product's price (server recalculates authoritatively).
+  const basePrice       = selectedVariant ? (selectedVariant.price ?? selectedItem?.price ?? 0) : (selectedItem?.price ?? 0);
   const optionsPrice    = selectedOptions.reduce((acc, sel) => {
     const opt = optionGroups.flatMap((g) => g.options).find((o) => o.id === sel.optionItemId);
     return acc + (opt?.price ?? 0);
@@ -413,7 +414,7 @@ export function ItemReplacementModal({ orderId, orderTotal, currentItem, onClose
                             : "border-gray-200 text-gray-700 hover:border-gray-300"
                         }`}
                       >
-                        {v.name} — R$ {Number(v.price).toFixed(2)}
+                        {v.name} — R$ {Number(v.price ?? selectedItem?.price ?? 0).toFixed(2)}
                       </button>
                     ))}
                   </div>

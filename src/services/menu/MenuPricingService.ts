@@ -95,7 +95,69 @@ export function channelPrice(item: ChannelPriceable, channel: PricingChannel): n
   return resolveChannelPrice(item, channel).finalUnitPrice;
 }
 
+/** A variant's optional pricing — `price` may be null, meaning "inherit the product". */
+export interface VariantPriceable {
+  price?:         DecimalLike | null;
+  priceDelivery?: DecimalLike | null;
+  priceDineIn?:   DecimalLike | null;
+  priceIfood?:    DecimalLike | null;
+}
+
+export type VariantPriceSource = "VARIANT_CHANNEL" | "VARIANT_BASE" | "INHERITED_PRODUCT";
+
+export interface ResolvedVariantPrice {
+  finalUnitPrice: number;
+  source:         VariantPriceSource;
+}
+
+/** The variant's own channel override for a channel (null = none). */
+function variantChannelOverride(v: VariantPriceable, channel: PricingChannel): number | null {
+  switch (channel) {
+    case "DELIVERY": return toNum(v.priceDelivery);
+    case "DINE_IN":  return toNum(v.priceDineIn);
+    case "IFOOD":    return toNum(v.priceIfood);
+    default:         return null; // DEFAULT → variant base only
+  }
+}
+
+/**
+ * Resolve a variant's effective unit price for a channel (TASK 3 — single source of
+ * truth). Precedence:
+ *   1. the variant's channel-specific override (priceDelivery/DineIn/Ifood)
+ *   2. the variant's base `price` (explicit override of the product)
+ *   3. INHERIT the parent product's price for the channel (channel → base)
+ *
+ * So a blank variant price falls through to the product's channel price (e.g. a
+ * "Coca-Cola" variant with no price uses the product's Delivery R$8 / Salão R$7),
+ * while a filled variant price (e.g. "Coca 2L" R$14) overrides it everywhere.
+ */
+export function resolveVariantPriceDetailed(
+  product: ChannelPriceable,
+  variant: VariantPriceable,
+  channel: PricingChannel,
+): ResolvedVariantPrice {
+  const vChannel = variantChannelOverride(variant, channel);
+  if (vChannel !== null) return { finalUnitPrice: vChannel, source: "VARIANT_CHANNEL" };
+
+  const vBase = toNum(variant.price);
+  if (vBase !== null) return { finalUnitPrice: vBase, source: "VARIANT_BASE" };
+
+  // Inherit the product's channel/base price.
+  return { finalUnitPrice: resolveChannelPrice(product, channel).finalUnitPrice, source: "INHERITED_PRODUCT" };
+}
+
+/** Convenience: the effective variant unit price number for a channel. */
+export function resolveVariantPrice(
+  product: ChannelPriceable,
+  variant: VariantPriceable,
+  channel: PricingChannel,
+): number {
+  return resolveVariantPriceDetailed(product, variant, channel).finalUnitPrice;
+}
+
 export const MenuPricingService = {
   resolveChannelPrice,
   channelPrice,
+  resolveVariantPrice,
+  resolveVariantPriceDetailed,
 };
