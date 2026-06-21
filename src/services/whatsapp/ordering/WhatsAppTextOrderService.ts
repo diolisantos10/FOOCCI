@@ -244,7 +244,8 @@ export async function analyzeTextOrder(input: WaAnalyzeInput): Promise<WaAnalyze
 //  Persistence is the caller's responsibility (session service / runtime wrapper).
 // ════════════════════════════════════════════════════════════════════════════
 
-import { advanceSession } from "./WhatsAppOrderStateMachine";
+import { advanceTurn, isOrderBrainEnabled } from "./WhatsAppOrderBrainRouter";
+import { loadOrderKnowledge } from "./WhatsAppOrderKnowledge";
 import { withMenuFooter } from "./menuFooter";
 import { lookupCep } from "@/lib/cep";
 import { buildFullDraft, checkCompleteness } from "./WhatsAppOrderDraftBuilder";
@@ -357,8 +358,13 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
   const menu    = input.menu ?? await loadMenuForRestaurant(input.restaurantId);
   const session = input.currentSession ?? newTransientSession(input);
 
-  // Run the pure state machine for this turn
-  const advanced = advanceSession(session, input.messageText, menu);
+  // Run the turn through the brain-aware router: the Brain understands intent and
+  // detects items (so non-order messages never hit the regex matcher), while the
+  // legacy machine still builds the comanda and runs finalization. Falls back to
+  // legacy when the brain is off or no AI pilot is configured.
+  const brainEnabled = isOrderBrainEnabled();
+  const knowledge = brainEnabled ? await loadOrderKnowledge(input.restaurantId).catch(() => undefined) : undefined;
+  const advanced = await advanceTurn(session, input.messageText, menu, { brainEnabled, knowledge });
   let s        = advanced.session;
   let reply    = advanced.suggestedReply;
   let payment: WaPaymentInfo | null = null;
