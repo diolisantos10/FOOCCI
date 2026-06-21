@@ -100,6 +100,7 @@ model Restaurant {
   waOrderingSessions     WhatsAppOrderingSession[]
   waTextOrderingConfig   WhatsAppTextOrderingConfig?
   soundSettings          RestaurantSoundSettings?
+  printStations          PrintStation[]
 
   @@map("restaurants")
 }
@@ -1535,6 +1536,30 @@ model RestaurantSoundSettings {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_sound_settings")
+}
+
+// ─── PrintStation ─────────────────────────────────────────────────────────────
+//  Maps each kitchen/station (Caixa, Cozinha 1–5, Copa, Cupom…) to a physical
+//  printer. The local print agent ("Carteiro") reads this mapping to route each
+//  ticket to the right printer. `printerName` is the Windows printer name as
+//  reported by the agent; null means "not assigned yet". Additive & tenant-scoped.
+
+model PrintStation {
+  id           String   @id @default(cuid())
+  restaurantId String
+  key          String // stable identifier: CAIXA, COZINHA_1…COZINHA_5, COPA, CUPOM
+  name         String // display name, editable by the owner
+  printerName  String? // assigned Windows printer (null = unassigned)
+  enabled      Boolean  @default(true)
+  position     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, key])
+  @@index([restaurantId])
+  @@map("print_stations")
 }
 
 // ─── StoreProfile ─────────────────────────────────────────────────────────────

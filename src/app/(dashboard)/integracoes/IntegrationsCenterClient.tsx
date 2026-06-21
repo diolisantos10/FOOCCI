@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "instagram" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos";
+type Provider = "whatsapp" | "instagram" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos" | "impressao";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -50,6 +50,14 @@ const INTEGRATIONS: {
     icon:          "📷",
     color:         "bg-gradient-to-br from-purple-500 to-pink-500",
     configureHref: "/integracoes/instagram",
+  },
+  {
+    provider:      "impressao",
+    name:          "Impressão (Cozinhas)",
+    description:   "Distribui automaticamente os pedidos para as impressoras de cada cozinha, copa e caixa.",
+    icon:          "🖨️",
+    color:         "bg-slate-700",
+    configureHref: "/integracoes/impressao",
   },
   {
     provider:    "stone",
