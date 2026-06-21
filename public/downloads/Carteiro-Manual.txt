@@ -1,0 +1,43 @@
+FOOCCI — Carteiro de Impressão (v0.2)
+=====================================
+
+O QUE É
+-------
+Um programinha que fica no PC do restaurante e imprime os pedidos do FOOCCI
+automaticamente, cada um na impressora certa. Você instala uma vez, pareia
+com um código, e esquece.
+
+
+PASSO 1 — ABRIR
+---------------
+Dê DOIS CLIQUES no "FOOCCI-Carteiro.exe".
+- Abre uma janelinha preta (o programa rodando — pode deixar aberta/minimizada).
+- O navegador abre sozinho na tela do Carteiro.
+  (Se não abrir, digite na barra de endereço:  localhost:9999 )
+
+Se aparecer o aviso azul "O Windows protegeu o seu PC":
+clique em "Mais informações" -> "Executar assim mesmo". É seguro (programa nosso).
+
+
+PASSO 2 — PAREAR (só na primeira vez)
+-------------------------------------
+1. No FOOCCI, abra:  Integrações -> Impressão (Cozinhas).
+2. Lá vai aparecer um CÓDIGO DE PAREAMENTO (ex: K7M2QP4A).
+3. Na tela do Carteiro, cole esse código e clique "Parear".
+4. Pronto: vai aparecer "Conectado". As impressoras do PC aparecem no FOOCCI.
+
+
+PASSO 3 — USAR
+--------------
+- No FOOCCI (Integrações -> Impressão), escolha qual impressora atende cada
+  estação (Caixa, Cozinha 1-5, Copa, Cupom) e salve.
+- Clique "Imprimir teste" em uma estação: a comanda sai sozinha na impressora.
+- Deixe o Carteiro aberto (ou minimizado) durante o expediente.
+
+
+O QUE ME CONTAR
+---------------
+- O pareamento funcionou? (apareceu "Conectado"?)
+- As impressoras apareceram na lista (no FOOCCI e no Carteiro)?
+- O "Imprimir teste" fez sair papel? Em qual impressora?
+- Apareceu algum erro?

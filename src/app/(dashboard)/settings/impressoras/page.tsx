@@ -1,109 +1,345 @@
 "use client";
 
-import { PageCard, SectionHeading } from "../_shared";
+import { useState, useEffect, useCallback } from "react";
+import { apiFetch, PageCard, SectionHeading, Feedback } from "../_shared";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Station {
+  id: string;
+  key: string;
+  name: string;
+  printerName: string | null;
+  enabled: boolean;
+  position: number;
+}
+
+interface Agent {
+  online: boolean;
+  lastSeenAt: string | null;
+  printers: string[];
+  pairingCode: string;
+  version: string | null;
+}
+
+function stationEmoji(key: string) {
+  return key === "CAIXA" ? "💵" : key === "COPA" ? "🥤" : key === "CUPOM" ? "🧾" : "🍳";
+}
+
+// ── Carteiro status banner ────────────────────────────────────────────────────
+
+function StatusBanner({ agent }: { agent: Agent | null }) {
+  const online = !!agent?.online;
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${
+        online ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"
+      }`}
+    >
+      <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-green-500" : "bg-gray-400"}`} />
+      <div className="min-w-0">
+        <p className={`text-sm font-semibold ${online ? "text-green-800" : "text-gray-700"}`}>
+          {online ? "Carteiro conectado" : "Carteiro não conectado"}
+        </p>
+        <p className="text-xs text-gray-500">
+          {online
+            ? `${agent?.printers.length ?? 0} impressora(s) detectada(s) neste PC.`
+            : "Siga o passo a passo abaixo para ativar a impressão automática."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Setup steps (download + open + pair) ──────────────────────────────────────
+
+function SetupSteps({
+  agent,
+  onCopy,
+  copied,
+}: {
+  agent: Agent | null;
+  onCopy: () => void;
+  copied: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Step 1 — download */}
+      <Step n={1} title="Baixe o programa Carteiro">
+        <p className="mb-3 text-sm text-gray-600">Ele roda no computador do restaurante (Windows) e imprime sozinho.</p>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/downloads/FOOCCI-Carteiro.exe"
+            download
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition"
+          >
+            ⬇️ Baixar o programa
+          </a>
+          <a
+            href="/downloads/Carteiro-Manual.txt"
+            download
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+          >
+            📄 Manual (passo a passo)
+          </a>
+        </div>
+      </Step>
+
+      {/* Step 2 — open */}
+      <Step n={2} title="Abra o programa (dois cliques)">
+        <p className="text-sm text-gray-600">
+          Dê dois cliques no arquivo baixado. Se o Windows mostrar um aviso azul, clique em{" "}
+          <strong>“Mais informações” → “Executar assim mesmo”</strong> (é seguro, é o nosso programa).
+          Uma telinha vai abrir no navegador.
+        </p>
+      </Step>
+
+      {/* Step 3 — pair */}
+      <Step n={3} title="Conecte com este código">
+        <p className="mb-3 text-sm text-gray-600">Na tela do Carteiro, cole o código abaixo e clique em “Parear”.</p>
+        {agent?.online ? (
+          <p className="inline-flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700">
+            ✓ Já conectado — não precisa fazer de novo.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-2.5 font-mono text-xl font-bold tracking-[0.35em] text-gray-800">
+              {agent?.pairingCode ?? "········"}
+            </span>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+            >
+              {copied ? "Copiado! ✓" : "Copiar código"}
+            </button>
+          </div>
+        )}
+      </Step>
+    </div>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700">
+        {n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-900">{title}</p>
+        <div className="mt-1.5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Printer control ───────────────────────────────────────────────────────────
+
+function PrinterControl({
+  value,
+  printers,
+  onChange,
+}: {
+  value: string | null;
+  printers: string[];
+  onChange: (v: string) => void;
+}) {
+  const cls =
+    "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
+  if (printers.length === 0) {
+    return (
+      <input
+        type="text"
+        value={value ?? ""}
+        placeholder="Nome da impressora (ex: Elgin i9)"
+        onChange={(e) => onChange(e.target.value)}
+        className={`${cls} placeholder:text-gray-400`}
+      />
+    );
+  }
+  const options = Array.from(new Set([...printers, ...(value ? [value] : [])]));
+  return (
+    <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={cls}>
+      <option value="">— sem impressora —</option>
+      {options.map((p) => (
+        <option key={p} value={p}>
+          {p}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ImpressorasPage() {
+  const [stations, setStations] = useState<Station[]>([]);
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const { ok, data } = await apiFetch("/api/integracoes/impressao");
+    if (ok) {
+      if (Array.isArray(data?.stations)) setStations(data.stations as Station[]);
+      if (data?.agent) setAgent(data.agent as Agent);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 15_000); // keep the connection status / printers fresh
+    return () => clearInterval(t);
+  }, [load]);
+
+  const update = (id: string, patch: Partial<Station>) => {
+    setStations((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setSuccess(null);
+  };
+
+  const handleCopy = () => {
+    if (!agent?.pairingCode) return;
+    navigator.clipboard?.writeText(agent.pairingCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSuccess(null);
+    setError(null);
+    const { ok, data } = await apiFetch("/api/integracoes/impressao", "PUT", {
+      stations: stations.map((s) => ({ id: s.id, name: s.name, printerName: s.printerName, enabled: s.enabled })),
+    });
+    setSaving(false);
+    if (ok) {
+      if (Array.isArray(data?.stations)) setStations(data.stations as Station[]);
+      setSuccess("Impressoras salvas.");
+    } else {
+      setError(data?.error ?? "Erro ao salvar.");
+    }
+  };
+
+  const handleTest = async (station: Station) => {
+    setTestingId(station.id);
+    setSuccess(null);
+    setError(null);
+    const { ok, data } = await apiFetch("/api/integracoes/impressao/teste", "POST", { stationId: station.id });
+    setTestingId(null);
+    if (ok) {
+      setSuccess(
+        agent?.online
+          ? `Comanda de teste enviada para ${station.name}. Veja a impressora!`
+          : `Teste na fila para ${station.name} — imprime assim que o Carteiro conectar.`,
+      );
+    } else {
+      setError(data?.error ?? "Erro ao enviar o teste.");
+    }
+  };
+
+  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+
   return (
     <div className="space-y-5">
-      {/* Status atual */}
+      <Feedback success={success} error={error} onDismiss={() => setError(null)} />
+
+      {/* Status */}
+      <StatusBanner agent={agent} />
+
+      {/* Setup — prominent when not connected, collapsible when connected */}
+      {agent?.online ? (
+        <details className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <summary className="cursor-pointer list-none px-6 py-4 text-sm font-semibold text-gray-700">
+            ⚙️ Instalar o Carteiro em outro computador
+          </summary>
+          <div className="border-t border-gray-50 px-6 py-5">
+            <SetupSteps agent={agent} onCopy={handleCopy} copied={copied} />
+          </div>
+        </details>
+      ) : (
+        <PageCard>
+          <SectionHeading
+            title="Ative a impressão automática"
+            subtitle="Três passos rápidos. Depois disso, os pedidos imprimem sozinhos na cozinha."
+          />
+          <SetupSteps agent={agent} onCopy={handleCopy} copied={copied} />
+        </PageCard>
+      )}
+
+      {/* Stations mapping */}
       <PageCard>
         <SectionHeading
-          title="Impressão ativa"
-          subtitle="Imprima a comanda pelo botão 🖨️ na tela de cada pedido."
+          title="Impressora de cada estação"
+          subtitle="Escolha qual impressora atende cada lugar. Use “Testar” para conferir."
         />
-        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-800">
-          <p className="font-semibold">✅ Funcionando</p>
-          <p className="mt-1 text-green-700">
-            Abra um pedido na tela <strong>Pedidos</strong> e clique em{" "}
-            <span className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-700">
-              🖨️ Imprimir comanda
-            </span>
-            .
-          </p>
+        <div className="space-y-3">
+          {stations.map((s) => {
+            const hasPrinter = !!(s.printerName && s.printerName.trim());
+            return (
+              <div
+                key={s.id}
+                className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-row sm:items-center sm:gap-4"
+              >
+                <div className="flex min-w-0 items-center gap-2.5 sm:w-36 sm:shrink-0">
+                  <span className="text-lg">{stationEmoji(s.key)}</span>
+                  <span className="truncate text-sm font-semibold text-gray-900">{s.name}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <PrinterControl
+                    value={s.printerName}
+                    printers={agent?.printers ?? []}
+                    onChange={(v) => update(s.id, { printerName: v })}
+                  />
+                </div>
+                <div className="flex items-center gap-3 sm:shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleTest(s)}
+                    disabled={!hasPrinter || testingId === s.id}
+                    title={hasPrinter ? "Enviar uma comanda de teste" : "Escolha uma impressora primeiro"}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                  >
+                    {testingId === s.id ? "Enviando…" : "🖨️ Testar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update(s.id, { enabled: !s.enabled })}
+                    aria-pressed={s.enabled}
+                    title={s.enabled ? "Estação ativa" : "Estação desativada"}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                      s.enabled ? "bg-brand-500" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                        s.enabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+          >
+            {saving ? "Salvando…" : "Salvar impressoras"}
+          </button>
         </div>
       </PageCard>
-
-      {/* Impressão automática ao aceitar */}
-      <PageCard>
-        <SectionHeading
-          title="Impressão automática ao aceitar pedido"
-          subtitle="A comanda dispara sozinha quando você aceita um novo pedido."
-        />
-        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-800">
-          <p className="font-semibold">✅ Ativo por padrão</p>
-          <p className="mt-1 text-green-700">
-            Na tela de <strong>Pedidos</strong>, o botão{" "}
-            <span className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
-              🖨️ Impr. automática
-            </span>{" "}
-            no topo liga e desliga a impressão automática ao confirmar o pedido.
-          </p>
-        </div>
-      </PageCard>
-
-      {/* Como usar hoje */}
-      <PageCard>
-        <SectionHeading title="Como usar hoje" subtitle="Fluxo recomendado para o dia a dia." />
-        <ol className="space-y-3">
-          {[
-            <>
-              Abra um pedido na tela <span className="font-semibold text-gray-900">Pedidos</span>.
-            </>,
-            <>
-              Clique em{" "}
-              <span className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-700">
-                🖨️ Imprimir comanda
-              </span>{" "}
-              — ou ative a impressão automática para que ela dispare ao aceitar.
-            </>,
-            <>A comanda é enviada para a impressora. Pronto.</>,
-          ].map((text, i) => (
-            <li key={i} className="flex items-start gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
-                {i + 1}
-              </span>
-              <span className="text-sm text-gray-700 pt-0.5">{text}</span>
-            </li>
-          ))}
-        </ol>
-      </PageCard>
-
-      {/* Foocci Carteiro — em construção (substitui a antiga "Fase 2") */}
-      <PageCard>
-        <SectionHeading
-          title="Foocci Carteiro — impressão automática de verdade"
-          subtitle="O agente local que imprime direto na cozinha, sem janela e sem configuração técnica."
-        />
-        <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
-          <p className="font-semibold">🚧 Em construção</p>
-          <p className="mt-1 text-indigo-700">
-            Um programinha instalado uma única vez no PC do restaurante que imprime cada pedido na
-            impressora certa, automaticamente — sem janela do navegador, sem atalhos e sem ajuste de margem.
-          </p>
-        </div>
-        <ul className="space-y-2">
-          {[
-            "Imprime direto na térmica, sem abrir nenhuma janela",
-            "Impressora de caixa e de cada cozinha de forma independente",
-            "Distribui cada item para a estação certa (Caixa, Cozinha 1–5, Copa, Cupom)",
-            "Reimpressão pelo botão na tela do pedido",
-          ].map((text, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-300" />
-              {text}
-            </li>
-          ))}
-        </ul>
-        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-          A configuração de qual impressora atende cada estação já está em{" "}
-          <strong className="text-gray-700">Integrações → Impressão (Cozinhas)</strong>.
-        </div>
-      </PageCard>
-
-      <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-xs text-gray-400">
-        Dica: use <strong className="text-gray-600">Salvar como PDF</strong> na janela de impressão
-        para guardar uma cópia digital de cada comanda.
-      </div>
     </div>
   );
 }
