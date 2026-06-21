@@ -25,7 +25,7 @@ interface Agent {
 interface Category {
   id: string;
   name: string;
-  printStationKey: string | null;
+  printStationKeys: string[];
 }
 
 function stationEmoji(key: string) {
@@ -200,8 +200,22 @@ export default function ImpressorasPage() {
     setSuccess(null);
   };
 
-  const updateCategory = (id: string, printStationKey: string) => {
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, printStationKey: printStationKey || null } : c)));
+  const setCatStation = (id: string, idx: number, key: string) => {
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, printStationKeys: c.printStationKeys.map((k, i) => (i === idx ? key : k)) } : c,
+      ),
+    );
+    setSuccess(null);
+  };
+  const addCatStation = (id: string) => {
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, printStationKeys: [...c.printStationKeys, ""] } : c)));
+    setSuccess(null);
+  };
+  const removeCatStation = (id: string, idx: number) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, printStationKeys: c.printStationKeys.filter((_, i) => i !== idx) } : c)),
+    );
     setSuccess(null);
   };
 
@@ -219,7 +233,7 @@ export default function ImpressorasPage() {
     setError(null);
     const { ok, data } = await apiFetch("/api/integracoes/impressao", "PUT", {
       stations: stations.map((s) => ({ id: s.id, name: s.name, printerName: s.printerName, enabled: s.enabled })),
-      categories: categories.map((c) => ({ id: c.id, printStationKey: c.printStationKey })),
+      categories: categories.map((c) => ({ id: c.id, printStationKeys: c.printStationKeys })),
     });
     setSaving(false);
     if (ok) {
@@ -338,7 +352,7 @@ export default function ImpressorasPage() {
       <PageCard>
         <SectionHeading
           title="2. Para onde vai cada categoria"
-          subtitle="Diga em qual estação cada categoria do cardápio é impressa. Ex.: Sushi → Cozinha 1, Bebidas → Copa."
+          subtitle="Em qual(is) estação(ões) cada categoria imprime. Pode adicionar mais de uma — para pratos que saem em duas cozinhas."
         />
         {categories.length === 0 ? (
           <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
@@ -347,24 +361,42 @@ export default function ImpressorasPage() {
         ) : (
           <div className="space-y-2">
             {categories.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5"
-              >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{c.name}</span>
-                <span className="shrink-0 text-gray-300">→</span>
-                <select
-                  value={c.printStationKey ?? ""}
-                  onChange={(e) => updateCategory(c.id, e.target.value)}
-                  className="w-40 shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
-                >
-                  <option value="">— escolher —</option>
-                  {stations.map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.name}
-                    </option>
+              <div key={c.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                <div className="mt-2 space-y-2">
+                  {c.printStationKeys.map((key, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="shrink-0 text-gray-300">→</span>
+                      <select
+                        value={key}
+                        onChange={(e) => setCatStation(c.id, idx, e.target.value)}
+                        className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
+                      >
+                        <option value="">— escolher estação —</option>
+                        {stations.map((s) => (
+                          <option key={s.key} value={s.key}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeCatStation(c.id, idx)}
+                        title="Remover impressora"
+                        className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-400 hover:bg-red-50 hover:text-red-500 transition"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   ))}
-                </select>
+                  <button
+                    type="button"
+                    onClick={() => addCatStation(c.id)}
+                    className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition"
+                  >
+                    + adicionar impressora
+                  </button>
+                </div>
               </div>
             ))}
           </div>

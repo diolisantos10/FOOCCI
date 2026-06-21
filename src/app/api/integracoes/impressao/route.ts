@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       prisma.menuCategory.findMany({
         where: { restaurantId: ctx.restaurantId, isActive: true },
         orderBy: { sortOrder: "asc" },
-        select: { id: true, name: true, printStationKey: true },
+        select: { id: true, name: true, printStationKeys: true },
       }),
     ]);
     return ok({
@@ -124,20 +124,25 @@ export async function PUT(req: NextRequest) {
       return [prisma.printStation.updateMany({ where: { id: s.id, restaurantId: ctx.restaurantId }, data })];
     });
 
-    // Category → station routing (which food category goes to which station).
+    // Category → station routing (a category can print at several stations).
     const cats = Array.isArray(body.categories)
-      ? (body.categories as Array<{ id?: unknown; printStationKey?: unknown }>)
+      ? (body.categories as Array<{ id?: unknown; printStationKeys?: unknown }>)
       : [];
     const categoryOps = cats.flatMap((c) => {
       if (typeof c.id !== "string" || !c.id) return [];
-      const key =
-        typeof c.printStationKey === "string" && c.printStationKey.trim()
-          ? c.printStationKey.trim().slice(0, 40)
-          : null;
+      const keys = Array.isArray(c.printStationKeys)
+        ? Array.from(
+            new Set(
+              c.printStationKeys
+                .filter((k): k is string => typeof k === "string" && k.trim() !== "")
+                .map((k) => k.trim().slice(0, 40)),
+            ),
+          )
+        : [];
       return [
         prisma.menuCategory.updateMany({
           where: { id: c.id, restaurantId: ctx.restaurantId },
-          data: { printStationKey: key },
+          data: { printStationKeys: keys },
         }),
       ];
     });
@@ -150,7 +155,7 @@ export async function PUT(req: NextRequest) {
       prisma.menuCategory.findMany({
         where: { restaurantId: ctx.restaurantId, isActive: true },
         orderBy: { sortOrder: "asc" },
-        select: { id: true, name: true, printStationKey: true },
+        select: { id: true, name: true, printStationKeys: true },
       }),
     ]);
     return ok({ stations, categories });

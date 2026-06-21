@@ -248,7 +248,7 @@ model MenuCategory {
   showInDelivery Boolean    @default(true) // false = category hidden from delivery channel
   showInDineIn   Boolean    @default(true) // false = category hidden from QR dine-in menu
   source         MenuSource @default(MANUAL) // tracks whether created manually or via external integration
-  printStationKey String? // routing: which print station (CAIXA, COZINHA_1…COPA, CUPOM) this category's items print at; null = unassigned
+  printStationKeys String[] @default([]) // routing: which print station(s) this category's items print at — can be several (same dish in two kitchens)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
