@@ -67,12 +67,18 @@ export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
   if (!ctx) return unauthorized();
   try {
-    const [stations, agent] = await Promise.all([
+    const [stations, agent, categories] = await Promise.all([
       loadStations(ctx.restaurantId),
       getOrCreateAgent(ctx.restaurantId),
+      prisma.menuCategory.findMany({
+        where: { restaurantId: ctx.restaurantId, isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true, printStationKey: true },
+      }),
     ]);
     return ok({
       stations,
+      categories,
       agent: {
         online: isOnline(agent),
         lastSeenAt: agent.lastSeenAt,
@@ -94,7 +100,7 @@ export async function PUT(req: NextRequest) {
     return forbidden("Apenas o proprietário ou gerente pode alterar a impressão.");
 
   try {
-    const body = (await req.json().catch(() => ({}))) as { stations?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { stations?: unknown; categories?: unknown };
     if (!Array.isArray(body.stations)) return badRequest("Lista de estações inválida.");
 
     const rows = body.stations as Array<{
@@ -104,7 +110,7 @@ export async function PUT(req: NextRequest) {
       enabled?: unknown;
     }>;
 
-    const ops = rows.flatMap((s) => {
+    const stationOps = rows.flatMap((s) => {
       if (typeof s.id !== "string" || !s.id) return [];
       const data: { name?: string; printerName?: string | null; enabled?: boolean } = {};
       if (typeof s.name === "string" && s.name.trim()) data.name = s.name.trim().slice(0, 80);
@@ -118,9 +124,36 @@ export async function PUT(req: NextRequest) {
       return [prisma.printStation.updateMany({ where: { id: s.id, restaurantId: ctx.restaurantId }, data })];
     });
 
-    if (ops.length > 0) await prisma.$transaction(ops);
+    // Category → station routing (which food category goes to which station).
+    const cats = Array.isArray(body.categories)
+      ? (body.categories as Array<{ id?: unknown; printStationKey?: unknown }>)
+      : [];
+    const categoryOps = cats.flatMap((c) => {
+      if (typeof c.id !== "string" || !c.id) return [];
+      const key =
+        typeof c.printStationKey === "string" && c.printStationKey.trim()
+          ? c.printStationKey.trim().slice(0, 40)
+          : null;
+      return [
+        prisma.menuCategory.updateMany({
+          where: { id: c.id, restaurantId: ctx.restaurantId },
+          data: { printStationKey: key },
+        }),
+      ];
+    });
 
-    return ok({ stations: await loadStations(ctx.restaurantId) });
+    const allOps = [...stationOps, ...categoryOps];
+    if (allOps.length > 0) await prisma.$transaction(allOps);
+
+    const [stations, categories] = await Promise.all([
+      loadStations(ctx.restaurantId),
+      prisma.menuCategory.findMany({
+        where: { restaurantId: ctx.restaurantId, isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true, printStationKey: true },
+      }),
+    ]);
+    return ok({ stations, categories });
   } catch (err) {
     console.error("[PUT integracoes/impressao]", err);
     return serverError();

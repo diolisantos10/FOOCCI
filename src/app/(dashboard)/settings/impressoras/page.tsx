@@ -22,6 +22,12 @@ interface Agent {
   version: string | null;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  printStationKey: string | null;
+}
+
 function stationEmoji(key: string) {
   return key === "CAIXA" ? "💵" : key === "COPA" ? "🥤" : key === "CUPOM" ? "🧾" : "🍳";
 }
@@ -53,18 +59,9 @@ function StatusBanner({ agent }: { agent: Agent | null }) {
 
 // ── Setup steps (download + open + pair) ──────────────────────────────────────
 
-function SetupSteps({
-  agent,
-  onCopy,
-  copied,
-}: {
-  agent: Agent | null;
-  onCopy: () => void;
-  copied: boolean;
-}) {
+function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: () => void; copied: boolean }) {
   return (
     <div className="space-y-4">
-      {/* Step 1 — download */}
       <Step n={1} title="Baixe o programa Carteiro">
         <p className="mb-3 text-sm text-gray-600">Ele roda no computador do restaurante (Windows) e imprime sozinho.</p>
         <div className="flex flex-wrap gap-2">
@@ -85,16 +82,14 @@ function SetupSteps({
         </div>
       </Step>
 
-      {/* Step 2 — open */}
       <Step n={2} title="Abra o programa (dois cliques)">
         <p className="text-sm text-gray-600">
           Dê dois cliques no arquivo baixado. Se o Windows mostrar um aviso azul, clique em{" "}
-          <strong>“Mais informações” → “Executar assim mesmo”</strong> (é seguro, é o nosso programa).
-          Uma telinha vai abrir no navegador.
+          <strong>“Mais informações” → “Executar assim mesmo”</strong> (é seguro, é o nosso programa). Uma telinha
+          vai abrir no navegador.
         </p>
       </Step>
 
-      {/* Step 3 — pair */}
       <Step n={3} title="Conecte com este código">
         <p className="mb-3 text-sm text-gray-600">Na tela do Carteiro, cole o código abaixo e clique em “Parear”.</p>
         {agent?.online ? (
@@ -176,6 +171,7 @@ function PrinterControl({
 export default function ImpressorasPage() {
   const [stations, setStations] = useState<Station[]>([]);
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -188,18 +184,24 @@ export default function ImpressorasPage() {
     if (ok) {
       if (Array.isArray(data?.stations)) setStations(data.stations as Station[]);
       if (data?.agent) setAgent(data.agent as Agent);
+      if (Array.isArray(data?.categories)) setCategories(data.categories as Category[]);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15_000); // keep the connection status / printers fresh
+    const t = setInterval(load, 15_000); // keep connection status / printers fresh
     return () => clearInterval(t);
   }, [load]);
 
   const update = (id: string, patch: Partial<Station>) => {
     setStations((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setSuccess(null);
+  };
+
+  const updateCategory = (id: string, printStationKey: string) => {
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, printStationKey: printStationKey || null } : c)));
     setSuccess(null);
   };
 
@@ -217,11 +219,13 @@ export default function ImpressorasPage() {
     setError(null);
     const { ok, data } = await apiFetch("/api/integracoes/impressao", "PUT", {
       stations: stations.map((s) => ({ id: s.id, name: s.name, printerName: s.printerName, enabled: s.enabled })),
+      categories: categories.map((c) => ({ id: c.id, printStationKey: c.printStationKey })),
     });
     setSaving(false);
     if (ok) {
       if (Array.isArray(data?.stations)) setStations(data.stations as Station[]);
-      setSuccess("Impressoras salvas.");
+      if (Array.isArray(data?.categories)) setCategories(data.categories as Category[]);
+      setSuccess("Configuração de impressão salva.");
     } else {
       setError(data?.error ?? "Erro ao salvar.");
     }
@@ -273,11 +277,11 @@ export default function ImpressorasPage() {
         </PageCard>
       )}
 
-      {/* Stations mapping */}
+      {/* Step A — which printer per station */}
       <PageCard>
         <SectionHeading
-          title="Impressora de cada estação"
-          subtitle="Escolha qual impressora atende cada lugar. Use “Testar” para conferir."
+          title="1. Impressora de cada estação"
+          subtitle="Em qual impressora cada estação imprime. Use “Testar” para conferir."
         />
         <div className="space-y-3">
           {stations.map((s) => {
@@ -328,18 +332,56 @@ export default function ImpressorasPage() {
             );
           })}
         </div>
-
-        <div className="mt-5 flex justify-end">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
-          >
-            {saving ? "Salvando…" : "Salvar impressoras"}
-          </button>
-        </div>
       </PageCard>
+
+      {/* Step B — which station per food category */}
+      <PageCard>
+        <SectionHeading
+          title="2. Para onde vai cada categoria"
+          subtitle="Diga em qual estação cada categoria do cardápio é impressa. Ex.: Sushi → Cozinha 1, Bebidas → Copa."
+        />
+        {categories.length === 0 ? (
+          <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+            Você ainda não tem categorias no cardápio. Cadastre no <strong>Cardápio</strong> e elas aparecem aqui.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {categories.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{c.name}</span>
+                <span className="shrink-0 text-gray-300">→</span>
+                <select
+                  value={c.printStationKey ?? ""}
+                  onChange={(e) => updateCategory(c.id, e.target.value)}
+                  className="w-40 shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
+                >
+                  <option value="">— escolher —</option>
+                  {stations.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+      </PageCard>
+
+      {/* Single save for everything */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+        >
+          {saving ? "Salvando…" : "Salvar tudo"}
+        </button>
+      </div>
     </div>
   );
 }
