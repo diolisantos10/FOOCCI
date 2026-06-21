@@ -85,6 +85,12 @@ export async function advanceTurn(
     knowledge: opts.knowledge,
   });
 
+  // Diagnostic (production observability): one line per live brain turn so the logs
+  // show whether the order brain is engaging and in which mode (LLM vs FALLBACK).
+  console.log(
+    `[WhatsAppOrderBrain] stage=${session.stage} intent=${decision.intent} items=${decision.items.length} mode=${decision.reasoningMode}`,
+  );
+
   // No pilot configured (or unusable output) → legacy machine (no worse than today).
   if (decision.reasoningMode === "FALLBACK") {
     return advanceSession(session, message, menu);
