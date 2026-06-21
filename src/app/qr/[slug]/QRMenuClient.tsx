@@ -9,6 +9,7 @@ type Variant = {
   id: string;
   name: string;
   price: number;
+  imageUrl: string | null;
   isAvailable: boolean;
 };
 
@@ -244,39 +245,39 @@ function ProductModal({
     <div className="fixed inset-0 z-50 bg-white flex flex-col sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm">
       {/* Desktop: centered card */}
       <div
-        className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
+        className="relative w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl overflow-hidden sm:shadow-2xl bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image — square, center-cropped, capped at 50vh so content stays visible */}
-        <div className="relative w-full shrink-0 bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
-          {item.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="w-full h-full object-cover object-center"
-              loading="lazy"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : (
-            <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
-              🍽️
-            </div>
-          )}
+        {/* Close button — floats over the sheet, stays put while the content scrolls */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 left-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+          aria-label="Fechar"
+        >
+          ←
+        </button>
 
-          {/* Close button — top left */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-4 left-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-            aria-label="Fechar"
-          >
-            ←
-          </button>
-        </div>
+        {/* One natural scroll flow: image + details scroll together (image is NOT fixed) */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          {/* Image — square, center-cropped, capped at 50vh; part of the scrollable content */}
+          <div className="relative w-full bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
+            {item.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                className="w-full h-full object-cover object-center"
+                loading="lazy"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : (
+              <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
+                🍽️
+              </div>
+            )}
+          </div>
 
-        {/* Body — scrolls if content is long */}
-        <div className="flex-1 overflow-y-auto">
           <div className="px-5 pt-5 pb-2 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-xl font-bold text-gray-900 leading-tight">
@@ -332,17 +333,31 @@ function ProductModal({
                   Variantes
                 </p>
                 <div className="space-y-1.5">
-                  {item.variants.map((v) => (
-                    <div
-                      key={v.id}
-                      className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 border border-gray-100"
-                    >
-                      <span className="text-sm text-gray-800">{v.name}</span>
-                      <span className="text-sm font-bold text-gray-900">
-                        R$&nbsp;{formatPrice(v.price)}
-                      </span>
-                    </div>
-                  ))}
+                  {item.variants.map((v) => {
+                    // Variant photo when set, else fall back to the product photo.
+                    const vImg = v.imageUrl ?? item.imageUrl;
+                    return (
+                      <div
+                        key={v.id}
+                        className="flex items-center gap-2.5 rounded-xl bg-gray-50 px-3 py-2.5 border border-gray-100"
+                      >
+                        {vImg && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={vImg}
+                            alt={v.name}
+                            className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                            loading="lazy"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                        )}
+                        <span className="flex-1 text-sm text-gray-800">{v.name}</span>
+                        <span className="text-sm font-bold text-gray-900">
+                          R$&nbsp;{formatPrice(v.price)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -677,8 +692,9 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
   function scrollToCategory(catId: string) {
     const el = document.getElementById(`cat-${catId}`);
     if (!el) return;
-    const navHeight = navRef.current?.offsetHeight ?? 52;
-    const top = el.getBoundingClientRect().top + window.scrollY - navHeight - 8;
+    // The category nav is fixed at the BOTTOM now, so the top of the viewport is
+    // free — scroll the section heading near the top with a small margin.
+    const top = el.getBoundingClientRect().top + window.scrollY - 8;
     window.scrollTo({ top, behavior: "smooth" });
   }
 
@@ -695,7 +711,8 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
         />
       )}
 
-      <div className="min-h-screen bg-[#fafaf9]">
+      {/* Bottom padding clears the fixed category nav so it never covers the footer/last items. */}
+      <div className={`min-h-screen bg-[#fafaf9] ${categories.length > 1 ? "pb-24" : ""}`}>
 
         {/* ── HERO ──────────────────────────────────────────────── */}
         <div ref={heroRef} id="hero" className="bg-white border-b border-gray-100">
@@ -855,9 +872,9 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
           )}
         </div>
 
-        {/* ── STICKY CATEGORY NAV ───────────────────────────────── */}
+        {/* ── BOTTOM-FIXED CATEGORY NAV ─────────────────────────── */}
         {categories.length > 1 && (
-          <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+          <div className="fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur-sm border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]">
             <div
               ref={navRef}
               className="mx-auto max-w-2xl flex gap-3 overflow-x-auto px-4 py-3 scrollbar-hide"

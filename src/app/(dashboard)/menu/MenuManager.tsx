@@ -28,6 +28,7 @@ type Variant = {
   id: string;
   name: string;
   price: number | null; // null = inherit the product's price for the channel
+  imageUrl?: string | null; // optional per-variant photo; null = use the product image
   priceDelivery?: number | null;
   priceDineIn?:   number | null;
   priceIfood?:    number | null;
@@ -828,10 +829,11 @@ function SortableItemRow({
         storytellingIA:       raw.storytellingIA       ?? null,
         hasActivePromo:    false,
         promoActiveToday:  false,
-        variants: (raw.variants ?? []).map((v: { id: string; name: string; price: string | number | null; isAvailable: boolean; sortOrder: number }) => ({
+        variants: (raw.variants ?? []).map((v: { id: string; name: string; price: string | number | null; imageUrl?: string | null; isAvailable: boolean; sortOrder: number }) => ({
           id:          v.id,
           name:        v.name,
           price:       v.price == null ? null : Number(v.price), // null = inherits product price
+          imageUrl:    v.imageUrl ?? null,
           isAvailable: v.isAvailable,
           sortOrder:   v.sortOrder,
         })),
@@ -2122,9 +2124,10 @@ function SortableVariantRow({
   } = useSortable({ id: variant.id });
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{ name: string; price: string; imageUrl: string | null }>({
     name: variant.name,
     price: variant.price == null ? "" : String(variant.price),
+    imageUrl: variant.imageUrl ?? null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -2152,8 +2155,9 @@ function SortableVariantRow({
       const data = await apiFetch(`/api/menu/variants/${variant.id}`, "PATCH", {
         name: trimmedName,
         price, // null clears the override → inherits the product price
+        imageUrl: form.imageUrl, // null = use the product image
       });
-      onUpdated({ ...variant, name: data.data.name, price: data.data.price == null ? null : Number(data.data.price) });
+      onUpdated({ ...variant, name: data.data.name, price: data.data.price == null ? null : Number(data.data.price), imageUrl: data.data.imageUrl ?? null });
       setEditing(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -2201,6 +2205,11 @@ function SortableVariantRow({
               className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
           </div>
+          <div>
+            <p className="text-[11px] font-medium text-gray-600">Foto da variação (opcional)</p>
+            <p className="mb-1 text-[10px] text-gray-400">Se não adicionar, será usada a foto do produto.</p>
+            <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
+          </div>
           {error && <InlineError message={error} />}
           <div className="flex gap-2">
             <button
@@ -2216,7 +2225,7 @@ function SortableVariantRow({
               onClick={() => {
                 setEditing(false);
                 setError("");
-                setForm({ name: variant.name, price: variant.price == null ? "" : String(variant.price) });
+                setForm({ name: variant.name, price: variant.price == null ? "" : String(variant.price), imageUrl: variant.imageUrl ?? null });
               }}
               className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
             >
@@ -2227,6 +2236,10 @@ function SortableVariantRow({
       ) : (
         <div className="flex items-center gap-2 px-3 py-2.5">
           <DragHandle listeners={listeners} />
+          {variant.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={variant.imageUrl} alt={variant.name} className="h-8 w-8 shrink-0 rounded object-cover" />
+          )}
           <span className="flex-1 truncate text-sm text-gray-800">
             {variant.name}
           </span>
@@ -2238,7 +2251,7 @@ function SortableVariantRow({
           <button
             type="button"
             onClick={() => {
-              setForm({ name: variant.name, price: String(variant.price) });
+              setForm({ name: variant.name, price: variant.price == null ? "" : String(variant.price), imageUrl: variant.imageUrl ?? null });
               setEditing(true);
             }}
             className="shrink-0 text-xs text-blue-500 hover:underline"
@@ -2339,7 +2352,7 @@ function EditItemModal({
   // Variants state — initialised from item.variants when modal opens
   const [variants, setVariants] = useState<Variant[]>([]);
   const [addingVariant, setAddingVariant] = useState(false);
-  const [newVariant, setNewVariant] = useState({ name: "", price: "" });
+  const [newVariant, setNewVariant] = useState<{ name: string; price: string; imageUrl: string | null }>({ name: "", price: "", imageUrl: null });
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -2395,7 +2408,7 @@ function EditItemModal({
     setVariants(item.variants ?? []);
     setExtras(item.extras ?? []);
     setAddingVariant(false);
-    setNewVariant({ name: "", price: "" });
+    setNewVariant({ name: "", price: "", imageUrl: null });
     setAddingExtra(false);
     setNewExtra({ name: "", quantity: "1", price: "" });
     setError("");
@@ -2481,13 +2494,14 @@ function EditItemModal({
       const data = await apiFetch(`/api/menu/items/${item.id}/variants`, "POST", {
         name: trimmedName,
         price, // null = inherits the product price
+        imageUrl: newVariant.imageUrl, // optional — null = use the product image
         sortOrder: variants.length,
       });
       setVariants((vs) => [
         ...vs,
-        { ...data.data, price: data.data.price == null ? null : Number(data.data.price) },
+        { ...data.data, price: data.data.price == null ? null : Number(data.data.price), imageUrl: data.data.imageUrl ?? null },
       ]);
-      setNewVariant({ name: "", price: "" });
+      setNewVariant({ name: "", price: "", imageUrl: null });
       setAddingVariant(false);
     } catch (e: unknown) {
       setAddError(e instanceof Error ? e.message : "Erro ao adicionar variante.");
@@ -3287,6 +3301,11 @@ function EditItemModal({
                         />
                       </div>
                     </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-gray-600">Foto da variação (opcional)</p>
+                      <p className="mb-1 text-[10px] text-gray-400">Se não adicionar, será usada a foto do produto.</p>
+                      <ImageUpload value={newVariant.imageUrl} onChange={(url) => setNewVariant((f) => ({ ...f, imageUrl: url }))} />
+                    </div>
                     {addError && <InlineError message={addError} />}
                     <div className="flex gap-2">
                       <button
@@ -3301,7 +3320,7 @@ function EditItemModal({
                         type="button"
                         onClick={() => {
                           setAddingVariant(false);
-                          setNewVariant({ name: "", price: "" });
+                          setNewVariant({ name: "", price: "", imageUrl: null });
                           setAddError("");
                         }}
                         className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"

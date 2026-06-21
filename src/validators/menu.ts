@@ -91,6 +91,8 @@ export const createVariantSchema = z.object({
   priceDelivery: channelPriceField,
   priceDineIn:   channelPriceField,
   priceIfood:    channelPriceField,
+  // Optional per-variant photo. Blank/null accepted — falls back to the product image.
+  imageUrl: z.string().nullable().optional().or(z.literal("")),
   portion: z.string().max(50).optional(),
   isAvailable: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),

@@ -45,3 +45,34 @@ describe("createVariantSchema — variant price is optional", () => {
     if (r.success) expect(r.data.price).toBeNull();
   });
 });
+
+describe("createVariantSchema — variant photo is optional", () => {
+  it("A — accepts a variant with NO photo (omitted)", () => {
+    const r = createVariantSchema.safeParse({ name: "Coca-Cola", price: null });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.imageUrl ?? null).toBeNull();
+  });
+
+  it("A — accepts an explicit null photo", () => {
+    const r = createVariantSchema.safeParse({ name: "Sprite", price: null, imageUrl: null });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.imageUrl).toBeNull();
+  });
+
+  it("B — accepts a variant WITH a photo", () => {
+    const url = "https://cdn.foocci.com/variants/coca.jpg";
+    const r = createVariantSchema.safeParse({ name: "Coca-Cola", price: null, imageUrl: url });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.imageUrl).toBe(url);
+  });
+
+  it("C — accepts an empty-string photo (treated as none)", () => {
+    const r = createVariantSchema.safeParse({ name: "Guaraná", imageUrl: "" });
+    expect(r.success).toBe(true);
+  });
+
+  it("update — can set or clear the photo independently", () => {
+    expect(updateVariantSchema.safeParse({ imageUrl: "https://x/y.png" }).success).toBe(true);
+    expect(updateVariantSchema.safeParse({ imageUrl: null }).success).toBe(true);
+  });
+});

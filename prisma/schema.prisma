@@ -328,6 +328,7 @@ model MenuItemVariant {
   priceDelivery         Decimal? @db.Decimal(10, 2)
   priceDineIn           Decimal? @db.Decimal(10, 2)
   priceIfood            Decimal? @db.Decimal(10, 2)
+  imageUrl              String? // optional per-variant photo; falls back to the product image when null
   portion               String? // e.g. "300g", "500ml"
   isAvailable           Boolean  @default(true)
   sortOrder             Int      @default(0)

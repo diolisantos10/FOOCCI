@@ -66,7 +66,7 @@ export default async function QRMenuPage({
           variants: {
             where: { isAvailable: true },
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-            select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, isAvailable: true },
+            select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, imageUrl: true, isAvailable: true },
           },
           extras: {
             orderBy: { name: "asc" },
@@ -88,7 +88,7 @@ export default async function QRMenuPage({
               variants: {
                 where: { isAvailable: true },
                 orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-                select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, isAvailable: true },
+                select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, imageUrl: true, isAvailable: true },
               },
               extras: {
                 orderBy: { name: "asc" },
@@ -129,7 +129,7 @@ export default async function QRMenuPage({
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
       promotion: promoMap.get(i.id) ?? null,
-      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: resolveVariantPrice(i, v, "DINE_IN"), isAvailable: v.isAvailable })),
+      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: resolveVariantPrice(i, v, "DINE_IN"), imageUrl: v.imageUrl ?? null, isAvailable: v.isAvailable })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, quantity: e.quantity, price: Number(e.price) })),
     };
   }

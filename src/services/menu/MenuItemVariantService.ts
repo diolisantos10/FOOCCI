@@ -67,6 +67,7 @@ export class MenuItemVariantService {
         priceDelivery: toChannelDecimal(input.priceDelivery) ?? null,
         priceDineIn:   toChannelDecimal(input.priceDineIn) ?? null,
         priceIfood:    toChannelDecimal(input.priceIfood) ?? null,
+        imageUrl: input.imageUrl?.trim() || null, // optional — null = inherit product image
         portion: input.portion?.trim() ?? null,
         isAvailable: input.isAvailable ?? true,
         sortOrder: input.sortOrder ?? 0,
@@ -91,6 +92,7 @@ export class MenuItemVariantService {
         ...(input.priceDelivery !== undefined && { priceDelivery: toChannelDecimal(input.priceDelivery) }),
         ...(input.priceDineIn   !== undefined && { priceDineIn:   toChannelDecimal(input.priceDineIn) }),
         ...(input.priceIfood    !== undefined && { priceIfood:    toChannelDecimal(input.priceIfood) }),
+        ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl?.trim() || null }),
         ...(input.portion !== undefined && { portion: input.portion?.trim() ?? null }),
         ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),

@@ -112,6 +112,7 @@ export async function POST(
           name:                 v.name,
           // Copy the variant price as-is — a null (inherited) price stays inherited.
           price:                v.price === null ? null : new Decimal(v.price.toString()),
+          imageUrl:             v.imageUrl, // copy the optional variant photo
           portion:              v.portion,
           isAvailable:          v.isAvailable,
           sortOrder:            v.sortOrder,
