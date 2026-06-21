@@ -6,14 +6,16 @@
  */
 
 import type {
-  WhatsAppProvider, SendTextInput, SendTemplateInput, SendResult, ConnectionStatus,
+  WhatsAppProvider, SendTextInput, SendTemplateInput, SendMediaInput, SendResult,
+  ConnectionStatus, WebhookValidationResult, NormalizedWebhookResult,
 } from "./types";
 import { MetaConfigService, type MetaConfigResolved } from "../MetaConfigService";
-import { metaGraphUrl } from "../metaFlag";
+import { metaGraphUrl, metaAppSecret } from "../metaFlag";
 import {
-  buildMetaTextPayload, buildMetaTemplatePayload, toMetaRecipient,
+  buildMetaTextPayload, buildMetaTemplatePayload, buildMetaMediaPayload, toMetaRecipient,
   extractMetaMessageId, maskGraphResponse,
 } from "./metaPayload";
+import { validateMetaSignature, normalizeMetaWebhook } from "./metaWebhook";
 
 const PROVIDER = "META_CLOUD_API" as const;
 
@@ -38,6 +40,29 @@ export class MetaWhatsAppCloudProvider implements WhatsAppProvider {
     const recipient = toMetaRecipient(input.to);
     if (!recipient) return fail("Telefone inválido para envio.", "INVALID_PHONE");
     return this.post(cfg, buildMetaTemplatePayload(recipient, input.templateName, input.language, input.bodyParams ?? []));
+  }
+
+  async sendMedia(input: SendMediaInput): Promise<SendResult> {
+    const cfg = await MetaConfigService.getResolved(input.restaurantId);
+    if (!cfg) return fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED");
+    const recipient = toMetaRecipient(input.to);
+    if (!recipient) return fail("Telefone inválido para envio.", "INVALID_PHONE");
+    return this.post(cfg, buildMetaMediaPayload(recipient, input.mediaType, input.mediaUrl, input.caption));
+  }
+
+  /** Validates X-Hub-Signature-256 against the app secret (provider-neutral entry). */
+  validateWebhook(rawBody: string, headers: Record<string, string | null>): WebhookValidationResult {
+    const sig = headers["x-hub-signature-256"] ?? headers["X-Hub-Signature-256"] ?? null;
+    const secret = metaAppSecret();
+    if (!secret) return { valid: false, reason: "META_APP_SECRET_MISSING" };
+    return validateMetaSignature(rawBody, sig, secret)
+      ? { valid: true }
+      : { valid: false, reason: "INVALID_SIGNATURE" };
+  }
+
+  normalizeIncomingWebhook(payload: unknown): NormalizedWebhookResult {
+    const n = normalizeMetaWebhook(payload);
+    return { provider: PROVIDER, channelIds: n.phoneNumberIds, messages: n.messages, statuses: n.statuses };
   }
 
   private async post(cfg: MetaConfigResolved, payload: object): Promise<SendResult> {

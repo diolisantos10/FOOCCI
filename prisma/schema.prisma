@@ -51,6 +51,11 @@ model Restaurant {
   // stay on EVOLUTION until explicitly switched — additive, non-breaking.
   whatsappProvider String @default("EVOLUTION")
 
+  // Optional, OFF by default. When the active provider send FAILS (not BLOCKED),
+  // retry once via fallbackProvider. Never double-sends; only triggers on failure.
+  allowWhatsAppProviderFallback Boolean @default(false)
+  fallbackProvider              String  @default("EVOLUTION")
+
   users                  User[]
   customers              Customer[]
   menuCategories         MenuCategory[]
@@ -63,6 +68,7 @@ model Restaurant {
   aiLogs                 AIInteractionLog[]
   evolutionConfig        EvolutionConfig?
   metaWhatsAppConfig     MetaWhatsAppConfig?
+  metaMessageTemplates   MetaMessageTemplate[]
   brandConfig            RestaurantBrandConfig?
   agentConfig            WhatsAppAgentConfig?
   deliveryConfig         DeliveryConfig?
@@ -662,6 +668,14 @@ model Message {
   externalMessageId String?     @unique // Evolution API / WhatsApp message ID
   externalStatus    String? // sent | delivered | read | failed
 
+  // Dual-provider tracking (additive, nullable). For Evolution rows these stay null
+  // and the existing external* fields remain the source of truth; Meta rows populate
+  // these so Central de Conversas / diagnostics can tell providers apart.
+  provider          String? // EVOLUTION | META_CLOUD_API
+  providerMessageId String? // provider-native id (wamid for Meta)
+  providerStatus    String? // provider-native delivery status
+  providerError     String? // masked provider error
+
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
@@ -1073,6 +1087,30 @@ model MetaWhatsAppConfig {
 
   @@index([phoneNumberId])
   @@map("meta_whatsapp_configs")
+}
+
+// Approved Meta message templates per restaurant. Business-initiated WhatsApp sends
+// OUTSIDE the 24h customer-service window must use an APPROVED template; this is the
+// minimal registry CRM/automation can resolve a template from. Additive, Meta-only.
+model MetaMessageTemplate {
+  id               String  @id @default(cuid())
+  restaurantId     String
+
+  templateName     String  // Meta-registered name, e.g. "order_update"
+  languageCode     String  @default("pt_BR")
+  category         String  @default("UTILITY") // UTILITY | MARKETING | AUTHENTICATION
+  status           String  @default("PENDING") // PENDING | APPROVED | REJECTED | DISABLED
+  bodyVariables    Int     @default(0) // number of {{n}} placeholders in the body
+  mappedCampaignType String? // optional: CRM campaign type this template fulfils
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, templateName, languageCode])
+  @@index([restaurantId, status])
+  @@map("meta_message_templates")
 }
 
 // ═══════════════════════════════════════════

@@ -5,7 +5,7 @@
  * provider-agnostic service.
  */
 
-import type { WhatsAppProvider, SendTextInput, SendResult, ConnectionStatus } from "./types";
+import type { WhatsAppProvider, SendTextInput, SendMediaInput, SendResult, ConnectionStatus } from "./types";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
@@ -26,6 +26,33 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     }
     try {
       const res = await EvolutionClient.sendTextMessage(snap.data, phone, input.text);
+      return { ok: true, provider: PROVIDER, status: "SENT", providerMessageId: res.key?.id ?? null };
+    } catch (err) {
+      const isEvo = err instanceof EvolutionApiError;
+      const status = isEvo ? (err as EvolutionApiError).status : 0;
+      return {
+        ok: false, provider: PROVIDER, status: "FAILED", providerMessageId: null,
+        error:     isEvo ? `HTTP ${status}` : (err instanceof Error ? err.message : "Erro desconhecido"),
+        errorCode: isEvo ? `EVOLUTION_HTTP_${status}` : "ERROR",
+        retryable: isEvo ? status >= 500 : true,
+      };
+    }
+  }
+
+  async sendMedia(input: SendMediaInput): Promise<SendResult> {
+    if (input.mediaType === "video") {
+      return { ok: false, provider: PROVIDER, status: "FAILED", providerMessageId: null, error: "Vídeo por URL não é suportado no Evolution.", errorCode: "EVOLUTION_VIDEO_UNSUPPORTED", retryable: false };
+    }
+    const snap = await EvolutionConfigService.getSnapshot(input.restaurantId);
+    if (!snap.ok) {
+      return { ok: false, provider: PROVIDER, status: "FAILED", providerMessageId: null, error: "WhatsApp (Evolution) não configurado.", errorCode: "EVOLUTION_NOT_CONFIGURED", retryable: false };
+    }
+    const phone = normalizePhoneForEvolution(input.to);
+    if (!phone || !isValidEvolutionPhone(phone)) {
+      return { ok: false, provider: PROVIDER, status: "FAILED", providerMessageId: null, error: "Telefone inválido para envio.", errorCode: "INVALID_PHONE", retryable: false };
+    }
+    try {
+      const res = await EvolutionClient.sendMediaMessage(snap.data, phone, input.mediaType, input.mediaUrl, input.caption);
       return { ok: true, provider: PROVIDER, status: "SENT", providerMessageId: res.key?.id ?? null };
     } catch (err) {
       const isEvo = err instanceof EvolutionApiError;

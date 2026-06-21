@@ -23,6 +23,7 @@ import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
+import { resolveProviderId, WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 
 /** The Brain front door is ON for everyone by default; set WHATSAPP_BRAIN_ENABLED=false to disable. */
 export function isWhatsAppBrainEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -103,15 +104,28 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const reply = outcome.result.idealResponse?.trim();
   if (!reply) return { status: "SKIPPED", reason: "brain produced no reply" };
 
-  const cfg = await EvolutionConfigService.getSnapshot(restaurantId);
-  if (!cfg.ok) return { status: "SKIPPED", reason: "evolution config missing" };
-
-  await sendReply(cfg.data, conversation.customer.phone, reply, conversationId, {
+  const metadata = {
     source: "WHATSAPP_BRAIN",
     brainIntent: outcome.result.primaryIntent,
     brainMode: outcome.reasoningMode,
     brainEngine: `${outcome.engine.provider}:${outcome.engine.model}`,
-  });
+  };
+
+  // Provider-aware send. The EVOLUTION path below is unchanged; Meta restaurants
+  // (flag on + explicitly selected) reply through the Meta Cloud API. For every
+  // Evolution restaurant resolveProviderId() short-circuits to EVOLUTION, so this
+  // branch is inert in production.
+  const providerId = await resolveProviderId(restaurantId);
+  if (providerId === "META_CLOUD_API") {
+    const sent = await WhatsAppMessagingService.sendConversationReply({
+      restaurantId, conversationId, toPhone: conversation.customer.phone, text: reply, senderType: "AI", metadata,
+    });
+    if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
+  } else {
+    const cfg = await EvolutionConfigService.getSnapshot(restaurantId);
+    if (!cfg.ok) return { status: "SKIPPED", reason: "evolution config missing" };
+    await sendReply(cfg.data, conversation.customer.phone, reply, conversationId, metadata);
+  }
 
   // Escalate AFTER the reply is sent, so the customer still gets the Brain's
   // message and the next turn goes to a human.

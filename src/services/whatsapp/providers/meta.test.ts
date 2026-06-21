@@ -15,6 +15,7 @@ import { createHmac } from "crypto";
 import {
   buildMetaTextPayload,
   buildMetaTemplatePayload,
+  buildMetaMediaPayload,
   toMetaRecipient,
   extractMetaMessageId,
   maskGraphResponse,
@@ -46,6 +47,22 @@ describe("C — sendText payload", () => {
     const masked = maskGraphResponse({ access_token: "EAABwzLixnjYBO123456789", error: "x" });
     expect(masked).not.toContain("EAABwzLixnjYBO123456789");
     expect(masked).toContain("***");
+  });
+
+  it("builds media payloads by URL (caption on image/document, none on audio)", () => {
+    expect(buildMetaMediaPayload("5511999990000", "image", "https://x/y.jpg", "olha")).toEqual({
+      messaging_product: "whatsapp", recipient_type: "individual", to: "5511999990000",
+      type: "image", image: { link: "https://x/y.jpg", caption: "olha" },
+    });
+    expect(buildMetaMediaPayload("5511999990000", "document", "https://x/menu.pdf")).toEqual({
+      messaging_product: "whatsapp", recipient_type: "individual", to: "5511999990000",
+      type: "document", document: { link: "https://x/menu.pdf" },
+    });
+    // audio never carries a caption
+    expect(buildMetaMediaPayload("5511999990000", "audio", "https://x/a.ogg", "ignored")).toEqual({
+      messaging_product: "whatsapp", recipient_type: "individual", to: "5511999990000",
+      type: "audio", audio: { link: "https://x/a.ogg" },
+    });
   });
 });
 

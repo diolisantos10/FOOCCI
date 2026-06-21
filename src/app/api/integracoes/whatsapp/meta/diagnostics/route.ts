@@ -20,17 +20,20 @@ export async function GET(req: NextRequest) {
     const rid = ctx.restaurantId;
     const waConv = { restaurantId: rid, channel: "WHATSAPP" as const };
 
-    const [restaurant, metaPublic, evoStatus, lastInbound, lastOutbound] = await Promise.all([
-      prisma.restaurant.findUnique({ where: { id: rid }, select: { whatsappProvider: true } }),
+    const [restaurant, metaPublic, evoStatus, lastInbound, lastOutbound, templateRequiredFailures, approvedTemplates] = await Promise.all([
+      prisma.restaurant.findUnique({ where: { id: rid }, select: { whatsappProvider: true, allowWhatsAppProviderFallback: true, fallbackProvider: true } }),
       MetaConfigService.getPublic(rid),
       WhatsAppMessagingService.providers.evolution.getConnectionStatus(rid),
       prisma.message.findFirst({ where: { direction: "INBOUND",  conversation: waConv }, orderBy: { sentAt: "desc" }, select: { sentAt: true } }),
       prisma.message.findFirst({ where: { direction: "OUTBOUND", conversation: waConv }, orderBy: { sentAt: "desc" }, select: { sentAt: true, externalStatus: true } }),
+      prisma.message.count({ where: { conversation: waConv, providerError: { contains: "TEMPLATE_REQUIRED" } } }),
+      prisma.metaMessageTemplate.count({ where: { restaurantId: rid, status: "APPROVED" } }),
     ]);
 
     return ok({
       activeProvider:    restaurant?.whatsappProvider ?? "EVOLUTION",
       featureEnabled:    isMetaWhatsAppEnabled(),
+      fallback:          { enabled: !!restaurant?.allowWhatsAppProviderFallback, provider: restaurant?.fallbackProvider ?? "EVOLUTION" },
       evolution:         { connected: evoStatus.connected, detail: evoStatus.detail },
       meta: {
         connected:         metaPublic?.connected ?? false,
@@ -42,9 +45,11 @@ export async function GET(req: NextRequest) {
         lastError:         metaPublic?.lastError ?? null,
         tokenPreview:      metaPublic?.tokenPreview ?? null,
       },
-      webhookConfigured: !!metaWebhookVerifyToken() && !!metaAppSecret(),
-      lastInboundAt:     lastInbound?.sentAt?.toISOString() ?? null,
-      lastOutboundAt:    lastOutbound?.sentAt?.toISOString() ?? null,
+      webhookConfigured:  !!metaWebhookVerifyToken() && !!metaAppSecret(),
+      approvedTemplates,
+      templateRequiredFailures,
+      lastInboundAt:      lastInbound?.sentAt?.toISOString() ?? null,
+      lastOutboundAt:     lastOutbound?.sentAt?.toISOString() ?? null,
       lastOutboundStatus: lastOutbound?.externalStatus ?? null,
     });
   } catch (err) {

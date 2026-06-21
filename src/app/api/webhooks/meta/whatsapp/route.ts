@@ -17,6 +17,7 @@ import { ConversationStatus } from "@prisma/client";
 import { metaWebhookVerifyToken, metaAppSecret } from "@/services/whatsapp/metaFlag";
 import { verifyMetaChallenge, validateMetaSignature, normalizeMetaWebhook } from "@/services/whatsapp/providers/metaWebhook";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "@/services/whatsapp/brain/WhatsAppBrainRuntimeService";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -58,13 +59,16 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
 
   // Delivery statuses → update the matching OUTBOUND message.
   for (const s of norm.statuses) {
+    const failed = s.status === "failed";
     await prisma.message.updateMany({
       where: { externalMessageId: s.providerMessageId },
       data: {
         externalStatus: s.status,
+        providerStatus: s.status,
+        ...(failed && s.errorCode ? { providerError: `META_${s.errorCode}` } : {}),
         ...(s.status === "delivered" ? { deliveredAt: s.timestamp ?? new Date() } : {}),
         ...(s.status === "read"      ? { readAt: s.timestamp ?? new Date() }      : {}),
-        ...(s.status === "failed" && s.errorCode ? { errorMessage: `META_${s.errorCode}` } : {}),
+        ...(failed && s.errorCode ? { errorMessage: `META_${s.errorCode}` } : {}),
       },
     });
   }
@@ -92,6 +96,10 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
         type:              "TEXT",
         sentAt:            m.timestamp,
         externalMessageId: m.providerMessageId,
+        externalStatus:    "received",
+        provider:          "META_CLOUD_API",
+        providerMessageId: m.providerMessageId,
+        providerStatus:    "received",
         metadata:          { provider: "META_CLOUD_API", phoneNumberId: m.phoneNumberId, messageType: m.type },
       },
     });
@@ -99,6 +107,16 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
       where: { id: conv.id },
       data:  { lastMessageAt: m.timestamp, unreadCount: { increment: 1 } },
     });
+
+    // Feed the same agent pipeline Evolution uses: the Brain (default front door)
+    // answers TEXT messages and replies THROUGH the selected provider (Meta here).
+    // Fire-and-forget and self-guarding (Brain skips human-handled / AI-locked
+    // conversations). Order intent / Pix logic is unchanged.
+    if (isWhatsAppBrainEnabled() && m.type === "text" && (m.text ?? "").trim()) {
+      void WhatsAppBrainRuntimeService.respond(conv.id).catch((err) =>
+        console.error("[webhook/meta/whatsapp] brain dispatch failed", err),
+      );
+    }
   }
 }
 

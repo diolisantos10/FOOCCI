@@ -79,6 +79,34 @@ export function buildMetaTemplatePayload(
   };
 }
 
+export type MetaMediaType = "image" | "audio" | "video" | "document";
+
+export interface MetaMediaPayload {
+  messaging_product: "whatsapp";
+  recipient_type:    "individual";
+  to:                string;
+  type:              MetaMediaType;
+  image?:    { link: string; caption?: string };
+  audio?:    { link: string };
+  video?:    { link: string; caption?: string };
+  document?: { link: string; caption?: string };
+}
+
+/** Builds a media message payload by URL ("link"). Audio carries no caption. */
+export function buildMetaMediaPayload(
+  to:        string,
+  mediaType: MetaMediaType,
+  mediaUrl:  string,
+  caption?:  string,
+): MetaMediaPayload {
+  const base = { messaging_product: "whatsapp", recipient_type: "individual", to, type: mediaType } as const;
+  if (mediaType === "audio") return { ...base, audio: { link: mediaUrl } };
+  const media = caption ? { link: mediaUrl, caption } : { link: mediaUrl };
+  if (mediaType === "image")    return { ...base, image: media };
+  if (mediaType === "video")    return { ...base, video: media };
+  return { ...base, document: media };
+}
+
 /** Extracts the provider message id from a Graph send response (if present). */
 export function extractMetaMessageId(raw: unknown): string | null {
   const r = raw as { messages?: Array<{ id?: string }> } | null;
