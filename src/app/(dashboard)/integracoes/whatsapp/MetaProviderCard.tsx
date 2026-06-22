@@ -9,7 +9,8 @@
  * (masked). Shows nothing intrusive when the Meta feature is disabled.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { buildMetaSetupInstructions, metaWebhookUrl, META_WEBHOOK_FIELD } from "@/services/whatsapp/metaSetupInstructions";
 
 interface MetaPublic {
   connected: boolean;
@@ -57,6 +58,7 @@ export function MetaProviderCard() {
   const [busy, setBusy]       = useState<string | null>(null);
   const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [copied, setCopied]   = useState(false);
 
   const appId    = process.env.NEXT_PUBLIC_META_APP_ID;
   const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
@@ -146,12 +148,24 @@ export function MetaProviderCard() {
     finally { setBusy(null); }
   }
 
+  // Copy the internal team setup checklist (env-var NAMES only — never values).
+  async function copyInstructions() {
+    try {
+      await navigator.clipboard.writeText(buildMetaSetupInstructions());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      flash(false, "Não foi possível copiar.");
+    }
+  }
+
   if (loading) return null;
   if (!status) return null;
 
   const meta = status.meta;
   const isMeta = status.activeProvider === "META_CLOUD_API";
   const metaConnected = meta?.connected ?? false;
+  const env = diag?.env;
 
   return (
     <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-5">
@@ -216,42 +230,69 @@ export function MetaProviderCard() {
         </div>
       </div>
 
-      {/* Advanced (collapsed, masked) */}
-      {status.featureEnabled && meta && (
+      {/* Advanced — platform setup checklist (OWNER/MANAGER only; no secrets). */}
+      {diag && (
         <div className="mt-3">
           <button type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-[11px] font-medium text-gray-400 hover:text-gray-600">
-            {showAdvanced ? "Ocultar avançado" : "Avançado"}
+            {showAdvanced ? "Ocultar avançado" : "Avançado · configuração da plataforma"}
           </button>
           {showAdvanced && (
-            <div className="mt-2 space-y-1 rounded-lg bg-gray-50 px-3 py-2 text-[10px] font-mono text-gray-500">
-              <div>status: {meta.connectionStatus}</div>
-              <div>número: {meta.displayPhoneNumber ?? "—"}</div>
-              <div>phoneNumberId: {meta.phoneNumberId ?? "—"}</div>
-              <div>wabaId: {meta.wabaId ?? "—"}</div>
-              <div>businessId: {meta.businessId ?? "—"}</div>
-              <div>token: {meta.tokenPreview ?? "—"}</div>
-              <div>qualidade: {meta.qualityRating ?? "—"}</div>
-              {meta.lastError && <div className="text-red-500">último erro: {meta.lastError}</div>}
-              <div>webhook: /api/webhooks/meta/whatsapp</div>
-              {diag?.env && (
-                <div className="mt-1 border-t border-gray-200 pt-1">
-                  <div className="mb-0.5 text-gray-400">configuração do servidor (Meta):</div>
-                  <EnvRow label="META_WHATSAPP_ENABLED"    on={diag.env.featureEnabled} />
-                  <EnvRow label="META_APP_ID"              on={diag.env.appId} />
-                  <EnvRow label="META_APP_SECRET (assina webhook)" on={diag.env.appSecret} />
-                  <EnvRow label="META_CONFIG_ID"           on={diag.env.configId} />
-                  <EnvRow label="META_WEBHOOK_VERIFY_TOKEN" on={diag.env.webhookVerifyToken} />
-                  <EnvRow label="META_TEST_PHONE"          on={diag.env.testPhone} />
-                  <EnvRow label="NEXT_PUBLIC_META_APP_ID (build)"    on={diag.env.publicAppId} />
-                  <EnvRow label="NEXT_PUBLIC_META_CONFIG_ID (build)" on={diag.env.publicConfigId} />
-                  <div>graph: {diag.env.graphVersion}</div>
-                  {typeof diag.templateRequiredFailures === "number" && (
-                    <div>bloqueios por template (24h): {diag.templateRequiredFailures}</div>
+            <div className="mt-2 space-y-3 rounded-lg bg-gray-50 px-3 py-3 text-[11px] text-gray-600">
+              <button type="button" onClick={copyInstructions}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                {copied ? "Copiado ✓" : "Copiar instruções para configurar Meta"}
+              </button>
+
+              {/* A — Foocci platform readiness (from server env, booleans only) */}
+              {env && (
+                <SetupSection title="A · Plataforma Foocci">
+                  <Check ok={env.featureEnabled}     label="Integração Meta habilitada" />
+                  <Check ok={env.appId}              label="App ID configurado" />
+                  <Check ok={env.appSecret}          label="App Secret configurado" />
+                  <Check ok={env.configId}           label="Config ID (Embedded Signup) configurado" />
+                  <Check ok={env.webhookVerifyToken} label="Verify Token do webhook configurado" />
+                  <Check ok={env.publicAppId}        label="App ID público (navegador) configurado" />
+                  <Check ok={env.publicConfigId}     label="Config ID público (navegador) configurado" />
+                  <Check ok={env.testPhone}          label="Telefone de teste configurado (recomendado)" soft />
+                  <div className="text-gray-400">Versão da Graph API: {env.graphVersion}</div>
+                  {!env.signatureEnforced && (
+                    <div className="text-amber-600">⚠ Assinatura do webhook não exigida — defina META_APP_SECRET.</div>
                   )}
-                  {!diag.env.signatureEnforced && (
-                    <div className="text-amber-600">⚠ assinatura do webhook NÃO exigida (defina META_APP_SECRET)</div>
-                  )}
-                </div>
+                </SetupSection>
+              )}
+
+              {/* B — Meta Business setup (guidance + the few auto-detectable items) */}
+              <SetupSection title="B · Configuração no Meta Business">
+                <Check ok={env?.webhookVerifyToken ?? false} label="Verify token igual ao configurado na Foocci" />
+                <SetupItem label={`URL do webhook: ${metaWebhookUrl()}`} />
+                <SetupItem label={`Campo a assinar: ${META_WEBHOOK_FIELD}`} />
+                <SetupItem label="App Meta criado · produto WhatsApp adicionado · Embedded Signup criado" />
+                <SetupItem label="Permissões: whatsapp_business_messaging, whatsapp_business_management" />
+              </SetupSection>
+
+              {/* C — Safe test flow */}
+              <SetupSection title="C · Fluxo de teste seguro">
+                <SetupItem label="1. Testar conexão (apenas número interno)" />
+                <SetupItem label="2. Simular recebimento (não envia nada)" />
+                <SetupItem label="3. Conectar via Embedded Signup" />
+                <SetupItem label="4. Receber inbound do número interno" />
+                <SetupItem label="5. Conferir Central de Conversas" />
+                <SetupItem label="6. Voltar para Evolution (rollback)" />
+              </SetupSection>
+
+              {/* Masked connection details — only when connected; IDs masked, token preview only */}
+              {meta && (
+                <SetupSection title="Conexão (mascarado)">
+                  <div className="space-y-0.5 font-mono text-[10px] text-gray-500">
+                    <div>status: {meta.connectionStatus}</div>
+                    <div>número: {meta.displayPhoneNumber ?? "—"}</div>
+                    <div>phoneNumberId: {maskId(meta.phoneNumberId)}</div>
+                    <div>wabaId: {maskId(meta.wabaId)}</div>
+                    <div>token: {meta.tokenPreview ?? "—"}</div>
+                    <div>qualidade: {meta.qualityRating ?? "—"}</div>
+                    {meta.lastError && <div className="text-red-500">último erro: {meta.lastError}</div>}
+                  </div>
+                </SetupSection>
               )}
             </div>
           )}
@@ -261,12 +302,32 @@ export function MetaProviderCard() {
   );
 }
 
-function EnvRow({ label, on }: { label: string; on: boolean }) {
+/** Masks a technical id, showing only the last 4 chars (never a secret to begin with). */
+function maskId(v: string | null): string {
+  if (!v) return "—";
+  return v.length <= 4 ? "••••" : `••••${v.slice(-4)}`;
+}
+
+function SetupSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className={on ? "text-green-600" : "text-gray-400"}>
-      {on ? "✓" : "✗"} {label}
+    <div className="space-y-0.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{title}</p>
+      {children}
     </div>
   );
+}
+
+function Check({ ok, label, soft }: { ok: boolean; label: string; soft?: boolean }) {
+  const okColor = soft ? "text-gray-600" : "text-green-600";
+  return (
+    <div className={ok ? okColor : (soft ? "text-gray-400" : "text-red-500")}>
+      {ok ? "✓" : (soft ? "○" : "✗")} {label}
+    </div>
+  );
+}
+
+function SetupItem({ label }: { label: string }) {
+  return <div className="text-gray-500">• {label}</div>;
 }
 
 // ── FB SDK helpers ──────────────────────────────────────────────────────────────
