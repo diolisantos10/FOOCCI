@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Weekly Strategist — analyse each restaurant once a week and build a plan.
+#
+# COPILOT restaurants → plan awaits the lojista's approval in the dashboard.
+# AUTOPILOT restaurants → eligible items are auto-approved & turned into recurring
+# campaigns inside their guardrails (the existing runner then sends them safely).
+#
+# This endpoint NEVER sends a WhatsApp message directly — it only creates plans /
+# campaigns. Actual sending stays with run-scheduled-campaigns (its own cron).
+#
+# Schedule: Mondays 10:00 UTC (07:00 America/Sao_Paulo). Also manual.
+# Auth: CRON_SECRET (NOT ADMIN_SECRET).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Weekly Strategist
+
+on:
+  schedule:
+    - cron: "0 10 * * 1" # Mondays 10:00 UTC = 07:00 Brasília
+  workflow_dispatch:
+    inputs:
+      restaurant_id:
+        description: "Optional: scope to a single restaurant id (blank = all)"
+        type: string
+        default: ""
+      force:
+        description: "Force? (true = discard an existing plan for the week and recompute)"
+        type: choice
+        default: "false"
+        options: ["false", "true"]
+
+jobs:
+  weekly-plan:
+    name: "CRM Weekly Strategist"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/crm/weekly-plan" >> "$GITHUB_OUTPUT"
+
+      - name: "Generate weekly plans"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RESTAURANT_ID: ${{ inputs.restaurant_id }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          BODY=$(jq -nc \
+            --argjson force "$([[ "$FORCE" == "true" ]] && echo true || echo false)" \
+            --arg rid "$RESTAURANT_ID" \
+            '{force:$force} + (if $rid=="" then {} else {restaurantId:$rid} end)')
+          echo "→ payload: $BODY"
+          set +e
+          curl --connect-timeout 20 --max-time 600 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "$BODY" \
+            -o /tmp/plan.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP         : $HTTP"
+          echo "← ok           : $(jq -r '.ok'           /tmp/plan.json 2>/dev/null)"
+          echo "← scope        : $(jq -r '.scope // "?"' /tmp/plan.json 2>/dev/null)"
+          echo "← processed    : $(jq -r '.processed // "?"'    /tmp/plan.json 2>/dev/null)"
+          echo "← created      : $(jq -r '.created // "?"'      /tmp/plan.json 2>/dev/null)"
+          echo "← autoExecuted : $(jq -r '.autoExecuted // "?"' /tmp/plan.json 2>/dev/null)"
+          echo "← errors       : $(jq -rc '.errors // []'      /tmp/plan.json 2>/dev/null)"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::weekly-plan non-2xx ($HTTP)."; exit 1; fi
+          echo "✅ CRM Weekly Strategist concluído."

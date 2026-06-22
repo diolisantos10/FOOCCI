@@ -1884,12 +1884,100 @@ model RestaurantCRMProfile {
   profileVersion       Int            @default(0) // bumped each time weights are recomputed
   whatsAppSafetyConfig Json? // CRMWhatsAppSafetyConfig — global sending safety rules
   segmentConfig        Json? // SegmentConfig — relationship segment day thresholds
+  // ── Autonomy (Weekly Strategist) ───────────────────────────────────────────
+  // How the weekly CRM plan is decided: COPILOT proposes & waits for approval;
+  // AUTOPILOT auto-approves & executes eligible items inside the guardrails below.
+  autonomyMode         String         @default("COPILOT") // "COPILOT" | "AUTOPILOT"
+  // AutonomyConfig JSON — guardrails for AUTOPILOT and limits for plan generation:
+  // { weeklySendBudget?, maxAudiencePerCampaign?, allowedActionTypes?: string[],
+  //   autoApproveMaxPriority?: "HIGH"|"MEDIUM"|"LOW", excludedActionTypes?: string[] }
+  autonomyConfig       Json?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_crm_profiles")
+}
+
+// ═══════════════════════════════════════════
+//  CRM WEEKLY PLAN  (Autonomous Strategist — Phase 1)
+//  The agent analyses the restaurant's situation once a week (CrmActionCenter)
+//  and proposes a plan of campaigns. In COPILOT mode the lojista approves;
+//  in AUTOPILOT mode eligible items are auto-approved & executed inside
+//  guardrails. Executing an item creates a real (recurring) Campaign, which the
+//  existing ScheduledCampaignRunner then sends safely. Like CRMContactLedger,
+//  the plan is intentionally FK-less to Restaurant (operational/derived data).
+// ═══════════════════════════════════════════
+
+model CrmWeeklyPlan {
+  id           String              @id @default(cuid())
+  restaurantId String
+  weekStart    DateTime // Monday 00:00 (restaurant tz) — one plan per restaurant per week
+  status       CrmWeeklyPlanStatus @default(PENDING_APPROVAL)
+  autonomyMode String              @default("COPILOT") // snapshot of mode at generation time
+  summary      Json? // { totalItems, totalAudience, totalEstimatedRevenue, highPriority, ... }
+  warnings     String[] // carried over from the Action Center (e.g. WhatsApp not configured)
+  notes        String?             @db.Text
+  generatedAt  DateTime            @default(now())
+  decidedAt    DateTime? // when the plan was approved/rejected (or auto-decided)
+  decidedBy    String? // userId, or "AUTOPILOT"
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  items CrmWeeklyPlanItem[]
+
+  @@index([restaurantId, weekStart])
+  @@index([restaurantId, status])
+  @@map("crm_weekly_plans")
+}
+
+model CrmWeeklyPlanItem {
+  id                      String                  @id @default(cuid())
+  planId                  String
+  restaurantId            String // denormalized for tenant-scoped queries
+  actionType              String // CrmActionType (e.g. RECOVER_COLD_CUSTOMERS)
+  title                   String
+  rationale               String                  @db.Text // why the agent proposes this
+  targetSegment           String // FRIO | MORNO | VIP | ANIVERSARIANTES | RECENTE_AVALIACAO
+  templateId              String?
+  objective               String?
+  messageTemplate         String                  @db.Text // editable proposed message
+  estimatedAudience       Int                     @default(0)
+  estimatedRevenue        Decimal                 @default(0) @db.Decimal(12, 2)
+  priority                String                  @default("MEDIUM") // HIGH | MEDIUM | LOW
+  suggestedScheduleConfig Json? // proposed { mode, weekdays, timeWindow, dailyLimit, ... }
+  couponCode              String?
+  status                  CrmWeeklyPlanItemStatus @default(PROPOSED)
+  campaignId              String? // set once executed → the created Campaign.id
+  executionError          String? // populated if execute() failed for this item
+  decidedAt               DateTime?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  plan CrmWeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([restaurantId, status])
+  @@map("crm_weekly_plan_items")
+}
+
+enum CrmWeeklyPlanStatus {
+  PENDING_APPROVAL
+  PARTIALLY_APPROVED // some items approved, some rejected/pending
+  APPROVED
+  REJECTED
+  EXECUTED // approved items have been turned into campaigns
+  EXPIRED // superseded by a newer week's plan without action
+}
+
+enum CrmWeeklyPlanItemStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  EXECUTED // a Campaign was created from this item
+  FAILED // execute() failed (see executionError)
+  SKIPPED // not eligible (e.g. zero audience, guardrail)
 }
 
 // ═══════════════════════════════════════════

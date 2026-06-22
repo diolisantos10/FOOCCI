@@ -8,6 +8,7 @@ import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ProgramaTab } from "./ProgramaTab";
+import { WeeklyPlanTab } from "./WeeklyPlanTab";
 import { ReviewRequestModal } from "./ReviewRequestModal";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
 import { isGuestIdentifier } from "@/lib/guest";
@@ -5567,10 +5568,11 @@ function SegmentacaoConfig() {
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
+type Tab = "overview" | "plano-semana" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
 
 const TAB_PARAM_MAP: Record<string, Tab> = {
   "visao-geral":   "overview",
+  "plano-semana":  "plano-semana",
   "campanhas":     "campanhas",
   "automacoes":    "automacoes",
   "clientes":      "customers",
@@ -5580,6 +5582,7 @@ const TAB_PARAM_MAP: Record<string, Tab> = {
 
 const TAB_URL_MAP: Record<Tab, string> = {
   overview:       "visao-geral",
+  "plano-semana": "plano-semana",
   campanhas:      "campanhas",
   automacoes:     "automacoes",
   customers:      "clientes",
@@ -5734,6 +5737,7 @@ export function CRMClient({
   // intacto e as automações já configuradas continuam rodando.
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",      label: "Visão Geral" },
+    { id: "plano-semana",  label: "Plano da Semana" },
     { id: "campanhas",     label: "Campanhas" },
     { id: "customers",     label: "Clientes" },
     { id: "programa",      label: "Programa de Relacionamento" },
@@ -5799,6 +5803,9 @@ export function CRMClient({
           topCustomers={topCustomers}
           topCustomersLoading={topCustomersLoading}
         />
+      )}
+      {tab === "plano-semana" && (
+        <WeeklyPlanTab />
       )}
       {tab === "campanhas" && (
         <CampanhasTab stats={currentStats} />
