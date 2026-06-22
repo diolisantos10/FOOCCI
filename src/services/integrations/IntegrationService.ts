@@ -75,6 +75,14 @@ function decodeConfig<T>(blob: string): T {
   return JSON.parse(decrypt(blob)) as T;
 }
 
+/** Race a promise against a timeout so a hung Evolution never stalls the page. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
 function maskView(raw: AnyRaw, provider: IntegrationProvider): Record<string, string | null> {
   if (provider === "stone") {
     const r = raw as StoneRaw;
@@ -201,18 +209,38 @@ export class IntegrationService {
       }
       const v = result.data;
       const hasMinimalConfig = !!v.instanceName && !!v.baseUrl;
+      const fields = {
+        instanceName:         v.instanceName,
+        baseUrl:              v.baseUrl,
+        apiKeyPreview:        v.apiKeyPreview,
+        webhookSecretPreview: v.webhookSecretPreview,
+      };
+
+      // Not active / not minimally configured → no need to reach Evolution.
+      if (!v.isActive || !hasMinimalConfig) {
+        return serviceOk({
+          provider:     "whatsapp",
+          status:       hasMinimalConfig ? "configured" : "unconfigured",
+          isActive:     v.isActive,
+          lastTestedAt: null,
+          lastError:    null,
+          fields,
+        });
+      }
+
+      // Active config: NEVER trust isActive alone. isActive only means "a config
+      // row exists and was activated" — it stays true after the WhatsApp session
+      // drops. Query the LIVE connection state so the badge can't claim
+      // "Conectado" while the instance is actually "close" (the reported bug:
+      // status shows connected but messages get no reply).
+      const live = await IntegrationService._liveWhatsAppStatus(restaurantId);
       return serviceOk({
         provider:     "whatsapp",
-        status:       v.isActive ? "active" : hasMinimalConfig ? "configured" : "unconfigured",
+        status:       live.status,
         isActive:     v.isActive,
         lastTestedAt: null,
-        lastError:    null,
-        fields: {
-          instanceName:        v.instanceName,
-          baseUrl:             v.baseUrl,
-          apiKeyPreview:       v.apiKeyPreview,
-          webhookSecretPreview: v.webhookSecretPreview,
-        },
+        lastError:    live.lastError,
+        fields,
       });
     }
 
@@ -382,6 +410,30 @@ export class IntegrationService {
   }
 
   // ── private test helpers ─────────────────────────────────────────────────────
+
+  /**
+   * Live WhatsApp connection status — the SOURCE OF TRUTH for the badge.
+   * Only reports "active" (→ "Conectado") when the Evolution instance is
+   * genuinely "open". A dropped/closed session maps to "error", and an
+   * in-progress link to "pending_validation" (→ "Aguardando conexão"). A
+   * verification failure never claims connected.
+   */
+  private static async _liveWhatsAppStatus(
+    restaurantId: string,
+  ): Promise<{ status: IntegrationView["status"]; lastError: string | null }> {
+    const snap = await EvolutionConfigService.getSnapshot(restaurantId);
+    if (!snap.ok) return { status: "error", lastError: "WhatsApp não configurado." };
+    try {
+      const status = await withTimeout(EvolutionClient.getInstanceStatus(snap.data), 6000);
+      if (status.state === "open") return { status: "active", lastError: null };
+      if (status.state === "connecting") {
+        return { status: "pending_validation", lastError: "Conectando — escaneie o QR code para finalizar." };
+      }
+      return { status: "error", lastError: "WhatsApp desconectado. Reconecte escaneando o QR code." };
+    } catch {
+      return { status: "error", lastError: "Não foi possível verificar a conexão com o WhatsApp no momento." };
+    }
+  }
 
   private static async _testWhatsApp(restaurantId: string): Promise<ServiceResult<TestResult>> {
     const snap = await EvolutionConfigService.getSnapshot(restaurantId);
