@@ -71,6 +71,12 @@ interface RoutingReadiness {
 type WaMode = "DRY_RUN_ONLY" | "ALLOWLIST_REPLY_ONLY" | "ALLOWLIST_FULL_TEST";
 type WaScope = "PHONE_ALLOWLIST" | "RESTAURANT_WIDE";
 
+interface EngineHealth {
+  brain: { provider: string; model: string; reasoning: "LLM" | "FALLBACK"; openaiConfigured: boolean; reason: string };
+  flags: { frontDoorEnabled: boolean; orderBrainEnabled: boolean };
+  providersConfigured: string[];
+}
+
 interface ActivationConfig {
   restaurantId: string;
   enabled: boolean;
@@ -144,6 +150,7 @@ export default function WaTextOrderingPage() {
   const [customerId, setCustomerId]   = useState("");
   const [mode, setMode]               = useState<"dry_run" | "reply_only" | "full_test">("dry_run");
   const [message, setMessage]         = useState("quero 2 yakisoba e uma coca");
+  const [engine, setEngine]           = useState<EngineHealth | null>(null);
 
   const [result, setResult]           = useState<SimResult | null>(null);
   const [sessionState, setSessionState] = useState<Record<string, unknown> | null>(null);
@@ -310,6 +317,14 @@ export default function WaTextOrderingPage() {
   // Auto-load the persisted config when the page opens and whenever the slug changes.
   useEffect(() => { void loadConfig(); }, [loadConfig]);
 
+  // Brain engine health — is the AI pilot actually ON in production? (reads prod env)
+  useEffect(() => {
+    fetch("/api/admin/diagnostics/whatsapp-text-ordering/engine")
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.brain) setEngine(d as EngineHealth); })
+      .catch(() => {});
+  }, []);
+
   const patchConfig = useCallback(async (patch: Record<string, unknown>, okMsg: string) => {
     setCfgSaving(true); setCfgError(null); setCfgOk(null);
     try {
@@ -391,6 +406,48 @@ export default function WaTextOrderingPage() {
         </a>
       </div>
       <p className="text-sm text-gray-500">Simule pedidos por WhatsApp sem afetar clientes reais.</p>
+
+      {/* A1. Brain engine health — is the AI pilot actually ON in production? */}
+      <div className={`mt-4 rounded-xl border p-4 ${
+        engine
+          ? engine.brain.reasoning === "LLM"
+            ? "border-green-300 bg-green-50"
+            : "border-red-300 bg-red-50"
+          : "border-gray-200 bg-gray-50"
+      }`}>
+        <h3 className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+          🧠 Cérebro do agente (produção)
+        </h3>
+        {!engine ? (
+          <p className="mt-1 text-sm text-gray-500">Verificando…</p>
+        ) : engine.brain.reasoning === "LLM" ? (
+          <div className="mt-1">
+            <p className="text-sm font-semibold text-green-800">
+              ✅ LIGADO — raciocinando com IA ({engine.brain.model})
+            </p>
+            <p className="text-xs text-green-700">
+              O agente está pensando de verdade. Se ainda erra, o caminho é afinar o raciocínio/prompt.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-1">
+            <p className="text-sm font-semibold text-red-800">
+              🔴 DESLIGADO — usando a regex velha (fallback)
+            </p>
+            <p className="text-xs text-red-700">
+              Falta a <span className="font-mono">OPENAI_API_KEY</span> no Railway do FOOCCI. Sem ela, o cérebro
+              não pensa e o agente erra como antes. <b>Esse é o conserto nº 1.</b>
+            </p>
+          </div>
+        )}
+        {engine && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Pill text={`OpenAI: ${engine.brain.openaiConfigured ? "configurada ✓" : "ausente ✗"}`} tone={engine.brain.openaiConfigured ? "green" : "red"} />
+            <Pill text={`porta do cérebro: ${engine.flags.frontDoorEnabled ? "ON" : "OFF"}`} tone={engine.flags.frontDoorEnabled ? "green" : "gray"} />
+            <Pill text={`cérebro do pedido: ${engine.flags.orderBrainEnabled ? "ON" : "OFF"}`} tone={engine.flags.orderBrainEnabled ? "green" : "gray"} />
+          </div>
+        )}
+      </div>
 
       {/* B. Safety banner */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs">
