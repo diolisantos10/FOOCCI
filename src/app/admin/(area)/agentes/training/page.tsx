@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { CycleValidationReport } from "@/app/api/admin/training/validate-cycle/route";
 import { EXTERNAL_ARENAS } from "@/services/agent-training/arenas";
+import { UnifiedInboxTab } from "./UnifiedInboxTab";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2224,10 +2225,11 @@ function RunDetailView({ runId, onBack }: { runId: string; onBack: () => void })
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "visao-geral" | "arena" | "casos" | "melhorias" | "versoes" | "validacao" | "configuracoes";
+type Tab = "visao-geral" | "caixa-unica" | "arena" | "casos" | "melhorias" | "versoes" | "validacao" | "configuracoes";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "visao-geral",     label: "Visão Geral" },
+  { id: "caixa-unica",     label: "📥 Caixa Única" },
   { id: "arena",           label: "Arena" },
   { id: "casos",           label: "Casos" },
   { id: "melhorias",       label: "Melhorias para Aprovar" },
@@ -2346,7 +2348,7 @@ export default function AgentTrainingPage() {
             </p>
           </div>
           {pendingCount > 0 && (
-            <button onClick={() => setTab("melhorias")}
+            <button onClick={() => setTab("caixa-unica")}
               className="flex items-center gap-2 rounded-full bg-yellow-900/40 px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-900/60 border border-yellow-700/40 transition-colors">
               <span className="flex h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
               {pendingCount} melhoria{pendingCount > 1 ? "s" : ""} para aprovar
@@ -2389,6 +2391,7 @@ export default function AgentTrainingPage() {
             backfillResult={backfillResult}
           />
         )}
+        {tab === "caixa-unica"   && <UnifiedInboxTab />}
         {tab === "arena"         && <ArenaTab />}
         {tab === "casos"         && <CasosTab onSelectScenario={(id) => setSelectedScenario(id)} />}
         {tab === "melhorias"     && <MelhoriasTab />}
