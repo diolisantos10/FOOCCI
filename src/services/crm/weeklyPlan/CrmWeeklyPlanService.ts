@@ -85,6 +85,42 @@ export class CrmWeeklyPlanService {
     return { mode, config };
   }
 
+  /**
+   * Cross-tenant autonomy overview for the Admin control panel: every restaurant
+   * with its current mode, resolved guardrails and latest weekly plan status.
+   */
+  static async listAutonomyOverview() {
+    const [restaurants, profiles, plans] = await Promise.all([
+      prisma.restaurant.findMany({ select: { id: true, name: true, slug: true }, orderBy: { name: "asc" } }),
+      prisma.restaurantCRMProfile.findMany({
+        select: { restaurantId: true, autonomyMode: true, autonomyConfig: true },
+      }),
+      prisma.crmWeeklyPlan.findMany({
+        orderBy: { weekStart: "desc" },
+        select: { restaurantId: true, weekStart: true, status: true, summary: true },
+      }),
+    ]);
+
+    const profileMap = new Map(profiles.map((p) => [p.restaurantId, p]));
+    const latestPlan = new Map<string, (typeof plans)[number]>();
+    for (const pl of plans) {
+      if (!latestPlan.has(pl.restaurantId)) latestPlan.set(pl.restaurantId, pl); // desc → first seen is latest
+    }
+
+    return restaurants.map((r) => {
+      const prof = profileMap.get(r.id);
+      const mode: AutonomyMode = prof?.autonomyMode === "AUTOPILOT" ? "AUTOPILOT" : "COPILOT";
+      return {
+        restaurantId: r.id,
+        name: r.name,
+        slug: r.slug,
+        mode,
+        config: resolveAutonomyConfig(prof?.autonomyConfig),
+        latestPlan: latestPlan.get(r.id) ?? null,
+      };
+    });
+  }
+
   // ─── Item-level decisions ────────────────────────────────────────────────────
 
   /** Approve one proposed item and execute it (create its recurring campaign). */

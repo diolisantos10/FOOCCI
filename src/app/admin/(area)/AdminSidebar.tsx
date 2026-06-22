@@ -31,6 +31,7 @@ export function AdminSidebar() {
     { href: "/admin/diagnostics/whatsapp-routing-test",    label: "WA Routing Lab", icon: "🧬" },
     { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes", icon: "🧠" },
     { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",    icon: "📞" },
+    { href: "/admin/agentes/crm/autonomia",                label: "CRM Autonomia", icon: "🧭" },
     { href: "/admin/agentes/analytics/testes",             label: "Analytics Testes", icon: "📊" },
     { href: "/admin/diagnostics/whatsapp-text-ordering", label: "WA Pedido Texto", icon: "🧾" },
     { href: "/admin/agents/whatsapp",                    label: "WA Cockpit",      icon: "🎛️" },
