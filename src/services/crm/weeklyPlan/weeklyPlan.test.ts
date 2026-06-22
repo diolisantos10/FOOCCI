@@ -67,8 +67,18 @@ describe("buildPlanItemDraft — supported opportunities map to safe segments", 
     expect(buildPlanItemDraft(action("RECOVER_COLD_CUSTOMERS", { eligibleCount: 0 }))).toBeNull();
   });
 
-  it("does NOT convert unsupported segments (PERDIDO / SEM_PEDIDOS / high-value / coupon)", () => {
-    expect(buildPlanItemDraft(action("RECOVER_LOST_CUSTOMERS"))).toBeNull();
+  it("RECOVER_LOST_CUSTOMERS → PERDIDO win-back, scheduled before cold recovery", () => {
+    const lost = buildPlanItemDraft(action("RECOVER_LOST_CUSTOMERS", { priority: "HIGH" }));
+    expect(lost).not.toBeNull();
+    expect(lost!.targetSegment).toBe("PERDIDO");
+    expect(lost!.templateId).toBe("recuperar-perdidos");
+    // Lost runs at 10:00, cold at 11:00 → lost customers get the win-back first.
+    expect(lost!.suggestedScheduleConfig.timeWindow.start).toBe("10:00");
+    const cold = buildPlanItemDraft(action("RECOVER_COLD_CUSTOMERS"));
+    expect(cold!.suggestedScheduleConfig.timeWindow.start).toBe("11:00");
+  });
+
+  it("does NOT convert segments without a precise audience (SEM_PEDIDOS / high-value / coupon)", () => {
     expect(buildPlanItemDraft(action("NO_ORDER_FIRST_PURCHASE"))).toBeNull();
     expect(buildPlanItemDraft(action("HIGH_VALUE_CUSTOMER_ATTENTION"))).toBeNull();
     expect(buildPlanItemDraft(action("COUPON_OPPORTUNITY"))).toBeNull();
@@ -82,16 +92,18 @@ describe("buildPlanItemDraft — supported opportunities map to safe segments", 
     expect(ok!.messageTemplate).toContain("{link_avaliacao_google}");
   });
 
-  it("buildPlanDrafts drops alerts and unsupported, keeps order", () => {
+  it("buildPlanDrafts drops alerts, keeps supported in order", () => {
     const drafts = buildPlanDrafts([
       action("SAFETY_ISSUE_ALERT"),
       action("RECOVER_COLD_CUSTOMERS", { priority: "HIGH" }),
       action("RECOVER_LOST_CUSTOMERS"),
+      action("NO_ORDER_FIRST_PURCHASE"),
       action("VIP_APPRECIATION"),
       action("CAMPAIGN_PERFORMANCE_ALERT"),
     ]);
     expect(drafts.map((d) => d.actionType)).toEqual([
       "RECOVER_COLD_CUSTOMERS",
+      "RECOVER_LOST_CUSTOMERS",
       "VIP_APPRECIATION",
     ]);
   });

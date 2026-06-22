@@ -84,6 +84,7 @@ export interface SendResult {
 const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "clientes-quentes":   "QUENTE",
   "recuperar-frios":    "FRIO",
+  "recuperar-perdidos": "PERDIDO",
   "reativar-mornos":    "MORNO",
   "segunda-compra":     "PRIMEIRO_PEDIDO",
   "clientes-vip":       "VIP",
@@ -162,6 +163,21 @@ export async function resolveAudience(
           OR: [
             { lastOrderAt: { lt: cutoffs.warmCutoff } },
             { lastOrderAt: null, importedLastOrderAt: { lt: cutoffs.warmCutoff } },
+          ],
+        },
+        orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+
+    case "PERDIDO":
+      // Lost customers: no order since the lostCutoff (default 120+ days).
+      // Distinct from FRIO so the Weekly Strategist can send a stronger win-back.
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          OR: [
+            { lastOrderAt: { lt: cutoffs.lostCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { lt: cutoffs.lostCutoff } },
           ],
         },
         orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],

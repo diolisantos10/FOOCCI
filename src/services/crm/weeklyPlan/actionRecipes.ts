@@ -7,9 +7,12 @@
  *
  * SCOPE GUARD (V1):
  *   - Only maps action types whose targetSegment `resolveAudience()` supports
- *     CORRECTLY. PERDIDO / SEM_PEDIDOS have no audience case (they fall through to
- *     "TODOS" = everyone) so they are intentionally NOT auto-converted here — the
- *     "FRIO" recovery already sweeps 61+ days (cold + lost) without mis-targeting.
+ *     CORRECTLY. SEM_PEDIDOS / high-value / coupon have no precise audience case
+ *     yet, so they are intentionally NOT auto-converted here.
+ *   - Cold (FRIO, 61–120d) and lost (PERDIDO, 120+d) are split into two recipes
+ *     with different message strength. The lost campaign runs an hour earlier so a
+ *     lost customer gets the stronger win-back first; the cross-campaign 24h safety
+ *     gate then prevents the cold nudge from re-hitting them the same day.
  *   - Alert-type actions (SAFETY_ISSUE_ALERT, CAMPAIGN_PERFORMANCE_ALERT) are not
  *     campaigns; the planner surfaces them as warnings instead.
  *   - Messages follow the CrmAgentProfile tone floor: human, ≤3 short paragraphs,
@@ -71,6 +74,19 @@ const RECIPES: Partial<Record<CrmActionType, Recipe>> = {
     weekdays: WEEKDAYS_BUSINESS,
     timeWindow: { start: "11:00", end: "20:00" },
     dailyLimit: 25,
+  },
+  RECOVER_LOST_CUSTOMERS: {
+    targetSegment: "PERDIDO",
+    templateId: "recuperar-perdidos",
+    objective: "RECUPERAR",
+    message:
+      "Oi, {nome} 💙 Faz um bom tempo que a gente não se vê por aqui — e a sua presença fez falta de verdade.\n\n" +
+      "Separei o cardápio com carinho pra te receber de volta. Bora matar a saudade? {link_cardapio}",
+    // Runs an hour earlier than the cold recovery so a lost customer gets the
+    // stronger win-back first (the 24h cross-campaign gate then skips the cold nudge).
+    weekdays: WEEKDAYS_BUSINESS,
+    timeWindow: { start: "10:00", end: "20:00" },
+    dailyLimit: 20,
   },
   WARM_CUSTOMERS: {
     targetSegment: "MORNO",
