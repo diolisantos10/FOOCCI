@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     const force = url.searchParams.get("force") === "true" || body.force === true;
 
     if (restaurantId) {
-      const result = await CrmWeeklyPlannerService.generateForRestaurant(restaurantId, { force });
+      const result = await CrmWeeklyPlannerService.generateForRestaurant(restaurantId, { force, notify: true });
       return NextResponse.json({ ok: true, scope: "single", ...result });
     }
 
-    const summary = await CrmWeeklyPlannerService.generateForAllRestaurants({ force });
+    const summary = await CrmWeeklyPlannerService.generateForAllRestaurants({ force, notify: true });
     return NextResponse.json({ ok: true, scope: "all", ...summary });
   } catch (err) {
     console.error("[cron/crm/weekly-plan]", err);

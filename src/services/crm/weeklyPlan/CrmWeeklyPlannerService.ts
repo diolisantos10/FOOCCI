@@ -18,6 +18,7 @@ import { CrmActionCenterService } from "@/services/crm/CrmActionCenterService";
 import { buildPlanDrafts } from "./actionRecipes";
 import { decidePlan } from "./autonomyPolicy";
 import { CrmWeeklyPlanService } from "./CrmWeeklyPlanService";
+import { CrmWeeklyNotificationService } from "./CrmWeeklyNotificationService";
 
 export interface GenerateResult {
   planId: string;
@@ -45,7 +46,7 @@ export class CrmWeeklyPlannerService {
    */
   static async generateForRestaurant(
     restaurantId: string,
-    opts?: { now?: Date; force?: boolean },
+    opts?: { now?: Date; force?: boolean; notify?: boolean },
   ): Promise<GenerateResult> {
     const now = opts?.now ?? new Date();
     const weekStart = isoWeekStart(now);
@@ -115,6 +116,23 @@ export class CrmWeeklyPlannerService {
       autoExecuted = res.executed;
     }
 
+    // Proactively ping the owner on WhatsApp (cron only — opt-in via `notify`).
+    if (opts?.notify) {
+      const notifyPayload = {
+        items: decision.decisions.map((d) => ({ status: d.status })),
+        summary,
+      };
+      try {
+        if (mode === "AUTOPILOT" && autoExecuted > 0) {
+          await CrmWeeklyNotificationService.notifyAutopilotExecuted(restaurantId, notifyPayload, autoExecuted);
+        } else {
+          await CrmWeeklyNotificationService.notifyPlanReady(restaurantId, notifyPayload);
+        }
+      } catch {
+        /* best-effort — a notification failure never fails plan generation */
+      }
+    }
+
     return {
       planId: plan.id,
       created: true,
@@ -127,7 +145,7 @@ export class CrmWeeklyPlannerService {
    * Cron entry point: generate plans for every restaurant that has a real
    * (non-guest, active) customer base — those are the ones a plan can act on.
    */
-  static async generateForAllRestaurants(opts?: { now?: Date; force?: boolean }): Promise<BatchResult> {
+  static async generateForAllRestaurants(opts?: { now?: Date; force?: boolean; notify?: boolean }): Promise<BatchResult> {
     const rows = await prisma.customer.groupBy({
       by: ["restaurantId"],
       where: { isGuest: false, isActive: true },
@@ -138,6 +156,10 @@ export class CrmWeeklyPlannerService {
     const result: BatchResult = { processed: 0, created: 0, autoExecuted: 0, errors: [] };
     for (const restaurantId of restaurantIds) {
       try {
+        // First, the digest for last week's results (best-effort), then this week's plan.
+        if (opts?.notify) {
+          await CrmWeeklyNotificationService.sendResultsDigest(restaurantId, { now: opts?.now }).catch(() => undefined);
+        }
         const r = await this.generateForRestaurant(restaurantId, opts);
         result.processed += 1;
         if (r.created) result.created += 1;
