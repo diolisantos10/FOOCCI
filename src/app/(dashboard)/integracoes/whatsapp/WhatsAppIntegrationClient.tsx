@@ -783,6 +783,17 @@ function WebhookLogTable({ events }: { events: WebhookLogEvent[] }) {
 export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const isOwner = userRole === "OWNER";
 
+  // Support mode — the technical "Configurações avançadas" block (diagnostics,
+  // maintenance, deep probes, raw credentials, secret rotation) is HIDDEN from
+  // the lojista and only appears for Foocci support via ?suporte=1. This keeps
+  // the owner's page clean (status + QR + health) without losing the tools used
+  // to debug a connection. Starts false (SSR-safe); set on the client after mount.
+  const [supportMode, setSupportMode] = useState(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setSupportMode(p.get("suporte") === "1" || p.get("support") === "1");
+  }, []);
+
   const [view,    setView]    = useState<EvolutionView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -1287,7 +1298,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           {webhookLogSummary?.lastError && (webhookLogSummary.acceptedRealEvents ?? 0) === 0 && (
             <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
               Atenção: {webhookLogSummary.lastError === "signature_mismatch"
-                ? "Problema de autenticação na conexão. Acesse Avançado → Diagnósticos."
+                ? "Problema de autenticação na conexão. Fale com o suporte Foocci para reconfigurar."
                 : webhookLogSummary.lastError}
             </div>
           )}
@@ -1393,8 +1404,8 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
         </p>
       </div>
 
-      {/* ── Advanced settings (OWNER only, collapsed) ──────────────────────── */}
-      {isOwner && (
+      {/* ── Advanced settings — Foocci support only (hidden from lojista; ?suporte=1) ── */}
+      {isOwner && supportMode && (
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
 
           {/* Toggle header */}
