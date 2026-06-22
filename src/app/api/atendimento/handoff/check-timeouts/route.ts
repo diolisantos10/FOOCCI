@@ -1,21 +1,35 @@
 /**
  * POST /api/atendimento/handoff/check-timeouts
  *
- * Previously auto-returned conversations to AI after 5 min of human inactivity.
+ * PRODUCT DECISION (2026-05-28): Human handoff is PERSISTENT. The AI never
+ * auto-returns; IA returns ONLY by explicit staff action ("Devolver para IA").
+ * This endpoint does NOT change that — it performs no mutation.
  *
- * PRODUCT DECISION (2026-05-28): Human handoff is now persistent.
- * IA returns ONLY by explicit staff action via the Atendimento UI ("Devolver para IA").
- * Auto-resume on timeout has been permanently removed.
+ * What it does now (alert-only, added 2026-06-22): it reports the conversations
+ * where the customer's last message has gone unanswered by a human for at least
+ * WHATSAPP_HANDOFF_ALERT_MINUTES (default 10). The standard handoff alarm goes
+ * silent once a conversation is assumed/acknowledged, so this re-surfaces the
+ * "assumed but never actually answered" dropped-ball case to the Atendimento UI.
  *
- * Endpoint kept for backwards compatibility — the /atendimento client polls it every ~60 s.
- * It is now a safe no-op that reports how many conversations are in human mode.
+ * The /atendimento client polls this every ~60 s and raises a visible/audible
+ * alert for the returned `overdue` list. `timedOut` is kept as an empty array for
+ * backwards compatibility (no auto-return ever happens here).
  */
 
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
-import { ConversationStatus } from "@prisma/client";
+import { ConversationStatus, ConversationType } from "@prisma/client";
+import { selectOverdueHandoffs } from "@/lib/handoff-overdue";
+
+const DEFAULT_ALERT_MINUTES = 10;
+const RECENCY_CAP_MS = 24 * 60 * 60 * 1000; // ignore ancient/abandoned threads
+
+function alertMinutes(): number {
+  const raw = Number(process.env.WHATSAPP_HANDOFF_ALERT_MINUTES);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_ALERT_MINUTES;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,18 +37,53 @@ export async function POST(req: NextRequest) {
     if (!ctx) return unauthorized();
 
     const { restaurantId } = ctx;
+    const now = new Date();
+    const thresholdMinutes = alertMinutes();
+    const thresholdMs = thresholdMinutes * 60_000;
 
-    const checked = await prisma.conversation.count({
+    // Candidates: WhatsApp customer conversations in human mode that have been idle
+    // for at least the threshold (and not ancient). Staff/supplier locks excluded.
+    const candidates = await prisma.conversation.findMany({
       where: {
         restaurantId,
-        aiEnabled: false,
-        status: { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
-        channel: "WHATSAPP",
+        channel:          "WHATSAPP",
+        aiLocked:         false,
+        conversationType: ConversationType.CUSTOMER,
+        status:           { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
+        lastMessageAt: {
+          lte: new Date(now.getTime() - thresholdMs),
+          gte: new Date(now.getTime() - RECENCY_CAP_MS),
+        },
       },
+      select: {
+        id:            true,
+        customerName:  true,
+        lastMessageAt: true,
+        customer:      { select: { name: true } },
+        messages: {
+          orderBy: { sentAt: "desc" },
+          take:    1,
+          select:  { direction: true, senderType: true },
+        },
+      },
+      orderBy: { lastMessageAt: "asc" },
+      take: 200,
     });
 
-    // Human handoff is persistent; IA returns only by explicit staff action.
-    return ok({ checked, timedOut: [] });
+    const overdue = selectOverdueHandoffs(
+      candidates.map((c) => ({
+        id:             c.id,
+        customerName:   c.customerName ?? c.customer?.name ?? null,
+        lastMessageAt:  c.lastMessageAt,
+        lastDirection:  c.messages[0]?.direction ?? null,
+        lastSenderType: c.messages[0]?.senderType ?? null,
+      })),
+      now,
+      thresholdMs,
+    );
+
+    // No mutation — alert only. `timedOut` stays empty (no auto-return).
+    return ok({ checked: candidates.length, thresholdMinutes, overdue, timedOut: [] });
   } catch (err) {
     console.error("[POST /api/atendimento/handoff/check-timeouts]", err);
     return serverError();
