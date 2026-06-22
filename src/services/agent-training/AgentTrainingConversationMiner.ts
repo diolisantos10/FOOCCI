@@ -1,28 +1,16 @@
 /**
  * AgentTrainingConversationMiner
  *
- * Reads historical Atendimento/WhatsApp conversations and converts them into
+ * Reads recent real Atendimento/WhatsApp conversations and converts them into
  * training scenarios. NEVER mutates original conversation data.
- * Masks PII before storing scenarios.
+ *
+ * Reading + PII masking are delegated to the single canonical reader
+ * (scanRealConversations) so every miner sees the same PII-safe, role-tagged
+ * shape. This module only does the scenario-shaping on top of that.
  */
 
-import { prisma } from "@/lib/prisma";
 import type { TranscriptTurn } from "./types";
-
-// ── PII masking ───────────────────────────────────────────────────────────────
-
-// Matches Brazilian phone formats: +5511999990000, 11999990000, 999990000
-const PHONE_RE   = /(\+?55\s*)?(\(?\d{2}\)?\s*)?9\d{4}[\s-]?\d{4}/g;
-const CPF_RE     = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
-// Bare address patterns: "Rua X, 123", "Av. Y nº 45", "Avenida Z, 10"
-const ADDRESS_RE = /\b(?:rua|av(?:enida)?|r\.|estrada|alameda|travessa|praça)\s+[^\n,]{3,40}(?:,\s*\d+)?/gi;
-
-export function maskSensitiveData(text: string): string {
-  return text
-    .replace(PHONE_RE,   "[TELEFONE]")
-    .replace(CPF_RE,     "[CPF]")
-    .replace(ADDRESS_RE, "[ENDEREÇO]");
-}
+import { scanRealConversations } from "./realConversationScan";
 
 // ── Scenario type classification ──────────────────────────────────────────────
 
@@ -87,47 +75,33 @@ interface MinedScenario {
 }
 
 export async function mineRealConversations(opts: MineOptions = {}): Promise<MinedScenario[]> {
-  const since        = new Date(Date.now() - (opts.sinceHours ?? 48) * 3_600_000);
-  const maxConvs     = opts.maxConversations ?? 30;
-
-  const where: Record<string, unknown> = {
+  // Single canonical reader: already masks PII + enforces minMessages.
+  const conversations = await scanRealConversations({
     conversationType: "CUSTOMER",
-    lastMessageAt:    { gte: since },
-  };
-  if (opts.restaurantId) where.restaurantId = opts.restaurantId;
-
-  const conversations = await prisma.conversation.findMany({
-    where,
-    orderBy:  { lastMessageAt: "desc" },
-    take:     maxConvs,
-    include:  {
-      messages: {
-        orderBy: { sentAt: "asc" },
-        select:  { content: true, senderType: true, sentAt: true, direction: true },
-      },
-    },
+    sinceHours:       opts.sinceHours ?? 48,
+    maxConversations: opts.maxConversations ?? 30,
+    minMessages:      2,
+    ...(opts.restaurantId ? { restaurantId: opts.restaurantId } : {}),
   });
 
   const results: MinedScenario[] = [];
 
   for (const conv of conversations) {
-    if (conv.messages.length < 2) continue;
-
-    const maskedMessages = conv.messages.map((m) => ({
-      ...m,
+    // classifyScenarioType keys off the raw senderType, which the scanner preserves.
+    const messagesForClassify = conv.messages.map((m) => ({
+      content:    m.content,
       senderType: m.senderType ?? "UNKNOWN",
-      content: maskSensitiveData(m.content ?? ""),
     }));
 
-    const scenarioType = classifyScenarioType(maskedMessages);
+    const scenarioType = classifyScenarioType(messagesForClassify);
 
-    const transcript: TranscriptTurn[] = maskedMessages.map((m) => ({
-      role:    (m.senderType === "AI" || m.senderType === "HUMAN") ? "bot" as const : "customer" as const,
+    const transcript: TranscriptTurn[] = conv.messages.map((m) => ({
+      role:    m.role === "bot" ? "bot" as const : "customer" as const,
       content: m.content,
-      ts:      (m.sentAt ?? new Date()).toISOString(),
+      ts:      m.sentAt,
     }));
 
-    const lastBot = maskedMessages.filter((m) => m.senderType === "AI").at(-1);
+    const lastBot = conv.messages.filter((m) => m.senderType === "AI").at(-1);
 
     results.push({
       sourceConversationId: conv.id,
