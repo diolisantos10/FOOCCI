@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { scanRealConversations, type ScannedConversation } from "@/services/agent-training/realConversationScan";
 import {
   reviewConversation,
   type ConversationOutcome,
@@ -85,23 +86,18 @@ export async function runLiveLearningReview(input: LiveLearningInput): Promise<L
     };
   }
 
-  const since = new Date(Date.now() - windowHours * 60 * 60 * 1000);
-
-  let conversations: {
-    id: string; status: string; orderId: string | null;
-    messages: { direction: string; senderType: string | null; content: string; type: string; sentAt: Date }[];
-  }[] = [];
+  // Single canonical reader (shared with the training miner). includeRaw=true
+  // because the deterministic detectors must see the ORIGINAL text; the excerpts
+  // that get persisted are masked downstream by conversationReview.
+  let conversations: ScannedConversation[] = [];
   try {
-    conversations = await prisma.conversation.findMany({
-      where: { restaurantId, channel: "WHATSAPP", lastMessageAt: { gte: since } },
-      select: {
-        id: true, status: true, orderId: true,
-        messages: {
-          orderBy: { sentAt: "asc" },
-          select: { direction: true, senderType: true, content: true, type: true, sentAt: true },
-        },
-      },
-      take: 500,
+    conversations = await scanRealConversations({
+      restaurantId,
+      channel: "WHATSAPP",
+      sinceHours: windowHours,
+      maxConversations: 500,
+      minMessages: 1,
+      includeRaw: true,
     });
   } catch (err) {
     return {
@@ -116,11 +112,11 @@ export async function runLiveLearningReview(input: LiveLearningInput): Promise<L
 
   for (const c of conversations) {
     const messages: ReviewMessage[] = c.messages.map((m) => ({
-      direction: m.direction as "INBOUND" | "OUTBOUND",
+      direction: (m.direction ?? "OUTBOUND") as "INBOUND" | "OUTBOUND",
       senderType: m.senderType,
-      content: m.content,
-      type: m.type,
-      sentAt: m.sentAt,
+      content: m.raw ?? m.content, // RAW for detectors; conversationReview masks its own excerpts
+      type: m.type ?? "TEXT",
+      sentAt: new Date(m.sentAt),
     }));
     const handoff = HANDOFF_STATUSES.includes(c.status) ||
       messages.some((m) => m.senderType === "SYSTEM" && /handoff|atendente/i.test(m.content));

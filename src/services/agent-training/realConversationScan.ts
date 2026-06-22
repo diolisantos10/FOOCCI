@@ -48,7 +48,14 @@ export type ScannedRole = "customer" | "bot" | "system";
 
 export interface ScannedMessage {
   role: ScannedRole;
-  content: string; // PII-masked
+  content: string; // PII-masked — safe to store, summarize, or show a human
+  /**
+   * UNMASKED original text. Present ONLY when scanRealConversations is called
+   * with { includeRaw: true }. Some deterministic detectors (intent, address,
+   * order classifiers) must read the original text to work, then mask their own
+   * excerpts. NEVER persist or display `raw` — use `content` for anything stored.
+   */
+  raw?: string;
   senderType: string | null;
   direction: string | null;
   type: string | null;
@@ -71,6 +78,8 @@ export interface ScanOptions {
   sinceHours?: number; // default 24
   maxConversations?: number; // default 200
   minMessages?: number; // default 2
+  /** Also expose each message's UNMASKED text as `raw` (for in-memory detectors). */
+  includeRaw?: boolean;
 }
 
 function roleOf(senderType: string | null | undefined): ScannedRole {
@@ -107,6 +116,7 @@ export async function scanRealConversations(opts: ScanOptions = {}): Promise<Sca
   });
 
   const minMessages = opts.minMessages ?? 2;
+  const includeRaw = opts.includeRaw === true;
   const out: ScannedConversation[] = [];
   for (const c of rows) {
     if (c.messages.length < minMessages) continue;
@@ -116,14 +126,18 @@ export async function scanRealConversations(opts: ScanOptions = {}): Promise<Sca
       channel: c.channel ?? null,
       status: c.status,
       orderId: c.orderId ?? null,
-      messages: c.messages.map((m) => ({
-        role: roleOf(m.senderType),
-        content: maskPII(m.content ?? ""),
-        senderType: m.senderType ?? null,
-        direction: m.direction ?? null,
-        type: m.type ?? null,
-        sentAt: (m.sentAt ?? new Date()).toISOString(),
-      })),
+      messages: c.messages.map((m) => {
+        const rawContent = m.content ?? "";
+        return {
+          role: roleOf(m.senderType),
+          content: maskPII(rawContent),
+          ...(includeRaw ? { raw: rawContent } : {}),
+          senderType: m.senderType ?? null,
+          direction: m.direction ?? null,
+          type: m.type ?? null,
+          sentAt: (m.sentAt ?? new Date()).toISOString(),
+        };
+      }),
     });
   }
   return out;

@@ -118,6 +118,20 @@ describe("scanRealConversations — the single canonical reader", () => {
     expect(arg.orderBy).toEqual({ lastMessageAt: "desc" });
   });
 
+  it("exposes raw (unmasked) text only when includeRaw is set", async () => {
+    db.conversation.findMany.mockResolvedValue([
+      { id: "c1", restaurantId: "r1", channel: "WHATSAPP", status: "OPEN", orderId: null, messages: [msg("CUSTOMER", "zap 11999998888"), msg("AI", "ok")] },
+    ]);
+
+    const masked = await scanRealConversations();
+    expect(masked[0]!.messages[0]!.raw).toBeUndefined();
+    expect(masked[0]!.messages[0]!.content).toContain("[TELEFONE]");
+
+    const withRaw = await scanRealConversations({ includeRaw: true });
+    expect(withRaw[0]!.messages[0]!.raw).toBe("zap 11999998888"); // unmasked, for in-memory detectors
+    expect(withRaw[0]!.messages[0]!.content).toContain("[TELEFONE]"); // content still masked
+  });
+
   it("omits filters that weren't provided and defaults the cap to 200", async () => {
     await scanRealConversations();
     const arg = db.conversation.findMany.mock.calls[0]![0] as { where: Record<string, unknown>; take: number };
