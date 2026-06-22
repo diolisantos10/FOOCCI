@@ -3,10 +3,14 @@
 /**
  * Meta WhatsApp provider card — Integrações → WhatsApp.
  *
- * Owner UX (non-technical): connect via Embedded Signup, see status, test the
- * connection (safe — internal number only), use Meta as provider, or roll back to
- * Evolution. Raw tokens/IDs live only inside the collapsed "Avançado" section
- * (masked). Shows nothing intrusive when the Meta feature is disabled.
+ * Owner UX rule: NO technical setup. The owner only ever clicks "Conectar WhatsApp
+ * oficial da Meta" → logs in with Meta → picks company/number → "Conectado", then can
+ * "Testar conexão", "Usar como principal" or "Voltar para a conexão anterior". The
+ * owner never sees or pastes tokens, App IDs, Config IDs, verify tokens, webhook URLs,
+ * WABA/Phone Number IDs or API versions, and never sees internal provider names.
+ *
+ * All technical detail (env readiness, webhook URL, masked IDs, setup checklist, copy
+ * instructions) lives ONLY in the collapsed "Avançado" section for the Foocci team.
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
@@ -84,7 +88,7 @@ export function MetaProviderCard() {
   // ── Embedded Signup ──────────────────────────────────────────────────────────
   async function connect() {
     if (!appId || !configId) {
-      flash(false, "Configuração do app Meta pendente no servidor. Contate o suporte Foocci para habilitar.");
+      flash(false, "Precisa de autorização da Foocci para ativar. Fale com o suporte Foocci.");
       return;
     }
     setBusy("connect");
@@ -115,7 +119,7 @@ export function MetaProviderCard() {
       if (res.ok && j?.data?.connected) { flash(true, "WhatsApp oficial da Meta conectado."); load(); }
       else flash(false, j?.error ?? "Falha ao conectar.");
     } catch {
-      flash(false, "Não foi possível iniciar o Embedded Signup.");
+      flash(false, "Não foi possível iniciar a conexão. Tente novamente.");
     } finally { setBusy(null); }
   }
 
@@ -170,9 +174,9 @@ export function MetaProviderCard() {
   return (
     <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-gray-900">Provedor de WhatsApp</h2>
+        <h2 className="text-sm font-bold text-gray-900">Conexão de WhatsApp</h2>
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isMeta ? "bg-blue-50 text-blue-700" : "bg-green-50 text-green-700"}`}>
-          Ativo: {isMeta ? "Meta oficial" : "Evolution"}
+          Em uso: {isMeta ? "WhatsApp oficial da Meta" : "WhatsApp atual"}
         </span>
       </div>
 
@@ -181,21 +185,21 @@ export function MetaProviderCard() {
       )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {/* Evolution */}
+        {/* Current connection */}
         <div className={`rounded-xl border p-4 ${!isMeta ? "border-green-300 bg-green-50/40" : "border-gray-200"}`}>
-          <p className="text-sm font-semibold text-gray-800">Atual — Evolution</p>
-          <p className="mt-1 text-xs text-gray-500">Provedor atual do WhatsApp. Continua funcionando normalmente.</p>
+          <p className="text-sm font-semibold text-gray-800">WhatsApp atual</p>
+          <p className="mt-1 text-xs text-gray-500">Sua conexão de WhatsApp atual. Continua funcionando normalmente.</p>
           {isMeta && (
-            <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "EVOLUTION" }, "Voltou para o Evolution.")}
+            <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "EVOLUTION" }, "Pronto — voltou para a conexão anterior.")}
               className="mt-3 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              Voltar para Evolution
+              Voltar para a conexão anterior
             </button>
           )}
         </div>
 
         {/* Meta */}
         <div className={`rounded-xl border p-4 ${isMeta ? "border-blue-300 bg-blue-50/40" : "border-gray-200"}`}>
-          <p className="text-sm font-semibold text-gray-800">Oficial Meta — WhatsApp Business Platform</p>
+          <p className="text-sm font-semibold text-gray-800">WhatsApp oficial da Meta</p>
           {!status.featureEnabled ? (
             <p className="mt-1 text-xs text-gray-400">Em breve — disponível quando ativado pela Foocci.</p>
           ) : metaConnected ? (
@@ -206,21 +210,17 @@ export function MetaProviderCard() {
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                   Testar conexão
                 </button>
-                <button type="button" disabled={!!busy} onClick={simulate}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                  {busy === "simulate" ? "Simulando…" : "Simular recebimento"}
-                </button>
                 {!isMeta && (
-                  <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "META_CLOUD_API", confirm: true }, "Meta definida como provedor.")}
+                  <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "META_CLOUD_API", confirm: true }, "Pronto — WhatsApp oficial da Meta agora é o principal.")}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                    Usar Meta como provedor
+                    Usar como principal
                   </button>
                 )}
               </div>
             </>
           ) : (
             <>
-              <p className="mt-1 text-xs text-gray-500">Conta empresarial oficial. Conecte em poucos cliques.</p>
+              <p className="mt-1 text-xs text-gray-500">Faça login com a Meta e escolha sua empresa e número. Sem códigos para digitar.</p>
               <button type="button" disabled={busy === "connect"} onClick={connect}
                 className="mt-3 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                 {busy === "connect" ? "Conectando…" : "Conectar WhatsApp oficial da Meta"}
@@ -238,10 +238,18 @@ export function MetaProviderCard() {
           </button>
           {showAdvanced && (
             <div className="mt-2 space-y-3 rounded-lg bg-gray-50 px-3 py-3 text-[11px] text-gray-600">
-              <button type="button" onClick={copyInstructions}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
-                {copied ? "Copiado ✓" : "Copiar instruções para configurar Meta"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={copyInstructions}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                  {copied ? "Copiado ✓" : "Copiar instruções para configurar Meta"}
+                </button>
+                {metaConnected && (
+                  <button type="button" disabled={!!busy} onClick={simulate}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    {busy === "simulate" ? "Simulando…" : "Simular recebimento (diagnóstico)"}
+                  </button>
+                )}
+              </div>
 
               {/* A — Foocci platform readiness (from server env, booleans only) */}
               {env && (
@@ -274,10 +282,10 @@ export function MetaProviderCard() {
               <SetupSection title="C · Fluxo de teste seguro">
                 <SetupItem label="1. Testar conexão (apenas número interno)" />
                 <SetupItem label="2. Simular recebimento (não envia nada)" />
-                <SetupItem label="3. Conectar via Embedded Signup" />
+                <SetupItem label="3. Conectar (login Meta → escolher empresa/número)" />
                 <SetupItem label="4. Receber inbound do número interno" />
                 <SetupItem label="5. Conferir Central de Conversas" />
-                <SetupItem label="6. Voltar para Evolution (rollback)" />
+                <SetupItem label="6. Voltar para a conexão anterior (rollback)" />
               </SetupSection>
 
               {/* Masked connection details — only when connected; IDs masked, token preview only */}
