@@ -547,6 +547,13 @@ export function AtendimentoClient({
   // the visual "Aguardando". A new pending request (not in this set) re-arms it.
   const [acknowledgedHumanIds, setAcknowledgedHumanIds] = useState<Set<string>>(new Set());
 
+  // Overdue handoff alert (alert-only — never auto-returns to AI). Tracked with a
+  // SEPARATE ack set from the pending alarm so silencing one never affects the
+  // other, and a re-overdue conversation can ring again.
+  type OverdueItem = { id: string; customer: string; waitingMinutes: number };
+  const [overdueHandoffs,        setOverdueHandoffs]        = useState<OverdueItem[]>([]);
+  const [acknowledgedOverdueIds, setAcknowledgedOverdueIds] = useState<Set<string>>(new Set());
+
   // Drop acknowledgements once a conversation leaves the pending queue (assumed/
   // resolved), so if it later returns to HUMAN it rings again.
   useEffect(() => {
@@ -568,9 +575,35 @@ export function AtendimentoClient({
     [pendingHumanIds, acknowledgedHumanIds],
   );
 
+  // Overdue handoffs re-arm the alarm via their own ack set. Drop acks once a
+  // conversation leaves the overdue list, so a later re-overdue rings again.
+  const overdueIds = useMemo(() => overdueHandoffs.map((o) => o.id), [overdueHandoffs]);
+
   useEffect(() => {
-    handoffControllerRef.current?.sync(handoffSoundEnabled ? alarmingHumanIds : []);
-  }, [alarmingHumanIds, handoffSoundEnabled]);
+    setAcknowledgedOverdueIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(overdueIds);
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) { if (live.has(id)) next.add(id); else changed = true; }
+      return changed ? next : prev;
+    });
+  }, [overdueIds]);
+
+  const alarmingOverdueIds = useMemo(
+    () => overdueIds.filter((id) => !acknowledgedOverdueIds.has(id)),
+    [overdueIds, acknowledgedOverdueIds],
+  );
+
+  // The alarm sound rings for pending (unacked) ∪ overdue (unacked), deduped.
+  const soundIds = useMemo(
+    () => Array.from(new Set([...alarmingHumanIds, ...alarmingOverdueIds])),
+    [alarmingHumanIds, alarmingOverdueIds],
+  );
+
+  useEffect(() => {
+    handoffControllerRef.current?.sync(handoffSoundEnabled ? soundIds : []);
+  }, [soundIds, handoffSoundEnabled]);
 
   const acknowledgePendingHuman = useCallback(() => {
     setAcknowledgedHumanIds(new Set(pendingHumanIds));
@@ -580,23 +613,25 @@ export function AtendimentoClient({
     if (pendingHumanIds[0]) setSelectedId(pendingHumanIds[0]);
   }, [pendingHumanIds]);
 
-  // ── Inactivity-timeout pollers (run every 60 s while page is open) ──────
-  // check-timeouts:            human hasn't replied → customer waiting → return to AI
-  // check-customer-inactivity: human replied        → customer silent  → return to AI
+  // ── Handoff alert poller (every 60 s while the page is open) ───────────────
+  // Alert-only: surfaces conversations the customer has been waiting on past the
+  // threshold (default 10 min) with no human reply. No auto-return ever happens —
+  // human handoff stays persistent (product decision 2026-05-28).
   useEffect(() => {
     const run = () => {
-      const refresh = (d: { data?: { timedOut?: string[] } }) => {
-        if ((d.data?.timedOut?.length ?? 0) > 0) fetchList();
-      };
       fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
-        .then((r) => r.json()).then(refresh).catch(() => {});
-      fetch("/api/atendimento/handoff/check-customer-inactivity", { method: "POST" })
-        .then((r) => r.json()).then(refresh).catch(() => {});
+        .then((r) => r.json())
+        .then((d: { data?: { overdue?: OverdueItem[] } }) => {
+          setOverdueHandoffs(d?.data?.overdue ?? []);
+        })
+        .catch(() => {});
+      // Sibling endpoint kept for backwards compatibility (safe no-op).
+      fetch("/api/atendimento/handoff/check-customer-inactivity", { method: "POST" }).catch(() => {});
     };
     run();
     const id = setInterval(run, 60_000);
     return () => clearInterval(id);
-  }, [fetchList]);
+  }, []);
 
   // ── Fetch conversation thread ──────────────────────────────────────────────
   const fetchThread = useCallback(async (id: string) => {
@@ -1000,6 +1035,37 @@ export function AtendimentoClient({
                 className="rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-[11px] font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors"
               >
                 {alarmingHumanIds.length === 0 ? "Silenciado ✓" : "Estou ciente"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Overdue handoff alert — a conversation already assumed/acknowledged but
+            the customer has been waiting past the threshold with no human reply
+            (the dropped-ball case the pending alarm above goes silent on). Alert
+            only: the IA does NOT take over. Stays visible until a human answers;
+            the sound can be silenced separately. */}
+        {overdueHandoffs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-red-200 bg-red-50 px-3 py-1.5">
+            <span className="text-xs font-semibold text-red-700">
+              ⏰ {overdueHandoffs.length} sem resposta há +{overdueHandoffs[0]?.waitingMinutes ?? 0} min — cliente esperando
+            </span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => { if (overdueHandoffs[0]) setSelectedId(overdueHandoffs[0].id); }}
+                className="rounded-lg bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-red-700 transition-colors"
+              >
+                Ver
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcknowledgedOverdueIds(new Set(overdueHandoffs.map((o) => o.id)))}
+                disabled={alarmingOverdueIds.length === 0}
+                title="Silencia o som deste alerta sem resolver as conversas nem reativar a IA"
+                className="rounded-lg border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+              >
+                {alarmingOverdueIds.length === 0 ? "Silenciado ✓" : "Silenciar"}
               </button>
             </div>
           </div>
