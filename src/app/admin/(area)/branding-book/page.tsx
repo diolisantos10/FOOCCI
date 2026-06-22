@@ -189,7 +189,7 @@ export default function BrandingBookPage() {
             </ToneCard>
             <ToneCard label="Não é" positive={false}>
               Não é fofo nem usa emojis em excesso. Não usa jargão de tecnologia com o restaurante. Não promete o que
-              não entrega. Não fala de "IA revolucionária" — fala de resultados concretos.
+              não entrega. Não fala de &ldquo;IA revolucionária&rdquo; — fala de resultados concretos.
             </ToneCard>
           </div>
         </section>
