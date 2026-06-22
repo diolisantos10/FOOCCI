@@ -522,8 +522,9 @@ export function buildLooseAddressReply(_ctx: ReplyContext): string {
   );
 }
 
-export function renderMainMenu(ctx: ReplyContext): string {
-  const menuList = buildMenuList(ctx.menuOptions);
+export function renderMainMenu(ctx: ReplyContext, optionsOverride?: MenuOption[]): string {
+  const opts = optionsOverride ?? ctx.menuOptions;
+  const menuList = buildMenuList(opts);
   if (!menuList) return ctx.welcomeMessage;
   return "Oi! 😊 Como você prefere começar?" + menuList + BACK_TO_MENU_FOOTER;
 }
@@ -1015,7 +1016,10 @@ async function run(conversationId: string): Promise<void> {
 
   // ── Back-to-menu shortcut ─────────────────────────────────────────────────
   if (BACK_TO_MENU_RE.test(lastMessage.content.trim())) {
-    await sendReply(evolutionResult.data, toPhone, renderMainMenu(ctx), conversationId);
+    // Use full (unfiltered) options if effectiveMenuOptions is empty — the
+    // "0. menu" shortcut must always render something, even when closed.
+    const backMenuOptions = effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
+    await sendReply(evolutionResult.data, toPhone, renderMainMenu(ctx, backMenuOptions), conversationId);
     return;
   }
 
@@ -1176,12 +1180,10 @@ async function run(conversationId: string): Promise<void> {
               replyText = P0_FALLBACK_REPLY;
             }
 
-            // If GPT gave a generic/short answer with no URL, append the menu so
-            // the customer always knows their options — but only if the full menu
-            // hasn't been shown recently (prevents spamming the numbered list after
-            // every unknown message within the same 30-min session).
+            // Menu is the anchor: always append the numbered list to GPT replies
+            // so the customer can see their options on every turn (no cooldown).
             let fullMenuAppended = false;
-            if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http") && !menuSentRecently) {
+            if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http")) {
               const menuList = buildMenuList(effectiveMenuOptions);
               if (menuList) {
                 replyText += "\n\nComo posso te ajudar?" + menuList;
@@ -1231,7 +1233,10 @@ async function run(conversationId: string): Promise<void> {
             const greetLine = firstName
               ? `Olá, ${firstName}! Tudo bem? 😊 Como posso te ajudar hoje?`
               : ctx.welcomeMessage;
-            const menuList = buildMenuList(effectiveMenuOptions);
+            // Menu is the anchor: show effective (filtered) options but fall back
+            // to the full list so the greeting ALWAYS renders the numbered menu.
+            const greetOptions = effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
+            const menuList = buildMenuList(greetOptions);
             let greet = greetLine;
             if (menuList) {
               greet += menuList + BACK_TO_MENU_FOOTER;
