@@ -43,15 +43,15 @@ describe("normalizeRisk — collapse to 3 levels", () => {
 });
 
 describe("listInbox — the unified queue", () => {
-  it("aggregates + normalizes every source into one shape, newest first", async () => {
+  it("aggregates + normalizes every source into one rich shape, newest first", async () => {
     db.agentImprovementProposal.findMany.mockResolvedValue([
-      { id: "p1", agentType: "WHATSAPP_ORDERING", title: "Prop", problemSummary: "prob", proposedPatchText: "fix", expectedImpact: null, riskLevel: "HIGH", createdAt: new Date("2026-06-22T10:00:00Z") },
+      { id: "p1", agentType: "WHATSAPP_ORDERING", title: "Prop", problemSummary: "prob", rootCause: "causa raiz", proposedChangeType: "PROMPT_PATCH", proposedPatchText: "fix", expectedImpact: "menos erros", beforeScore: 60, afterScoreEstimate: 85, riskLevel: "HIGH", createdAt: new Date("2026-06-22T10:00:00Z") },
     ]);
     db.agentSimulationOpportunity.findMany.mockResolvedValue([
-      { id: "o1", agentSlug: "waiter", title: "Opp", summary: "sum", recommendation: "rec", severity: "P1", createdAt: new Date("2026-06-22T12:00:00Z") },
+      { id: "o1", agentSlug: "waiter", title: "Opp", summary: "sum", recommendation: "rec", type: "MISSED_SALE", expectedImpact: "recupera venda", severity: "P1", createdAt: new Date("2026-06-22T12:00:00Z") },
     ]);
     db.waiterTrainingSuggestion.findMany.mockResolvedValue([
-      { id: "w1", agentSlug: "waiter", title: "Sug", problemDetected: "pd", idealResponse: "ir", trainingRule: "tr", riskLevel: "LOW", createdAt: new Date("2026-06-22T11:00:00Z") },
+      { id: "w1", agentSlug: "waiter", title: "Sug", problemDetected: "pd", situationSummary: "cliente pediu desconto", customerIntent: "quer economizar", idealResponse: "ofereça o combo", trainingRule: "tr", expectedImpact: "+ticket médio", suggestedActionType: "UPSELL_BEHAVIOR", sanitizedCustomerExcerpt: "tem desconto?", sanitizedWaiterExcerpt: "não", riskLevel: "LOW", createdAt: new Date("2026-06-22T11:00:00Z") },
     ]);
 
     const { items, countsByAgent, total } = await listInbox();
@@ -59,11 +59,22 @@ describe("listInbox — the unified queue", () => {
     // newest first: opp(12h) → sug(11h) → prop(10h)
     expect(items.map((i) => i.id)).toEqual(["opportunity:o1", "waiter_suggestion:w1", "improvement:p1"]);
 
+    // improvement: friendly change label + score-delta impact
     const prop = items.find((i) => i.id === "improvement:p1")!;
     expect(prop.agentKey).toBe("whatsapp");
-    expect(prop.agentLabel).toBe("WhatsApp");
-    expect(prop.recommendation).toBe("fix");
-    expect(prop.riskLevel).toBe("HIGH");
+    expect(prop.changeLabel).toBe("Ajuste de fala do agente");
+    expect(prop.context).toBe("causa raiz");
+    expect(prop.impact).toContain("60");
+    expect(prop.impact).toContain("85");
+
+    // waiter suggestion: real example (excerpts) + business-language change label
+    const sug = items.find((i) => i.id === "waiter_suggestion:w1")!;
+    expect(sug.example).toContain("Cliente:");
+    expect(sug.example).toContain("Agente:");
+    expect(sug.changeLabel).toBe("Venda extra (upsell)");
+    expect(sug.context).toContain("cliente pediu desconto");
+    expect(sug.impact).toBe("+ticket médio");
+    expect(sug.recommendation).toBe("ofereça o combo");
 
     // per-agent counts power the "salas" filter
     expect(countsByAgent.whatsapp).toBe(1);

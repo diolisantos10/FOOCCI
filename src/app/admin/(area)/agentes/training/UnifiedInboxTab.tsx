@@ -4,6 +4,8 @@
  * Caixa Única de Aprovação — the unified approval inbox (Phase 1).
  * Reads /api/admin/training/inbox (all pending approvals across every source) and
  * lets the owner approve/reject in ONE place, with per-agent "salas" (filter).
+ * Each card speaks plain business language: problem + real example + suggestion +
+ * why it matters + a clear CTA.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -17,7 +19,11 @@ interface ApprovalItem {
   agentLabel: string;
   title: string;
   problem: string;
+  context: string | null;
+  example: string | null;
   recommendation: string;
+  impact: string | null;
+  changeLabel: string | null;
   riskLevel: "LOW" | "MEDIUM" | "HIGH";
   createdAt: string;
 }
@@ -40,6 +46,18 @@ const RISK_TONE: Record<string, string> = {
   MEDIUM: "bg-amber-900/40 text-amber-300 border-amber-700/40",
   LOW: "bg-gray-800 text-gray-400 border-gray-700",
 };
+const RISK_LABEL: Record<string, string> = { HIGH: "Alta prioridade", MEDIUM: "Média", LOW: "Baixa" };
+
+function Field({ icon, label, text, accent }: { icon: string; label: string; text: string; accent?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
+        {icon} {label}
+      </p>
+      <p className={`mt-0.5 text-sm leading-relaxed ${accent ? "text-emerald-200" : "text-gray-300"}`}>{text}</p>
+    </div>
+  );
+}
 
 export function UnifiedInboxTab() {
   const [sala, setSala] = useState<AgentKey | "todos">("todos");
@@ -118,39 +136,63 @@ export function UnifiedInboxTab() {
         <div className="space-y-3">
           {data.items.map((it) => (
             <div key={it.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
+              {/* Badges */}
+              <div className="mb-2.5 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold text-gray-300">
                   {it.agentLabel}
                 </span>
-                <span className="rounded-full bg-gray-800/60 px-2 py-0.5 text-[11px] text-gray-400">
-                  {it.sourceLabel}
-                </span>
+                {it.changeLabel && (
+                  <span className="rounded-full bg-violet-900/40 px-2 py-0.5 text-[11px] font-semibold text-violet-300">
+                    {it.changeLabel}
+                  </span>
+                )}
+                <span className="rounded-full bg-gray-800/60 px-2 py-0.5 text-[11px] text-gray-500">{it.sourceLabel}</span>
                 <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${RISK_TONE[it.riskLevel] ?? RISK_TONE.LOW}`}>
-                  risco {it.riskLevel}
+                  {RISK_LABEL[it.riskLevel] ?? it.riskLevel}
                 </span>
               </div>
-              <p className="text-sm font-semibold text-white">{it.title}</p>
-              <p className="mt-1 text-xs text-gray-400">
-                <b className="text-gray-300">Problema:</b> {it.problem}
-              </p>
-              <p className="mt-1 text-xs text-gray-400">
-                <b className="text-gray-300">Sugestão:</b> {it.recommendation}
-              </p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  disabled={acting === it.id}
-                  onClick={() => decide(it.id, "APPROVE")}
-                  className="rounded-lg bg-green-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-green-600 disabled:opacity-50"
-                >
-                  {acting === it.id ? "…" : "✓ Aprovar"}
-                </button>
-                <button
-                  disabled={acting === it.id}
-                  onClick={() => decide(it.id, "REJECT")}
-                  className="rounded-lg border border-gray-700 px-4 py-1.5 text-xs font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-50"
-                >
-                  ✕ Descartar
-                </button>
+
+              {/* Headline */}
+              <p className="text-base font-bold text-white">{it.title}</p>
+
+              {/* Sections */}
+              <div className="mt-3 space-y-2.5">
+                <Field icon="🔴" label="O que está acontecendo" text={it.context ? `${it.problem} ${it.context}` : it.problem} />
+
+                {it.example && (
+                  <div className="rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">💬 Exemplo real</p>
+                    <p className="mt-1 whitespace-pre-line text-xs italic text-gray-400">{it.example}</p>
+                  </div>
+                )}
+
+                <Field icon="💡" label="Sugestão de melhoria" text={it.recommendation} accent />
+
+                {it.impact && <Field icon="📈" label="Por que vale a pena" text={it.impact} />}
+              </div>
+
+              {/* CTA */}
+              <div className="mt-4 border-t border-gray-800 pt-3">
+                <p className="mb-2 text-[11px] text-gray-500">
+                  👉 Ao <b className="text-green-400">aprovar</b>, o agente passa a aplicar essa melhoria.{" "}
+                  <b className="text-gray-400">Descartar</b> arquiva a sugestão.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    disabled={acting === it.id}
+                    onClick={() => decide(it.id, "APPROVE")}
+                    className="rounded-lg bg-green-700 px-4 py-2 text-xs font-bold text-white hover:bg-green-600 disabled:opacity-50"
+                  >
+                    {acting === it.id ? "…" : "✓ Aprovar e ensinar o agente"}
+                  </button>
+                  <button
+                    disabled={acting === it.id}
+                    onClick={() => decide(it.id, "REJECT")}
+                    className="rounded-lg border border-gray-700 px-4 py-2 text-xs font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+                  >
+                    ✕ Descartar
+                  </button>
+                </div>
               </div>
             </div>
           ))}

@@ -5,8 +5,9 @@
  * approve live in several different tables with different shapes and status names
  * (AgentImprovementProposal, AgentSimulationOpportunity, WaiterTrainingSuggestion,
  * …). This service is a thin, ADDITIVE aggregator: it reads each source, normalizes
- * every item into ONE shape, and routes an approve/reject decision back to the right
- * table. It never changes the producers and never touches production runtime.
+ * every item into ONE rich, marketing-friendly shape (problem + real example +
+ * suggestion + business impact), and routes an approve/reject decision back to the
+ * right table. It never changes the producers and never touches production runtime.
  *
  * Extensible by design: add a new queue by adding one entry to SOURCES.
  */
@@ -18,7 +19,7 @@ export type ApprovalRisk = "LOW" | "MEDIUM" | "HIGH";
 export type ApprovalDecision = "APPROVE" | "REJECT";
 export type ApprovalSourceKey = "improvement" | "opportunity" | "waiter_suggestion";
 
-/** One normalized item in the unified inbox (regardless of which table it came from). */
+/** One normalized, human-readable item in the unified inbox. */
 export interface ApprovalItem {
   id: string; // composite `${source}:${rawId}` — unique across sources
   source: ApprovalSourceKey;
@@ -27,8 +28,12 @@ export interface ApprovalItem {
   agentKey: ApprovalAgentKey; // for the per-agent "salas" filter
   agentLabel: string;
   title: string;
-  problem: string;
-  recommendation: string;
+  problem: string; // what's going wrong, in plain language
+  context: string | null; // the situation / what happened
+  example: string | null; // a real excerpt or concrete example
+  recommendation: string; // the suggested fix, in plain language
+  impact: string | null; // why it matters (expected business impact)
+  changeLabel: string | null; // friendly label for the kind of change
   riskLevel: ApprovalRisk;
   createdAt: string; // ISO
 }
@@ -61,6 +66,52 @@ export function normalizeRisk(raw: string | null | undefined): ApprovalRisk {
   return "LOW";
 }
 
+/** Translates the technical change-type codes into business/marketing language. */
+const CHANGE_LABELS: Record<string, string> = {
+  PROMPT_PATCH: "Ajuste de fala do agente",
+  ROUTING_RULE: "Regra de roteamento",
+  STATE_MACHINE_RULE: "Regra de fluxo",
+  COPY_CHANGE: "Ajuste de texto",
+  MENU_MATCHING_RULE: "Reconhecimento do cardápio",
+  HANDOFF_RULE: "Quando chamar um humano",
+  CONFIG_CHANGE: "Configuração",
+  RESPONSE_PATTERN: "Padrão de resposta",
+  PAYMENT_RULE: "Regra de pagamento",
+  MENU_GUIDANCE: "Orientação de cardápio",
+  UPSELL_BEHAVIOR: "Venda extra (upsell)",
+  OBJECTION_HANDLING: "Lidar com objeção",
+  RESTRICTION_HANDLING: "Lidar com restrição alimentar",
+  CHECKOUT_GUIDANCE: "Fechamento do pedido",
+  TONE_ADJUSTMENT: "Ajuste de tom",
+  BUG: "Correção de erro",
+  MISSED_SALE: "Venda perdida",
+  UX_FRICTION: "Atrito na experiência",
+  PROMPT_GAP: "Falha de instrução",
+  POLICY_GAP: "Falha de política",
+};
+export function friendlyChange(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return CHANGE_LABELS[raw.toUpperCase()] ?? null;
+}
+
+function clean(s: string | null | undefined): string | null {
+  return s && s.trim() ? s.trim() : null;
+}
+function joinParts(parts: Array<string | null | undefined>, sep = " · "): string | null {
+  const xs = parts.map(clean).filter(Boolean) as string[];
+  return xs.length ? xs.join(sep) : null;
+}
+function excerptExample(customer?: string | null, agent?: string | null): string | null {
+  const parts: string[] = [];
+  if (clean(customer)) parts.push(`Cliente: "${clean(customer)}"`);
+  if (clean(agent)) parts.push(`Agente: "${clean(agent)}"`);
+  return parts.length ? parts.join("\n") : null;
+}
+function scoreLine(before?: number | null, after?: number | null): string | null {
+  if (before == null || after == null) return null;
+  return `Nota esperada: ${Math.round(before)} → ${Math.round(after)}`;
+}
+
 function makeItem(p: Omit<ApprovalItem, "id" | "agentLabel">): ApprovalItem {
   return { ...p, id: `${p.source}:${p.rawId}`, agentLabel: AGENT_LABELS[p.agentKey] };
 }
@@ -89,7 +140,11 @@ const improvementSource: InboxSource = {
         agentKey: normalizeAgent(r.agentType),
         title: r.title,
         problem: r.problemSummary,
-        recommendation: r.proposedPatchText ?? r.expectedImpact ?? "—",
+        context: clean(r.rootCause),
+        example: null,
+        recommendation: clean(r.proposedPatchText) ?? clean(r.expectedImpact) ?? "—",
+        impact: joinParts([r.expectedImpact, scoreLine(r.beforeScore, r.afterScoreEstimate)]),
+        changeLabel: friendlyChange(r.proposedChangeType),
         riskLevel: normalizeRisk(r.riskLevel),
         createdAt: r.createdAt.toISOString(),
       }),
@@ -98,11 +153,7 @@ const improvementSource: InboxSource = {
   async decide(rawId, decision, reviewer) {
     await prisma.agentImprovementProposal.update({
       where: { id: rawId },
-      data: {
-        status: decision === "APPROVE" ? "APPROVED" : "REJECTED",
-        approvedBy: reviewer,
-        approvedAt: new Date(),
-      },
+      data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", approvedBy: reviewer, approvedAt: new Date() },
     });
   },
 };
@@ -123,7 +174,11 @@ const opportunitySource: InboxSource = {
         agentKey: normalizeAgent(r.agentSlug),
         title: r.title,
         problem: r.summary,
+        context: null,
+        example: null,
         recommendation: r.recommendation,
+        impact: clean(r.expectedImpact),
+        changeLabel: friendlyChange(String(r.type)),
         riskLevel: normalizeRisk(String(r.severity)),
         createdAt: r.createdAt.toISOString(),
       }),
@@ -132,11 +187,7 @@ const opportunitySource: InboxSource = {
   async decide(rawId, decision, reviewer) {
     await prisma.agentSimulationOpportunity.update({
       where: { id: rawId },
-      data: {
-        status: decision === "APPROVE" ? "APPROVED" : "REJECTED",
-        reviewedBy: reviewer,
-        reviewedAt: new Date(),
-      },
+      data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", reviewedBy: reviewer, reviewedAt: new Date() },
     });
   },
 };
@@ -157,7 +208,11 @@ const waiterSuggestionSource: InboxSource = {
         agentKey: normalizeAgent(r.agentSlug),
         title: r.title,
         problem: r.problemDetected,
-        recommendation: r.idealResponse || r.trainingRule,
+        context: joinParts([r.situationSummary, r.customerIntent], " — "),
+        example: excerptExample(r.sanitizedCustomerExcerpt, r.sanitizedWaiterExcerpt),
+        recommendation: clean(r.idealResponse) ?? r.trainingRule,
+        impact: clean(r.expectedImpact),
+        changeLabel: friendlyChange(r.suggestedActionType),
         riskLevel: normalizeRisk(r.riskLevel),
         createdAt: r.createdAt.toISOString(),
       }),
@@ -166,11 +221,7 @@ const waiterSuggestionSource: InboxSource = {
   async decide(rawId, decision, reviewer) {
     await prisma.waiterTrainingSuggestion.update({
       where: { id: rawId },
-      data: {
-        status: decision === "APPROVE" ? "APPROVED" : "REJECTED",
-        reviewedBy: reviewer,
-        reviewedAt: new Date(),
-      },
+      data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", reviewedBy: reviewer, reviewedAt: new Date() },
     });
   },
 };
