@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # WhatsApp Master Simulator — continuous hermetic validation
 #
-# Runs the WhatsApp Master Simulator every hour, covering all areas:
+# Runs the WhatsApp Master Simulator once a day, covering all areas:
 #   MENU         renderMainMenu contract: 7 options, no raw link, footer
 #   RECEPTIONIST Guard rules: voucher/thanks/praise/contextual/cadê → not product
 #   TEXT_ORDER   Free-text detection, ambiguous item handling, config safety
@@ -24,7 +24,7 @@ name: WhatsApp Master Simulator
 
 on:
   schedule:
-    - cron: "0 * * * *"   # every hour at :00
+    - cron: "0 8 * * *"   # once a day, 08:00 UTC (05:00 BRT)
 
   workflow_dispatch:
 

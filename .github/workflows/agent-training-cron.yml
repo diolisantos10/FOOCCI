@@ -2,15 +2,16 @@
 # Agent Training Center — fully automatic cron pipeline
 #
 # Four jobs run on schedule to keep the training loop always on without any
-# manual intervention:
+# manual intervention. One daily pass each (was every 30 min) — the unified
+# Caixa Única is the single place the owner approves what these produce:
 #
-#   small-batch        Every 30 min — 10 AI-generated scenarios, auto-evaluate,
-#                      auto-propose for any new failure category.
+#   small-batch        Daily 06:00 UTC (03:00 BRT) — 10 AI-generated scenarios,
+#                      auto-evaluate, auto-propose for any new failure category.
 #
-#   mine-conversations Every 30 min — capture real WhatsApp failures as training
+#   mine-conversations Daily 06:00 UTC — capture real WhatsApp failures as training
 #                      scenarios (read-only, PII handled by the service).
 #
-#   process-backlog    Every 30 min — drain WARN/FAIL scenarios that are missing
+#   process-backlog    Daily 06:00 UTC — drain WARN/FAIL scenarios that are missing
 #                      evaluations or proposals (7-day rolling window, max 15
 #                      evaluations per call).
 #
@@ -36,8 +37,8 @@ name: Agent Training Cron
 
 on:
   schedule:
-    # Small batch + mine + backlog — every 30 minutes
-    - cron: "*/30 * * * *"
+    # Small batch + mine + backlog — once daily, 06:00 UTC (03:00 BRT)
+    - cron: "0 6 * * *"
     # Nightly batch — 07:00 UTC = 04:00 BRT
     - cron: "0 7 * * *"
 
@@ -68,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >-
-      github.event.schedule == '*/30 * * * *' ||
+      github.event.schedule == '0 6 * * *' ||
       (github.event_name == 'workflow_dispatch' &&
        (inputs.target == 'small-batch' || inputs.target == 'all-30min'))
 
@@ -109,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >-
-      github.event.schedule == '*/30 * * * *' ||
+      github.event.schedule == '0 6 * * *' ||
       (github.event_name == 'workflow_dispatch' &&
        (inputs.target == 'mine-conversations' || inputs.target == 'all-30min'))
 
@@ -150,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >-
-      github.event.schedule == '*/30 * * * *' ||
+      github.event.schedule == '0 6 * * *' ||
       (github.event_name == 'workflow_dispatch' &&
        (inputs.target == 'process-backlog' || inputs.target == 'all-30min'))
 
