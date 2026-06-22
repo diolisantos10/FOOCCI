@@ -736,9 +736,10 @@ function ImportResultCard({ result, isPublish = false }: { result: ImportSummary
             ⚠️ {result.countMissing} capítulo(s) não encontrado(s) no banco.
           </p>
           <p className="text-[11px] text-red-700">
-            Execute o seed primeiro para criar a estrutura de capítulos:
+            Use o botão{" "}
+            <strong>🌱 Criar capítulos base</strong>{" "}
+            para criar a estrutura de capítulos antes de importar.
           </p>
-          <p className="text-[11px] font-mono text-red-700">node scripts/seed-manual.mjs</p>
           <ul className="mt-1 list-disc list-inside text-[11px] text-red-600">
             {result.results.filter(r => r.action === "MISSING").map(r => (
               <li key={r.slug}>{r.slug}</li>
@@ -780,7 +781,7 @@ function ImportResultCard({ result, isPublish = false }: { result: ImportSummary
   );
 }
 
-function ImportManualV01Panel({ onClose }: { onClose: () => void }) {
+function ImportManualV01Panel({ onClose, chapterCount }: { onClose: () => void; chapterCount: number }) {
   const [dryRunResult,  setDryRunResult]  = useState<ImportSummary | null>(null);
   const [publishResult, setPublishResult] = useState<ImportSummary | null>(null);
   const [loading,       setLoading]       = useState<"dry-run" | "publish" | null>(null);
@@ -852,6 +853,18 @@ function ImportManualV01Panel({ onClose }: { onClose: () => void }) {
 
         {/* Body */}
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+
+          {/* Seed warning */}
+          {chapterCount === 0 && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <p className="font-semibold">❌ Nenhum capítulo encontrado no banco.</p>
+              <p className="mt-1 text-xs text-red-700">
+                Feche este painel e clique em{" "}
+                <strong>🌱 Criar capítulos base</strong>{" "}
+                antes de importar. A importação pulará capítulos inexistentes.
+              </p>
+            </div>
+          )}
 
           {/* Safety notice */}
           <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800 space-y-1.5">
@@ -949,6 +962,119 @@ function ImportManualV01Panel({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── Seed Chapters Modal ───────────────────────────────────────────────────────
+
+interface SeedResult {
+  created: number;
+  skipped: number;
+  total:   number;
+  errors:  string[];
+  createdSlugs: string[];
+}
+
+function SeedChaptersModal({ onClose, onSeeded }: { onClose: () => void; onSeeded: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [result,  setResult]  = useState<SeedResult | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
+
+  async function runSeed() {
+    setLoading(true); setError(null); setResult(null);
+    try {
+      const res = await fetch("/api/admin/manual/seed", { method: "POST" });
+      const data = await res.json() as SeedResult & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Erro ao criar capítulos.");
+      setResult(data);
+      onSeeded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">🌱 Criar capítulos base</h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Cria os 14 capítulos estruturais do Manual Operacional. Idempotente — seguro executar múltiplas vezes.
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700 space-y-1.5">
+            <p className="font-medium text-gray-900">O que esta ação faz:</p>
+            <ul className="list-disc list-inside space-y-0.5 text-xs text-gray-600">
+              <li>Cria até 14 capítulos estruturais (status BACKLOG, não publicados).</li>
+              <li>Pula capítulos que já existem — nenhum conteúdo é sobrescrito.</li>
+              <li>Não conecta agentes de IA. Não adiciona RAG. Não expõe nada ao restaurante.</li>
+            </ul>
+          </div>
+
+          {!result && !error && (
+            <button
+              onClick={runSeed}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading && <Spinner />}
+              {loading ? "Criando capítulos…" : "Criar capítulos base"}
+            </button>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {result && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm space-y-3">
+              <p className="font-semibold text-green-800">✅ Concluído</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  { label: "Criados",  value: result.created, color: "text-green-700" },
+                  { label: "Pulados",  value: result.skipped, color: "text-gray-500"  },
+                  { label: "Total",    value: result.total,   color: "text-gray-900"  },
+                ].map(s => (
+                  <div key={s.label} className="rounded-lg bg-white/70 px-2 py-2">
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              {result.errors.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                  <p className="text-xs font-semibold text-red-700">{result.errors.length} erro(s):</p>
+                  <ul className="mt-1 list-disc list-inside text-xs text-red-600">
+                    {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            {result ? "Fechar" : "Cancelar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ManualOperacionalPage() {
@@ -978,6 +1104,7 @@ export default function ManualOperacionalPage() {
 
   // Import v0.1 panel
   const [showImportPanel, setShowImportPanel] = useState(false);
+  const [showSeedModal,   setShowSeedModal]   = useState(false);
 
   // ── Fetch helpers ────────────────────────────────────────────────────────────
 
@@ -1092,6 +1219,13 @@ export default function ManualOperacionalPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => setShowSeedModal(true)}
+              className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+              title="Criar os 14 capítulos base do Manual Operacional"
+            >
+              🌱 Criar capítulos base
+            </button>
+            <button
               onClick={() => setShowImportPanel(true)}
               className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
               title="Importar e publicar Manual Operacional v0.1"
@@ -1189,10 +1323,19 @@ export default function ManualOperacionalPage() {
             <div className="py-16 text-center">
               <p className="text-2xl">📖</p>
               <p className="mt-2 text-sm text-gray-500">Nenhum capítulo encontrado.</p>
-              <button onClick={() => setShowNewChapter(true)}
-                className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
-                Criar primeiro capítulo
-              </button>
+              <p className="mt-1 text-xs text-gray-400">
+                Se esta é a primeira execução, crie os capítulos base antes de importar a v0.1.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button onClick={() => setShowSeedModal(true)}
+                  className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
+                  🌱 Criar capítulos base
+                </button>
+                <button onClick={() => setShowNewChapter(true)}
+                  className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
+                  + Criar manualmente
+                </button>
+              </div>
             </div>
           ) : (
             <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
@@ -1376,8 +1519,15 @@ export default function ManualOperacionalPage() {
       )}
 
       {/* ── Modals ── */}
+      {showSeedModal && (
+        <SeedChaptersModal
+          onClose={() => setShowSeedModal(false)}
+          onSeeded={fetchChapters}
+        />
+      )}
       {showImportPanel && (
         <ImportManualV01Panel
+          chapterCount={chapters.length}
           onClose={() => { setShowImportPanel(false); fetchChapters(); }}
         />
       )}
