@@ -6,6 +6,7 @@ import {
   resolveAutonomyConfig,
   DEFAULT_AUTONOMY_CONFIG,
 } from "./autonomyPolicy";
+import { screenGeneratedTemplate, requiredPlaceholdersFor, type ComposeTemplateArgs } from "./messageComposer";
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -186,6 +187,47 @@ describe("decidePlan — AUTOPILOT guardrails", () => {
       allowedActionTypes: ["VIP_APPRECIATION"],
     });
     expect(decisions.map((d) => d.draft.actionType)).toEqual(["VIP_APPRECIATION"]);
+  });
+});
+
+// ─── messageComposer safety screen ───────────────────────────────────────────
+
+describe("screenGeneratedTemplate — Fase 2 safety net", () => {
+  const base: ComposeTemplateArgs = {
+    actionType: "RECOVER_COLD_CUSTOMERS",
+    restaurantName: "Cantina",
+    fallbackMessage: "Oi {nome}, volte! {link_cardapio}",
+    requiredPlaceholders: ["{nome}", "{link_cardapio}"],
+    allowDiscount: false,
+  };
+
+  it("passes a clean on-brand template", () => {
+    const msg = "Oi {nome} 😊 senti sua falta por aqui! Dá uma olhada no cardápio: {link_cardapio}";
+    expect(screenGeneratedTemplate(msg, base)).toBeNull();
+  });
+
+  it("rejects spam language", () => {
+    const msg = "{nome} OFERTA IMPERDÍVEL, clique agora! {link_cardapio}";
+    expect(screenGeneratedTemplate(msg, base)).toMatch(/^spam:/);
+  });
+
+  it("rejects a missing required placeholder", () => {
+    expect(screenGeneratedTemplate("Oi {nome}, volte sempre!", base)).toBe("missing-placeholder:{link_cardapio}");
+  });
+
+  it("rejects invented discounts when none is configured", () => {
+    const msg = "Oi {nome}, 20% de desconto pra você! {link_cardapio}";
+    expect(screenGeneratedTemplate(msg, base)).toBe("implies-discount");
+  });
+
+  it("rejects unknown placeholders the personalizer can't fill", () => {
+    const msg = "Oi {nome} {sobrenome}, volte! {link_cardapio}";
+    expect(screenGeneratedTemplate(msg, base)).toBe("unknown-placeholder:{sobrenome}");
+  });
+
+  it("requiredPlaceholdersFor picks the review link for review messages", () => {
+    expect(requiredPlaceholdersFor("Oi {nome}, avalie: {link_avaliacao_google}")).toEqual(["{nome}", "{link_avaliacao_google}"]);
+    expect(requiredPlaceholdersFor("Oi {nome}, peça: {link_cardapio}")).toEqual(["{nome}", "{link_cardapio}"]);
   });
 });
 

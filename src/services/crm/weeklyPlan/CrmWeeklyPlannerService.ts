@@ -15,10 +15,11 @@ import { startOfWeek } from "date-fns";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { CrmActionCenterService } from "@/services/crm/CrmActionCenterService";
-import { buildPlanDrafts } from "./actionRecipes";
+import { buildPlanDrafts, type PlanItemDraft } from "./actionRecipes";
 import { decidePlan } from "./autonomyPolicy";
 import { CrmWeeklyPlanService } from "./CrmWeeklyPlanService";
 import { CrmWeeklyNotificationService } from "./CrmWeeklyNotificationService";
+import { composeCampaignTemplate, isAiMessagesEnabled, requiredPlaceholdersFor } from "./messageComposer";
 
 export interface GenerateResult {
   planId: string;
@@ -64,8 +65,12 @@ export class CrmWeeklyPlannerService {
     }
 
     const { mode, config } = await CrmWeeklyPlanService.getAutonomy(restaurantId);
-    const actionCenter = await CrmActionCenterService.getActionCenter(restaurantId, { now });
-    const drafts = buildPlanDrafts(actionCenter.actions);
+    const [actionCenter, restaurant] = await Promise.all([
+      CrmActionCenterService.getActionCenter(restaurantId, { now }),
+      prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
+    ]);
+    const baseDrafts = buildPlanDrafts(actionCenter.actions);
+    const drafts = await this.enrichDraftsWithAi(baseDrafts, restaurant?.name ?? "nossa loja");
     const decision = decidePlan(drafts, mode, config);
 
     const totalAudience = decision.decisions.reduce((s, d) => s + d.draft.estimatedAudience, 0);
@@ -139,6 +144,30 @@ export class CrmWeeklyPlannerService {
       autoExecuted,
       totalItems: decision.decisions.length,
     };
+  }
+
+  /**
+   * Fase 2: replace each draft's recipe message with an on-brand template
+   * generated from the CRM Agent's constitution (screened + safe). No-op when AI
+   * messages are disabled, so the deterministic recipe stays the default.
+   */
+  private static async enrichDraftsWithAi(
+    drafts: PlanItemDraft[],
+    restaurantName: string,
+  ): Promise<PlanItemDraft[]> {
+    if (!isAiMessagesEnabled()) return drafts;
+    return Promise.all(
+      drafts.map(async (d) => {
+        const { message } = await composeCampaignTemplate({
+          actionType: d.actionType,
+          restaurantName,
+          fallbackMessage: d.messageTemplate,
+          requiredPlaceholders: requiredPlaceholdersFor(d.messageTemplate),
+          allowDiscount: false,
+        });
+        return { ...d, messageTemplate: message };
+      }),
+    );
   }
 
   /**
