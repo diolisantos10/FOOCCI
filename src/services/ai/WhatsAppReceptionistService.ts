@@ -1106,12 +1106,11 @@ async function run(conversationId: string): Promise<void> {
         // GPT is used for:
         //   - UNKNOWN intent in RECEPTIONIST_ONLY mode
         //   - any data-backed intent where template data is unavailable
-        // NOTE: GREETING is NEVER routed to GPT here — the short-circuit above
-        // handles repeat greetings within the cooldown window, and the template
-        // path below handles first-contact greetings (always shows menu).
+        // NOTE: GREETING and MENU_REQUEST are NEVER routed to GPT — both
+        // always show the configured numbered menu (template path below).
         const useGpt =
           (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
-          (templateReply === null && intent !== "GREETING");
+          (templateReply === null && intent !== "GREETING" && intent !== "MENU_REQUEST");
 
         // Within the 30-min session: short re-engagement only — menu already visible,
         // no need to repeat the numbered list. Compact footer keeps the escape hatch.
@@ -1247,6 +1246,20 @@ async function run(conversationId: string): Promise<void> {
               greet += `\n\n⚠️ ${ctx.closedMessage}`;
             }
             replyText = greet;
+          } else if (intent === "MENU_REQUEST") {
+            // "menu", "cardápio", "ver opções" — always show the numbered menu.
+            // Never delegate to GPT: the menu is fixed and must not be
+            // summarised or rewritten by the model.
+            const menuOpts = effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
+            const menuListMR = buildMenuList(menuOpts);
+            if (menuListMR) {
+              replyText = `Como posso te ajudar hoje?${menuListMR}${BACK_TO_MENU_FOOTER}`;
+              if (ctx.pedidoUrl) {
+                replyText += `\n\nCardápio completo: ${ctx.pedidoUrl}`;
+              }
+            } else {
+              replyText = appendBackToMainMenu(templateReply ?? ctx.welcomeMessage);
+            }
           } else {
             replyText = appendBackToMainMenu(templateReply ?? ctx.welcomeMessage);
           }
