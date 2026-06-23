@@ -16,7 +16,7 @@ export const MODULES: AncordModule[] = [
     title: "A Atividade do Assessor de Investimento (Res. CVM 178)",
     short: "Atividade do AI",
     critical: true,
-    examQuestions: 5,
+    examQuestions: 12,
     topics: [
       "Quem é o assessor de investimento e o que ele pode fazer",
       "Vínculo com intermediário (corretora/distribuidora/banco)",
@@ -67,7 +67,7 @@ export const MODULES: AncordModule[] = [
     title: "Fundamentos de Economia",
     short: "Economia",
     critical: false,
-    examQuestions: 4,
+    examQuestions: 3,
     topics: [
       "PIB, inflação (IPCA, IGP-M)",
       "Taxa Selic e o Copom",
@@ -115,7 +115,7 @@ export const MODULES: AncordModule[] = [
     title: "Administração de Risco",
     short: "Risco",
     critical: false,
-    examQuestions: 4,
+    examQuestions: 3,
     topics: [
       "Riscos: mercado, crédito, liquidez e operacional",
       "Risco sistemático x não sistemático (diversificação)",
@@ -131,7 +131,7 @@ export const MODULES: AncordModule[] = [
     title: "Mercado de Capitais: Produtos e Tributação",
     short: "Mercado de Capitais",
     critical: true,
-    examQuestions: 12,
+    examQuestions: 10,
     topics: [
       "Ações ON x PN, direitos do acionista, tag along",
       "Debêntures e bônus de subscrição",
@@ -148,7 +148,7 @@ export const MODULES: AncordModule[] = [
     title: "Fundos de Investimento",
     short: "Fundos",
     critical: false,
-    examQuestions: 7,
+    examQuestions: 6,
     topics: [
       "Condomínio, cota e marcação a mercado",
       "Aberto x fechado; administrador, gestor, custodiante",
@@ -212,7 +212,7 @@ export const MODULES: AncordModule[] = [
     title: "Matemática Financeira",
     short: "Matemática Fin.",
     critical: false,
-    examQuestions: 6,
+    examQuestions: 5,
     topics: [
       "Juros simples x compostos",
       "Taxa nominal, efetiva e real (Fisher)",
@@ -244,7 +244,7 @@ export const MODULES: AncordModule[] = [
     title: "Mercado de Derivativos",
     short: "Derivativos",
     critical: true,
-    examQuestions: 8,
+    examQuestions: 7,
     topics: [
       "Mercados: a termo, futuro, opções e swap",
       "Hedge, especulação e arbitragem",

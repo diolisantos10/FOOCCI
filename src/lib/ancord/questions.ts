@@ -1,4 +1,5 @@
 import type { Question } from "./types";
+import { QUESTIONS_EXTRA } from "./questions-extra";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Banco de questões ANCORD — conjunto inicial (semente), curado para precisão.
@@ -12,7 +13,7 @@ import type { Question } from "./types";
 // vigente (CVM, BACEN, Lei 9.613/98).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const QUESTIONS: Question[] = [
+const QUESTIONS_CORE: Question[] = [
   // ── Módulo I — Atividade do Assessor de Investimento (CRÍTICO) ──────────────
   {
     id: "m1-1",
@@ -1161,6 +1162,8 @@ export const QUESTIONS: Question[] = [
     tags: ["arbitragem"],
   },
 ];
+
+export const QUESTIONS: Question[] = [...QUESTIONS_CORE, ...QUESTIONS_EXTRA];
 
 export function questionsByModule(moduleId: number): Question[] {
   return QUESTIONS.filter((q) => q.moduleId === moduleId);
