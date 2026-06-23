@@ -1179,13 +1179,16 @@ async function run(conversationId: string): Promise<void> {
               replyText = P0_FALLBACK_REPLY;
             }
 
-            // Menu is the anchor: always append the numbered list to GPT replies
-            // so the customer can see their options on every turn (no cooldown).
+            // Menu is the anchor: ALWAYS append the numbered list to GPT replies so
+            // the customer sees their options on every turn — even when closed (fall
+            // back to the full configured list) or when the reply contains a link.
+            const gptMenuOptions =
+              effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
             let fullMenuAppended = false;
-            if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http")) {
-              const menuList = buildMenuList(effectiveMenuOptions);
+            if (!triggerHandoff && gptMenuOptions.length > 0) {
+              const menuList = buildMenuList(gptMenuOptions);
               if (menuList) {
-                replyText += "\n\nComo posso te ajudar?" + menuList;
+                replyText += "\n\nComo posso te ajudar?" + menuList + BACK_TO_MENU_FOOTER;
                 fullMenuAppended = true;
               }
             }
