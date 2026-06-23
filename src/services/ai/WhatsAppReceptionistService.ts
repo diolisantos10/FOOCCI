@@ -750,6 +750,8 @@ async function run(conversationId: string): Promise<void> {
       status:          true,
       aiEnabled:       true,
       activeSubmenuId: true,
+      customerPhone:   true,
+      customerName:    true,
       customer:        { select: { id: true, phone: true, name: true } },
     },
   });
@@ -764,7 +766,14 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
-  if (!conversation.customer?.phone) {
+  // Resolve phone/name from linked Customer first, fall back to the denormalized
+  // fields on Conversation (populated for contacts that haven't gone through
+  // the Customer creation flow yet).
+  const resolvedPhone = (conversation.customer?.phone ?? conversation.customerPhone ?? "").trim();
+  const resolvedName  = conversation.customer?.name  ?? conversation.customerName  ?? null;
+  const resolvedId    = conversation.customer?.id    ?? null;
+
+  if (!resolvedPhone) {
     console.warn(`[WhatsAppReceptionistService] Conversation ${conversationId} has no customer phone`);
     return;
   }
@@ -863,15 +872,15 @@ async function run(conversationId: string): Promise<void> {
   // Build customer-identified URL so /pedido can skip the phone-entry step
   const pedidoUrl = buildIdentifiedPedidoUrl(
     basePedidoUrl,
-    conversation.customer.phone,
-    conversation.customer.name ?? null,
+    resolvedPhone,
+    resolvedName,
   );
   // Instrumentation: log link-generation state so we can diagnose waToken failures.
   console.info("[WhatsAppReceptionistService] link-gen", {
     conversationId,
     restaurantSlug:       restaurant?.slug ?? null,
-    customerPhoneLen:     conversation.customer.phone?.length ?? 0,
-    customerPhoneTrimLen: conversation.customer.phone?.trim().length ?? 0,
+    customerPhoneLen:     resolvedPhone.length,
+    customerPhoneTrimLen: resolvedPhone.trim().length,
     hasSecret:            !!(process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET),
     secretLen:            (process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0,
     basePedidoUrlPrefix:  basePedidoUrl ? basePedidoUrl.slice(0, 60) : null,
@@ -998,7 +1007,7 @@ async function run(conversationId: string): Promise<void> {
   const ctx: ReplyContext = {
     restaurantName:  restaurant?.name ?? "nossa loja",
     agentName:       agentCfg?.agentName?.trim() || "Assistente",
-    customerName:    conversation.customer.name ?? null,
+    customerName:    resolvedName,
     pedidoUrl,
     qrMenuUrl,
     address,
@@ -1018,7 +1027,7 @@ async function run(conversationId: string): Promise<void> {
     tiktokUrl:       brandConfig?.tiktokUrl    ?? null,
   };
 
-  const toPhone = conversation.customer.phone.replace(/^\+/, "");
+  const toPhone = resolvedPhone.replace(/^\+/, "");
 
   // Handle media messages — we cannot process images, audio, or documents.
   if (lastMessage.type !== "TEXT") {
@@ -1064,8 +1073,8 @@ async function run(conversationId: string): Promise<void> {
     console.info("[WhatsAppReceptionistService] option-selected", {
       conversationId,
       restaurantSlug:       restaurant?.slug ?? null,
-      customerIdPresent:    !!conversation.customer.id,
-      customerPhonePresent: !!(conversation.customer.phone?.trim()),
+      customerIdPresent:    !!resolvedId,
+      customerPhonePresent: !!resolvedPhone.trim(),
       optionLabel:          selectedOpt.label,
       optionFlow:           selectedOpt.flow,
       inSubmenu:            !!activeSubmenuParent,
@@ -1094,9 +1103,9 @@ async function run(conversationId: string): Promise<void> {
         const { startOrderFromMenu } = await import("@/services/whatsapp/ordering/startOrderFromMenu");
         const prompt = await startOrderFromMenu({
           restaurantId:   conversation.restaurantId,
-          phone:          conversation.customer.phone ?? "",
+          phone:          resolvedPhone,
           conversationId,
-          customerId:     conversation.customer.id ?? null,
+          customerId:     resolvedId,
         });
         replyText = prompt ?? appendBackToMainMenu(buildFlowReply(selectedOpt, ctx));
       }
@@ -1248,7 +1257,7 @@ async function run(conversationId: string): Promise<void> {
 
             const gpt = await generateGptReply({
               ctx,
-              customerName:        conversation.customer.name,
+              customerName:        resolvedName,
               currentMessage:      lastMessage.content,
               conversationHistory,
               knowledgeItems,
@@ -1395,12 +1404,12 @@ async function run(conversationId: string): Promise<void> {
     replyText.includes("src=whatsapp") &&
     !replyText.includes("waToken=") &&
     basePedidoUrl &&
-    conversation.customer.phone?.trim()
+    resolvedPhone
   ) {
     const freshSigned = buildIdentifiedPedidoUrl(
       basePedidoUrl,
-      conversation.customer.phone,
-      conversation.customer.name ?? null,
+      resolvedPhone,
+      resolvedName,
     );
     if (freshSigned?.includes("waToken=")) {
       // Replace any unsigned /pedido URL in the reply text
