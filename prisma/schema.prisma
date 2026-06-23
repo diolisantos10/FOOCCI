@@ -635,6 +635,10 @@ model Conversation {
   aiLockedAt        DateTime?
   aiLockedByUserId  String? // operator who applied the lock
   assignedTo        String?
+  // WhatsApp menu: which configured submenu (top-level option id) the customer is
+  // currently viewing; null = top-level menu. Lets numbered selection resolve to
+  // the submenu's children instead of the main menu.
+  activeSubmenuId   String?
   contextType       String? // INBOUND | CRM_CAMPAIGN | CRM_AUTOMATION | ORDER_SUPPORT | HUMAN_SUPPORT
   relatedCampaignId String? // denormalized Campaign.id — no FK; avoids cascade complexity
   resolvedAt        DateTime?

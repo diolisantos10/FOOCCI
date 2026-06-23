@@ -5,7 +5,7 @@ import { z } from "zod";
 export const AGENT_MODES  = ["RECEPTIONIST_ONLY", "HUMAN_ASSISTED", "AI_ORDERING_EXPERIMENTAL"] as const;
 export const AGENT_TONES  = ["informal", "neutral", "premium"] as const;
 export const AGENT_STYLES = ["direct", "consultive", "sales_driven"] as const;
-export const FLOW_TYPES   = ["order", "handoff", "menu", "promotions", "custom", "text_order", "rodizio", "club"] as const;
+export const FLOW_TYPES   = ["order", "handoff", "menu", "promotions", "custom", "text_order", "rodizio", "club", "submenu"] as const;
 
 export type AgentMode = (typeof AGENT_MODES)[number];
 
@@ -13,11 +13,24 @@ export type FlowType = (typeof FLOW_TYPES)[number];
 
 // ── Menu option ────────────────────────────────────────────────────────────────
 
-export const menuOptionSchema = z.object({
+// A leaf menu option (no further nesting). Used at the top level and as a
+// submenu child; only top-level options may carry `submenuOptions` (one level).
+const menuOptionFields = {
   id:      z.string().min(1),
   label:   z.string().min(1, "Rótulo obrigatório").max(60),
   flow:    z.enum(FLOW_TYPES),
   message: z.string().max(500).optional(),  // only used when flow = 'custom'
+};
+
+export const subMenuOptionSchema = z.object(menuOptionFields);
+
+export type SubMenuOption = z.infer<typeof subMenuOptionSchema>;
+
+// A top-level option. When flow = 'submenu' it opens a one-level submenu built
+// from `submenuOptions` instead of running a terminal action.
+export const menuOptionSchema = z.object({
+  ...menuOptionFields,
+  submenuOptions: z.array(subMenuOptionSchema).max(8).optional(),
 });
 
 export type MenuOption = z.infer<typeof menuOptionSchema>;

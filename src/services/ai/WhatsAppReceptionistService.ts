@@ -529,6 +529,13 @@ export function renderMainMenu(ctx: ReplyContext, optionsOverride?: MenuOption[]
   return "Oi! 😊 Como você prefere começar?" + menuList + BACK_TO_MENU_FOOTER;
 }
 
+/** Renders a one-level submenu (its children numbered) with the "0. menu" escape. */
+export function renderSubmenu(parent: MenuOption, options: MenuOption[]): string {
+  const list = buildMenuList(options);
+  if (!list) return parent.label;
+  return `${parent.label} — escolha uma opção:` + list + BACK_TO_MENU_FOOTER;
+}
+
 // ── Receptionist response observability (single source of truth) ──────────────
 //
 // classifyReplyText labels what a FINISHED receptionist reply IS, by inspecting
@@ -738,11 +745,12 @@ async function run(conversationId: string): Promise<void> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: {
-      id:           true,
-      restaurantId: true,
-      status:       true,
-      aiEnabled:    true,
-      customer:     { select: { id: true, phone: true, name: true } },
+      id:              true,
+      restaurantId:    true,
+      status:          true,
+      aiEnabled:       true,
+      activeSubmenuId: true,
+      customer:        { select: { id: true, phone: true, name: true } },
     },
   });
 
@@ -970,6 +978,19 @@ async function run(conversationId: string): Promise<void> {
   const effectiveMenuOptions: MenuOption[] = effectivelyOpen
     ? menuOptions
     : menuOptions.filter((o) => o.flow !== "handoff");
+
+  // Submenu context (one level): if the customer is inside a configured submenu,
+  // the numbered options they currently see are that submenu's children.
+  const activeSubmenuParent = conversation.activeSubmenuId
+    ? menuOptions.find(
+        (o) => o.id === conversation.activeSubmenuId && (o.submenuOptions?.length ?? 0) > 0,
+      )
+    : undefined;
+  const currentMenuOptions: MenuOption[] = activeSubmenuParent
+    ? (effectivelyOpen
+        ? activeSubmenuParent.submenuOptions!
+        : activeSubmenuParent.submenuOptions!.filter((o) => o.flow !== "handoff"))
+    : effectiveMenuOptions;
   const pauseMessage = isPaused
     ? `Pedidos pausados temporariamente.${pauseReason ? ` ${pauseReason}.` : ""} Tente novamente em breve.`
     : null;
@@ -1016,6 +1037,13 @@ async function run(conversationId: string): Promise<void> {
 
   // ── Back-to-menu shortcut ─────────────────────────────────────────────────
   if (BACK_TO_MENU_RE.test(lastMessage.content.trim())) {
+    // "0"/"menu" always returns to the TOP-level menu — drop any submenu context.
+    if (conversation.activeSubmenuId) {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data:  { activeSubmenuId: null },
+      });
+    }
     // Use full (unfiltered) options if effectiveMenuOptions is empty — the
     // "0. menu" shortcut must always render something, even when closed.
     const backMenuOptions = effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
@@ -1024,7 +1052,9 @@ async function run(conversationId: string): Promise<void> {
   }
 
   // ── Check if customer selected a numbered or named menu option ────────────
-  const selectedOpt = detectSelectedOption(lastMessage.content, effectiveMenuOptions);
+  // Resolve against the options currently on screen — the submenu's children when
+  // the customer is inside one, otherwise the top-level menu.
+  const selectedOpt = detectSelectedOption(lastMessage.content, currentMenuOptions);
 
   let replyText: string     = ctx.handoffMessage;
   let triggerHandoff        = false;
@@ -1038,14 +1068,43 @@ async function run(conversationId: string): Promise<void> {
       customerPhonePresent: !!(conversation.customer.phone?.trim()),
       optionLabel:          selectedOpt.label,
       optionFlow:           selectedOpt.flow,
+      inSubmenu:            !!activeSubmenuParent,
       ctxPedidoUrlHasWaToken: ctx.pedidoUrl?.includes("waToken=") ?? false,
     });
-    replyText      = buildFlowReply(selectedOpt, ctx);
-    triggerHandoff = selectedOpt.flow === "handoff";
-    if (!triggerHandoff) {
-      replyText = appendBackToMainMenu(replyText);
+
+    if (selectedOpt.flow === "submenu" && (selectedOpt.submenuOptions?.length ?? 0) > 0) {
+      // Open the submenu: show its children and remember we're inside it so the
+      // next numbered reply resolves against them.
+      const subOptions = effectivelyOpen
+        ? selectedOpt.submenuOptions!
+        : selectedOpt.submenuOptions!.filter((o) => o.flow !== "handoff");
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data:  { activeSubmenuId: selectedOpt.id },
+      });
+      replyText = renderSubmenu(selectedOpt, subOptions);
+    } else {
+      // Terminal option: run its flow, then return to the top-level menu.
+      replyText      = buildFlowReply(selectedOpt, ctx);
+      triggerHandoff = selectedOpt.flow === "handoff";
+      if (!triggerHandoff) {
+        replyText = appendBackToMainMenu(replyText);
+      }
+      if (conversation.activeSubmenuId) {
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data:  { activeSubmenuId: null },
+        });
+      }
     }
   } else {
+    // Not a menu/submenu selection → abandon any submenu context (back to main).
+    if (conversation.activeSubmenuId) {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data:  { activeSubmenuId: null },
+      });
+    }
     const intent = detectIntent(lastMessage.content);
     const explicitOrder = isExplicitOrderMessage(lastMessage.content);
     const looseAddress  = looksLikeLooseAddress(lastMessage.content);
