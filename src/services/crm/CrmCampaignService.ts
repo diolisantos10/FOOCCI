@@ -23,6 +23,7 @@ import { markConversationCrmContext, buildConversationMetadataForCrmSend, CONTEX
 import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
 import { isBirthdayCampaign } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
+import { buildInstagramUrl } from "@/lib/social";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -313,7 +314,7 @@ export function personalizeMessage(
     .replace(/{dias_sem_pedir}/g,       dias !== null ? String(dias) : "alguns")
     .replace(/{ultimo_pedido}/g,        lastOrderLabel)
     .replace(/{produto_favorito}/g,     "nossos pratos")  // V1 simplified
-    .replace(/{instagram}/g,            ctx.instagramUrl ?? "");
+    .replace(/{instagram}/g,            buildInstagramUrl(ctx.instagramUrl) ?? "");
 }
 
 // ─── campaign creation ────────────────────────────────────────
@@ -335,7 +336,7 @@ export class CrmCampaignService {
       }),
       prisma.restaurantBrandConfig.findUnique({
         where: { restaurantId },
-        select: { googleReviewUrl: true },
+        select: { googleReviewUrl: true, instagramUrl: true },
       }),
     ]);
 
@@ -345,6 +346,7 @@ export class CrmCampaignService {
       restaurantName:  restaurant?.name ?? "nossa loja",
       pedidoUrl,
       googleReviewUrl: brandConfig?.googleReviewUrl ?? null,
+      instagramUrl:    brandConfig?.instagramUrl    ?? null,
     };
 
     // Recurring campaigns resolve audience at execution time, not creation time

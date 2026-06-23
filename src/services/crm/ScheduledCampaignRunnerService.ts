@@ -727,7 +727,7 @@ export class ScheduledCampaignRunnerService {
       }),
       prisma.restaurantBrandConfig.findUnique({
         where:  { restaurantId: campaign.restaurantId },
-        select: { googleReviewUrl: true },
+        select: { googleReviewUrl: true, instagramUrl: true },
       }),
     ]);
     const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
@@ -735,6 +735,7 @@ export class ScheduledCampaignRunnerService {
       restaurantName:  restaurant?.name ?? "nossa loja",
       pedidoUrl,
       googleReviewUrl: brandConfig?.googleReviewUrl ?? null,
+      instagramUrl:    brandConfig?.instagramUrl    ?? null,
     };
 
     // Pre-fetch opt-out status
