@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { MODULES, roman } from "@/lib/ancord/modules";
-import { moduleMastery } from "@/lib/ancord/plan";
-import { useAncord, useHydrated } from "@/lib/ancord/store";
+import { MODULES, roman } from "@/lib/modules";
+import { moduleMastery } from "@/lib/plan";
+import { useAncord, useHydrated } from "@/lib/store";
 import { Bar, CriticalBadge } from "../_components/ui";
 
 export default function ModulosPage() {
@@ -23,7 +23,7 @@ export default function ModulosPage() {
           const data = mm.find((x) => x.moduleId === m.id);
           const mastery = data ? Math.round(data.mastery * 100) : 0;
           return (
-            <Link key={m.id} href={`/ancord/modulos/${m.id}`} className="block">
+            <Link key={m.id} href={`/modulos/${m.id}`} className="block">
               <div className="rounded-2xl border border-gray-100 bg-white p-4 hover:border-brand-200">
                 <div className="flex items-start gap-3">
                   <span className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-sm font-bold text-brand-600">

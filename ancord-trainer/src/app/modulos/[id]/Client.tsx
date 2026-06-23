@@ -1,17 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { getModule, roman } from "@/lib/ancord/modules";
-import { questionsByModule } from "@/lib/ancord/questions";
-import { flashcardsByModule } from "@/lib/ancord/flashcards";
-import { moduleMastery } from "@/lib/ancord/plan";
-import { useAncord, useHydrated } from "@/lib/ancord/store";
+import { getModule, roman } from "@/lib/modules";
+import { questionsByModule } from "@/lib/questions";
+import { flashcardsByModule } from "@/lib/flashcards";
+import { moduleMastery } from "@/lib/plan";
+import { useAncord, useHydrated } from "@/lib/store";
 import { Bar, Card, CriticalBadge } from "../../_components/ui";
 
-export default function ModuleDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+export function ModuleDetailClient({ id }: { id: number }) {
   const m = getModule(id);
   const p = useAncord();
   const hydrated = useHydrated();
@@ -20,7 +17,7 @@ export default function ModuleDetailPage() {
     return (
       <div className="py-16 text-center">
         <p className="text-gray-500">Capítulo não encontrado.</p>
-        <Link href="/ancord/modulos" className="mt-3 inline-block text-brand-600">← Voltar aos módulos</Link>
+        <Link href="/modulos" className="mt-3 inline-block text-brand-600">← Voltar aos módulos</Link>
       </div>
     );
   }
@@ -32,7 +29,7 @@ export default function ModuleDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/ancord/modulos" className="text-sm text-gray-400">← Módulos</Link>
+      <Link href="/modulos" className="text-sm text-gray-400">← Módulos</Link>
 
       <header className="flex items-start gap-3">
         <span className="flex h-11 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-base font-bold text-brand-600">
@@ -74,24 +71,17 @@ export default function ModuleDetailPage() {
       {/* Ações */}
       <div className="space-y-2">
         <Link
-          href={`/ancord/estudar?modo=questoes&modulo=${m.id}`}
+          href={`/estudar?modo=questoes&modulo=${m.id}`}
           className="flex items-center justify-between rounded-xl bg-brand-500 px-4 py-3.5 text-sm font-semibold text-white"
         >
           <span>⚡ Treinar {nQ} questões deste capítulo</span>
           <span>›</span>
         </Link>
         <Link
-          href={`/ancord/estudar?modo=revisao&modulo=${m.id}`}
+          href={`/estudar?modo=revisao&modulo=${m.id}`}
           className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-semibold text-gray-800"
         >
           <span>🧠 Revisar {nF} flashcards</span>
-          <span>›</span>
-        </Link>
-        <Link
-          href={`/ancord/tutor?modulo=${m.id}`}
-          className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-semibold text-gray-800"
-        >
-          <span>🤖 Pedir explicação ao tutor</span>
           <span>›</span>
         </Link>
       </div>

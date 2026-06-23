@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useAncord, useHydrated, completeOnboarding } from "@/lib/ancord/store";
-import { daysUntil, todayKey } from "@/lib/ancord/storage";
-import { buildDailyPlan, readiness } from "@/lib/ancord/plan";
-import { getModule } from "@/lib/ancord/modules";
+import { useAncord, useHydrated, completeOnboarding } from "@/lib/store";
+import { daysUntil, todayKey } from "@/lib/storage";
+import { buildDailyPlan, readiness } from "@/lib/plan";
+import { getModule } from "@/lib/modules";
 import { Ring, Bar, Card, SectionTitle } from "./_components/ui";
 
 function greeting(): string {
@@ -96,7 +96,7 @@ export default function HomePage() {
           <h1 className="text-2xl font-bold text-gray-900">Plano de hoje</h1>
         </div>
         <Link
-          href="/ancord/progresso"
+          href="/progresso"
           className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-bold text-brand-600"
         >
           🔥 {p.streak.current}
@@ -137,7 +137,7 @@ export default function HomePage() {
 
       {/* Foco do dia */}
       {focus && (
-        <Link href={`/ancord/modulos/${focus.id}`} className="block">
+        <Link href={`/modulos/${focus.id}`} className="block">
           <div className="rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 p-4 text-white shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-white/70">Foco do dia</p>
             <p className="mt-0.5 text-lg font-bold">{focus.title}</p>
@@ -186,13 +186,13 @@ export default function HomePage() {
       <section>
         <SectionTitle>Atalhos</SectionTitle>
         <div className="grid grid-cols-2 gap-2">
-          <Link href="/ancord/simulado?modo=full" className="rounded-2xl border border-gray-100 bg-white p-4 text-center hover:border-brand-200">
+          <Link href="/simulado?modo=full" className="rounded-2xl border border-gray-100 bg-white p-4 text-center hover:border-brand-200">
             <div className="text-2xl">📝</div>
             <p className="mt-1 text-sm font-semibold text-gray-800">Simulado 80q</p>
           </Link>
-          <Link href="/ancord/tutor" className="rounded-2xl border border-gray-100 bg-white p-4 text-center hover:border-brand-200">
-            <div className="text-2xl">🤖</div>
-            <p className="mt-1 text-sm font-semibold text-gray-800">Tirar dúvida</p>
+          <Link href="/estudar?modo=revisao" className="rounded-2xl border border-gray-100 bg-white p-4 text-center hover:border-brand-200">
+            <div className="text-2xl">🧠</div>
+            <p className="mt-1 text-sm font-semibold text-gray-800">Flashcards</p>
           </Link>
         </div>
       </section>

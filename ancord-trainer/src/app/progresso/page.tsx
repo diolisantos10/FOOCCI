@@ -2,8 +2,8 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { roman, getModule } from "@/lib/ancord/modules";
-import { moduleMastery, readiness } from "@/lib/ancord/plan";
+import { roman, getModule } from "@/lib/modules";
+import { moduleMastery, readiness } from "@/lib/plan";
 import {
   useAncord,
   useHydrated,
@@ -12,8 +12,8 @@ import {
   exportJSON,
   importJSON,
   resetAll,
-} from "@/lib/ancord/store";
-import { daysUntil } from "@/lib/ancord/storage";
+} from "@/lib/store";
+import { daysUntil } from "@/lib/storage";
 import { Ring, Bar, Card, SectionTitle } from "../_components/ui";
 
 export default function ProgressoPage() {
@@ -56,7 +56,7 @@ export default function ProgressoPage() {
     <div className="space-y-5">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Seu progresso</h1>
-        <Link href="/ancord" className="text-sm text-gray-400">Início</Link>
+        <Link href="/" className="text-sm text-gray-400">Início</Link>
       </header>
 
       <Card className="flex items-center gap-4">
@@ -75,7 +75,7 @@ export default function ProgressoPage() {
         {p.exams.length === 0 ? (
           <Card>
             <p className="text-sm text-gray-500">Nenhum simulado ainda.</p>
-            <Link href="/ancord/simulado?modo=full" className="mt-2 inline-block text-sm font-semibold text-brand-600">
+            <Link href="/simulado?modo=full" className="mt-2 inline-block text-sm font-semibold text-brand-600">
               Fazer o primeiro →
             </Link>
           </Card>
@@ -107,7 +107,7 @@ export default function ProgressoPage() {
               const mod = getModule(d.moduleId)!;
               const v = Math.round(d.mastery * 100);
               return (
-                <Link key={d.moduleId} href={`/ancord/modulos/${d.moduleId}`} className="block">
+                <Link key={d.moduleId} href={`/modulos/${d.moduleId}`} className="block">
                   <div className="mb-1 flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1.5 text-gray-600">
                       <span className="font-bold text-gray-400">{roman(d.moduleId)}</span>

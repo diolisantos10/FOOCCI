@@ -3,20 +3,20 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { Flashcard, Progress } from "@/lib/ancord/types";
-import { QUESTIONS, questionsByModule } from "@/lib/ancord/questions";
-import { FLASHCARDS, flashcardsByModule } from "@/lib/ancord/flashcards";
-import { getModule, roman } from "@/lib/ancord/modules";
-import { displayOptions, type ExamItem } from "@/lib/ancord/exam";
-import { optionOrder, shuffle } from "@/lib/ancord/util";
-import { isDue, type Grade } from "@/lib/ancord/srs";
+import type { Flashcard, Progress } from "@/lib/types";
+import { QUESTIONS, questionsByModule } from "@/lib/questions";
+import { FLASHCARDS, flashcardsByModule } from "@/lib/flashcards";
+import { getModule, roman } from "@/lib/modules";
+import { displayOptions, type ExamItem } from "@/lib/exam";
+import { optionOrder, shuffle } from "@/lib/util";
+import { isDue, type Grade } from "@/lib/srs";
 import {
   useAncord,
   useHydrated,
   recordAnswer,
   reviewFlashcard,
   addStudyMinutes,
-} from "@/lib/ancord/store";
+} from "@/lib/store";
 import { Bar } from "../_components/ui";
 
 function buildQuestionQueue(moduleId?: number): ExamItem[] {
@@ -139,7 +139,7 @@ function StudySession() {
     <div className="flex min-h-[80vh] flex-col">
       {/* Topo */}
       <div className="mb-4 flex items-center justify-between">
-        <Link href="/ancord" className="text-sm text-gray-400">
+        <Link href="/" className="text-sm text-gray-400">
           ✕ Sair
         </Link>
         <Timer start={sessionStart.current} />
@@ -342,12 +342,12 @@ function Summary({
 
       <div className="mt-8 w-full max-w-xs space-y-2">
         <Link
-          href={mode === "revisao" ? "/ancord/estudar?modo=revisao" : `/ancord/estudar?modo=questoes${moduleId ? `&modulo=${moduleId}` : ""}`}
+          href={mode === "revisao" ? "/estudar?modo=revisao" : `/estudar?modo=questoes${moduleId ? `&modulo=${moduleId}` : ""}`}
           className="block w-full rounded-xl bg-brand-500 py-3 text-sm font-semibold text-white hover:bg-brand-600"
         >
           Continuar treinando
         </Link>
-        <Link href="/ancord" className="block w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700">
+        <Link href="/" className="block w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700">
           Voltar ao início
         </Link>
       </div>
@@ -362,10 +362,10 @@ function Empty({ title, subtitle }: { title: string; subtitle: string }) {
       <h1 className="mt-3 text-xl font-bold text-gray-900">{title}</h1>
       <p className="mt-1 max-w-xs text-sm text-gray-500">{subtitle}</p>
       <div className="mt-6 flex gap-2">
-        <Link href="/ancord/estudar?modo=questoes" className="rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white">
+        <Link href="/estudar?modo=questoes" className="rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white">
           Treinar questões
         </Link>
-        <Link href="/ancord" className="rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700">
+        <Link href="/" className="rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700">
           Início
         </Link>
       </div>

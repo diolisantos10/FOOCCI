@@ -3,16 +3,16 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { ExamResult } from "@/lib/ancord/types";
+import type { ExamResult } from "@/lib/types";
 import {
   buildExam,
   displayOptions,
   scoreExam,
   type ExamItem,
   type ExamMode,
-} from "@/lib/ancord/exam";
-import { MODULES, roman, PASS_PCT, CRITICAL_MIN_PCT } from "@/lib/ancord/modules";
-import { recordExam, useHydrated } from "@/lib/ancord/store";
+} from "@/lib/exam";
+import { MODULES, roman, PASS_PCT, CRITICAL_MIN_PCT } from "@/lib/modules";
+import { recordExam, useHydrated } from "@/lib/store";
 import { Bar, Card, CriticalBadge } from "../_components/ui";
 
 function fmt(sec: number): string {
@@ -335,7 +335,7 @@ function Result({
         <button onClick={onRestart} className="flex-1 rounded-xl bg-brand-500 py-3 text-sm font-semibold text-white">
           Novo simulado
         </button>
-        <Link href="/ancord" className="flex-1 rounded-xl border border-gray-200 py-3 text-center text-sm font-semibold text-gray-700">
+        <Link href="/" className="flex-1 rounded-xl border border-gray-200 py-3 text-center text-sm font-semibold text-gray-700">
           Início
         </Link>
       </div>

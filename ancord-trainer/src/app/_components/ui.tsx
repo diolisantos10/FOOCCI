@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { roman } from "@/lib/ancord/modules";
+import { roman } from "@/lib/modules";
 
 // Componentes de UI puros e reutilizáveis do treinador ANCORD.
 

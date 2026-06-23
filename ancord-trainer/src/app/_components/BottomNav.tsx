@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
-  { href: "/ancord", label: "Início", emoji: "🏠", exact: true },
-  { href: "/ancord/estudar", label: "Estudar", emoji: "⚡", exact: false },
-  { href: "/ancord/simulado", label: "Simulado", emoji: "📝", exact: false },
-  { href: "/ancord/modulos", label: "Módulos", emoji: "📚", exact: false },
-  { href: "/ancord/tutor", label: "Tutor", emoji: "🤖", exact: false },
+  { href: "/", label: "Início", emoji: "🏠", exact: true },
+  { href: "/estudar", label: "Estudar", emoji: "⚡", exact: false },
+  { href: "/simulado", label: "Simulado", emoji: "📝", exact: false },
+  { href: "/modulos", label: "Módulos", emoji: "📚", exact: false },
 ];
 
 export function BottomNav() {

@@ -28,8 +28,6 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/setup$/,                    // Setup API
   /^\/qr(\/.*)?$/,                     // Public QR dine-in menu pages
   /^\/api\/qr(\/.*)?$/,                // Public QR dine-in menu API
-  /^\/ancord(\/.*)?$/,                 // ANCORD Trainer — standalone study app (no auth, client-side state)
-  /^\/api\/ancord(\/.*)?$/,            // ANCORD Trainer API (AI tutor) — provider keys stay server-side
   /^\/pedido(\/.*)?$/,                 // Public AI ordering experience pages
   /^\/api\/pedido(\/.*)?$/,            // Public AI ordering experience API
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
