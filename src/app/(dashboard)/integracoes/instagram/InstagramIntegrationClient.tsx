@@ -10,6 +10,12 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { INSTAGRAM_MODE_LABEL } from "@/services/instagram/labels";
+import {
+  buildInstagramSetupInstructions,
+  instagramWebhookUrl,
+  INSTAGRAM_WEBHOOK_FIELD,
+  INSTAGRAM_REVIEW_SCOPES,
+} from "@/services/instagram/instagramSetupInstructions";
 
 type Mode = "DISABLED" | "RECEIVE_ONLY" | "REPLY_ONLY" | "FULL";
 type Scope = "TEST_ACCOUNT_ONLY" | "RESTAURANT_WIDE";
@@ -33,6 +39,18 @@ interface ConfigView {
   webhookUrl: string | null;
   lastWebhookAt: string | null;
   lastError: string | null;
+  env?: InstagramEnv | null;
+}
+
+interface InstagramEnv {
+  appId: boolean;
+  appSecret: boolean;
+  webhookVerifyToken: boolean;
+  instagramAppSecret: boolean;
+  baseUrl: boolean;
+  encryptionKey: boolean;
+  signatureEnforced: boolean;
+  webhookReachable: boolean;
 }
 
 interface PageCandidate {
@@ -157,6 +175,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
   if (loading) return <div className="p-6 text-sm text-gray-500">Carregando…</div>;
   const connected = isConnected(view);
+  const env = view?.env ?? null;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6 text-gray-800">
@@ -266,6 +285,60 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
         <Link href="/atendimento" className="mt-2 inline-block text-sm font-semibold text-sky-700 hover:text-sky-900">Abrir Central de Atendimento →</Link>
       </section>
 
+      {/* ── Avançado · Uso interno Foocci — prontidão da plataforma (sem segredos) ── */}
+      <details className="rounded-xl border border-gray-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-600">Avançado · Uso interno Foocci</summary>
+        <div className="mt-3 space-y-4 text-sm text-gray-600">
+          <button
+            onClick={() => copy(buildInstagramSetupInstructions(), "setup")}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            {copied === "setup" ? "Copiado!" : "Copiar instruções de setup Instagram"}
+          </button>
+
+          {/* A — Variáveis no servidor (✓/✗, nomes apenas — nunca valores) */}
+          {env && (
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">A · Variáveis no servidor</p>
+              <IgCheck ok={env.appId}              label="META_APP_ID ou FACEBOOK_APP_ID" />
+              <IgCheck ok={env.appSecret}          label="META_APP_SECRET ou FACEBOOK_APP_SECRET" />
+              <IgCheck ok={env.webhookVerifyToken} label="INSTAGRAM_WEBHOOK_VERIFY_TOKEN" />
+              <IgCheck ok={env.instagramAppSecret} label="INSTAGRAM_APP_SECRET (recomendado)" soft />
+              <IgCheck ok={env.baseUrl}            label="FOOCCI_BASE_URL ou APP_URL" />
+              <IgCheck ok={env.encryptionKey}      label="ENCRYPTION_KEY" />
+            </div>
+          )}
+
+          {/* B — Webhook */}
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">B · Webhook</p>
+            <IgItem label={`URL: ${view?.webhookUrl ?? instagramWebhookUrl()}`} />
+            <IgCheck ok={env?.webhookReachable ?? false} label="Endpoint público / alcançável" />
+            <IgCheck ok={(env?.webhookVerifyToken ?? false) || (view?.verifyTokenConfigured ?? false)} label="Verify token configurado" />
+            <IgCheck ok={env?.signatureEnforced ?? false} label="Assinatura exigida (INSTAGRAM_APP_SECRET)" soft />
+            {env && !env.signatureEnforced && <div className="text-amber-600">⚠ Assinatura não exigida — defina INSTAGRAM_APP_SECRET.</div>}
+            <IgItem label={`Campo/evento a assinar: ${INSTAGRAM_WEBHOOK_FIELD}`} />
+          </div>
+
+          {/* C — Permissões (App Review) */}
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">C · Permissões (App Review)</p>
+            {INSTAGRAM_REVIEW_SCOPES.map((s) => <IgItem key={s} label={s} />)}
+            <div className="text-amber-600">⚠ instagram_manage_messages e pages_messaging exigem App Review. Antes da aprovação, use uma conta Tester.</div>
+          </div>
+
+          {/* D — Fluxo de teste seguro */}
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">D · Fluxo de teste seguro</p>
+            <IgItem label="1. Conectar com Facebook → escolher Página" />
+            <IgItem label="2. Rodar diagnóstico (não envia nenhuma mensagem)" />
+            <IgItem label="3. Enviar DM de uma conta Tester" />
+            <IgItem label="4. Conferir na Central de Atendimento (selo Instagram DM)" />
+            <IgItem label="5. Responder manualmente pela Central" />
+          </div>
+        </div>
+      </details>
+
       {/* Webhook */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold">Webhook</h2>
@@ -355,6 +428,19 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
       </section>
     </div>
   );
+}
+
+function IgCheck({ ok, label, soft }: { ok: boolean; label: string; soft?: boolean }) {
+  const okColor = soft ? "text-gray-600" : "text-emerald-600";
+  return (
+    <div className={`text-xs ${ok ? okColor : soft ? "text-gray-400" : "text-red-500"}`}>
+      {ok ? "✓" : soft ? "○" : "✗"} {label}
+    </div>
+  );
+}
+
+function IgItem({ label }: { label: string }) {
+  return <div className="text-xs text-gray-500">• {label}</div>;
 }
 
 function Field({ label, value, onChange, placeholder, disabled }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; disabled?: boolean }) {

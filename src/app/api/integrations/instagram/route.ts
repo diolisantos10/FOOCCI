@@ -35,6 +35,19 @@ export async function GET(req: NextRequest) {
 
   const config = await getInstagramConfig(ctx.restaurantId);
   const view = config ? toView(config) : null;
+  const wbUrl = webhookUrl(req);
+
+  // Env readiness — booleans only, NEVER values. Drives the Avançado checklist.
+  const env = {
+    appId:              !!(process.env.META_APP_ID || process.env.FACEBOOK_APP_ID),
+    appSecret:          !!(process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET),
+    webhookVerifyToken: !!process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
+    instagramAppSecret: !!process.env.INSTAGRAM_APP_SECRET,
+    baseUrl:            !!wbUrl, // public base resolves → webhook URL is generatable
+    encryptionKey:      !!process.env.ENCRYPTION_KEY,
+    signatureEnforced:  !!process.env.INSTAGRAM_APP_SECRET, // POST signature only checked when set
+    webhookReachable:   !!wbUrl, // route is public (middleware-allowlisted) when a base exists
+  };
 
   // Status for the Integrations Center card (lojista-friendly).
   let status: "unconfigured" | "configured" | "active" | "error" | "pending_validation" = "unconfigured";
@@ -67,13 +80,14 @@ export async function GET(req: NextRequest) {
       instagramUsername: view?.instagramUsername ?? null,
       metaConnectAvailable: getMetaEnvStatus(req.nextUrl.origin).oauthReady,
       missingEnv: getMetaEnvStatus(req.nextUrl.origin).missing,
-      webhookUrl: webhookUrl(req),
+      webhookUrl: wbUrl,
       lastWebhookAt: view?.lastWebhookAt ?? null,
       lastError: view?.lastError ?? null,
       allowlistedExternalUserIds: config?.allowlistedExternalUserIds ?? [],
       appId: view?.appId ?? null,
       envVerifyTokenConfigured: !!process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
       envAppSecretConfigured: !!process.env.INSTAGRAM_APP_SECRET,
+      env,
     },
   });
 }
