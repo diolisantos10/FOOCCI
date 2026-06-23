@@ -1083,6 +1083,24 @@ async function run(conversationId: string): Promise<void> {
         data:  { activeSubmenuId: selectedOpt.id },
       });
       replyText = renderSubmenu(selectedOpt, subOptions);
+    } else if (selectedOpt.flow === "text_order") {
+      // "Digitar pedido" → hand the conversation to the Text Ordering engine when
+      // it's live + reply-capable for this restaurant+phone (safe-by-default: off
+      // unless explicitly enabled). Falls back to the canned prompt otherwise.
+      const { startOrderFromMenu } = await import("@/services/whatsapp/ordering/startOrderFromMenu");
+      const prompt = await startOrderFromMenu({
+        restaurantId:   conversation.restaurantId,
+        phone:          conversation.customer.phone ?? "",
+        conversationId,
+        customerId:     conversation.customer.id ?? null,
+      });
+      replyText = prompt ?? appendBackToMainMenu(buildFlowReply(selectedOpt, ctx));
+      if (conversation.activeSubmenuId) {
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data:  { activeSubmenuId: null },
+        });
+      }
     } else {
       // Terminal option: run its flow, then return to the top-level menu.
       replyText      = buildFlowReply(selectedOpt, ctx);
