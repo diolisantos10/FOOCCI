@@ -160,6 +160,7 @@ const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string 
   text_order: { icon: "✍️", label: "Pedido por mensagem",    desc: "Cliente digita o pedido diretamente no chat" },
   rodizio:    { icon: "🍽️", label: "Rodízio presencial",     desc: "Informa sobre o rodízio e horários"       },
   club:       { icon: "⭐", label: "Cazza Club",              desc: "Informa sobre o programa de fidelidade"   },
+  submenu:    { icon: "📂", label: "Abrir submenu",          desc: "Mostra um submenu com mais opções"        },
 };
 
 const PRESETS_AGENT: Array<{ label: string; flow: FlowType; message?: string }> = [
@@ -530,6 +531,58 @@ function OptionCard({
             placeholder="Mensagem enviada ao cliente ao selecionar esta opção…"
             className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+        </div>
+      )}
+      {option.flow === "submenu" && (
+        <div className="pl-8 space-y-2">
+          <p className="text-xs font-medium text-gray-600">Opções do submenu:</p>
+          {(option.submenuOptions ?? []).map((sub, si) => (
+            <div key={sub.id} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={sub.label}
+                onChange={(e) => {
+                  const next = [...(option.submenuOptions ?? [])];
+                  next[si] = { ...sub, label: e.target.value };
+                  onChange({ submenuOptions: next });
+                }}
+                maxLength={60}
+                placeholder="Ex: Digitar pedido"
+                className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <select
+                value={sub.flow}
+                onChange={(e) => {
+                  const next = [...(option.submenuOptions ?? [])];
+                  next[si] = { ...sub, flow: e.target.value as FlowType };
+                  onChange({ submenuOptions: next });
+                }}
+                className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {FLOW_TYPES.filter((f) => f !== "submenu").map((f) => (
+                  <option key={f} value={f}>{FLOW_CONFIG[f].icon} {FLOW_CONFIG[f].label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => onChange({ submenuOptions: (option.submenuOptions ?? []).filter((_, i) => i !== si) })}
+                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                aria-label="Remover sub-opção"
+              >✕</button>
+            </div>
+          ))}
+          {(option.submenuOptions ?? []).length < 8 && (
+            <button
+              type="button"
+              onClick={() => onChange({
+                submenuOptions: [
+                  ...(option.submenuOptions ?? []),
+                  { id: `sub-${Date.now()}`, label: "", flow: "menu" as FlowType },
+                ],
+              })}
+              className="text-xs font-medium text-brand-600 hover:text-brand-700"
+            >+ Adicionar opção ao submenu</button>
+          )}
         </div>
       )}
     </div>

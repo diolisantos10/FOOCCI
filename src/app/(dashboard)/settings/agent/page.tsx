@@ -40,6 +40,7 @@ const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string 
   text_order: { icon: "✍️", label: "Pedido por mensagem",     desc: "Cliente digita o pedido diretamente no chat" },
   rodizio:    { icon: "🍽️", label: "Rodízio presencial",      desc: "Informa sobre o rodízio e horários"          },
   club:       { icon: "⭐", label: "Cazza Club",               desc: "Informa sobre o programa de fidelidade"      },
+  submenu:    { icon: "📂", label: "Abrir submenu",           desc: "Mostra um submenu com mais opções"           },
 };
 
 // Preset chips shown at the bottom of the options list

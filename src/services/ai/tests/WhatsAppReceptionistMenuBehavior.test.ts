@@ -63,6 +63,7 @@ import {
   buildMenuList,
   detectSelectedOption,
   renderMainMenu,
+  renderSubmenu,
   buildFlowReply,
   detectIntent,
   looksLikeLooseAddress,
@@ -75,7 +76,7 @@ import {
   type ReplyContext,
 } from "../WhatsAppReceptionistService";
 import { detectIntent as detectOrderingIntent } from "@/services/whatsapp/ordering/parser";
-import type { MenuOption } from "@/validators/whatsapp-agent";
+import { menuOptionSchema, type MenuOption } from "@/validators/whatsapp-agent";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,54 @@ const THREE_OPTIONS: MenuOption[] = [
   { id: "opt-2", label: "Ver cardápio",            flow: "menu"    },
   { id: "opt-3", label: "Falar com atendente",     flow: "handoff" },
 ];
+
+describe("submenu (one-level, configurable)", () => {
+  const PARENT: MenuOption = {
+    id: "p-order", label: "Fazer pedido", flow: "submenu",
+    submenuOptions: [
+      { id: "p-type", label: "Digitar pedido", flow: "text_order" },
+      { id: "p-menu", label: "Ver cardápio",   flow: "menu" },
+    ],
+  };
+
+  it("renderSubmenu lists the children and keeps the 0. menu escape", () => {
+    const out = renderSubmenu(PARENT, (PARENT.submenuOptions ?? []) as MenuOption[]);
+    expect(out).toContain("Fazer pedido");
+    expect(out).toContain("Digitar pedido");
+    expect(out).toContain("Ver cardápio");
+    expect(out).toContain("0. menu");
+  });
+
+  it("detectSelectedOption resolves a number against the submenu children", () => {
+    const children = (PARENT.submenuOptions ?? []) as MenuOption[];
+    expect(detectSelectedOption("1", children)?.flow).toBe("text_order");
+    expect(detectSelectedOption("2", children)?.flow).toBe("menu");
+    expect(detectSelectedOption("9", children)).toBeNull();
+  });
+
+  it("a terminal option carries no children", () => {
+    expect(THREE_OPTIONS[1]!.submenuOptions).toBeUndefined();
+  });
+
+  it("validator accepts one-level submenuOptions", () => {
+    const parsed = menuOptionSchema.parse({
+      id: "p", label: "Fazer pedido", flow: "submenu",
+      submenuOptions: [{ id: "c", label: "Digitar pedido", flow: "text_order" }],
+    });
+    expect(parsed.submenuOptions?.[0]?.flow).toBe("text_order");
+  });
+
+  it("validator strips a second nesting level (submenu children are leaves)", () => {
+    const parsed = menuOptionSchema.parse({
+      id: "p", label: "Fazer pedido", flow: "submenu",
+      submenuOptions: [{
+        id: "c", label: "X", flow: "menu",
+        submenuOptions: [{ id: "g", label: "Y", flow: "menu" }],
+      }],
+    });
+    expect((parsed.submenuOptions?.[0] as Record<string, unknown>).submenuOptions).toBeUndefined();
+  });
+});
 
 function makeCtx(overrides: Partial<ReplyContext> = {}): ReplyContext {
   return {
