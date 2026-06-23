@@ -19,6 +19,17 @@ vi.mock("@/lib/handoff", () => handoff);
 const brain = vi.hoisted(() => ({ reasonAsAgent: vi.fn() }));
 vi.mock("@/services/brain/reasoning/BrainReasoner", () => brain);
 
+// The Brain front door delegates menu interactions to the Receptionist (dynamically
+// imported). Mock the module — its real pure helpers are covered by the Receptionist's
+// own suite; here we drive detectIntent and stub respond to test the wiring.
+const recep = vi.hoisted(() => ({
+  detectIntent: vi.fn(() => "UNKNOWN"),
+  BACK_TO_MENU_RE: /^(0|menu|voltar|in[ií]cio|inicio)$/i,
+  BACK_TO_MENU_FOOTER: "\n\n0. menu",
+  WhatsAppReceptionistService: { respond: vi.fn() },
+}));
+vi.mock("@/services/ai/WhatsAppReceptionistService", () => recep);
+
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "./WhatsAppBrainRuntimeService";
 
 function brainOutcome(over: Record<string, unknown> = {}) {
@@ -49,6 +60,8 @@ beforeEach(() => {
   evoClient.sendTextMessage.mockResolvedValue({ key: { id: "ext_1" } });
   handoff.markConversationNeedsHuman.mockResolvedValue(true);
   brain.reasonAsAgent.mockResolvedValue(brainOutcome());
+  recep.detectIntent.mockReturnValue("UNKNOWN");
+  recep.WhatsAppReceptionistService.respond.mockResolvedValue({ status: "REPLIED" });
 });
 
 describe("isWhatsAppBrainEnabled (the safety switch)", () => {
@@ -66,9 +79,29 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
       expect.objectContaining({ agentId: "whatsapp", businessId: "rest_1" }),
     );
     expect(evoClient.sendTextMessage).toHaveBeenCalledWith(
-      expect.anything(), "5511999", "Aceitamos Pix, cartão e dinheiro. 😊",
+      expect.anything(), "5511999", "Aceitamos Pix, cartão e dinheiro. 😊\n\n0. menu",
     );
     expect(out.status).toBe("REPLIED");
+  });
+
+  it("delegates menu interactions to the Receptionist — never free-form", async () => {
+    recep.detectIntent.mockReturnValue("MENU_REQUEST");
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(brain.reasonAsAgent).not.toHaveBeenCalled();
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(out.status).toBe("REPLIED");
+  });
+
+  it("treats a bare number as a menu selection (Receptionist, not the Brain)", async () => {
+    db.message.findFirst.mockReset();
+    db.message.findFirst
+      .mockResolvedValueOnce({ content: "2", type: "TEXT", sentAt: new Date() })
+      .mockResolvedValueOnce(null);
+    recep.detectIntent.mockReturnValue("UNKNOWN"); // a number is not a keyword intent
+    await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(brain.reasonAsAgent).not.toHaveBeenCalled();
   });
 
   it("escalates to a human when the Brain asks — but sends the reply first", async () => {

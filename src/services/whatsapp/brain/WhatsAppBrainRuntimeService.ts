@@ -88,6 +88,25 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   });
   if (alreadyReplied) return { status: "SKIPPED", reason: "already replied" };
 
+  // ── Menu is the fixed anchor — the Brain must respect it ───────────────────
+  // Greetings, "menu"/"cardápio", the "0"/"voltar" shortcut and numbered
+  // selections are deterministic menu interactions, handled by the Receptionist
+  // (configured numbered menu, option flows, "0" back-to-menu) — NEVER answered
+  // free-form by the Brain. The Brain only reasons about genuine off-menu
+  // questions, and still keeps the "0" escape hatch on its reply (below).
+  const recep = await import("@/services/ai/WhatsAppReceptionistService");
+  const inboundText = lastMessage.content.trim();
+  const menuIntent = recep.detectIntent(inboundText);
+  const isMenuInteraction =
+    menuIntent === "GREETING" ||
+    menuIntent === "MENU_REQUEST" ||
+    recep.BACK_TO_MENU_RE.test(inboundText) ||
+    /^\d+$/.test(inboundText);
+  if (isMenuInteraction) {
+    await recep.WhatsAppReceptionistService.respond(conversationId);
+    return { status: "REPLIED", reason: "menu-anchor" };
+  }
+
   const { restaurantId } = conversation;
 
   // Reason via the Brain (WhatsApp scope). Truth (menu/prices/payments/hours) is
@@ -104,6 +123,12 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const reply = outcome.result.idealResponse?.trim();
   if (!reply) return { status: "SKIPPED", reason: "brain produced no reply" };
 
+  // Keep the menu within reach on every free-form answer (skip on handoff).
+  const anchoredReply =
+    outcome.result.shouldEscalate || reply.includes("0. menu")
+      ? reply
+      : reply + recep.BACK_TO_MENU_FOOTER;
+
   const metadata = {
     source: "WHATSAPP_BRAIN",
     brainIntent: outcome.result.primaryIntent,
@@ -118,13 +143,13 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const providerId = await resolveProviderId(restaurantId);
   if (providerId === "META_CLOUD_API") {
     const sent = await WhatsAppMessagingService.sendConversationReply({
-      restaurantId, conversationId, toPhone: conversation.customer.phone, text: reply, senderType: "AI", metadata,
+      restaurantId, conversationId, toPhone: conversation.customer.phone, text: anchoredReply, senderType: "AI", metadata,
     });
     if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
   } else {
     const cfg = await EvolutionConfigService.getSnapshot(restaurantId);
     if (!cfg.ok) return { status: "SKIPPED", reason: "evolution config missing" };
-    await sendReply(cfg.data, conversation.customer.phone, reply, conversationId, metadata);
+    await sendReply(cfg.data, conversation.customer.phone, anchoredReply, conversationId, metadata);
   }
 
   // Escalate AFTER the reply is sent, so the customer still gets the Brain's
