@@ -147,6 +147,7 @@ const STYLE_OPTIONS = [
 ];
 
 const AGENT_MODE_OPTIONS: Array<{ value: AgentMode; label: string; desc: string }> = [
+  { value: "MENU_ONLY",         label: "Menu fixo (sem IA)", desc: "Só o menu numerado. Sem IA. Pedido → falar com a equipe" },
   { value: "RECEPTIONIST_ONLY", label: "Recepcionista",      desc: "Responde, exibe opções e direciona o cliente"  },
   { value: "HUMAN_ASSISTED",    label: "Com suporte humano", desc: "IA e equipe atuam juntos na mesma conversa"    },
 ];

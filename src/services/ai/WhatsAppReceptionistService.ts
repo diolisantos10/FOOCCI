@@ -1084,17 +1084,22 @@ async function run(conversationId: string): Promise<void> {
       });
       replyText = renderSubmenu(selectedOpt, subOptions);
     } else if (selectedOpt.flow === "text_order") {
-      // "Digitar pedido" → hand the conversation to the Text Ordering engine when
-      // it's live + reply-capable for this restaurant+phone (safe-by-default: off
-      // unless explicitly enabled). Falls back to the canned prompt otherwise.
-      const { startOrderFromMenu } = await import("@/services/whatsapp/ordering/startOrderFromMenu");
-      const prompt = await startOrderFromMenu({
-        restaurantId:   conversation.restaurantId,
-        phone:          conversation.customer.phone ?? "",
-        conversationId,
-        customerId:     conversation.customer.id ?? null,
-      });
-      replyText = prompt ?? appendBackToMainMenu(buildFlowReply(selectedOpt, ctx));
+      if (agentMode === "MENU_ONLY") {
+        // Menu-only safe mode: no AI order-taking → send the customer to the team.
+        replyText = appendBackToMainMenu("Para fazer seu pedido, fale com nossa equipe 😊");
+      } else {
+        // "Digitar pedido" → hand the conversation to the Text Ordering engine when
+        // it's live + reply-capable for this restaurant+phone (safe-by-default: off
+        // unless explicitly enabled). Falls back to the canned prompt otherwise.
+        const { startOrderFromMenu } = await import("@/services/whatsapp/ordering/startOrderFromMenu");
+        const prompt = await startOrderFromMenu({
+          restaurantId:   conversation.restaurantId,
+          phone:          conversation.customer.phone ?? "",
+          conversationId,
+          customerId:     conversation.customer.id ?? null,
+        });
+        replyText = prompt ?? appendBackToMainMenu(buildFlowReply(selectedOpt, ctx));
+      }
       if (conversation.activeSubmenuId) {
         await prisma.conversation.update({
           where: { id: conversationId },
@@ -1115,6 +1120,17 @@ async function run(conversationId: string): Promise<void> {
         });
       }
     }
+  } else if (agentMode === "MENU_ONLY") {
+    // Menu-only safe mode: no AI. Anything that isn't a menu selection just
+    // re-shows the fixed menu (greetings included). Ordering goes through the
+    // menu's "Falar com atendente" option.
+    if (conversation.activeSubmenuId) {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data:  { activeSubmenuId: null },
+      });
+    }
+    replyText = renderMainMenu(ctx, effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions);
   } else {
     // Not a menu/submenu selection → abandon any submenu context (back to main).
     if (conversation.activeSubmenuId) {

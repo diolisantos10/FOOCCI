@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
-export const AGENT_MODES  = ["RECEPTIONIST_ONLY", "HUMAN_ASSISTED", "AI_ORDERING_EXPERIMENTAL"] as const;
+export const AGENT_MODES  = ["RECEPTIONIST_ONLY", "HUMAN_ASSISTED", "AI_ORDERING_EXPERIMENTAL", "MENU_ONLY"] as const;
 export const AGENT_TONES  = ["informal", "neutral", "premium"] as const;
 export const AGENT_STYLES = ["direct", "consultive", "sales_driven"] as const;
 export const FLOW_TYPES   = ["order", "handoff", "menu", "promotions", "custom", "text_order", "rodizio", "club", "submenu"] as const;

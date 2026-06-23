@@ -390,7 +390,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         .catch((err) =>
           console.error("[WebhookProcessor] AI ordering module load failed:", err)
         );
-    } else if (process.env.WHATSAPP_BRAIN_ENABLED !== "false" && event.messageType === "TEXT") {
+    } else if (agentMode !== "MENU_ONLY" && process.env.WHATSAPP_BRAIN_ENABLED !== "false" && event.messageType === "TEXT") {
       // Brain front door (ON by default; set WHATSAPP_BRAIN_ENABLED=false to disable).
       // The Brain is the intelligent default host for TEXT messages: it reasons about
       // the real intent and answers from the restaurant knowledge instead of matching
