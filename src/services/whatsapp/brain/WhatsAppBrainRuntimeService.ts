@@ -55,6 +55,8 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
       restaurantId: true,
       status: true,
       aiEnabled: true,
+      customerPhone: true,
+      customerName: true,
       customer: { select: { id: true, phone: true, name: true } },
     },
   });
@@ -68,7 +70,9 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   ) {
     return { status: "SKIPPED", reason: "conversation not AI-eligible" };
   }
-  if (!conversation.customer?.phone) {
+
+  const resolvedPhone = (conversation.customer?.phone ?? conversation.customerPhone ?? "").trim();
+  if (!resolvedPhone) {
     return { status: "SKIPPED", reason: "no customer phone" };
   }
 
@@ -143,13 +147,13 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const providerId = await resolveProviderId(restaurantId);
   if (providerId === "META_CLOUD_API") {
     const sent = await WhatsAppMessagingService.sendConversationReply({
-      restaurantId, conversationId, toPhone: conversation.customer.phone, text: anchoredReply, senderType: "AI", metadata,
+      restaurantId, conversationId, toPhone: resolvedPhone, text: anchoredReply, senderType: "AI", metadata,
     });
     if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
   } else {
     const cfg = await EvolutionConfigService.getSnapshot(restaurantId);
     if (!cfg.ok) return { status: "SKIPPED", reason: "evolution config missing" };
-    await sendReply(cfg.data, conversation.customer.phone, anchoredReply, conversationId, metadata);
+    await sendReply(cfg.data, resolvedPhone, anchoredReply, conversationId, metadata);
   }
 
   // Escalate AFTER the reply is sent, so the customer still gets the Brain's

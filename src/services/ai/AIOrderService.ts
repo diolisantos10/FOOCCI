@@ -984,14 +984,16 @@ async function safeHandoff(conversationId: string, message: string): Promise<voi
     // Attempt to find Evolution config and send the fallback message
     const conv = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { restaurantId: true, customer: { select: { phone: true } } },
+      select: { restaurantId: true, customerPhone: true, customer: { select: { phone: true } } },
     });
 
-    if (conv && conv.customer) {
-      const cfgResult = await EvolutionConfigService.getSnapshot(conv.restaurantId);
-      if (cfgResult.ok) {
-        const phone = conv.customer.phone!.replace(/^\+/, ""); // WhatsApp customers always have a phone
-        await sendWhatsAppReply(cfgResult.data, phone, message, conversationId);
+    if (conv) {
+      const phone = (conv.customer?.phone ?? conv.customerPhone ?? "").trim().replace(/^\+/, "");
+      if (phone) {
+        const cfgResult = await EvolutionConfigService.getSnapshot(conv.restaurantId);
+        if (cfgResult.ok) {
+          await sendWhatsAppReply(cfgResult.data, phone, message, conversationId);
+        }
       }
     }
   } catch (err) {
