@@ -790,6 +790,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isAdvancedOpen,  setIsAdvancedOpen]  = useState(false);
+  const [quickTesting, setQuickTesting] = useState(false);
 
   // Webhook health state
   const [webhookLogLoading, setWebhookLogLoading] = useState(false);
@@ -897,6 +898,24 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     }
     setLoading(false);
   }, []);
+
+  // Owner-friendly "Testar conexão" — re-checks the live status (read-only; same GET
+  // loadView uses) and reports a simple message. No backend/webhook/send change.
+  async function handleQuickTest() {
+    setQuickTesting(true);
+    setFeedback(null);
+    const { ok, data } = await apiFetch("/api/integrations/whatsapp");
+    setQuickTesting(false);
+    if (ok && data) {
+      const v = data as EvolutionView;
+      setView(v);
+      setFeedback(viewToSimple(v.status) === "connected"
+        ? { type: "ok",  msg: "Conectado. Sua integração de WhatsApp está funcionando." }
+        : { type: "err", msg: "Falha na conexão. Reconecte o WhatsApp ou abra o Avançado." });
+    } else {
+      setFeedback({ type: "err", msg: "Falha na conexão." });
+    }
+  }
 
   const loadWebhookLog = useCallback(async () => {
     if (!isOwner) return;
@@ -1207,9 +1226,8 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-gray-900">WhatsApp</h1>
-          <p className="text-xs text-gray-500">
-            Atenda clientes do restaurante pelo WhatsApp.
-          </p>
+          <p className="text-xs text-gray-500">Integração atual · atende seus clientes no WhatsApp.</p>
+          <span className="mt-1 inline-block rounded-full bg-gray-100 px-2 py-px text-[10px] font-medium text-gray-500">Mantido como fallback</span>
         </div>
         <ConnectionPill status={simpleStatus} />
       </div>
@@ -1231,10 +1249,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
       {simpleStatus === "connected" && !showQrPanel ? (
         <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-800">WhatsApp conectado</p>
+            <p className="text-sm font-semibold text-gray-800">WhatsApp atual</p>
             <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
               <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              Ativo
+              Conectado
             </span>
           </div>
 
@@ -1269,7 +1287,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           {webhookLogSummary?.lastError && (webhookLogSummary.acceptedRealEvents ?? 0) === 0 && (
             <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
               Atenção: {webhookLogSummary.lastError === "signature_mismatch"
-                ? "Webhook com problema de autenticação. Acesse Configurações avançadas → Diagnósticos."
+                ? "Problema de autenticação na conexão. Acesse Avançado → Diagnósticos."
                 : webhookLogSummary.lastError}
             </div>
           )}
@@ -1282,6 +1300,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
               <span>Abrir Central de Mensagens</span>
               <span>→</span>
             </Link>
+            <button
+              type="button"
+              onClick={() => void handleQuickTest()}
+              disabled={quickTesting}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition"
+            >
+              {quickTesting ? "Testando…" : "Testar conexão"}
+            </button>
             <button
               type="button"
               onClick={() => setShowQrPanel(true)}
@@ -1378,9 +1404,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
             className="flex w-full items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <span className="text-sm font-semibold text-gray-700">Configurações avançadas</span>
+              <span className="text-sm font-semibold text-gray-700">Avançado</span>
               <span className="rounded-full border border-gray-200 px-2 py-px text-[10px] font-medium text-gray-400">
-                suporte Foocci
+                Uso interno Foocci
               </span>
             </div>
             <span className={`text-gray-400 transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`}>▾</span>
