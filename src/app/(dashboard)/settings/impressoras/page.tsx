@@ -189,11 +189,18 @@ export default function ImpressorasPage() {
     setLoading(false);
   }, []);
 
+  // Refresh only the agent (connection status + detected printers) every 15 s.
+  // Stations and categories must NOT be overwritten while the user is editing.
+  const refreshAgent = useCallback(async () => {
+    const { ok, data } = await apiFetch("/api/integracoes/impressao");
+    if (ok && data?.agent) setAgent(data.agent as Agent);
+  }, []);
+
   useEffect(() => {
     load();
-    const t = setInterval(load, 15_000); // keep connection status / printers fresh
+    const t = setInterval(refreshAgent, 15_000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, refreshAgent]);
 
   const update = (id: string, patch: Partial<Station>) => {
     setStations((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -303,7 +310,7 @@ export default function ImpressorasPage() {
             return (
               <div
                 key={s.id}
-                className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-row sm:items-center sm:gap-4"
+                className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center sm:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-2.5 sm:w-36 sm:shrink-0">
                   <span className="text-lg">{stationEmoji(s.key)}</span>
@@ -361,16 +368,16 @@ export default function ImpressorasPage() {
         ) : (
           <div className="space-y-2">
             {categories.map((c) => (
-              <div key={c.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div key={c.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                 <p className="text-sm font-medium text-gray-800">{c.name}</p>
                 <div className="mt-2 space-y-2">
                   {c.printStationKeys.map((key, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="shrink-0 text-gray-300">→</span>
+                      <span className="shrink-0 text-gray-500">→</span>
                       <select
                         value={key}
                         onChange={(e) => setCatStation(c.id, idx, e.target.value)}
-                        className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
+                        className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
                       >
                         <option value="">— escolher estação —</option>
                         {stations.map((s) => (
