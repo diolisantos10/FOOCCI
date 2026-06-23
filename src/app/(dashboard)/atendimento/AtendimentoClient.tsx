@@ -703,8 +703,10 @@ export function AtendimentoClient({
     }
 
     // CRM context helpers — convHasCustomerReply defined at module level.
-    const isCrmOrigin = (c: ConvSummary) =>
-      c.contextType === "CRM_CAMPAIGN" || c.contextType === "CRM_AUTOMATION";
+    // Use server-computed crmSent flag: covers all CRM contextTypes (CAMPAIGN,
+    // AUTOMATION, REVIEW, CART_RECOVERY) and log-matched customers whose deduped
+    // conversation has a non-CRM contextType (e.g. a prior order conversation).
+    const isCrmOrigin = (c: ConvSummary) => c.crmSent === true;
 
     // Status filter (client-side for non-RESOLVED)
     if (statusFilter === "CRM_SENT") {
