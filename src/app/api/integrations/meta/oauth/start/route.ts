@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
-import { getPublicBaseUrl } from "@/lib/public-base-url";
+import { getReturnBaseUrl } from "@/lib/public-base-url";
 import { startMetaConnect, metaRedirectUri } from "@/services/instagram/metaOAuth";
 
 export const runtime = "nodejs";
@@ -19,8 +19,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
-  // Return links: public base when available (production), request origin in dev.
-  const returnBase = getPublicBaseUrl(req.nextUrl.origin).url ?? req.nextUrl.origin;
+  // Return links must be browser-reachable: public base in production (canonical
+  // fallback if env is missing), request origin only in dev — NEVER localhost:8080.
+  const returnBase = getReturnBaseUrl(req.nextUrl.origin);
   const settings = new URL("/integracoes/instagram", returnBase);
   if (!ctx) return NextResponse.redirect(new URL("/login", returnBase));
   if (ctx.role !== "OWNER" && ctx.role !== "MANAGER") {

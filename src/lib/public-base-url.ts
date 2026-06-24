@@ -61,3 +61,19 @@ export function getPublicBaseUrl(originFallback?: string): PublicBaseUrlResult {
     error: "PUBLIC_BASE_URL_NOT_CONFIGURED",
   };
 }
+
+/** The canonical public domain — used as a last-resort redirect base in production. */
+export const CANONICAL_PUBLIC_BASE_URL = "https://foocci.com.br";
+
+/**
+ * Base URL for user-facing REDIRECTS (return links, OAuth blocked-state pages).
+ * Always reachable from a browser: the resolved public base when configured, else the
+ * canonical public domain in production (NEVER the internal request origin, which is
+ * http://localhost:8080 behind Railway). In development the request origin is fine.
+ */
+export function getReturnBaseUrl(originFallback?: string): string {
+  const resolved = getPublicBaseUrl(originFallback).url;
+  if (resolved) return resolved;
+  if (process.env.NODE_ENV === "production") return CANONICAL_PUBLIC_BASE_URL;
+  return (originFallback ?? CANONICAL_PUBLIC_BASE_URL).replace(/\/$/, "");
+}

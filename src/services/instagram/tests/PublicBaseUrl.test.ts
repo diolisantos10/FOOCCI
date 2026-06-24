@@ -10,7 +10,7 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-import { getPublicBaseUrl } from "@/lib/public-base-url";
+import { getPublicBaseUrl, getReturnBaseUrl } from "@/lib/public-base-url";
 import { getMetaEnvStatus, metaRedirectUri, startMetaConnect } from "../metaOAuth";
 
 const ENV_KEYS = ["FOOCCI_BASE_URL", "NEXT_PUBLIC_APP_URL", "APP_URL", "NEXT_PUBLIC_SITE_URL", "NEXTAUTH_URL", "META_APP_ID", "META_APP_SECRET", "FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"];
@@ -26,6 +26,33 @@ afterEach(() => {
     if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
   }
   vi.stubEnv("NODE_ENV", savedNodeEnv ?? "test");
+});
+
+describe("getReturnBaseUrl — redirects nunca apontam para localhost em produção", () => {
+  it("produção SEM base configurada → domínio canônico, nunca localhost:8080", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const base = getReturnBaseUrl("http://localhost:8080");
+    expect(base).toBe("https://foocci.com.br");
+    expect(base).not.toContain("localhost");
+  });
+
+  it("produção com origin .railway.app → domínio canônico, nunca railway", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const base = getReturnBaseUrl("https://foocci-production.up.railway.app");
+    expect(base).toBe("https://foocci.com.br");
+    expect(base).not.toContain("railway.app");
+  });
+
+  it("produção COM FOOCCI_BASE_URL → usa o valor configurado", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.FOOCCI_BASE_URL = "https://foocci.com.br";
+    expect(getReturnBaseUrl("http://localhost:8080")).toBe("https://foocci.com.br");
+  });
+
+  it("desenvolvimento → usa o origin da requisição", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    expect(getReturnBaseUrl("http://localhost:3000")).toBe("http://localhost:3000");
+  });
 });
 
 describe("(1/5/6) base pública em produção", () => {
