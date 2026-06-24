@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 
-export const VALID_PROVIDERS = ["stone", "mercadopago", "tipos", "openai", "saipos"] as const;
+export const VALID_PROVIDERS = ["stone", "mercadopago", "openai", "saipos"] as const;
 export type IntegrationProvider = (typeof VALID_PROVIDERS)[number];
 
 export function isValidProvider(v: string): v is IntegrationProvider {
@@ -37,16 +37,6 @@ export const mercadopagoConfigSchema = z.object({
 });
 
 export type MercadoPagoConfigInput = z.infer<typeof mercadopagoConfigSchema>;
-
-// ── Tipos ─────────────────────────────────────────────────────────────────────
-
-export const tiposConfigSchema = z.object({
-  baseUrl:   z.string().url("Base URL deve ser uma URL válida"),
-  apiKey:    z.string(), // empty = keep existing
-  accountId: z.string().optional(),
-});
-
-export type TiposConfigInput = z.infer<typeof tiposConfigSchema>;
 
 // ── OpenAI ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +67,6 @@ export function parseProviderConfig(provider: IntegrationProvider, body: unknown
   switch (provider) {
     case "stone":       return stoneConfigSchema.safeParse(body);
     case "mercadopago": return mercadopagoConfigSchema.safeParse(body);
-    case "tipos":       return tiposConfigSchema.safeParse(body);
     case "openai":      return openaiConfigSchema.safeParse(body);
     case "saipos":      return saiposConfigSchema.safeParse(body);
   }

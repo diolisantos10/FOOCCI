@@ -7,7 +7,6 @@
  *   - "whatsapp"    → bridges to existing EvolutionConfigService
  *   - "stone"       → IntegrationConfig row (configBlob encrypted JSON)
  *   - "mercadopago" → IntegrationConfig row
- *   - "tipos"       → IntegrationConfig row
  *
  * Security: every method is scoped to restaurantId. ConfigBlob is stored
  * AES-256-GCM encrypted. Views returned to the API layer never contain
@@ -24,7 +23,6 @@ import type {
   IntegrationProvider,
   StoneConfigInput,
   MercadoPagoConfigInput,
-  TiposConfigInput,
   OpenAIConfigInput,
   SaiposConfigInput,
 } from "@/validators/integrations";
@@ -51,7 +49,6 @@ export interface TestResult {
 
 interface StoneRaw   { environment: string; clientId: string; clientSecret: string }
 interface MpRaw      { environment: string; accessToken: string }
-interface TiposRaw   { baseUrl: string; apiKey: string; accountId?: string }
 interface OpenAIRaw  { apiKey: string }
 interface SaiposRaw  {
   environment:     string;
@@ -63,7 +60,7 @@ interface SaiposRaw  {
   paymentMappings: Record<string, number>;
 }
 
-type AnyRaw = StoneRaw | MpRaw | TiposRaw | OpenAIRaw | SaiposRaw;
+type AnyRaw = StoneRaw | MpRaw | OpenAIRaw | SaiposRaw;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -97,14 +94,6 @@ function maskView(raw: AnyRaw, provider: IntegrationProvider): Record<string, st
     return {
       environment:         r.environment,
       accessTokenPreview:  maskSecret(r.accessToken),
-    };
-  }
-  if (provider === "tipos") {
-    const r = raw as TiposRaw;
-    return {
-      baseUrl:       r.baseUrl,
-      apiKeyPreview: maskSecret(r.apiKey),
-      accountId:     r.accountId ?? null,
     };
   }
   if (provider === "saipos") {
@@ -181,7 +170,7 @@ export class IntegrationService {
 
     // Ensure all known providers appear, even if not yet configured
     const configuredProviders = new Set(otherViews.map((v) => v.provider));
-    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "tipos", "openai", "saipos"] as IntegrationProvider[])
+    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "openai", "saipos"] as IntegrationProvider[])
       .filter((p) => !configuredProviders.has(p))
       .map((p) => ({
         provider:     p,
@@ -261,7 +250,7 @@ export class IntegrationService {
   static async upsert(
     provider: IntegrationProvider,
     restaurantId: string,
-    input: StoneConfigInput | MercadoPagoConfigInput | TiposConfigInput | OpenAIConfigInput | SaiposConfigInput
+    input: StoneConfigInput | MercadoPagoConfigInput | OpenAIConfigInput | SaiposConfigInput
   ): Promise<ServiceResult<IntegrationView>> {
     // Load existing decrypted config to preserve secrets if empty strings sent
     let existingRaw: AnyRaw | null = null;
@@ -288,14 +277,6 @@ export class IntegrationService {
       newRaw = {
         environment: inp.environment,
         accessToken: inp.accessToken || old?.accessToken || "",
-      };
-    } else if (provider === "tipos") {
-      const inp = input as TiposConfigInput;
-      const old = existingRaw as TiposRaw | null;
-      newRaw = {
-        baseUrl:   inp.baseUrl,
-        apiKey:    inp.apiKey || old?.apiKey || "",
-        accountId: inp.accountId,
       };
     } else if (provider === "saipos") {
       const inp = input as SaiposConfigInput;
@@ -382,7 +363,6 @@ export class IntegrationService {
       const raw = decodeConfig<AnyRaw>(row.configBlob);
       if (provider === "stone")            result = await IntegrationService._testStone(raw as StoneRaw);
       else if (provider === "mercadopago") result = await IntegrationService._testMercadoPago(raw as MpRaw);
-      else if (provider === "tipos")       result = await IntegrationService._testTipos(raw as TiposRaw);
       else if (provider === "saipos")      result = await IntegrationService._testSaipos(restaurantId);
       else                                 result = await IntegrationService._testOpenAI(raw as OpenAIRaw);
     } catch (err) {
@@ -536,32 +516,6 @@ export class IntegrationService {
     return { ...result, _pendingValidation: is902 };
   }
 
-  private static async _testTipos(raw: TiposRaw): Promise<TestResult> {
-    if (!raw.baseUrl || !raw.apiKey) {
-      return { success: false, message: "Configuração incompleta (URL ou API Key em falta)." };
-    }
-    // Try a HEAD request to the base URL; Tipos-specific endpoint unknown for now.
-    const testUrl = raw.baseUrl.replace(/\/$/, "") + "/health";
-    try {
-      const res = await fetch(testUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${raw.apiKey}`,
-          "X-Api-Key":   raw.apiKey,
-        },
-        signal: AbortSignal.timeout(8000),
-      });
-      // Any 2xx or 4xx (means server is reachable; 401=auth issue)
-      if (res.ok) return { success: true, message: "Servidor Tipos alcançado com sucesso." };
-      if (res.status === 401 || res.status === 403)
-        return { success: false, message: "API Key inválida ou sem permissão." };
-      if (res.status === 404)
-        return { success: true, message: "Servidor Tipos alcançado (endpoint /health não encontrado, mas conexão ok)." };
-      return { success: false, message: `Tipos retornou HTTP ${res.status}.` };
-    } catch {
-      return { success: false, message: "Não foi possível alcançar o servidor Tipos. Verifique a URL." };
-    }
-  }
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
