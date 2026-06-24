@@ -8,6 +8,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { PrintButton } from "@/components/print/PrintButton";
 import { OrderTicket } from "@/components/print/OrderTicket";
+import { buildStoreInfo, TICKET_PRINT_CSS } from "@/lib/print-ticket";
 import { ItemReplacementButton } from "@/components/orders/ItemReplacementButton";
 import { OrderEditLogBanner } from "@/components/orders/OrderEditLogBanner";
 
@@ -60,9 +61,20 @@ export default async function OrderDetailPage({
 
   const restaurant = await prisma.restaurant.findUnique({
     where:  { id: session.user.restaurantId },
-    select: { name: true },
+    select: {
+      name:     true,
+      address:  true,
+      timezone: true,
+      storeProfile: {
+        select: {
+          cnpj: true, street: true, streetNumber: true, complement: true,
+          neighborhood: true, city: true, state: true, cep: true,
+        },
+      },
+    },
   });
   const restaurantName = restaurant?.name ?? "Restaurante";
+  const storeInfo = restaurant ? buildStoreInfo(restaurant, restaurant.storeProfile) : undefined;
 
   const canEdit = ["OWNER", "MANAGER"].includes(session.user.role);
   const orderTotalNum = Number(order.total);
@@ -333,17 +345,13 @@ export default async function OrderDetailPage({
         )}
       </div>
 
-      {/* Print ticket — hidden on screen, full-page during @media print */}
-      <OrderTicket order={order} restaurantName={restaurantName} />
-      <style>{`
-        @media print {
-          * { visibility: hidden; }
-          #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; }
-          #foocci-print-ticket * { visibility: visible; }
-          @page { margin: 0; size: 80mm auto; }
-          body { margin: 0; }
-        }
-      `}</style>
+      {/* Print tickets — hidden on screen, printed during @media print:
+          kitchen comanda (resumida) + cashier nota (completa). */}
+      <div id="foocci-print-area" className="hidden print:block">
+        <OrderTicket order={order} restaurantName={restaurantName} variant="kitchen" store={storeInfo} mode="print" />
+        <OrderTicket order={order} restaurantName={restaurantName} variant="cashier" store={storeInfo} mode="print" />
+      </div>
+      <style>{TICKET_PRINT_CSS}</style>
     </>
   );
 }

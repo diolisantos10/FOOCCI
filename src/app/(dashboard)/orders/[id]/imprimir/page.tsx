@@ -7,18 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { PrintButton } from "@/components/print/PrintButton";
 import { OrderTicket } from "@/components/print/OrderTicket";
 import { AutoPrintTrigger } from "@/components/print/AutoPrintTrigger";
+import { buildStoreInfo, TICKET_PRINT_CSS } from "@/lib/print-ticket";
 
 export const metadata = { title: "Pré-visualizar comanda" };
-
-const PRINT_CSS = `
-  @media print {
-    * { visibility: hidden; }
-    #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; }
-    #foocci-print-ticket * { visibility: visible; color: #000 !important; }
-    @page { margin: 0; size: 80mm auto; }
-    body { margin: 0; }
-  }
-`;
 
 export default async function ImprimirPage({
   params,
@@ -42,7 +33,17 @@ export default async function ImprimirPage({
     }),
     prisma.restaurant.findUnique({
       where:  { id: session.user.restaurantId },
-      select: { name: true },
+      select: {
+        name:     true,
+        address:  true,
+        timezone: true,
+        storeProfile: {
+          select: {
+            cnpj: true, street: true, streetNumber: true, complement: true,
+            neighborhood: true, city: true, state: true, cep: true,
+          },
+        },
+      },
     }),
   ]);
 
@@ -51,17 +52,27 @@ export default async function ImprimirPage({
   }
 
   const restaurantName = restaurant?.name ?? "Restaurante";
-  const autoPrint  = searchParams.autoprint  === "1";
-  const printOnly  = searchParams.printOnly  === "1";
+  const storeInfo = restaurant
+    ? buildStoreInfo(restaurant, restaurant.storeProfile)
+    : undefined;
+  const autoPrint = searchParams.autoprint === "1";
+  const printOnly = searchParams.printOnly === "1";
+
+  // Both notinhas: kitchen comanda (resumida) + cashier nota (completa).
+  const tickets = (mode: "print" | "preview") => (
+    <div id="foocci-print-area">
+      <OrderTicket order={order} restaurantName={restaurantName} variant="kitchen" store={storeInfo} mode={mode} />
+      <OrderTicket order={order} restaurantName={restaurantName} variant="cashier" store={storeInfo} mode={mode} />
+    </div>
+  );
 
   // printOnly: minimal wrapper used by hidden-iframe printing.
-  // No layout chrome — just the ticket + print CSS.
   if (printOnly) {
     return (
       <>
         <style>{`body{margin:0;background:#fff;}`}</style>
-        <style>{PRINT_CSS}</style>
-        <OrderTicket order={order} restaurantName={restaurantName} mode="preview" />
+        <style>{TICKET_PRINT_CSS}</style>
+        {tickets("preview")}
       </>
     );
   }
@@ -78,18 +89,23 @@ export default async function ImprimirPage({
         </Link>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">
-            Verifique os dados antes de imprimir
+            Imprime a comanda da cozinha e a nota do caixa
           </span>
           <PrintButton />
         </div>
       </div>
 
-      {/* Ticket preview — centered on gray background */}
-      <div className="min-h-[calc(100vh-8rem)] bg-gray-100 py-10 print:bg-transparent print:py-0">
-        <OrderTicket order={order} restaurantName={restaurantName} mode="preview" />
+      {/* On-screen preview labels (hidden in print) */}
+      <div className="bg-gray-100 px-6 pt-6 text-center text-xs font-semibold uppercase tracking-wide text-gray-400 print:hidden">
+        Pré-visualização · 2 vias (cozinha + caixa)
       </div>
 
-      <style>{PRINT_CSS}</style>
+      {/* Ticket preview — both notinhas, centered on gray background */}
+      <div className="min-h-[calc(100vh-9rem)] space-y-8 bg-gray-100 py-8 print:min-h-0 print:space-y-0 print:bg-transparent print:py-0">
+        {tickets("preview")}
+      </div>
+
+      <style>{TICKET_PRINT_CSS}</style>
     </>
   );
 }
