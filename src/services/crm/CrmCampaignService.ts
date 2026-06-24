@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
@@ -449,12 +450,20 @@ export class CrmCampaignService {
       throw new Error("Campaign is already sent or sending");
     }
 
-    // Check Evolution config
+    // Check if Meta CRM is enabled for this restaurant
+    const metaCfgRow = await prisma.metaWhatsAppConfig.findUnique({
+      where:  { restaurantId },
+      select: { metaCrmEnabled: true, connectionStatus: true },
+    });
+    const useMetaCrm = metaCfgRow?.metaCrmEnabled === true && metaCfgRow.connectionStatus === "CONNECTED";
+
+    // Check Evolution config (always fetched — used as fallback even when Meta is primary)
     const cfgResult = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!cfgResult.ok) {
+    if (!cfgResult.ok && !useMetaCrm) {
       throw new Error(`WhatsApp not configured: ${cfgResult.error}`);
     }
-    const evoConfig = cfgResult.data;
+    const evoConfig = cfgResult.ok ? cfgResult.data : null;
+    const metaProvider = useMetaCrm ? new MetaWhatsAppCloudProvider() : null;
 
     // Mark campaign as SENDING
     await prisma.campaign.update({
@@ -600,8 +609,34 @@ export class CrmCampaignService {
       }
 
       try {
-        // Send via Evolution API
-        const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
+        // Send via Meta Cloud API (when CRM toggle is on) with Evolution fallback.
+        // On Meta failure we fall back to Evolution so no customer is silently skipped.
+        let externalMessageId: string | null = null;
+        let providerUsed = "EVOLUTION";
+
+        if (metaProvider) {
+          const metaResult = await metaProvider.sendText({ restaurantId, to: phone, text: messageText });
+          if (metaResult.ok) {
+            externalMessageId = metaResult.providerMessageId;
+            providerUsed = "META_CLOUD_API";
+          } else {
+            console.warn(`[CrmCampaignService] Meta send failed (${metaResult.errorCode}) — falling back to Evolution for ${phone}`);
+            // Fallback to Evolution
+            if (evoConfig) {
+              const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
+              externalMessageId = evoResult.key.id;
+              providerUsed = "EVOLUTION_FALLBACK";
+            } else {
+              throw new Error(`Meta CRM send failed: ${metaResult.error} (no Evolution fallback configured)`);
+            }
+          }
+        } else {
+          if (!evoConfig) throw new Error("No WhatsApp provider configured");
+          const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
+          externalMessageId = evoResult.key.id;
+          providerUsed = "EVOLUTION";
+        }
+
         const now = new Date();
 
         // Find or create WhatsApp conversation for this customer
@@ -627,9 +662,9 @@ export class CrmCampaignService {
               content:           messageText,
               type:              "TEXT",
               sentAt:            now,
-              externalMessageId: evoResult.key.id,
+              externalMessageId,
               externalStatus:    "sent",
-              metadata:          buildConversationMetadataForCrmSend(campaignId, exec.id),
+              metadata:          { ...buildConversationMetadataForCrmSend(campaignId, exec.id) as object, crmProvider: providerUsed },
             },
           }),
           prisma.campaignExecution.update({

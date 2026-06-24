@@ -46,6 +46,7 @@ export interface MetaConfigPublic {
   lastError:          string | null;
   qualityRating:      string | null;
   messagingLimit:     string | null;
+  metaCrmEnabled:     boolean;
 }
 
 export function generateVerifyToken(): string {
@@ -105,6 +106,7 @@ export const MetaConfigService = {
       lastError:          cfg.lastError,
       qualityRating:      cfg.qualityRating,
       messagingLimit:     cfg.messagingLimit,
+      metaCrmEnabled:     cfg.metaCrmEnabled,
     };
   },
 

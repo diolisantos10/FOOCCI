@@ -38,7 +38,7 @@ const INTEGRATIONS: {
   {
     provider:      "whatsapp",
     name:          "WhatsApp",
-    description:   "Atendimento automático e manual via WhatsApp Business com Evolution API.",
+    description:   "Atendimento automático, CRM e campanhas via WhatsApp. Conecte Evolution API ou WhatsApp oficial da Meta.",
     icon:          "💬",
     color:         "bg-green-500",
     configureHref: "/integracoes/whatsapp",

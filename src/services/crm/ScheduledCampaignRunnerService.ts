@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { Prisma, ConversationStatus } from "@prisma/client";
 import {
@@ -712,12 +713,20 @@ export class ScheduledCampaignRunnerService {
     governance?: { allowWeeklyCapOverride: boolean; campaignFamilyKey: string | null; messageFingerprint: string | null },
     runOpts: { abortOnInstanceCollapse?: boolean } = {},
   ): Promise<{ sent: number; failed: number; blocked: number; skipped: number; aborted: boolean }> {
+    // Check if Meta CRM is enabled
+    const metaCfgRow = await prisma.metaWhatsAppConfig.findUnique({
+      where:  { restaurantId: campaign.restaurantId },
+      select: { metaCrmEnabled: true, connectionStatus: true },
+    });
+    const useMetaCrm = metaCfgRow?.metaCrmEnabled === true && metaCfgRow.connectionStatus === "CONNECTED";
+    const metaProvider = useMetaCrm ? new MetaWhatsAppCloudProvider() : null;
+
     const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
-    if (!cfgResult.ok) {
+    if (!cfgResult.ok && !useMetaCrm) {
       console.error(`[ScheduledCampaignRunner] WhatsApp not configured for restaurant ${campaign.restaurantId}`);
       return { sent: 0, failed: customers.length, blocked: 0, skipped: 0, aborted: false };
     }
-    const evoConfig = cfgResult.data;
+    const evoConfig = cfgResult.ok ? cfgResult.data : null;
 
     // Load message personalization context
     const [restaurant, brandConfig] = await Promise.all([
@@ -869,7 +878,32 @@ export class ScheduledCampaignRunnerService {
       sendIndex++;
 
       try {
-        const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
+        // Send via Meta Cloud API (when CRM toggle is on) with Evolution fallback.
+        let externalMessageId: string | null = null;
+        let crmProvider = "EVOLUTION";
+
+        if (metaProvider) {
+          const metaResult = await metaProvider.sendText({ restaurantId: campaign.restaurantId, to: phone, text: messageText });
+          if (metaResult.ok) {
+            externalMessageId = metaResult.providerMessageId;
+            crmProvider = "META_CLOUD_API";
+          } else {
+            console.warn(`[ScheduledCampaignRunner] Meta send failed (${metaResult.errorCode}) — falling back to Evolution for ${phone}`);
+            if (evoConfig) {
+              const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
+              externalMessageId = evoResult.key.id;
+              crmProvider = "EVOLUTION_FALLBACK";
+            } else {
+              throw new Error(`Meta CRM send failed: ${metaResult.error} (no Evolution fallback configured)`);
+            }
+          }
+        } else {
+          if (!evoConfig) throw new Error("No WhatsApp provider configured");
+          const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
+          externalMessageId = evoResult.key.id;
+          crmProvider = "EVOLUTION";
+        }
+
         const now       = new Date();
 
         const convId = await findOrCreateBatchConversation(
@@ -901,9 +935,9 @@ export class ScheduledCampaignRunnerService {
               content:           messageText,
               type:              "TEXT",
               sentAt:            now,
-              externalMessageId: evoResult.key.id,
+              externalMessageId,
               externalStatus:    "sent",
-              metadata:          buildConversationMetadataForCrmSend(campaign.id, exec.id),
+              metadata:          { ...buildConversationMetadataForCrmSend(campaign.id, exec.id) as object, crmProvider },
             },
           }),
         ]);
@@ -950,7 +984,7 @@ export class ScheduledCampaignRunnerService {
         // mid-batch, stop remaining sends and return a partial result instead of
         // hammering a dead session. The cron path passes no flag → unchanged.
         if (runOpts.abortOnInstanceCollapse) {
-          const liveStatus = await EvolutionClient.getInstanceStatus(evoConfig).catch(() => null);
+          const liveStatus = evoConfig ? await EvolutionClient.getInstanceStatus(evoConfig).catch(() => null) : null;
           if (!liveStatus || liveStatus.state !== "open") { aborted = true; break; }
         }
       }

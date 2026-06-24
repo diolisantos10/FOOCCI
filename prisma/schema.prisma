@@ -1091,6 +1091,8 @@ model MetaWhatsAppConfig {
   qualityRating      String?  // GREEN | YELLOW | RED (when available)
   messagingLimit     String?  // TIER_1K | TIER_10K | ... (when available)
 
+  metaCrmEnabled     Boolean  @default(false) // when true, CRM campaigns route through Meta Cloud API
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
