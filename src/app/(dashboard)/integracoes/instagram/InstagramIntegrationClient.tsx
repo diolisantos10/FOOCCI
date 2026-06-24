@@ -181,7 +181,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6 text-gray-800">
       <div>
         <Link href="/integracoes" className="text-sm text-gray-500 hover:text-gray-700">← Integrações</Link>
-        <h1 className="mt-1 text-2xl font-bold">Meta / Instagram</h1>
+        <h1 className="mt-1 text-2xl font-bold">Instagram</h1>
         <p className="text-sm text-gray-500">Receba mensagens do Instagram Direct na Central de Atendimento.</p>
       </div>
 

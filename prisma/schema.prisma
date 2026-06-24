@@ -3877,6 +3877,7 @@ model MetaOAuthState {
   userId                   String
   state                    String   @unique
   status                   String   @default("PENDING") // PENDING | AWAITING_SELECTION | CONSUMED
+  returnPlatform           String?  // "instagram" | "facebook" — where to redirect after callback
   userAccessTokenEncrypted String? // AES-256-GCM — short-lived user token, never plaintext
   candidates               Json? // [{ pageId, pageName, instagramBusinessAccountId?, instagramUsername?, hasInstagram }]
   error                    String?

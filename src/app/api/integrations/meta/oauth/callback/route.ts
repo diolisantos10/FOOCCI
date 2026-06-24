@@ -19,7 +19,6 @@ export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   // Browser-reachable return base — never the internal localhost:8080 origin.
   const returnBase = getReturnBaseUrl(req.nextUrl.origin);
-  const settings = new URL("/integracoes/instagram", returnBase);
 
   const result = await handleMetaCallback({
     state: params.get("state") ?? "",
@@ -27,6 +26,10 @@ export async function GET(req: NextRequest) {
     error: params.get("error") ?? params.get("error_message"),
     redirectUri: metaRedirectUri(req.nextUrl.origin),
   });
+
+  // Redirect to the platform that initiated the OAuth flow (instagram or facebook).
+  const platform = result.returnPlatform === "facebook" ? "facebook" : "instagram";
+  const settings = new URL(`/integracoes/${platform}`, returnBase);
 
   if (!result.ok) {
     settings.searchParams.set("meta", "error");

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { InstagramIntegrationClient } from "./InstagramIntegrationClient";
 
-export const metadata = { title: "Meta / Instagram — Integrações" };
+export const metadata = { title: "Instagram — Integrações" };
 
 export default async function InstagramIntegrationPage() {
   const session = await getServerSession(authOptions);
@@ -12,7 +12,7 @@ export default async function InstagramIntegrationPage() {
 
   return (
     <>
-      <TopBar title="Meta / Instagram" />
+      <TopBar title="Instagram" />
       <InstagramIntegrationClient userRole={session.user.role} />
     </>
   );

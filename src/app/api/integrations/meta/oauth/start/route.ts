@@ -29,10 +29,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(settings);
   }
 
+  const from = req.nextUrl.searchParams.get("from") ?? "instagram";
+  const returnPlatform = from === "facebook" ? "facebook" : "instagram";
+
   const result = await startMetaConnect({
     restaurantId: ctx.restaurantId,
     userId: ctx.userId,
     redirectUri: metaRedirectUri(req.nextUrl.origin),
+    returnPlatform,
   });
 
   if (!result.ok || !result.authUrl) {

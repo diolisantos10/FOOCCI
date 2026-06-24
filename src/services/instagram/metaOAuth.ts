@@ -152,7 +152,7 @@ export interface StartResult {
   error?: string;
 }
 
-export async function startMetaConnect(input: { restaurantId: string; userId: string; redirectUri: string | null }): Promise<StartResult> {
+export async function startMetaConnect(input: { restaurantId: string; userId: string; redirectUri: string | null; returnPlatform?: string }): Promise<StartResult> {
   const creds = getMetaAppCreds();
   if (!creds) return { ok: false, blocked: "BLOCKED_BY_META_APP_ENV", missing: getMetaEnvStatus().missing };
   // Never build an OAuth dialog pointing at a broken/localhost redirect URI.
@@ -168,6 +168,7 @@ export async function startMetaConnect(input: { restaurantId: string; userId: st
       userId: input.userId,
       state,
       status: "PENDING",
+      returnPlatform: input.returnPlatform ?? "instagram",
       expiresAt: new Date(Date.now() + STATE_TTL_MS),
     },
   });
@@ -180,26 +181,28 @@ export interface CallbackResult {
   restaurantId: string | null;
   candidateCount: number;
   reason: string | null;
+  returnPlatform: string | null;
 }
 
 export async function handleMetaCallback(
   input: { state: string; code?: string | null; error?: string | null; redirectUri: string | null },
   graph: MetaGraph = realMetaGraph,
 ): Promise<CallbackResult> {
-  if (!input.state) return { ok: false, restaurantId: null, candidateCount: 0, reason: "state ausente" };
+  if (!input.state) return { ok: false, restaurantId: null, candidateCount: 0, reason: "state ausente", returnPlatform: null };
   const row = await prisma.metaOAuthState.findUnique({ where: { state: input.state } });
-  if (!row || row.status !== "PENDING") return { ok: false, restaurantId: null, candidateCount: 0, reason: "Sessão de conexão inválida ou já usada." };
+  if (!row || row.status !== "PENDING") return { ok: false, restaurantId: null, candidateCount: 0, reason: "Sessão de conexão inválida ou já usada.", returnPlatform: null };
+  const platform = (row as { returnPlatform?: string | null }).returnPlatform ?? "instagram";
   if (row.expiresAt.getTime() < Date.now()) {
     await prisma.metaOAuthState.update({ where: { id: row.id }, data: { status: "CONSUMED", error: "expirado" } }).catch(() => undefined);
-    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "A conexão expirou. Tente novamente." };
+    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "A conexão expirou. Tente novamente.", returnPlatform: platform };
   }
   if (input.error) {
     await prisma.metaOAuthState.update({ where: { id: row.id }, data: { status: "CONSUMED", error: input.error.slice(0, 300) } }).catch(() => undefined);
-    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Autorização cancelada na Meta." };
+    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Autorização cancelada na Meta.", returnPlatform: platform };
   }
   const creds = getMetaAppCreds();
   if (!creds || !input.code || !input.redirectUri) {
-    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Configuração da Meta ausente." };
+    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Configuração da Meta ausente.", returnPlatform: platform };
   }
 
   try {
@@ -213,11 +216,11 @@ export async function handleMetaCallback(
         candidates: candidates.map(strip) as object,
       },
     });
-    return { ok: true, restaurantId: row.restaurantId, candidateCount: candidates.length, reason: null };
+    return { ok: true, restaurantId: row.restaurantId, candidateCount: candidates.length, reason: null, returnPlatform: platform };
   } catch (err) {
     const reason = err instanceof Error ? err.message.slice(0, 200) : "erro ao conectar com a Meta";
     await prisma.metaOAuthState.update({ where: { id: row.id }, data: { status: "CONSUMED", error: reason } }).catch(() => undefined);
-    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason };
+    return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason, returnPlatform: platform };
   }
 }
 
