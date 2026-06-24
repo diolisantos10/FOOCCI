@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "whatsapp-business" | "instagram" | "stone" | "mercadopago" | "openai" | "saipos";
+type Provider = "whatsapp" | "instagram" | "stone" | "mercadopago" | "openai" | "saipos";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -37,23 +37,15 @@ const INTEGRATIONS: {
 }[] = [
   {
     provider:      "whatsapp",
-    name:          "WhatsApp (Evolution)",
-    description:   "Atendimento automático e manual via WhatsApp com a Evolution API (conexão por QR Code).",
+    name:          "WhatsApp",
+    description:   "Atendimento via WhatsApp — escolha entre QR Code (Evolution) ou a conta oficial da Meta (Cloud API) com login em um clique.",
     icon:          "💬",
     color:         "bg-green-500",
     configureHref: "/integracoes/whatsapp",
   },
   {
-    provider:      "whatsapp-business",
-    name:          "WhatsApp Business (Meta)",
-    description:   "Conexão oficial da Meta (Cloud API) para atendimento e campanhas de CRM. Login com um clique, sem códigos.",
-    icon:          "💬",
-    color:         "bg-blue-600",
-    configureHref: "/integracoes/whatsapp-business",
-  },
-  {
     provider:      "instagram",
-    name:          "Meta / Instagram",
+    name:          "Instagram",
     description:   "Receba e responda mensagens do Instagram Direct pela Central de Atendimento.",
     icon:          "📷",
     color:         "bg-gradient-to-br from-purple-500 to-pink-500",
@@ -90,6 +82,13 @@ const INTEGRATIONS: {
 ];
 
 // ── API helper ────────────────────────────────────────────────────────────────
+
+function mergeStatus(a: IntegrationStatus | undefined, b: IntegrationStatus | undefined): IntegrationStatus {
+  const rank: Record<IntegrationStatus, number> = { active: 5, error: 4, configured: 3, pending_validation: 2, unconfigured: 1 };
+  const ra = a ? rank[a] : 0;
+  const rb = b ? rank[b] : 0;
+  return ra >= rb ? (a ?? "unconfigured") : (b ?? "unconfigured");
+}
 
 async function apiFetch(url: string, method = "GET", body?: object) {
   const res = await fetch(url, {
@@ -1319,9 +1318,10 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
   const [selected, setSelected]   = useState<Provider | null>(null);
 
   const loadAll = useCallback(async () => {
-    const results = await Promise.allSettled(
-      INTEGRATIONS.map((i) => apiFetch(`/api/integrations/${i.provider}`))
-    );
+    const [results, metaResult] = await Promise.all([
+      Promise.allSettled(INTEGRATIONS.map((i) => apiFetch(`/api/integrations/${i.provider}`))),
+      apiFetch("/api/integrations/whatsapp-business"),
+    ]);
     const map: Record<string, IntegrationView> = {};
     results.forEach((r, idx) => {
       const integration = INTEGRATIONS[idx];
@@ -1329,13 +1329,36 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
         map[integration.provider] = r.value.data as IntegrationView;
       }
     });
+    // Combine Evolution + Meta statuses for the single WhatsApp card
+    if (metaResult.ok && metaResult.data) {
+      const metaView = metaResult.data as IntegrationView;
+      const evoView  = map["whatsapp"];
+      const combined = mergeStatus(evoView?.status, metaView.status);
+      map["whatsapp"] = evoView
+        ? { ...evoView, status: combined, isActive: combined === "active" }
+        : { ...metaView, status: combined, isActive: combined === "active" };
+    }
     setViews(map);
     setLoading(false);
   }, []);
 
   const refreshOne = useCallback(async (provider: Provider) => {
     const { ok, data } = await apiFetch(`/api/integrations/${provider}`);
-    if (ok) setViews((prev) => ({ ...prev, [provider]: data as IntegrationView }));
+    if (!ok) return;
+    if (provider === "whatsapp") {
+      // Re-fetch Meta status and combine
+      const metaResult = await apiFetch("/api/integrations/whatsapp-business");
+      const evoView = data as IntegrationView;
+      if (metaResult.ok && metaResult.data) {
+        const metaView = metaResult.data as IntegrationView;
+        const combined = mergeStatus(evoView.status, metaView.status);
+        setViews((prev) => ({ ...prev, whatsapp: { ...evoView, status: combined, isActive: combined === "active" } }));
+      } else {
+        setViews((prev) => ({ ...prev, whatsapp: evoView }));
+      }
+    } else {
+      setViews((prev) => ({ ...prev, [provider]: data as IntegrationView }));
+    }
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);

@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
+import { MetaProviderCard } from "./MetaProviderCard";
 import { WhatsAppIntegrationClient } from "./WhatsAppIntegrationClient";
 
 export const metadata = { title: "WhatsApp — Integrações" };
@@ -13,6 +14,9 @@ export default async function WhatsAppIntegrationPage() {
   return (
     <>
       <TopBar title="WhatsApp" />
+      <div className="mx-auto max-w-2xl px-4 pt-4 sm:px-6">
+        <MetaProviderCard />
+      </div>
       <WhatsAppIntegrationClient userRole={session.user.role} />
     </>
   );
