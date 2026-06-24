@@ -74,8 +74,8 @@ function isConnected(v: ConfigView | null): boolean {
 }
 
 const META_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> = {
-  blocked_env: { kind: "err", text: "Conexão automática ainda não configurada — faltam variáveis da Meta no servidor (veja a lista abaixo)." },
-  blocked_base_url: { kind: "err", text: "Configure FOOCCI_BASE_URL=https://foocci.com.br no Railway para habilitar a conexão." },
+  blocked_env: { kind: "err", text: "Conexão automática indisponível no momento. Fale com o suporte Foocci." },
+  blocked_base_url: { kind: "err", text: "Conexão automática indisponível no momento. Fale com o suporte Foocci." },
   error: { kind: "err", text: "Não foi possível concluir a conexão com a Meta. Tente novamente." },
   no_pages: { kind: "err", text: "Nenhuma Página do Facebook foi encontrada na sua conta." },
   forbidden: { kind: "err", text: "Apenas o proprietário ou gerente pode conectar." },
@@ -91,6 +91,15 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
   const [flow, setFlow] = useState<"normal" | "select_page">("normal");
   const [candidates, setCandidates] = useState<PageCandidate[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+
+  // Support mode — technical/platform tooling (webhook, manual setup, checklist,
+  // internal diagnostics) is hidden from the lojista and only shown to Foocci
+  // support via ?suporte=1. SSR-safe: starts false, set on the client after mount.
+  const [supportMode, setSupportMode] = useState(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setSupportMode(p.get("suporte") === "1" || p.get("support") === "1");
+  }, []);
 
   // manual advanced
   const [pageId, setPageId] = useState("");
@@ -199,7 +208,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             {candidates.map((c) => (
               <div key={c.pageId} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium">{c.pageName} <span className="text-xs text-gray-400">#{c.pageId}</span></p>
+                  <p className="text-sm font-medium">{c.pageName || "Página do Facebook"}</p>
                   <p className="text-xs text-gray-500">
                     {c.hasInstagram ? `Instagram conectado: ${c.instagramUsername ? "@" + c.instagramUsername : "sim"}` : "Esta Página não possui Instagram profissional conectado."}
                   </p>
@@ -225,12 +234,12 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           <p className="mt-2 text-xs text-gray-400">Você será direcionado para a Meta para autorizar o Foocci.</p>
           {view && !view.metaConnectAvailable && (
             <div className="mx-auto mt-3 max-w-md rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">
-              <p className="font-semibold">Conexão automática ainda não configurada.</p>
-              <p className="mt-0.5">Faltam variáveis da Meta no servidor:</p>
-              <ul className="mt-0.5 list-disc pl-4 font-mono">
-                {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
-              </ul>
-              <p className="mt-1">Enquanto isso, dá para usar a configuração manual avançada abaixo.</p>
+              <p>Conexão automática indisponível no momento. Fale com o suporte Foocci.</p>
+              {supportMode && (
+                <ul className="mt-1 list-disc pl-4 font-mono">
+                  {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
+                </ul>
+              )}
             </div>
           )}
         </section>
@@ -270,7 +279,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <p>Webhook: <b>{test.webhook}</b></p>
             <p>Central: <b>{test.centralChannel}</b></p>
             <p>Envio real: <b>{test.realSend}</b></p>
-            <p className="text-xs text-gray-500">Nenhuma mensagem foi enviada. (runtimeTouched: {String(test.runtimeTouched)})</p>
+            <p className="text-xs text-gray-500">Nenhuma mensagem foi enviada.{supportMode ? ` (runtimeTouched: ${String(test.runtimeTouched)})` : ""}</p>
           </div>
         </section>
       )}
@@ -285,7 +294,8 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
         <Link href="/atendimento" className="mt-2 inline-block text-sm font-semibold text-sky-700 hover:text-sky-900">Abrir Central de Atendimento →</Link>
       </section>
 
-      {/* ── Avançado · Uso interno Foocci — prontidão da plataforma (sem segredos) ── */}
+      {/* ── Avançado · Uso interno Foocci — prontidão da plataforma (support gate) ── */}
+      {supportMode && (
       <details className="rounded-xl border border-gray-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-semibold text-gray-600">Avançado · Uso interno Foocci</summary>
         <div className="mt-3 space-y-4 text-sm text-gray-600">
@@ -338,8 +348,10 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           </div>
         </div>
       </details>
+      )}
 
-      {/* Webhook */}
+      {/* Webhook (support gate) */}
+      {supportMode && (
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold">Webhook</h2>
         <p className="mt-1 text-sm text-gray-500">Callback URL para o painel da Meta (configurada automaticamente quando você conecta).</p>
@@ -354,8 +366,10 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           </p>
         )}
       </section>
+      )}
 
-      {/* Configuração manual avançada (accordion) */}
+      {/* Configuração manual avançada (accordion, support gate) */}
+      {supportMode && (
       <details className="rounded-xl border border-gray-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-semibold text-gray-600">Configuração manual avançada</summary>
         <div className="mt-3 space-y-3">
@@ -408,8 +422,10 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           )}
         </div>
       </details>
+      )}
 
-      {/* Checklist da Meta */}
+      {/* Checklist da Meta (support gate) */}
+      {supportMode && (
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold">Checklist da Meta</h2>
         <ul className="mt-2 space-y-1 text-sm">
@@ -426,6 +442,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           ))}
         </ul>
       </section>
+      )}
     </div>
   );
 }

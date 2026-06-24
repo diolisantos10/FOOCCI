@@ -32,8 +32,8 @@ interface PageCandidate {
 }
 
 const META_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> = {
-  blocked_env: { kind: "err", text: "Conexão automática ainda não configurada — faltam variáveis da Meta no servidor (veja a lista abaixo)." },
-  blocked_base_url: { kind: "err", text: "Configure FOOCCI_BASE_URL=https://foocci.com.br no Railway para habilitar a conexão." },
+  blocked_env: { kind: "err", text: "Conexão automática indisponível no momento. Fale com o suporte Foocci." },
+  blocked_base_url: { kind: "err", text: "Conexão automática indisponível no momento. Fale com o suporte Foocci." },
   error: { kind: "err", text: "Não foi possível concluir a conexão com a Meta. Tente novamente." },
   no_pages: { kind: "err", text: "Nenhuma Página do Facebook foi encontrada na sua conta." },
   forbidden: { kind: "err", text: "Apenas o proprietário ou gerente pode conectar." },
@@ -62,6 +62,14 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
   const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(null);
   const [flow, setFlow] = useState<"normal" | "select_page">("normal");
   const [candidates, setCandidates] = useState<PageCandidate[]>([]);
+
+  // Support mode — technical/platform tooling is hidden from the lojista and only
+  // shown to Foocci support via ?suporte=1. SSR-safe: starts false, set after mount.
+  const [supportMode, setSupportMode] = useState(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setSupportMode(p.get("suporte") === "1" || p.get("support") === "1");
+  }, []);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/integrations/facebook");
@@ -148,7 +156,7 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
             {candidates.map((c) => (
               <div key={c.pageId} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium">{c.pageName} <span className="text-xs text-gray-400">#{c.pageId}</span></p>
+                  <p className="text-sm font-medium">{c.pageName || "Página do Facebook"}</p>
                   <p className="text-xs text-gray-500">
                     {c.hasInstagram
                       ? `Instagram conectado: ${c.instagramUsername ? "@" + c.instagramUsername : "sim"}`
@@ -181,11 +189,12 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
           <p className="mt-2 text-xs text-gray-400">Você será direcionado para a Meta para autorizar o Foocci.</p>
           {view && !view.metaConnectAvailable && (
             <div className="mx-auto mt-3 max-w-md rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">
-              <p className="font-semibold">Conexão automática ainda não configurada.</p>
-              <p className="mt-0.5">Faltam variáveis da Meta no servidor:</p>
-              <ul className="mt-0.5 list-disc pl-4 font-mono">
-                {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
-              </ul>
+              <p>Conexão automática indisponível no momento. Fale com o suporte Foocci.</p>
+              {supportMode && (
+                <ul className="mt-1 list-disc pl-4 font-mono">
+                  {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
+                </ul>
+              )}
             </div>
           )}
         </section>
@@ -230,7 +239,8 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
         </Link>
       </section>
 
-      {/* ── Avançado · Variáveis de ambiente ── */}
+      {/* ── Avançado · Variáveis de ambiente (support gate) ── */}
+      {supportMode && (
       <details className="rounded-xl border border-gray-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-semibold text-gray-600">Avançado · Uso interno Foocci</summary>
         <div className="mt-3 space-y-4 text-sm text-gray-600">
@@ -267,6 +277,7 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
           </div>
         </div>
       </details>
+      )}
     </div>
   );
 }

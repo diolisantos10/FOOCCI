@@ -232,7 +232,7 @@ export function MetaProviderCard() {
               <div className="mt-3 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
                 <div>
                   <p className="text-xs font-semibold text-gray-800">Campanhas CRM via Meta</p>
-                  <p className="text-[11px] text-gray-500">Enviar mensagens de CRM pelo WhatsApp oficial da Meta em vez do Evolution.</p>
+                  <p className="text-[11px] text-gray-500">Enviar mensagens de CRM pelo WhatsApp oficial da Meta em vez da conexão atual.</p>
                 </div>
                 <button
                   type="button"
@@ -240,7 +240,7 @@ export function MetaProviderCard() {
                   onClick={() => action(
                     "crm-toggle",
                     { enabled: !meta?.metaCrmEnabled },
-                    meta?.metaCrmEnabled ? "CRM voltou para o Evolution." : "CRM agora usa o WhatsApp oficial da Meta."
+                    meta?.metaCrmEnabled ? "CRM voltou para a conexão atual." : "CRM agora usa o WhatsApp oficial da Meta."
                   )}
                   className={`ml-3 flex-shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
                     meta?.metaCrmEnabled

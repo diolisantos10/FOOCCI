@@ -126,13 +126,18 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
   }
 
   // ── Meu Negócio ──────────────────────────────────────────────────────────────
-  async function loadLocations() {
+  const loadLocations = useCallback(async () => {
     setBusy("locations");
     const { ok, data, error } = await api("/api/integrations/google/business");
     setBusy(null);
-    if (ok) setLocations((data as { locations: BusinessLocation[] }).locations);
-    else flash(false, error ?? "Não foi possível carregar os locais.");
-  }
+    if (ok) {
+      const locs = (data as { locations: BusinessLocation[] }).locations;
+      setLocations(locs);
+      // Exactly one location → select it automatically (no picker needed).
+      if (locs.length === 1 && locs[0]) void selectLocation(locs[0]);
+    } else flash(false, error ?? "Não foi possível carregar os locais.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   async function selectLocation(loc: BusinessLocation | null) {
     setBusy("select-location");
     const { ok, error } = await api("/api/integrations/google/business", "POST",
@@ -150,13 +155,18 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
   }
 
   // ── GA4 ──────────────────────────────────────────────────────────────────────
-  async function loadProperties() {
+  const loadProperties = useCallback(async () => {
     setBusy("properties");
     const { ok, data, error } = await api("/api/integrations/google/analytics");
     setBusy(null);
-    if (ok) setProperties((data as { properties: Ga4Property[] }).properties);
-    else flash(false, error ?? "Não foi possível carregar as propriedades.");
-  }
+    if (ok) {
+      const props = (data as { properties: Ga4Property[] }).properties;
+      setProperties(props);
+      // Exactly one property → select it automatically (no picker needed).
+      if (props.length === 1 && props[0]) void selectProperty(props[0]);
+    } else flash(false, error ?? "Não foi possível carregar as propriedades.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   async function selectProperty(prop: Ga4Property | null) {
     setBusy("select-property");
     const { ok, error } = await api("/api/integrations/google/analytics", "POST",
@@ -178,6 +188,24 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
     if (status?.connected && status.ga4PropertyId) void loadSnapshot(rangeDays);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.ga4PropertyId, rangeDays]);
+
+  // Auto-fetch locations once connected with the Meu Negócio scope and no location
+  // chosen yet — the merchant shouldn't have to click "Buscar meus locais".
+  useEffect(() => {
+    if (status?.connected && status.hasBusinessScope && !status.businessLocationId && locations === null) {
+      void loadLocations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.connected, status?.hasBusinessScope, status?.businessLocationId]);
+
+  // Auto-fetch analytics properties once connected with the Analytics scope and no
+  // property chosen yet — same friction removal as locations above.
+  useEffect(() => {
+    if (status?.connected && status.hasAnalyticsScope && !status.ga4PropertyId && properties === null) {
+      void loadProperties();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.connected, status?.hasAnalyticsScope, status?.ga4PropertyId]);
 
   async function copyInstructions() {
     try {
@@ -254,7 +282,7 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
             </div>
 
             {!status?.hasBusinessScope ? (
-              <p className="mt-2 text-xs text-amber-600">Permissão do Meu Negócio não concedida. Reconecte e aceite todas as permissões.</p>
+              <p className="mt-2 text-xs text-amber-600">Faltou liberar o acesso ao Meu Negócio. Clique em Conectar de novo e marque todas as caixas.</p>
             ) : status?.businessLocationName ? (
               <div className="mt-3">
                 <p className="text-xs text-gray-500">Local selecionado</p>
@@ -289,7 +317,7 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
           {/* Google Analytics GA4 */}
           <section className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-900">Google Analytics (GA4)</h2>
+              <h2 className="text-sm font-bold text-gray-900">Métricas do seu site (Google Analytics)</h2>
               <span className="text-[10px] font-semibold text-gray-400">Métricas do site</span>
             </div>
 
@@ -320,7 +348,7 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-xs text-gray-500">Escolha a propriedade GA4 do seu site.</p>
+                <p className="text-xs text-gray-500">Escolha o site que você acompanha no Google Analytics.</p>
                 {!properties ? (
                   <button type="button" disabled={!!busy} onClick={loadProperties}
                     className="mt-2 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-50">

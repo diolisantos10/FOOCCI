@@ -38,7 +38,7 @@ const INTEGRATIONS: {
   {
     provider:      "whatsapp",
     name:          "WhatsApp",
-    description:   "Atendimento via WhatsApp — escolha entre QR Code (Evolution) ou a conta oficial da Meta (Cloud API) com login em um clique.",
+    description:   "Conecte por QR Code ou pela conta oficial da Meta, com login em um clique.",
     icon:          "💬",
     color:         "bg-green-500",
     configureHref: "/integracoes/whatsapp",
@@ -62,7 +62,7 @@ const INTEGRATIONS: {
   {
     provider:      "google",
     name:          "Google",
-    description:   "Conecte o Google Meu Negócio e o Analytics (GA4) com um clique. Avaliações e métricas do site na sua central.",
+    description:   "Conecte o Google Meu Negócio e o Google Analytics com um clique. Avaliações e métricas do site na sua central.",
     icon:          "🔍",
     color:         "bg-blue-500",
     configureHref: "/integracoes/google",
@@ -84,7 +84,7 @@ const INTEGRATIONS: {
   {
     provider:    "openai",
     name:        "OpenAI",
-    description: "Motor de IA dos agentes Foocci — GPT-4o para atendimento e vendas automáticas.",
+    description: "Motor de inteligência artificial dos agentes Foocci.",
     icon:        "🤖",
     color:       "bg-[#10a37f]",
   },
