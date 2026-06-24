@@ -1631,6 +1631,84 @@ function CustomerIdentityStrip({
   );
 }
 
+// ── Birthday prompt ───────────────────────────────────────────────────────────
+// Shown once, at the start of the chat, to an ALREADY-IDENTIFIED customer who has
+// no birthday on file — so the CRM can send a birthday "mimo". Cute, dismissible,
+// asks only day + month. Never blocks ordering; self-hides when not needed.
+
+const BIRTHDAY_MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function BirthdayPrompt({ slug, customerId, name }: { slug: string; customerId?: string; name: string | null }) {
+  const [status, setStatus] = useState<"idle" | "ask" | "saving" | "done" | "hidden">("idle");
+  const [day, setDay]       = useState("");
+  const [month, setMonth]   = useState("");
+
+  useEffect(() => {
+    if (!customerId) { setStatus("hidden"); return; }
+    try { if (sessionStorage.getItem(`foocci_bday_${customerId}`) === "1") { setStatus("hidden"); return; } } catch { /* ignore */ }
+    let active = true;
+    fetch(`/api/pedido/${slug}/birthday?customerId=${encodeURIComponent(customerId)}`)
+      .then((r) => (r.ok ? r.json() : { needsBirthday: false }))
+      .then((j) => { if (active) setStatus(j?.needsBirthday ? "ask" : "hidden"); })
+      .catch(() => { if (active) setStatus("hidden"); });
+    return () => { active = false; };
+  }, [slug, customerId]);
+
+  function remember() { try { if (customerId) sessionStorage.setItem(`foocci_bday_${customerId}`, "1"); } catch { /* ignore */ } }
+  function dismiss() { remember(); setStatus("hidden"); }
+
+  async function save() {
+    const d = Number(day), m = Number(month);
+    if (!d || !m) return;
+    setStatus("saving");
+    try {
+      const res = await fetch(`/api/pedido/${slug}/birthday`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId, day: d, month: m }),
+      });
+      if (res.ok) { remember(); setStatus("done"); setTimeout(() => setStatus("hidden"), 5000); }
+      else setStatus("ask");
+    } catch { setStatus("ask"); }
+  }
+
+  if (status === "idle" || status === "hidden") return null;
+  const firstName = name?.trim().split(/\s+/)[0] ?? "";
+
+  if (status === "done") {
+    return (
+      <div className="shrink-0 border-b border-pink-100 bg-pink-50 px-4 py-2.5 text-center text-sm text-pink-700">
+        🎉 Aêê{firstName ? `, ${firstName}` : ""}! Anotado. No seu dia tem uma surpresa esperando 🎂🎁
+      </div>
+    );
+  }
+
+  return (
+    <div className="shrink-0 border-b border-pink-100 bg-gradient-to-r from-pink-50 to-orange-50 px-4 py-3">
+      <p className="text-sm font-semibold text-gray-800">
+        🎂 {firstName ? `${firstName}, quando` : "Quando"} é seu aniversário?
+      </p>
+      <p className="mt-0.5 text-xs text-gray-600">No seu dia a gente adora mandar um mimo especial 🎁 Conta pra gente?</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select value={day} onChange={(e) => setDay(e.target.value)} aria-label="Dia"
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm focus:border-pink-400 focus:outline-none">
+          <option value="">Dia</option>
+          {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Mês"
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm focus:border-pink-400 focus:outline-none">
+          <option value="">Mês</option>
+          {BIRTHDAY_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+        </select>
+        <button type="button" disabled={!day || !month || status === "saving"} onClick={save}
+          className="rounded-lg bg-pink-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50">
+          {status === "saving" ? "Salvando…" : "Salvar 🎂"}
+        </button>
+        <button type="button" onClick={dismiss} className="text-xs font-medium text-gray-400 hover:text-gray-600">Agora não</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Sales behavior control ────────────────────────────────────────────────────
 // Governs how assertively the AI engages during browsing.
 // The menu is the primary experience; AI is support only.
@@ -4696,6 +4774,11 @@ export function PedidoClient({
             displayPhone={identifiedPhone}
             onReset={handleResetIdentity}
           />
+        )}
+
+        {/* Birthday prompt — identified customer with no birthday on file (CRM mimo) */}
+        {entryPhase === "browsing" && resolvedCustomerId && (
+          <BirthdayPrompt slug={slug} customerId={resolvedCustomerId} name={identifiedName ?? customerName} />
         )}
 
         {/* Chat messages */}
