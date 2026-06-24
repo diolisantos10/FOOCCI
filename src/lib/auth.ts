@@ -14,22 +14,30 @@
 
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { googleClientId, googleClientSecret, googleOAuthConfigured } from "@/services/google/googleFlag";
 
-export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
+/**
+ * "Login com Google" gate. Google authenticates the email; we only allow it for
+ * an email that maps to EXACTLY ONE active Foocci user (so the tenant is
+ * unambiguous). Zero matches = not provisioned; multiple = same email across
+ * restaurants → must use email/senha. Returns the resolved user or null.
+ */
+async function resolveGoogleUser(email: string | null | undefined) {
+  if (!email) return null;
+  const matches = await prisma.user.findMany({
+    where: { email: { equals: email, mode: "insensitive" }, isActive: true },
+    select: { id: true, role: true, restaurantId: true },
+  });
+  return matches.length === 1 ? matches[0]! : null;
+}
 
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-
-  providers: [
-    CredentialsProvider({
+// Build the provider list: credentials always, Google only when creds are set
+// (so the app never crashes / shows a broken button when Google isn't configured).
+const providers: NextAuthOptions["providers"] = [
+  CredentialsProvider({
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
@@ -91,16 +99,57 @@ export const authOptions: NextAuthOptions = {
           restaurantId: user.restaurantId,
         };
       },
+  }),
+];
+
+if (googleOAuthConfigured()) {
+  providers.push(
+    GoogleProvider({
+      clientId: googleClientId()!,
+      clientSecret: googleClientSecret()!,
+      authorization: { params: { prompt: "select_account" } },
     }),
-  ],
+  );
+}
+
+export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
+
+  providers,
 
   callbacks: {
-    async jwt({ token, user }) {
-      // On initial sign-in `user` is populated from authorize()
-      if (user) {
+    // Gate Google sign-in: only emails mapping to exactly one active user.
+    async signIn({ user, account }) {
+      if (account?.provider === "google") {
+        const resolved = await resolveGoogleUser(user.email);
+        return resolved !== null;
+      }
+      return true; // credentials handled in authorize()
+    },
+
+    async jwt({ token, user, account }) {
+      // Credentials sign-in: `user` carries our DB fields from authorize().
+      if (user && account?.provider !== "google") {
         token.id = user.id;
         token.role = user.role;
         token.restaurantId = user.restaurantId;
+      }
+      // Google sign-in: resolve our DB user by the verified Google email.
+      if (account?.provider === "google") {
+        const resolved = await resolveGoogleUser(user?.email ?? token.email);
+        if (resolved) {
+          token.id = resolved.id;
+          token.role = resolved.role;
+          token.restaurantId = resolved.restaurantId;
+        }
       }
       return token;
     },

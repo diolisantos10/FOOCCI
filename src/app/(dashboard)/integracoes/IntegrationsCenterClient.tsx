@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "instagram" | "stone" | "mercadopago" | "openai" | "saipos";
+type Provider = "whatsapp" | "instagram" | "google" | "stone" | "mercadopago" | "openai" | "saipos";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -50,6 +50,14 @@ const INTEGRATIONS: {
     icon:          "📷",
     color:         "bg-gradient-to-br from-purple-500 to-pink-500",
     configureHref: "/integracoes/instagram",
+  },
+  {
+    provider:      "google",
+    name:          "Google",
+    description:   "Conecte o Google Meu Negócio e o Analytics (GA4) com um clique. Avaliações e métricas do site na sua central.",
+    icon:          "🔍",
+    color:         "bg-blue-500",
+    configureHref: "/integracoes/google",
   },
   {
     provider:    "stone",
@@ -88,6 +96,20 @@ function mergeStatus(a: IntegrationStatus | undefined, b: IntegrationStatus | un
   const ra = a ? rank[a] : 0;
   const rb = b ? rank[b] : 0;
   return ra >= rb ? (a ?? "unconfigured") : (b ?? "unconfigured");
+}
+
+// Google's status endpoint returns a custom shape; normalize it to a card view.
+function googleToView(data: unknown): IntegrationView {
+  const d = (data ?? {}) as { connected?: boolean; lastError?: string | null; lastSyncedAt?: string | null };
+  const status: IntegrationStatus = d.connected ? "active" : "unconfigured";
+  return {
+    provider: "google",
+    status,
+    isActive: Boolean(d.connected),
+    lastTestedAt: d.lastSyncedAt ?? null,
+    lastError: d.lastError ?? null,
+    fields: {},
+  };
 }
 
 async function apiFetch(url: string, method = "GET", body?: object) {
@@ -1326,7 +1348,10 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
     results.forEach((r, idx) => {
       const integration = INTEGRATIONS[idx];
       if (r.status === "fulfilled" && r.value.ok && integration) {
-        map[integration.provider] = r.value.data as IntegrationView;
+        // Google returns a custom shape ({ connected, ... }) — normalize to a card view.
+        map[integration.provider] = integration.provider === "google"
+          ? googleToView(r.value.data)
+          : (r.value.data as IntegrationView);
       }
     });
     // Combine Evolution + Meta statuses for the single WhatsApp card

@@ -103,6 +103,7 @@ model Restaurant {
   printStations          PrintStation[]
   printAgent             PrintAgent?
   printJobs              PrintJob[]
+  googleIntegrationConfig GoogleIntegrationConfig?
 
   @@map("restaurants")
 }
@@ -1177,6 +1178,67 @@ model IntegrationConfig {
   @@unique([restaurantId, provider])
   @@index([restaurantId])
   @@map("integration_configs")
+}
+
+// ═══════════════════════════════════════════
+//  GOOGLE INTEGRATION  (Meu Negócio + Analytics GA4)
+//  One OAuth connection per restaurant powers both Google Business Profile
+//  (Meu Negócio) and Google Analytics (GA4 Data API). Tokens are AES-256-GCM
+//  encrypted at rest and NEVER returned to the client — only masked previews
+//  and connection status. Login com Google is separate (NextAuth, no tokens here).
+// ═══════════════════════════════════════════
+
+model GoogleIntegrationConfig {
+  id           String  @id @default(cuid())
+  restaurantId String  @unique
+
+  connected    Boolean @default(false)
+
+  // OAuth tokens (AES-256-GCM encrypted ciphertext — never plaintext)
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  scopes                String? // space-separated granted scopes
+  googleEmail           String? // connected Google account email (display only)
+  googleUserId          String? // Google account sub (display/debug)
+
+  // Google Business Profile (Meu Negócio)
+  businessAccountId    String?
+  businessLocationId   String? // e.g. "locations/12345"
+  businessLocationName String?
+
+  // Google Analytics (GA4)
+  ga4PropertyId   String? // e.g. "properties/123456789"
+  ga4PropertyName String?
+
+  lastSyncedAt DateTime?
+  lastError    String?
+  metadata     Json? // { connectedAt?, ... } non-secret display data
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("google_integration_configs")
+}
+
+// Single-use CSRF state for the Google OAuth handshake. Trust is anchored on this
+// row (not just the session). Short-lived; consumed on callback.
+model GoogleOAuthState {
+  id           String   @id @default(cuid())
+  restaurantId String
+  userId       String
+  state        String   @unique
+  status       String   @default("PENDING") // PENDING | CONSUMED
+  error        String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([restaurantId, status])
+  @@index([expiresAt])
+  @@map("google_oauth_states")
 }
 
 // ═══════════════════════════════════════════
