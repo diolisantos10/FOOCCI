@@ -898,16 +898,21 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
   const loadView = useCallback(async () => {
     setLoading(true);
-    const { ok, data } = await apiFetch("/api/integrations/whatsapp");
-    if (ok && data) {
-      const v = data as EvolutionView;
-      setView(v);
-      setInstanceName(v.fields.instanceName ?? "");
-      setBaseUrl(v.fields.baseUrl ?? "");
-      setApiKey("");
-      setWebhookSecret("");
+    try {
+      const { ok, data } = await apiFetch("/api/integrations/whatsapp");
+      if (ok && data) {
+        const v = data as EvolutionView;
+        setView(v);
+        setInstanceName(v.fields.instanceName ?? "");
+        setBaseUrl(v.fields.baseUrl ?? "");
+        setApiKey("");
+        setWebhookSecret("");
+      }
+    } catch {
+      // Network error — leave view null, page shows unconfigured state
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   // Owner-friendly "Testar conexão" — re-checks the live status (read-only; same GET
