@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "instagram" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos";
+type Provider = "whatsapp" | "whatsapp-business" | "instagram" | "stone" | "mercadopago" | "openai" | "saipos";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -37,11 +37,19 @@ const INTEGRATIONS: {
 }[] = [
   {
     provider:      "whatsapp",
-    name:          "WhatsApp",
-    description:   "Atendimento automático, CRM e campanhas via WhatsApp. Conecte Evolution API ou WhatsApp oficial da Meta.",
+    name:          "WhatsApp (Evolution)",
+    description:   "Atendimento automático e manual via WhatsApp com a Evolution API (conexão por QR Code).",
     icon:          "💬",
     color:         "bg-green-500",
     configureHref: "/integracoes/whatsapp",
+  },
+  {
+    provider:      "whatsapp-business",
+    name:          "WhatsApp Business (Meta)",
+    description:   "Conexão oficial da Meta (Cloud API) para atendimento e campanhas de CRM. Login com um clique, sem códigos.",
+    icon:          "💬",
+    color:         "bg-blue-600",
+    configureHref: "/integracoes/whatsapp-business",
   },
   {
     provider:      "instagram",
@@ -64,13 +72,6 @@ const INTEGRATIONS: {
     description: "Checkout transparente, links de pagamento e cobranças via PIX.",
     icon:        "🔵",
     color:       "bg-blue-500",
-  },
-  {
-    provider:    "tipos",
-    name:        "Tipos",
-    description: "Sistema de gestão de restaurante (ERP) — sincronização de cardápio e pedidos.",
-    icon:        "🍽️",
-    color:       "bg-orange-500",
   },
   {
     provider:    "openai",
@@ -588,65 +589,6 @@ function MercadoPagoForm({
         hint="Encontre no painel do Mercado Pago → Credenciais → Access Token."
         value={accessToken}
         onChange={setAccessToken}
-      />
-      <div className="flex justify-end pt-1">
-        <button type="submit" disabled={saving}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
-          {saving ? "Salvando…" : "Salvar"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function TiposForm({
-  view, saving, onSave,
-}: {
-  view: IntegrationView | null;
-  saving: boolean;
-  onSave: (data: Record<string, unknown>) => void;
-}) {
-  const f = view?.fields ?? {};
-  const [baseUrl, setBaseUrl]     = useState(f.baseUrl ?? "");
-  const [apiKey, setApiKey]       = useState("");
-  const [accountId, setAccountId] = useState(f.accountId ?? "");
-
-  useEffect(() => {
-    setBaseUrl(f.baseUrl ?? "");
-    setApiKey("");
-    setAccountId(f.accountId ?? "");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view?.provider]);
-
-  return (
-    <form
-      onSubmit={(e) => { e.preventDefault(); onSave({ baseUrl, apiKey, accountId }); }}
-      className="space-y-4"
-    >
-      <TextField
-        label="URL base da API"
-        name="baseUrl"
-        placeholder="https://api.tipos.com.br"
-        type="url"
-        hint="URL fornecida pelo suporte Tipos."
-        value={baseUrl}
-        onChange={setBaseUrl}
-      />
-      <TextField
-        label="ID da conta / restaurante"
-        name="accountId"
-        placeholder="12345"
-        hint="Opcional. Identificador do seu restaurante na Tipos."
-        value={accountId}
-        onChange={setAccountId}
-      />
-      <SecretField
-        label="API Key"
-        name="apiKey"
-        placeholder={f.apiKeyPreview ? `Atual: ${f.apiKeyPreview} — deixe em branco para manter` : "Cole sua API Key"}
-        hint="Chave de acesso fornecida pela Tipos."
-        value={apiKey}
-        onChange={setApiKey}
       />
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
@@ -1330,7 +1272,6 @@ function DetailPanel({
               {provider === "whatsapp"    && <WhatsAppForm    view={view} saving={saving} onSave={handleSave} />}
               {provider === "stone"       && <StoneForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "mercadopago" && <MercadoPagoForm view={view} saving={saving} onSave={handleSave} />}
-              {provider === "tipos"       && <TiposForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "openai"      && <OpenAIForm      view={view} saving={saving} onSave={handleSave} />}
               {provider === "saipos"      && <SaiposForm      view={view} saving={saving} onSave={handleSave} />}
             </div>
