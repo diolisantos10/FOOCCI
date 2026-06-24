@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "instagram" | "google" | "stone" | "mercadopago" | "openai" | "saipos";
+type Provider = "whatsapp" | "instagram" | "facebook" | "google" | "stone" | "mercadopago" | "openai" | "saipos";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -50,6 +50,14 @@ const INTEGRATIONS: {
     icon:          "📷",
     color:         "bg-gradient-to-br from-purple-500 to-pink-500",
     configureHref: "/integracoes/instagram",
+  },
+  {
+    provider:      "facebook",
+    name:          "Facebook",
+    description:   "Receba e responda mensagens do Facebook Messenger pela Central de Atendimento.",
+    icon:          "📘",
+    color:         "bg-[#1877F2]",
+    configureHref: "/integracoes/facebook",
   },
   {
     provider:      "google",
