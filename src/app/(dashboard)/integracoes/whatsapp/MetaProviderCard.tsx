@@ -107,7 +107,12 @@ export function MetaProviderCard() {
       };
       window.addEventListener("message", listener);
 
-      await loadFbSdk(appId);
+      const sdkLoaded = await loadFbSdk(appId);
+      if (!sdkLoaded) {
+        window.removeEventListener("message", listener);
+        flash(false, "Não foi possível carregar o serviço da Meta. Verifique sua conexão e tente novamente.");
+        return;
+      }
       const code = await fbLogin(configId);
       window.removeEventListener("message", listener);
 
@@ -117,8 +122,13 @@ export function MetaProviderCard() {
         body: JSON.stringify({ code, ...assets }),
       });
       const j = await res.json().catch(() => null);
-      if (res.ok && j?.data?.connected) { flash(true, "WhatsApp oficial da Meta conectado."); load(); }
-      else flash(false, j?.error ?? "Falha ao conectar.");
+      if (res.ok && j?.data?.connected) {
+        const warning = !j.data.healthCheckPassed ? " A verificação da API será concluída em instantes." : "";
+        flash(true, `WhatsApp oficial da Meta conectado.${warning}`);
+        load();
+      } else {
+        flash(false, j?.data?.error ?? j?.error ?? "Não foi possível concluir a conexão. Tente novamente.");
+      }
     } catch {
       flash(false, "Não foi possível iniciar a conexão. Tente novamente.");
     } finally { setBusy(null); }
@@ -364,14 +374,19 @@ function SetupItem({ label }: { label: string }) {
 
 // ── FB SDK helpers ──────────────────────────────────────────────────────────────
 
-function loadFbSdk(appId: string): Promise<void> {
+function loadFbSdk(appId: string): Promise<boolean> {
   return new Promise((resolve) => {
-    if (window.FB) { resolve(); return; }
+    if (window.FB) {
+      // Re-init to ensure the correct appId is active (handles reconnect after appId change).
+      window.FB.init({ appId, autoLogAppEvents: true, xfbml: false, version: "v21.0" });
+      resolve(true);
+      return;
+    }
     const s = document.createElement("script");
     s.src = "https://connect.facebook.net/en_US/sdk.js";
     s.async = true; s.defer = true;
-    s.onload = () => { window.FB?.init({ appId, autoLogAppEvents: true, xfbml: false, version: "v21.0" }); resolve(); };
-    s.onerror = () => resolve();
+    s.onload = () => { window.FB?.init({ appId, autoLogAppEvents: true, xfbml: false, version: "v21.0" }); resolve(true); };
+    s.onerror = () => resolve(false);
     document.body.appendChild(s);
   });
 }

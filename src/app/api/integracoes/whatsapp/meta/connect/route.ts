@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const ctx = getTenantContext(req);
   if (!ctx) return unauthorized();
   if (!["OWNER", "MANAGER"].includes(ctx.role)) return forbidden();
-  if (!isMetaWhatsAppEnabled()) return badRequest("Integração Meta desativada (META_WHATSAPP_ENABLED).");
+  if (!isMetaWhatsAppEnabled()) return badRequest("Esta integração não está disponível no momento. Fale com o suporte Foocci.");
 
   try {
     const body = (await req.json().catch(() => ({}))) as {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       displayPhoneNumber?: string; businessId?: string; configId?: string;
     };
     if (!body.wabaId || !body.phoneNumberId) {
-      return badRequest("wabaId e phoneNumberId são obrigatórios.");
+      return badRequest("Não foi possível identificar o número WhatsApp. Tente novamente ou fale com o suporte Foocci.");
     }
 
     let accessToken = body.accessToken;
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       if (!ex.ok) return badRequest(ex.error);
       accessToken = ex.accessToken;
     }
-    if (!accessToken) return badRequest("Faltam credenciais Meta (code ou accessToken).");
+    if (!accessToken) return badRequest("Não foi possível obter a autorização da Meta. Tente novamente.");
 
     const details = await fetchPhoneDetails(accessToken, body.phoneNumberId);
 
@@ -52,10 +52,22 @@ export async function POST(req: NextRequest) {
       accessToken,
     });
 
-    // Verify the token works (reads the phone node — no message sent).
-    const health = await new MetaWhatsAppCloudProvider().healthCheck(ctx.restaurantId);
+    // Best-effort health check — credentials are already saved. A transient failure
+    // here must NOT block the success response; the UI reflects live status on reload.
+    let healthOk = false;
+    let healthDetail: string | null = null;
+    try {
+      const health = await new MetaWhatsAppCloudProvider().healthCheck(ctx.restaurantId);
+      healthOk  = health.connected;
+      healthDetail = health.detail ?? null;
+    } catch { /* non-fatal */ }
 
-    return ok({ connected: health.connected, detail: health.detail, meta: await MetaConfigService.getPublic(ctx.restaurantId) });
+    return ok({
+      connected: true,
+      healthCheckPassed: healthOk,
+      healthDetail,
+      meta: await MetaConfigService.getPublic(ctx.restaurantId),
+    });
   } catch (err) {
     console.error("[POST meta/connect]", err);
     return serverError();

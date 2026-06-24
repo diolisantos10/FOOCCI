@@ -12,7 +12,7 @@ export async function exchangeCodeForToken(
 ): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
   const appId = metaAppId();
   const secret = metaAppSecret();
-  if (!appId || !secret) return { ok: false, error: "Meta app não configurado no servidor (META_APP_ID / META_APP_SECRET)." };
+  if (!appId || !secret) return { ok: false, error: "Serviço Meta não disponível no momento. Fale com o suporte Foocci." };
   try {
     const res = await fetch(
       metaGraphUrl(`oauth/access_token?client_id=${appId}&client_secret=${secret}&code=${encodeURIComponent(code)}`),
