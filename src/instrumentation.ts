@@ -4,6 +4,8 @@
  * Runs once when the Node.js server process starts.
  * Starts background schedulers: AutoSimulatorScheduler, CartRecoveryScheduler
  * and ScheduledCampaignScheduler.
+ * Also auto-syncs Evolution webhook URLs so WhatsApp recovers automatically
+ * after every deploy without manual intervention.
  */
 
 export async function register() {
@@ -22,5 +24,13 @@ export async function register() {
       "./services/crm/ScheduledCampaignScheduler"
     );
     ScheduledCampaignScheduler.start();
+
+    // Re-register Evolution webhook after every deploy so WhatsApp never goes
+    // silent due to Evolution marking the endpoint as failed during downtime.
+    const { syncAllEvolutionWebhooks } = await import(
+      "./services/evolution/EvolutionWebhookStartupSync"
+    );
+    void syncAllEvolutionWebhooks();
   }
 }
+
