@@ -18,6 +18,7 @@ import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
+import { sendMetaCrmMessage } from "./metaCrmSend";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { Prisma, ConversationStatus } from "@prisma/client";
 import {
@@ -264,7 +265,7 @@ export class ScheduledCampaignRunnerService {
       where:  { id: campaignId },
       select: {
         id: true, restaurantId: true, name: true, status: true,
-        targetSegment: true, templateId: true, message: true,
+        targetSegment: true, templateId: true, message: true, objective: true, audienceConfig: true,
         scheduleConfig: true, totalSent: true,
         campaignFamilyKey: true, messageFingerprint: true, dedupePolicy: true,
       },
@@ -539,7 +540,7 @@ export class ScheduledCampaignRunnerService {
       where:  { id: campaignId },
       select: {
         id: true, restaurantId: true, name: true, status: true,
-        message: true, templateId: true, targetSegment: true,
+        message: true, templateId: true, targetSegment: true, objective: true, audienceConfig: true,
         scheduleConfig: true, campaignFamilyKey: true, messageFingerprint: true,
         executions: {
           orderBy: { createdAt: "asc" },
@@ -664,7 +665,7 @@ export class ScheduledCampaignRunnerService {
     const startedAt = new Date();
 
     const send = await this._sendBatch(
-      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment },
+      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig },
       customers,
       safety,
       { allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride, campaignFamilyKey: campaign.campaignFamilyKey ?? null, messageFingerprint: fingerprint || null },
@@ -707,6 +708,7 @@ export class ScheduledCampaignRunnerService {
     campaign: {
       id: string; restaurantId: string; name: string; status: string;
       message: string; templateId: string | null; targetSegment: string | null;
+      objective: string | null; audienceConfig: unknown;
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
@@ -883,7 +885,14 @@ export class ScheduledCampaignRunnerService {
         let crmProvider = "EVOLUTION";
 
         if (metaProvider) {
-          const metaResult = await metaProvider.sendText({ restaurantId: campaign.restaurantId, to: phone, text: messageText });
+          // Cold/marketing audience is outside the 24h window → must use an APPROVED
+          // template. Resolve the campaign's template + fill {{1}}=nome; falls back to
+          // freeform only when no template is configured.
+          const firstName = (customer.name ?? "").split(" ")[0] || "Cliente";
+          const { result: metaResult } = await sendMetaCrmMessage(metaProvider, {
+            restaurantId: campaign.restaurantId, phone, freeformText: messageText, firstName,
+            campaign: { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+          });
           if (metaResult.ok) {
             externalMessageId = metaResult.providerMessageId;
             crmProvider = "META_CLOUD_API";

@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { buildMetaSetupInstructions, metaWebhookUrl, META_WEBHOOK_FIELD } from "@/services/whatsapp/metaSetupInstructions";
+import { MetaTemplatesPanel } from "./MetaTemplatesPanel";
 
 interface MetaPublic {
   connected: boolean;
@@ -295,6 +296,9 @@ export function MetaProviderCard() {
                   {meta?.metaCrmEnabled ? "Ativado" : "Ativar"}
                 </button>
               </div>
+
+              {/* Message templates — required for CRM marketing via Meta. */}
+              <MetaTemplatesPanel />
             </>
           ) : (
             <>

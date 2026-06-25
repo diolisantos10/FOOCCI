@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
+import { sendMetaCrmMessage } from "./metaCrmSend";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
@@ -436,7 +437,7 @@ export class CrmCampaignService {
     // Validate campaign ownership
     const campaign = await prisma.campaign.findUnique({
       where:  { id: campaignId },
-      select: { id: true, restaurantId: true, status: true, templateId: true, objective: true, targetSegment: true },
+      select: { id: true, restaurantId: true, status: true, templateId: true, objective: true, targetSegment: true, audienceConfig: true },
     });
 
     if (!campaign || campaign.restaurantId !== restaurantId) {
@@ -490,6 +491,17 @@ export class CrmCampaignService {
             where: { id: { in: customerIds }, hasOptedOut: true },
             select: { id: true },
           })).map((c) => c.id)
+        : []
+    );
+
+    // Customer first names — needed to fill Meta template body params (e.g. {{1}}=nome)
+    // when CRM routes through Meta. Cheap single batch; only used on the Meta path.
+    const customerNames = new Map<string, string>(
+      useMetaCrm && customerIds.length > 0
+        ? (await prisma.customer.findMany({
+            where:  { id: { in: customerIds } },
+            select: { id: true, name: true },
+          })).map((c) => [c.id, c.name] as [string, string])
         : []
     );
 
@@ -615,7 +627,14 @@ export class CrmCampaignService {
         let providerUsed = "EVOLUTION";
 
         if (metaProvider) {
-          const metaResult = await metaProvider.sendText({ restaurantId, to: phone, text: messageText });
+          // Marketing to cold audiences is outside the 24h window → must use an APPROVED
+          // template. sendMetaCrmMessage resolves the campaign's template + fills params;
+          // it only falls back to freeform when no template is configured.
+          const firstName = (customerNames.get(exec.customerId ?? "") ?? "").split(" ")[0] || "Cliente";
+          const { result: metaResult } = await sendMetaCrmMessage(metaProvider, {
+            restaurantId, phone, freeformText: messageText, firstName,
+            campaign: { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+          });
           if (metaResult.ok) {
             externalMessageId = metaResult.providerMessageId;
             providerUsed = "META_CLOUD_API";
