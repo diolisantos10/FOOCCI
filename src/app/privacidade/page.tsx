@@ -144,8 +144,8 @@ export default function PrivacidadePublicaPage() {
       <Block heading="Contato e exclusão de dados">
         <p>
           Para exercer seus direitos ou solicitar a exclusão de dados, fale com a gente em{" "}
-          <a className="font-medium text-blue-600 hover:underline" href="mailto:contato@foocci.com.br">
-            contato@foocci.com.br
+          <a className="font-medium text-blue-600 hover:underline" href="mailto:diolisantos10@gmail.com">
+            diolisantos10@gmail.com
           </a>
           . Consulte também nossos{" "}
           <Link className="font-medium text-blue-600 hover:underline" href="/termos">

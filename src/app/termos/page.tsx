@@ -110,8 +110,8 @@ export default function TermosPublicosPage() {
       <Block heading="Contato">
         <p>
           Dúvidas? Fale com a gente em{" "}
-          <a className="font-medium text-blue-600 hover:underline" href="mailto:contato@foocci.com.br">
-            contato@foocci.com.br
+          <a className="font-medium text-blue-600 hover:underline" href="mailto:diolisantos10@gmail.com">
+            diolisantos10@gmail.com
           </a>
           .
         </p>
