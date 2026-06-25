@@ -65,6 +65,16 @@ export function MetaProviderCard() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [copied, setCopied]   = useState(false);
 
+  // Support-only manual connect (gate ?suporte=1). Lets the Foocci team paste
+  // credentials obtained via Meta's "Integrar com API" path before the 1-click
+  // Embedded Signup (partner verification) is live. Never shown to merchants.
+  const [supportMode, setSupportMode] = useState(false);
+  const [manual, setManual] = useState({ phoneNumberId: "", wabaId: "", accessToken: "", displayPhoneNumber: "" });
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setSupportMode(p.get("suporte") === "1" || p.get("support") === "1");
+  }, []);
+
   const appId    = process.env.NEXT_PUBLIC_META_APP_ID;
   const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
 
@@ -131,6 +141,40 @@ export function MetaProviderCard() {
       }
     } catch {
       flash(false, "Não foi possível iniciar a conexão. Tente novamente.");
+    } finally { setBusy(null); }
+  }
+
+  // Support-only: connect by pasting credentials from Meta's "Integrar com API"
+  // path (phone number id, WABA id, permanent/system token). Hits the same
+  // /connect endpoint the Embedded Signup uses — token never leaves the server.
+  async function manualConnect() {
+    const phoneNumberId = manual.phoneNumberId.trim();
+    const wabaId        = manual.wabaId.trim();
+    const accessToken   = manual.accessToken.trim();
+    if (!phoneNumberId || !wabaId || !accessToken) {
+      flash(false, "Preencha número (phone number id), conta (WABA id) e token.");
+      return;
+    }
+    setBusy("manual");
+    try {
+      const res = await fetch("/api/integracoes/whatsapp/meta/connect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumberId, wabaId, accessToken,
+          displayPhoneNumber: manual.displayPhoneNumber.trim() || undefined,
+        }),
+      });
+      const j = await res.json().catch(() => null);
+      if (res.ok && j?.data?.connected) {
+        const warning = !j.data.healthCheckPassed ? " A verificação da API será concluída em instantes." : "";
+        flash(true, `WhatsApp oficial da Meta conectado.${warning}`);
+        setManual({ phoneNumberId: "", wabaId: "", accessToken: "", displayPhoneNumber: "" });
+        load(); loadDiag();
+      } else {
+        flash(false, j?.data?.error ?? j?.error ?? "Não foi possível conectar. Confira os 3 valores e tente de novo.");
+      }
+    } catch {
+      flash(false, "Sem conexão. Tente novamente.");
     } finally { setBusy(null); }
   }
 
@@ -259,6 +303,34 @@ export function MetaProviderCard() {
                 className="mt-3 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                 {busy === "connect" ? "Conectando…" : "Conectar WhatsApp oficial da Meta"}
               </button>
+
+              {/* Support-only manual connect (Integrar com API path). Gate ?suporte=1. */}
+              {supportMode && (
+                <div className="mt-4 rounded-lg border border-dashed border-amber-300 bg-amber-50/50 p-3">
+                  <p className="text-[11px] font-semibold text-amber-800">Conexão manual · uso interno Foocci</p>
+                  <p className="mt-0.5 text-[10px] text-amber-700">
+                    Cole os 3 valores do painel da Meta (WhatsApp → Configuração da API). O token vai criptografado pro servidor.
+                  </p>
+                  <div className="mt-2 grid gap-2">
+                    <input value={manual.phoneNumberId} onChange={(e) => setManual((m) => ({ ...m, phoneNumberId: e.target.value }))}
+                      placeholder="Identificador do número de telefone (phone number id)"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-[11px]" />
+                    <input value={manual.wabaId} onChange={(e) => setManual((m) => ({ ...m, wabaId: e.target.value }))}
+                      placeholder="Identificador da conta do WhatsApp Business (WABA id)"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-[11px]" />
+                    <input value={manual.displayPhoneNumber} onChange={(e) => setManual((m) => ({ ...m, displayPhoneNumber: e.target.value }))}
+                      placeholder="Número exibido, ex: +55 11 99999-9999 (opcional)"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-[11px]" />
+                    <textarea value={manual.accessToken} onChange={(e) => setManual((m) => ({ ...m, accessToken: e.target.value }))}
+                      placeholder="Token de acesso (permanente / system user)" rows={2}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 font-mono text-[10px]" />
+                    <button type="button" disabled={busy === "manual"} onClick={manualConnect}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+                      {busy === "manual" ? "Conectando…" : "Conectar com estes dados"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
