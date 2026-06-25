@@ -14,7 +14,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { isMetaWhatsAppEnabled } from "@/services/whatsapp/metaFlag";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
-import { exchangeCodeForToken, fetchPhoneDetails } from "@/services/whatsapp/MetaOnboardingService";
+import { exchangeCodeForToken, fetchPhoneDetails, inspectTokenExpiry } from "@/services/whatsapp/MetaOnboardingService";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 
 export async function POST(req: NextRequest) {
@@ -40,7 +40,16 @@ export async function POST(req: NextRequest) {
     }
     if (!accessToken) return badRequest("Não foi possível obter a autorização da Meta. Tente novamente.");
 
+    // Guard against a number already connected to ANOTHER restaurant (e.g. a stale
+    // row after a merchant reconnected elsewhere). A unique constraint on
+    // phoneNumberId would otherwise surface as an opaque 500 here.
+    const owner = await MetaConfigService.getByPhoneNumberId(body.phoneNumberId);
+    if (owner && owner.restaurantId !== ctx.restaurantId) {
+      return badRequest("Este número de WhatsApp já está conectado em outra conta Foocci. Fale com o suporte Foocci para liberar.");
+    }
+
     const details = await fetchPhoneDetails(accessToken, body.phoneNumberId);
+    const { expiresAt } = await inspectTokenExpiry(accessToken);
 
     await MetaConfigService.upsert({
       restaurantId:       ctx.restaurantId,
@@ -50,6 +59,7 @@ export async function POST(req: NextRequest) {
       businessId:         body.businessId ?? null,
       configId:           body.configId ?? null,
       accessToken,
+      tokenExpiresAt:     expiresAt,
     });
 
     // Best-effort health check — credentials are already saved. A transient failure

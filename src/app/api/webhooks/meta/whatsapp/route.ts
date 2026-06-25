@@ -32,9 +32,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const raw = await req.text();
 
-  // Signature check (enforced when the app secret is configured).
+  // Signature check — FAIL CLOSED. A missing app secret must reject (not accept
+  // unsigned, spoofable payloads that could inject inbound messages into any tenant).
   const secret = metaAppSecret();
-  if (secret && !validateMetaSignature(raw, req.headers.get("x-hub-signature-256"), secret)) {
+  if (!secret) {
+    console.error("[webhook/meta/whatsapp] META_APP_SECRET not set — rejecting unsigned webhook");
+    return NextResponse.json({ ok: false, error: "webhook not configured" }, { status: 401 });
+  }
+  if (!validateMetaSignature(raw, req.headers.get("x-hub-signature-256"), secret)) {
     return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
   }
 

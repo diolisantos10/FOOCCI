@@ -29,6 +29,31 @@ export async function exchangeCodeForToken(
   }
 }
 
+/**
+ * Inspect an access token via Graph `debug_token` to learn when it expires, so we can
+ * persist `tokenExpiresAt` and warn (in health checks) before a merchant's sends start
+ * failing silently. `data.expires_at === 0` means the token never expires.
+ * Best-effort: returns { expiresAt: null } on any failure (never blocks onboarding).
+ */
+export async function inspectTokenExpiry(accessToken: string): Promise<{ expiresAt: Date | null }> {
+  const appId = metaAppId();
+  const secret = metaAppSecret();
+  if (!appId || !secret) return { expiresAt: null };
+  try {
+    const appToken = `${appId}|${secret}`;
+    const res = await fetch(
+      metaGraphUrl(`debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`),
+    );
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) return { expiresAt: null };
+    const expiresAt = (json as { data?: { expires_at?: number } }).data?.expires_at;
+    if (typeof expiresAt !== "number" || expiresAt <= 0) return { expiresAt: null }; // 0 = never expires
+    return { expiresAt: new Date(expiresAt * 1000) };
+  } catch {
+    return { expiresAt: null };
+  }
+}
+
 export async function fetchPhoneDetails(
   accessToken:   string,
   phoneNumberId: string,

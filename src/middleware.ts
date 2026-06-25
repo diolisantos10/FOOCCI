@@ -18,6 +18,8 @@ import { TENANT_HEADER, USER_HEADER, ROLE_HEADER } from "@/lib/tenant";
 // Routes that do NOT require authentication
 const PUBLIC_PATHS: RegExp[] = [
   /^\/$/,                              // landing page
+  /^\/privacidade$/,                   // PUBLIC privacy policy (required by Meta/Google app review)
+  /^\/termos$/,                        // PUBLIC terms of use (required by Meta/Google app review)
   /^\/site(\/.*)?$/,                   // public marketing website (no auth)
   /^\/login(\/.*)?$/,                  // login + sub-pages
   /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
