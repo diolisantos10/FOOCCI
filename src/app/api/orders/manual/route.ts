@@ -22,6 +22,7 @@ import { assignOrderNumber, formatOrderNumber } from "@/lib/order-number";
 import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { geocodeAddress, type LatLng } from "@/lib/geocoding";
 import { isQuoteStatusBlocked } from "@/lib/delivery-authorization";
+import { PrintQueueService } from "@/services/print/PrintQueueService";
 
 const itemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -425,6 +426,11 @@ export async function POST(req: NextRequest) {
   if (order === null) {
     return NextResponse.json({ error: "Cupom já utilizado por este cliente" }, { status: 400 });
   }
+
+  // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
+  PrintQueueService.maybeEnqueueOrder(restaurantId, order.id).catch((e) =>
+    console.error("[print] manual order enqueue failed:", e),
+  );
 
   const displayNumber = formatOrderNumber(order.orderNumber, order.id);
 

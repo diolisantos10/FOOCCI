@@ -28,6 +28,7 @@ import { decrypt } from "@/lib/crypto";
 import { verifyMpWebhookSignature } from "@/lib/mercadopago";
 import { Decimal } from "@prisma/client/runtime/library";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { PrintQueueService } from "@/services/print/PrintQueueService";
 
 const LOG = "[mp-webhook]";
 
@@ -87,6 +88,14 @@ export async function confirmMpPayment(
   });
 
   console.info(LOG, "order confirmed", { orderId: order.id });
+
+  // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
+  // Only when this webhook actually advanced the order to CONFIRMED.
+  if (orderNeedsStatusAdvance) {
+    PrintQueueService.maybeEnqueueOrder(order.restaurantId, order.id).catch((e) =>
+      console.error("[print] mp webhook enqueue failed:", e),
+    );
+  }
 
   // Idempotent coupon usage: updateMany WHERE couponUsageCountedAt IS NULL wins the race.
   const orderForCoupon = await prisma.order.findUnique({

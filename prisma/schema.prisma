@@ -435,6 +435,7 @@ model Order {
   cancelledAt          DateTime?
   idempotencyKey       String?     @unique
   crmSyncedAt          DateTime? // set once customer metrics have been counted for this order
+  printQueuedAt        DateTime? // set once station print jobs have been enqueued (once-only guard)
   source               String? // pedido | qr | whatsapp | manual | import — origin channel
   importedAt           DateTime? // set for historically imported orders; actual event date
   // ── Marketing / channel attribution ──────────────────────────────────────────
@@ -1666,6 +1667,7 @@ model PrintAgent {
 model PrintJob {
   id           String    @id @default(cuid())
   restaurantId String
+  orderId      String? // source order (null for test prints) — traceability + dedupe
   stationKey   String? // which station this came from (CAIXA, COZINHA_1, …)
   printerName  String // target Windows printer
   title        String // short label (e.g. "Pedido #123" / "TESTE")
@@ -1679,6 +1681,7 @@ model PrintJob {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId, status])
+  @@index([orderId])
   @@map("print_jobs")
 }
 

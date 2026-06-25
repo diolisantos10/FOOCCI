@@ -15,6 +15,7 @@ import type { UpdateOrderStatusInput, OrderListQuery } from "@/validators/order"
 import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import { OrderNotificationService } from "@/services/order/OrderNotificationService";
+import { PrintQueueService } from "@/services/print/PrintQueueService";
 
 export type OrderWithDetails = Order & {
   items: OrderItem[];
@@ -171,6 +172,10 @@ export class OrderService {
     if (input.status === "CONFIRMED") {
       SaiposIntegrationService.maybeSendOrder(restaurantId, orderId).catch((e) =>
         console.error("[saipos] updateStatus send failed:", e)
+      );
+      // Enqueue station print jobs for the Carteiro (idempotent, internal guard).
+      PrintQueueService.maybeEnqueueOrder(restaurantId, orderId).catch((e) =>
+        console.error("[print] updateStatus enqueue failed:", e)
       );
     }
 

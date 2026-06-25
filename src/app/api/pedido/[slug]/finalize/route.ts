@@ -39,6 +39,7 @@ import { channelPrice } from "@/services/menu/MenuPricingService";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
 import { createOrderRecord } from "@/services/checkout/CheckoutFinalizationService";
+import { PrintQueueService } from "@/services/print/PrintQueueService";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -699,6 +700,11 @@ export async function POST(
   if (!isGuestIdentifier(phone)) {
     await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "finalize");
   }
+
+  // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
+  PrintQueueService.maybeEnqueueOrder(restaurantId, orderId).catch((e) =>
+    console.error("[print] finalize enqueue failed:", e),
+  );
 
   return NextResponse.json({ orderId, confirmed: true });
 }
