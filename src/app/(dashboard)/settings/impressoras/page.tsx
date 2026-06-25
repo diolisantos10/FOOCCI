@@ -20,6 +20,7 @@ interface Agent {
   printers: string[];
   pairingCode: string;
   version: string | null;
+  kitchenLargeFont: boolean;
 }
 
 interface Category {
@@ -175,6 +176,7 @@ export default function ImpressorasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [largeFont, setLargeFont] = useState(false);
   const [copied, setCopied] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +185,10 @@ export default function ImpressorasPage() {
     const { ok, data } = await apiFetch("/api/integracoes/impressao");
     if (ok) {
       if (Array.isArray(data?.stations)) setStations(data.stations as Station[]);
-      if (data?.agent) setAgent(data.agent as Agent);
+      if (data?.agent) {
+        setAgent(data.agent as Agent);
+        setLargeFont(!!(data.agent as Agent).kitchenLargeFont);
+      }
       if (Array.isArray(data?.categories)) setCategories(data.categories as Category[]);
     }
     setLoading(false);
@@ -241,6 +246,7 @@ export default function ImpressorasPage() {
     const { ok, data } = await apiFetch("/api/integracoes/impressao", "PUT", {
       stations: stations.map((s) => ({ id: s.id, name: s.name, printerName: s.printerName, enabled: s.enabled })),
       categories: categories.map((c) => ({ id: c.id, printStationKeys: c.printStationKeys })),
+      kitchenLargeFont: largeFont,
     });
     setSaving(false);
     if (ok) {
@@ -408,6 +414,35 @@ export default function ImpressorasPage() {
             ))}
           </div>
         )}
+      </PageCard>
+
+      {/* Big-font opt-in for kitchen comandas */}
+      <PageCard>
+        <SectionHeading
+          title="3. Letras grandes na cozinha"
+          subtitle="Imprime os itens da comanda da cozinha em letra dupla — mais fácil de ler de longe."
+        />
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">Ativar letra grande</p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Funciona em impressoras que aceitam comandos ESC/POS (a maioria das térmicas). Ative, salve e
+              imprima um pedido de teste: se os itens saírem grandes, está certo. Se sair com códigos
+              estranhos no lugar, é só desligar e salvar.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setLargeFont((v) => !v); setSuccess(null); }}
+            aria-pressed={largeFont}
+            title={largeFont ? "Letra grande ativada" : "Letra grande desativada"}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${largeFont ? "bg-brand-500" : "bg-gray-300"}`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${largeFont ? "translate-x-5" : "translate-x-0"}`}
+            />
+          </button>
+        </div>
       </PageCard>
 
       {/* Single save for everything */}

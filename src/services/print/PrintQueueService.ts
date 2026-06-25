@@ -48,8 +48,27 @@ export class PrintQueueService {
     }
   }
 
-  private static async enqueue(restaurantId: string, orderId: string): Promise<void> {
-    const [order, restaurant, stations, categories] = await Promise.all([
+  /** Force a re-print of an order's station tickets — bypasses the once-only guard. */
+  static async reprintOrder(
+    restaurantId: string,
+    orderId: string,
+  ): Promise<{ ok: boolean; jobs: number; reason?: string }> {
+    try {
+      const jobs = await this.enqueue(restaurantId, orderId);
+      if (jobs === 0) {
+        return { ok: false, jobs: 0, reason: "Nenhuma estação com impressora recebeu itens deste pedido." };
+      }
+      return { ok: true, jobs };
+    } catch (err) {
+      console.error("[PrintQueueService] reprint failed", {
+        restaurantId, orderId, err: err instanceof Error ? err.message : String(err),
+      });
+      return { ok: false, jobs: 0, reason: "Erro ao reimprimir." };
+    }
+  }
+
+  private static async enqueue(restaurantId: string, orderId: string): Promise<number> {
+    const [order, restaurant, stations, categories, agent] = await Promise.all([
       prisma.order.findUnique({
         where: { id: orderId },
         include: {
@@ -73,15 +92,16 @@ export class PrintQueueService {
       }),
       prisma.printStation.findMany({ where: { restaurantId, enabled: true }, orderBy: { position: "asc" } }),
       prisma.menuCategory.findMany({ where: { restaurantId }, select: { id: true, printStationKeys: true } }),
+      prisma.printAgent.findUnique({ where: { restaurantId }, select: { kitchenLargeFont: true } }),
     ]);
 
-    if (!order || !restaurant) return;
+    if (!order || !restaurant) return 0;
 
     // Only stations with a real printer assigned can receive jobs.
     const printable = stations.filter((s) => s.printerName && s.printerName.trim());
     if (printable.length === 0) {
       console.info("[PrintQueueService] no station has a printer — nothing to enqueue", { restaurantId, orderId });
-      return;
+      return 0;
     }
 
     const tz = restaurant.timezone || "America/Sao_Paulo";
@@ -158,19 +178,21 @@ export class PrintQueueService {
       if (stationItems.length === 0) continue;
 
       const body = renderKitchenTicketText({
-        order: ticketOrder, items: stationItems, restaurantName: restaurant.name, stationName: station.name, timezone: tz,
+        order: ticketOrder, items: stationItems, restaurantName: restaurant.name, stationName: station.name,
+        timezone: tz, largeFont: agent?.kitchenLargeFont ?? false,
       });
       jobs.push({ restaurantId, orderId, stationKey: station.key, printerName, title: `${title} - ${station.name}`, body });
     }
 
     if (jobs.length === 0) {
       console.info("[PrintQueueService] no jobs produced", { restaurantId, orderId });
-      return;
+      return 0;
     }
 
     await prisma.printJob.createMany({ data: jobs });
     console.info("[PrintQueueService] enqueued station print jobs", {
       restaurantId, orderId, jobs: jobs.length, stations: jobs.map((j) => j.stationKey),
     });
+    return jobs.length;
   }
 }

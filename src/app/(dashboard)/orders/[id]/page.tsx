@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { PrintButton } from "@/components/print/PrintButton";
+import { ReprintButton } from "@/components/print/ReprintButton";
 import { OrderTicket } from "@/components/print/OrderTicket";
 import { buildStoreInfo, TICKET_PRINT_CSS } from "@/lib/print-ticket";
 import { ItemReplacementButton } from "@/components/orders/ItemReplacementButton";
@@ -106,6 +107,7 @@ export default async function OrderDetailPage({
             >
               🔍 Pré-visualizar comanda
             </Link>
+            <ReprintButton orderId={order.id} />
             <PrintButton />
           </div>
         </div>

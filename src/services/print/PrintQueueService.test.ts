@@ -12,6 +12,7 @@ const db = vi.hoisted(() => ({
   restaurant:   { findUnique: vi.fn() },
   printStation: { findMany: vi.fn() },
   menuCategory: { findMany: vi.fn() },
+  printAgent:   { findUnique: vi.fn() },
   printJob:     { createMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -47,6 +48,7 @@ beforeEach(() => {
     { id: "cat_frango", printStationKeys: ["COZINHA_1", "COZINHA_2"] },
     { id: "cat_bebida", printStationKeys: [] }, // unmapped → fail-safe to all kitchens
   ]);
+  db.printAgent.findUnique.mockResolvedValue({ kitchenLargeFont: false });
   db.printJob.createMany.mockResolvedValue({ count: 0 });
 });
 
@@ -93,5 +95,22 @@ describe("station routing", () => {
     ]);
     await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
     expect(db.printJob.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("reprint + large font", () => {
+  it("reprintOrder bypasses the once-only guard and reports job count", async () => {
+    db.printJob.createMany.mockResolvedValue({ count: 3 });
+    const res = await PrintQueueService.reprintOrder("rest_1", "ord_1");
+    expect(db.order.updateMany).not.toHaveBeenCalled(); // no guard stamp on reprint
+    expect(res).toEqual({ ok: true, jobs: 3 });
+  });
+
+  it("kitchen body carries ESC/POS double-height only when the agent opts in", async () => {
+    db.printAgent.findUnique.mockResolvedValue({ kitchenLargeFont: true });
+    await PrintQueueService.reprintOrder("rest_1", "ord_1");
+    const j = jobsByStation();
+    expect(j.COZINHA_1).toContain("\x1d\x21\x01"); // big-font code present
+    expect(j.CAIXA).not.toContain("\x1d\x21\x01"); // cashier never big
   });
 });

@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
         printers: agent.reportedPrinters,
         pairingCode: agent.pairingCode,
         version: agent.agentVersion,
+        kitchenLargeFont: agent.kitchenLargeFont,
       },
     });
   } catch (err) {
@@ -100,8 +101,16 @@ export async function PUT(req: NextRequest) {
     return forbidden("Apenas o proprietário ou gerente pode alterar a impressão.");
 
   try {
-    const body = (await req.json().catch(() => ({}))) as { stations?: unknown; categories?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { stations?: unknown; categories?: unknown; kitchenLargeFont?: unknown };
     if (!Array.isArray(body.stations)) return badRequest("Lista de estações inválida.");
+
+    // Print agent preference: big-font (ESC/POS double-height) on kitchen comandas.
+    if (typeof body.kitchenLargeFont === "boolean") {
+      await prisma.printAgent.updateMany({
+        where: { restaurantId: ctx.restaurantId },
+        data:  { kitchenLargeFont: body.kitchenLargeFont },
+      });
+    }
 
     const rows = body.stations as Array<{
       id?: unknown;

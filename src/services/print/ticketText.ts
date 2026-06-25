@@ -156,6 +156,11 @@ export function parseAddons(raw: unknown): ParsedAddon[] {
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
+// ESC/POS character-size codes (GS ! n). Double-HEIGHT only keeps the 48-col
+// width intact (no re-wrap needed); the printer just prints those lines taller.
+const BIG_ON  = "\x1d\x21\x01";
+const BIG_OFF = "\x1d\x21\x00";
+
 const TYPE_LABELS: Record<string, string> = {
   DELIVERY: "ENTREGA",
   PICKUP:   "RETIRADA",
@@ -208,10 +213,13 @@ export function renderKitchenTicketText(args: {
   restaurantName: string;
   stationName: string;
   timezone: string;
+  /** Opt-in: emphasize item lines with ESC/POS double-height ("letras grandes"). */
+  largeFont?: boolean;
 }): string {
-  const { order, items, restaurantName, stationName, timezone } = args;
+  const { order, items, restaurantName, stationName, timezone, largeFont } = args;
   const L: string[] = [];
   const totalQty = items.reduce((s, it) => s + it.quantity, 0);
+  const big = (line: string) => (largeFont ? `${BIG_ON}${line}${BIG_OFF}` : line);
 
   L.push(rule("="));
   L.push(center(TYPE_LABELS[order.type] ?? ascii(order.type)));
@@ -228,7 +236,7 @@ export function renderKitchenTicketText(args: {
   L.push(rule());
 
   for (const it of items) {
-    for (const ln of itemLines(it.quantity, it.name)) L.push(ln);
+    for (const ln of itemLines(it.quantity, it.name)) L.push(big(ln));
     for (const a of parseAddons(it.addonsJson)) L.push(`    >> ${ascii(a.name)}`);
     if (it.notes) for (const ln of obsLines(it.notes)) L.push(ln);
   }

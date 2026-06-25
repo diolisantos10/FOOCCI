@@ -1651,6 +1651,9 @@ model PrintAgent {
   reportedPrinters String[] // printers the agent last saw on the PC
   agentVersion     String?
   lastSeenAt       DateTime?
+  // Opt-in: emit ESC/POS double-height codes on kitchen item lines ("letras
+  // grandes"). OFF by default — only enable if the printer accepts raw ESC/POS.
+  kitchenLargeFont Boolean    @default(false)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 

@@ -58,6 +58,16 @@ describe("kitchen ticket", () => {
   it("never exceeds the paper width", () => {
     for (const line of txt.split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
   });
+
+  it("emits ESC/POS double-height on item lines only when largeFont is on", () => {
+    const plain = renderKitchenTicketText({ order: baseOrder, items, restaurantName: "Sushi Cazza", stationName: "Cozinha 1", timezone: "America/Sao_Paulo" });
+    expect(plain).not.toContain("\x1d\x21\x01");
+    const big = renderKitchenTicketText({ order: baseOrder, items, restaurantName: "Sushi Cazza", stationName: "Cozinha 1", timezone: "America/Sao_Paulo", largeFont: true });
+    expect(big).toContain("\x1d\x21\x01"); // GS ! 1 — double height
+    expect(big).toContain("\x1d\x21\x00"); // reset
+    // the visible text after stripping control codes is unchanged
+    expect(big.replace(/\x1d\x21[\x00-\xff]/g, "")).toContain("FRANGO EMPANADO");
+  });
 });
 
 describe("cashier ticket", () => {
