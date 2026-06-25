@@ -54,6 +54,32 @@ export async function inspectTokenExpiry(accessToken: string): Promise<{ expires
   }
 }
 
+/**
+ * Subscribes OUR app to the merchant's WhatsApp Business Account so inbound message
+ * webhooks route to us after Embedded Signup (POST /{wabaId}/subscribed_apps). Without
+ * this, a freshly-onboarded number receives no inbound events. Best-effort + idempotent:
+ * returns { ok:false } on failure (the caller treats it as non-fatal).
+ */
+export async function subscribeAppToWaba(
+  accessToken: string,
+  wabaId:      string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${wabaId}/subscribed_apps`), {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = (json as { error?: { message?: string } }).error?.message;
+      return { ok: false, error: maskGraphResponse(err ?? "Falha ao assinar a conta do WhatsApp.") };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
 export async function fetchPhoneDetails(
   accessToken:   string,
   phoneNumberId: string,

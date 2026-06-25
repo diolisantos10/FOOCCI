@@ -14,7 +14,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { isMetaWhatsAppEnabled } from "@/services/whatsapp/metaFlag";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
-import { exchangeCodeForToken, fetchPhoneDetails, inspectTokenExpiry } from "@/services/whatsapp/MetaOnboardingService";
+import { exchangeCodeForToken, fetchPhoneDetails, inspectTokenExpiry, subscribeAppToWaba } from "@/services/whatsapp/MetaOnboardingService";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 
 export async function POST(req: NextRequest) {
@@ -50,6 +50,11 @@ export async function POST(req: NextRequest) {
 
     const details = await fetchPhoneDetails(accessToken, body.phoneNumberId);
     const { expiresAt } = await inspectTokenExpiry(accessToken);
+
+    // Subscribe our app to the WABA so inbound webhooks route to us after signup.
+    // Best-effort: a failure here must NOT block the connect (it can be retried, and
+    // the merchant can also enable it in Meta Business Manager).
+    try { await subscribeAppToWaba(accessToken, body.wabaId); } catch { /* non-fatal */ }
 
     await MetaConfigService.upsert({
       restaurantId:       ctx.restaurantId,
