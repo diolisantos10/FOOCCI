@@ -1017,21 +1017,21 @@ function StatusTimeline({ order }: { order: MockOrder }) {
           <div key={step.status} className="flex flex-1 flex-col items-center">
             {/* Connector + dot row */}
             <div className="flex w-full items-center">
-              <div className={`h-px flex-1 transition-colors ${i === 0 ? "invisible" : done || current ? "bg-orange-400" : "bg-gray-200"}`} />
+              <div className={`h-px flex-1 transition-colors ${i === 0 ? "invisible" : done || current ? "bg-brand-400" : "bg-line2"}`} />
               <div className={`h-4 w-4 shrink-0 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors
-                ${done    ? "bg-orange-500 text-white"
-                : current ? "border-2 border-orange-500 bg-white"
-                :           "bg-gray-200"}`}
+                ${done    ? "bg-brand-500 text-white"
+                : current ? "border-2 border-brand-500 bg-paper"
+                :           "bg-line2"}`}
               >
                 {done && "✓"}
               </div>
-              <div className={`h-px flex-1 transition-colors ${isLast ? "invisible" : done ? "bg-orange-400" : "bg-gray-200"}`} />
+              <div className={`h-px flex-1 transition-colors ${isLast ? "invisible" : done ? "bg-brand-400" : "bg-line2"}`} />
             </div>
             {/* Label */}
             <p className={`mt-1 text-center text-[9px] leading-tight ${
-              current ? "font-bold text-orange-600"
-              : done   ? "text-gray-500"
-              :          "text-gray-300"
+              current ? "font-bold text-brand-600"
+              : done   ? "text-ink2"
+              :          "text-muted"
             }`}>
               {step.label}
             </p>
@@ -1088,7 +1088,7 @@ function SaiposSection({
   })();
 
   return (
-    <div className="border-t border-dashed border-gray-200 pt-4">
+    <div className="border-t border-dashed border-line2 pt-4">
       <SectionLabel>Sistema de gestão</SectionLabel>
 
       {/* Status banner */}
@@ -1144,7 +1144,7 @@ function SaiposSection({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
       {children}
     </p>
   );
@@ -1152,14 +1152,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-4 text-sm">
-      <span className="shrink-0 text-gray-400">{label}</span>
-      <span className="text-right font-medium text-gray-800">{value}</span>
+    <div className="flex justify-between gap-4 text-[13px]">
+      <span className="shrink-0 text-muted">{label}</span>
+      <span className="text-right font-medium text-ink2">{value}</span>
     </div>
   );
 }
 
-function DetailPanel({
+export function DetailPanel({
   order,
   onClose,
   isOwner,
@@ -1172,11 +1172,11 @@ function DetailPanel({
 }) {
   if (!order) {
     return (
-      <div className="hidden lg:flex w-[380px] shrink-0 flex-col items-center justify-center gap-3 border-l border-[#E5E5E5] bg-white text-gray-300">
-        <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+      <div className="hidden lg:flex w-[380px] shrink-0 flex-col items-center justify-center gap-3 border-l border-line bg-paper text-muted">
+        <svg className="h-9 w-9 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
           <path strokeLinecap="round" d="M9 12h6M3 7l2-2h14l2 2v14l-2 2H5l-2-2V7z" />
         </svg>
-        <p className="text-sm">Selecione um pedido</p>
+        <p className="text-[13px]">Selecione um pedido</p>
       </div>
     );
   }
@@ -1188,34 +1188,34 @@ function DetailPanel({
   return (
     // Mobile: fixed full-screen overlay (z-30)
     // Desktop: static side panel (lg:relative, lg:w-[380px])
-    <div className="fixed inset-0 z-30 flex flex-col bg-white lg:relative lg:inset-auto lg:z-auto lg:w-[380px] lg:shrink-0 lg:border-l lg:border-[#E5E5E5]">
+    <div className="fixed inset-0 z-30 flex flex-col bg-paper lg:relative lg:inset-auto lg:z-auto lg:w-[380px] lg:shrink-0 lg:border-l lg:border-line">
 
       {/* Mobile back button row */}
-      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 lg:hidden">
+      <div className="flex items-center gap-3 border-b border-line px-4 py-3 lg:hidden">
         <button
           onClick={onClose}
-          className="flex items-center gap-1.5 rounded-lg py-1 pr-2 text-sm font-medium text-gray-600 hover:text-gray-900"
+          className="flex items-center gap-1.5 rounded-lg py-1 pr-2 text-[13px] font-medium text-ink2 hover:text-ink"
         >
           ← Voltar
         </button>
-        <span className="font-mono text-xs text-gray-400">
+        <span className="font-mono text-xs text-muted">
           Pedido {formatOrderNumber(order.orderNumber, order.id)}
         </span>
         <button
           onClick={() => printOrder(order.id)}
-          className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+          className="ml-auto flex items-center gap-1 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8]"
         >
           🖨️ Imprimir
         </button>
       </div>
 
       {/* Desktop header */}
-      <div className="hidden items-start justify-between border-b border-gray-100 px-5 py-4 lg:flex">
+      <div className="hidden items-start justify-between border-b border-line px-5 py-4 lg:flex">
         <div>
-          <p className="font-mono text-xs text-gray-400">
+          <p className="font-mono text-xs text-muted">
             Pedido {formatOrderNumber(order.orderNumber, order.id)}
           </p>
-          <h3 className="mt-0.5 text-base font-bold text-gray-900">
+          <h3 className="mt-0.5 text-[16px] font-bold text-ink">
             {order.customerId ? (
               <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
             ) : order.customer}
@@ -1224,11 +1224,11 @@ function DetailPanel({
         <div className="flex items-center gap-2">
           <button
             onClick={() => printOrder(order.id)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+            className="flex items-center gap-1.5 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]"
           >
             🖨️ Imprimir comanda
           </button>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-[#F4F4F2]">
             <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
               <path d="M4 4l8 8M12 4l-8 8" />
             </svg>
@@ -1237,8 +1237,8 @@ function DetailPanel({
       </div>
 
       {/* Customer name — mobile only (since desktop header above has it) */}
-      <div className="border-b border-gray-100 px-4 py-2 lg:hidden">
-        <h3 className="text-base font-bold text-gray-900">
+      <div className="border-b border-line px-4 py-2 lg:hidden">
+        <h3 className="text-[16px] font-bold text-ink">
           {order.customerId ? (
             <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
           ) : order.customer}
@@ -1246,7 +1246,7 @@ function DetailPanel({
       </div>
 
       {/* Status timeline */}
-      <div className="border-b border-[#E5E5E5] px-4 py-3 lg:px-5">
+      <div className="border-b border-line px-4 py-3 lg:px-5">
         <StatusTimeline order={order} />
       </div>
 
@@ -1262,7 +1262,7 @@ function DetailPanel({
             {order.conversationId && (
               <a
                 href={`/atendimento?conv=${order.conversationId}`}
-                className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line2 bg-paper px-3 py-2 text-xs font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]"
               >
                 💬 Abrir conversa no Chat
               </a>
@@ -1288,7 +1288,7 @@ function DetailPanel({
           <div>
             <SectionLabel>Entrega</SectionLabel>
             <div className="space-y-1.5">
-              <div className="text-sm text-gray-800 leading-snug">{order.address}</div>
+              <div className="text-[13px] text-ink2 leading-snug">{order.address}</div>
               {order.deliveryFee != null && (
                 <Row label="Taxa de entrega" value={fmtCurrency(order.deliveryFee)} />
               )}
@@ -1303,19 +1303,19 @@ function DetailPanel({
             {order.items.map((item, i) => (
               <div key={i}>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-gray-800">
-                    <span className="mr-2 font-semibold text-gray-500">{item.qty}×</span>
+                  <span className="text-[13px] text-ink2">
+                    <span className="mr-2 font-bold text-ink">{item.qty}×</span>
                     {item.name}
                   </span>
-                  <span className="ml-4 shrink-0 text-sm font-medium text-gray-700">
+                  <span className="ml-4 shrink-0 text-[13px] font-semibold text-ink2">
                     {fmtCurrency(item.price * item.qty)}
                   </span>
                 </div>
                 {item.note && (
-                  <p className="mt-0.5 pl-6 text-xs italic text-gray-400">{item.note}</p>
+                  <p className="mt-0.5 pl-6 text-xs italic text-muted">{item.note}</p>
                 )}
                 {item.addons?.map((addon, j) => (
-                  <p key={j} className="mt-0.5 pl-6 text-xs text-gray-500">+ {addon}</p>
+                  <p key={j} className="mt-0.5 pl-6 text-xs text-muted">+ {addon}</p>
                 ))}
               </div>
             ))}
@@ -1339,21 +1339,21 @@ function DetailPanel({
         </div>
 
         {/* 6. Resumo */}
-        <div className="border-t border-dashed border-gray-200 pt-4">
-          <div className="space-y-1.5 text-sm">
+        <div className="border-t border-dashed border-line2 pt-4">
+          <div className="space-y-1.5 text-[13px]">
             <div className="flex justify-between">
-              <span className="text-gray-400">Subtotal</span>
-              <span className="text-gray-700">{fmtCurrency(order.subtotal)}</span>
+              <span className="text-muted">Subtotal</span>
+              <span className="text-ink2">{fmtCurrency(order.subtotal)}</span>
             </div>
             {isDelivery && order.deliveryFee != null && (
               <div className="flex justify-between">
-                <span className="text-gray-400">Entrega</span>
-                <span className="text-gray-700">{fmtCurrency(order.deliveryFee)}</span>
+                <span className="text-muted">Entrega</span>
+                <span className="text-ink2">{fmtCurrency(order.deliveryFee)}</span>
               </div>
             )}
-            <div className="flex justify-between pt-1">
-              <span className="font-semibold text-gray-700">Total</span>
-              <span className="font-bold text-gray-900">{fmtCurrency(order.total)}</span>
+            <div className="mt-1 flex items-baseline justify-between border-t border-line pt-2">
+              <span className="text-[15px] font-bold text-ink">Total</span>
+              <span className="text-[18px] font-extrabold tracking-[-.02em] text-ink">{fmtCurrency(order.total)}</span>
             </div>
           </div>
         </div>
@@ -1421,7 +1421,7 @@ function printOrder(orderId: string): void {
 
 // ─── NewOrderModal ────────────────────────────────────────────
 
-function NewOrderModal({
+export function NewOrderModal({
   order,
   queueLength,
   onAccept,
@@ -1441,20 +1441,20 @@ function NewOrderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
-      <div className="relative mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-paper shadow-2xl">
 
         {/* Header */}
-        <div className="bg-orange-500 px-6 py-4 text-white">
+        <div className="bg-brand-500 px-6 py-4 text-white">
           <div className="flex items-center gap-3">
             <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
-            <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
+            <span className="text-xl font-extrabold tracking-wide">NOVO PEDIDO!</span>
           </div>
           {queueLength > 1 ? (
-            <p className="mt-0.5 text-sm text-orange-100">
+            <p className="mt-0.5 text-sm text-white/85">
               Há {queueLength} pedidos aguardando aceite — mostrando 1 de {queueLength}.
             </p>
           ) : (
-            <p className="mt-0.5 text-sm text-orange-100">
+            <p className="mt-0.5 text-sm text-white/85">
               Um novo pedido aguarda sua confirmação
             </p>
           )}
@@ -1466,55 +1466,55 @@ function NewOrderModal({
           {/* Customer + number + total */}
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-mono text-xs text-gray-400">
+              <p className="font-mono text-xs text-muted">
                 Pedido {formatOrderNumber(order.orderNumber, order.id)}
               </p>
-              <h3 className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
+              <h3 className="mt-0.5 text-xl font-bold text-ink leading-tight">
                 {order.customerId ? (
                   <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
                 ) : order.customer}
               </h3>
-              <p className="text-sm text-gray-500">{order.phone}</p>
+              <p className="text-sm text-muted">{order.phone}</p>
             </div>
-            <span className="shrink-0 text-2xl font-bold text-gray-900">
+            <span className="shrink-0 text-2xl font-extrabold tracking-[-.02em] text-ink">
               {fmtCurrency(order.total)}
             </span>
           </div>
 
           {/* Type + payment chips */}
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+            <span className="rounded-full bg-[#F4F4F2] px-3 py-1 text-xs font-semibold text-ink2">
               {order.type === "DELIVERY" ? "🛵 Delivery" : order.type === "TABLE" ? "🍽️ Mesa" : "🏃 Retirada"}
             </span>
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+            <span className="rounded-full bg-[#F4F4F2] px-3 py-1 text-xs font-semibold text-ink2">
               💳 {order.payment}
             </span>
           </div>
 
           {/* Address (delivery only) */}
           {order.type === "DELIVERY" && (
-            <div className="rounded-lg bg-gray-50 px-3 py-2.5">
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+            <div className="rounded-xl bg-[#FAFAF8] border border-line px-3 py-2.5">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted">
                 Endereço
               </p>
-              <p className="text-sm text-gray-800 leading-snug">{order.address}</p>
+              <p className="text-sm text-ink2 leading-snug">{order.address}</p>
             </div>
           )}
 
           {/* Items */}
           <div>
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Itens</p>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">Itens</p>
             <div className="space-y-1.5">
               {order.items.map((item, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="text-gray-800">
-                    <span className="font-semibold text-gray-500">{item.qty}×</span>{" "}
+                  <span className="text-ink2">
+                    <span className="font-bold text-ink">{item.qty}×</span>{" "}
                     {item.name}
                     {item.note && (
-                      <span className="ml-1 italic text-xs text-gray-400">({item.note})</span>
+                      <span className="ml-1 italic text-xs text-muted">({item.note})</span>
                     )}
                   </span>
-                  <span className="shrink-0 font-medium text-gray-700">
+                  <span className="shrink-0 font-semibold text-ink2">
                     {fmtCurrency(item.price * item.qty)}
                   </span>
                 </div>
@@ -1523,42 +1523,42 @@ function NewOrderModal({
           </div>
 
           {/* Totals */}
-          <div className="border-t border-gray-100 pt-3 space-y-1.5">
+          <div className="border-t border-line pt-3 space-y-1.5">
             {order.type === "DELIVERY" && order.deliveryFee != null && (
-              <div className="flex justify-between text-sm text-gray-500">
+              <div className="flex justify-between text-sm text-muted">
                 <span>Taxa de entrega</span>
                 <span>{fmtCurrency(order.deliveryFee)}</span>
               </div>
             )}
-            <div className="flex justify-between text-base font-bold text-gray-900">
-              <span>Total</span>
-              <span>{fmtCurrency(order.total)}</span>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[15px] font-bold text-ink">Total</span>
+              <span className="text-[18px] font-extrabold tracking-[-.02em] text-ink">{fmtCurrency(order.total)}</span>
             </div>
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="border-t border-gray-100 px-6 py-4">
+        <div className="border-t border-line px-6 py-4">
           {!confirmReject ? (
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmReject(true)}
                 disabled={accepting || rejecting}
-                className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
+                className="flex-1 rounded-xl border border-line2 px-4 py-3 text-sm font-bold text-ink2 transition-colors hover:bg-[#FAFAF8] disabled:opacity-40"
               >
                 Recusar pedido
               </button>
               <button
                 onClick={onAccept}
                 disabled={accepting || rejecting}
-                className="flex-1 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-orange-600 disabled:opacity-40"
+                className="flex-1 rounded-xl bg-brand-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
               >
                 {accepting ? "Aceitando…" : "✓ Aceitar pedido"}
               </button>
             </div>
           ) : (
             <div>
-              <p className="mb-2 text-center text-sm font-semibold text-gray-800">
+              <p className="mb-2 text-center text-sm font-semibold text-ink2">
                 Confirmar recusa deste pedido?
               </p>
               <textarea
@@ -1567,13 +1567,13 @@ function NewOrderModal({
                 placeholder="Motivo do cancelamento (opcional — será enviado ao cliente)"
                 rows={2}
                 disabled={rejecting}
-                className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:opacity-50"
+                className="w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:opacity-50"
               />
               <div className="mt-3 flex gap-3">
                 <button
                   onClick={() => { setConfirmReject(false); setRejectReason(""); }}
                   disabled={rejecting}
-                  className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  className="flex-1 rounded-xl border border-line2 px-4 py-3 text-sm font-bold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40"
                 >
                   Voltar
                 </button>
