@@ -161,6 +161,12 @@ export function parseAddons(raw: unknown): ParsedAddon[] {
 const BIG_ON  = "\x1d\x21\x01";
 const BIG_OFF = "\x1d\x21\x00";
 
+// ESC/POS feed-to-cutter + full cut (GS V 65 0). Ends every ticket so the
+// printer cuts right after the content instead of spooling a long blank tail
+// and running consecutive tickets together on one strip. The printer auto-feeds
+// the print-head→cutter gap, so only a small margin (2 lines) is added above.
+const CUT = "\x1d\x56\x41\x00";
+
 const TYPE_LABELS: Record<string, string> = {
   DELIVERY: "ENTREGA",
   PICKUP:   "RETIRADA",
@@ -249,8 +255,7 @@ export function renderKitchenTicketText(args: {
   }
   L.push(rule("="));
   L.push(center(ascii(restaurantName).toUpperCase()));
-  L.push("\n\n\n");
-  return L.join("\n");
+  return L.join("\n") + "\n\n" + CUT;
 }
 
 // ── Cashier ticket ────────────────────────────────────────────────────────────
@@ -328,6 +333,5 @@ export function renderCashierTicketText(args: {
   L.push(rule("="));
   L.push(center(ascii(restaurantName).toUpperCase()));
   L.push(center("Foocci"));
-  L.push("\n\n\n");
-  return L.join("\n");
+  return L.join("\n") + "\n\n" + CUT;
 }

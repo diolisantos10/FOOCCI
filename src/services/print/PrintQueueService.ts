@@ -161,14 +161,32 @@ export class PrintQueueService {
       printerName: string; title: string; body: string;
     }> = [];
 
+    // A printer assigned to a cashier station prints ONLY the full nota — never
+    // a kitchen comanda — and only one nota even if CAIXA + CUPOM share it.
+    const cashierPrinters = new Set(
+      printable.filter((s) => CASHIER_STATION_KEYS.has(s.key)).map((s) => s.printerName!.trim()),
+    );
+    const cashierDone = new Set<string>();
+
     for (const station of printable) {
       const printerName = station.printerName!.trim();
 
       if (CASHIER_STATION_KEYS.has(station.key)) {
+        if (cashierDone.has(printerName)) continue; // one nota per physical printer
+        cashierDone.add(printerName);
         const body = renderCashierTicketText({
           order: ticketOrder, items: allItems, restaurantName: restaurant.name, store, timezone: tz,
         });
         jobs.push({ restaurantId, orderId, stationKey: station.key, printerName, title: `${title} - ${station.name}`, body });
+        continue;
+      }
+
+      // Never send a kitchen comanda to a printer that belongs to the caixa —
+      // the caixa gets the full nota only.
+      if (cashierPrinters.has(printerName)) {
+        console.info("[PrintQueueService] skipping kitchen comanda on a cashier printer", {
+          restaurantId, orderId, stationKey: station.key, printerName,
+        });
         continue;
       }
 

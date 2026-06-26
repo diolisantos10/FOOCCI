@@ -68,6 +68,12 @@ describe("kitchen ticket", () => {
     // the visible text after stripping control codes is unchanged
     expect(big.replace(/\x1d\x21[\x00-\xff]/g, "")).toContain("FRANGO EMPANADO");
   });
+
+  it("ends with the ESC/POS feed + full-cut command (no long blank tail)", () => {
+    expect(txt.endsWith("\x1d\x56\x41\x00")).toBe(true); // GS V 65 0
+    // only a small margin before the cut — never a huge blank spool
+    expect(txt).not.toMatch(/\n{5,}/);
+  });
 });
 
 describe("cashier ticket", () => {
@@ -103,5 +109,10 @@ describe("cashier ticket", () => {
 
   it("never exceeds the paper width", () => {
     for (const line of txt.split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
+  });
+
+  it("ends with the ESC/POS feed + full-cut command", () => {
+    expect(txt.endsWith("\x1d\x56\x41\x00")).toBe(true); // GS V 65 0
+    expect(txt).not.toMatch(/\n{5,}/);
   });
 });

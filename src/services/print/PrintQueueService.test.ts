@@ -82,6 +82,34 @@ describe("station routing", () => {
     expect(j.COZINHA_1).not.toContain("TOTAL(=)");
   });
 
+  it("a kitchen sharing the caixa printer gets NO comanda there — caixa = nota only", async () => {
+    // Cozinha 1 mis-assigned to the caixa's physical printer.
+    db.printStation.findMany.mockResolvedValue([
+      { key: "CAIXA",     name: "Caixa",     printerName: "Caixa01", enabled: true, position: 0 },
+      { key: "COZINHA_1", name: "Cozinha 1", printerName: "Caixa01", enabled: true, position: 1 },
+      { key: "COZINHA_2", name: "Cozinha 2", printerName: "Cz2",     enabled: true, position: 2 },
+    ]);
+    await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
+    const arg = db.printJob.createMany.mock.calls[0][0].data as Array<{ stationKey: string; printerName: string; body: string }>;
+    // Exactly one job lands on Caixa01, and it's the full nota (not a comanda).
+    const onCaixaPrinter = arg.filter((j) => j.printerName === "Caixa01");
+    expect(onCaixaPrinter).toHaveLength(1);
+    expect(onCaixaPrinter[0]!.stationKey).toBe("CAIXA");
+    expect(onCaixaPrinter[0]!.body).toContain("TOTAL(=)");
+    // Cozinha 2 still prints normally.
+    expect(arg.some((j) => j.stationKey === "COZINHA_2")).toBe(true);
+  });
+
+  it("CAIXA + CUPOM on the same printer print the nota only once", async () => {
+    db.printStation.findMany.mockResolvedValue([
+      { key: "CAIXA", name: "Caixa", printerName: "Caixa01", enabled: true, position: 0 },
+      { key: "CUPOM", name: "Cupom", printerName: "Caixa01", enabled: true, position: 1 },
+    ]);
+    await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
+    const arg = db.printJob.createMany.mock.calls[0][0].data as Array<{ printerName: string }>;
+    expect(arg.filter((j) => j.printerName === "Caixa01")).toHaveLength(1);
+  });
+
   it("is idempotent — does nothing when the guard already stamped", async () => {
     db.order.updateMany.mockResolvedValue({ count: 0 });
     await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
