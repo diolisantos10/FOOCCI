@@ -975,35 +975,35 @@ export function AtendimentoClient({
       {/* ── LEFT PANEL ───────────────────────────────────────────────────── */}
       <aside
         className={`
-          flex-col border-r border-gray-200 bg-white overflow-hidden
+          flex-col border-r border-line bg-paper overflow-hidden
           ${mobileView === "list" ? "flex w-full" : "hidden"}
           lg:flex lg:w-80 lg:shrink-0
         `}
         style={isDesktop ? { width: leftWidth } : undefined}
       >
         {/* Search + Sort */}
-        <div className="border-b border-gray-100 px-3 pt-3 pb-2 space-y-2">
+        <div className="border-b border-line px-3 pt-3 pb-2 space-y-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
             <input
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Nome, telefone ou mensagem…"
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="min-w-0 flex-1 rounded-xl border border-line2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             <button
               type="submit"
-              className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-600 transition-colors"
+              className="rounded-xl bg-ink px-3.5 py-2 text-xs font-bold text-white hover:bg-black transition-colors"
             >
               Buscar
             </button>
           </form>
           <div className="flex items-center gap-2">
-            <span className="shrink-0 text-[11px] text-gray-400">Ordenar:</span>
+            <span className="shrink-0 text-[11px] text-muted">Ordenar:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 focus:border-orange-400 focus:outline-none"
+              className="flex-1 rounded-xl border border-line2 bg-paper px-2 py-1.5 text-[11px] text-ink2 focus:border-brand-400 focus:outline-none"
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.id} value={o.id}>{o.label}</option>
@@ -1074,7 +1074,7 @@ export function AtendimentoClient({
         )}
 
         {/* Status filter chips */}
-        <div className="border-b border-gray-100">
+        <div className="border-b border-line">
           <ScrollableChips>
             {STATUS_FILTERS.map((f) => (
               <button
@@ -1083,8 +1083,8 @@ export function AtendimentoClient({
                 onClick={() => setStatusFilter(f.id)}
                 className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                   statusFilter === f.id
-                    ? "bg-orange-500 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-ink text-white"
+                    : "bg-[#F4F4F2] text-ink2 hover:bg-[#ECECEA]"
                 }`}
               >
                 {f.label}{f.id === "AI_OFF" && humanHandoffCount > 0
@@ -1114,7 +1114,7 @@ export function AtendimentoClient({
               </button>
             </div>
           ) : displayed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-gray-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted">
               <span className="text-2xl">💬</span>
               <p>
                 {statusFilter === "CRM_SENT" || statusFilter === "CRM_REPLIED"
@@ -1123,7 +1123,7 @@ export function AtendimentoClient({
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-line">
               {displayed.map((conv) => {
                 // Skip SYSTEM messages (handoff events) and internal commands for preview.
                 const lastMsg  = (conv.messages ?? []).find(
@@ -1151,12 +1151,12 @@ export function AtendimentoClient({
                       onClick={() => handleSelectConv(conv.id)}
                       className={`w-full px-3 py-3 text-left transition-colors border-l-2 ${
                         isSelected
-                          ? "bg-orange-50 border-orange-500"
+                          ? "bg-brand-50 border-brand-500"
                           : priority === "critical"
                           ? "border-red-400 bg-red-50/40 hover:bg-red-50/70"
                           : priority === "attention"
                           ? "border-amber-400 hover:bg-amber-50/30"
-                          : "border-transparent hover:bg-gray-50"
+                          : "border-transparent hover:bg-[#FAFAF8]"
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
@@ -1165,7 +1165,7 @@ export function AtendimentoClient({
                           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                             isWaiting
                               ? "bg-red-100 text-red-700"
-                              : "bg-orange-100 text-orange-700"
+                              : "bg-brand-50 text-brand-600"
                           }`}
                         >
                           {initials(conv.customer?.name ?? conv.customerName ?? "?")}
@@ -1757,7 +1757,7 @@ function ThreadPanel({
           )}
 
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600">
               {initials(thread.customer?.name ?? thread.customerName ?? "?")}
             </div>
             <div className="min-w-0">
@@ -1981,7 +1981,7 @@ function ThreadPanel({
       {(!isResolved && (isHumanHandling || isLocked)) ? (
         <form
           onSubmit={onSend}
-          className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 space-y-2"
+          className="shrink-0 border-t border-line bg-paper px-4 py-3 space-y-2"
         >
           {/* Hidden file input */}
           <input
@@ -2034,7 +2034,7 @@ function ThreadPanel({
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading || sending}
               aria-label="Anexar arquivo"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-orange-500 disabled:opacity-40 transition-colors"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line2 text-muted hover:bg-[#FAFAF8] hover:text-brand-500 disabled:opacity-40 transition-colors"
             >
               📎
             </button>
@@ -2049,12 +2049,12 @@ function ThreadPanel({
               }}
               placeholder={attachment ? "Legenda (opcional)…" : "Digite uma mensagem… (Enter para enviar)"}
               rows={1}
-              className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             <button
               type="submit"
               disabled={sending || uploading || (!text.trim() && !attachment)}
-              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               {uploading ? "Enviando…" : sending ? "…" : "Enviar"}
             </button>
@@ -2350,8 +2350,8 @@ function MessageBubble({
         <div
           className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
             isOutbound
-              ? "rounded-br-sm bg-orange-500 text-white"
-              : "rounded-bl-sm bg-white text-gray-900 border border-gray-100"
+              ? "rounded-br-sm bg-brand-500 text-white"
+              : "rounded-bl-sm bg-paper text-ink border border-line"
           }`}
         >
           {/* Image — render with fallback card if URL fails or is absent */}
@@ -2462,7 +2462,7 @@ function MessageBubble({
           )}
         </div>
 
-        <div className="flex items-center gap-2 px-1 text-[10px] text-gray-400">
+        <div className="flex items-center gap-2 px-1 text-[10px] text-muted">
           <span>{fmtTime(msg.sentAt)}</span>
           {isOutbound && msg.externalStatus && (
             <span>
@@ -2473,7 +2473,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() => setTeachOpen(true)}
-              className="rounded-full border border-orange-200 bg-orange-50 px-2 py-px text-[10px] font-semibold text-orange-600 hover:bg-orange-100 transition-colors"
+              className="rounded-full border border-brand-200 bg-brand-50 px-2 py-px text-[10px] font-semibold text-brand-600 hover:bg-brand-100 transition-colors"
             >
               Ensinar IA
             </button>
