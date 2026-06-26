@@ -66,6 +66,14 @@ function brazilMidnight(offsetDays: number, now: Date): Date {
 }
 
 const DAY_NAMES_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+const DAY_NAMES_LONG  = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"] as const;
+
+/** "vs. quinta passada" / "vs. domingo passado" for a same-weekday-last-week comparison. */
+function lastWeekdayLabel(dow: number): string {
+  const name   = DAY_NAMES_LONG[dow] ?? "";
+  const gender = dow === 0 || dow === 6 ? "passado" : "passada"; // domingo/sábado are masculine
+  return `vs. ${name} ${gender}`;
+}
 
 /** Human-readable day label from an ISO date string. */
 function dayBucketLabel(iso: string, totalBuckets: number): string {
@@ -102,13 +110,14 @@ export function computePeriodRange(
 
   // ── today ─────────────────────────────────────────────────────────────────
   if (period === "today") {
-    // Compare yesterday 0h → yesterday at same elapsed time (symmetric window).
-    const prevStart = new Date(todayStart.getTime() - 86_400_000);
-    const prevEnd   = new Date(now.getTime()        - 86_400_000);
+    // Compare to the SAME WEEKDAY last week (Thu vs last Thu), same elapsed time —
+    // weekday-to-weekday is the meaningful comparison for a restaurant.
+    const prevStart = new Date(todayStart.getTime() - 7 * 86_400_000);
+    const prevEnd   = new Date(now.getTime()        - 7 * 86_400_000);
     return {
       rangeStart: todayStart, rangeEnd: now,
       prevStart,              prevEnd,
-      period, label: "Hoje", prevLabel: "vs. ontem",
+      period, label: "Hoje", prevLabel: lastWeekdayLabel(brtNow.getUTCDay()),
       days: 1, isToday: true, granularity: "hour",
     };
   }
@@ -117,10 +126,13 @@ export function computePeriodRange(
   if (period === "yesterday") {
     const yStart = new Date(todayStart.getTime() - 86_400_000);
     const yEnd   = todayStart;
+    // Same weekday the previous week (yesterday − 7 days).
+    const yDow   = ((brtNow.getUTCDay() - 1) + 7) % 7;
     return {
       rangeStart: yStart, rangeEnd: yEnd,
-      prevStart: new Date(yStart.getTime() - 86_400_000), prevEnd: yStart,
-      period, label: "Ontem", prevLabel: "vs. anteontem",
+      prevStart: new Date(yStart.getTime() - 7 * 86_400_000),
+      prevEnd:   new Date(yEnd.getTime()   - 7 * 86_400_000),
+      period, label: "Ontem", prevLabel: lastWeekdayLabel(yDow),
       days: 1, isToday: false, granularity: "hour",
     };
   }
