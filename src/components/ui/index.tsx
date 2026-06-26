@@ -158,6 +158,53 @@ export function Button({ variant = "secondary", className, children, ...rest }: 
   );
 }
 
+// ── Confirm dialog shell ──────────────────────────────────────────────────────
+
+const DIALOG_TONES: Record<string, string> = {
+  danger:  "bg-red-50 text-red-600 ring-red-100",
+  caution: "bg-amber-50 text-amber-600 ring-amber-100",
+  brand:   "bg-brand-50 text-brand-600 ring-brand-100",
+};
+
+/**
+ * Centered confirmation modal — tone-driven icon badge + title/subtitle, with
+ * an arbitrary body (`children`) and an action row (`footer`). Presentational
+ * only: the parent owns open/close state and the button handlers.
+ */
+export function ConfirmDialog({
+  tone = "danger",
+  icon,
+  title,
+  subtitle,
+  children,
+  footer,
+}: {
+  tone?: keyof typeof DIALOG_TONES;
+  icon: React.ReactNode;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  children?: React.ReactNode;
+  footer: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-paper p-5 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <div className={cx("flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1", DIALOG_TONES[tone])}>
+            {icon}
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h3 className="text-[15px] font-bold leading-snug text-ink">{title}</h3>
+            {subtitle && <p className="mt-1 text-[13px] leading-snug text-muted">{subtitle}</p>}
+          </div>
+        </div>
+        {children && <div className="mt-4">{children}</div>}
+        <div className="mt-5 flex gap-3">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 export function EmptyState({ icon, title, sub }: { icon?: React.ReactNode; title: string; sub?: string }) {

@@ -32,8 +32,13 @@ Régua por tela (sempre):
   Foocci**, exposta, com nome + "Parceiro Foocci"; fallback de inicial quando não há logo.
   Fonte: `restaurant.logoUrl`. Era o último item do backlog.
 
-## Polimento futuro (fora do "grande de uma vez" — próxima passada, se o Diego quiser)
-- ⬜ Redesenho estrutural (não só tokens) dos 3 mini-diálogos de Pedidos
-  (cancelar/apagar/confirmar pagamento manual) — hoje já estão na paleta, mas dá pra
-  deixar no padrão premium do detalhe de Pedidos.
-- ⬜ Passar o olho ao vivo em CRM/Cardápio/Analytics/Integrações depois do deploy.
+## Feito (no ar) — polimento final
+- ✅ **3 mini-diálogos de Pedidos** (cancelar / apagar / confirmar pagamento manual)
+  redesenhados no padrão premium: shell único `ConfirmDialog` no kit (`@/components/ui`)
+  com selo de ícone por tom — **danger** (vermelho) p/ cancelar+apagar, **caution**
+  (âmbar) p/ pagamento manual. Caixa de contexto do pagamento harmonizada (amarelo→âmbar).
+
+## Verificar ao vivo (só o Diego consegue — precisa de login)
+- ⬜ Passar o olho navegando em CRM/Cardápio/Analytics/Integrações no ar. Estão
+  token-completos (0 resíduo) e renderizando ok nos testes; se bater algo torto num
+  canto específico, é ajuste pontual.

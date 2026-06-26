@@ -5,7 +5,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, ConfirmDialog } from "@/components/ui";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
 import {
   SOUND_PREF_KEY,
@@ -2155,21 +2155,22 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
 
       {/* Cancel confirmation dialog */}
       {cancelDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
-            <h3 className="text-base font-bold text-ink">Cancelar pedido?</h3>
-            <p className="mt-1 text-sm text-muted">Esta ação não pode ser desfeita.</p>
-            <textarea
-              value={cancelDialog.reason}
-              onChange={(e) => setCancelDialog((prev) => prev ? { ...prev, reason: e.target.value } : null)}
-              placeholder="Motivo do cancelamento (opcional — será enviado ao cliente via WhatsApp)"
-              rows={2}
-              className="mt-3 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100"
-            />
-            <div className="mt-4 flex gap-3">
+        <ConfirmDialog
+          tone="danger"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          }
+          title="Cancelar pedido?"
+          subtitle="Esta ação não pode ser desfeita."
+          footer={
+            <>
               <button
                 onClick={() => setCancelDialog(null)}
-                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]"
               >
                 Voltar
               </button>
@@ -2178,43 +2179,59 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
                   executeCancelWithReason(cancelDialog.id, cancelDialog.reason.trim() || undefined);
                   setCancelDialog(null);
                 }}
-                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
               >
                 Confirmar cancelamento
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <textarea
+            value={cancelDialog.reason}
+            onChange={(e) => setCancelDialog((prev) => prev ? { ...prev, reason: e.target.value } : null)}
+            placeholder="Motivo do cancelamento (opcional — será enviado ao cliente via WhatsApp)"
+            rows={2}
+            className="w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100"
+          />
+        </ConfirmDialog>
       )}
 
       {deleteDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
-            <h3 className="text-base font-bold text-ink">Apagar pedido?</h3>
-            <p className="mt-2 text-sm text-ink2">
-              Essa ação remove o pedido e desfaz seus impactos em faturamento, produtos, cliente, histórico e relatórios. Essa ação não pode ser desfeita.
-            </p>
-            {deleteError && (
-              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{deleteError}</p>
-            )}
-            <div className="mt-4 flex gap-3">
+        <ConfirmDialog
+          tone="danger"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          }
+          title="Apagar pedido?"
+          subtitle="Remove o pedido e desfaz seus impactos em faturamento, produtos, cliente, histórico e relatórios. Não pode ser desfeito."
+          footer={
+            <>
               <button
                 onClick={() => { setDeleteDialog(null); setDeleteError(null); }}
                 disabled={deleting}
-                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8] disabled:opacity-40"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => handleConfirmDelete(deleteDialog.id)}
                 disabled={deleting}
-                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-40"
               >
                 {deleting ? "Apagando…" : "Sim, apagar pedido"}
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          {deleteError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{deleteError}</p>
+          )}
+        </ConfirmDialog>
       )}
 
       {modalOrder && (
@@ -2230,75 +2247,80 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
 
       {/* Manual payment confirmation dialog */}
       {manualConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
-            <h3 className="text-base font-bold text-ink">Confirmar pagamento manualmente?</h3>
-            <p className="mt-1 text-xs text-muted">
-              Use apenas se você verificou o pagamento no painel do Mercado Pago.
-              Esta ação marca o pedido como pago e o envia para produção.
-            </p>
-            {/* Order context for staff review */}
-            <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2.5 text-xs text-yellow-900 space-y-1">
-              <div className="flex justify-between">
-                <span className="text-yellow-700">Cliente</span>
-                <span className="font-semibold">{manualConfirmDialog.customer}</span>
-              </div>
-              {manualConfirmDialog.phone && manualConfirmDialog.phone !== "Telefone não informado" && (
-                <div className="flex justify-between">
-                  <span className="text-yellow-700">Telefone</span>
-                  <span className="font-semibold">{manualConfirmDialog.phone}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-yellow-700">Pagamento</span>
-                <span className="font-semibold">{manualConfirmDialog.paymentLabel}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-yellow-700">Total</span>
-                <span className="font-semibold">R$ {manualConfirmDialog.total.toFixed(2).replace(".", ",")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-yellow-700">Aguardando há</span>
-                <span className="font-semibold">{elapsed(manualConfirmDialog.createdAt)}</span>
-              </div>
-            </div>
-            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink2">
-              <input
-                type="checkbox"
-                checked={manualConfirmChecked}
-                onChange={(e) => setManualConfirmChecked(e.target.checked)}
-                className="h-4 w-4 accent-amber-500"
-              />
-              Confirmei o pagamento no painel do Mercado Pago
-            </label>
-            <textarea
-              value={manualConfirmReason}
-              onChange={(e) => setManualConfirmReason(e.target.value)}
-              placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
-              rows={2}
-              className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
-            />
-            {manualConfirmError && (
-              <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>
-            )}
-            <div className="mt-4 flex gap-3">
+        <ConfirmDialog
+          tone="caution"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          }
+          title="Confirmar pagamento manualmente?"
+          subtitle="Use apenas se você verificou o pagamento no painel do Mercado Pago. Esta ação marca o pedido como pago e o envia para produção."
+          footer={
+            <>
               <button
                 onClick={() => setManualConfirmDialog(null)}
                 disabled={manualConfirming}
-                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8] disabled:opacity-40"
               >
                 Voltar
               </button>
               <button
                 onClick={handleConfirmManualPayment}
                 disabled={manualConfirming || !manualConfirmChecked || !manualConfirmReason.trim()}
-                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-40"
               >
                 {manualConfirming ? "Confirmando…" : "Confirmar pagamento"}
               </button>
+            </>
+          }
+        >
+          {/* Order context for staff review */}
+          <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+            <div className="flex justify-between">
+              <span className="text-amber-700">Cliente</span>
+              <span className="font-semibold">{manualConfirmDialog.customer}</span>
+            </div>
+            {manualConfirmDialog.phone && manualConfirmDialog.phone !== "Telefone não informado" && (
+              <div className="flex justify-between">
+                <span className="text-amber-700">Telefone</span>
+                <span className="font-semibold">{manualConfirmDialog.phone}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-amber-700">Pagamento</span>
+              <span className="font-semibold">{manualConfirmDialog.paymentLabel}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-amber-700">Total</span>
+              <span className="font-semibold">R$ {manualConfirmDialog.total.toFixed(2).replace(".", ",")}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-amber-700">Aguardando há</span>
+              <span className="font-semibold">{elapsed(manualConfirmDialog.createdAt)}</span>
             </div>
           </div>
-        </div>
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink2">
+            <input
+              type="checkbox"
+              checked={manualConfirmChecked}
+              onChange={(e) => setManualConfirmChecked(e.target.checked)}
+              className="h-4 w-4 accent-amber-500"
+            />
+            Confirmei o pagamento no painel do Mercado Pago
+          </label>
+          <textarea
+            value={manualConfirmReason}
+            onChange={(e) => setManualConfirmReason(e.target.value)}
+            placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
+            rows={2}
+            className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+          />
+          {manualConfirmError && (
+            <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>
+          )}
+        </ConfirmDialog>
       )}
 
       {manualOrderOpen && (
