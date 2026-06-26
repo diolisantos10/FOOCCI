@@ -229,8 +229,6 @@ describe("K — grounding: recommendedActions reference findings", () => {
       channels:       [],
       zeroSalesProducts: [],
       upsellRevenue:  { revenue: 0, sharePercent: 0, ordersWithUpsell: 0, avgPerOrder: 0 },
-      importedBaseline: null,
-      importedCustomers: [],
       insights:       [],
     };
     const data: AgentServiceData = {

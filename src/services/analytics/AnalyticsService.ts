@@ -1,9 +1,11 @@
 /**
  * AnalyticsService — all restaurant performance queries.
  *
- * Every query is scoped by restaurantId and a date window.
- * Effective order date = COALESCE("importedAt", "createdAt") so imported
- * historical orders are bucketed by their real date, not the import date.
+ * Every query is scoped by restaurantId and a date window and reflects ONLY
+ * real Foocci sales: imported historical orders (Order.importedAt IS NOT NULL,
+ * source = "import") are excluded from every aggregate. The imported data stays
+ * in the database and remains visible per-customer (customer profile), but it no
+ * longer contributes to restaurant-level analytics or any historical baseline.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -77,18 +79,6 @@ export interface TopCustomer {
   segment:    string;
 }
 
-export interface ImportedCustomerRow {
-  id:                  string;
-  name:                string;
-  phone:               string;
-  tier:                string;
-  segment:             string;
-  importedTotalSpent:  number;
-  importedOrderCount:  number;
-  importedLastOrderAt: string | null; // YYYY-MM-DD
-  averageTicket:       number;
-}
-
 export interface SegmentCount {
   segment: string;
   count:   number;
@@ -113,27 +103,6 @@ export interface Insight {
   message: string;
 }
 
-// Imported aggregate baseline — from ProductSalesAggregate (Saipos/Nemo import).
-// Only present when there is imported data. Never mixed with real Foocci orders.
-export interface ImportedAggregateRow {
-  name:        string;
-  category:    string;
-  revenue:     number;
-  qty:         number;
-  rowType:     string; // "PRODUCT" | "CATEGORY"
-}
-
-export interface ImportedBaseline {
-  periodStart:           string; // ISO date
-  periodEnd:             string; // ISO date
-  totalRevenue:          number;
-  totalQuantity:         number;
-  topCategories:         ImportedAggregateRow[];
-  topProducts:           ImportedAggregateRow[];
-  rowCount:              number;
-  semClassificacaoCount: number; // rows without a standard category classification
-}
-
 export interface UpsellRevenue {
   revenue:           number; // sum of upsell item totals in completed orders
   revenueShare:      number; // upsell revenue as % of total revenue (0–100)
@@ -153,10 +122,6 @@ export interface AnalyticsOverview {
   tiers:                    TierCount[];
   channels:                 ChannelRow[];
   insights:                 Insight[];
-  importedBaseline:         ImportedBaseline | null;
-  importedTopCustomers:     ImportedCustomerRow[]; // top 20 by importedTotalSpent
-  importedTopByOrders:      ImportedCustomerRow[]; // top 20 by importedOrderCount
-  importedSemTelefoneCount: number;               // customers with importedTotalSpent>0 but no phone
   zeroSalesProducts:        ZeroSalesProduct[];   // active menu items with no sales in the period
   upsellRevenue:            UpsellRevenue;
 }
@@ -192,10 +157,6 @@ export class AnalyticsService {
       segments,
       tiers,
       channels,
-      importedBaseline,
-      importedTopCustomers,
-      importedTopByOrders,
-      importedSemTelefoneCount,
       zeroSalesProducts,
       upsellRevenue,
     ] = await Promise.all([
@@ -208,17 +169,13 @@ export class AnalyticsService {
       this.getSegments(restaurantId),
       this.getTiers(restaurantId),
       this.getChannels(restaurantId, from, to),
-      this.getImportedBaseline(restaurantId),
-      this.getImportedTopCustomers(restaurantId),
-      this.getImportedTopByOrders(restaurantId),
-      this.getImportedSemTelefoneCount(restaurantId),
       this.getZeroSalesProducts(restaurantId, from, to),
       this.getUpsellRevenue(restaurantId, from, to),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers, importedTopByOrders, importedSemTelefoneCount, zeroSalesProducts, upsellRevenue };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, zeroSalesProducts, upsellRevenue };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -244,8 +201,9 @@ export class AnalyticsService {
           COALESCE(SUM(CASE WHEN status = 'AWAITING_PAYMENT' THEN total ELSE 0 END), 0)::text                                                AS awaiting_payment_total
         FROM orders
         WHERE "restaurantId" = ${restaurantId}
-          AND COALESCE("importedAt", "createdAt") >= ${from}
-          AND COALESCE("importedAt", "createdAt") <  ${to}
+          AND "importedAt" IS NULL
+          AND "createdAt" >= ${from}
+          AND "createdAt" <  ${to}
       `,
       prisma.$queryRaw<Array<{ cnt: RawBigint }>>`
         SELECT COUNT(*) AS cnt
@@ -289,14 +247,15 @@ export class AnalyticsService {
       cnt:     RawBigint;
     }>>`
       SELECT
-        TO_CHAR(COALESCE("importedAt", "createdAt") AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day,
+        TO_CHAR("createdAt" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day,
         COALESCE(SUM(total), 0)::text AS revenue,
         COUNT(*)                       AS cnt
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
+        AND "importedAt" IS NULL
         AND status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE("importedAt", "createdAt") >= ${from}
-        AND COALESCE("importedAt", "createdAt") <  ${to}
+        AND "createdAt" >= ${from}
+        AND "createdAt" <  ${to}
       GROUP BY 1
       ORDER BY 1
     `;
@@ -333,8 +292,9 @@ export class AnalyticsService {
       JOIN orders o ON o.id = oi."orderId"
       WHERE o."restaurantId" = ${restaurantId}
         AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-        AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+        AND o."importedAt" IS NULL
+        AND o."createdAt" >= ${from}
+        AND o."createdAt" <  ${to}
       GROUP BY oi.name, oi."categoryName"
       ORDER BY SUM(oi.total) DESC NULLS LAST
       LIMIT ${limit}
@@ -374,8 +334,9 @@ export class AnalyticsService {
       JOIN orders o ON o.id = oi."orderId"
       WHERE o."restaurantId" = ${restaurantId}
         AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-        AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+        AND o."importedAt" IS NULL
+        AND o."createdAt" >= ${from}
+        AND o."createdAt" <  ${to}
       GROUP BY 1
       ORDER BY SUM(oi.total) DESC NULLS LAST
     `;
@@ -410,8 +371,9 @@ export class AnalyticsService {
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
         AND status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE("importedAt", "createdAt") >= ${from}
-        AND COALESCE("importedAt", "createdAt") <  ${to}
+        AND "importedAt" IS NULL
+        AND "createdAt" >= ${from}
+        AND "createdAt" <  ${to}
     `;
     const total = toNum(totalRow[0]?.cnt ?? 0);
     if (total === 0) {
@@ -434,8 +396,9 @@ export class AnalyticsService {
         JOIN orders o ON o.id = oi."orderId"
         WHERE o."restaurantId" = ${restaurantId}
           AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-          AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-          AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+          AND o."importedAt" IS NULL
+          AND o."createdAt" >= ${from}
+          AND o."createdAt" <  ${to}
           AND (${whereClause})
       `;
 
@@ -484,8 +447,9 @@ export class AnalyticsService {
       WHERE c."restaurantId" = ${restaurantId}
         AND c."isGuest" = false
         AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-        AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+        AND o."importedAt" IS NULL
+        AND o."createdAt" >= ${from}
+        AND o."createdAt" <  ${to}
       GROUP BY c.id, c.name, c.phone, c.tier, c.segment
       ORDER BY SUM(o.total) DESC NULLS LAST
       LIMIT ${limit}
@@ -563,8 +527,9 @@ export class AnalyticsService {
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
         AND status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE("importedAt", "createdAt") >= ${from}
-        AND COALESCE("importedAt", "createdAt") <  ${to}
+        AND "importedAt" IS NULL
+        AND "createdAt" >= ${from}
+        AND "createdAt" <  ${to}
       GROUP BY 1
       ORDER BY COUNT(*) DESC
     `;
@@ -651,118 +616,6 @@ export class AnalyticsService {
     return insights;
   }
 
-  // ── Imported top customers (by importedTotalSpent) ────────────────────────
-
-  private static async getImportedTopCustomers(
-    restaurantId: string,
-    limit = 20,
-  ): Promise<ImportedCustomerRow[]> {
-    const rows = await prisma.$queryRaw<Array<{
-      id:          string;
-      name:        string;
-      phone:       string;
-      tier:        string;
-      segment:     string;
-      total_spent: string;
-      order_count: RawBigint;
-      last_order:  Date | null;
-      avg_ticket:  string;
-    }>>`
-      SELECT
-        id,
-        name,
-        COALESCE(phone, '')                      AS phone,
-        COALESCE(tier, 'BRONZE')                 AS tier,
-        COALESCE(segment, 'SEM_PEDIDOS')         AS segment,
-        COALESCE("importedTotalSpent", 0)::text  AS total_spent,
-        COALESCE("importedOrderCount", 0)        AS order_count,
-        "importedLastOrderAt"                    AS last_order,
-        COALESCE("averageTicket", 0)::text       AS avg_ticket
-      FROM customers
-      WHERE "restaurantId" = ${restaurantId}
-        AND "isGuest" = false
-        AND "importedTotalSpent" > 0
-      ORDER BY "importedTotalSpent" DESC NULLS LAST
-      LIMIT ${limit}
-    `;
-
-    return rows.map((r) => ({
-      id:                  r.id,
-      name:                r.name,
-      phone:               r.phone,
-      tier:                r.tier,
-      segment:             r.segment,
-      importedTotalSpent:  toNum(r.total_spent),
-      importedOrderCount:  toNum(r.order_count),
-      importedLastOrderAt: r.last_order ? r.last_order.toISOString().slice(0, 10) : null,
-      averageTicket:       toNum(r.avg_ticket),
-    }));
-  }
-
-  // ── Imported customers sorted by order count ──────────────────────────────
-
-  private static async getImportedTopByOrders(
-    restaurantId: string,
-    limit = 20,
-  ): Promise<ImportedCustomerRow[]> {
-    const rows = await prisma.$queryRaw<Array<{
-      id:          string;
-      name:        string;
-      phone:       string;
-      tier:        string;
-      segment:     string;
-      total_spent: string;
-      order_count: RawBigint;
-      last_order:  Date | null;
-      avg_ticket:  string;
-    }>>`
-      SELECT
-        id,
-        name,
-        COALESCE(phone, '')                      AS phone,
-        COALESCE(tier, 'BRONZE')                 AS tier,
-        COALESCE(segment, 'SEM_PEDIDOS')         AS segment,
-        COALESCE("importedTotalSpent", 0)::text  AS total_spent,
-        COALESCE("importedOrderCount", 0)        AS order_count,
-        "importedLastOrderAt"                    AS last_order,
-        COALESCE("averageTicket", 0)::text       AS avg_ticket
-      FROM customers
-      WHERE "restaurantId" = ${restaurantId}
-        AND "isGuest" = false
-        AND "importedOrderCount" > 0
-      ORDER BY "importedOrderCount" DESC NULLS LAST
-      LIMIT ${limit}
-    `;
-
-    return rows.map((r) => ({
-      id:                  r.id,
-      name:                r.name,
-      phone:               r.phone,
-      tier:                r.tier,
-      segment:             r.segment,
-      importedTotalSpent:  toNum(r.total_spent),
-      importedOrderCount:  toNum(r.order_count),
-      importedLastOrderAt: r.last_order ? r.last_order.toISOString().slice(0, 10) : null,
-      averageTicket:       toNum(r.avg_ticket),
-    }));
-  }
-
-  // ── Count of imported customers missing a phone number ─────────────────────
-
-  private static async getImportedSemTelefoneCount(
-    restaurantId: string,
-  ): Promise<number> {
-    const rows = await prisma.$queryRaw<Array<{ cnt: RawBigint }>>`
-      SELECT COUNT(*) AS cnt
-      FROM customers
-      WHERE "restaurantId" = ${restaurantId}
-        AND "isGuest" = false
-        AND "importedTotalSpent" > 0
-        AND (phone IS NULL OR phone = '')
-    `;
-    return toNum(rows[0]?.cnt ?? 0);
-  }
-
   // ── Zero-sales products ────────────────────────────────────────────────────
   // Active menu items that had no confirmed order_items in the given date range.
   // Uses a CTE to collect sold menuItemIds, then LEFT JOIN to find the gap.
@@ -785,8 +638,9 @@ export class AnalyticsService {
       JOIN orders o ON o.id = oi."orderId"
       WHERE o."restaurantId" = ${restaurantId}
         AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-        AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+        AND o."importedAt" IS NULL
+        AND o."createdAt" >= ${from}
+        AND o."createdAt" <  ${to}
     `;
 
     const row             = rows[0];
@@ -818,8 +672,9 @@ export class AnalyticsService {
         JOIN orders o ON o.id = oi."orderId"
         WHERE o."restaurantId" = ${restaurantId}
           AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-          AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-          AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+          AND o."importedAt" IS NULL
+          AND o."createdAt" >= ${from}
+          AND o."createdAt" <  ${to}
           AND oi."menuItemId" IS NOT NULL
       )
       SELECT
@@ -845,90 +700,5 @@ export class AnalyticsService {
       price:       toNum(r.price),
       isAvailable: r.is_available,
     }));
-  }
-
-  // ── Imported aggregate baseline ────────────────────────────────────────────
-  // Reads ProductSalesAggregate (Saipos/Nemo import). Never mixed with real orders.
-
-  static async getImportedBaseline(restaurantId: string): Promise<ImportedBaseline | null> {
-    const rows = await prisma.$queryRaw<Array<{
-      category_name: string;
-      product_name:  string | null;
-      row_type:      string | null;
-      qty:           string;
-      revenue:       string;
-      period_start:  Date;
-      period_end:    Date;
-    }>>`
-      SELECT
-        "categoryName"  AS category_name,
-        "productName"   AS product_name,
-        "rowType"       AS row_type,
-        COALESCE("quantitySold", 0)::text AS qty,
-        COALESCE("grossRevenue", 0)::text AS revenue,
-        "periodStart"   AS period_start,
-        "periodEnd"     AS period_end
-      FROM product_sales_aggregates
-      WHERE "restaurantId" = ${restaurantId}
-      ORDER BY COALESCE("grossRevenue", 0) DESC
-    `;
-
-    if (rows.length === 0) return null;
-
-    const periodStart = rows.reduce(
-      (min, r) => r.period_start < min ? r.period_start : min,
-      rows[0]!.period_start,
-    );
-    const periodEnd = rows.reduce(
-      (max, r) => r.period_end > max ? r.period_end : max,
-      rows[0]!.period_end,
-    );
-
-    // Use product_name presence to distinguish product rows from category summary rows.
-    // row_type may be null or in different capitalisation/language depending on the import source,
-    // so we do NOT rely on it for the primary split.
-    const productRows  = rows.filter(r => r.product_name !== null && r.product_name.trim() !== "");
-    const categoryRows = rows.filter(r => !r.product_name || r.product_name.trim() === "");
-
-    // Use category-level rows for revenue/qty totals — they represent per-category aggregates
-    // and avoid double-counting (categories already sum their product lines).
-    // Fall back to product rows if the import has no category-level rows.
-    const summaryRows   = categoryRows.length > 0 ? categoryRows : productRows;
-    const totalRevenue  = summaryRows.reduce((s, r) => s + toNum(r.revenue), 0);
-    const totalQuantity = summaryRows.reduce((s, r) => s + toNum(r.qty), 0);
-
-    const semClassificacaoCount = rows.filter(r => {
-      const rt  = (r.row_type ?? "").toUpperCase();
-      const cat = (r.category_name ?? "").toLowerCase();
-      return rt.includes("SEM") || rt.includes("CLASSIF") ||
-             cat.includes("sem classif") || cat.includes("sem categoria");
-    }).length;
-
-    const topProducts: ImportedAggregateRow[] = productRows.slice(0, 150).map(r => ({
-      name:     r.product_name!,
-      category: r.category_name,
-      revenue:  toNum(r.revenue),
-      qty:      toNum(r.qty),
-      rowType:  r.row_type ?? "PRODUCT",
-    }));
-
-    const topCategories: ImportedAggregateRow[] = categoryRows.slice(0, 30).map(r => ({
-      name:     r.category_name,
-      category: r.category_name,
-      revenue:  toNum(r.revenue),
-      qty:      toNum(r.qty),
-      rowType:  r.row_type ?? "CATEGORY",
-    }));
-
-    return {
-      periodStart:           periodStart.toISOString(),
-      periodEnd:             periodEnd.toISOString(),
-      totalRevenue,
-      totalQuantity,
-      topCategories,
-      topProducts,
-      rowCount:              rows.length,
-      semClassificacaoCount,
-    };
   }
 }

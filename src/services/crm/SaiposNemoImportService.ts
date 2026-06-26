@@ -313,22 +313,6 @@ function sanitizeMoney(
   return value;
 }
 
-// Decimal(6,4) allows at most 2 integer digits — max absolute value is 99.9999.
-// Percent values of exactly 100.0 (valid for a single-category restaurant) overflow.
-// We null-clamp them to keep the import running; percent is informational only.
-const DECIMAL_6_4_MAX = 99.9999;
-
-function sanitizePercent(value: number | null, rowLabel: string): number | null {
-  if (value === null) return null;
-  if (Math.abs(value) > DECIMAL_6_4_MAX) {
-    console.warn(
-      `[executeImport] percent fora do limite Decimal(6,4) em "${rowLabel}": ${value} → null`,
-    );
-    return null;
-  }
-  return value;
-}
-
 function parseIntField(raw: string | undefined | null): number | null {
   if (!raw?.trim()) return null;
   const n = parseInt(raw.trim().replace(/\D/g, ""), 10);
@@ -1059,35 +1043,6 @@ export function buildPreview(
 
 // ── Execute ────────────────────────────────────────────────────────────────────
 
-// StoredReport is serialized via JSON.stringify before being persisted in importJob.reportJson.
-// All Date fields become ISO strings on the round-trip. This helper converts them back so
-// Date-dependent operations (toISOString, Prisma DateTime) work correctly.
-function toDate(d: Date | string | null | undefined): Date | null {
-  if (!d) return null;
-  if (d instanceof Date) return d;
-  const dt = new Date(d as string);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function makeImportKey(
-  restaurantId: string,
-  sourceSystem: string,
-  periodStart: Date,
-  periodEnd: Date,
-  categoryName: string,
-  productName: string | null,
-  rowType: string,
-): string {
-  return [
-    restaurantId, sourceSystem,
-    periodStart.toISOString().slice(0, 10),
-    periodEnd.toISOString().slice(0, 10),
-    categoryName,
-    productName ?? "",
-    rowType,
-  ].join("::");
-}
-
 function chunks<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -1098,7 +1053,7 @@ export async function executeImport(
   restaurantId: string,
   report: StoredReport,
 ): Promise<SaiposNemoExecuteResult> {
-  const { merged, noPhone, soldRows, soldMeta } = report;
+  const { merged, noPhone } = report;
   const noPhoneImportable: NoPhoneImportableCustomer[] = report.noPhoneImportable ?? [];
 
   let contactableCreated      = 0;
@@ -1106,8 +1061,6 @@ export async function executeImport(
   let nonContactableCreated   = 0;
   let nonContactableUpdated   = 0;
   let addressesCreated        = 0;
-  let productAggCreated       = 0;
-  let productAggSkipped       = 0;
 
   // ── Upsert customers in batches ───────────────────────────────────────────
   const phones = merged.map(r => r.phone);
@@ -1390,79 +1343,12 @@ export async function executeImport(
     }
   }
 
-  // ── Insert product sales aggregates ───────────────────────────────────────
-  // Convert dates here: soldMeta dates are ISO strings after JSON round-trip from DB.
-  const periodStart = toDate(soldMeta.periodStart);
-  const periodEnd   = toDate(soldMeta.periodEnd);
-
-  if (soldRows.length > 0 && periodStart && periodEnd) {
-    // Pre-flight: block if duplicate importKeys remain after consolidation
-    const importKeys = soldRows.map(r =>
-      makeImportKey(restaurantId, "SAIPOS", periodStart, periodEnd, r.categoryName, r.productName, r.rowType)
-    );
-    const uniqueKeys = new Set(importKeys);
-    if (uniqueKeys.size !== importKeys.length) {
-      throw new Error("Importação bloqueada: ainda existem chaves agregadas duplicadas.");
-    }
-
-    const aggRows = soldRows.map(r => {
-      const rowLabel = r.productName
-        ? `${r.categoryName} / ${r.productName}`
-        : r.categoryName;
-      const safePct = sanitizePercent(r.percent ?? null, rowLabel);
-      return {
-        id:          `psa_${Math.random().toString(36).slice(2)}`,
-        restaurantId,
-        sourceSystem: "SAIPOS",
-        periodStart,
-        periodEnd,
-        categoryName: r.categoryName,
-        productName:  r.productName ?? undefined,
-        quantitySold: Math.round(r.quantitySold),
-        grossRevenue: r.grossRevenue,
-        percent:      safePct ?? undefined,
-        rowType:      r.rowType,
-        importKey:    makeImportKey(
-          restaurantId, "SAIPOS",
-          periodStart, periodEnd,
-          r.categoryName, r.productName, r.rowType
-        ),
-      };
-    });
-
-    // Log rows whose percent was clamped so the admin can audit them
-    const clampedRows = soldRows.filter(r => {
-      const v = r.percent ?? null;
-      return v !== null && Math.abs(v) > DECIMAL_6_4_MAX;
-    });
-    if (clampedRows.length > 0) {
-      console.warn(
-        `[executeImport] ${clampedRows.length} linhas de produto com percent fora do limite Decimal(6,4) (definido como null):`,
-        clampedRows.map(r => ({
-          rowType:      r.rowType,
-          categoryName: r.categoryName,
-          productName:  r.productName,
-          percent:      r.percent,
-          grossRevenue: r.grossRevenue,
-        })),
-      );
-    }
-
-    // Insert with skipDuplicates using importKey uniqueness
-    let result: { count: number };
-    try {
-      result = await prisma.productSalesAggregate.createMany({
-        data: aggRows,
-        skipDuplicates: true,
-      });
-    } catch (err) {
-      // Log full row list so the offending value is visible in server logs
-      console.error("[executeImport] createMany ProductSalesAggregate falhou. Linhas enviadas:", aggRows);
-      throw err;
-    }
-    productAggCreated  = result.count;
-    productAggSkipped  = aggRows.length - result.count;
-  }
+  // ── Product sales aggregates: RETIRED ─────────────────────────────────────
+  // The restaurant-level imported sales baseline (ProductSalesAggregate) was
+  // removed from the product. Analytics now reflects ONLY real Foocci sales, and
+  // per-customer purchase history lives on the imported Order/OrderItem records.
+  // We intentionally no longer write ProductSalesAggregate rows. Customer/order
+  // import above is unchanged. Counters stay 0 for backward-compatible reporting.
 
   return {
     contactableCustomersCreated:    contactableCreated,
@@ -1471,8 +1357,8 @@ export async function executeImport(
     nonContactableCustomersUpdated: nonContactableUpdated,
     noPhoneSkippedInsufficientData: noPhone.length,
     addressesCreated,
-    productAggregatesCreated: productAggCreated,
-    productAggregatesSkipped: productAggSkipped,
+    productAggregatesCreated: 0,
+    productAggregatesSkipped: 0,
   };
 }
 
