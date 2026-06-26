@@ -93,11 +93,14 @@ export function SalesChart({ data }: { data: DashboardData }) {
   const lastNonZero = cur.reduce((acc, b, i) => (b.revenue > 0 ? i : acc), -1);
   const hourly = data.granularity === "hour";
   const labelStep = hourly ? 3 : cur.length > 16 ? 2 : 1;
+  // Only pair bars side-by-side when there is actually a comparison period to
+  // show — otherwise (new restaurant, no history) keep clean full-width bars.
+  const hasPrev = prev.some((p) => p && p.revenue > 0);
 
   return (
     <Card className="p-5">
       <SectionTitle meta={`${fmtCurrency(data.revenuePeriod)} · ${data.prevPeriodLabel}`}>Receita no período</SectionTitle>
-      <div className="flex h-[168px] items-end gap-[6px] pt-5">
+      <div className="flex h-[168px] items-end gap-[5px] pt-5">
         {cur.map((b, i) => {
           const p = prev[i];
           const curH = b.revenue > 0 ? Math.max(3, Math.round((b.revenue / maxRev) * 132)) : 1;
@@ -106,24 +109,39 @@ export function SalesChart({ data }: { data: DashboardData }) {
           return (
             <div key={b.bucketKey} className="relative flex flex-1 flex-col items-center justify-end" title={`${b.label}: ${fmtCurrency(b.revenue)} · ${data.prevPeriodLabel.replace("vs. ", "")}: ${p ? fmtCurrency(p.revenue) : "—"}`}>
               {b.revenue > 0 && (
-                <span className={`mb-1 text-[8.5px] font-semibold ${isNow ? "text-brand-600" : "text-muted"}`}>
+                <span className={`mb-1 text-[8.5px] font-semibold leading-none ${isNow ? "text-brand-600" : "text-muted"}`}>
                   {fmtCompact(b.revenue)}
                 </span>
               )}
-              {prevH > 0 && <div className="absolute bottom-0 w-full rounded-[3px] bg-[#EDEDEA]" style={{ height: prevH }} />}
-              <div className={`relative w-full rounded-[4px] ${isNow ? "bg-brand-500" : "bg-[#1A1814]"}`} style={{ height: curH, opacity: isNow ? 1 : 0.88 }} />
+              {hasPrev ? (
+                // Today vs. same weekday last week — two visible bars, never occluded.
+                <div className="flex w-full items-end justify-center gap-[2px]">
+                  <div
+                    className={`w-1/2 max-w-[18px] rounded-[3px] ${isNow ? "bg-brand-500" : "bg-[#1A1814]"}`}
+                    style={{ height: curH, opacity: isNow ? 1 : 0.9 }}
+                  />
+                  <div className="w-1/2 max-w-[12px] rounded-[3px] bg-[#C7C7C1]" style={{ height: prevH }} />
+                </div>
+              ) : (
+                <div
+                  className={`w-full rounded-[4px] ${isNow ? "bg-brand-500" : "bg-[#1A1814]"}`}
+                  style={{ height: curH, opacity: isNow ? 1 : 0.9 }}
+                />
+              )}
             </div>
           );
         })}
       </div>
-      <div className="mt-2 flex gap-[6px]">
+      <div className="mt-2 flex gap-[5px]">
         {cur.map((b, i) => (
           <span key={b.bucketKey} className="flex-1 text-center text-[9.5px] text-muted">{i % labelStep === 0 ? b.label : ""}</span>
         ))}
       </div>
       <div className="mt-3 flex items-center gap-4 text-[11px] text-muted">
         <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-[#1A1814]" /> Atual</span>
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-[#EDEDEA]" /> {data.prevPeriodLabel.replace("vs. ", "")}</span>
+        {hasPrev && (
+          <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-[#C7C7C1]" /> {data.prevPeriodLabel.replace("vs. ", "")}</span>
+        )}
       </div>
     </Card>
   );

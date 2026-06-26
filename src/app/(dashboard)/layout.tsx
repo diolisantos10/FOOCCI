@@ -28,13 +28,26 @@ export default async function DashboardLayout({
     }
   }
 
-  // Partner restaurant brand for the sidebar co-brand lockup.
+  // Partner restaurant brand for the sidebar co-brand lockup. The logo the owner
+  // uploads on the "Marca" page is stored in RestaurantBrandConfig.brandPersona
+  // (JSON), NOT Restaurant.logoUrl — so prefer that, falling back to the
+  // restaurant record. Same for the display name (brandName overrides).
   let restaurant: { name: string; logoUrl: string | null } | null = null;
   if (session?.user?.restaurantId) {
-    restaurant = await prisma.restaurant.findUnique({
-      where: { id: session.user.restaurantId },
-      select: { name: true, logoUrl: true },
-    });
+    const rid = session.user.restaurantId;
+    const [r, brand] = await Promise.all([
+      prisma.restaurant.findUnique({ where: { id: rid }, select: { name: true, logoUrl: true } }),
+      prisma.restaurantBrandConfig.findUnique({ where: { restaurantId: rid }, select: { brandPersona: true } }),
+    ]);
+    if (r) {
+      const persona = (brand?.brandPersona ?? {}) as { logoUrl?: unknown; brandName?: unknown };
+      const personaLogo = typeof persona.logoUrl === "string" ? persona.logoUrl.trim() : "";
+      const personaName = typeof persona.brandName === "string" ? persona.brandName.trim() : "";
+      restaurant = {
+        name: personaName || r.name,
+        logoUrl: personaLogo || r.logoUrl || null,
+      };
+    }
   }
 
   return (
