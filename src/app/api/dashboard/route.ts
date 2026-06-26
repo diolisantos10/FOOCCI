@@ -42,6 +42,15 @@ export async function GET(req: NextRequest) {
     const pr = computePeriodRange(periodKey, sp.get("startDate"), sp.get("endDate"));
     const { rangeStart, rangeEnd, prevStart, prevEnd, label: periodLabel, prevLabel, days, granularity } = pr;
 
+    // The chart shows `numBuckets` full buckets. For the PREVIOUS series we fetch
+    // the entire span those buckets cover — not just up to "now − 1 period" — so
+    // the comparison (e.g. last week's same weekday) is filled across the whole
+    // day, letting the owner see the hours still ahead and anticipate them. The
+    // KPI delta further down stays time-aligned (only orders before prevEnd).
+    const numBuckets   = granularity === "hour" ? 24 : days;
+    const bucketMs     = granularity === "hour" ? 3_600_000 : 86_400_000;
+    const prevFetchEnd = new Date(Math.max(prevEnd.getTime(), prevStart.getTime() + numBuckets * bucketMs));
+
     const [
       periodOrders,
       prevOrders,
@@ -73,11 +82,13 @@ export async function GET(req: NextRequest) {
           },
         },
       }),
-      // 2. Previous period orders (comparison KPIs + chart)
+      // 2. Previous period orders (comparison KPIs + chart). Fetch the full
+      //    bucket span (prevFetchEnd) so the chart's comparison is complete; the
+      //    KPI delta uses only the time-aligned slice (< prevEnd) below.
       prisma.order.findMany({
         where: {
           restaurantId: ctx.restaurantId,
-          createdAt:    { gte: prevStart, lt: prevEnd },
+          createdAt:    { gte: prevStart, lt: prevFetchEnd },
           status:       { in: REVENUE_STATUS },
         },
         select: { total: true, createdAt: true },
@@ -150,9 +161,10 @@ export async function GET(req: NextRequest) {
     const ordersPeriod  = periodOrders.length;
     const avgTicket     = ordersPeriod > 0 ? revenuePeriod / ordersPeriod : 0;
 
-    // ── Previous period comparison ─────────────────────────────────────────────
-    const revenuePrev = prevOrders.reduce((s, o) => s + Number(o.total), 0);
-    const ordersPrev  = prevOrders.length;
+    // ── Previous period comparison (time-aligned: same elapsed window only) ────
+    const prevAligned = prevOrders.filter(o => o.createdAt < prevEnd);
+    const revenuePrev = prevAligned.reduce((s, o) => s + Number(o.total), 0);
+    const ordersPrev  = prevAligned.length;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -193,7 +205,7 @@ export async function GET(req: NextRequest) {
     };
 
     // ── Chart buckets (current + previous period) ──────────────────────────────
-    const numBuckets       = granularity === "hour" ? 24 : days;
+    // numBuckets / granularity computed above (drives prevFetchEnd too).
     const chartBuckets     = buildChartBuckets(
       periodOrders.map(o => ({ createdAt: o.createdAt, total: Number(o.total) })),
       rangeStart, numBuckets, granularity,

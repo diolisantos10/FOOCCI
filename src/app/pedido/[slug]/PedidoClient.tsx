@@ -863,35 +863,37 @@ function ProductModal({
       }}
     >
       {/* Card — flex column on both mobile and desktop for true sticky footer */}
-      <div className="w-full h-full flex flex-col overflow-hidden sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:shadow-2xl bg-white">
+      <div className="relative w-full h-full flex flex-col overflow-hidden sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:shadow-2xl bg-white">
 
-        {/* ── Image — fixed at top, never scrolls away ── */}
-        <div className="relative w-full bg-gray-100 overflow-hidden shrink-0" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
-          {item.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="w-full h-full object-cover object-center"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-7xl">
-              {categoryEmoji(item.name)}
-            </div>
-          )}
+        {/* Back arrow — pinned to the card corner so it stays reachable while scrolling */}
+        <button
+          onClick={onClose}
+          className="absolute left-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform text-lg"
+        >
+          ←
+        </button>
 
-          {/* Back arrow — top left */}
-          <button
-            onClick={onClose}
-            className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform text-lg"
-          >
-            ←
-          </button>
-        </div>
-
-        {/* ── Content — scrollable, fills remaining space ── */}
+        {/* ── Scroll area — the image lives INSIDE the scroll flow, so it scrolls
+             together with the content ("colada na página") instead of floating at
+             the top with the text sliding underneath it. ── */}
         <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Image — first block in the scroll flow */}
+          <div className="relative w-full bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
+            {item.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                className="w-full h-full object-cover object-center"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-100 text-7xl">
+                {categoryEmoji(item.name)}
+              </div>
+            )}
+          </div>
+
         <div className="px-6 pt-5 pb-4">
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
