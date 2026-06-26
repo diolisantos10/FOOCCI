@@ -22,12 +22,18 @@ Régua por tela (sempre):
 - ✅ **Cardápio** (MenuManager + QRCard + upload) — retokenizado.
 - ✅ **Analytics** — retokenizado.
 
-## A fazer
-- ⬜ **Integrações** (`integracoes`) — última tela de conteúdo grande
-- ⬜ Polimento: 3 mini-diálogos de Pedidos (cancelar/apagar/confirmar pagamento manual);
-  perfil do cliente (`customers/[id]`); revisar visualmente CRM/Cardápio/Analytics no ar.
+## Feito (no ar) — continuação
+- ✅ **Integrações** (`integracoes`) — retokenizado no sweep geral.
+- ✅ **Perfil do cliente** (`customers/[id]`) + lista de clientes — retokenizado.
+- ✅ **Sweep geral** — TODO o `(dashboard)/*.tsx` na paleta da marca. Resíduo de tokens
+  legados na UI: **0** (`bg-white`, `text-gray-800/900`, `-orange-*` zerados; cores
+  semânticas verde/vermelho/âmbar/azul/violeta preservadas de propósito).
+- ✅ **Logo do restaurante na sidebar** (parceria) — logo do parceiro **abaixo da logo
+  Foocci**, exposta, com nome + "Parceiro Foocci"; fallback de inicial quando não há logo.
+  Fonte: `restaurant.logoUrl`. Era o último item do backlog.
 
-## Backlog (deixar pro FINAL)
-- ⬜ **Logo do restaurante na sidebar**, logo **abaixo da logo Foocci** (perto do card do dono),
-  exposta — dá a cara de **parceria** (Foocci + restaurante). Fonte do logo:
-  `restaurant.logoUrl` (já existe no schema). Pedido do Diego — fazer por último.
+## Polimento futuro (fora do "grande de uma vez" — próxima passada, se o Diego quiser)
+- ⬜ Redesenho estrutural (não só tokens) dos 3 mini-diálogos de Pedidos
+  (cancelar/apagar/confirmar pagamento manual) — hoje já estão na paleta, mas dá pra
+  deixar no padrão premium do detalhe de Pedidos.
+- ⬜ Passar o olho ao vivo em CRM/Cardápio/Analytics/Integrações depois do deploy.
