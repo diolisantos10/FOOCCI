@@ -243,7 +243,7 @@ export default function StorePage() {
     setSaving(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -408,7 +408,7 @@ export default function StorePage() {
             </Field>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted">
             O endereço é usado pela Foocci para calcular automaticamente o frete por distância. Preencha todos os campos acima para melhores resultados.
           </p>
         </div>
@@ -467,7 +467,7 @@ export default function StorePage() {
         <div className="space-y-5">
           {/* Proprietário */}
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Proprietário / Responsável principal</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Proprietário / Responsável principal</p>
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Nome">
@@ -497,8 +497,8 @@ export default function StorePage() {
           </div>
 
           {/* Gerente */}
-          <div className="border-t border-gray-100 pt-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Gerente / Responsável operacional</p>
+          <div className="border-t border-line pt-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Gerente / Responsável operacional</p>
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Nome">
@@ -579,7 +579,7 @@ export default function StorePage() {
             </Field>
           </div>
 
-          <p className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-500">
+          <p className="rounded-lg bg-[#FAFAF8] px-4 py-3 text-xs text-muted">
             💡 Taxas, zonas e horários de entrega são configurados em{" "}
             <a href="/settings/delivery" className="font-medium text-brand-600 hover:underline">Configurações › Entrega</a>.
             Horários de funcionamento em{" "}

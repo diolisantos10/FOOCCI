@@ -162,8 +162,8 @@ function StatusBadge({ status }: { status: IntegrationStatus }) {
       </span>
     );
   return (
-    <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500">
-      <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+    <span className="flex items-center gap-1 rounded-full bg-[#F4F4F2] px-2.5 py-0.5 text-xs font-semibold text-muted">
+      <span className="h-1.5 w-1.5 rounded-full bg-muted" />
       Não configurado
     </span>
   );
@@ -194,8 +194,8 @@ function IntegrationCard({
   const lastTested = formatDate(view?.lastTestedAt ?? null);
 
   return (
-    <div className={`rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md ${
-      selected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-100"
+    <div className={`rounded-2xl border bg-paper shadow-sm transition-all hover:shadow-md ${
+      selected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-line"
     }`}>
       <button
         type="button"
@@ -211,12 +211,12 @@ function IntegrationCard({
           {/* Info */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-900">{meta.name}</span>
+              <span className="text-sm font-semibold text-ink">{meta.name}</span>
               <StatusBadge status={status} />
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-gray-500">{meta.description}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">{meta.description}</p>
             {lastTested && (
-              <p className="mt-1.5 text-[10px] text-gray-400">Testado em {lastTested}</p>
+              <p className="mt-1.5 text-[10px] text-muted">Testado em {lastTested}</p>
             )}
             {view?.lastError && status === "error" && (
               <p className="mt-1 truncate text-[10px] text-red-500">{view.lastError}</p>
@@ -224,12 +224,12 @@ function IntegrationCard({
           </div>
 
           {/* Arrow */}
-          <span className="shrink-0 text-gray-300">›</span>
+          <span className="shrink-0 text-muted">›</span>
         </div>
       </button>
 
       {meta.configureHref && (
-        <div className="border-t border-gray-50 px-5 py-2.5">
+        <div className="border-t border-line px-5 py-2.5">
           <Link
             href={meta.configureHref}
             className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
@@ -252,7 +252,7 @@ function SecretField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-ink2">{label}</label>
       <input
         type="password"
         name={name}
@@ -260,9 +260,9 @@ function SecretField({
         value={value}
         autoComplete="off"
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
       />
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -275,16 +275,16 @@ function TextField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-ink2">{label}</label>
       <input
         type={type}
         name={name}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
       />
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -297,18 +297,18 @@ function SelectField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-ink2">{label}</label>
       <select
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -389,7 +389,7 @@ function WhatsAppQRPanel() {
           <button
             type="button"
             onClick={handleConnect}
-            className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
+            className="rounded-lg border border-green-300 bg-paper px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
           >
             Atualizar QR
           </button>
@@ -471,9 +471,9 @@ function WhatsAppForm({
         value={webhookSecret}
         onChange={setWebhookSecret}
       />
-      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-        <p className="text-xs font-medium text-gray-700">URL do Webhook para configurar na Evolution:</p>
-        <p className="mt-1 break-all font-mono text-xs text-gray-500">
+      <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+        <p className="text-xs font-medium text-ink2">URL do Webhook para configurar na Evolution:</p>
+        <p className="mt-1 break-all font-mono text-xs text-muted">
           {window.location.origin}/api/webhooks/evolution
         </p>
       </div>
@@ -577,26 +577,26 @@ function MercadoPagoForm({
       className="space-y-4"
     >
       {/* Payment methods — read-only status panel */}
-      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-        <p className="mb-2.5 text-xs font-semibold text-gray-700">Formas de pagamento</p>
+      <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+        <p className="mb-2.5 text-xs font-semibold text-ink2">Formas de pagamento</p>
         <div className="space-y-1.5">
           {MP_PAYMENT_METHODS.map((m) => (
             <div key={m.id} className="flex items-center justify-between">
-              <span className="text-xs text-gray-700">{m.label}</span>
+              <span className="text-xs text-ink2">{m.label}</span>
               {m.active ? (
                 <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
                   Ativo
                 </span>
               ) : (
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-400">
+                <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-muted">
                   Em breve
                 </span>
               )}
             </div>
           ))}
         </div>
-        <p className="mt-2.5 text-[10px] leading-relaxed text-gray-400">
+        <p className="mt-2.5 text-[10px] leading-relaxed text-muted">
           No momento apenas Pix está disponível. Os demais métodos serão liberados em breve.
         </p>
       </div>
@@ -690,11 +690,11 @@ function CheckboxField({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-violet-600"
+        className="mt-0.5 h-4 w-4 rounded border-line2 accent-violet-600"
       />
       <div>
-        <label htmlFor={name} className="text-sm font-medium text-gray-700 cursor-pointer">{label}</label>
-        {hint && <p className="mt-0.5 text-xs text-gray-400">{hint}</p>}
+        <label htmlFor={name} className="text-sm font-medium text-ink2 cursor-pointer">{label}</label>
+        {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       </div>
     </div>
   );
@@ -789,7 +789,7 @@ function SaiposForm({
     });
   };
 
-  const inputCls = "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
+  const inputCls = "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
   const errCls   = "mt-1 text-xs text-red-500";
 
   return (
@@ -802,14 +802,14 @@ function SaiposForm({
         className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition ${
           isActive
             ? "border-violet-200 bg-violet-50"
-            : "border-gray-200 bg-gray-50"
+            : "border-line2 bg-[#FAFAF8]"
         }`}
       >
         <div className="text-left">
-          <p className={`text-sm font-semibold ${isActive ? "text-violet-800" : "text-gray-600"}`}>
+          <p className={`text-sm font-semibold ${isActive ? "text-violet-800" : "text-ink2"}`}>
             Ativar integração Saipos
           </p>
-          <p className="mt-0.5 text-xs text-gray-400">
+          <p className="mt-0.5 text-xs text-muted">
             {isActive
               ? "Integração ativa — pedidos confirmados são enviados ao Saipos."
               : "Integração desativada — credenciais salvas mas pedidos não são enviados."}
@@ -817,9 +817,9 @@ function SaiposForm({
         </div>
         {/* Toggle pill */}
         <div className={`relative ml-4 h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
-          isActive ? "bg-violet-600" : "bg-gray-300"
+          isActive ? "bg-violet-600" : "bg-line2"
         }`}>
-          <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+          <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper shadow transition-transform duration-200 ${
             isActive ? "translate-x-5" : "translate-x-0"
           }`} />
         </div>
@@ -864,13 +864,13 @@ function SaiposForm({
 
       {/* Secret do parceiro — input is ALWAYS empty on load; preview shown as a separate label */}
       <div>
-        <p className="mb-1 text-sm font-medium text-gray-700">
+        <p className="mb-1 text-sm font-medium text-ink2">
           Secret do parceiro/canal Saipos
         </p>
         {existingSecretPreview && (
-          <p className="mb-1.5 text-xs text-gray-500">
+          <p className="mb-1.5 text-xs text-muted">
             Secret atual salvo:{" "}
-            <span className="font-mono font-semibold text-gray-700">{existingSecretPreview}</span>
+            <span className="font-mono font-semibold text-ink2">{existingSecretPreview}</span>
           </p>
         )}
         <input
@@ -882,7 +882,7 @@ function SaiposForm({
           onChange={(e) => { setApiKey(e.target.value); setErrors((p) => ({ ...p, apiKey: "" })); }}
           className={inputCls}
         />
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-muted">
           Cole aqui o secret do parceiro/canal informado pela Saipos após o credenciamento. Não confundir com senha da loja ou API Key pública, salvo se a Saipos confirmar que este é o secret do canal.
         </p>
         {errors.apiKey && <p className={errCls}>{errors.apiKey}</p>}
@@ -898,8 +898,8 @@ function SaiposForm({
         </p>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-        <p className="text-xs font-semibold text-gray-700">Comportamento</p>
+      <div className="space-y-3 rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+        <p className="text-xs font-semibold text-ink2">Comportamento</p>
         <CheckboxField
           label="Enviar pedidos automaticamente"
           name="autoSendOrders"
@@ -918,9 +918,9 @@ function SaiposForm({
 
       {/* Payment mappings — max-w-full prevents textarea from forcing modal width */}
       <div className="min-w-0">
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-ink2">
           Mapeamento de pagamentos
-          <span className="ml-1 font-normal text-gray-400">(JSON)</span>
+          <span className="ml-1 font-normal text-muted">(JSON)</span>
         </label>
         <textarea
           value={paymentMappings}
@@ -930,11 +930,11 @@ function SaiposForm({
           }}
           rows={5}
           spellCheck={false}
-          className="w-full max-w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-800 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
+          className="w-full max-w-full resize-none rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
         />
         {errors.paymentMappings
           ? <p className={errCls}>{errors.paymentMappings}</p>
-          : <p className="mt-1 text-xs text-gray-400">
+          : <p className="mt-1 text-xs text-muted">
               Mapeie cada método Foocci (CASH, PIX, CREDIT_CARD, DEBIT_CARD…) ao código numérico do PDV Saipos.
             </p>
         }
@@ -948,7 +948,7 @@ function SaiposForm({
           <button
             type="button"
             onClick={handleCopy}
-            className="shrink-0 rounded-lg border border-violet-200 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50 transition"
+            className="shrink-0 rounded-lg border border-violet-200 bg-paper px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50 transition"
           >
             {copied ? "Copiado!" : "Copiar"}
           </button>
@@ -998,17 +998,17 @@ function SaiposAuthDebugPanel({ debug }: { debug: Record<string, unknown> }) {
   ];
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-      <p className="mb-1 text-xs font-semibold text-gray-500">Diagnóstico Saipos Auth</p>
-      <p className="mb-2 text-[10px] text-gray-400">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3">
+      <p className="mb-1 text-xs font-semibold text-muted">Diagnóstico Saipos Auth</p>
+      <p className="mb-2 text-[10px] text-muted">
         idPartner = ID da loja no canal de venda (store-specific).
         secret = senha única do parceiro/canal (igual para todas as lojas do parceiro).
       </p>
       <div className="space-y-1.5">
         {rows.map(([label, value]) => (
           <div key={label} className="flex min-w-0 gap-2">
-            <span className="w-32 shrink-0 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{label}</span>
-            <span className="min-w-0 flex-1 break-all font-mono text-[11px] text-gray-800">{value}</span>
+            <span className="w-32 shrink-0 text-[10px] font-medium text-muted uppercase tracking-wide">{label}</span>
+            <span className="min-w-0 flex-1 break-all font-mono text-[11px] text-ink">{value}</span>
           </div>
         ))}
       </div>
@@ -1045,7 +1045,7 @@ function SaiposCopyDiagnosticsButton({ debug }: { debug: Record<string, unknown>
     <button
       type="button"
       onClick={handleCopy}
-      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+      className="w-full rounded-xl border border-line2 bg-paper px-4 py-2 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] transition"
     >
       {copied ? "✓ Diagnóstico copiado!" : "Copiar diagnóstico para suporte"}
     </button>
@@ -1095,7 +1095,7 @@ function SaiposTempSecretTester() {
           value={tempSecret}
           autoComplete="off"
           onChange={(e) => setTempSecret(e.target.value)}
-          className="flex-1 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 transition"
+          className="flex-1 rounded-xl border border-amber-200 bg-paper px-3 py-2 text-sm placeholder:text-muted focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 transition"
         />
         <button
           type="button"
@@ -1197,20 +1197,20 @@ function DetailPanel({
       />
 
       {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-30 flex w-full flex-col bg-white shadow-2xl sm:w-[420px] lg:relative lg:inset-auto lg:z-auto lg:w-[400px] lg:shrink-0 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-sm">
+      <div className="fixed inset-y-0 right-0 z-30 flex w-full flex-col bg-paper shadow-2xl sm:w-[420px] lg:relative lg:inset-auto lg:z-auto lg:w-[400px] lg:shrink-0 lg:rounded-2xl lg:border lg:border-line lg:shadow-sm">
 
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div className="flex items-center gap-3">
             <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg text-white ${meta.color}`}>
               {meta.icon}
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900">{meta.name}</p>
+              <p className="text-sm font-semibold text-ink">{meta.name}</p>
               <StatusBadge status={status} />
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">✕</button>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-[#F4F4F2] hover:text-ink2 transition">✕</button>
         </div>
 
         {/* Scroll body */}
@@ -1218,10 +1218,10 @@ function DetailPanel({
 
           {/* Status summary */}
           {(lastTested || view?.lastError) && (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs space-y-1">
+            <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-xs space-y-1">
               {lastTested && (
-                <p className="text-gray-500">
-                  <span className="font-medium text-gray-700">Último teste:</span> {lastTested}
+                <p className="text-muted">
+                  <span className="font-medium text-ink2">Último teste:</span> {lastTested}
                 </p>
               )}
               {view?.lastError && (
@@ -1250,7 +1250,7 @@ function DetailPanel({
               <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
                 testResult.success
                   ? "border-green-200 bg-green-50 text-green-700"
-                  : "border-orange-200 bg-orange-50 text-orange-700"
+                  : "border-brand-200 bg-brand-50 text-brand-700"
               }`}>
                 <span>{testResult.success ? "✓" : "⚠"}</span>
                 <span>{testResult.message}</span>
@@ -1297,7 +1297,7 @@ function DetailPanel({
           {/* Config form (owner-only) */}
           {isOwner ? (
             <div>
-              <p className="mb-4 text-sm font-semibold text-gray-700">Configuração</p>
+              <p className="mb-4 text-sm font-semibold text-ink2">Configuração</p>
               {provider === "whatsapp"    && <WhatsAppForm    view={view} saving={saving} onSave={handleSave} />}
               {provider === "stone"       && <StoneForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "mercadopago" && <MercadoPagoForm view={view} saving={saving} onSave={handleSave} />}
@@ -1305,20 +1305,20 @@ function DetailPanel({
               {provider === "saipos"      && <SaiposForm      view={view} saving={saving} onSave={handleSave} />}
             </div>
           ) : (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+            <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-sm text-muted">
               Apenas o proprietário pode editar as configurações de integração.
             </div>
           )}
         </div>
 
         {/* Footer actions */}
-        <div className="border-t border-gray-100 px-5 py-4 space-y-2">
+        <div className="border-t border-line px-5 py-4 space-y-2">
           {/* Test connection */}
           <button
             type="button"
             onClick={handleTest}
             disabled={testing || status === "unconfigured"}
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40 transition"
+            className="w-full rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm font-semibold text-ink2 shadow-sm hover:bg-[#FAFAF8] disabled:opacity-40 transition"
           >
             {testing ? "Testando…" : "Testar conexão"}
           </button>
@@ -1328,7 +1328,7 @@ function DetailPanel({
             <button
               type="button"
               onClick={handleDisconnect}
-              className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition"
+              className="w-full rounded-xl border border-red-200 bg-paper px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition"
             >
               Desconectar
             </button>
@@ -1409,7 +1409,7 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Header */}
           <div className="mb-6">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted">
               Conecte e monitore as tecnologias do seu restaurante.
             </p>
 
@@ -1428,7 +1428,7 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 animate-pulse rounded-2xl bg-gray-100" />
+                <div key={i} className="h-24 animate-pulse rounded-2xl bg-[#F4F4F2]" />
               ))}
             </div>
           ) : (
@@ -1474,7 +1474,7 @@ function SummaryChip({
   label: string; value: number; color: "gray" | "green" | "yellow" | "red";
 }) {
   const cls = {
-    gray:   "bg-gray-100 text-gray-600",
+    gray:   "bg-[#F4F4F2] text-ink2",
     green:  "bg-green-100 text-green-700",
     yellow: "bg-yellow-100 text-yellow-700",
     red:    "bg-red-100 text-red-600",

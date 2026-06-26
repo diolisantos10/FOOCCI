@@ -230,9 +230,9 @@ export function MetaProviderCard() {
   const env = diag?.env;
 
   return (
-    <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-5">
+    <div className="mb-5 rounded-2xl border border-line2 bg-paper p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-gray-900">Conexão de WhatsApp</h2>
+        <h2 className="text-sm font-bold text-ink">Conexão de WhatsApp</h2>
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isMeta ? "bg-blue-50 text-blue-700" : "bg-green-50 text-green-700"}`}>
           Em uso: {isMeta ? "WhatsApp oficial da Meta" : "WhatsApp atual"}
         </span>
@@ -244,22 +244,22 @@ export function MetaProviderCard() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {/* Current connection */}
-        <div className={`rounded-xl border p-4 ${!isMeta ? "border-green-300 bg-green-50/40" : "border-gray-200"}`}>
-          <p className="text-sm font-semibold text-gray-800">WhatsApp atual</p>
-          <p className="mt-1 text-xs text-gray-500">Sua conexão de WhatsApp atual. Continua funcionando normalmente.</p>
+        <div className={`rounded-xl border p-4 ${!isMeta ? "border-green-300 bg-green-50/40" : "border-line2"}`}>
+          <p className="text-sm font-semibold text-ink">WhatsApp atual</p>
+          <p className="mt-1 text-xs text-muted">Sua conexão de WhatsApp atual. Continua funcionando normalmente.</p>
           {isMeta && (
             <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "EVOLUTION" }, "Pronto — voltou para a conexão anterior.")}
-              className="mt-3 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              className="mt-3 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
               Voltar para a conexão anterior
             </button>
           )}
         </div>
 
         {/* Meta */}
-        <div className={`rounded-xl border p-4 ${isMeta ? "border-blue-300 bg-blue-50/40" : "border-gray-200"}`}>
-          <p className="text-sm font-semibold text-gray-800">WhatsApp oficial da Meta</p>
+        <div className={`rounded-xl border p-4 ${isMeta ? "border-blue-300 bg-blue-50/40" : "border-line2"}`}>
+          <p className="text-sm font-semibold text-ink">WhatsApp oficial da Meta</p>
           {!status.featureEnabled ? (
-            <p className="mt-1 text-xs text-gray-400">Em breve — disponível quando ativado pela Foocci.</p>
+            <p className="mt-1 text-xs text-muted">Em breve — disponível quando ativado pela Foocci.</p>
           ) : metaConnected ? (
             <>
               <p className="mt-1 text-xs text-green-700">✓ Conectado{meta?.displayPhoneNumber ? ` · ${meta.displayPhoneNumber}` : ""}</p>
@@ -270,7 +270,7 @@ export function MetaProviderCard() {
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" disabled={!!busy} onClick={() => action("test", {}, "Mensagem de teste enviada (número interno).")}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
                   Testar conexão
                 </button>
                 {!isMeta && (
@@ -281,10 +281,10 @@ export function MetaProviderCard() {
                 )}
               </div>
               {/* CRM via Meta toggle */}
-              <div className="mt-3 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+              <div className="mt-3 flex items-center justify-between rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2.5">
                 <div>
-                  <p className="text-xs font-semibold text-gray-800">Campanhas CRM via Meta</p>
-                  <p className="text-[11px] text-gray-500">Enviar mensagens de CRM pelo WhatsApp oficial da Meta em vez da conexão atual.</p>
+                  <p className="text-xs font-semibold text-ink">Campanhas CRM via Meta</p>
+                  <p className="text-[11px] text-muted">Enviar mensagens de CRM pelo WhatsApp oficial da Meta em vez da conexão atual.</p>
                 </div>
                 <button
                   type="button"
@@ -297,7 +297,7 @@ export function MetaProviderCard() {
                   className={`ml-3 flex-shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
                     meta?.metaCrmEnabled
                       ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
+                      : "border border-line2 bg-paper text-ink2 hover:bg-[#F4F4F2]"
                   }`}
                 >
                   {meta?.metaCrmEnabled ? "Ativado" : "Ativar"}
@@ -309,7 +309,7 @@ export function MetaProviderCard() {
             </>
           ) : (
             <>
-              <p className="mt-1 text-xs text-gray-500">Faça login com a Meta e escolha sua empresa e número. Sem códigos para digitar.</p>
+              <p className="mt-1 text-xs text-muted">Faça login com a Meta e escolha sua empresa e número. Sem códigos para digitar.</p>
               <button type="button" disabled={busy === "connect"} onClick={connect}
                 className="mt-3 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                 {busy === "connect" ? "Conectando…" : "Conectar WhatsApp oficial da Meta"}
@@ -325,16 +325,16 @@ export function MetaProviderCard() {
                   <div className="mt-2 grid gap-2">
                     <input value={manual.phoneNumberId} onChange={(e) => setManual((m) => ({ ...m, phoneNumberId: e.target.value }))}
                       placeholder="Identificador do número de telefone (phone number id)"
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-[11px]" />
+                      className="w-full rounded-md border border-line2 px-2 py-1.5 text-[11px]" />
                     <input value={manual.wabaId} onChange={(e) => setManual((m) => ({ ...m, wabaId: e.target.value }))}
                       placeholder="Identificador da conta do WhatsApp Business (WABA id)"
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-[11px]" />
+                      className="w-full rounded-md border border-line2 px-2 py-1.5 text-[11px]" />
                     <input value={manual.displayPhoneNumber} onChange={(e) => setManual((m) => ({ ...m, displayPhoneNumber: e.target.value }))}
                       placeholder="Número exibido, ex: +55 11 99999-9999 (opcional)"
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-[11px]" />
+                      className="w-full rounded-md border border-line2 px-2 py-1.5 text-[11px]" />
                     <textarea value={manual.accessToken} onChange={(e) => setManual((m) => ({ ...m, accessToken: e.target.value }))}
                       placeholder="Token de acesso (permanente / system user)" rows={2}
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 font-mono text-[10px]" />
+                      className="w-full rounded-md border border-line2 px-2 py-1.5 font-mono text-[10px]" />
                     <button type="button" disabled={busy === "manual"} onClick={manualConnect}
                       className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
                       {busy === "manual" ? "Conectando…" : "Conectar com estes dados"}
@@ -350,19 +350,19 @@ export function MetaProviderCard() {
       {/* Advanced — platform setup checklist (OWNER/MANAGER only; no secrets). */}
       {diag && (
         <div className="mt-3">
-          <button type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-[11px] font-medium text-gray-400 hover:text-gray-600">
+          <button type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-[11px] font-medium text-muted hover:text-ink2">
             {showAdvanced ? "Ocultar avançado" : "Avançado · configuração da plataforma"}
           </button>
           {showAdvanced && (
-            <div className="mt-2 space-y-3 rounded-lg bg-gray-50 px-3 py-3 text-[11px] text-gray-600">
+            <div className="mt-2 space-y-3 rounded-lg bg-[#FAFAF8] px-3 py-3 text-[11px] text-ink2">
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={copyInstructions}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                  className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink2 hover:bg-[#FAFAF8]">
                   {copied ? "Copiado ✓" : "Copiar instruções para configurar Meta"}
                 </button>
                 {metaConnected && (
                   <button type="button" disabled={!!busy} onClick={simulate}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
                     {busy === "simulate" ? "Simulando…" : "Simular recebimento (diagnóstico)"}
                   </button>
                 )}
@@ -379,7 +379,7 @@ export function MetaProviderCard() {
                   <Check ok={env.publicAppId}        label="App ID público (navegador) configurado" />
                   <Check ok={env.publicConfigId}     label="Config ID público (navegador) configurado" />
                   <Check ok={env.testPhone}          label="Telefone de teste configurado (recomendado)" soft />
-                  <div className="text-gray-400">Versão da Graph API: {env.graphVersion}</div>
+                  <div className="text-muted">Versão da Graph API: {env.graphVersion}</div>
                   {!env.signatureEnforced && (
                     <div className="text-amber-600">⚠ Assinatura do webhook não exigida — defina META_APP_SECRET.</div>
                   )}
@@ -408,7 +408,7 @@ export function MetaProviderCard() {
               {/* Masked connection details — only when connected; IDs masked, token preview only */}
               {meta && (
                 <SetupSection title="Conexão (mascarado)">
-                  <div className="space-y-0.5 font-mono text-[10px] text-gray-500">
+                  <div className="space-y-0.5 font-mono text-[10px] text-muted">
                     <div>status: {meta.connectionStatus}</div>
                     <div>número: {meta.displayPhoneNumber ?? "—"}</div>
                     <div>phoneNumberId: {maskId(meta.phoneNumberId)}</div>
@@ -437,23 +437,23 @@ function maskId(v: string | null): string {
 function SetupSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{title}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">{title}</p>
       {children}
     </div>
   );
 }
 
 function Check({ ok, label, soft }: { ok: boolean; label: string; soft?: boolean }) {
-  const okColor = soft ? "text-gray-600" : "text-green-600";
+  const okColor = soft ? "text-ink2" : "text-green-600";
   return (
-    <div className={ok ? okColor : (soft ? "text-gray-400" : "text-red-500")}>
+    <div className={ok ? okColor : (soft ? "text-muted" : "text-red-500")}>
       {ok ? "✓" : (soft ? "○" : "✗")} {label}
     </div>
   );
 }
 
 function SetupItem({ label }: { label: string }) {
-  return <div className="text-gray-500">• {label}</div>;
+  return <div className="text-muted">• {label}</div>;
 }
 
 // ── FB SDK helpers ──────────────────────────────────────────────────────────────

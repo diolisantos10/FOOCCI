@@ -327,7 +327,7 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
               key={r}
               onClick={() => setRange(r)}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                range === r ? "bg-orange-500 text-white" : "text-muted hover:bg-[#F4F4F2]"
+                range === r ? "bg-brand-500 text-white" : "text-muted hover:bg-[#F4F4F2]"
               }`}
             >
               {r === "today" ? "Hoje" : r === "7d" ? "7 dias" : "30 dias"}
@@ -373,7 +373,7 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {rows.map((row) => (
                   <tr key={row.source} className="hover:bg-[#FAFAF8] transition-colors">
                     <td className="px-4 py-3 font-semibold text-ink">{row.label}</td>
@@ -402,7 +402,7 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
           <h3 className="text-sm font-bold text-ink">Links rastreáveis do cardápio</h3>
           <p className="text-xs text-muted mt-0.5">Clique para copiar e cole na bio, stories ou QR Code</p>
         </div>
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-line">
           {SOURCES.map((src) => {
             const url = `${baseUrl}?src=${src.key}`;
             const isCopied = copied === src.key;
@@ -470,7 +470,7 @@ const TIER_COLOR: Record<string, string> = {
   DIAMANTE: "bg-cyan-400",
   OURO:     "bg-yellow-400",
   PRATA:    "bg-muted",
-  BRONZE:   "bg-orange-400",
+  BRONZE:   "bg-brand-400",
 };
 
 // ─── Data-source helpers ──────────────────────────────────────────────────────
@@ -859,7 +859,7 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
                   <th className="pb-1.5 font-medium text-right">Qtd</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {baseline.topProducts.slice(0, 15).map((p, i) => (
                   <tr key={i}>
                     <td className="py-1.5 pr-3 text-muted">{i + 1}</td>
@@ -939,7 +939,7 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
                 <th className="pb-1.5 font-medium text-right">2.º pedido</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-line">
               {cohorts.map((c) => (
                 <tr key={c.cohortMonth}>
                   <td className="py-1.5 pr-3 font-medium text-ink">{c.cohortMonth}</td>
@@ -1609,7 +1609,7 @@ function ZeroSalesCard({ products }: { products: ZeroSalesProduct[] }) {
               <th className="pb-2 font-medium text-right">Preço</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-line">
             {products.map((p, i) => (
               <tr key={i}>
                 <td className="py-2 pr-4 font-medium text-ink">
@@ -1738,7 +1738,7 @@ function TabProdutos({ data, loading, preset }: {
                     <th className="pb-2 font-medium text-right">% receita</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {sorted.map((p, i) => {
                     const share = baseline.totalRevenue > 0 ? (p.revenue / baseline.totalRevenue) * 100 : 0;
                     return (
@@ -1818,7 +1818,7 @@ function TabProdutos({ data, loading, preset }: {
                   <th className="pb-2 font-medium text-right">Pedidos</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {data!.topProducts.map((p, i) => (
                   <tr key={i}>
                     <td className="py-2 pr-4 text-muted">{i + 1}</td>
@@ -1851,7 +1851,7 @@ function TabProdutos({ data, loading, preset }: {
                     <th className="pb-2 font-medium text-right">Pedidos</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {slow.map((p, i) => (
                     <tr key={i}>
                       <td className="py-2 pr-4 font-medium text-ink">{p.name}</td>
@@ -1999,7 +1999,7 @@ function TabCategorias({ data, loading, preset }: {
                     <th className="pb-2 font-medium text-right">% receita</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {sortedCats.map((cat, i) => {
                     const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
                     return (
@@ -2167,7 +2167,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                     <th className="pb-1.5 font-medium">Tier</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {data!.importedTopCustomers.map((c) => (
                     <tr key={c.id}>
                       <td className="py-1.5 pr-3 font-medium text-ink">{c.name}</td>
@@ -2210,7 +2210,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                       <th className="pb-1.5 font-medium">Tier</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-line">
                     {data!.importedTopByOrders.map((c, i) => (
                       <tr key={c.id}>
                         <td className="py-1.5 pr-3 text-muted">{i + 1}</td>
@@ -2308,7 +2308,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                     <th className="pb-1.5 font-medium">Tier</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {data!.topCustomers.map((c) => (
                     <tr key={c.id}>
                       <td className="py-1.5 pr-3 font-medium text-ink">{c.name}</td>
@@ -2436,7 +2436,7 @@ function TabCanais({ data, loading }: { data: AnalyticsOverview | null; loading:
                     <th className="pb-1.5 font-medium text-right">Pedidos</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {[...data!.salesByDay].reverse().slice(0, 14).map((pt) => (
                     <tr key={pt.date}>
                       <td className="py-1 pr-4 text-ink2">{pt.date}</td>
@@ -2597,7 +2597,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
 
       {/* ── Answer card ── */}
       {answer && (
-        <div className="rounded-xl border border-line2 bg-paper shadow-sm divide-y divide-gray-100">
+        <div className="rounded-xl border border-line2 bg-paper shadow-sm divide-y divide-line">
 
           {/* Intent + confidence header */}
           <div className="flex flex-wrap items-center gap-2 px-5 py-3">

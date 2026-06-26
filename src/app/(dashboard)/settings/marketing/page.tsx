@@ -83,8 +83,8 @@ export default function MarketingSettingsPage() {
 
       {/* ── Page header ── */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Segurança de Envio WhatsApp</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-xl font-bold text-ink">Segurança de Envio WhatsApp</h1>
+        <p className="mt-1 text-sm text-muted">
           Configure limites e proteções para os envios automáticos do CRM.
           Essas regras se aplicam a campanhas recorrentes e automações (reativação, aniversário, pós-pedido).
         </p>
@@ -144,7 +144,7 @@ export default function MarketingSettingsPage() {
       {/* ── Horário quieto ── */}
       <PageCard>
         <SectionHeading title="Horário Quieto" />
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted">
           Nenhuma mensagem automática será enviada durante o horário quieto, independente da configuração individual de cada campanha.
         </p>
 
@@ -200,7 +200,7 @@ export default function MarketingSettingsPage() {
       {/* ── Comportamento humano ── */}
       <PageCard>
         <SectionHeading title="Comportamento Gradual" />
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted">
           Delay aleatório entre envios consecutivos no mesmo lote. Reduz o risco de bloqueio de número pelo WhatsApp.
         </p>
 
@@ -248,7 +248,7 @@ export default function MarketingSettingsPage() {
       {/* ── Proteções fixas ── */}
       <PageCard>
         <SectionHeading title="Proteções Permanentes" />
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted">
           Estas regras estão sempre ativas e não podem ser desabilitadas, em conformidade com a LGPD e as políticas do WhatsApp Business.
         </p>
 
@@ -260,7 +260,7 @@ export default function MarketingSettingsPage() {
             { icon: "⏱️", text: "Janela cruzada: cliente que recebeu qualquer campanha hoje aguarda cooldown antes de receber outra (exceto mensagens de aniversário)" },
             { icon: "✅", text: "Opt-out por palavra-chave é detectado automaticamente pelo WhatsApp Webhook" },
           ].map((item) => (
-            <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
+            <li key={item.text} className="flex items-start gap-2.5 text-sm text-ink2">
               <span className="shrink-0 text-base">{item.icon}</span>
               <span>{item.text}</span>
             </li>

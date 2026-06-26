@@ -56,7 +56,7 @@ function Spinner({ size = "sm" }: { size?: "sm" | "lg" }) {
       : "h-3.5 w-3.5 border-2";
   return (
     <span
-      className={`inline-block animate-spin rounded-full border-line2 border-t-orange-500 ${cls}`}
+      className={`inline-block animate-spin rounded-full border-line2 border-t-brand-500 ${cls}`}
     />
   );
 }
@@ -89,7 +89,7 @@ function StepBadge({
           >
             {s.label}
           </span>
-          {i < steps.length - 1 && <span className="text-gray-200">›</span>}
+          {i < steps.length - 1 && <span className="text-line2">›</span>}
         </span>
       ))}
     </div>
@@ -168,8 +168,8 @@ function UploadZone({
             onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
             className={`cursor-pointer rounded-xl border-2 border-dashed bg-paper px-8 py-14 text-center transition-all ${
               dragOver
-                ? "border-orange-400 bg-brand-50"
-                : "border-line2 hover:border-gray-400"
+                ? "border-brand-400 bg-brand-50"
+                : "border-line2 hover:border-muted"
             }`}
           >
             <input
@@ -192,7 +192,7 @@ function UploadZone({
             </p>
             <button
               type="button"
-              className="mt-5 rounded-lg bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+              className="mt-5 rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600"
             >
               Selecionar arquivo
             </button>
@@ -454,7 +454,7 @@ function PreviewTable({
                   <th className="px-3 py-2.5 text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {grouped.map((group) => (
                   <>
                     {/* Category separator */}
@@ -593,7 +593,7 @@ function PreviewTable({
                   value="replace"
                   checked={mode === "replace"}
                   onChange={() => setMode("replace")}
-                  className="mt-0.5 accent-orange-500"
+                  className="mt-0.5 accent-brand-500"
                 />
                 <div>
                   <p className="text-sm font-medium text-ink">
@@ -612,7 +612,7 @@ function PreviewTable({
                   value="append"
                   checked={mode === "append"}
                   onChange={() => setMode("append")}
-                  className="mt-0.5 accent-orange-500"
+                  className="mt-0.5 accent-brand-500"
                 />
                 <div>
                   <p className="text-sm font-medium text-ink">
@@ -649,7 +649,7 @@ function PreviewTable({
           <button
             onClick={() => onConfirm(mode)}
             disabled={!canConfirm}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-40"
           >
             {confirming ? (
               <>
@@ -775,7 +775,7 @@ function SummaryScreen({ summary }: { summary: ImportSummary }) {
         <div className="flex flex-col gap-2">
           <Link
             href="/menu"
-            className="flex items-center justify-center rounded-lg bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+            className="flex items-center justify-center rounded-lg bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-600"
           >
             Ver cardápio
           </Link>

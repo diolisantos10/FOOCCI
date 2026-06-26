@@ -16,9 +16,9 @@ export const metadata = { title: "Perfil do Cliente" };
 
 function classify(spend: number): Classification {
   if (spend >= 2000) return { tier: "Diamond", icon: "💎", gradient: "from-cyan-400 to-blue-500",     nextTier: null,      nextThreshold: null, progressPercent: 100 };
-  if (spend >= 800)  return { tier: "Gold",    icon: "🥇", gradient: "from-amber-400 to-orange-500", nextTier: "Diamond", nextThreshold: 2000, progressPercent: Math.round(((spend - 800)  / 1200) * 100) };
+  if (spend >= 800)  return { tier: "Gold",    icon: "🥇", gradient: "from-amber-400 to-brand-500", nextTier: "Diamond", nextThreshold: 2000, progressPercent: Math.round(((spend - 800)  / 1200) * 100) };
   if (spend >= 300)  return { tier: "Silver",  icon: "🥈", gradient: "from-gray-300 to-gray-500",    nextTier: "Gold",    nextThreshold: 800,  progressPercent: Math.round(((spend - 300)  / 500)  * 100) };
-  return                    { tier: "Bronze",  icon: "🥉", gradient: "from-orange-400 to-orange-700",nextTier: "Silver",  nextThreshold: 300,  progressPercent: Math.round((spend / 300)            * 100) };
+  return                    { tier: "Bronze",  icon: "🥉", gradient: "from-brand-400 to-brand-700",nextTier: "Silver",  nextThreshold: 300,  progressPercent: Math.round((spend / 300)            * 100) };
 }
 
 // ─── Order row type (inferred from Prisma select) ────────────────────────────

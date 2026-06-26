@@ -59,11 +59,11 @@ export function BrainPanel() {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
         <div className="animate-pulse space-y-3">
-          <div className="h-4 w-32 rounded bg-gray-200" />
-          <div className="h-3 w-full rounded bg-gray-100" />
-          <div className="h-3 w-4/5 rounded bg-gray-100" />
+          <div className="h-4 w-32 rounded bg-line2" />
+          <div className="h-3 w-full rounded bg-[#F4F4F2]" />
+          <div className="h-3 w-4/5 rounded bg-[#F4F4F2]" />
         </div>
       </div>
     );
@@ -76,10 +76,10 @@ export function BrainPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <p className="text-sm font-bold text-ink flex items-center gap-2">
             <span>🧠</span> Inteligência CRM
           </p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             {hasData
               ? `${summary.totalSent} ação${summary.totalSent !== 1 ? "ões" : ""} rastreada${summary.totalSent !== 1 ? "s" : ""} nos últimos 30 dias`
               : "Nenhuma ação registrada ainda — comece enviando mensagens"}
@@ -98,15 +98,15 @@ export function BrainPanel() {
       {/* Key metrics */}
       {hasData && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl bg-white border border-gray-100 p-3 text-center">
-            <p className="text-lg font-bold text-gray-900">{summary.totalSent}</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">Enviadas</p>
+          <div className="rounded-xl bg-paper border border-line p-3 text-center">
+            <p className="text-lg font-bold text-ink">{summary.totalSent}</p>
+            <p className="text-[10px] text-muted mt-0.5">Enviadas</p>
           </div>
-          <div className="rounded-xl bg-white border border-gray-100 p-3 text-center">
+          <div className="rounded-xl bg-paper border border-line p-3 text-center">
             <p className="text-lg font-bold text-green-600">{summary.totalConverted}</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">Convertidas</p>
+            <p className="text-[10px] text-muted mt-0.5">Convertidas</p>
           </div>
-          <div className="rounded-xl bg-white border border-brand-100 p-3 text-center bg-brand-50">
+          <div className="rounded-xl bg-paper border border-brand-100 p-3 text-center bg-brand-50">
             <p className="text-lg font-bold text-brand-700">
               {(summary.overallRate * 100).toFixed(0)}%
             </p>
@@ -118,11 +118,11 @@ export function BrainPanel() {
       {/* Style performance breakdown */}
       {hasData && showStyles && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-600">Desempenho por estilo</p>
+          <p className="text-xs font-semibold text-ink2">Desempenho por estilo</p>
           {summary.styles.map((s) => (
             <div key={s.style}>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-gray-700">
+                <span className="text-xs font-medium text-ink2">
                   {STYLE_LABELS[s.style] ?? s.style}
                   {summary.topStyle === s.style && (
                     <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold text-green-700">
@@ -130,9 +130,9 @@ export function BrainPanel() {
                     </span>
                   )}
                 </span>
-                <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                <div className="flex items-center gap-2 text-[10px] text-muted">
                   <span>{s.sent} enviadas</span>
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-ink2">
                     {(s.conversionRate * 100).toFixed(0)}% conv.
                   </span>
                   <span className="font-bold text-brand-600">
@@ -141,15 +141,15 @@ export function BrainPanel() {
                 </div>
               </div>
               {/* Weight bar */}
-              <div className="h-1.5 w-full rounded-full bg-gray-100">
+              <div className="h-1.5 w-full rounded-full bg-[#F4F4F2]">
                 <div
-                  className={`h-1.5 rounded-full ${STYLE_COLORS[s.style] ?? "bg-gray-400"} transition-all`}
+                  className={`h-1.5 rounded-full ${STYLE_COLORS[s.style] ?? "bg-muted"} transition-all`}
                   style={{ width: `${(s.weight * 100).toFixed(1)}%` }}
                 />
               </div>
             </div>
           ))}
-          <p className="text-[10px] text-gray-400 pt-1">
+          <p className="text-[10px] text-muted pt-1">
             Peso = probabilidade de usar este estilo na próxima mensagem.
             Atualiza automaticamente a cada 10 ações ou conversão.
           </p>
@@ -158,8 +158,8 @@ export function BrainPanel() {
 
       {/* No data state */}
       {!hasData && (
-        <div className="rounded-xl bg-white border border-dashed border-gray-200 p-4 text-center">
-          <p className="text-xs text-gray-500">
+        <div className="rounded-xl bg-paper border border-dashed border-line2 p-4 text-center">
+          <p className="text-xs text-muted">
             Quando você registrar envios pelo CRM, o sistema aprenderá quais estilos
             convertem mais e priorizará automaticamente os melhores.
           </p>
@@ -168,7 +168,7 @@ export function BrainPanel() {
 
       {/* Tone profile selector */}
       <div>
-        <p className="text-xs font-semibold text-gray-700 mb-2">
+        <p className="text-xs font-semibold text-ink2 mb-2">
           Personalidade do restaurante
         </p>
         <div className="grid grid-cols-2 gap-2">
@@ -183,20 +183,20 @@ export function BrainPanel() {
                 className={`rounded-xl border-2 p-3 text-left transition-all ${
                   active
                     ? "border-brand-500 bg-brand-50"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    : "border-line2 bg-paper hover:border-line2"
                 } disabled:opacity-60`}
               >
-                <p className={`text-xs font-bold ${active ? "text-brand-700" : "text-gray-700"}`}>
+                <p className={`text-xs font-bold ${active ? "text-brand-700" : "text-ink2"}`}>
                   {opt.label}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">
+                <p className="text-[10px] text-muted mt-0.5 leading-relaxed">
                   {opt.description}
                 </p>
               </button>
             );
           })}
         </div>
-        <p className="mt-2 text-[10px] text-gray-400">
+        <p className="mt-2 text-[10px] text-muted">
           A personalidade ajusta os pesos dos estilos de mensagem para se alinhar
           com a identidade do seu restaurante.
         </p>

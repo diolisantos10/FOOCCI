@@ -28,7 +28,7 @@ const TIERS: TierKey[] = ["BRONZE", "PRATA", "OURO", "DIAMANTE"];
 const TIER_META: Record<TierKey, {
   label: string; icon: string; bg: string; border: string; text: string; badgeBg: string;
 }> = {
-  BRONZE:   { label: "Bronze",   icon: "🥉", bg: "bg-brand-50",  border: "border-orange-200", text: "text-brand-700", badgeBg: "bg-brand-100" },
+  BRONZE:   { label: "Bronze",   icon: "🥉", bg: "bg-brand-50",  border: "border-brand-200", text: "text-brand-700", badgeBg: "bg-brand-100" },
   PRATA:    { label: "Prata",    icon: "🥈", bg: "bg-[#FAFAF8]",    border: "border-line2",   text: "text-ink2",   badgeBg: "bg-[#F4F4F2]"   },
   OURO:     { label: "Ouro",     icon: "🥇", bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-700",  badgeBg: "bg-amber-100"  },
   DIAMANTE: { label: "Diamante", icon: "💎", bg: "bg-cyan-50",    border: "border-cyan-200",   text: "text-cyan-700",   badgeBg: "bg-cyan-100"   },
@@ -215,7 +215,7 @@ function TierSettingsForm({
               <th className="px-4 py-2.5 font-medium text-muted">Lógica</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-line">
             <tr>
               <td className="px-4 py-3 text-brand-600 font-medium text-sm">🥉 Bronze</td>
               <td className="px-4 py-3 text-muted text-xs" colSpan={3}>Padrão — todos os novos clientes</td>
@@ -453,7 +453,7 @@ function CloseToNextTierTable({ customers }: { customers: CloseToNextTierCustome
             <th className="px-4 py-2.5 font-medium">Último pedido</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-50">
+        <tbody className="divide-y divide-line">
           {customers.map((c) => {
             const curr = TIER_META[c.currentTier];
             const next = TIER_META[c.nextTier];

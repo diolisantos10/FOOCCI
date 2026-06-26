@@ -11,7 +11,7 @@ type Status = OnboardingStatusData | null;
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const READINESS_LABELS: Record<OnboardingStatusData["readiness"], { label: string; color: string; bg: string; border: string }> = {
-  NAO_INICIADO:      { label: "Não iniciado",       color: "text-gray-600",  bg: "bg-gray-100",    border: "border-gray-200" },
+  NAO_INICIADO:      { label: "Não iniciado",       color: "text-ink2",  bg: "bg-[#F4F4F2]",    border: "border-line2" },
   EM_CONFIGURACAO:   { label: "Em configuração",    color: "text-blue-700",  bg: "bg-blue-50",     border: "border-blue-200" },
   PRONTO_PARA_TESTE: { label: "Pronto para teste",  color: "text-amber-700", bg: "bg-amber-50",    border: "border-amber-200" },
   PRONTO_PARA_PILOTO:{ label: "Pronto para piloto", color: "text-green-700", bg: "bg-green-50",    border: "border-green-200" },
@@ -21,7 +21,7 @@ const READINESS_LABELS: Record<OnboardingStatusData["readiness"], { label: strin
 const STEP_DOT: Record<StepStatus, string> = {
   COMPLETE: "bg-green-500",
   PENDING:  "bg-amber-400",
-  WARNING:  "bg-orange-400",
+  WARNING:  "bg-brand-400",
   BLOCKED:  "bg-red-500",
 };
 
@@ -35,7 +35,7 @@ const STEP_ICON: Record<StepStatus, string> = {
 const STEP_TEXT: Record<StepStatus, string> = {
   COMPLETE: "text-green-700",
   PENDING:  "text-amber-700",
-  WARNING:  "text-orange-700",
+  WARNING:  "text-brand-700",
   BLOCKED:  "text-red-700",
 };
 
@@ -60,7 +60,7 @@ function CopyBtn({ text }: { text: string }) {
     <button
       type="button"
       onClick={() => { void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}
-      className={`ml-1 shrink-0 text-xs transition-colors ${copied ? "text-green-600" : "text-gray-400 hover:text-gray-600"}`}
+      className={`ml-1 shrink-0 text-xs transition-colors ${copied ? "text-green-600" : "text-muted hover:text-ink2"}`}
     >
       {copied ? "✓" : "📋"}
     </button>
@@ -72,10 +72,10 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   const color = pct === 100 ? "bg-green-500" : pct >= 60 ? "bg-amber-400" : "bg-red-400";
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-[#F4F4F2] rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-semibold text-gray-500 w-10 text-right">{value}/{max}</span>
+      <span className="text-xs font-semibold text-muted w-10 text-right">{value}/{max}</span>
     </div>
   );
 }
@@ -97,29 +97,29 @@ function StepCard({
   href?: string;
   children?: React.ReactNode;
 }) {
-  const iconColor = { COMPLETE: "bg-green-500", PENDING: "bg-amber-400", WARNING: "bg-orange-400", BLOCKED: "bg-red-500" }[step.status];
-  const borderColor = { COMPLETE: "border-green-200", PENDING: "border-gray-200", WARNING: "border-orange-200", BLOCKED: "border-red-200" }[step.status];
+  const iconColor = { COMPLETE: "bg-green-500", PENDING: "bg-amber-400", WARNING: "bg-brand-400", BLOCKED: "bg-red-500" }[step.status];
+  const borderColor = { COMPLETE: "border-green-200", PENDING: "border-line2", WARNING: "border-brand-200", BLOCKED: "border-red-200" }[step.status];
 
   return (
-    <div className={`rounded-2xl border bg-white p-5 shadow-sm ${borderColor}`}>
+    <div className={`rounded-2xl border bg-paper p-5 shadow-sm ${borderColor}`}>
       <div className="flex items-start gap-4">
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${iconColor}`}>
           {step.status === "COMPLETE" ? "✓" : number}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="font-semibold text-gray-900">{title}</h3>
+            <h3 className="font-semibold text-ink">{title}</h3>
             <span className={`text-xs font-semibold ${STEP_TEXT[step.status]}`}>
               {STEP_ICON[step.status]} {step.status === "COMPLETE" ? "Concluído" : step.status === "BLOCKED" ? "Bloqueado" : step.status === "WARNING" ? "Atenção" : "Pendente"}
             </span>
           </div>
-          <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
+          <p className="mt-0.5 text-sm text-muted">{subtitle}</p>
           <p className={`mt-2 text-xs font-medium ${STEP_TEXT[step.status]}`}>{step.message}</p>
           {children && <div className="mt-3">{children}</div>}
           {href && step.status !== "COMPLETE" && (
             <Link
               href={href}
-              className="mt-3 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100"
+              className="mt-3 inline-flex items-center gap-1 rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-1.5 text-xs font-semibold text-ink2 transition-colors hover:bg-[#F4F4F2]"
             >
               Configurar →
             </Link>
@@ -171,7 +171,7 @@ export default function OnboardingClient() {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <div className="mx-auto max-w-3xl px-4 py-10 space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-white" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-paper" />)}
         </div>
       </div>
     );
@@ -202,12 +202,12 @@ export default function OnboardingClient() {
         <div className={`rounded-2xl border ${r.border} ${r.bg} px-6 py-5`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted">
                 {status.restaurantName}
               </p>
               <h1 className={`mt-1 text-xl font-bold ${r.color}`}>{r.label}</h1>
             </div>
-            <span className={`rounded-full border px-4 py-1.5 text-sm font-bold ${r.color} ${r.border} bg-white`}>
+            <span className={`rounded-full border px-4 py-1.5 text-sm font-bold ${r.color} ${r.border} bg-paper`}>
               {completedCount}/{stepsArr.length} etapas
             </span>
           </div>
@@ -262,7 +262,7 @@ export default function OnboardingClient() {
                 className={`rounded-full border px-3 py-1 font-medium ${
                   active
                     ? "border-green-200 bg-green-50 text-green-700"
-                    : "border-gray-200 bg-gray-50 text-gray-400"
+                    : "border-line2 bg-[#FAFAF8] text-muted"
                 }`}
               >
                 {active ? "✓" : "○"} {label}
@@ -274,7 +274,7 @@ export default function OnboardingClient() {
               </span>
             )}
           </div>
-          <p className="mt-2 text-[11px] text-gray-400">
+          <p className="mt-2 text-[11px] text-muted">
             Pagamento online deve ser ativado somente após teste em ambiente de produção.
           </p>
         </StepCard>
@@ -294,14 +294,14 @@ export default function OnboardingClient() {
               { label: "Total",       value: status.counts.totalProducts },
               { label: "Com foto",    value: status.counts.productsWithImage },
             ].map(({ label, value }) => (
-              <div key={label} className="rounded-xl bg-gray-50 px-3 py-2.5">
-                <p className="text-xl font-bold text-gray-900">{value}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">{label}</p>
+              <div key={label} className="rounded-xl bg-[#FAFAF8] px-3 py-2.5">
+                <p className="text-xl font-bold text-ink">{value}</p>
+                <p className="text-[10px] text-muted mt-0.5">{label}</p>
               </div>
             ))}
           </div>
           <div className="mt-3 flex gap-2 flex-wrap">
-            <Link href="/menu" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+            <Link href="/menu" className="inline-flex items-center gap-1 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors">
               Abrir cardápio →
             </Link>
           </div>
@@ -320,15 +320,15 @@ export default function OnboardingClient() {
               { label: "Delivery",  url: status.links.delivery },
               { label: "QR Salão",  url: status.links.qr },
             ].map(({ label, url }) => (
-              <div key={label} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+              <div key={label} className="flex items-center gap-2 rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] text-gray-500 uppercase">{label}</p>
-                  <p className="text-xs text-gray-700 font-mono truncate">{url || "—"}</p>
+                  <p className="text-[10px] text-muted uppercase">{label}</p>
+                  <p className="text-xs text-ink2 font-mono truncate">{url || "—"}</p>
                 </div>
                 {url && (
                   <div className="flex gap-1 shrink-0">
                     <CopyBtn text={url} />
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-gray-600">↗</a>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted hover:text-ink2">↗</a>
                   </div>
                 )}
               </div>
@@ -340,15 +340,15 @@ export default function OnboardingClient() {
             <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasPhone ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
               {status.whatsapp.hasPhone ? "✓" : "⚠"} Telefone WhatsApp
             </span>
-            <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasEvolution ? "border-green-200 bg-green-50 text-green-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}>
+            <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasEvolution ? "border-green-200 bg-green-50 text-green-700" : "border-line2 bg-[#FAFAF8] text-muted"}`}>
               {status.whatsapp.hasEvolution ? "✓" : "○"} Evolution API
             </span>
-            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-medium text-gray-600">
+            <span className="rounded-full border border-line2 bg-[#FAFAF8] px-3 py-1 font-medium text-ink2">
               Modo: {status.whatsapp.agentMode === "RECEPTIONIST_ONLY" ? "Recepcionista" : status.whatsapp.agentMode === "HUMAN_ASSISTED" ? "Humano Assistido" : "IA Pedidos (exp.)"}
             </span>
           </div>
           <div className="mt-2 flex gap-2">
-            <Link href="/integracoes/whatsapp" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+            <Link href="/integracoes/whatsapp" className="inline-flex items-center gap-1 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors">
               Configurar WhatsApp →
             </Link>
           </div>
@@ -370,9 +370,9 @@ export default function OnboardingClient() {
                       type="checkbox"
                       checked={!!checked[i]}
                       onChange={(e) => setChecked((prev) => ({ ...prev, [i]: e.target.checked }))}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 accent-green-500"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-line2 accent-green-500"
                     />
-                    <span className={`text-sm transition-colors ${checked[i] ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                    <span className={`text-sm transition-colors ${checked[i] ? "text-muted line-through" : "text-ink2"}`}>
                       {item}
                     </span>
                   </label>
@@ -411,13 +411,13 @@ export default function OnboardingClient() {
             href={status.links.delivery}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 min-w-36 text-center rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+            className="flex-1 min-w-36 text-center rounded-xl border border-line2 bg-paper py-2.5 text-sm font-semibold text-ink2 shadow-sm hover:bg-[#FAFAF8] transition-colors"
           >
             Abrir cardápio delivery ↗
           </a>
           <Link
             href="/dashboard"
-            className="flex-1 min-w-36 text-center rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+            className="flex-1 min-w-36 text-center rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
           >
             Voltar ao painel
           </Link>

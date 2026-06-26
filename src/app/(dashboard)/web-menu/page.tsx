@@ -33,8 +33,8 @@ export default async function WebMenuPage() {
     <div className="p-6 max-w-2xl space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Web Menu</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-xl font-semibold text-ink">Web Menu</h1>
+        <p className="mt-1 text-sm text-muted">
           Compartilhe o link do cardápio digital ou imprima o QR code para as mesas.
         </p>
       </div>
@@ -46,9 +46,9 @@ export default async function WebMenuPage() {
           { label: "Acesso",     value: "Público"      },
           { label: "Atualiza",   value: "Em tempo real" },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-center">
-            <p className="text-xs text-gray-500">{label}</p>
-            <p className="text-sm font-semibold text-gray-900">{value}</p>
+          <div key={label} className="rounded-xl border border-line bg-paper px-4 py-3 text-center">
+            <p className="text-xs text-muted">{label}</p>
+            <p className="text-sm font-semibold text-ink">{value}</p>
           </div>
         ))}
       </div>
@@ -57,9 +57,9 @@ export default async function WebMenuPage() {
       <QRCard url={qrUrl} slug={restaurant.slug} />
 
       {/* How to use */}
-      <section className="rounded-xl border border-gray-100 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Como usar</h2>
-        <ol className="space-y-2 text-sm text-gray-600 list-none">
+      <section className="rounded-xl border border-line bg-paper p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-ink2">Como usar</h2>
+        <ol className="space-y-2 text-sm text-ink2 list-none">
           {[
             'Abra o QR acima e clique em "Baixar QR".',
             "Imprima e cole nas mesas, balcão ou embalagens.",

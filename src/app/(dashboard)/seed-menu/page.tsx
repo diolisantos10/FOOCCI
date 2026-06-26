@@ -50,24 +50,24 @@ export default function SeedMenuPage() {
     <>
       <TopBar title="Cardápio de Exemplo" />
       <div className="flex flex-col items-center justify-center p-10">
-        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm text-center">
+        <div className="w-full max-w-md rounded-2xl border border-line2 bg-paper p-8 shadow-sm text-center">
           {status === "checking" && (
-            <p className="text-gray-500 text-sm">Verificando cardápio...</p>
+            <p className="text-muted text-sm">Verificando cardápio...</p>
           )}
 
           {status === "ready" && (
             <>
               <div className="text-5xl mb-4">🍕</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
+              <h2 className="text-xl font-bold text-ink mb-2">
                 Cardápio de Exemplo
               </h2>
-              <p className="text-sm text-gray-500 mb-1">
+              <p className="text-sm text-muted mb-1">
                 Seu cardápio está vazio. Deseja popular com dados de exemplo de uma pizzaria?
               </p>
-              <p className="text-xs text-gray-400 mb-6">
+              <p className="text-xs text-muted mb-6">
                 Serão criadas 4 categorias e 11 itens. Você poderá editar ou excluir qualquer item depois.
               </p>
-              <ul className="text-sm text-gray-600 text-left mb-6 space-y-1">
+              <ul className="text-sm text-ink2 text-left mb-6 space-y-1">
                 <li>🍕 <strong>Pizzas Tradicionais</strong> — 4 sabores</li>
                 <li>⭐ <strong>Pizzas Especiais</strong> — 3 sabores</li>
                 <li>🥤 <strong>Bebidas</strong> — 2 itens</li>
@@ -75,7 +75,7 @@ export default function SeedMenuPage() {
               </ul>
               <button
                 onClick={handleSeed}
-                className="w-full rounded-lg bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+                className="w-full rounded-lg bg-brand-500 py-3 text-sm font-semibold text-white hover:bg-brand-600"
               >
                 Criar cardápio de exemplo
               </button>
@@ -83,19 +83,19 @@ export default function SeedMenuPage() {
           )}
 
           {status === "seeding" && (
-            <p className="text-gray-500 text-sm">Criando cardápio...</p>
+            <p className="text-muted text-sm">Criando cardápio...</p>
           )}
 
           {status === "done" && result && (
             <>
               <div className="text-5xl mb-4">✅</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Cardápio criado!</h2>
-              <p className="text-sm text-gray-600 mb-1">
+              <h2 className="text-xl font-bold text-ink mb-2">Cardápio criado!</h2>
+              <p className="text-sm text-ink2 mb-1">
                 {result.categories} categorias e {result.items} itens adicionados com sucesso.
               </p>
               <button
                 onClick={() => router.push("/menu")}
-                className="mt-6 w-full rounded-lg bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+                className="mt-6 w-full rounded-lg bg-brand-500 py-3 text-sm font-semibold text-white hover:bg-brand-600"
               >
                 Ver cardápio
               </button>
@@ -105,13 +105,13 @@ export default function SeedMenuPage() {
           {status === "blocked" && (
             <>
               <div className="text-5xl mb-4">🔒</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Cardápio já possui dados</h2>
-              <p className="text-sm text-gray-500 mb-6">
+              <h2 className="text-xl font-bold text-ink mb-2">Cardápio já possui dados</h2>
+              <p className="text-sm text-muted mb-6">
                 O seeding só é permitido quando o cardápio está completamente vazio.
               </p>
               <button
                 onClick={() => router.push("/menu")}
-                className="w-full rounded-lg bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+                className="w-full rounded-lg bg-brand-500 py-3 text-sm font-semibold text-white hover:bg-brand-600"
               >
                 Ver cardápio
               </button>
@@ -124,7 +124,7 @@ export default function SeedMenuPage() {
               <p className="text-sm text-red-600 mb-4">{errorMsg}</p>
               <button
                 onClick={() => router.push("/menu")}
-                className="w-full rounded-lg bg-gray-200 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-300"
+                className="w-full rounded-lg bg-line2 py-3 text-sm font-semibold text-ink2 hover:bg-line2"
               >
                 Voltar para o cardápio
               </button>

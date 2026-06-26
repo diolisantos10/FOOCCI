@@ -13,7 +13,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         <SettingsNav />
 
         {/* Content area */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="flex-1 overflow-y-auto bg-[#FAFAF8]">
           <div className="mx-auto max-w-2xl px-6 py-6 pb-12">
             {children}
           </div>

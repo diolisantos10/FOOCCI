@@ -13,14 +13,14 @@ import { computePeriodRange, buildChartBuckets } from "@/lib/dashboard-periods";
 describe("computePeriodRange — today", () => {
   const now = new Date("2026-06-06T15:00:00.000Z"); // 12:00 BRT
 
-  it("prevEnd is now − 24 h (same elapsed time yesterday, not yesterday midnight)", () => {
+  it("prevEnd is now − 7 d (same weekday last week, same elapsed time)", () => {
     const pr = computePeriodRange("today", null, null, now);
-    expect(pr.prevEnd.getTime()).toBe(now.getTime() - 86_400_000);
+    expect(pr.prevEnd.getTime()).toBe(now.getTime() - 7 * 86_400_000);
   });
 
-  it("prevStart is yesterday midnight BRT (03:00 UTC)", () => {
+  it("prevStart is the same weekday last week (todayStart − 7 d)", () => {
     const pr = computePeriodRange("today", null, null, now);
-    expect(pr.prevStart.getTime()).toBe(new Date("2026-06-05T03:00:00.000Z").getTime());
+    expect(pr.prevStart.getTime()).toBe(new Date("2026-05-30T03:00:00.000Z").getTime());
   });
 
   it("granularity is 'hour'", () => {
@@ -54,10 +54,10 @@ describe("computePeriodRange — yesterday", () => {
     expect(pr.rangeEnd.getTime()).toBe(new Date("2026-06-06T03:00:00.000Z").getTime());
   });
 
-  it("comparison is the day before yesterday (full day)", () => {
+  it("comparison is the same weekday the previous week", () => {
     const pr = computePeriodRange("yesterday", null, null, now);
-    expect(pr.prevStart.getTime()).toBe(new Date("2026-06-04T03:00:00.000Z").getTime());
-    expect(pr.prevEnd.getTime()).toBe(new Date("2026-06-05T03:00:00.000Z").getTime());
+    expect(pr.prevStart.getTime()).toBe(new Date("2026-05-29T03:00:00.000Z").getTime());
+    expect(pr.prevEnd.getTime()).toBe(new Date("2026-05-30T03:00:00.000Z").getTime());
   });
 
   it("granularity is 'hour'", () => {

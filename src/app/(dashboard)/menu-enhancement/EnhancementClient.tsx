@@ -61,12 +61,12 @@ interface Toast {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  PENDING:           { label: "Pendente",          color: "bg-gray-100 text-gray-600",   dot: "bg-gray-400" },
+  PENDING:           { label: "Pendente",          color: "bg-[#F4F4F2] text-ink2",   dot: "bg-muted" },
   PROCESSING:        { label: "Processando",        color: "bg-blue-100 text-blue-700",   dot: "bg-blue-500" },
   READY:             { label: "Pronta para revisão",color: "bg-yellow-100 text-yellow-700",dot:"bg-yellow-500" },
   FAILED:            { label: "Falhou",             color: "bg-red-100 text-red-600",     dot: "bg-red-500" },
   APPROVED:          { label: "Aprovada",           color: "bg-green-100 text-green-700", dot: "bg-green-500" },
-  REJECTED:          { label: "Rejeitada",          color: "bg-orange-100 text-orange-700",dot:"bg-orange-500" },
+  REJECTED:          { label: "Rejeitada",          color: "bg-brand-100 text-brand-700",dot:"bg-brand-500" },
   LOW_SOURCE_QUALITY:{ label: "Baixa qualidade",    color: "bg-purple-100 text-purple-700",dot:"bg-purple-500" },
   NEEDS_NEW_PHOTO:   { label: "Precisa nova foto",  color: "bg-pink-100 text-pink-700",   dot: "bg-pink-500" },
 };
@@ -153,7 +153,7 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] ?? { label: status, color: "bg-gray-100 text-gray-500", dot: "bg-gray-400" };
+  const cfg = STATUS_CONFIG[status] ?? { label: status, color: "bg-[#F4F4F2] text-muted", dot: "bg-muted" };
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.color}`}>
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
@@ -172,22 +172,22 @@ function ImageComparison({ originalUrl, enhancedUrl, label }: {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
       <div className="flex-1">
-        <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">Original</p>
-        <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+        <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted">Original</p>
+        <div className="aspect-square w-full overflow-hidden rounded-lg border border-line2 bg-[#F4F4F2]">
           {originalUrl ? (
             <img src={originalUrl} alt={`Original — ${label}`} className="h-full w-full object-cover object-center" />
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-gray-400">Sem imagem</div>
+            <div className="flex h-full items-center justify-center text-xs text-muted">Sem imagem</div>
           )}
         </div>
       </div>
       <div className="flex-1">
-        <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">Aprimorada</p>
-        <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+        <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted">Aprimorada</p>
+        <div className="aspect-square w-full overflow-hidden rounded-lg border border-line2 bg-[#F4F4F2]">
           {enhancedUrl ? (
             <img src={enhancedUrl} alt={`Aprimorada — ${label}`} className="h-full w-full object-cover object-center" />
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-gray-400">Aguardando</div>
+            <div className="flex h-full items-center justify-center text-xs text-muted">Aguardando</div>
           )}
         </div>
       </div>
@@ -206,9 +206,9 @@ function ActionBtn({ label, color, busy, onClick }: {
   const colorMap = {
     green:  "bg-green-500 text-white hover:bg-green-600",
     red:    "border border-red-300 text-red-600 hover:bg-red-50",
-    orange: "border border-orange-300 text-orange-600 hover:bg-orange-50",
+    orange: "border border-brand-300 text-brand-600 hover:bg-brand-50",
     blue:   "bg-blue-500 text-white hover:bg-blue-600",
-    gray:   "border border-gray-300 text-gray-600 hover:bg-gray-50",
+    gray:   "border border-line2 text-ink2 hover:bg-[#FAFAF8]",
   };
   return (
     <button
@@ -234,12 +234,12 @@ function JobCard({ job, onAction, actionBusy }: {
   const friendlyError = job.errorReason ? mapErrorReason(job.errorReason) : null;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-line2 bg-paper p-4 shadow-sm">
       {/* Header */}
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">{job.menuItem.name}</p>
-          <p className="text-[11px] text-gray-400">{job.menuItem.category.name}</p>
+          <p className="truncate text-sm font-semibold text-ink">{job.menuItem.name}</p>
+          <p className="text-[11px] text-muted">{job.menuItem.category.name}</p>
         </div>
         <StatusBadge status={job.status} />
       </div>
@@ -277,7 +277,7 @@ function JobCard({ job, onAction, actionBusy }: {
 
       {/* Provider / mode metadata */}
       {job.providerName && (
-        <p className="mt-1 text-[10px] text-gray-400">
+        <p className="mt-1 text-[10px] text-muted">
           Provider: {job.providerName} · {job.processMode ?? "—"}
           {job.approvedAt && (
             <> · Aprovada em {new Date(job.approvedAt).toLocaleDateString("pt-BR")}</>
@@ -321,12 +321,12 @@ function StatCard({ label, value, color, onClick, active }: {
       disabled={!onClick}
       className={`rounded-xl border px-4 py-3 text-left transition-colors ${
         active
-          ? "border-gray-400 bg-gray-900 text-white"
-          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+          ? "border-muted bg-ink text-white"
+          : "border-line2 bg-paper hover:border-line2 hover:bg-[#FAFAF8]"
       } ${onClick ? "cursor-pointer" : "cursor-default"}`}
     >
       <p className={`text-xl font-bold ${active ? "text-white" : color}`}>{value}</p>
-      <p className={`text-xs ${active ? "text-gray-300" : "text-gray-500"}`}>{label}</p>
+      <p className={`text-xs ${active ? "text-muted" : "text-muted"}`}>{label}</p>
     </button>
   );
 }
@@ -515,20 +515,20 @@ export function EnhancementClient({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
+    <div className="min-h-screen bg-[#FAFAF8] pb-12">
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Page header */}
-      <div className="border-b border-gray-200 bg-white px-6 py-5">
+      <div className="border-b border-line2 bg-paper px-6 py-5">
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-orange-500">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-600">
                 Ferramenta interna · admin only
               </p>
-              <h1 className="mt-0.5 text-xl font-bold text-gray-900">Melhoria de fotos do cardápio</h1>
-              <p className="mt-0.5 text-sm text-gray-500">
+              <h1 className="mt-0.5 text-xl font-bold text-ink">Melhoria de fotos do cardápio</h1>
+              <p className="mt-0.5 text-sm text-muted">
                 Revise as versões melhoradas antes de aplicar no cardápio. · {restaurant.name} · {totalWithImage} produtos com imagem
               </p>
             </div>
@@ -536,18 +536,18 @@ export function EnhancementClient({
             {/* Batch controls */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-600">Modo:</label>
+                <label className="text-xs text-ink2">Modo:</label>
                 <select
                   value={processMode}
                   onChange={(e) => setProcessMode(e.target.value as ProcessMode)}
-                  className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="rounded-lg border border-line2 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400"
                 >
                   <option value="enhance+upscale">Aprimorar + Upscale</option>
                   <option value="enhance">Só aprimorar</option>
                   <option value="upscale">Só upscale</option>
                 </select>
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+              <label className="flex items-center gap-1.5 text-xs text-ink2">
                 <input
                   type="checkbox"
                   checked={dryRun}
@@ -560,7 +560,7 @@ export function EnhancementClient({
                 type="button"
                 disabled={batchBusy}
                 onClick={() => setShowBatchConfirm(true)}
-                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
               >
                 {batchBusy ? "Processando…" : "Iniciar processamento"}
               </button>
@@ -579,9 +579,9 @@ export function EnhancementClient({
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
           onClick={(e) => { if (e.target === e.currentTarget) setShowBatchConfirm(false); }}
         >
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h2 className="mb-1 text-base font-bold text-gray-900">Iniciar processamento</h2>
-            <p className="mb-1 text-sm text-gray-600">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-bold text-ink">Iniciar processamento</h2>
+            <p className="mb-1 text-sm text-ink2">
               Serão processadas imagens ainda <strong>não iniciadas</strong>, <strong>com falha</strong> e <strong>rejeitadas</strong>.
             </p>
             <p className="mb-4 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
@@ -591,14 +591,14 @@ export function EnhancementClient({
               <button
                 type="button"
                 onClick={() => setShowBatchConfirm(false)}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                className="flex-1 rounded-xl border border-line2 px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8]"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={startBatch}
-                className="flex-1 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                className="flex-1 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
               >
                 {dryRun ? "Simular (dry run)" : "Processar agora"}
               </button>
@@ -611,17 +611,17 @@ export function EnhancementClient({
 
         {/* Summary stat cards */}
         <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
-          <StatCard label="Total"       value={jobs.length}                      color="text-gray-900" onClick={() => setStatusFilter("all")}                active={statusFilter === "all"} />
+          <StatCard label="Total"       value={jobs.length}                      color="text-ink" onClick={() => setStatusFilter("all")}                active={statusFilter === "all"} />
           <StatCard label="Processando" value={statusCounts["PROCESSING"] ?? 0}  color="text-blue-600" onClick={() => setStatusFilter("PROCESSING")}         active={statusFilter === "PROCESSING"} />
           <StatCard label="Prontas"     value={statusCounts["READY"] ?? 0}       color="text-yellow-600" onClick={() => setStatusFilter("READY")}             active={statusFilter === "READY"} />
           <StatCard label="Aprovadas"   value={statusCounts["APPROVED"] ?? 0}    color="text-green-600" onClick={() => setStatusFilter("APPROVED")}           active={statusFilter === "APPROVED"} />
-          <StatCard label="Rejeitadas"  value={statusCounts["REJECTED"] ?? 0}    color="text-orange-600" onClick={() => setStatusFilter("REJECTED")}          active={statusFilter === "REJECTED"} />
+          <StatCard label="Rejeitadas"  value={statusCounts["REJECTED"] ?? 0}    color="text-brand-600" onClick={() => setStatusFilter("REJECTED")}          active={statusFilter === "REJECTED"} />
           <StatCard label="Falhas"      value={statusCounts["FAILED"] ?? 0}      color="text-red-600" onClick={() => setStatusFilter("FAILED")}               active={statusFilter === "FAILED"} />
         </div>
 
         {/* Progress indicator */}
         {reviewable > 0 && (
-          <p className="mb-4 text-xs text-gray-500">
+          <p className="mb-4 text-xs text-muted">
             {reviewed} de {reviewable} revisadas
           </p>
         )}
@@ -638,10 +638,10 @@ export function EnhancementClient({
                 onClick={() => setStatusFilter(status)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   isActive
-                    ? "bg-gray-900 text-white"
+                    ? "bg-ink text-white"
                     : count === 0
-                    ? "border border-gray-200 bg-white text-gray-300"
-                    : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    ? "border border-line2 bg-paper text-muted"
+                    : "border border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
                 }`}
               >
                 {label} ({count})
@@ -685,7 +685,7 @@ export function EnhancementClient({
                     type="button"
                     disabled={recoveryBusy}
                     onClick={() => runRecovery(true)}
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                    className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
                   >
                     Simular
                   </button>
@@ -705,11 +705,11 @@ export function EnhancementClient({
 
         {/* Unprocessed products notice */}
         {unprocessedItems.length > 0 && (
-          <div className="mb-5 rounded-xl border border-dashed border-orange-300 bg-orange-50 px-4 py-3">
-            <p className="text-sm font-medium text-orange-700">
+          <div className="mb-5 rounded-xl border border-dashed border-brand-300 bg-brand-50 px-4 py-3">
+            <p className="text-sm font-medium text-brand-700">
               {unprocessedItems.length} produto{unprocessedItems.length !== 1 ? "s" : ""} ainda não processado{unprocessedItems.length !== 1 ? "s" : ""}
             </p>
-            <p className="mt-0.5 text-xs text-orange-600">
+            <p className="mt-0.5 text-xs text-brand-600">
               Clique em &quot;Iniciar processamento&quot; para incluí-los.
             </p>
           </div>
@@ -717,32 +717,32 @@ export function EnhancementClient({
 
         {/* Jobs grid — or empty state */}
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 py-16 text-center">
+          <div className="rounded-xl border border-dashed border-line2 py-16 text-center">
             {jobs.length === 0 ? (
               <>
-                <p className="text-gray-500 font-medium">Nenhum processamento iniciado.</p>
-                <p className="mt-1 text-sm text-gray-400">
+                <p className="text-muted font-medium">Nenhum processamento iniciado.</p>
+                <p className="mt-1 text-sm text-muted">
                   Clique em &quot;Iniciar processamento&quot; para começar.
                 </p>
               </>
             ) : statusFilter === "READY" ? (
               <>
-                <p className="text-gray-500 font-medium">Nenhuma foto pronta para revisão no momento.</p>
+                <p className="text-muted font-medium">Nenhuma foto pronta para revisão no momento.</p>
                 <button
                   type="button"
                   onClick={() => setStatusFilter("all")}
-                  className="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                  className="mt-3 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink"
                 >
                   Ver todas
                 </button>
               </>
             ) : (
               <>
-                <p className="text-gray-400">Nenhuma foto nesta etapa.</p>
+                <p className="text-muted">Nenhuma foto nesta etapa.</p>
                 <button
                   type="button"
                   onClick={() => setStatusFilter("all")}
-                  className="mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  className="mt-3 rounded-lg border border-line2 px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8]"
                 >
                   Ver todas
                 </button>

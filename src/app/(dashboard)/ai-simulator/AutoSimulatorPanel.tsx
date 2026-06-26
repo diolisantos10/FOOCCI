@@ -40,7 +40,7 @@ interface SimRunRecord {
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<SimulatorStatus, { label: string; dot: string; badge: string }> = {
-  IDLE:      { label: "Inativo",          dot: "bg-gray-400",  badge: "bg-gray-100 text-gray-600"   },
+  IDLE:      { label: "Inativo",          dot: "bg-muted",  badge: "bg-[#F4F4F2] text-ink2"   },
   RUNNING:   { label: "Rodando agora",    dot: "bg-blue-500",  badge: "bg-blue-100 text-blue-700"   },
   SCHEDULED: { label: "Agendado",         dot: "bg-green-500", badge: "bg-green-100 text-green-700" },
   PAUSED:    { label: "Pausado",          dot: "bg-amber-400", badge: "bg-amber-100 text-amber-700" },
@@ -62,9 +62,9 @@ const FAILURE_LABELS: Record<string, string> = {
 
 const IMPACT_COLORS: Record<string, string> = {
   high:   "bg-red-100 text-red-700",
-  medium: "bg-orange-100 text-orange-700",
+  medium: "bg-brand-100 text-brand-700",
   low:    "bg-green-100 text-green-700",
-  none:   "bg-gray-100 text-gray-500",
+  none:   "bg-[#F4F4F2] text-muted",
 };
 
 function fmtTime(iso: string) {
@@ -98,9 +98,9 @@ function ImpactBadge({ pattern }: { pattern: FailurePattern }) {
 
 function MetricCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="bg-gray-50 rounded-lg px-3 py-2 text-center">
-      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-      <p className={`text-lg font-bold ${warn ? "text-orange-500" : "text-gray-800"}`}>{value}</p>
+    <div className="bg-[#FAFAF8] rounded-lg px-3 py-2 text-center">
+      <p className="text-xs text-muted mb-0.5">{label}</p>
+      <p className={`text-lg font-bold ${warn ? "text-brand-600" : "text-ink"}`}>{value}</p>
     </div>
   );
 }
@@ -115,7 +115,7 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 2000);
         });
       }}
-      className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+      className="px-3 py-1.5 text-xs font-medium bg-[#F4F4F2] hover:bg-line2 text-ink2 rounded-lg transition-colors"
     >
       {copied ? "✓ Copiado!" : "Copiar sugestão"}
     </button>
@@ -126,22 +126,22 @@ function HistoryRow({ run, isSelected, onClick }: {
   run: SimRunRecord; isSelected: boolean; onClick: () => void;
 }) {
   const score = Math.round(run.overallScore * 100);
-  const scoreColor = score >= 75 ? "text-green-600" : score >= 50 ? "text-orange-500" : "text-red-600";
+  const scoreColor = score >= 75 ? "text-green-600" : score >= 50 ? "text-brand-600" : "text-red-600";
   return (
     <button
       onClick={onClick}
       className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-        isSelected ? "bg-blue-50 ring-1 ring-blue-200" : "hover:bg-gray-50"
+        isSelected ? "bg-blue-50 ring-1 ring-blue-200" : "hover:bg-[#FAFAF8]"
       }`}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted">
           {fmtTime(run.ranAt)}
           {run.triggeredBy === "manual" && (
             <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-medium">manual</span>
           )}
         </p>
-        <p className="text-xs text-gray-600 truncate mt-0.5">
+        <p className="text-xs text-ink2 truncate mt-0.5">
           {FAILURE_LABELS[run.analysis?.type] ?? "—"}
         </p>
       </div>
@@ -152,16 +152,16 @@ function HistoryRow({ run, isSelected, onClick }: {
 
 function RunDetail({ run }: { run: SimRunRecord }) {
   const score = Math.round(run.overallScore * 100);
-  const scoreColor = score >= 75 ? "text-green-600" : score >= 50 ? "text-orange-500" : "text-red-600";
+  const scoreColor = score >= 75 ? "text-green-600" : score >= 50 ? "text-brand-600" : "text-red-600";
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-gray-400">{fmtTime(run.ranAt)} · {run.scenarioCount} cenários</p>
+          <p className="text-xs text-muted">{fmtTime(run.ranAt)} · {run.scenarioCount} cenários</p>
           <ImpactBadge pattern={run.analysis} />
         </div>
         <p className={`text-3xl font-bold ${scoreColor}`}>
-          {score}<span className="text-base font-normal text-gray-400">%</span>
+          {score}<span className="text-base font-normal text-muted">%</span>
         </p>
       </div>
 
@@ -179,17 +179,17 @@ function RunDetail({ run }: { run: SimRunRecord }) {
       )}
 
       <div className="space-y-1">
-        <p className="text-xs font-semibold text-gray-700">Insight</p>
-        <p className="text-sm text-gray-600 leading-relaxed">{run.insight}</p>
+        <p className="text-xs font-semibold text-ink2">Insight</p>
+        <p className="text-sm text-ink2 leading-relaxed">{run.insight}</p>
       </div>
 
       {run.analysis.type !== "none" && run.suggestedPrompt && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-gray-700">Sugestão de prompt</p>
+            <p className="text-xs font-semibold text-ink2">Sugestão de prompt</p>
             <CopyButton text={run.suggestedPrompt} />
           </div>
-          <pre className="text-[11px] font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap overflow-x-auto max-h-52 leading-relaxed">
+          <pre className="text-[11px] font-mono text-ink2 bg-[#FAFAF8] border border-line2 rounded-lg p-3 whitespace-pre-wrap overflow-x-auto max-h-52 leading-relaxed">
             {run.suggestedPrompt}
           </pre>
         </div>
@@ -322,8 +322,8 @@ export function AutoSimulatorPanel() {
 
   if (initialLoad) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
-        <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mr-2" />
+      <div className="flex items-center justify-center py-16 text-muted text-sm">
+        <span className="inline-block w-4 h-4 border-2 border-line2 border-t-blue-500 rounded-full animate-spin mr-2" />
         Carregando...
       </div>
     );
@@ -333,7 +333,7 @@ export function AutoSimulatorPanel() {
     <div className="space-y-4">
 
       {/* ── Status header ───────────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+      <div className="bg-paper border border-line2 rounded-xl p-5 space-y-3">
         {/* Status row */}
         <div className="flex items-center gap-2">
           <StatusDot status={simStatus} />
@@ -341,7 +341,7 @@ export function AutoSimulatorPanel() {
             {meta.label}
           </span>
           {isRunning && (
-            <span className="text-xs text-gray-400 ml-1">
+            <span className="text-xs text-muted ml-1">
               — cenário {status?.progress?.current ?? "…"} de {status?.progress?.total ?? "…"}
             </span>
           )}
@@ -350,11 +350,11 @@ export function AutoSimulatorPanel() {
         {/* Progress bar */}
         {isRunning && status?.progress && (
           <div className="space-y-1">
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-muted">
               <span className="truncate max-w-xs">{status.progress.scenarioName || "Preparando…"}</span>
               <span className="shrink-0 ml-2">{status.progress.pct}%</span>
             </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-[#F4F4F2] rounded-full overflow-hidden">
               <div
                 className="h-full bg-blue-500 rounded-full transition-all duration-500"
                 style={{ width: `${status.progress.pct}%` }}
@@ -364,14 +364,14 @@ export function AutoSimulatorPanel() {
         )}
 
         {/* Time info */}
-        <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+        <div className="flex flex-wrap gap-4 text-xs text-muted">
           {status?.lastRunAt && (
-            <span>Última execução: <strong className="text-gray-700">{fmtTime(status.lastRunAt)}</strong></span>
+            <span>Última execução: <strong className="text-ink2">{fmtTime(status.lastRunAt)}</strong></span>
           )}
           {status?.nextRunAt && simStatus === "SCHEDULED" && (
-            <span>Próxima execução: <strong className="text-gray-700">{fmtTime(status.nextRunAt)}</strong></span>
+            <span>Próxima execução: <strong className="text-ink2">{fmtTime(status.nextRunAt)}</strong></span>
           )}
-          {!status?.lastRunAt && <span className="text-gray-400">Nenhuma execução registrada</span>}
+          {!status?.lastRunAt && <span className="text-muted">Nenhuma execução registrada</span>}
         </div>
 
         {/* Error */}
@@ -383,15 +383,15 @@ export function AutoSimulatorPanel() {
       </div>
 
       {/* ── Controls ────────────────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
+      <div className="bg-paper border border-line2 rounded-xl p-4 flex flex-wrap items-center gap-3">
         {/* Interval */}
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-ink2">
           A cada
           <select
             value={config?.intervalMinutes ?? 60}
             disabled={savingCfg || isRunning}
             onChange={(e) => void patchConfig({ intervalMinutes: Number(e.target.value) })}
-            className="px-2 py-1 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
+            className="px-2 py-1 border border-line2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
           >
             {[15, 30, 60, 120, 240].map((m) => (
               <option key={m} value={m}>{m} min</option>
@@ -400,13 +400,13 @@ export function AutoSimulatorPanel() {
         </label>
 
         {/* Scenario count */}
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-ink2">
           Cenários:
           <select
             value={config?.scenarioCount ?? 10}
             disabled={savingCfg || isRunning}
             onChange={(e) => void patchConfig({ scenarioCount: Number(e.target.value) })}
-            className="px-2 py-1 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
+            className="px-2 py-1 border border-line2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
           >
             {[5, 10, 20].map((n) => (
               <option key={n} value={n}>{n}</option>
@@ -432,7 +432,7 @@ export function AutoSimulatorPanel() {
             <button
               onClick={() => void doAction("/api/auto-simulator/pause")}
               title="Pausar agendamento automático"
-              className="px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-3 py-2 border border-line2 text-ink2 text-sm font-medium rounded-lg hover:bg-[#FAFAF8] transition-colors"
             >
               ⏸ Pausar
             </button>
@@ -443,7 +443,7 @@ export function AutoSimulatorPanel() {
             <button
               onClick={() => void doAction("/api/auto-simulator/resume")}
               title="Ativar agendamento automático"
-              className="px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-3 py-2 border border-line2 text-ink2 text-sm font-medium rounded-lg hover:bg-[#FAFAF8] transition-colors"
             >
               🔄 Ativar autopilot
             </button>
@@ -478,8 +478,8 @@ export function AutoSimulatorPanel() {
       {/* ── History + detail ─────────────────────────────────────────────────── */}
       {history.length === 0 ? (
         <div className="text-center py-16 space-y-2">
-          <p className="text-gray-500 text-sm font-medium">Nenhuma execução ainda</p>
-          <p className="text-gray-400 text-xs">
+          <p className="text-muted text-sm font-medium">Nenhuma execução ainda</p>
+          <p className="text-muted text-xs">
             Clique em &quot;Rodar agora&quot; para iniciar a primeira simulação,
             ou ative o autopilot para execuções automáticas.
           </p>
@@ -487,8 +487,8 @@ export function AutoSimulatorPanel() {
       ) : (
         <div className="grid grid-cols-[220px_1fr] gap-4 min-h-[400px]">
           {/* History sidebar */}
-          <div className="bg-white border border-gray-200 rounded-xl p-2 overflow-y-auto max-h-[600px] space-y-0.5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Histórico</p>
+          <div className="bg-paper border border-line2 rounded-xl p-2 overflow-y-auto max-h-[600px] space-y-0.5">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wide px-3 py-1.5">Histórico</p>
             {history.map((run) => (
               <HistoryRow
                 key={run.id}
@@ -500,11 +500,11 @@ export function AutoSimulatorPanel() {
           </div>
 
           {/* Run detail */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="bg-paper border border-line2 rounded-xl p-5">
             {selectedRun ? (
               <RunDetail run={selectedRun} />
             ) : (
-              <p className="text-gray-400 text-sm text-center py-12">Selecione uma execução no histórico</p>
+              <p className="text-muted text-sm text-center py-12">Selecione uma execução no histórico</p>
             )}
           </div>
         </div>

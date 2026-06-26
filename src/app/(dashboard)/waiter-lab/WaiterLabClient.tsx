@@ -56,7 +56,7 @@ const VALID_MODES: WaiterMode[] = [
 ];
 
 const MODE_COLORS: Record<string, string> = {
-  BROWSE:           "bg-gray-700 text-gray-200",
+  BROWSE:           "bg-ink text-line2",
   SUGGESTION:       "bg-green-900 text-green-300",
   INTERVENTION:     "bg-yellow-900 text-yellow-200",
   CHECKOUT_SUPPORT: "bg-blue-900 text-blue-300",
@@ -283,10 +283,10 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
         <span className="text-4xl">🍽️</span>
-        <p className="text-lg font-semibold text-gray-700">
+        <p className="text-lg font-semibold text-ink2">
           Nenhum restaurante encontrado
         </p>
-        <p className="max-w-xs text-sm text-gray-400">
+        <p className="max-w-xs text-sm text-muted">
           Faça login com uma conta que tenha um restaurante cadastrado para usar o Waiter Lab.
         </p>
       </div>
@@ -297,10 +297,10 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
         <span className="text-4xl">🍽️</span>
-        <p className="text-lg font-semibold text-gray-700">
+        <p className="text-lg font-semibold text-ink2">
           Nenhum restaurante com cardápio encontrado para testar.
         </p>
-        <p className="max-w-xs text-sm text-gray-400">
+        <p className="max-w-xs text-sm text-muted">
           Adicione itens ao cardápio em{" "}
           <a href="/menu" className="text-amber-600 underline hover:text-amber-500">
             Cardápio
@@ -354,7 +354,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-gray-950 text-gray-100 font-mono text-xs">
+    <div className="flex h-full flex-col overflow-hidden bg-ink text-gray-100 font-mono text-xs">
 
       {/* Header */}
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-800 px-3 py-2">
@@ -366,7 +366,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
         {defaultSlug && (
           <button
             onClick={() => void handleLoad(defaultSlug)}
-            className="rounded bg-gray-700 px-2 py-1 text-[10px] text-gray-200 hover:bg-gray-600 active:bg-gray-800"
+            className="rounded bg-ink px-2 py-1 text-[10px] text-line2 hover:bg-ink2 active:bg-ink"
           >
             ↺ Carregar restaurante atual
             {restaurantName && (
@@ -377,7 +377,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
 
         {/* Manual slug override */}
         <input
-          className="w-40 rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-amber-500"
+          className="w-40 rounded bg-ink px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-ink2 focus:ring-1 focus:ring-amber-500"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
           placeholder="outro slug…"
@@ -385,7 +385,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
         />
         <button
           onClick={() => void handleLoad(slug)}
-          className="rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-400 hover:border-amber-600 hover:text-amber-300"
+          className="rounded border border-gray-700 px-2 py-1 text-[10px] text-muted hover:border-amber-600 hover:text-amber-300"
         >
           Carregar
         </button>
@@ -393,7 +393,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
         {catalogError && <span className="text-red-400">{catalogError}</span>}
         {catalog.length > 0 && !catalogError && (
           <span className="text-green-400">
-            {catalog.length} itens · <span className="text-gray-500">{activeSlug}</span>
+            {catalog.length} itens · <span className="text-muted">{activeSlug}</span>
           </span>
         )}
 
@@ -404,8 +404,8 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
               onClick={() => setLabMode("manual")}
               className={`px-2 py-1 text-[10px] transition-colors ${
                 labMode === "manual"
-                  ? "bg-gray-700 text-gray-100"
-                  : "text-gray-600 hover:text-gray-400"
+                  ? "bg-ink text-gray-100"
+                  : "text-ink2 hover:text-muted"
               }`}
             >
               Manual
@@ -415,7 +415,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
               className={`px-2 py-1 text-[10px] transition-colors ${
                 labMode === "autopilot"
                   ? "bg-amber-600 text-white"
-                  : "text-gray-600 hover:text-amber-400"
+                  : "text-ink2 hover:text-amber-400"
               }`}
             >
               AutoPilot
@@ -424,7 +424,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
 
           <button
             onClick={resetSession}
-            className="rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
+            className="rounded border border-gray-700 px-2 py-1 text-[10px] text-muted hover:border-red-700 hover:text-red-400"
           >
             Reset Session
           </button>
@@ -437,10 +437,10 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
         {/* Left — Real ordering UI iframe */}
         <div className="flex w-72 shrink-0 flex-col border-r border-gray-800">
           <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5">
-            <span className="text-[10px] uppercase tracking-widest text-gray-600">UI Real</span>
+            <span className="text-[10px] uppercase tracking-widest text-ink2">UI Real</span>
             <button
               onClick={() => { setIframeStatus("loading"); setIframeKey((k) => k + 1); }}
-              className="text-[10px] text-gray-600 hover:text-gray-400"
+              className="text-[10px] text-ink2 hover:text-muted"
             >
               ↺ reload
             </button>
@@ -449,46 +449,46 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
           {/* iframe debug info */}
           <div className="shrink-0 space-y-0.5 border-b border-gray-800 px-3 py-1.5">
             <div className="flex gap-1.5">
-              <span className="w-16 shrink-0 text-[10px] text-gray-600">restaurante</span>
+              <span className="w-16 shrink-0 text-[10px] text-ink2">restaurante</span>
               <span className="truncate text-[10px] text-amber-400">{restaurantName ?? activeSlug}</span>
             </div>
             <div className="flex gap-1.5">
-              <span className="w-16 shrink-0 text-[10px] text-gray-600">slug</span>
-              <span className="text-[10px] text-gray-300">{activeSlug}</span>
+              <span className="w-16 shrink-0 text-[10px] text-ink2">slug</span>
+              <span className="text-[10px] text-muted">{activeSlug}</span>
             </div>
             <div className="flex gap-1.5">
-              <span className="w-16 shrink-0 text-[10px] text-gray-600">url</span>
-              <span className="text-[10px] text-gray-500">/pedido/{activeSlug}</span>
+              <span className="w-16 shrink-0 text-[10px] text-ink2">url</span>
+              <span className="text-[10px] text-muted">/pedido/{activeSlug}</span>
             </div>
             <div className="flex gap-1.5">
-              <span className="w-16 shrink-0 text-[10px] text-gray-600">catálogo</span>
+              <span className="w-16 shrink-0 text-[10px] text-ink2">catálogo</span>
               <span className={`text-[10px] ${
-                catalogLoading          ? "animate-pulse text-gray-500" :
+                catalogLoading          ? "animate-pulse text-muted" :
                 catalog.length > 0      ? "text-green-400"              : "text-red-400"
               }`}>
                 {catalogLoading ? "carregando…" : `${catalog.length} itens`}
               </span>
             </div>
             <div className="flex gap-1.5">
-              <span className="w-16 shrink-0 text-[10px] text-gray-600">iframe</span>
+              <span className="w-16 shrink-0 text-[10px] text-ink2">iframe</span>
               <span className={`text-[10px] ${
                 iframeStatus === "loaded"  ? "text-green-400"              :
-                iframeStatus === "error"   ? "text-red-400"               : "animate-pulse text-gray-500"
+                iframeStatus === "error"   ? "text-red-400"               : "animate-pulse text-muted"
               }`}>
                 {iframeStatus === "loaded" ? "carregado" : iframeStatus === "error" ? "erro" : "carregando…"}
               </span>
             </div>
           </div>
 
-          <div className="relative flex-1 overflow-hidden bg-white">
+          <div className="relative flex-1 overflow-hidden bg-paper">
             {iframeStatus === "error" && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-gray-100 p-4 text-center">
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#F4F4F2] p-4 text-center">
                 <span className="text-2xl">⚠️</span>
-                <p className="text-xs font-semibold text-gray-700">Não foi possível carregar</p>
-                <code className="rounded bg-gray-200 px-2 py-0.5 text-[10px] text-gray-600">
+                <p className="text-xs font-semibold text-ink2">Não foi possível carregar</p>
+                <code className="rounded bg-line2 px-2 py-0.5 text-[10px] text-ink2">
                   /pedido/{activeSlug}
                 </code>
-                <p className="text-[10px] text-gray-500">
+                <p className="text-[10px] text-muted">
                   Verifique se o restaurante possui cardápio publicado.
                 </p>
               </div>
@@ -524,7 +524,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
 
           {/* Quick test buttons */}
           <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-            <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Teste Rápido</div>
+            <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">Teste Rápido</div>
             <div className="flex flex-wrap gap-1.5">
               {QUICK_TESTS.map(({ label, event, message, useFirstId, needsCatalog }) => {
                 const noCatalog = needsCatalog && catalog.length === 0;
@@ -546,8 +546,8 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                     }}
                     className={`rounded border px-2 py-0.5 text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                       noCatalog
-                        ? "border-gray-800 text-gray-700"
-                        : "border-gray-700 text-gray-400 hover:border-amber-600 hover:text-amber-300"
+                        ? "border-gray-800 text-ink2"
+                        : "border-gray-700 text-muted hover:border-amber-600 hover:text-amber-300"
                     }`}
                   >
                     {label}
@@ -557,7 +557,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
             </div>
             <div className="mt-2 flex gap-1.5">
               <input
-                className="flex-1 rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-amber-500"
+                className="flex-1 rounded bg-ink px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-ink2 focus:ring-1 focus:ring-amber-500"
                 value={typedMessage}
                 onChange={(e) => setTypedMessage(e.target.value)}
                 placeholder="Mensagem do usuário (ON_USER_MESSAGE)…"
@@ -576,7 +576,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                     setTypedMessage("");
                   }
                 }}
-                className="rounded border border-gray-700 px-3 py-1 text-[10px] text-gray-400 hover:border-amber-600 hover:text-amber-300 disabled:opacity-40"
+                className="rounded border border-gray-700 px-3 py-1 text-[10px] text-muted hover:border-amber-600 hover:text-amber-300 disabled:opacity-40"
               >
                 Enviar
               </button>
@@ -589,17 +589,17 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
             {/* Response column */}
             <div className="flex flex-1 flex-col overflow-y-auto border-r border-gray-800 p-3">
               <div className="mb-2 flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-widest text-gray-600">Última Resposta</span>
+                <span className="text-[10px] uppercase tracking-widest text-ink2">Última Resposta</span>
                 {lastEvent && (
-                  <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-amber-400">{lastEvent}</span>
+                  <span className="rounded bg-ink px-1.5 py-0.5 text-[10px] text-amber-400">{lastEvent}</span>
                 )}
                 {isLoading && (
-                  <span className="animate-pulse text-[10px] text-gray-500">aguardando…</span>
+                  <span className="animate-pulse text-[10px] text-muted">aguardando…</span>
                 )}
               </div>
 
               {!lastResponse && !isLoading && (
-                <div className="text-gray-700">
+                <div className="text-ink2">
                   Nenhuma resposta. Use um botão de teste acima.
                 </div>
               )}
@@ -607,32 +607,32 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
               {lastResponse && !isLoading && (
                 <div className="space-y-3">
                   <div>
-                    <div className="mb-1 text-[10px] text-gray-600">mode</div>
-                    <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold uppercase ${MODE_COLORS[lastResponse.mode] ?? "bg-gray-800 text-gray-300"}`}>
+                    <div className="mb-1 text-[10px] text-ink2">mode</div>
+                    <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold uppercase ${MODE_COLORS[lastResponse.mode] ?? "bg-ink text-muted"}`}>
                       {lastResponse.mode}
                     </span>
                   </div>
                   <div>
-                    <div className="mb-1 text-[10px] text-gray-600">message</div>
-                    <div className="whitespace-pre-wrap rounded bg-gray-800 px-2 py-2 leading-relaxed text-gray-200">
+                    <div className="mb-1 text-[10px] text-ink2">message</div>
+                    <div className="whitespace-pre-wrap rounded bg-ink px-2 py-2 leading-relaxed text-line2">
                       {lastResponse.reply}
                     </div>
                   </div>
                   <div>
-                    <div className="mb-1 text-[10px] text-gray-600">
-                      cards[] <span className="text-gray-700">({lastResponse.cards.length})</span>
+                    <div className="mb-1 text-[10px] text-ink2">
+                      cards[] <span className="text-ink2">({lastResponse.cards.length})</span>
                     </div>
                     {lastResponse.cards.length === 0 ? (
-                      <span className="text-gray-700">[]</span>
+                      <span className="text-ink2">[]</span>
                     ) : (
                       <div className="space-y-1">
                         {lastResponse.cards.map((id) => {
                           const item = catalog.find((c) => c.id === id);
                           return (
-                            <div key={id} className={`rounded px-2 py-1 ${item ? "bg-gray-800 text-gray-300" : "bg-red-950 text-red-400"}`}>
-                              <span className="text-gray-500">{id.slice(0, 8)}…</span>
+                            <div key={id} className={`rounded px-2 py-1 ${item ? "bg-ink text-muted" : "bg-red-950 text-red-400"}`}>
+                              <span className="text-muted">{id.slice(0, 8)}…</span>
                               {item ? (
-                                <span className="ml-2 text-gray-200">{item.name}</span>
+                                <span className="ml-2 text-line2">{item.name}</span>
                               ) : (
                                 <span className="ml-2 text-red-400">ID não encontrado no catálogo!</span>
                               )}
@@ -643,18 +643,18 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                     )}
                   </div>
                   <div>
-                    <div className="mb-1 text-[10px] text-gray-600">
-                      options[] <span className="text-gray-700">({lastResponse.options.length})</span>
+                    <div className="mb-1 text-[10px] text-ink2">
+                      options[] <span className="text-ink2">({lastResponse.options.length})</span>
                     </div>
                     {lastResponse.options.length === 0 ? (
-                      <span className="text-gray-700">[]</span>
+                      <span className="text-ink2">[]</span>
                     ) : (
                       <div className="space-y-1">
                         {lastResponse.options.map((opt) => (
-                          <div key={opt.value} className="flex gap-2 rounded bg-gray-800 px-2 py-1">
+                          <div key={opt.value} className="flex gap-2 rounded bg-ink px-2 py-1">
                             <span className="text-amber-300">{opt.label}</span>
-                            <span className="text-gray-600">→</span>
-                            <span className="text-gray-500">{opt.value}</span>
+                            <span className="text-ink2">→</span>
+                            <span className="text-muted">{opt.value}</span>
                           </div>
                         ))}
                       </div>
@@ -663,12 +663,12 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                   <div>
                     <button
                       onClick={() => setShowRaw((v) => !v)}
-                      className="text-[10px] text-gray-600 hover:text-gray-400"
+                      className="text-[10px] text-ink2 hover:text-muted"
                     >
                       {showRaw ? "▲ ocultar raw" : "▼ raw JSON"}
                     </button>
                     {showRaw && (
-                      <pre className="mt-1 overflow-x-auto rounded bg-gray-800 p-2 text-[10px] text-gray-500">
+                      <pre className="mt-1 overflow-x-auto rounded bg-ink p-2 text-[10px] text-muted">
                         {JSON.stringify(lastResponse, null, 2)}
                       </pre>
                     )}
@@ -706,7 +706,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
               {/* Assertions */}
               <div className="mb-4">
                 <div className="mb-1.5 flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-widest text-gray-600">Assertions</span>
+                  <span className="text-[10px] uppercase tracking-widest text-ink2">Assertions</span>
                   {assertions.length > 0 && (
                     <span className="flex gap-1">
                       {passCount > 0 && <span className="text-green-400">{passCount}✓</span>}
@@ -715,17 +715,17 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                   )}
                 </div>
                 {assertions.length === 0 && (
-                  <div className="text-gray-700">Execute um evento para validar.</div>
+                  <div className="text-ink2">Execute um evento para validar.</div>
                 )}
                 <div className="space-y-1">
                   {assertions.map((a, i) => (
                     <div key={i} className="flex items-start gap-1.5">
-                      <span className={`mt-px shrink-0 text-[11px] ${a.pass === true ? "text-green-400" : a.pass === false ? "text-red-400" : "text-gray-600"}`}>
+                      <span className={`mt-px shrink-0 text-[11px] ${a.pass === true ? "text-green-400" : a.pass === false ? "text-red-400" : "text-ink2"}`}>
                         {a.pass === true ? "✓" : a.pass === false ? "✗" : "—"}
                       </span>
-                      <span className={a.pass === false ? "text-red-300" : "text-gray-400"}>
+                      <span className={a.pass === false ? "text-red-300" : "text-muted"}>
                         {a.label}
-                        {a.detail && <span className="ml-1 text-gray-600">({a.detail})</span>}
+                        {a.detail && <span className="ml-1 text-ink2">({a.detail})</span>}
                       </span>
                     </div>
                   ))}
@@ -734,29 +734,29 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
 
               {/* Lab controls */}
               <div className="mb-4">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Lab Controls</div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">Lab Controls</div>
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={resetSession}
-                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-400 hover:border-amber-600 hover:text-amber-300"
+                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-muted hover:border-amber-600 hover:text-amber-300"
                   >
                     Reset Lab
                   </button>
                   <button
                     onClick={() => setLabCart([])}
-                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
+                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-muted hover:border-red-700 hover:text-red-400"
                   >
                     Clear Cart
                   </button>
                   <button
                     onClick={() => setHistory([])}
-                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
+                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-muted hover:border-red-700 hover:text-red-400"
                   >
                     Clear Memory
                   </button>
                   <button
                     onClick={() => { setIframeStatus("loading"); setIframeKey((k) => k + 1); }}
-                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 hover:border-gray-500 hover:text-gray-300"
+                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-muted hover:border-gray-500 hover:text-muted"
                   >
                     Reload UI
                   </button>
@@ -765,42 +765,42 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
 
               {/* Session state */}
               <div className="mb-4">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Estado da Sessão</div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">Estado da Sessão</div>
                 <div className="space-y-1 text-[11px]">
                   <div>
-                    <span className="text-gray-600">Último evento: </span>
+                    <span className="text-ink2">Último evento: </span>
                     <span className="text-amber-400">{lastEvent ?? "—"}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Modo atual: </span>
+                    <span className="text-ink2">Modo atual: </span>
                     <span className={`font-bold ${
                       lastResponse?.mode === "CHECKOUT_SUPPORT" ? "text-blue-400"   :
                       lastResponse?.mode === "SUGGESTION"       ? "text-green-400"  :
-                      lastResponse?.mode === "INTERVENTION"     ? "text-yellow-400" : "text-gray-300"
+                      lastResponse?.mode === "INTERVENTION"     ? "text-yellow-400" : "text-muted"
                     }`}>
                       {lastResponse?.mode ?? "—"}
                     </span>
                   </div>
-                  <div><span className="text-gray-600">Cards: </span><span className="text-gray-300">{lastResponse?.cards.length ?? 0}</span></div>
-                  <div><span className="text-gray-600">Options: </span><span className="text-gray-300">{lastResponse?.options.length ?? 0}</span></div>
-                  <div><span className="text-gray-600">Turnos: </span><span className="text-gray-300">{history.length}</span></div>
-                  <div><span className="text-gray-600">Catálogo: </span><span className="text-gray-300">{catalog.length} itens</span></div>
+                  <div><span className="text-ink2">Cards: </span><span className="text-muted">{lastResponse?.cards.length ?? 0}</span></div>
+                  <div><span className="text-ink2">Options: </span><span className="text-muted">{lastResponse?.options.length ?? 0}</span></div>
+                  <div><span className="text-ink2">Turnos: </span><span className="text-muted">{history.length}</span></div>
+                  <div><span className="text-ink2">Catálogo: </span><span className="text-muted">{catalog.length} itens</span></div>
                 </div>
               </div>
 
               {/* Lab cart */}
               <div className="mb-4">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
-                  Cart do Lab {labCart.length > 0 && <span className="text-gray-500">R$ {cartTotal.toFixed(2)}</span>}
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">
+                  Cart do Lab {labCart.length > 0 && <span className="text-muted">R$ {cartTotal.toFixed(2)}</span>}
                 </div>
                 {labCart.length === 0 ? (
-                  <div className="text-gray-700">vazio</div>
+                  <div className="text-ink2">vazio</div>
                 ) : (
                   <div className="space-y-0.5">
                     {labCart.map((item) => (
                       <div key={item.id} className="flex items-center justify-between">
-                        <span className="text-gray-400">{item.name}</span>
-                        <span className="flex items-center gap-2 text-gray-600">
+                        <span className="text-muted">{item.name}</span>
+                        <span className="flex items-center gap-2 text-ink2">
                           x{item.qty}
                           <button onClick={() => setLabCart((c) => c.filter((i) => i.id !== item.id))} className="text-[10px] hover:text-red-500">✕</button>
                         </span>
@@ -810,14 +810,14 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                 )}
                 {catalog.length > 0 && (
                   <div className="mt-2">
-                    <div className="mb-1 text-[10px] text-gray-700">Adicionar ao cart:</div>
+                    <div className="mb-1 text-[10px] text-ink2">Adicionar ao cart:</div>
                     <div className="flex flex-wrap gap-1">
                       {catalog.slice(0, 6).map((item) => (
                         <button
                           key={item.id}
                           onClick={() => addToLabCart(item)}
                           title={`R$ ${item.price.toFixed(2)}`}
-                          className="rounded border border-gray-800 px-1.5 py-0.5 text-[10px] text-gray-600 hover:border-gray-600 hover:text-gray-300"
+                          className="rounded border border-gray-800 px-1.5 py-0.5 text-[10px] text-ink2 hover:border-gray-600 hover:text-muted"
                         >
                           + {item.name.length > 14 ? `${item.name.slice(0, 14)}…` : item.name}
                         </button>
@@ -830,12 +830,12 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
               {/* Resolved product names */}
               {lastResponse && lastResponse.cards.length > 0 && (
                 <div>
-                  <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Produtos Sugeridos</div>
+                  <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">Produtos Sugeridos</div>
                   <div className="space-y-0.5">
                     {lastResponse.cards.map((id) => {
                       const item = catalog.find((c) => c.id === id);
                       return (
-                        <div key={id} className={`text-[11px] ${item ? "text-gray-300" : "text-red-400"}`}>
+                        <div key={id} className={`text-[11px] ${item ? "text-muted" : "text-red-400"}`}>
                           {item ? `${item.name} — R$ ${item.price.toFixed(2)}` : `ID desconhecido: ${id}`}
                         </div>
                       );

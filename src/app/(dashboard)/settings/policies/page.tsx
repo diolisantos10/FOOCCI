@@ -61,7 +61,7 @@ export default function PoliciesPage() {
     setSaving(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">

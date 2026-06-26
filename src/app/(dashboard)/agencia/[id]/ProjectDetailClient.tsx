@@ -47,7 +47,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT:            "bg-gray-100 text-gray-600",
+  DRAFT:            "bg-[#F4F4F2] text-ink2",
   STRATEGY_DONE:    "bg-blue-50 text-blue-700",
   PROPOSAL_READY:   "bg-purple-50 text-purple-700",
   ACTIVE:           "bg-green-50 text-green-700",
@@ -58,7 +58,7 @@ const STATUS_COLORS: Record<string, string> = {
 const PRIORITY_COLORS: Record<string, string> = {
   high:   "bg-red-50 text-red-700 border-red-200",
   medium: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  low:    "bg-gray-50 text-gray-600 border-gray-200",
+  low:    "bg-[#FAFAF8] text-ink2 border-line2",
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -85,43 +85,43 @@ function SpecialistCard({ data }: { data: SpecialistOutput }) {
   const icon = SPECIALIST_ICONS[data.role] ?? "👤";
 
   return (
-    <div className={`rounded-xl border bg-white shadow-sm overflow-hidden ${
-      data.priority === "high" ? "border-red-200" : "border-gray-200"
+    <div className={`rounded-xl border bg-paper shadow-sm overflow-hidden ${
+      data.priority === "high" ? "border-red-200" : "border-line2"
     }`}>
       {/* Header */}
       <div
         className="flex cursor-pointer items-start gap-3 p-4"
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-lg">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#FAFAF8] text-lg">
           {icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-gray-900">{data.specialist}</span>
+            <span className="text-sm font-semibold text-ink">{data.specialist}</span>
             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PRIORITY_COLORS[data.priority]}`}>
               Prioridade {PRIORITY_LABELS[data.priority]}
             </span>
           </div>
-          <p className="mt-1 text-xs text-gray-500 line-clamp-2">{data.mainInsight}</p>
+          <p className="mt-1 text-xs text-muted line-clamp-2">{data.mainInsight}</p>
         </div>
-        <span className="text-gray-400 text-sm shrink-0">{expanded ? "▲" : "▼"}</span>
+        <span className="text-muted text-sm shrink-0">{expanded ? "▲" : "▼"}</span>
       </div>
 
       {/* Expanded body */}
       {expanded && (
-        <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+        <div className="border-t border-line px-4 pb-4 pt-3 space-y-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Direção Recomendada</p>
-            <p className="text-sm text-gray-700">{data.recommendedDirection}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-1">Direção Recomendada</p>
+            <p className="text-sm text-ink2">{data.recommendedDirection}</p>
           </div>
 
           {data.risks.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Riscos</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-1">Riscos</p>
               <ul className="space-y-1">
                 {data.risks.map((risk, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                  <li key={i} className="flex items-start gap-2 text-sm text-ink2">
                     <span className="mt-0.5 shrink-0 text-red-400">⚠</span>
                     {risk}
                   </li>
@@ -132,10 +132,10 @@ function SpecialistCard({ data }: { data: SpecialistOutput }) {
 
           {data.suggestedDeliverables.length > 0 && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Entregáveis Sugeridos</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-1">Entregáveis Sugeridos</p>
               <ul className="space-y-1">
                 {data.suggestedDeliverables.map((d, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                  <li key={i} className="flex items-start gap-2 text-sm text-ink2">
                     <span className="mt-0.5 shrink-0 text-green-500">✓</span>
                     {d}
                   </li>
@@ -203,7 +203,7 @@ function SynthesisSection({ synthesis }: { synthesis: StrategySynthesis }) {
         </div>
       )}
 
-      <div className="rounded-lg bg-white border border-indigo-200 p-3">
+      <div className="rounded-lg bg-paper border border-indigo-200 p-3">
         <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Próxima Ação para o PM</p>
         <p className="text-sm font-medium text-indigo-900">{synthesis.nextActionForPM}</p>
       </div>
@@ -261,19 +261,19 @@ export function ProjectDetailClient({ project }: { project: Project }) {
       <div className="mb-4 flex items-center gap-3">
         <button
           onClick={() => router.push("/agencia")}
-          className="text-sm text-gray-500 hover:text-gray-800"
+          className="text-sm text-muted hover:text-ink"
         >
           ← Projetos
         </button>
-        <span className="text-gray-300">/</span>
-        <span className="text-sm font-semibold text-gray-800 truncate">{project.name}</span>
-        <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_COLORS[project.status] ?? "bg-gray-100 text-gray-600"}`}>
+        <span className="text-muted">/</span>
+        <span className="text-sm font-semibold text-ink truncate">{project.name}</span>
+        <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_COLORS[project.status] ?? "bg-[#F4F4F2] text-ink2"}`}>
           {STATUS_LABELS[project.status] ?? project.status}
         </span>
       </div>
 
       {/* Tabs */}
-      <div className="mb-5 flex border-b border-gray-200">
+      <div className="mb-5 flex border-b border-line2">
         {(["brief", "strategy"] as const).map((t) => (
           <button
             key={t}
@@ -281,7 +281,7 @@ export function ProjectDetailClient({ project }: { project: Project }) {
             className={`px-4 pb-2 text-sm font-medium transition-colors ${
               tab === t
                 ? "border-b-2 border-brand-600 text-brand-700"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-muted hover:text-ink2"
             }`}
           >
             {t === "brief" ? "Brief" : "Strategy Room"}
@@ -295,9 +295,9 @@ export function ProjectDetailClient({ project }: { project: Project }) {
       {/* Brief tab */}
       {tab === "brief" && (
         <div className="space-y-5">
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Objetivo</h2>
-            <p className="text-sm text-gray-700 whitespace-pre-line">{project.objective}</p>
+          <div className="rounded-xl border border-line2 bg-paper p-5">
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Objetivo</h2>
+            <p className="text-sm text-ink2 whitespace-pre-line">{project.objective}</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -316,8 +316,8 @@ export function ProjectDetailClient({ project }: { project: Project }) {
           </div>
 
           {project.services.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
-              <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Serviços Selecionados</h2>
+            <div className="rounded-xl border border-line2 bg-paper p-5">
+              <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Serviços Selecionados</h2>
               <div className="flex flex-wrap gap-2">
                 {project.services.map((s) => (
                   <span key={s} className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">{s}</span>
@@ -347,9 +347,9 @@ export function ProjectDetailClient({ project }: { project: Project }) {
       {tab === "strategy" && (
         <div className="space-y-4">
           {!session ? (
-            <div className="rounded-xl border border-dashed border-gray-200 py-16 text-center">
-              <p className="text-sm font-medium text-gray-500">Strategy Room ainda não gerado.</p>
-              <p className="mt-1 text-xs text-gray-400 mb-4">Vá ao brief e clique em &ldquo;Gerar Strategy Room&rdquo;.</p>
+            <div className="rounded-xl border border-dashed border-line2 py-16 text-center">
+              <p className="text-sm font-medium text-muted">Strategy Room ainda não gerado.</p>
+              <p className="mt-1 text-xs text-muted mb-4">Vá ao brief e clique em &ldquo;Gerar Strategy Room&rdquo;.</p>
               <button
                 onClick={() => setTab("brief")}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
@@ -360,13 +360,13 @@ export function ProjectDetailClient({ project }: { project: Project }) {
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted">
                   Gerado em {new Date(session.generatedAt).toLocaleString("pt-BR")} · Uso interno
                 </p>
                 <button
                   onClick={generateStrategy}
                   disabled={generating}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
                 >
                   {generating ? "Gerando…" : "↺ Regenerar"}
                 </button>
@@ -401,9 +401,9 @@ export function ProjectDetailClient({ project }: { project: Project }) {
 
 function InfoField({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white p-4 ${className}`}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</p>
-      <p className="text-sm text-gray-700">{value}</p>
+    <div className={`rounded-xl border border-line2 bg-paper p-4 ${className}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-1">{label}</p>
+      <p className="text-sm text-ink2">{value}</p>
     </div>
   );
 }

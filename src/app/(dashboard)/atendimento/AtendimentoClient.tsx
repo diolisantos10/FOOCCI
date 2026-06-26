@@ -235,7 +235,7 @@ function getHandlerBadge(c: ConvSummary): HandlerBadge {
   if (c.aiLocked)
     return { label: "IA bloqueada", cls: "bg-slate-200 text-slate-700 border-slate-300" };
   if (c.status === "RESOLVED")
-    return { label: "Resolvida",  cls: "bg-gray-100   text-gray-500  border-gray-200"  };
+    return { label: "Resolvida",  cls: "bg-[#F4F4F2]   text-muted  border-line2"  };
   if (c.status === "OPEN" && c.unreadCount > 0)
     return { label: "Aguardando", cls: "bg-red-100    text-red-700   border-red-200"   };
   if (!c.aiEnabled || c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU")
@@ -253,7 +253,7 @@ function getConvTypeBadge(c: ConvSummary): { label: string; cls: string } | null
 // CRM_CAMPAIGN and CRM_AUTOMATION are handled dynamically in getCrmBadge()
 // so the badge reflects whether the customer has replied or not.
 const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
-  ORDER_SUPPORT: { label: "Pós-venda", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  ORDER_SUPPORT: { label: "Pós-venda", cls: "bg-brand-100 text-brand-700 border-brand-200" },
   HUMAN_SUPPORT: { label: "Suporte",   cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
 };
 
@@ -337,7 +337,7 @@ function ScrollableChips({ children, className }: { children: ReactNode; classNa
           type="button"
           onClick={() => nudge(-1)}
           aria-label="Rolar esquerda"
-          className="absolute left-0 z-10 flex h-full items-center bg-gradient-to-r from-white via-white/80 to-transparent pl-0.5 pr-3 text-sm text-gray-400 hover:text-gray-600"
+          className="absolute left-0 z-10 flex h-full items-center bg-gradient-to-r from-white via-white/80 to-transparent pl-0.5 pr-3 text-sm text-muted hover:text-ink2"
         >
           ‹
         </button>
@@ -353,7 +353,7 @@ function ScrollableChips({ children, className }: { children: ReactNode; classNa
           type="button"
           onClick={() => nudge(1)}
           aria-label="Rolar direita"
-          className="absolute right-0 z-10 flex h-full items-center bg-gradient-to-l from-white via-white/80 to-transparent pr-0.5 pl-3 text-sm text-gray-400 hover:text-gray-600"
+          className="absolute right-0 z-10 flex h-full items-center bg-gradient-to-l from-white via-white/80 to-transparent pr-0.5 pl-3 text-sm text-muted hover:text-ink2"
         >
           ›
         </button>
@@ -1017,15 +1017,15 @@ export function AtendimentoClient({
             (where "Assumir atendimento" is); "Estou ciente" silences the current
             batch without resolving anything. */}
         {pendingHumanIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-orange-200 bg-orange-50 px-3 py-1.5">
-            <span className="text-xs font-semibold text-orange-700">
+          <div className="flex flex-wrap items-center gap-2 border-b border-brand-200 bg-brand-50 px-3 py-1.5">
+            <span className="text-xs font-semibold text-brand-700">
               🙋 {pendingHumanIds.length} aguardando atendimento humano
             </span>
             <div className="ml-auto flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={viewFirstPendingHuman}
-                className="rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600 transition-colors"
+                className="rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-600 transition-colors"
               >
                 Ver pendentes
               </button>
@@ -1034,7 +1034,7 @@ export function AtendimentoClient({
                 onClick={acknowledgePendingHuman}
                 disabled={alarmingHumanIds.length === 0}
                 title="Silencia o alarme do lote atual sem resolver as conversas nem reativar a IA"
-                className="rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-[11px] font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors"
+                className="rounded-lg border border-brand-300 bg-paper px-2.5 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 transition-colors"
               >
                 {alarmingHumanIds.length === 0 ? "Silenciado ✓" : "Estou ciente"}
               </button>
@@ -1065,7 +1065,7 @@ export function AtendimentoClient({
                 onClick={() => setAcknowledgedOverdueIds(new Set(overdueHandoffs.map((o) => o.id)))}
                 disabled={alarmingOverdueIds.length === 0}
                 title="Silencia o som deste alerta sem resolver as conversas nem reativar a IA"
-                className="rounded-lg border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                className="rounded-lg border border-red-300 bg-paper px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
               >
                 {alarmingOverdueIds.length === 0 ? "Silenciado ✓" : "Silenciar"}
               </button>
@@ -1098,7 +1098,7 @@ export function AtendimentoClient({
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {loadingList ? (
-            <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+            <div className="flex items-center justify-center py-12 text-sm text-muted">
               Carregando…
             </div>
           ) : fetchError ? (
@@ -1174,10 +1174,10 @@ export function AtendimentoClient({
                         {/* Content */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="truncate text-sm font-semibold text-gray-900">
+                            <span className="truncate text-sm font-semibold text-ink">
                               {conv.customer?.name ?? conv.customerName ?? "Desconhecido"}
                             </span>
-                            <span className="shrink-0 text-[10px] text-gray-400">
+                            <span className="shrink-0 text-[10px] text-muted">
                               {fmtTime(conv.lastMessageAt ?? conv.createdAt)}
                             </span>
                           </div>
@@ -1203,11 +1203,11 @@ export function AtendimentoClient({
                                 📋 Cardápio
                               </span>
                             ) : conv.channel === "MANUAL" ? (
-                              <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-px text-[9px] font-bold leading-none text-gray-600">
+                              <span className="rounded-full border border-line2 bg-[#F4F4F2] px-1.5 py-px text-[9px] font-bold leading-none text-ink2">
                                 ✍️ Manual
                               </span>
                             ) : (
-                              <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-px text-[9px] font-bold leading-none text-gray-500">
+                              <span className="rounded-full border border-line2 bg-[#F4F4F2] px-1.5 py-px text-[9px] font-bold leading-none text-muted">
                                 {chanMeta.icon} {chanMeta.label}
                               </span>
                             )}
@@ -1239,7 +1239,7 @@ export function AtendimentoClient({
                             )}
                           </div>
 
-                          <p className="mt-1 truncate text-xs text-gray-500">
+                          <p className="mt-1 truncate text-xs text-muted">
                             {preview}
                           </p>
                         </div>
@@ -1253,7 +1253,7 @@ export function AtendimentoClient({
         </div>
 
         {/* Footer count */}
-        <div className="border-t border-gray-100 px-3 py-2 text-xs text-gray-400">
+        <div className="border-t border-line px-3 py-2 text-xs text-muted">
           {displayed.length} conversa{displayed.length !== 1 ? "s" : ""}
         </div>
       </aside>
@@ -1263,14 +1263,14 @@ export function AtendimentoClient({
         role="separator"
         aria-label="Redimensionar painel"
         onMouseDown={handleDividerMouseDown}
-        className="hidden lg:flex w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-orange-400 active:bg-orange-500 transition-colors"
+        className="hidden lg:flex w-1 shrink-0 cursor-col-resize bg-line2 hover:bg-brand-400 active:bg-brand-500 transition-colors"
       />
 
       {deleteConvOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-gray-900">Apagar conversa?</h3>
-            <p className="mt-2 text-sm text-gray-600">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
+            <h3 className="text-base font-bold text-ink">Apagar conversa?</h3>
+            <p className="mt-2 text-sm text-ink2">
               Essa ação remove a conversa, mensagens e dados vinculados a esse atendimento. Essa ação não pode ser desfeita.
             </p>
             {deleteConvError && (
@@ -1280,7 +1280,7 @@ export function AtendimentoClient({
               <button
                 onClick={() => { setDeleteConvOpen(false); setDeleteConvError(null); }}
                 disabled={deleteConvLoading}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
               >
                 Cancelar
               </button>
@@ -1303,17 +1303,17 @@ export function AtendimentoClient({
         lg:flex lg:flex-1
       `}>
         {!selectedId ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-gray-400">
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted">
             <span className="text-5xl">💬</span>
-            <p className="text-sm font-medium text-gray-500">
+            <p className="text-sm font-medium text-muted">
               Selecione uma conversa
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted">
               para ver o histórico e gerenciar o atendimento
             </p>
           </div>
         ) : loadingThread && !thread ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
+          <div className="flex h-full items-center justify-center text-sm text-muted">
             Carregando…
           </div>
         ) : thread ? (
@@ -1407,13 +1407,13 @@ function ActiveDraftPanel({ draft }: { draft: ActiveDraft }) {
         {items.length === 0 ? (
           <p className="text-xs text-blue-400 italic">Nenhum item adicionado ainda</p>
         ) : (
-          <p className="truncate text-xs text-gray-700">
+          <p className="truncate text-xs text-ink2">
             {items.map((i) => `${i.quantity}× ${i.menuItem?.name ?? "?"}`).join(" · ")}
-            {more > 0 && <span className="text-gray-400"> +{more}</span>}
+            {more > 0 && <span className="text-muted"> +{more}</span>}
           </p>
         )}
         {total > 0 && (
-          <p className="mt-0.5 text-xs font-bold text-gray-800">
+          <p className="mt-0.5 text-xs font-bold text-ink">
             R$ {total.toFixed(2).replace(".", ",")}
           </p>
         )}
@@ -1436,7 +1436,7 @@ const STATUS_META: Record<string, StatusMeta> = {
   PENDING:          { label: "Aguardando",        badge: "bg-amber-100  border-amber-200  text-amber-800"  },
   AWAITING_PAYMENT: { label: "Aguard. pagamento", badge: "bg-yellow-100 border-yellow-200 text-yellow-800" },
   CONFIRMED:        { label: "Confirmado",        badge: "bg-blue-100   border-blue-200   text-blue-800"   },
-  PREPARING:        { label: "Em preparo",        badge: "bg-orange-100 border-orange-200 text-orange-800" },
+  PREPARING:        { label: "Em preparo",        badge: "bg-brand-100 border-brand-200 text-brand-800" },
   READY:            { label: "Pronto",            badge: "bg-teal-100   border-teal-200   text-teal-800"   },
   OUT_FOR_DELIVERY: { label: "Em entrega",        badge: "bg-purple-100 border-purple-200 text-purple-800" },
 };
@@ -1500,7 +1500,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
   const items    = order.items.slice(0, 3);
   const more     = order.items.length - items.length;
   const delayed  = isDelayed(order.createdAt, status);
-  const meta     = delayed ? DELAYED_META : (STATUS_META[status] ?? { label: status, badge: "bg-gray-100 border-gray-200 text-gray-600" });
+  const meta     = delayed ? DELAYED_META : (STATUS_META[status] ?? { label: status, badge: "bg-[#F4F4F2] border-line2 text-ink2" });
   const priority = orderPriorityLevel(status, order.createdAt);
 
   async function applyAction(nextStatus: string, actionKey: string) {
@@ -1535,8 +1535,8 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
       priority === "critical"
         ? "border-red-400 bg-red-50/30"
         : priority === "attention"
-        ? "border-amber-400 bg-white"
-        : "border-gray-200 bg-white"
+        ? "border-amber-400 bg-paper"
+        : "border-line2 bg-paper"
     }`}>
       <div className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold border-b ${
         priority === "critical"
@@ -1555,31 +1555,31 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
         </span>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+      <div className="flex items-center gap-2 border-b border-line bg-[#FAFAF8] px-3 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
           Pedido ativo
         </span>
         <span className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-px text-[10px] font-semibold ${meta.badge}`}>
           {delayed && <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />}
           {meta.label}
         </span>
-        <span className="ml-auto text-[10px] text-gray-400 tabular-nums">
+        <span className="ml-auto text-[10px] text-muted tabular-nums">
           {Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60_000)} min
         </span>
         <a
           href="/orders"
-          className="rounded-lg border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 hover:bg-gray-100 transition-colors"
+          className="rounded-lg border border-line2 px-2 py-1 text-[10px] font-semibold text-muted hover:bg-[#F4F4F2] transition-colors"
         >
           Ver pedido
         </a>
       </div>
 
       <div className="px-3 py-2">
-        <p className="truncate text-xs text-gray-600">
+        <p className="truncate text-xs text-ink2">
           {items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
-          {more > 0 && <span className="text-gray-400"> +{more}</span>}
+          {more > 0 && <span className="text-muted"> +{more}</span>}
         </p>
-        <p className="mt-0.5 text-xs font-bold text-gray-800">
+        <p className="mt-0.5 text-xs font-bold text-ink">
           R$ {total.toFixed(2).replace(".", ",")}
         </p>
       </div>
@@ -1592,7 +1592,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
           {isManagerOrOwner && (
             <button
               onClick={() => setManualConfirmOpen(true)}
-              className="mt-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+              className="mt-1.5 rounded-lg border border-amber-300 bg-paper px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
             >
               Confirmar pagamento manualmente
             </button>
@@ -1601,7 +1601,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
       )}
 
       {!isTerminal && (
-        <div className="flex gap-1.5 flex-wrap border-t border-gray-100 bg-gray-50 px-3 py-2">
+        <div className="flex gap-1.5 flex-wrap border-t border-line bg-[#FAFAF8] px-3 py-2">
           {canConfirm && (
             <button
               onClick={() => applyAction("CONFIRMED", "confirm")}
@@ -1624,7 +1624,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
             <button
               onClick={() => applyAction("CANCELLED", "cancel")}
               disabled={updating !== null}
-              className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="rounded-lg border border-red-200 bg-paper px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
             >
               {updating === "cancel" ? "…" : "Cancelar pedido"}
             </button>
@@ -1640,16 +1640,16 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
 
       {manualConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-gray-900">Confirmar pagamento manualmente?</h3>
-            <p className="mt-1 text-xs text-gray-500">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
+            <h3 className="text-base font-bold text-ink">Confirmar pagamento manualmente?</h3>
+            <p className="mt-1 text-xs text-muted">
               Use apenas se você verificou o pagamento no painel do Mercado Pago.
               Esta ação marca o pedido como pago e o envia para produção.
             </p>
             <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
               Pedido {formatOrderNumber(order.orderNumber, order.id)} · R$ {parseFloat(order.total).toFixed(2).replace(".", ",")}
             </div>
-            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink2">
               <input
                 type="checkbox"
                 checked={manualConfirmChecked}
@@ -1663,7 +1663,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
               onChange={(e) => setManualConfirmReason(e.target.value)}
               placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
               rows={2}
-              className="mt-2 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+              className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-xs text-ink2 placeholder:text-muted focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
             />
             {manualConfirmError && (
               <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>
@@ -1672,7 +1672,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
               <button
                 onClick={() => { setManualConfirmOpen(false); setManualConfirmChecked(false); setManualConfirmReason(""); setManualConfirmError(null); }}
                 disabled={manualConfirming}
-                className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
               >
                 Voltar
               </button>
@@ -1741,7 +1741,7 @@ function ThreadPanel({
   return (
     <>
       {/* ── Thread header ─────────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3">
+      <div className="shrink-0 border-b border-line2 bg-paper px-4 py-3">
 
         {/* Row 1: back (mobile) + customer info + badges */}
         <div className="flex items-center gap-2">
@@ -1750,7 +1750,7 @@ function ThreadPanel({
               type="button"
               onClick={onBack}
               aria-label="Voltar"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] lg:hidden"
             >
               ←
             </button>
@@ -1766,17 +1766,17 @@ function ThreadPanel({
                   href={`/customers/${thread.customer.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block truncate text-sm font-bold text-gray-900 hover:text-orange-600 hover:underline"
+                  className="block truncate text-sm font-bold text-ink hover:text-brand-600 hover:underline"
                   title="Abrir ficha do cliente"
                 >
                   {thread.customer.name ?? "Desconhecido"}
                 </a>
               ) : (
-                <p className="truncate text-sm font-bold text-gray-900">
+                <p className="truncate text-sm font-bold text-ink">
                   {thread.customer?.name ?? thread.customerName ?? "Desconhecido"}
                 </p>
               )}
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 {(() => {
                   const ph = thread.customer?.phone ?? thread.customerPhone ?? "";
                   return !ph || isGuestIdentifier(ph) ? "Telefone não informado" : ph;
@@ -1792,7 +1792,7 @@ function ThreadPanel({
                 <span className="hidden md:inline">Multicanal</span>
               </span>
             ) : (
-              <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+              <span className="flex items-center gap-1 rounded-full bg-[#F4F4F2] px-2 py-0.5 text-xs font-medium text-ink2">
                 <span>{channel.icon}</span>
                 <span className="hidden md:inline">{channel.label}</span>
               </span>
@@ -1817,7 +1817,7 @@ function ThreadPanel({
             onChange={(e) => onClassify(e.target.value as ConversationType)}
             disabled={actionLoading}
             title="Classificar conversa"
-            className="shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="shrink-0 rounded-lg border border-line2 bg-paper px-2 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
           >
             {CONV_TYPE_OPTIONS.map((o) => (
               <option key={o.id} value={o.id}>{o.label}</option>
@@ -1839,7 +1839,7 @@ function ThreadPanel({
               onClick={() => onAIAction("takeover")}
               disabled={actionLoading}
               title={isPendingHuman ? "Assumir este atendimento humano e silenciar o alerta" : "Assumir o atendimento desta conversa"}
-              className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               Assumir atendimento
             </button>
@@ -1859,7 +1859,7 @@ function ThreadPanel({
               type="button"
               onClick={() => onAction("resolve")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-muted hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
             >
               Resolver
             </button>
@@ -1869,7 +1869,7 @@ function ThreadPanel({
               type="button"
               onClick={() => onAction("reopen")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
             >
               Reabrir
             </button>
@@ -1888,7 +1888,7 @@ function ThreadPanel({
               type="button"
               onClick={onDeleteConversation}
               disabled={actionLoading}
-              className="shrink-0 ml-auto rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="shrink-0 ml-auto rounded-lg border border-red-200 bg-paper px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
             >
               Apagar
             </button>
@@ -1945,9 +1945,9 @@ function ThreadPanel({
       )}
 
       {/* ── Message thread ────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-4">
+      <div className="flex-1 overflow-y-auto bg-[#FAFAF8] px-4 py-4">
         {thread.messages.length === 0 ? (
-          <p className="text-center text-sm text-gray-400">Sem mensagens ainda.</p>
+          <p className="text-center text-sm text-muted">Sem mensagens ainda.</p>
         ) : (
           <div className="space-y-2">
             {thread.messages.map((msg) => (
@@ -1998,7 +1998,7 @@ function ThreadPanel({
 
           {/* Attachment preview */}
           {attachment && (
-            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+            <div className="flex items-center gap-2 rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2">
               {attachment.mediaType === "IMAGE" && attachment.previewUrl ? (
                 <img
                   src={attachment.previewUrl}
@@ -2006,13 +2006,13 @@ function ThreadPanel({
                   className="h-12 w-12 shrink-0 rounded-lg object-cover"
                 />
               ) : (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xl">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-line2 text-xl">
                   📄
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-gray-700">{attachment.fileName}</p>
-                <p className="text-[10px] text-gray-400">
+                <p className="truncate text-xs font-medium text-ink2">{attachment.fileName}</p>
+                <p className="text-[10px] text-muted">
                   {attachment.mediaType === "IMAGE" ? "Imagem" : "Documento PDF"}
                 </p>
               </div>
@@ -2020,7 +2020,7 @@ function ThreadPanel({
                 type="button"
                 onClick={onAttachmentClear}
                 aria-label="Remover anexo"
-                className="shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                className="shrink-0 text-muted hover:text-ink2 transition-colors"
               >
                 ✕
               </button>
@@ -2061,18 +2061,18 @@ function ThreadPanel({
           </div>
         </form>
       ) : isResolved ? (
-        <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs text-gray-400">
+        <div className="shrink-0 border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-xs text-muted">
           Conversa resolvida.{" "}
           <button
             onClick={() => onAction("reopen")}
-            className="font-semibold text-orange-500 hover:underline"
+            className="font-semibold text-brand-600 hover:underline"
           >
             Reabrir
           </button>{" "}
           para enviar mensagens.
         </div>
       ) : (
-        <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs text-gray-400">
+        <div className="shrink-0 border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-xs text-muted">
           Assuma o atendimento para enviar mensagens.
         </div>
       )}
@@ -2128,25 +2128,25 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+      <div className="w-full max-w-lg rounded-2xl bg-paper shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
-            <p className="text-sm font-bold text-gray-900">Ensinar IA</p>
-            <p className="text-xs text-gray-500 mt-0.5">Salvar como aprendizado sugerido (aguarda aprovação)</p>
+            <p className="text-sm font-bold text-ink">Ensinar IA</p>
+            <p className="text-xs text-muted mt-0.5">Salvar como aprendizado sugerido (aguarda aprovação)</p>
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          <button type="button" onClick={onClose} className="text-muted hover:text-ink2 text-xl leading-none">✕</button>
         </div>
 
         {saved ? (
           <div className="px-5 py-8 text-center">
             <div className="text-3xl mb-2">✅</div>
-            <p className="text-sm font-semibold text-gray-800">Aprendizado salvo!</p>
-            <p className="text-xs text-gray-500 mt-1">Acesse Agentes IA → WhatsApp Host para aprovar.</p>
+            <p className="text-sm font-semibold text-ink">Aprendizado salvo!</p>
+            <p className="text-xs text-muted mt-1">Acesse Agentes IA → WhatsApp Host para aprovar.</p>
             <button
               type="button"
               onClick={onClose}
-              className="mt-4 rounded-lg bg-orange-500 px-4 py-2 text-xs font-bold text-white hover:bg-orange-600"
+              className="mt-4 rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600"
             >
               Fechar
             </button>
@@ -2155,7 +2155,7 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
           <div className="space-y-4 px-5 py-4">
             {/* Customer question */}
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+              <label className="mb-1 block text-[11px] font-semibold text-muted uppercase tracking-wide">
                 Pergunta do cliente
               </label>
               <textarea
@@ -2163,13 +2163,13 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="O que o cliente perguntou?"
-                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
             </div>
 
             {/* Suggested answer */}
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+              <label className="mb-1 block text-[11px] font-semibold text-muted uppercase tracking-wide">
                 Resposta da equipe (a IA usará isso)
               </label>
               <textarea
@@ -2177,19 +2177,19 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Qual foi a resposta correta?"
-                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
             </div>
 
             {/* Category */}
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+              <label className="mb-1 block text-[11px] font-semibold text-muted uppercase tracking-wide">
                 Categoria
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-orange-400 focus:outline-none"
+                className="w-full rounded-lg border border-line2 bg-paper px-3 py-2 text-sm text-ink2 focus:border-brand-400 focus:outline-none"
               >
                 {KNOWLEDGE_CATEGORIES.filter((c) => c.id !== "UNKNOWN_GAP").map((c) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
@@ -2205,14 +2205,14 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !question.trim() || !answer.trim()}
-                className="flex-1 rounded-lg bg-orange-500 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-lg bg-brand-500 py-2 text-xs font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Salvando…" : "Salvar aprendizado"}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50"
+                className="rounded-lg border border-line2 px-4 py-2 text-xs font-medium text-muted hover:bg-[#FAFAF8]"
               >
                 Cancelar
               </button>
@@ -2246,11 +2246,11 @@ function SystemEventNote({ msg }: { msg: Message }) {
 
   return (
     <div className="flex items-center gap-2 py-1">
-      <div className="h-px flex-1 bg-gray-200" />
+      <div className="h-px flex-1 bg-line2" />
       <span className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-medium text-amber-700">
         {label}
       </span>
-      <div className="h-px flex-1 bg-gray-200" />
+      <div className="h-px flex-1 bg-line2" />
     </div>
   );
 }
@@ -2276,11 +2276,11 @@ function MessageBubble({
   if (isInternalCommandContent(msg.content)) {
     return (
       <div className="flex items-center gap-2 py-1">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="shrink-0 rounded-full bg-gray-100 border border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+        <div className="h-px flex-1 bg-line2" />
+        <span className="shrink-0 rounded-full bg-[#F4F4F2] border border-line2 px-2 py-0.5 text-[10px] font-medium text-muted">
           Comando interno ocultado
         </span>
-        <div className="h-px flex-1 bg-gray-200" />
+        <div className="h-px flex-1 bg-line2" />
       </div>
     );
   }
@@ -2310,10 +2310,10 @@ function MessageBubble({
         : msg.senderType === "AI"
         ? (msgSource === "PEDIDO_TEXTO"
             ? "bg-sky-50 border border-sky-200 text-sky-700"
-            : "bg-orange-50 border border-orange-200 text-orange-600")
+            : "bg-brand-50 border border-brand-200 text-brand-600")
         : msg.senderType === "HUMAN_EXTERNAL"
           ? "bg-teal-50 border border-teal-200 text-teal-700"
-          : "bg-gray-700 border border-gray-600 text-white")
+          : "bg-ink border border-gray-600 text-white")
     : (msg.senderType === "CUSTOMER_CARDAPIO"
         ? "bg-purple-50 border border-purple-200 text-purple-700"
         : "bg-green-50 border border-green-200 text-green-700");
@@ -2375,8 +2375,8 @@ function MessageBubble({
                   style={{ display: "none" }}
                   className={`items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
                     isOutbound
-                      ? "border-orange-400/50 bg-orange-600 text-white"
-                      : "border-gray-200 bg-gray-100 text-gray-700"
+                      ? "border-brand-400/50 bg-brand-600 text-white"
+                      : "border-line2 bg-[#F4F4F2] text-ink2"
                   }`}
                 >
                   <span>📷</span>
@@ -2385,7 +2385,7 @@ function MessageBubble({
               </a>
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
-                isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
+                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-[#FAFAF8] text-muted"
               }`}>
                 <span>📷</span>
                 <span>Imagem recebida</span>
@@ -2405,8 +2405,8 @@ function MessageBubble({
                 rel="noopener noreferrer"
                 className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
                   isOutbound
-                    ? "border-orange-400/50 bg-orange-600 text-white"
-                    : "border-gray-200 bg-gray-100 text-gray-700"
+                    ? "border-brand-400/50 bg-brand-600 text-white"
+                    : "border-line2 bg-[#F4F4F2] text-ink2"
                 }`}
               >
                 <span>🎵</span>
@@ -2415,7 +2415,7 @@ function MessageBubble({
               )
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
-                isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
+                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-[#FAFAF8] text-muted"
               }`}>
                 <span>🎵</span>
                 <span>Áudio recebido</span>
@@ -2432,8 +2432,8 @@ function MessageBubble({
                 rel="noopener noreferrer"
                 className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
                   isOutbound
-                    ? "border-orange-400/50 bg-orange-600 text-white"
-                    : "border-gray-200 bg-gray-100 text-gray-700"
+                    ? "border-brand-400/50 bg-brand-600 text-white"
+                    : "border-line2 bg-[#F4F4F2] text-ink2"
                 }`}
               >
                 <span>📄</span>
@@ -2441,7 +2441,7 @@ function MessageBubble({
               </a>
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
-                isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
+                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-[#FAFAF8] text-muted"
               }`}>
                 <span>📄</span>
                 <span className="truncate">{msg.content || "Arquivo recebido"}</span>
@@ -2451,7 +2451,7 @@ function MessageBubble({
 
           {/* Unknown media types */}
           {msg.type !== "TEXT" && msg.type !== "IMAGE" && msg.type !== "AUDIO" && msg.type !== "DOCUMENT" && (
-            <p className={`mb-1 text-xs font-medium ${isOutbound ? "text-orange-200" : "text-gray-400"}`}>
+            <p className={`mb-1 text-xs font-medium ${isOutbound ? "text-brand-200" : "text-muted"}`}>
               [{msg.type?.toLowerCase?.() ?? "anexo"}]
             </p>
           )}

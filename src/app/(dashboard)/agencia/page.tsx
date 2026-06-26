@@ -63,7 +63,7 @@ export default async function AgenciaPage() {
     <>
       <TopBar title="Agência — Projetos" />
       <Suspense fallback={
-        <div className="flex items-center justify-center py-24 text-sm text-gray-400">
+        <div className="flex items-center justify-center py-24 text-sm text-muted">
           Carregando projetos…
         </div>
       }>

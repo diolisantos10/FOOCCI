@@ -42,10 +42,10 @@ export default function SettingsNav() {
   return (
     <>
       {/* Desktop: left sidebar */}
-      <nav className="hidden w-52 shrink-0 flex-col overflow-y-auto border-r border-gray-100 bg-white py-4 lg:flex">
+      <nav className="hidden w-52 shrink-0 flex-col overflow-y-auto border-r border-line bg-paper py-4 lg:flex">
         {GROUPS.map((group) => (
           <div key={group.title} className="mb-4">
-            <p className="mb-1 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            <p className="mb-1 px-4 text-[10px] font-bold uppercase tracking-widest text-muted">
               {group.title}
             </p>
             {group.items.map((item) => {
@@ -57,13 +57,13 @@ export default function SettingsNav() {
                   className={`group mx-2 flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? "bg-brand-50 text-brand-600"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      : "text-ink2 hover:bg-[#FAFAF8] hover:text-ink"
                   } ${item.soon ? "opacity-50 cursor-default pointer-events-none" : ""}`}
                 >
                   <span className="text-base leading-none">{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
                   {item.soon && (
-                    <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+                    <span className="rounded-full bg-line2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted">
                       breve
                     </span>
                   )}
@@ -75,7 +75,7 @@ export default function SettingsNav() {
       </nav>
 
       {/* Mobile: horizontal tab strip */}
-      <nav className="flex overflow-x-auto border-b border-gray-100 bg-white px-2 py-1.5 scrollbar-hide lg:hidden">
+      <nav className="flex overflow-x-auto border-b border-line bg-paper px-2 py-1.5 scrollbar-hide lg:hidden">
         {GROUPS.flatMap((g) => g.items).map((item) => {
           const active = pathname === item.href;
           return (
@@ -85,7 +85,7 @@ export default function SettingsNav() {
               className={`shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
                 active
                   ? "bg-brand-50 text-brand-600"
-                  : "text-gray-500 hover:text-gray-800"
+                  : "text-muted hover:text-ink"
               } ${item.soon ? "opacity-40 pointer-events-none" : ""}`}
             >
               <span>{item.icon}</span>

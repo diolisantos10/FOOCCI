@@ -132,21 +132,21 @@ export function AISimulatorClient() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Simulador da IA de Vendas</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-2xl font-bold text-ink">Simulador da IA de Vendas</h1>
+            <p className="text-sm text-muted mt-1">
               Testa automaticamente a IA com perfis de clientes usando o cardápio e configuração reais.
             </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-1 w-fit">
+        <div className="flex gap-1 bg-paper border border-line2 rounded-lg p-1 w-fit">
           <button
             onClick={() => setActiveTab("standard")}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               activeTab === "standard"
                 ? "bg-blue-600 text-white"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                : "text-ink2 hover:text-ink hover:bg-[#FAFAF8]"
             }`}
           >
             Simulação Padrão
@@ -156,7 +156,7 @@ export function AISimulatorClient() {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
               activeTab === "lab"
                 ? "bg-blue-600 text-white"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                : "text-ink2 hover:text-ink hover:bg-[#FAFAF8]"
             }`}
           >
             <span>⚗</span> Prompt Lab
@@ -166,7 +166,7 @@ export function AISimulatorClient() {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
               activeTab === "auto"
                 ? "bg-blue-600 text-white"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                : "text-ink2 hover:text-ink hover:bg-[#FAFAF8]"
             }`}
           >
             <span>⏱</span> Auto
@@ -176,7 +176,7 @@ export function AISimulatorClient() {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
               activeTab === "real"
                 ? "bg-green-600 text-white"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                : "text-ink2 hover:text-ink hover:bg-[#FAFAF8]"
             }`}
           >
             <span>📊</span> Dados Reais
@@ -189,13 +189,13 @@ export function AISimulatorClient() {
             {/* Controls */}
             <div className="flex items-center justify-end gap-2">
               <div className="flex flex-col items-start gap-0.5">
-                <label className="text-xs text-gray-400 px-1">Profundidade</label>
+                <label className="text-xs text-muted px-1">Profundidade</label>
                 <select
                   value={testDepth}
                   onChange={(e) => setTestDepth(e.target.value as TestDepth)}
                   disabled={state === "running"}
-                  className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
-                             hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
+                  className="px-3 py-2 bg-paper border border-line2 text-ink2 text-sm rounded-lg
+                             hover:border-line2 disabled:opacity-50 disabled:cursor-not-allowed
                              focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 >
                   {TEST_DEPTH_PRESETS.map((p) => (
@@ -204,13 +204,13 @@ export function AISimulatorClient() {
                 </select>
               </div>
               <div className="flex flex-col items-start gap-0.5">
-                <label className="text-xs text-gray-400 px-1">Cenários</label>
+                <label className="text-xs text-muted px-1">Cenários</label>
                 <select
                   value={scenarioCount}
                   onChange={(e) => setScenarioCount(Number(e.target.value))}
                   disabled={state === "running"}
-                  className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
-                             hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
+                  className="px-3 py-2 bg-paper border border-line2 text-ink2 text-sm rounded-lg
+                             hover:border-line2 disabled:opacity-50 disabled:cursor-not-allowed
                              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   {SCENARIO_PRESETS.map((p) => (
@@ -222,18 +222,18 @@ export function AISimulatorClient() {
               {state === "done" && report && (
                 <>
                   <button onClick={() => downloadJSON(report)} title="Baixar relatório completo (JSON)"
-                    className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
-                               hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5">
+                    className="px-3 py-2 bg-paper border border-line2 text-ink2 text-xs font-medium rounded-lg
+                               hover:bg-[#FAFAF8] hover:border-line2 transition-colors flex items-center gap-1.5">
                     ⬇ JSON
                   </button>
                   <button onClick={() => downloadSummary(report)} title="Baixar resumo legível (TXT)"
-                    className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
-                               hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5">
+                    className="px-3 py-2 bg-paper border border-line2 text-ink2 text-xs font-medium rounded-lg
+                               hover:bg-[#FAFAF8] hover:border-line2 transition-colors flex items-center gap-1.5">
                     ⬇ Resumo
                   </button>
                   <button onClick={() => downloadCSV(report)} title="Baixar tabela de resultados (CSV)"
-                    className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
-                               hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5">
+                    className="px-3 py-2 bg-paper border border-line2 text-ink2 text-xs font-medium rounded-lg
+                               hover:bg-[#FAFAF8] hover:border-line2 transition-colors flex items-center gap-1.5">
                     ⬇ CSV
                   </button>
                 </>
@@ -291,7 +291,7 @@ const CLASS_CONFIG: Record<ConversationClass, { label: string; color: string; bg
   low_conversion:  { label: "Baixa conversão", color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
   abandoned:       { label: "Abandonada",      color: "text-red-700",    bg: "bg-red-50 border-red-200"       },
   high_ticket:     { label: "Ticket alto",     color: "text-blue-700",   bg: "bg-blue-50 border-blue-200"     },
-  low_ticket:      { label: "Ticket baixo",    color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+  low_ticket:      { label: "Ticket baixo",    color: "text-brand-700", bg: "bg-brand-50 border-brand-200" },
 };
 
 const PATTERN_ICON: Record<string, string> = {
@@ -327,13 +327,13 @@ function RealDataPanel() {
       {/* Controls */}
       <div className="flex items-end gap-3 justify-end">
         <div className="flex flex-col gap-0.5">
-          <label className="text-xs text-gray-400 px-1">Conversas analisadas</label>
+          <label className="text-xs text-muted px-1">Conversas analisadas</label>
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
             disabled={loadState === "loading"}
-            className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
-                       hover:border-gray-300 disabled:opacity-50
+            className="px-3 py-2 bg-paper border border-line2 text-ink2 text-sm rounded-lg
+                       hover:border-line2 disabled:opacity-50
                        focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
           >
             {[25, 50, 100, 200].map((v) => (
@@ -361,9 +361,9 @@ function RealDataPanel() {
       )}
 
       {loadState === "idle" && (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-paper rounded-xl border border-line2 p-10 text-center text-muted">
           <div className="text-4xl mb-3">📊</div>
-          <p className="font-medium text-gray-600">Análise de conversas reais</p>
+          <p className="font-medium text-ink2">Análise de conversas reais</p>
           <p className="text-sm mt-1">
             Classifica conversas de clientes reais, extrai padrões e compara o desempenho da IA.
             Nenhum dado pessoal é exposto.
@@ -372,9 +372,9 @@ function RealDataPanel() {
       )}
 
       {report && report.total === 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-paper rounded-xl border border-line2 p-10 text-center text-muted">
           <div className="text-4xl mb-3">🔍</div>
-          <p className="font-medium text-gray-600">Nenhuma conversa real encontrada</p>
+          <p className="font-medium text-ink2">Nenhuma conversa real encontrada</p>
           <p className="text-sm mt-1">As conversas aparecerão aqui após clientes interagirem via WhatsApp.</p>
         </div>
       )}
@@ -382,18 +382,18 @@ function RealDataPanel() {
       {report && report.total > 0 && (
         <>
           {/* Summary metrics */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+          <div className="bg-paper rounded-xl border border-line2 p-6 space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Conversas analisadas</p>
-                <p className="text-4xl font-bold text-gray-900">{report.total}</p>
+                <p className="text-xs text-muted uppercase tracking-wide">Conversas analisadas</p>
+                <p className="text-4xl font-bold text-ink">{report.total}</p>
               </div>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted">
                 {new Date(report.generatedAt).toLocaleString("pt-BR")}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-line">
               {[
                 { label: "Taxa de conversão",  value: `${(report.conversionRate   * 100).toFixed(0)}%`, warn: report.conversionRate < 0.5  },
                 { label: "Ticket médio",        value: `R$ ${report.avgCartValue.toFixed(0)}`,            warn: report.avgCartValue < 30     },
@@ -401,15 +401,15 @@ function RealDataPanel() {
                 { label: "Cobertura de upsell", value: `${(report.upsellCoverageRate * 100).toFixed(0)}%`, warn: report.upsellCoverageRate < 0.5 },
               ].map((s) => (
                 <div key={s.label} className="text-center">
-                  <p className="text-xs text-gray-400 mb-0.5">{s.label}</p>
-                  <p className={`text-xl font-bold ${s.warn ? "text-orange-500" : "text-gray-800"}`}>{s.value}</p>
+                  <p className="text-xs text-muted mb-0.5">{s.label}</p>
+                  <p className={`text-xl font-bold ${s.warn ? "text-brand-600" : "text-ink"}`}>{s.value}</p>
                 </div>
               ))}
             </div>
 
             {/* Class breakdown */}
-            <div className="pt-3 border-t border-gray-100">
-              <p className="text-sm font-semibold text-gray-700 mb-3">Distribuição de conversas</p>
+            <div className="pt-3 border-t border-line">
+              <p className="text-sm font-semibold text-ink2 mb-3">Distribuição de conversas</p>
               <div className="flex flex-wrap gap-2">
                 {(Object.entries(report.classBreakdown) as [ConversationClass, number][])
                   .filter(([, count]) => count > 0)
@@ -427,8 +427,8 @@ function RealDataPanel() {
 
           {/* Patterns */}
           {report.patterns.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-              <p className="text-sm font-semibold text-gray-700">Padrões identificados</p>
+            <div className="bg-paper rounded-xl border border-line2 p-6 space-y-4">
+              <p className="text-sm font-semibold text-ink2">Padrões identificados</p>
               <div className="space-y-3">
                 {report.patterns.map((p, i) => (
                   <PatternRow key={i} pattern={p} total={report.total} />
@@ -440,7 +440,7 @@ function RealDataPanel() {
           {/* Top conversations */}
           {report.topConversations.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              <p className="text-sm font-semibold text-muted uppercase tracking-wide">
                 Melhores conversas
               </p>
               {report.topConversations.map((c) => (
@@ -452,7 +452,7 @@ function RealDataPanel() {
           {/* Bottom conversations */}
           {report.bottomConversations.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              <p className="text-sm font-semibold text-muted uppercase tracking-wide">
                 Piores conversas
               </p>
               {report.bottomConversations.map((c) => (
@@ -473,12 +473,12 @@ function PatternRow({ pattern, total }: { pattern: ConversationPattern; total: n
     ? "text-green-700"
     : pattern.impact === "negative"
     ? "text-red-700"
-    : "text-gray-700";
+    : "text-ink2";
   const barColor = pattern.impact === "positive"
     ? "bg-green-400"
     : pattern.impact === "negative"
     ? "bg-red-400"
-    : "bg-gray-300";
+    : "bg-line2";
 
   return (
     <div className="flex items-start gap-3">
@@ -486,16 +486,16 @@ function PatternRow({ pattern, total }: { pattern: ConversationPattern; total: n
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-baseline gap-2 mb-1">
           <p className={`text-sm font-medium ${textColor}`}>{pattern.description}</p>
-          <span className="text-xs text-gray-500 shrink-0">{pattern.count} / {total}</span>
+          <span className="text-xs text-muted shrink-0">{pattern.count} / {total}</span>
         </div>
         {pattern.metric && (
-          <p className="text-xs text-gray-500 mb-1">{pattern.metric}</p>
+          <p className="text-xs text-muted mb-1">{pattern.metric}</p>
         )}
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
+        <div className="w-full bg-[#F4F4F2] rounded-full h-1.5">
           <div className={`${barColor} h-1.5 rounded-full`} style={{ width: `${Math.min(100, pct)}%` }} />
         </div>
       </div>
-      <span className="text-xs font-bold text-gray-500 shrink-0">{pct}%</span>
+      <span className="text-xs font-bold text-muted shrink-0">{pct}%</span>
     </div>
   );
 }
@@ -515,29 +515,29 @@ function ConversationRow({
     : "bg-red-100 text-red-700";
 
   return (
-    <div className={`rounded-xl border p-4 space-y-2 ${variant === "bottom" ? "bg-red-50 border-red-200" : "bg-white border-gray-200"}`}>
+    <div className={`rounded-xl border p-4 space-y-2 ${variant === "bottom" ? "bg-red-50 border-red-200" : "bg-paper border-line2"}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
             {cfg.label}
           </span>
-          <span className="text-xs text-gray-400 truncate">{conv.customerLabel}</span>
+          <span className="text-xs text-muted truncate">{conv.customerLabel}</span>
         </div>
         <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${scoreBg}`}>
           {conv.score} / 100
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-        <span>Ticket: <strong className="text-gray-700">R$ {conv.cartValue.toFixed(0)}</strong></span>
-        <span>Turnos: <strong className="text-gray-700">{conv.turns}</strong></span>
-        <span>Upsell: <strong className="text-gray-700">{conv.upsellAttempts} tentativa{conv.upsellAttempts !== 1 ? "s" : ""}, {conv.upsellAccepted} aceita{conv.upsellAccepted !== 1 ? "s" : ""}</strong></span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+        <span>Ticket: <strong className="text-ink2">R$ {conv.cartValue.toFixed(0)}</strong></span>
+        <span>Turnos: <strong className="text-ink2">{conv.turns}</strong></span>
+        <span>Upsell: <strong className="text-ink2">{conv.upsellAttempts} tentativa{conv.upsellAttempts !== 1 ? "s" : ""}, {conv.upsellAccepted} aceita{conv.upsellAccepted !== 1 ? "s" : ""}</strong></span>
         {conv.drinkAttempted   && <span className="text-blue-600">✓ bebida</span>}
         {conv.dessertAttempted && <span className="text-purple-600">✓ sobremesa</span>}
       </div>
 
       {conv.preview && (
-        <p className="text-xs text-gray-500 italic border-t border-gray-100 pt-2 line-clamp-2">
+        <p className="text-xs text-muted italic border-t border-line pt-2 line-clamp-2">
           &ldquo;{conv.preview}&rdquo;
         </p>
       )}
@@ -571,18 +571,18 @@ function SimulationResultsPanel({
   return (
     <>
       {state === "running" && progress && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
+        <div className="bg-paper rounded-xl border border-line2 p-4">
+          <div className="flex justify-between text-sm text-ink2 mb-2">
             <span>Executando: <strong>{progress.scenarioName}</strong></span>
             <span>{progress.current} / {progress.total} cenários</span>
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-2">
+          <div className="w-full bg-[#F4F4F2] rounded-full h-2">
             <div
               className="bg-blue-500 h-2 rounded-full transition-all duration-500"
               style={{ width: `${(progress.current / progress.total) * 100}%` }}
             />
           </div>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-muted mt-2">
             Isso pode levar ~60–90 segundos. As respostas aparecem à medida que cada cenário termina.
           </p>
         </div>
@@ -598,7 +598,7 @@ function SimulationResultsPanel({
 
       {results.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">
             Resultados por cenário
           </h2>
           <div className="space-y-3">
@@ -615,9 +615,9 @@ function SimulationResultsPanel({
       )}
 
       {state === "idle" && (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
+        <div className="bg-paper rounded-xl border border-line2 p-10 text-center text-muted">
           <div className="text-4xl mb-3">🤖</div>
-          <p className="font-medium text-gray-600">{emptyLabel}</p>
+          <p className="font-medium text-ink2">{emptyLabel}</p>
           <p className="text-sm mt-1">{emptyHint}</p>
         </div>
       )}
@@ -727,12 +727,12 @@ function PromptLabPanel() {
   return (
     <div className="space-y-4">
       {/* Input card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <div className="bg-paper rounded-xl border border-line2 p-5 space-y-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-ink2 mb-1">
             Descreva o cenário de teste
           </label>
-          <p className="text-xs text-gray-400 mb-2">
+          <p className="text-xs text-muted mb-2">
             Escreva em linguagem natural — o parser extrai intenção, orçamento, comportamento e restrições.
           </p>
           <textarea
@@ -741,21 +741,21 @@ function PromptLabPanel() {
             disabled={isRunning}
             placeholder='Ex: "cliente indeciso que nunca comeu aqui" ou "cliente com pressa, quer algo barato"'
             rows={3}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800
-                       placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500
+            className="w-full px-3 py-2.5 border border-line2 rounded-lg text-sm text-ink
+                       placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-blue-500
                        focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
           />
         </div>
 
         {/* Example chips */}
         <div className="flex flex-wrap gap-1.5">
-          <span className="text-xs text-gray-400 self-center mr-1">Exemplos:</span>
+          <span className="text-xs text-muted self-center mr-1">Exemplos:</span>
           {LAB_EXAMPLES.map((ex) => (
             <button
               key={ex}
               onClick={() => setPrompt(ex)}
               disabled={isRunning}
-              className="px-2.5 py-1 text-xs bg-gray-100 text-gray-600 rounded-full
+              className="px-2.5 py-1 text-xs bg-[#F4F4F2] text-ink2 rounded-full
                          hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-50"
             >
               {ex}
@@ -764,8 +764,8 @@ function PromptLabPanel() {
         </div>
 
         {/* Run buttons */}
-        <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
-          <span className="text-xs text-gray-400 mr-1">Rodar:</span>
+        <div className="flex items-center gap-2 pt-1 border-t border-line">
+          <span className="text-xs text-muted mr-1">Rodar:</span>
           {VARIATION_PRESETS.map((p) => (
             <button
               key={p.value}
@@ -804,7 +804,7 @@ function PromptLabPanel() {
               { label: "Abertura",     value: parsedInfo.upsellOpenness },
               ...(parsedInfo.dietary ? [{ label: "Restrição", value: parsedInfo.dietary }] : []),
             ].map(({ label, value }) => (
-              <span key={label} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-blue-100 rounded-full text-xs text-gray-700">
+              <span key={label} className="inline-flex items-center gap-1 px-2.5 py-1 bg-paper border border-blue-100 rounded-full text-xs text-ink2">
                 <span className="text-blue-500 font-medium">{label}:</span> {value}
               </span>
             ))}
@@ -897,13 +897,13 @@ function SummaryCard({ report }: { report: SimulationReport }) {
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+    <div className="bg-paper rounded-xl border border-line2 p-6 space-y-5">
       {/* Score + safe badge */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Score geral</p>
+          <p className="text-xs text-muted uppercase tracking-wide">Score geral</p>
           <p className={`text-4xl font-bold ${scoreColor}`}>
-            {report.overallScore.toFixed(0)}<span className="text-xl text-gray-400"> / 100</span>
+            {report.overallScore.toFixed(0)}<span className="text-xl text-muted"> / 100</span>
           </p>
         </div>
         <div className={`px-4 py-2 rounded-lg border text-sm font-semibold flex items-center gap-2 ${safeBadge.bg}`}>
@@ -913,11 +913,11 @@ function SummaryCard({ report }: { report: SimulationReport }) {
       </div>
 
       {/* 6-stat grid */}
-      <div className="grid grid-cols-3 gap-3 pt-1 border-t border-gray-100">
+      <div className="grid grid-cols-3 gap-3 pt-1 border-t border-line">
         {stats.map((s) => (
           <div key={s.label} className="text-center">
-            <p className="text-xs text-gray-400 mb-0.5">{s.label}</p>
-            <p className={`text-lg font-bold ${s.warn ? "text-orange-500" : "text-gray-800"}`}>
+            <p className="text-xs text-muted mb-0.5">{s.label}</p>
+            <p className={`text-lg font-bold ${s.warn ? "text-brand-600" : "text-ink"}`}>
               {s.value}
             </p>
           </div>
@@ -927,11 +927,11 @@ function SummaryCard({ report }: { report: SimulationReport }) {
       {/* Top fixes */}
       {report.topFixes.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-gray-700 mb-2">Correções recomendadas:</p>
+          <p className="text-sm font-semibold text-ink2 mb-2">Correções recomendadas:</p>
           <ol className="space-y-1">
             {report.topFixes.map((fix, i) => (
-              <li key={i} className="text-sm text-gray-600 flex gap-2">
-                <span className="font-bold text-gray-400">{i + 1}.</span>
+              <li key={i} className="text-sm text-ink2 flex gap-2">
+                <span className="font-bold text-muted">{i + 1}.</span>
                 {fix}
               </li>
             ))}
@@ -958,7 +958,7 @@ function SummaryCard({ report }: { report: SimulationReport }) {
       {/* Stage breakdown */}
       {report.stageScores && <StageBreakdownChart scores={report.stageScores} testDepth={report.testDepth} />}
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted">
         {report.restaurantName} · Executado em {new Date(report.ranAt).toLocaleString("pt-BR")}
       </p>
     </div>
@@ -1012,8 +1012,8 @@ function StageBreakdownChart({
     : null;
 
   return (
-    <div className="pt-3 border-t border-gray-100">
-      <p className="text-sm font-semibold text-gray-700 mb-3">Breakdown por etapa</p>
+    <div className="pt-3 border-t border-line">
+      <p className="text-sm font-semibold text-ink2 mb-3">Breakdown por etapa</p>
       <div className="space-y-2">
         {entries.map(([key, value]) => {
           const inScopeEntry = isInScope(key);
@@ -1023,13 +1023,13 @@ function StageBreakdownChart({
             return (
               <div key={key}>
                 <div className="flex justify-between text-xs mb-0.5">
-                  <span className="font-medium text-gray-300">
+                  <span className="font-medium text-muted">
                     {STAGE_LABELS[key] ?? key}
-                    <span className="ml-1 text-gray-300 italic">— não avaliado</span>
+                    <span className="ml-1 text-muted italic">— não avaliado</span>
                   </span>
-                  <span className="text-gray-300">N/A</span>
+                  <span className="text-muted">N/A</span>
                 </div>
-                <div className="w-full bg-gray-50 rounded-full h-1.5" />
+                <div className="w-full bg-[#FAFAF8] rounded-full h-1.5" />
               </div>
             );
           }
@@ -1040,14 +1040,14 @@ function StageBreakdownChart({
           return (
             <div key={key}>
               <div className="flex justify-between text-xs mb-0.5">
-                <span className={`font-medium ${isWeak ? "text-red-600" : "text-gray-600"}`}>
+                <span className={`font-medium ${isWeak ? "text-red-600" : "text-ink2"}`}>
                   {STAGE_LABELS[key] ?? key}
                   {isWeak       && " ⚠ mais fraca"}
                   {isDepthTarget && " ← profundidade alvo"}
                 </span>
-                <span className={`font-bold ${isWeak ? "text-red-600" : "text-gray-700"}`}>{pct}%</span>
+                <span className={`font-bold ${isWeak ? "text-red-600" : "text-ink2"}`}>{pct}%</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div className="w-full bg-[#F4F4F2] rounded-full h-1.5">
                 <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
               </div>
             </div>
@@ -1094,8 +1094,8 @@ function ScenarioCard({
         <div className="flex items-center gap-3">
           <span className="text-lg">{statusConfig.icon}</span>
           <div>
-            <p className="font-semibold text-gray-800 text-sm">{result.name}</p>
-            <p className="text-xs text-gray-500">{result.description}</p>
+            <p className="font-semibold text-ink text-sm">{result.name}</p>
+            <p className="text-xs text-muted">{result.description}</p>
             {result.failureStage && (
               <p className="text-xs text-red-500 mt-0.5 font-medium">
                 Falhou em: {FAILURE_STAGE_LABELS[result.failureStage] ?? result.failureStage}
@@ -1107,7 +1107,7 @@ function ScenarioCard({
           <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusConfig.badge}`}>
             {result.score.toFixed(0)} / 100
           </span>
-          <span className="text-gray-400 text-sm">{isExpanded ? "▲" : "▼"}</span>
+          <span className="text-muted text-sm">{isExpanded ? "▲" : "▼"}</span>
         </div>
       </button>
 
@@ -1126,10 +1126,10 @@ function ScenarioCard({
           {/* Sales weaknesses */}
           {result.salesWeaknesses.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2">Pontos fracos de vendas</p>
+              <p className="text-xs text-muted font-medium mb-2">Pontos fracos de vendas</p>
               <ul className="space-y-1">
                 {result.salesWeaknesses.map((w, i) => (
-                  <li key={i} className="text-xs text-orange-700 bg-orange-50 rounded px-2 py-1.5">
+                  <li key={i} className="text-xs text-brand-700 bg-brand-50 rounded px-2 py-1.5">
                     ↘ {w}
                   </li>
                 ))}
@@ -1139,13 +1139,13 @@ function ScenarioCard({
 
           {/* Expected behavior */}
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-1">Comportamento esperado</p>
-            <p className="text-sm text-gray-700">{result.expectedBehavior}</p>
+            <p className="text-xs text-muted font-medium mb-1">Comportamento esperado</p>
+            <p className="text-sm text-ink2">{result.expectedBehavior}</p>
           </div>
 
           {/* Checks */}
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-2">Verificações</p>
+            <p className="text-xs text-muted font-medium mb-2">Verificações</p>
             <div className="space-y-1.5">
               {result.checks.map((check, i) => (
                 <CheckRow key={i} check={check} />
@@ -1156,7 +1156,7 @@ function ScenarioCard({
           {/* Issues */}
           {result.issues.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2">Falhas detectadas</p>
+              <p className="text-xs text-muted font-medium mb-2">Falhas detectadas</p>
               <ul className="space-y-1">
                 {result.issues.map((issue, i) => (
                   <li key={i} className="text-xs text-red-600 bg-red-50 rounded px-2 py-1.5">
@@ -1170,7 +1170,7 @@ function ScenarioCard({
           {/* Full transcript */}
           {result.transcript.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2">
+              <p className="text-xs text-muted font-medium mb-2">
                 Transcrição completa ({result.totalTurns} turnos)
               </p>
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -1208,10 +1208,10 @@ function CheckRow({ check }: { check: CheckResult }) {
         {check.passed ? "✓" : "✗"}
       </span>
       <div>
-        <span className={`font-medium ${check.passed ? "text-gray-700" : "text-red-700"}`}>
+        <span className={`font-medium ${check.passed ? "text-ink2" : "text-red-700"}`}>
           {check.label}
         </span>
-        <span className="text-gray-400 ml-1">— {check.detail}</span>
+        <span className="text-muted ml-1">— {check.detail}</span>
       </div>
     </div>
   );
@@ -1244,7 +1244,7 @@ function SalesMetricsRow({
     {
       label: "Turnos",
       value: String(totalTurns),
-      color: totalTurns >= 10 ? "text-orange-500" : undefined,
+      color: totalTurns >= 10 ? "text-brand-600" : undefined,
     },
     {
       label: "Conversão",
@@ -1274,7 +1274,7 @@ function SalesMetricsRow({
       color: metrics.postCheckoutCompleted
         ? "text-green-600"
         : metrics.postCheckoutDropPhase !== "not_reached"
-        ? "text-orange-500"
+        ? "text-brand-600"
         : undefined,
     },
   ];
@@ -1282,9 +1282,9 @@ function SalesMetricsRow({
   return (
     <div className="pt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
       {items.map((item) => (
-        <div key={item.label} className="bg-gray-50 rounded-lg px-2 py-2 text-center">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5 leading-tight">{item.label}</p>
-          <p className={`text-xs font-semibold ${item.color ?? "text-gray-700"}`}>
+        <div key={item.label} className="bg-[#FAFAF8] rounded-lg px-2 py-2 text-center">
+          <p className="text-[10px] text-muted uppercase tracking-wide mb-0.5 leading-tight">{item.label}</p>
+          <p className={`text-xs font-semibold ${item.color ?? "text-ink2"}`}>
             {item.value}
           </p>
         </div>
@@ -1298,11 +1298,11 @@ function SalesMetricsRow({
 function CartEvolutionTable({ evolution }: { evolution: CartSnapshot[] }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 font-medium mb-2">Evolução do carrinho por turno</p>
+      <p className="text-xs text-muted font-medium mb-2">Evolução do carrinho por turno</p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <thead>
-            <tr className="text-gray-400 border-b border-gray-100">
+            <tr className="text-muted border-b border-line">
               <th className="text-left py-1 pr-3 font-medium">Turno</th>
               <th className="text-right py-1 pr-3 font-medium">Valor</th>
               <th className="text-right py-1 pr-3 font-medium">Itens</th>
@@ -1315,13 +1315,13 @@ function CartEvolutionTable({ evolution }: { evolution: CartSnapshot[] }) {
               const delta  = snap.value - (prev?.value ?? 0);
               const added  = delta > 0;
               return (
-                <tr key={snap.turn} className="border-b border-gray-50">
-                  <td className="py-1 pr-3 text-gray-500">#{snap.turn}</td>
-                  <td className="py-1 pr-3 text-right font-medium text-gray-800">
+                <tr key={snap.turn} className="border-b border-line">
+                  <td className="py-1 pr-3 text-muted">#{snap.turn}</td>
+                  <td className="py-1 pr-3 text-right font-medium text-ink">
                     {snap.value > 0 ? `R$ ${snap.value.toFixed(2)}` : "—"}
                   </td>
-                  <td className="py-1 pr-3 text-right text-gray-600">{snap.items}</td>
-                  <td className={`py-1 text-right font-medium ${added ? "text-green-600" : "text-gray-300"}`}>
+                  <td className="py-1 pr-3 text-right text-ink2">{snap.items}</td>
+                  <td className={`py-1 text-right font-medium ${added ? "text-green-600" : "text-muted"}`}>
                     {added ? `+R$ ${delta.toFixed(2)}` : "—"}
                   </td>
                 </tr>
@@ -1542,16 +1542,16 @@ function TranscriptBubble({
       <div
         className={`max-w-[85%] rounded-lg px-3 py-2 text-xs ${
           isAI
-            ? "bg-white border border-gray-200 text-gray-800"
+            ? "bg-paper border border-line2 text-ink"
             : "bg-blue-600 text-white"
         }`}
       >
-        <p className={`text-[10px] font-semibold mb-0.5 ${isAI ? "text-gray-400" : "text-blue-200"}`}>
+        <p className={`text-[10px] font-semibold mb-0.5 ${isAI ? "text-muted" : "text-blue-200"}`}>
           {isAI ? "🤖 IA" : "👤 Cliente"}
         </p>
         <p className="whitespace-pre-wrap leading-relaxed">{turn.content || <em className="opacity-50">sem resposta</em>}</p>
         {turn.toolCalls.length > 0 && (
-          <div className="mt-1 pt-1 border-t border-gray-100 space-y-0.5">
+          <div className="mt-1 pt-1 border-t border-line space-y-0.5">
             {turn.toolCalls.map((tc, i) => (
               <p key={i} className={`text-[10px] ${tc.success ? "text-green-600" : "text-red-500"}`}>
                 ⚙ {tc.name}: {tc.detail}

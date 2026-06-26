@@ -23,15 +23,15 @@ export class WaiterLabErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-full flex-col items-center justify-center gap-4 bg-gray-950 p-8 text-center font-mono text-xs">
+        <div className="flex h-full flex-col items-center justify-center gap-4 bg-ink p-8 text-center font-mono text-xs">
           <span className="rounded bg-red-900 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-red-300">
             Lab Error — render exception
           </span>
-          <p className="text-sm text-gray-300">
+          <p className="text-sm text-muted">
             O Waiter Lab encontrou um erro de renderização.
           </p>
           {this.state.error && (
-            <pre className="max-w-lg overflow-auto rounded bg-gray-900 p-3 text-left text-[10px] text-red-400">
+            <pre className="max-w-lg overflow-auto rounded bg-ink p-3 text-left text-[10px] text-red-400">
               {this.state.error.message}
               {"\n"}
               {this.state.error.stack?.split("\n").slice(1, 5).join("\n")}
@@ -40,13 +40,13 @@ export class WaiterLabErrorBoundary extends React.Component<
           <div className="flex gap-3">
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="rounded bg-gray-700 px-3 py-2 text-xs text-gray-200 hover:bg-gray-600"
+              className="rounded bg-ink px-3 py-2 text-xs text-line2 hover:bg-ink2"
             >
               Reset Lab
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="rounded border border-gray-700 px-3 py-2 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200"
+              className="rounded border border-gray-700 px-3 py-2 text-xs text-muted hover:border-gray-500 hover:text-line2"
             >
               Reload UI
             </button>

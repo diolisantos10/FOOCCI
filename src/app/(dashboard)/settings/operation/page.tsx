@@ -8,7 +8,7 @@ const DAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const DAY_FULL  = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 const TIME_INPUT =
-  "rounded-xl border border-gray-200 bg-white px-2 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition w-24";
+  "rounded-xl border border-line2 bg-paper px-2 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition w-24";
 
 interface Period {
   open:  string;
@@ -121,7 +121,7 @@ export default function OperationPage() {
     setSaving(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   const openCount = days.filter((d) => d.isOpen).length;
 
@@ -145,7 +145,7 @@ export default function OperationPage() {
               className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-colors ${
                 day.isOpen
                   ? "bg-brand-600 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                  : "bg-[#F4F4F2] text-muted hover:bg-line2"
               }`}
             >
               {DAY_SHORT[day.dayOfWeek]}
@@ -154,11 +154,11 @@ export default function OperationPage() {
         </div>
 
         {/* Day rows */}
-        <div className="divide-y divide-gray-50 overflow-hidden rounded-xl border border-gray-100">
+        <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
           {days.map((day, dayIdx) => (
             <div
               key={day.dayOfWeek}
-              className={`px-4 py-3 transition-colors ${day.isOpen ? "bg-white" : "bg-gray-50"}`}
+              className={`px-4 py-3 transition-colors ${day.isOpen ? "bg-paper" : "bg-[#FAFAF8]"}`}
             >
               <div className="flex items-start gap-3">
                 {/* Day toggle */}
@@ -181,7 +181,7 @@ export default function OperationPage() {
                           onChange={(e) => updatePeriod(dayIdx, periodIdx, { open: e.target.value })}
                           className={TIME_INPUT}
                         />
-                        <span className="text-xs text-gray-400">até</span>
+                        <span className="text-xs text-muted">até</span>
                         <input
                           type="time"
                           value={period.close}
@@ -193,7 +193,7 @@ export default function OperationPage() {
                           <button
                             type="button"
                             onClick={() => removePeriod(dayIdx, periodIdx)}
-                            className="text-gray-300 hover:text-red-400 transition-colors text-sm leading-none"
+                            className="text-muted hover:text-red-400 transition-colors text-sm leading-none"
                             title="Remover período"
                           >
                             ✕
@@ -223,14 +223,14 @@ export default function OperationPage() {
                     </button>
                   </div>
                 ) : (
-                  <span className="ml-auto mt-1 text-xs font-medium text-gray-400">Fechado</span>
+                  <span className="ml-auto mt-1 text-xs font-medium text-muted">Fechado</span>
                 )}
               </div>
             </div>
           ))}
         </div>
 
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-muted">
           Use &quot;+ Adicionar período&quot; para restaurantes com intervalo (ex: almoço 11h–15h e jantar 18h–23h). Use &quot;copiar&quot; para replicar a toda a semana útil.
         </p>
       </PageCard>

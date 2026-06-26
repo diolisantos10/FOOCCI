@@ -180,7 +180,7 @@ export default function CustomersClient({
   }
 
   function SortIcon({ col }: { col: SortCol }) {
-    if (sortBy !== col) return <span className="ml-0.5 text-gray-300">↕</span>;
+    if (sortBy !== col) return <span className="ml-0.5 text-muted">↕</span>;
     return <span className="ml-0.5">{sortDir === "asc" ? "↑" : "↓"}</span>;
   }
 
@@ -194,8 +194,8 @@ export default function CustomersClient({
             onClick={() => router.push(buildUrl({ search, sortBy, sortDir, filter: tab.id }))}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               filter === tab.id
-                ? "bg-orange-500 text-white shadow-sm"
-                : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                ? "bg-brand-500 text-white shadow-sm"
+                : "border border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
             }`}
           >
             {tab.label}
@@ -219,16 +219,16 @@ export default function CustomersClient({
       )}
 
       {/* Desktop table */}
-      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white sm:block">
+      <div className="hidden overflow-hidden rounded-xl border border-line2 bg-paper sm:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <tr className="border-b border-line bg-[#FAFAF8] text-left text-xs font-medium uppercase tracking-wide text-muted">
               <th className="w-10 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600"
+                  className="h-4 w-4 rounded border-line2 text-brand-600 accent-brand-600"
                   title="Selecionar todos"
                 />
               </th>
@@ -238,7 +238,7 @@ export default function CustomersClient({
                 <th key={col.id} className="px-4 py-3">
                   <button
                     onClick={() => handleSort(col.id)}
-                    className="flex items-center gap-0.5 transition-colors hover:text-gray-800"
+                    className="flex items-center gap-0.5 transition-colors hover:text-ink"
                   >
                     {col.label}
                     <SortIcon col={col.id} />
@@ -248,11 +248,11 @@ export default function CustomersClient({
               <th className="w-20 px-4 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center">
-                  <p className="text-sm text-gray-400">Nenhum cliente encontrado.</p>
+                  <p className="text-sm text-muted">Nenhum cliente encontrado.</p>
                   {!search && filter === "all" && (
                     <div className="mt-3 flex justify-center">
                       <NewCustomerButton />
@@ -262,13 +262,13 @@ export default function CustomersClient({
               </tr>
             )}
             {rows.map((c) => (
-              <tr key={c.id} className={`hover:bg-gray-50 ${selected.has(c.id) ? "bg-brand-50" : ""}`}>
+              <tr key={c.id} className={`hover:bg-[#FAFAF8] ${selected.has(c.id) ? "bg-brand-50" : ""}`}>
                 <td className="px-4 py-3">
                   <input
                     type="checkbox"
                     checked={selected.has(c.id)}
                     onChange={() => toggleSelect(c.id)}
-                    className="h-4 w-4 rounded border-gray-300 accent-brand-600"
+                    className="h-4 w-4 rounded border-line2 accent-brand-600"
                   />
                 </td>
                 <td className="px-4 py-3">
@@ -279,12 +279,12 @@ export default function CustomersClient({
                     {c.name}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-gray-600">{!c.phone || isGuestIdentifier(c.phone) ? "—" : c.phone}</td>
-                <td className="px-4 py-3 font-medium text-gray-700">
+                <td className="px-4 py-3 text-ink2">{!c.phone || isGuestIdentifier(c.phone) ? "—" : c.phone}</td>
+                <td className="px-4 py-3 font-medium text-ink2">
                   {c.totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{c.totalOrders}</td>
-                <td className="px-4 py-3 text-gray-400">
+                <td className="px-4 py-3 text-ink2">{c.totalOrders}</td>
+                <td className="px-4 py-3 text-muted">
                   {c.lastOrderAt
                     ? new Date(c.lastOrderAt).toLocaleDateString("pt-BR")
                     : "—"}
@@ -294,14 +294,14 @@ export default function CustomersClient({
                     <button
                       onClick={() => openEdit(c)}
                       title="Editar"
-                      className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-lg p-1.5 text-muted transition-colors hover:bg-blue-50 hover:text-blue-600"
                     >
                       ✏️
                     </button>
                     <button
                       onClick={() => setDelTarget(c)}
                       title="Excluir"
-                      className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-1.5 text-muted transition-colors hover:bg-red-50 hover:text-red-600"
                     >
                       🗑️
                     </button>
@@ -317,7 +317,7 @@ export default function CustomersClient({
       <div className="space-y-2 sm:hidden">
         {rows.length === 0 ? (
           <div className="py-10 text-center">
-            <p className="text-sm text-gray-400">Nenhum cliente encontrado.</p>
+            <p className="text-sm text-muted">Nenhum cliente encontrado.</p>
             {!search && filter === "all" && (
               <div className="mt-3 flex justify-center">
                 <NewCustomerButton />
@@ -328,26 +328,26 @@ export default function CustomersClient({
           rows.map((c) => (
             <div
               key={c.id}
-              className={`flex items-center gap-2 rounded-xl border bg-white p-3 ${selected.has(c.id) ? "border-brand-300 bg-brand-50" : "border-gray-200"}`}
+              className={`flex items-center gap-2 rounded-xl border bg-paper p-3 ${selected.has(c.id) ? "border-brand-300 bg-brand-50" : "border-line2"}`}
             >
               <input
                 type="checkbox"
                 checked={selected.has(c.id)}
                 onChange={() => toggleSelect(c.id)}
-                className="h-4 w-4 shrink-0 rounded border-gray-300 accent-brand-600"
+                className="h-4 w-4 shrink-0 rounded border-line2 accent-brand-600"
               />
               <Link href={`/customers/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
                   {c.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
-                  <p className="truncate text-xs text-gray-500">{!c.phone || isGuestIdentifier(c.phone) ? "—" : c.phone}</p>
+                  <p className="truncate text-sm font-semibold text-ink">{c.name}</p>
+                  <p className="truncate text-xs text-muted">{!c.phone || isGuestIdentifier(c.phone) ? "—" : c.phone}</p>
                 </div>
               </Link>
               <div className="shrink-0 text-right">
-                <p className="text-sm font-semibold text-gray-700">{c.totalOrders} ped.</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm font-semibold text-ink2">{c.totalOrders} ped.</p>
+                <p className="text-xs text-muted">
                   {c.lastOrderAt
                     ? new Date(c.lastOrderAt).toLocaleDateString("pt-BR")
                     : "—"}
@@ -356,13 +356,13 @@ export default function CustomersClient({
               <div className="ml-1 flex shrink-0 flex-col gap-0.5">
                 <button
                   onClick={() => openEdit(c)}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-blue-50 hover:text-blue-600"
                 >
                   ✏️
                 </button>
                 <button
                   onClick={() => setDelTarget(c)}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-red-50 hover:text-red-600"
                 >
                   🗑️
                 </button>
@@ -374,7 +374,7 @@ export default function CustomersClient({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+        <div className="mt-4 flex items-center justify-between text-sm text-muted">
           <span>
             Página {page} de {totalPages}
           </span>
@@ -382,7 +382,7 @@ export default function CustomersClient({
             {page > 1 && (
               <Link
                 href={buildUrl({ search, page: page - 1, sortBy, sortDir, filter })}
-                className="rounded-lg border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                className="rounded-lg border border-line2 px-3 py-1 hover:bg-[#FAFAF8]"
               >
                 ← Anterior
               </Link>
@@ -390,7 +390,7 @@ export default function CustomersClient({
             {page < totalPages && (
               <Link
                 href={buildUrl({ search, page: page + 1, sortBy, sortDir, filter })}
-                className="rounded-lg border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                className="rounded-lg border border-line2 px-3 py-1 hover:bg-[#FAFAF8]"
               >
                 Próxima →
               </Link>
@@ -402,34 +402,34 @@ export default function CustomersClient({
       {/* ── Edit modal ────────────────────────────────────────────────────── */}
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-bold text-gray-900">Editar cliente</h2>
+          <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-bold text-ink">Editar cliente</h2>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Nome</label>
+                <label className="mb-1 block text-xs font-semibold text-ink2">Nome</label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Telefone</label>
+                <label className="mb-1 block text-xs font-semibold text-ink2">Telefone</label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">
-                  Email <span className="font-normal text-gray-400">(opcional)</span>
+                <label className="mb-1 block text-xs font-semibold text-ink2">
+                  Email <span className="font-normal text-muted">(opcional)</span>
                 </label>
                 <input
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
                   type="email"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
             </div>
@@ -438,14 +438,14 @@ export default function CustomersClient({
               <button
                 onClick={closeEdit}
                 disabled={editBusy}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={submitEdit}
                 disabled={editBusy || !editName.trim() || !editPhone.trim()}
-                className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50"
               >
                 {editBusy ? "Salvando…" : "Salvar"}
               </button>
@@ -457,20 +457,20 @@ export default function CustomersClient({
       {/* ── Delete confirm modal ──────────────────────────────────────────── */}
       {delTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-xl">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-2xl">
               🗑️
             </div>
-            <h2 className="mb-1 text-lg font-bold text-gray-900">Excluir cliente</h2>
-            <p className="mb-5 text-sm text-gray-500">
+            <h2 className="mb-1 text-lg font-bold text-ink">Excluir cliente</h2>
+            <p className="mb-5 text-sm text-muted">
               Tem certeza que deseja excluir{" "}
-              <strong className="text-gray-900">{delTarget.name}</strong>?
+              <strong className="text-ink">{delTarget.name}</strong>?
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setDelTarget(null)}
                 disabled={delBusy}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
               >
                 Cancelar
               </button>

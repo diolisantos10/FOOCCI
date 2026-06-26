@@ -40,15 +40,15 @@ function StatusBanner({ agent }: { agent: Agent | null }) {
   return (
     <div
       className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${
-        online ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"
+        online ? "border-green-200 bg-green-50" : "border-line2 bg-[#FAFAF8]"
       }`}
     >
-      <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-green-500" : "bg-gray-400"}`} />
+      <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-green-500" : "bg-muted"}`} />
       <div className="min-w-0">
-        <p className={`text-sm font-semibold ${online ? "text-green-800" : "text-gray-700"}`}>
+        <p className={`text-sm font-semibold ${online ? "text-green-800" : "text-ink2"}`}>
           {online ? "Carteiro conectado" : "Carteiro não conectado"}
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           {online
             ? `${agent?.printers.length ?? 0} impressora(s) detectada(s) neste PC.`
             : "Siga o passo a passo abaixo para ativar a impressão automática."}
@@ -64,7 +64,7 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
   return (
     <div className="space-y-4">
       <Step n={1} title="Baixe o programa Carteiro">
-        <p className="mb-3 text-sm text-gray-600">Ele roda no computador do restaurante (Windows) e imprime sozinho.</p>
+        <p className="mb-3 text-sm text-ink2">Ele roda no computador do restaurante (Windows) e imprime sozinho.</p>
         <div className="flex flex-wrap gap-2">
           <a
             href="/downloads/FOOCCI-Carteiro.exe"
@@ -76,7 +76,7 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
           <a
             href="/downloads/Carteiro-Manual.txt"
             download
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+            className="inline-flex items-center gap-2 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition"
           >
             📄 Manual (passo a passo)
           </a>
@@ -84,7 +84,7 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
       </Step>
 
       <Step n={2} title="Abra o programa (dois cliques)">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-ink2">
           Dê dois cliques no arquivo baixado. Se o Windows mostrar um aviso azul, clique em{" "}
           <strong>“Mais informações” → “Executar assim mesmo”</strong> (é seguro, é o nosso programa). Uma telinha
           vai abrir no navegador.
@@ -92,20 +92,20 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
       </Step>
 
       <Step n={3} title="Conecte com este código">
-        <p className="mb-3 text-sm text-gray-600">Na tela do Carteiro, cole o código abaixo e clique em “Parear”.</p>
+        <p className="mb-3 text-sm text-ink2">Na tela do Carteiro, cole o código abaixo e clique em “Parear”.</p>
         {agent?.online ? (
           <p className="inline-flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700">
             ✓ Já conectado — não precisa fazer de novo.
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-2.5 font-mono text-xl font-bold tracking-[0.35em] text-gray-800">
+            <span className="rounded-xl border border-line2 bg-[#FAFAF8] px-5 py-2.5 font-mono text-xl font-bold tracking-[0.35em] text-ink">
               {agent?.pairingCode ?? "········"}
             </span>
             <button
               type="button"
               onClick={onCopy}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+              className="rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition"
             >
               {copied ? "Copiado! ✓" : "Copiar código"}
             </button>
@@ -119,11 +119,11 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
         {n}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-900">{title}</p>
+        <p className="text-sm font-semibold text-ink">{title}</p>
         <div className="mt-1.5">{children}</div>
       </div>
     </div>
@@ -142,7 +142,7 @@ function PrinterControl({
   onChange: (v: string) => void;
 }) {
   const cls =
-    "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
+    "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
   if (printers.length === 0) {
     return (
       <input
@@ -150,7 +150,7 @@ function PrinterControl({
         value={value ?? ""}
         placeholder="Nome da impressora (ex: Elgin i9)"
         onChange={(e) => onChange(e.target.value)}
-        className={`${cls} placeholder:text-gray-400`}
+        className={`${cls} placeholder:text-muted`}
       />
     );
   }
@@ -275,7 +275,7 @@ export default function ImpressorasPage() {
     }
   };
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   return (
     <div className="space-y-5">
@@ -286,11 +286,11 @@ export default function ImpressorasPage() {
 
       {/* Setup — prominent when not connected, collapsible when connected */}
       {agent?.online ? (
-        <details className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <summary className="cursor-pointer list-none px-6 py-4 text-sm font-semibold text-gray-700">
+        <details className="rounded-2xl border border-line bg-paper shadow-sm">
+          <summary className="cursor-pointer list-none px-6 py-4 text-sm font-semibold text-ink2">
             ⚙️ Instalar o Carteiro em outro computador
           </summary>
-          <div className="border-t border-gray-50 px-6 py-5">
+          <div className="border-t border-line px-6 py-5">
             <SetupSteps agent={agent} onCopy={handleCopy} copied={copied} />
           </div>
         </details>
@@ -316,11 +316,11 @@ export default function ImpressorasPage() {
             return (
               <div
                 key={s.id}
-                className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center sm:gap-4"
+                className="flex flex-col gap-3 rounded-xl border border-line2 bg-[#FAFAF8] p-3 sm:flex-row sm:items-center sm:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-2.5 sm:w-36 sm:shrink-0">
                   <span className="text-lg">{stationEmoji(s.key)}</span>
-                  <span className="truncate text-sm font-semibold text-gray-900">{s.name}</span>
+                  <span className="truncate text-sm font-semibold text-ink">{s.name}</span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <PrinterControl
@@ -335,7 +335,7 @@ export default function ImpressorasPage() {
                     onClick={() => handleTest(s)}
                     disabled={!hasPrinter || testingId === s.id}
                     title={hasPrinter ? "Enviar uma comanda de teste" : "Escolha uma impressora primeiro"}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                    className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition"
                   >
                     {testingId === s.id ? "Enviando…" : "🖨️ Testar"}
                   </button>
@@ -345,11 +345,11 @@ export default function ImpressorasPage() {
                     aria-pressed={s.enabled}
                     title={s.enabled ? "Estação ativa" : "Estação desativada"}
                     className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                      s.enabled ? "bg-brand-500" : "bg-gray-300"
+                      s.enabled ? "bg-brand-500" : "bg-line2"
                     }`}
                   >
                     <span
-                      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper shadow transition-transform ${
                         s.enabled ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
@@ -368,22 +368,22 @@ export default function ImpressorasPage() {
           subtitle="Em qual(is) estação(ões) cada categoria imprime. Pode adicionar mais de uma — para pratos que saem em duas cozinhas."
         />
         {categories.length === 0 ? (
-          <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+          <p className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-sm text-muted">
             Você ainda não tem categorias no cardápio. Cadastre no <strong>Cardápio</strong> e elas aparecem aqui.
           </p>
         ) : (
           <div className="space-y-2">
             {categories.map((c) => (
-              <div key={c.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <p className="text-sm font-medium text-gray-800">{c.name}</p>
+              <div key={c.id} className="rounded-xl border border-line2 bg-[#FAFAF8] p-3">
+                <p className="text-sm font-medium text-ink">{c.name}</p>
                 <div className="mt-2 space-y-2">
                   {c.printStationKeys.map((key, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="shrink-0 text-gray-500">→</span>
+                      <span className="shrink-0 text-muted">→</span>
                       <select
                         value={key}
                         onChange={(e) => setCatStation(c.id, idx, e.target.value)}
-                        className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
+                        className="min-w-0 flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
                       >
                         <option value="">— escolher estação —</option>
                         {stations.map((s) => (
@@ -396,7 +396,7 @@ export default function ImpressorasPage() {
                         type="button"
                         onClick={() => removeCatStation(c.id, idx)}
                         title="Remover impressora"
-                        className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-400 hover:bg-red-50 hover:text-red-500 transition"
+                        className="shrink-0 rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-sm font-semibold text-muted hover:bg-red-50 hover:text-red-500 transition"
                       >
                         ✕
                       </button>
@@ -422,10 +422,10 @@ export default function ImpressorasPage() {
           title="3. Letras grandes na cozinha"
           subtitle="Imprime os itens da comanda da cozinha em letra dupla — mais fácil de ler de longe."
         />
-        <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-line2 bg-[#FAFAF8] p-3">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-900">Ativar letra grande</p>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="text-sm font-medium text-ink">Ativar letra grande</p>
+            <p className="mt-0.5 text-xs text-muted">
               Funciona em impressoras que aceitam comandos ESC/POS (a maioria das térmicas). Ative, salve e
               imprima um pedido de teste: se os itens saírem grandes, está certo. Se sair com códigos
               estranhos no lugar, é só desligar e salvar.
@@ -436,10 +436,10 @@ export default function ImpressorasPage() {
             onClick={() => { setLargeFont((v) => !v); setSuccess(null); }}
             aria-pressed={largeFont}
             title={largeFont ? "Letra grande ativada" : "Letra grande desativada"}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${largeFont ? "bg-brand-500" : "bg-gray-300"}`}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${largeFont ? "bg-brand-500" : "bg-line2"}`}
           >
             <span
-              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${largeFont ? "translate-x-5" : "translate-x-0"}`}
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper shadow transition-transform ${largeFont ? "translate-x-5" : "translate-x-0"}`}
             />
           </button>
         </div>

@@ -475,8 +475,8 @@ function customerTierDisplay(tier: string): { label: string; icon: string; color
   switch (tier) {
     case "DIAMANTE": return { label: "Diamante", icon: "💎", color: "text-cyan-700 bg-cyan-50 border border-cyan-200"      };
     case "OURO":     return { label: "Ouro",     icon: "🥇", color: "text-amber-700 bg-amber-50 border border-amber-200"   };
-    case "PRATA":    return { label: "Prata",    icon: "🥈", color: "text-gray-600 bg-gray-100 border border-gray-200"     };
-    default:         return { label: "Bronze",   icon: "🥉", color: "text-orange-700 bg-orange-50 border border-orange-200" };
+    case "PRATA":    return { label: "Prata",    icon: "🥈", color: "text-ink2 bg-[#F4F4F2] border border-line2"     };
+    default:         return { label: "Bronze",   icon: "🥉", color: "text-brand-700 bg-brand-50 border border-brand-200" };
   }
 }
 
@@ -489,7 +489,7 @@ function customerTag(totalOrders: number, spend: number): { label: string; color
 function customerTemperature(lastOrderAt: string | null | undefined): { label: string; color: string } | null {
   if (!lastOrderAt) return null;
   const days = Math.floor((Date.now() - new Date(lastOrderAt).getTime()) / 86_400_000);
-  if (days <= 30)  return { label: "Quente", color: "text-orange-700 bg-orange-50" };
+  if (days <= 30)  return { label: "Quente", color: "text-brand-700 bg-brand-50" };
   if (days <= 60)  return { label: "Morno",  color: "text-yellow-700 bg-yellow-50" };
   return                  { label: "Frio",   color: "text-sky-700 bg-sky-50"       };
 }
@@ -653,7 +653,7 @@ export function StatusRow({
             }`}
           >
             {btn.label}
-            <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none ${isActive ? "bg-white/20" : "bg-paper text-muted"}`}>
+            <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none ${isActive ? "bg-paper/20" : "bg-paper text-muted"}`}>
               {btn.count}
             </span>
           </button>
@@ -906,7 +906,7 @@ function BulkBar({
             Despachar todos
           </button>
         )}
-        <button onClick={onClear} className="rounded-lg border border-white/25 px-3.5 py-1.5 text-[12.5px] font-semibold text-white/80 hover:bg-white/10 transition-colors">
+        <button onClick={onClear} className="rounded-lg border border-white/25 px-3.5 py-1.5 text-[12.5px] font-semibold text-white/80 hover:bg-paper/10 transition-colors">
           Limpar
         </button>
       </div>
@@ -1084,7 +1084,7 @@ function SaiposSection({
       };
     if (isFailed)
       return { label: `${n}: Falha na integração ⚠️`, color: "text-red-700", bg: "bg-red-50 border-red-100" };
-    return { label: `${n}: Aguardando envio`, color: "text-gray-500", bg: "bg-gray-50 border-gray-100" };
+    return { label: `${n}: Aguardando envio`, color: "text-muted", bg: "bg-[#FAFAF8] border-line" };
   })();
 
   return (
@@ -1370,7 +1370,7 @@ export function DetailPanel({
             <button
               type="button"
               onClick={() => onDelete(order.id)}
-              className="w-full rounded-lg border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+              className="w-full rounded-lg border border-red-200 bg-paper px-3 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
             >
               Apagar pedido permanentemente
             </button>
@@ -1446,7 +1446,7 @@ export function NewOrderModal({
         {/* Header */}
         <div className="bg-brand-500 px-6 py-4 text-white">
           <div className="flex items-center gap-3">
-            <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
+            <span className="h-3 w-3 animate-pulse rounded-full bg-paper shrink-0" />
             <span className="text-xl font-extrabold tracking-wide">NOVO PEDIDO!</span>
           </div>
           {queueLength > 1 ? (
@@ -2156,20 +2156,20 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       {/* Cancel confirmation dialog */}
       {cancelDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-gray-900">Cancelar pedido?</h3>
-            <p className="mt-1 text-sm text-gray-500">Esta ação não pode ser desfeita.</p>
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
+            <h3 className="text-base font-bold text-ink">Cancelar pedido?</h3>
+            <p className="mt-1 text-sm text-muted">Esta ação não pode ser desfeita.</p>
             <textarea
               value={cancelDialog.reason}
               onChange={(e) => setCancelDialog((prev) => prev ? { ...prev, reason: e.target.value } : null)}
               placeholder="Motivo do cancelamento (opcional — será enviado ao cliente via WhatsApp)"
               rows={2}
-              className="mt-3 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100"
+              className="mt-3 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100"
             />
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setCancelDialog(null)}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
               >
                 Voltar
               </button>
@@ -2189,9 +2189,9 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
 
       {deleteDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-gray-900">Apagar pedido?</h3>
-            <p className="mt-2 text-sm text-gray-600">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
+            <h3 className="text-base font-bold text-ink">Apagar pedido?</h3>
+            <p className="mt-2 text-sm text-ink2">
               Essa ação remove o pedido e desfaz seus impactos em faturamento, produtos, cliente, histórico e relatórios. Essa ação não pode ser desfeita.
             </p>
             {deleteError && (
@@ -2201,7 +2201,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
               <button
                 onClick={() => { setDeleteDialog(null); setDeleteError(null); }}
                 disabled={deleting}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
               >
                 Cancelar
               </button>
@@ -2231,9 +2231,9 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       {/* Manual payment confirmation dialog */}
       {manualConfirmDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-bold text-gray-900">Confirmar pagamento manualmente?</h3>
-            <p className="mt-1 text-xs text-gray-500">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
+            <h3 className="text-base font-bold text-ink">Confirmar pagamento manualmente?</h3>
+            <p className="mt-1 text-xs text-muted">
               Use apenas se você verificou o pagamento no painel do Mercado Pago.
               Esta ação marca o pedido como pago e o envia para produção.
             </p>
@@ -2262,7 +2262,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
                 <span className="font-semibold">{elapsed(manualConfirmDialog.createdAt)}</span>
               </div>
             </div>
-            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink2">
               <input
                 type="checkbox"
                 checked={manualConfirmChecked}
@@ -2276,7 +2276,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
               onChange={(e) => setManualConfirmReason(e.target.value)}
               placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
               rows={2}
-              className="mt-2 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+              className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
             />
             {manualConfirmError && (
               <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>
@@ -2285,7 +2285,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
               <button
                 onClick={() => setManualConfirmDialog(null)}
                 disabled={manualConfirming}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
               >
                 Voltar
               </button>

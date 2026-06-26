@@ -127,18 +127,18 @@ export function ReviewRequestModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md rounded-2xl bg-paper p-5 shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h3 className="text-base font-bold text-gray-900">⭐ Pedir avaliação</h3>
-            <p className="text-xs text-gray-500">{customer.name} · {customer.phone}</p>
+            <h3 className="text-base font-bold text-ink">⭐ Pedir avaliação</h3>
+            <p className="text-xs text-muted">{customer.name} · {customer.phone}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+          <button onClick={onClose} className="text-muted hover:text-ink2 text-lg leading-none">×</button>
         </div>
 
-        {loading && <div className="h-24 animate-pulse rounded-lg bg-gray-100" />}
+        {loading && <div className="h-24 animate-pulse rounded-lg bg-[#F4F4F2]" />}
         {error && <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
         {!loading && result && (
@@ -158,7 +158,7 @@ export function ReviewRequestModal({
                 {result.error && <li>{result.error}</li>}
               </ul>
             )}
-            <button onClick={onClose} className="mt-3 w-full rounded-lg bg-gray-900 py-2 text-xs font-semibold text-white">
+            <button onClick={onClose} className="mt-3 w-full rounded-lg bg-ink py-2 text-xs font-semibold text-white">
               Fechar
             </button>
           </div>
@@ -189,7 +189,7 @@ export function ReviewRequestModal({
             {/* Platform selector — only configured links */}
             {decision.availableLinks.length > 0 && (
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Plataforma</label>
+                <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">Plataforma</label>
                 <div className="mt-1 flex gap-2">
                   {decision.availableLinks.map((l) => (
                     <button
@@ -198,7 +198,7 @@ export function ReviewRequestModal({
                       className={`rounded-lg border px-3 py-1 text-xs font-semibold ${
                         (platform === l.platform || (platform === "AUTO" && decision.preferredPlatform === l.platform))
                           ? "border-brand-500 bg-brand-50 text-brand-700"
-                          : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                          : "border-line2 text-ink2 hover:bg-[#FAFAF8]"
                       }`}
                     >
                       {l.platform === "GOOGLE" ? "Google" : "iFood"}
@@ -206,24 +206,24 @@ export function ReviewRequestModal({
                   ))}
                 </div>
                 {selectedLink && (
-                  <p className="mt-1 truncate text-[10px] text-gray-400">{selectedLink}</p>
+                  <p className="mt-1 truncate text-[10px] text-muted">{selectedLink}</p>
                 )}
               </div>
             )}
 
             {/* Editable message */}
             <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Mensagem</label>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-muted">Mensagem</label>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
-                className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-line2 p-2 text-xs text-ink focus:border-brand-400 focus:outline-none"
               />
               {linkMissing && (
                 <p className="text-[10px] text-red-600">A mensagem precisa conter o link de avaliação.</p>
               )}
-              <button onClick={copyMsg} className="mt-1 rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50">
+              <button onClick={copyMsg} className="mt-1 rounded-md border border-line2 px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-[#FAFAF8]">
                 {copied ? "Copiado!" : "Copiar"}
               </button>
             </div>
@@ -237,11 +237,11 @@ export function ReviewRequestModal({
               >
                 {sending ? "Enviando…" : "Confirmar e enviar"}
               </button>
-              <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+              <button onClick={onClose} className="rounded-lg border border-line2 px-4 py-2 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8]">
                 Cancelar
               </button>
             </div>
-            <p className="text-[10px] text-gray-400">O envio só acontece após sua confirmação. Nenhum envio automático.</p>
+            <p className="text-[10px] text-muted">O envio só acontece após sua confirmação. Nenhum envio automático.</p>
           </div>
         )}
       </div>

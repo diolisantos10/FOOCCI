@@ -215,7 +215,7 @@ export default function SonsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+      <div className="flex items-center justify-center py-16 text-sm text-muted">
         Carregando…
       </div>
     );
@@ -280,7 +280,7 @@ export default function SonsPage() {
           checked={settings.soundEnabled}
           onChange={(v) => patch({ soundEnabled: v })}
         />
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-muted">
           Se o navegador bloquear o áudio, clique em &ldquo;Testar som&rdquo; uma vez neste computador para reautorizar.
         </p>
       </PageCard>
@@ -294,7 +294,7 @@ export default function SonsPage() {
         <div className="space-y-4">
           {/* Slider */}
           <div className="flex items-center gap-4">
-            <span className="text-xs text-gray-400 shrink-0 w-6">0%</span>
+            <span className="text-xs text-muted shrink-0 w-6">0%</span>
             <input
               type="range"
               min={0}
@@ -302,9 +302,9 @@ export default function SonsPage() {
               value={Math.min(settings.soundVolume, volumeMax)}
               disabled={!settings.soundEnabled}
               onChange={(e) => patch({ soundVolume: Number(e.target.value) })}
-              className="h-2 w-full cursor-pointer accent-orange-500 disabled:opacity-40"
+              className="h-2 w-full cursor-pointer accent-brand-500 disabled:opacity-40"
             />
-            <span className="w-12 shrink-0 text-right text-sm font-bold text-gray-800">
+            <span className="w-12 shrink-0 text-right text-sm font-bold text-ink">
               {settings.soundVolume}%
             </span>
           </div>
@@ -320,8 +320,8 @@ export default function SonsPage() {
                 title={p.hint}
                 className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
                   settings.soundVolume === p.value
-                    ? "border-orange-400 bg-orange-50 text-orange-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    ? "border-brand-400 bg-brand-50 text-brand-700"
+                    : "border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
                 }`}
               >
                 {p.label}
@@ -329,10 +329,10 @@ export default function SonsPage() {
             ))}
           </div>
 
-          <p className="text-xs text-gray-400">
-            O som de novo pedido já é alto em <strong className="text-gray-600">100%</strong>. Para cozinhas
-            barulhentas, use <strong className="text-gray-600">200%</strong> a{" "}
-            <strong className="text-gray-600">400%</strong>. Recomendado: 150%.
+          <p className="text-xs text-muted">
+            O som de novo pedido já é alto em <strong className="text-ink2">100%</strong>. Para cozinhas
+            barulhentas, use <strong className="text-ink2">200%</strong> a{" "}
+            <strong className="text-ink2">400%</strong>. Recomendado: 150%.
           </p>
           {!boostOk && (
             <p className="text-xs text-amber-600">
@@ -364,7 +364,7 @@ export default function SonsPage() {
           <button
             type="button"
             onClick={() => void testOrderSound()}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            className="rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition"
           >
             🔔 Testar som de pedido
           </button>
@@ -393,7 +393,7 @@ export default function SonsPage() {
           <button
             type="button"
             onClick={() => void testHandoffSound()}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            className="rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition"
           >
             🔔 Testar som de atendimento
           </button>
@@ -414,8 +414,8 @@ export default function SonsPage() {
               onClick={() => patch({ soundTheme: theme })}
               className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
                 settings.soundTheme === theme
-                  ? "border-orange-400 bg-orange-50 text-orange-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  ? "border-brand-400 bg-brand-50 text-brand-700"
+                  : "border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
               }`}
             >
               {theme === "DEFAULT" ? "🔔 Padrão" : theme === "SOFT" ? "🎵 Suave" : "🚨 Urgente"}
@@ -425,9 +425,9 @@ export default function SonsPage() {
       </PageCard>
 
       {/* Save row — sticky footer */}
-      <div className="sticky bottom-0 z-10 -mx-1 rounded-2xl border border-gray-100 bg-white/95 px-6 py-4 shadow-lg backdrop-blur-sm">
+      <div className="sticky bottom-0 z-10 -mx-1 rounded-2xl border border-line bg-paper/95 px-6 py-4 shadow-lg backdrop-blur-sm">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-muted">
             {dirty
               ? "Você tem alterações não salvas."
               : "Todas as configurações estão salvas."}
@@ -436,7 +436,7 @@ export default function SonsPage() {
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition"
+              className="rounded-xl border border-line2 px-4 py-2 text-sm text-ink2 hover:bg-[#FAFAF8] transition"
             >
               Restaurar padrão
             </button>
@@ -456,40 +456,40 @@ export default function SonsPage() {
       <PageCard>
         <SectionHeading title="Diagnóstico" subtitle="Última atividade dos alertas neste dispositivo." />
         {diag ? (
-          <div className="space-y-3 text-xs text-gray-500 font-mono">
+          <div className="space-y-3 text-xs text-muted font-mono">
             {/* New-order alert loop */}
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Novo pedido (alerta)</p>
-              <div><span className="font-semibold text-gray-700">volume salvo:</span> {settings.soundVolume}%</div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted">Novo pedido (alerta)</p>
+              <div><span className="font-semibold text-ink2">volume salvo:</span> {settings.soundVolume}%</div>
               <div>
-                <span className="font-semibold text-gray-700">ganho efetivo ({settings.soundTheme}):</span>{" "}
+                <span className="font-semibold text-ink2">ganho efetivo ({settings.soundTheme}):</span>{" "}
                 {effectiveAlertVolume(settings.soundVolume, settings.soundTheme)}%
               </div>
-              <div><span className="font-semibold text-gray-700">arquivo de áudio:</span> {diag.orderLoop?.assetPath ?? ORDER_WAV}</div>
+              <div><span className="font-semibold text-ink2">arquivo de áudio:</span> {diag.orderLoop?.assetPath ?? ORDER_WAV}</div>
               <div>
-                <span className="font-semibold text-gray-700">última tentativa:</span>{" "}
+                <span className="font-semibold text-ink2">última tentativa:</span>{" "}
                 {diag.orderLoop?.lastAttemptAt ? new Date(diag.orderLoop.lastAttemptAt).toLocaleString("pt-BR") : "—"}
               </div>
-              <div><span className="font-semibold text-gray-700">resultado:</span> {diag.orderLoop?.lastResult ?? "—"}{diag.orderLoop?.lastError ? ` (${diag.orderLoop.lastError})` : ""}</div>
-              <div><span className="font-semibold text-gray-700">loop ativo:</span> {diag.orderLoop ? (diag.orderLoop.loopActive ? "sim" : "não") : "—"}</div>
-              <div><span className="font-semibold text-gray-700">pedidos aguardando:</span> {diag.orderLoop?.activeCount ?? "—"}</div>
-              <div><span className="font-semibold text-gray-700">último motivo de parada:</span> {diag.orderLoop?.lastStopReason ?? "—"}</div>
+              <div><span className="font-semibold text-ink2">resultado:</span> {diag.orderLoop?.lastResult ?? "—"}{diag.orderLoop?.lastError ? ` (${diag.orderLoop.lastError})` : ""}</div>
+              <div><span className="font-semibold text-ink2">loop ativo:</span> {diag.orderLoop ? (diag.orderLoop.loopActive ? "sim" : "não") : "—"}</div>
+              <div><span className="font-semibold text-ink2">pedidos aguardando:</span> {diag.orderLoop?.activeCount ?? "—"}</div>
+              <div><span className="font-semibold text-ink2">último motivo de parada:</span> {diag.orderLoop?.lastStopReason ?? "—"}</div>
             </div>
             {/* Last-played / last-error mirrors */}
-            <div className="space-y-1.5 border-t border-gray-100 pt-3">
-              <div><span className="font-semibold text-gray-700">pedido · último toque:</span> {diag.orderLastPlayed ?? "—"}</div>
-              <div><span className="font-semibold text-gray-700">pedido · último erro:</span> {diag.orderLastError ?? "—"}</div>
-              <div><span className="font-semibold text-gray-700">atendimento · último toque:</span> {diag.handoffLastPlayed ?? "—"}</div>
-              <div><span className="font-semibold text-gray-700">atendimento · último erro:</span> {diag.handoffLastError ?? "—"}</div>
+            <div className="space-y-1.5 border-t border-line pt-3">
+              <div><span className="font-semibold text-ink2">pedido · último toque:</span> {diag.orderLastPlayed ?? "—"}</div>
+              <div><span className="font-semibold text-ink2">pedido · último erro:</span> {diag.orderLastError ?? "—"}</div>
+              <div><span className="font-semibold text-ink2">atendimento · último toque:</span> {diag.handoffLastPlayed ?? "—"}</div>
+              <div><span className="font-semibold text-ink2">atendimento · último erro:</span> {diag.handoffLastError ?? "—"}</div>
             </div>
           </div>
         ) : (
-          <p className="text-xs text-gray-400">Carregando…</p>
+          <p className="text-xs text-muted">Carregando…</p>
         )}
         <button
           type="button"
           onClick={refreshDiag}
-          className="mt-4 rounded-xl border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition"
+          className="mt-4 rounded-xl border border-line2 px-3 py-1.5 text-xs text-muted hover:bg-[#FAFAF8] transition"
         >
           Atualizar
         </button>
@@ -498,7 +498,7 @@ export default function SonsPage() {
       {/* Help note */}
       <PageCard>
         <SectionHeading title="Sobre o áudio no navegador" />
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-ink2">
           Navegadores modernos bloqueiam o áudio automático até o usuário interagir com a página.
           Se os sons pararem de funcionar após recarregar, use os botões <strong>Testar</strong>{" "}
           acima para reautorizar. Esta é a única tela que controla os sons — as telas de Pedidos

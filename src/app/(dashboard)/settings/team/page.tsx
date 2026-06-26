@@ -20,7 +20,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   OWNER:   "bg-violet-100 text-violet-700",
   MANAGER: "bg-indigo-100 text-indigo-700",
-  STAFF:   "bg-gray-100 text-gray-600",
+  STAFF:   "bg-[#F4F4F2] text-ink2",
 };
 
 const ROLE_ICONS: Record<string, string> = {
@@ -72,7 +72,7 @@ export default function TeamPage() {
     setAdding(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   return (
     <div className="space-y-5">
@@ -86,7 +86,7 @@ export default function TeamPage() {
         />
 
         {users.length === 0 ? (
-          <p className="py-4 text-center text-sm text-gray-400">
+          <p className="py-4 text-center text-sm text-muted">
             Nenhum usuário cadastrado ainda.
           </p>
         ) : (
@@ -94,27 +94,27 @@ export default function TeamPage() {
             {users.map((u) => (
               <div
                 key={u.id}
-                className={`flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3 ${
+                className={`flex items-center gap-3 rounded-xl border border-line px-4 py-3 ${
                   !u.isActive ? "opacity-50" : ""
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F4F4F2] text-lg">
                   {ROLE_ICONS[u.role] ?? "👤"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">{u.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  <p className="text-sm font-semibold text-ink">{u.name}</p>
+                  <p className="text-xs text-muted truncate">{u.email}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                      ROLE_COLORS[u.role] ?? "bg-gray-100 text-gray-600"
+                      ROLE_COLORS[u.role] ?? "bg-[#F4F4F2] text-ink2"
                     }`}
                   >
                     {ROLE_LABELS[u.role] ?? u.role}
                   </span>
                   {!u.isActive && (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+                    <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-medium text-muted">
                       Inativo
                     </span>
                   )}
@@ -177,7 +177,7 @@ export default function TeamPage() {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                className="rounded-xl border border-line2 px-4 py-2 text-sm text-ink2 hover:bg-[#FAFAF8]"
               >
                 Cancelar
               </button>
@@ -195,7 +195,7 @@ export default function TeamPage() {
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 py-4 text-sm font-medium text-gray-400 hover:border-brand-300 hover:text-brand-600 transition"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line2 py-4 text-sm font-medium text-muted hover:border-brand-300 hover:text-brand-600 transition"
         >
           + Adicionar membro
         </button>

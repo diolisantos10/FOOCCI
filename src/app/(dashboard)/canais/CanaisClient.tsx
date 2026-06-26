@@ -291,20 +291,20 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Canais & Links Rastreáveis</h1>
-          <p className="text-sm text-gray-500">Crie links únicos por canal e monitore cliques, pedidos e receita.</p>
+          <h1 className="text-xl font-bold text-ink">Canais & Links Rastreáveis</h1>
+          <p className="text-sm text-muted">Crie links únicos por canal e monitore cliques, pedidos e receita.</p>
         </div>
         <button
           type="button"
           onClick={() => { setShowCreate(true); setCreatedLink(null); }}
-          className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
+          className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
         >
           + Novo link
         </button>
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-line2">
         {([["links", "🔗 Links"], ["analytics", "📊 Analytics"]] as const).map(([id, label]) => (
           <button
             key={id}
@@ -312,8 +312,8 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
             onClick={() => setActiveTab(id)}
             className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === id
-                ? "border-orange-500 text-orange-600"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "border-brand-500 text-brand-600"
+                : "border-transparent text-muted hover:text-ink"
             }`}
           >
             {label}
@@ -332,8 +332,8 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
               <p className="break-all text-xs font-mono text-green-700">{getLinkUrl(createdLink)}</p>
               {getShortUrl(createdLink) && (
                 <>
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-orange-500">Link curto</p>
-                  <p className="break-all text-xs font-mono font-semibold text-gray-800">{getShortUrl(createdLink)}</p>
+                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-brand-600">Link curto</p>
+                  <p className="break-all text-xs font-mono font-semibold text-ink">{getShortUrl(createdLink)}</p>
                 </>
               )}
             </div>
@@ -349,7 +349,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                 <button
                   type="button"
                   onClick={() => { navigator.clipboard.writeText(getShortUrl(createdLink)!); }}
-                  className="rounded-lg border border-orange-300 bg-white px-3 py-1 text-xs font-bold text-orange-600 hover:bg-orange-50"
+                  className="rounded-lg border border-brand-300 bg-paper px-3 py-1 text-xs font-bold text-brand-600 hover:bg-brand-50"
                 >
                   Copiar link curto
                 </button>
@@ -378,41 +378,41 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
         <>
           {/* Create form */}
           {showCreate && (
-            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
-              <h2 className="mb-4 text-sm font-bold text-gray-800">Novo link rastreável</h2>
+            <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5">
+              <h2 className="mb-4 text-sm font-bold text-ink">Novo link rastreável</h2>
               <form onSubmit={handleCreate} className="space-y-3">
                 {/* Name + slug row */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-700">Nome do link *</label>
+                    <label className="block mb-1 text-xs font-medium text-ink2">Nome do link *</label>
                     <input
                       value={form.name}
                       onChange={(e) => handleNameChange(e.target.value)}
                       placeholder='Ex: Instagram Bio, QR Mesa 01'
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-700">
+                    <label className="block mb-1 text-xs font-medium text-ink2">
                       Slug *{" "}
-                      <span className="text-[10px] text-gray-400">(parte da URL)</span>
+                      <span className="text-[10px] text-muted">(parte da URL)</span>
                     </label>
                     <input
                       value={form.slug}
                       onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value, slugManual: true }))}
                       placeholder="instagram-bio"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
                 </div>
 
                 {/* Destination */}
                 <div>
-                  <label className="block mb-1 text-xs font-medium text-gray-700">Destino *</label>
+                  <label className="block mb-1 text-xs font-medium text-ink2">Destino *</label>
                   <select
                     value={form.destinationType}
                     onChange={(e) => setForm((f) => ({ ...f, destinationType: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   >
                     <option value="PEDIDO">Cardápio Delivery (/pedido/…)</option>
                     <option value="QR">Cardápio QR / Mesa (/qr/…)</option>
@@ -422,11 +422,11 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                 {/* Source + medium row */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-700">Origem (source) *</label>
+                    <label className="block mb-1 text-xs font-medium text-ink2">Origem (source) *</label>
                     <select
                       value={form.source}
                       onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     >
                       <option value="">Selecione…</option>
                       {SOURCES.map((s) => (
@@ -435,11 +435,11 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-700">Meio (medium) *</label>
+                    <label className="block mb-1 text-xs font-medium text-ink2">Meio (medium) *</label>
                     <select
                       value={form.medium}
                       onChange={(e) => setForm((f) => ({ ...f, medium: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     >
                       <option value="">Selecione…</option>
                       {MEDIUMS.map((m) => (
@@ -452,19 +452,19 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                 {/* Optional params */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-600">Campanha</label>
+                    <label className="block mb-1 text-xs font-medium text-ink2">Campanha</label>
                     <input value={form.campaign} onChange={(e) => setForm((f) => ({ ...f, campaign: e.target.value }))}
-                      placeholder="delivery-maio" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                      placeholder="delivery-maio" className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400" />
                   </div>
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-600">Conteúdo</label>
+                    <label className="block mb-1 text-xs font-medium text-ink2">Conteúdo</label>
                     <input value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                      placeholder="banner-vermelho" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                      placeholder="banner-vermelho" className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400" />
                   </div>
                   <div>
-                    <label className="block mb-1 text-xs font-medium text-gray-600">Termo</label>
+                    <label className="block mb-1 text-xs font-medium text-ink2">Termo</label>
                     <input value={form.term} onChange={(e) => setForm((f) => ({ ...f, term: e.target.value }))}
-                      placeholder="sushi entrega" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                      placeholder="sushi entrega" className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400" />
                   </div>
                 </div>
 
@@ -476,14 +476,14 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                   <button
                     type="submit"
                     disabled={creating}
-                    className="rounded-xl bg-orange-500 px-5 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                    className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
                   >
                     {creating ? "Criando…" : "Criar link"}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setShowCreate(false); setCreateError(""); }}
-                    className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                    className="rounded-xl border border-line2 px-4 py-2 text-sm text-ink2 hover:bg-[#FAFAF8]"
                   >
                     Cancelar
                   </button>
@@ -494,16 +494,16 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
 
           {/* Links list */}
           {loading ? (
-            <p className="text-center text-sm text-gray-400 py-12">Carregando…</p>
+            <p className="text-center text-sm text-muted py-12">Carregando…</p>
           ) : links.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 py-16 text-center text-gray-400">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line2 py-16 text-center text-muted">
               <span className="text-4xl">🔗</span>
-              <p className="text-sm font-medium text-gray-500">Nenhum link criado ainda</p>
-              <p className="text-xs text-gray-400">Crie o primeiro link para começar a rastrear visitas por canal.</p>
+              <p className="text-sm font-medium text-muted">Nenhum link criado ainda</p>
+              <p className="text-xs text-muted">Crie o primeiro link para começar a rastrear visitas por canal.</p>
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="mt-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600"
+                className="mt-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600"
               >
                 + Criar primeiro link
               </button>
@@ -515,22 +515,22 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                 return (
                   <div
                     key={link.id}
-                    className={`rounded-2xl border bg-white p-4 transition-all ${
-                      link.isActive ? "border-gray-200" : "border-gray-100 opacity-60"
+                    className={`rounded-2xl border bg-paper p-4 transition-all ${
+                      link.isActive ? "border-line2" : "border-line opacity-60"
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       {/* Source icon */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-xl">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F4F4F2] text-xl">
                         {SOURCE_ICONS[link.source] ?? "🔗"}
                       </div>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-bold text-gray-900 truncate">{link.name}</p>
+                          <p className="text-sm font-bold text-ink truncate">{link.name}</p>
                           {!link.isActive && (
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Inativo</span>
+                            <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-muted">Inativo</span>
                           )}
                           <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
                             {link.destinationType === "QR" ? "QR" : "Delivery"}
@@ -538,7 +538,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                         </div>
 
                         {/* UTM info */}
-                        <p className="mt-0.5 text-xs text-gray-500">
+                        <p className="mt-0.5 text-xs text-muted">
                           {link.source} · {link.medium}
                           {link.campaign ? ` · ${link.campaign}` : ""}
                         </p>
@@ -547,13 +547,13 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                         <div className="mt-2 space-y-1.5">
                           {/* Link rastreável */}
                           <div className="flex items-center gap-1.5">
-                            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-20">Rastreável</span>
-                            <p className="flex-1 truncate text-[11px] font-mono text-gray-400">{url}</p>
+                            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted w-20">Rastreável</span>
+                            <p className="flex-1 truncate text-[11px] font-mono text-muted">{url}</p>
                             <button
                               type="button"
                               title="Copiar link rastreável"
                               onClick={() => navigator.clipboard.writeText(url)}
-                              className="shrink-0 rounded-md border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+                              className="shrink-0 rounded-md border border-line2 px-1.5 py-0.5 text-[10px] text-muted hover:bg-[#FAFAF8] transition-colors"
                             >
                               Copiar
                             </button>
@@ -566,8 +566,8 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                             const isCopied = copiedShortId === link.id;
                             return (
                               <div className="flex items-center gap-1.5">
-                                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-400 w-20">Link curto</span>
-                                <p className="flex-1 truncate text-[11px] font-mono font-medium text-gray-700">{shortUrl}</p>
+                                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-brand-500 w-20">Link curto</span>
+                                <p className="flex-1 truncate text-[11px] font-mono font-medium text-ink2">{shortUrl}</p>
                                 <button
                                   type="button"
                                   title="Copiar link curto"
@@ -575,7 +575,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                                   className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
                                     isCopied
                                       ? "border-green-200 bg-green-50 text-green-700"
-                                      : "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                                      : "border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100"
                                   }`}
                                 >
                                   {isCopied ? "✓ Copiado" : "Copiar"}
@@ -594,8 +594,8 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                             { icon: "💰", label: "Receita",  value: fmtRevenue(link.revenue) },
                           ].map((m) => (
                             <div key={m.label} className="text-center">
-                              <p className="text-[10px] text-gray-400">{m.icon} {m.label}</p>
-                              <p className="text-sm font-bold text-gray-800">{m.value}</p>
+                              <p className="text-[10px] text-muted">{m.icon} {m.label}</p>
+                              <p className="text-sm font-bold text-ink">{m.value}</p>
                             </div>
                           ))}
                         </div>
@@ -608,7 +608,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                             type="button"
                             title="Ver QR Code"
                             onClick={() => setQrUrl(url)}
-                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
+                            className="rounded-lg border border-line2 px-2 py-1 text-xs text-muted hover:bg-[#FAFAF8] transition-colors"
                           >
                             📷 QR
                           </button>
@@ -617,7 +617,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                             title="Regenerar link curto"
                             onClick={() => handleRegenShortCode(link)}
                             disabled={regenLoadingId === link.id}
-                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                            className="rounded-lg border border-line2 px-2 py-1 text-xs text-muted hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
                           >
                             {regenLoadingId === link.id ? "…" : "↺ Regenerar"}
                           </button>
@@ -628,7 +628,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                             onClick={() => handleToggle(link)}
                             className={`rounded-lg px-2 py-1 text-[11px] font-medium transition-colors ${
                               link.isActive
-                                ? "border border-gray-200 text-gray-500 hover:bg-gray-50"
+                                ? "border border-line2 text-muted hover:bg-[#FAFAF8]"
                                 : "border border-green-200 text-green-600 hover:bg-green-50"
                             }`}
                           >
@@ -642,7 +642,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                             Apagar
                           </button>
                         </div>
-                        <p className="text-[10px] text-gray-400">{fmtDate(link.createdAt)}</p>
+                        <p className="text-[10px] text-muted">{fmtDate(link.createdAt)}</p>
                       </div>
                     </div>
                   </div>
@@ -657,41 +657,41 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
       {activeTab === "analytics" && (
         <div className="space-y-6">
           {/* GA4 / GTM */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-1 text-sm font-bold text-gray-800">Google Analytics / Tag Manager</h2>
-            <p className="mb-4 text-xs text-gray-500">
+          <div className="rounded-2xl border border-line2 bg-paper p-5">
+            <h2 className="mb-1 text-sm font-bold text-ink">Google Analytics / Tag Manager</h2>
+            <p className="mb-4 text-xs text-muted">
               Se preenchidos, os scripts serão carregados automaticamente no cardápio público (/pedido).
               Deixe em branco para não usar.
             </p>
 
             {gaLoading ? (
-              <p className="text-sm text-gray-400">Carregando…</p>
+              <p className="text-sm text-muted">Carregando…</p>
             ) : (
               <form onSubmit={handleSaveGA} className="space-y-3">
                 <div>
-                  <label className="block mb-1 text-xs font-semibold text-gray-700">
+                  <label className="block mb-1 text-xs font-semibold text-ink2">
                     GA4 Measurement ID
                   </label>
                   <input
                     value={ga4Id}
                     onChange={(e) => setGa4Id(e.target.value)}
                     placeholder="G-XXXXXXXXXX"
-                    className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full max-w-xs rounded-lg border border-line2 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
-                  <p className="mt-0.5 text-[11px] text-gray-400">Formato: G-XXXXXXXXXX</p>
+                  <p className="mt-0.5 text-[11px] text-muted">Formato: G-XXXXXXXXXX</p>
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-xs font-semibold text-gray-700">
+                  <label className="block mb-1 text-xs font-semibold text-ink2">
                     Google Tag Manager ID
                   </label>
                   <input
                     value={gtmId}
                     onChange={(e) => setGtmId(e.target.value)}
                     placeholder="GTM-XXXXXXX"
-                    className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full max-w-xs rounded-lg border border-line2 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
-                  <p className="mt-0.5 text-[11px] text-gray-400">Formato: GTM-XXXXXXX</p>
+                  <p className="mt-0.5 text-[11px] text-muted">Formato: GTM-XXXXXXX</p>
                 </div>
 
                 {gaError && <p className="text-xs text-red-600">{gaError}</p>}
@@ -700,7 +700,7 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                 <button
                   type="submit"
                   disabled={gaSaving}
-                  className="rounded-xl bg-orange-500 px-5 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                  className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
                 >
                   {gaSaving ? "Salvando…" : "Salvar"}
                 </button>
@@ -709,12 +709,12 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
           </div>
 
           {/* Events info */}
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-            <h2 className="mb-2 text-sm font-bold text-gray-700">Eventos rastreados automaticamente</h2>
-            <p className="mb-3 text-xs text-gray-500">
+          <div className="rounded-2xl border border-line bg-[#FAFAF8] p-5">
+            <h2 className="mb-2 text-sm font-bold text-ink2">Eventos rastreados automaticamente</h2>
+            <p className="mb-3 text-xs text-muted">
               Quando GA4 está configurado, os seguintes eventos são disparados no cardápio público:
             </p>
-            <ul className="space-y-1 text-xs text-gray-600">
+            <ul className="space-y-1 text-xs text-ink2">
               {[
                 ["view_menu",          "Ao carregar o cardápio"                         ],
                 ["view_product",       "Ao abrir detalhes de um produto"                ],
@@ -724,12 +724,12 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                 ["select_item",        "Ao selecionar uma categoria"                    ],
               ].map(([ev, desc]) => (
                 <li key={ev} className="flex items-start gap-2">
-                  <code className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono">{ev}</code>
+                  <code className="shrink-0 rounded bg-line2 px-1.5 py-0.5 text-[10px] font-mono">{ev}</code>
                   <span>{desc}</span>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-muted">
               Parâmetros incluídos: source, medium, campaign, trackingLinkId quando disponíveis.
             </p>
           </div>
@@ -743,24 +743,24 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
           onClick={() => setQrUrl(null)}
         >
           <div
-            className="rounded-2xl bg-white p-6 shadow-2xl flex flex-col items-center gap-4 max-w-xs w-full mx-4"
+            className="rounded-2xl bg-paper p-6 shadow-2xl flex flex-col items-center gap-4 max-w-xs w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-bold text-gray-800">QR Code</h3>
+            <h3 className="text-sm font-bold text-ink">QR Code</h3>
             <QRDisplay url={qrUrl} />
-            <p className="break-all text-center text-[11px] font-mono text-gray-400">{qrUrl}</p>
+            <p className="break-all text-center text-[11px] font-mono text-muted">{qrUrl}</p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => navigator.clipboard.writeText(qrUrl)}
-                className="rounded-lg bg-orange-500 px-4 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600"
               >
                 Copiar URL
               </button>
               <button
                 type="button"
                 onClick={() => setQrUrl(null)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-xs text-gray-600 hover:bg-gray-50"
+                className="rounded-lg border border-line2 px-4 py-2 text-xs text-ink2 hover:bg-[#FAFAF8]"
               >
                 Fechar
               </button>

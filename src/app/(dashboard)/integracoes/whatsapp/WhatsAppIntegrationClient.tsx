@@ -85,7 +85,7 @@ const STATUS_META: Record<SimpleStatus, { label: string; dot: string; ring: stri
   connected:    { label: "Conectado",          dot: "bg-green-500", ring: "ring-green-500/20", text: "text-green-700" },
   connecting:   { label: "Aguardando conexão", dot: "bg-amber-500", ring: "ring-amber-500/20", text: "text-amber-700" },
   error:        { label: "Erro de conexão",    dot: "bg-red-500",   ring: "ring-red-500/20",   text: "text-red-700"   },
-  unconfigured: { label: "Não conectado",      dot: "bg-gray-400",  ring: "ring-gray-300",     text: "text-gray-500"  },
+  unconfigured: { label: "Não conectado",      dot: "bg-muted",  ring: "ring-gray-300",     text: "text-muted"  },
 };
 
 function ConnectionPill({ status }: { status: SimpleStatus }) {
@@ -272,7 +272,7 @@ function SimpleQRPanel({
       )}
 
       {qrState === "loading" && (
-        <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-600">
+        <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-line bg-[#FAFAF8] px-4 py-4 text-sm text-ink2">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
           Gerando QR Code…
         </div>
@@ -284,7 +284,7 @@ function SimpleQRPanel({
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
             Recriando instância e capturando QR…
           </div>
-          <p className="text-center text-[11px] text-gray-400">
+          <p className="text-center text-[11px] text-muted">
             Isso leva cerca de 5–10 segundos. Não feche esta página.
           </p>
         </div>
@@ -296,7 +296,7 @@ function SimpleQRPanel({
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
             Preparando instância WhatsApp… aguarde.
           </div>
-          <p className="text-center text-[11px] text-gray-400">
+          <p className="text-center text-[11px] text-muted">
             QR Code sendo gerado automaticamente. Pode levar até 15s.
           </p>
         </div>
@@ -308,7 +308,7 @@ function SimpleQRPanel({
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
             Evolution está gerando o QR Code…
           </div>
-          <p className="text-center text-[11px] text-gray-400">
+          <p className="text-center text-[11px] text-muted">
             Aguarde enquanto o servidor prepara um novo código. Pode levar até 30s.
           </p>
         </div>
@@ -334,7 +334,7 @@ function SimpleQRPanel({
           <button
             type="button"
             onClick={() => void handleCreateQR()}
-            className="w-full rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-50 transition"
+            className="w-full rounded-xl border border-green-200 bg-paper px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-50 transition"
           >
             Atualizar QR Code
           </button>
@@ -346,7 +346,7 @@ function SimpleQRPanel({
           <p className="text-xs font-semibold text-indigo-800">
             Use o código de pareamento no WhatsApp do restaurante:
           </p>
-          <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3 text-center">
+          <div className="rounded-xl border border-indigo-200 bg-paper px-4 py-3 text-center">
             <span className="font-mono text-2xl font-bold tracking-widest text-indigo-700">
               {qrPairingCode}
             </span>
@@ -360,7 +360,7 @@ function SimpleQRPanel({
           <button
             type="button"
             onClick={() => void handleCreateQR()}
-            className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
+            className="w-full rounded-xl border border-indigo-200 bg-paper px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
           >
             Gerar novo código
           </button>
@@ -391,7 +391,7 @@ function SimpleQRPanel({
               {qrErrorMsg ?? "A instância Evolution não respondeu. Tente novamente."}
             </p>
             {qrDiagnostic && (
-              <div className="rounded-lg border border-red-200 bg-white px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
+              <div className="rounded-lg border border-red-200 bg-paper px-3 py-2 text-[11px] font-mono space-y-0.5 text-ink2">
                 {qrDiagnostic.stage && (
                   <p>stage: <span className="text-red-600">{qrDiagnostic.stage}</span></p>
                 )}
@@ -416,7 +416,7 @@ function SimpleQRPanel({
           <button
             type="button"
             onClick={() => void handleCreateQR()}
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+            className="w-full rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition"
           >
             Gerar novo QR Code
           </button>
@@ -429,7 +429,7 @@ function SimpleQRPanel({
           <button
             type="button"
             onClick={() => void handleCreateQR()}
-            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+            className="flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] transition"
           >
             Reconectar
           </button>
@@ -438,7 +438,7 @@ function SimpleQRPanel({
               type="button"
               onClick={() => void handleDisconnectClick()}
               disabled={disconnecting}
-              className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition"
+              className="flex-1 rounded-xl border border-red-200 bg-paper px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition"
             >
               {disconnecting ? "…" : "Desconectar"}
             </button>
@@ -609,33 +609,33 @@ function EventDiagCard({ result }: { result: EventDiagnosticsResult }) {
       <p className={`font-semibold ${meta.text}`}>
         {meta.icon} {result.verdictMessage}
       </p>
-      <div className={`font-mono text-[10px] space-y-0.5 bg-white/60 rounded border border-current/10 px-2 py-1.5 ${meta.text}`}>
+      <div className={`font-mono text-[10px] space-y-0.5 bg-paper/60 rounded border border-current/10 px-2 py-1.5 ${meta.text}`}>
         <p>
-          <span className="text-gray-500">estado: </span>
+          <span className="text-muted">estado: </span>
           <span className={result.connectionStatus === "open" ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
             {result.connectionStatus ?? "—"}
           </span>
         </p>
         {result.ownerJidMasked && (
-          <p><span className="text-gray-500">número: </span>+{result.ownerJidMasked.split("@")[0]}</p>
+          <p><span className="text-muted">número: </span>+{result.ownerJidMasked.split("@")[0]}</p>
         )}
         {result.integration && (
-          <p><span className="text-gray-500">integration: </span>{result.integration}</p>
+          <p><span className="text-muted">integration: </span>{result.integration}</p>
         )}
         <p>
-          <span className="text-gray-500">MESSAGES_UPSERT: </span>
+          <span className="text-muted">MESSAGES_UPSERT: </span>
           <span className={result.webhook.hasMessagesUpsert ? "text-green-700" : "text-red-600 font-bold"}>
             {result.webhook.hasMessagesUpsert ? "✓ presente" : "✗ ausente"}
           </span>
         </p>
         <p>
-          <span className="text-gray-500">webhookByEvents: </span>
+          <span className="text-muted">webhookByEvents: </span>
           <span className={result.webhook.webhookByEvents === false ? "text-green-700" : "text-red-600"}>
             {String(result.webhook.webhookByEvents ?? "?")}
           </span>
         </p>
         <p>
-          <span className="text-gray-500">enabled: </span>
+          <span className="text-muted">enabled: </span>
           <span className={result.webhook.enabled ? "text-green-700" : "text-red-600"}>
             {String(result.webhook.enabled ?? "?")}
           </span>
@@ -643,18 +643,18 @@ function EventDiagCard({ result }: { result: EventDiagnosticsResult }) {
         {result.rawSettingsKeys.length > 0 && (
           <>
             {result.settings.groupsIgnore !== null && (
-              <p><span className="text-gray-500">groupsIgnore: </span>{String(result.settings.groupsIgnore)}</p>
+              <p><span className="text-muted">groupsIgnore: </span>{String(result.settings.groupsIgnore)}</p>
             )}
             {result.settings.rejectCall !== null && (
-              <p><span className="text-gray-500">rejectCall: </span>{String(result.settings.rejectCall)}</p>
+              <p><span className="text-muted">rejectCall: </span>{String(result.settings.rejectCall)}</p>
             )}
             {result.settings.syncFullHistory !== null && (
-              <p><span className="text-gray-500">syncFullHistory: </span>{String(result.settings.syncFullHistory)}</p>
+              <p><span className="text-muted">syncFullHistory: </span>{String(result.settings.syncFullHistory)}</p>
             )}
           </>
         )}
         {result.rawSettingsKeys.length === 0 && (
-          <p className="text-gray-400">settings: endpoint não disponível nesta versão Evolution</p>
+          <p className="text-muted">settings: endpoint não disponível nesta versão Evolution</p>
         )}
       </div>
     </div>
@@ -673,7 +673,7 @@ function WebhookHealthCard({
   const now = Date.now();
 
   function healthStatus(): { label: string; color: string; dot: string } {
-    if (!summary) return { label: "Sem dados", color: "text-gray-500", dot: "bg-gray-400" };
+    if (!summary) return { label: "Sem dados", color: "text-muted", dot: "bg-muted" };
     // Use lastRealEventAt (ignores self_test synthetic writes)
     const lastReal = summary.lastRealEventAt ?? summary.lastEventAt;
     if (!lastReal) return { label: "Nenhum evento real recebido", color: "text-amber-600", dot: "bg-amber-400" };
@@ -695,34 +695,34 @@ function WebhookHealthCard({
   const hs = healthStatus();
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
-      <p className="text-sm font-semibold text-gray-800">Saúde da integração</p>
+    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm space-y-3">
+      <p className="text-sm font-semibold text-ink">Saúde da integração</p>
 
       {loading ? (
-        <div className="h-16 animate-pulse rounded-xl bg-gray-100" />
+        <div className="h-16 animate-pulse rounded-xl bg-[#F4F4F2]" />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-            <span className="text-gray-500">Status</span>
-            <span className={`font-semibold ${simpleStatus === "connected" ? "text-green-700" : "text-gray-600"}`}>
+            <span className="text-muted">Status</span>
+            <span className={`font-semibold ${simpleStatus === "connected" ? "text-green-700" : "text-ink2"}`}>
               {simpleStatus === "connected" ? "Conectado" : "Não conectado"}
             </span>
 
-            <span className="text-gray-500">Webhook</span>
+            <span className="text-muted">Webhook</span>
             <span className={`flex items-center gap-1.5 font-semibold ${hs.color}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${hs.dot}`} />
               {hs.label}
             </span>
 
-            <span className="text-gray-500">Último evento real</span>
-            <span className="text-gray-700">
+            <span className="text-muted">Último evento real</span>
+            <span className="text-ink2">
               {(summary?.lastRealEventAt ?? summary?.lastEventAt)
                 ? `${fmtAge(summary!.lastRealEventAt ?? summary!.lastEventAt!)} atrás`
                 : "nenhum"}
             </span>
 
-            <span className="text-gray-500">Mensagens hoje</span>
-            <span className="font-semibold text-gray-800">{summary?.inboundToday ?? 0} recebidas</span>
+            <span className="text-muted">Mensagens hoje</span>
+            <span className="font-semibold text-ink">{summary?.inboundToday ?? 0} recebidas</span>
           </div>
 
           {summary?.lastError && (summary.acceptedRealEvents ?? 0) === 0 && (
@@ -742,7 +742,7 @@ function WebhookHealthCard({
 function WebhookLogTable({ events }: { events: WebhookLogEvent[] }) {
   if (events.length === 0) {
     return (
-      <p className="text-xs text-gray-400 italic py-2">
+      <p className="text-xs text-muted italic py-2">
         Nenhum evento registrado. Envie uma mensagem WhatsApp para o número conectado.
       </p>
     );
@@ -752,20 +752,20 @@ function WebhookLogTable({ events }: { events: WebhookLogEvent[] }) {
       {events.map((ev) => (
         <div key={ev.id} className={`rounded-lg border px-2.5 py-2 text-[11px] font-mono ${
           !ev.accepted ? "border-red-100 bg-red-50" :
-          ev.ignored   ? "border-gray-100 bg-gray-50" :
+          ev.ignored   ? "border-line bg-[#FAFAF8]" :
           "border-green-100 bg-green-50"
         }`}>
           <div className="flex items-center gap-2">
-            <span className={ev.accepted ? (ev.ignored ? "text-gray-400" : "text-green-600") : "text-red-500"}>
+            <span className={ev.accepted ? (ev.ignored ? "text-muted" : "text-green-600") : "text-red-500"}>
               {ev.accepted ? (ev.ignored ? "·" : "✓") : "✗"}
             </span>
-            <span className="text-gray-700 font-semibold">{ev.eventName}</span>
+            <span className="text-ink2 font-semibold">{ev.eventName}</span>
             {ev.direction && (
-              <span className={`rounded px-1 py-px text-[9px] ${ev.direction === "INBOUND" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+              <span className={`rounded px-1 py-px text-[9px] ${ev.direction === "INBOUND" ? "bg-green-100 text-green-700" : "bg-[#F4F4F2] text-muted"}`}>
                 {ev.direction}
               </span>
             )}
-            <span className="ml-auto text-gray-400 text-[10px]">
+            <span className="ml-auto text-muted text-[10px]">
               {new Date(ev.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
           </div>
@@ -1217,7 +1217,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     return (
       <div className="mx-auto max-w-lg p-6 space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-2xl bg-gray-100" />
+          <div key={i} className="h-24 animate-pulse rounded-2xl bg-[#F4F4F2]" />
         ))}
       </div>
     );
@@ -1227,12 +1227,12 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     <div className="mx-auto max-w-lg p-6 space-y-6">
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/integracoes" className="hover:text-gray-800 transition-colors">
+      <div className="flex items-center gap-2 text-sm text-muted">
+        <Link href="/integracoes" className="hover:text-ink transition-colors">
           Integrações
         </Link>
         <span>/</span>
-        <span className="font-semibold text-gray-800">WhatsApp</span>
+        <span className="font-semibold text-ink">WhatsApp</span>
       </div>
 
       {/* Header */}
@@ -1241,9 +1241,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           💬
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-gray-900">WhatsApp</h1>
-          <p className="text-xs text-gray-500">Integração atual · atende seus clientes no WhatsApp.</p>
-          <span className="mt-1 inline-block rounded-full bg-gray-100 px-2 py-px text-[10px] font-medium text-gray-500">Mantido como fallback</span>
+          <h1 className="text-lg font-bold text-ink">WhatsApp</h1>
+          <p className="text-xs text-muted">Integração atual · atende seus clientes no WhatsApp.</p>
+          <span className="mt-1 inline-block rounded-full bg-[#F4F4F2] px-2 py-px text-[10px] font-medium text-muted">Mantido como fallback</span>
         </div>
         <ConnectionPill status={simpleStatus} />
       </div>
@@ -1263,9 +1263,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Connected state ────────────────────────────────────────────────── */}
       {simpleStatus === "connected" && !showQrPanel ? (
-        <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm space-y-4">
+        <div className="rounded-2xl border border-green-100 bg-paper p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-800">WhatsApp atual</p>
+            <p className="text-sm font-semibold text-ink">WhatsApp atual</p>
             <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
               <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
               Conectado
@@ -1275,29 +1275,29 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
             {phone && (
               <>
-                <span className="text-gray-500">Número</span>
-                <span className="font-mono font-semibold text-gray-800">{phone}</span>
+                <span className="text-muted">Número</span>
+                <span className="font-mono font-semibold text-ink">{phone}</span>
               </>
             )}
             {profileName && (
               <>
-                <span className="text-gray-500">Perfil</span>
-                <span className="text-gray-700">{profileName}</span>
+                <span className="text-muted">Perfil</span>
+                <span className="text-ink2">{profileName}</span>
               </>
             )}
-            <span className="text-gray-500">Recebimento</span>
+            <span className="text-muted">Recebimento</span>
             <span className={`flex items-center gap-1.5 font-medium ${webhookStatusLabel.color}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${webhookStatusLabel.dot}`} />
               {webhookStatusLabel.label}
             </span>
             {lastRealAgo && (
               <>
-                <span className="text-gray-500">Última atividade</span>
-                <span className="text-gray-700">{lastRealAgo}</span>
+                <span className="text-muted">Última atividade</span>
+                <span className="text-ink2">{lastRealAgo}</span>
               </>
             )}
-            <span className="text-gray-500">Mensagens hoje</span>
-            <span className="font-semibold text-gray-800">{webhookLogSummary?.inboundToday ?? 0} recebidas</span>
+            <span className="text-muted">Mensagens hoje</span>
+            <span className="font-semibold text-ink">{webhookLogSummary?.inboundToday ?? 0} recebidas</span>
           </div>
 
           {webhookLogSummary?.lastError && (webhookLogSummary.acceptedRealEvents ?? 0) === 0 && (
@@ -1320,14 +1320,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
               type="button"
               onClick={() => void handleQuickTest()}
               disabled={quickTesting}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition"
+              className="w-full rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition"
             >
               {quickTesting ? "Testando…" : "Testar conexão"}
             </button>
             <button
               type="button"
               onClick={() => setShowQrPanel(true)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+              className="w-full rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition"
             >
               Reconectar WhatsApp
             </button>
@@ -1335,12 +1335,12 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
         </div>
       ) : (
         /* ── Disconnected / QR state ──────────────────────────────────────── */
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+        <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm space-y-4">
           <div>
-            <p className="text-sm font-semibold text-gray-800">
+            <p className="text-sm font-semibold text-ink">
               {showQrPanel ? "Reconectar WhatsApp" : "Conectar WhatsApp do restaurante"}
             </p>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-muted">
               {showQrPanel
                 ? "Escaneie o QR Code para reconectar."
                 : "Escaneie o QR Code com o celular do restaurante para começar a atender clientes."}
@@ -1349,7 +1349,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
           {!showQrPanel && isConfigured && (
             <div className="space-y-3">
-              <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
+              <ol className="space-y-1.5 text-xs text-ink2 list-decimal list-inside">
                 <li>Abra o WhatsApp no celular</li>
                 <li>Toque em <span className="font-medium">Aparelhos conectados</span></li>
                 <li>Toque em <span className="font-medium">Conectar aparelho</span></li>
@@ -1382,7 +1382,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
             <button
               type="button"
               onClick={() => setShowQrPanel(false)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 transition"
+              className="w-full rounded-xl border border-line2 px-4 py-2 text-sm text-muted hover:bg-[#FAFAF8] transition"
             >
               Cancelar
             </button>
@@ -1411,29 +1411,29 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Advanced settings — Foocci support only (hidden from lojista; ?suporte=1) ── */}
       {isOwner && supportMode && (
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-line bg-paper shadow-sm overflow-hidden">
 
           {/* Toggle header */}
           <button
             type="button"
             onClick={() => setIsAdvancedOpen((v) => !v)}
-            className="flex w-full items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition-colors"
+            className="flex w-full items-center justify-between px-5 py-3.5 text-left hover:bg-[#FAFAF8] transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <span className="text-sm font-semibold text-gray-700">Avançado</span>
-              <span className="rounded-full border border-gray-200 px-2 py-px text-[10px] font-medium text-gray-400">
+              <span className="text-sm font-semibold text-ink2">Avançado</span>
+              <span className="rounded-full border border-line2 px-2 py-px text-[10px] font-medium text-muted">
                 Uso interno Foocci
               </span>
             </div>
-            <span className={`text-gray-400 transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`}>▾</span>
+            <span className={`text-muted transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`}>▾</span>
           </button>
 
           {isAdvancedOpen && (
-            <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-5">
+            <div className="border-t border-line px-5 pb-5 pt-4 space-y-5">
 
               {/* ── Grupo A — Diagnósticos ────────────────────────────────── */}
               <div className="space-y-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Diagnósticos</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Diagnósticos</p>
 
                 {/* Signature mismatch alert */}
                 {hasSignatureMismatch && (
@@ -1449,7 +1449,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     type="button"
                     onClick={() => void handleVerifyConfig()}
                     disabled={verifyingConfig}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-2.5 text-xs font-medium text-ink2 hover:bg-[#F4F4F2] disabled:opacity-50 transition"
                   >
                     {verifyingConfig ? "Consultando Evolution…" : "Verificar webhook na Evolution"}
                   </button>
@@ -1465,7 +1465,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                       <p>auth: {liveConfigResult.tokenInUrl ? <span className="text-green-700">token na URL ✓</span> : liveConfigResult.secretPresent ? <span className="text-green-700">secret ✓</span> : <span className="text-amber-600">ausente</span>}</p>
                     </div>
                     {liveConfigResult.issues.length > 0 && liveConfigResult.issues.map((iss, i) => <p key={i} className="text-[10px]">⚠ {iss}</p>)}
-                    <p className="text-[10px] text-gray-600">{liveConfigResult.recommendation}</p>
+                    <p className="text-[10px] text-ink2">{liveConfigResult.recommendation}</p>
                   </div>
                 )}
 
@@ -1496,7 +1496,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     type="button"
                     onClick={() => void handleAuthTest()}
                     disabled={authTesting}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-2.5 text-xs font-medium text-ink2 hover:bg-[#F4F4F2] disabled:opacity-50 transition"
                   >
                     {authTesting ? "Testando…" : "Testar lógica de autenticação"}
                   </button>
@@ -1506,7 +1506,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     authTestResult.allWorkingCorrectly ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
                   }`}>
                     <p className="font-semibold">{authTestResult.allWorkingCorrectly ? "✓ Auth OK" : "✗ Auth com falha"}</p>
-                    <p className="text-gray-600">{authTestResult.diagnosis}</p>
+                    <p className="text-ink2">{authTestResult.diagnosis}</p>
                     {authTestResult.tests && Object.entries(authTestResult.tests).map(([k, v]) => (
                       <p key={k}><span className={v.accepted ? "text-green-600" : "text-red-500"}>{v.accepted ? "✓" : "✗"}</span> {k}</p>
                     ))}
@@ -1538,8 +1538,8 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
               </div>
 
               {/* ── Grupo B — Manutenção ──────────────────────────────────── */}
-              <div className="space-y-3 border-t border-gray-100 pt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Manutenção</p>
+              <div className="space-y-3 border-t border-line pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Manutenção</p>
 
                 {/* Sync webhook */}
                 {showSyncButton && (
@@ -1560,7 +1560,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     type="button"
                     onClick={() => void handleSyncWebhook()}
                     disabled={syncingWebhook}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-2.5 text-xs font-medium text-ink2 hover:bg-[#F4F4F2] disabled:opacity-50 transition"
                   >
                     {syncingWebhook ? "Sincronizando…" : "Sincronizar webhook"}
                   </button>
@@ -1580,22 +1580,22 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 )}
 
                 {/* Secret rotation */}
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2.5">
+                <div className="rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 space-y-2.5">
                   <div>
-                    <p className="text-xs font-medium text-gray-700">Rotacionar secret do webhook</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">Use apenas se o token foi exposto. Não desconecta o WhatsApp.</p>
+                    <p className="text-xs font-medium text-ink2">Rotacionar secret do webhook</p>
+                    <p className="text-[10px] text-muted mt-0.5">Use apenas se o token foi exposto. Não desconecta o WhatsApp.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => void handleRotateSecret()}
                     disabled={rotatingSecret || !isConfigured}
-                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition"
+                    className="rounded-xl border border-line2 bg-paper px-4 py-2 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition"
                   >
                     {rotatingSecret ? "Rotacionando…" : "Rotacionar secret"}
                   </button>
                   {rotateResult && (
                     <div className={`rounded-lg border px-3 py-2 text-xs ${
-                      rotateResult.success ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+                      rotateResult.success ? "border-green-200 bg-paper text-green-800" : "border-red-200 bg-paper text-red-700"
                     }`}>
                       <p className="font-semibold">{rotateResult.success ? "✓ Secret rotacionado" : "✗ Falha"}</p>
                       <p className="text-[10px] mt-0.5">{rotateResult.message}</p>
@@ -1604,14 +1604,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 </div>
 
                 {/* Log de eventos webhook */}
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                <div className="rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-gray-700">Log de eventos webhook</p>
+                    <p className="text-xs font-medium text-ink2">Log de eventos webhook</p>
                     <button
                       type="button"
                       onClick={() => void loadWebhookLog()}
                       disabled={webhookLogLoading}
-                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                      className="rounded-lg border border-line2 bg-paper px-2.5 py-1 text-[10px] font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition"
                     >
                       {webhookLogLoading ? "…" : "Atualizar"}
                     </button>
@@ -1621,7 +1621,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
               </div>
 
               {/* ── Grupo C — Ferramentas técnicas (nested accordion) ─────── */}
-              <div className="border-t border-gray-100 pt-4">
+              <div className="border-t border-line pt-4">
                 <button
                   type="button"
                   onClick={() => setIsTechToolsOpen((v) => !v)}
@@ -1649,8 +1649,8 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
                     {/* Credentials form */}
                     {(lastTested || view?.lastError) && (
-                      <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs space-y-1">
-                        {lastTested && <p className="text-gray-500"><span className="font-medium text-gray-700">Último teste:</span> {lastTested}</p>}
+                      <div className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 text-xs space-y-1">
+                        {lastTested && <p className="text-muted"><span className="font-medium text-ink2">Último teste:</span> {lastTested}</p>}
                         {view?.lastError && (
                           <p className={view.isActive ? "text-green-700" : "text-red-600"}>
                             {view.isActive ? "✓" : "⚠"} {view.lastError}
@@ -1661,16 +1661,16 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
                     <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
                       <div>
-                        <label className="mb-1.5 block text-sm font-medium text-gray-700">Nome da instância</label>
+                        <label className="mb-1.5 block text-sm font-medium text-ink2">Nome da instância</label>
                         <input type="text" value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="sushicazza"
-                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${instanceNameErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${instanceNameErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-indigo-400 focus:ring-indigo-100"}`}
                         />
                         <FieldError msg={instanceNameErr} />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-sm font-medium text-gray-700">URL do servidor Evolution</label>
+                        <label className="mb-1.5 block text-sm font-medium text-ink2">URL do servidor Evolution</label>
                         <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evo.seuservidor.com"
-                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${baseUrlErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${baseUrlErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-indigo-400 focus:ring-indigo-100"}`}
                         />
                         {loadedBaseUrlErr && !baseUrlErr && (
                           <div className="mt-1 flex items-start gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2.5 py-2">
@@ -1681,46 +1681,46 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         <FieldError msg={baseUrlErr} />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-sm font-medium text-gray-700">API Key</label>
-                        {f.apiKeyPreview && <p className="mb-1 text-xs text-gray-500">Atual: <span className="font-mono font-semibold text-gray-700">{f.apiKeyPreview}</span></p>}
+                        <label className="mb-1.5 block text-sm font-medium text-ink2">API Key</label>
+                        {f.apiKeyPreview && <p className="mb-1 text-xs text-muted">Atual: <span className="font-mono font-semibold text-ink2">{f.apiKeyPreview}</span></p>}
                         <input type="password" name="apiKey" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
                           placeholder={f.apiKeyPreview ? "Nova chave — deixe em branco para manter" : "Cole sua API Key"}
-                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${apiKeyErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${apiKeyErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-indigo-400 focus:ring-indigo-100"}`}
                         />
                         <FieldError msg={apiKeyErr} />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-sm font-medium text-gray-700">Webhook Secret</label>
-                        {f.webhookSecretPreview && <p className="mb-1 text-xs text-gray-500">Atual: <span className="font-mono font-semibold text-gray-700">{f.webhookSecretPreview}</span></p>}
+                        <label className="mb-1.5 block text-sm font-medium text-ink2">Webhook Secret</label>
+                        {f.webhookSecretPreview && <p className="mb-1 text-xs text-muted">Atual: <span className="font-mono font-semibold text-ink2">{f.webhookSecretPreview}</span></p>}
                         <input type="password" name="webhookSecret" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)}
                           placeholder={f.webhookSecretPreview ? "Novo secret — deixe em branco para manter" : "Cole o Webhook Secret"}
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                          className="w-full rounded-xl border border-line2 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
                         />
-                        <p className="mt-1 text-xs text-gray-400">Usado para autenticar as mensagens recebidas.</p>
+                        <p className="mt-1 text-xs text-muted">Usado para autenticar as mensagens recebidas.</p>
                       </div>
-                      <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 space-y-0.5">
-                        <p className="text-xs font-medium text-gray-700">URL do Webhook (base)</p>
-                        <p className="break-all font-mono text-[10px] text-gray-500">{webhookUrl}</p>
+                      <div className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 space-y-0.5">
+                        <p className="text-xs font-medium text-ink2">URL do Webhook (base)</p>
+                        <p className="break-all font-mono text-[10px] text-muted">{webhookUrl}</p>
                       </div>
                       <div className="flex items-center gap-3 pt-1">
                         <button type="submit" disabled={saving} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
                           {saving ? "Salvando…" : "Salvar credenciais"}
                         </button>
                         <button type="button" onClick={() => void handleTest()} disabled={testing || view?.status === "unconfigured" || !view}
-                          className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition">
+                          className="rounded-xl border border-line2 px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition">
                           {testing ? "Testando…" : "Testar conexão"}
                         </button>
                       </div>
                     </form>
 
                     {/* Diagnose Evolution */}
-                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
+                    <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-4 space-y-3">
                       <div>
-                        <p className="text-xs font-semibold text-gray-700">Diagnosticar Evolution</p>
-                        <p className="mt-0.5 text-xs text-gray-500">Verifica conectividade, autenticação, estado da instância e disponibilidade de QR.</p>
+                        <p className="text-xs font-semibold text-ink2">Diagnosticar Evolution</p>
+                        <p className="mt-0.5 text-xs text-muted">Verifica conectividade, autenticação, estado da instância e disponibilidade de QR.</p>
                       </div>
                       <button type="button" onClick={() => void handleDiagnose()} disabled={diagnosing || !isConfigured}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition">
+                        className="rounded-xl border border-line2 bg-paper px-4 py-2 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition">
                         {diagnosing ? "Diagnosticando…" : "Executar diagnóstico"}
                       </button>
                       {diagResult && (
@@ -1731,11 +1731,11 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                             <span className="text-blue-500">diag cria instância: {diagResult.diagnoseTestsCreateQr ? "✓" : "✗ (seguro)"}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                            <span className="text-gray-500">Servidor</span><span className="font-mono text-gray-700 truncate">{diagResult.baseUrlMasked}</span>
-                            <span className="text-gray-500">Instância</span><span className="font-mono text-gray-700">{diagResult.instanceName}</span>
-                            <span className="text-gray-500">Estado</span>
+                            <span className="text-muted">Servidor</span><span className="font-mono text-ink2 truncate">{diagResult.baseUrlMasked}</span>
+                            <span className="text-muted">Instância</span><span className="font-mono text-ink2">{diagResult.instanceName}</span>
+                            <span className="text-muted">Estado</span>
                             <span className={`font-semibold ${diagResult.instanceState === "open" ? "text-green-600" : diagResult.instanceState === "connecting" ? "text-amber-600" : "text-red-600"}`}>{diagResult.instanceState}</span>
-                            <span className="text-gray-500">QR extraído</span>
+                            <span className="text-muted">QR extraído</span>
                             <span className={diagResult.qrAvailable ? "text-green-600 font-semibold" : "text-red-600"}>{diagResult.qrAvailable ? "sim" : "não"}</span>
                           </div>
                           <div className="space-y-2">
@@ -1748,22 +1748,22 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                                 <div key={s.label} className="text-[11px]">
                                   <div className="flex items-center gap-1.5">
                                     <span className={s.ok ? "text-green-500" : "text-red-500"}>{s.ok ? "✓" : "✗"}</span>
-                                    <span className="font-mono text-gray-600">{s.label}</span>
+                                    <span className="font-mono text-ink2">{s.label}</span>
                                     {!s.ok && s.error && <span className="text-red-600 break-all">{s.error}</span>}
                                   </div>
                                   {shape && (
-                                    <div className="ml-4 mt-1 space-y-0.5 text-gray-500 text-[10px]">
+                                    <div className="ml-4 mt-1 space-y-0.5 text-muted text-[10px]">
                                       {shape.availableKeys && <p>Chaves: [{shape.availableKeys.join(", ")}]</p>}
                                       {shape.reason && <p className="text-amber-600">{shape.reason}</p>}
                                     </div>
                                   )}
                                   {variants && (
-                                    <div className="ml-4 mt-1 space-y-1 text-gray-500 text-[10px]">
+                                    <div className="ml-4 mt-1 space-y-1 text-muted text-[10px]">
                                       {variants.map((v) => (
                                         <div key={`${v.method}:${v.path}`} className="flex items-center gap-1.5">
-                                          <span className={v.qrExtracted ? "text-green-500" : v.error ? "text-red-400" : "text-gray-400"}>{v.qrExtracted ? "✓" : "·"}</span>
+                                          <span className={v.qrExtracted ? "text-green-500" : v.error ? "text-red-400" : "text-muted"}>{v.qrExtracted ? "✓" : "·"}</span>
                                           <span className="font-mono">{v.method} {v.path}</span>
-                                          {v.httpStatus && <span className="text-gray-400">HTTP {v.httpStatus}</span>}
+                                          {v.httpStatus && <span className="text-muted">HTTP {v.httpStatus}</span>}
                                           {v.qrExtracted && <span className="text-green-600 font-semibold">QR encontrado aqui!</span>}
                                           {v.error && <span className="text-red-500">{v.error}</span>}
                                         </div>
@@ -1779,33 +1779,33 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     </div>
 
                     {/* Env-var audit */}
-                    <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-4 space-y-3">
+                    <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-4 space-y-3">
                       <div>
-                        <p className="text-xs font-semibold text-orange-700">Auditoria de Env Vars (Railway)</p>
-                        <p className="mt-0.5 text-xs text-orange-600">Retorna variáveis necessárias para Evolution com valores recomendados. Use quando QR retorna apenas &#123; count &#125;.</p>
+                        <p className="text-xs font-semibold text-brand-700">Auditoria de Env Vars (Railway)</p>
+                        <p className="mt-0.5 text-xs text-brand-600">Retorna variáveis necessárias para Evolution com valores recomendados. Use quando QR retorna apenas &#123; count &#125;.</p>
                       </div>
                       <button type="button" onClick={() => void handleAudit()} disabled={auditing || !isConfigured}
-                        className="rounded-xl border border-orange-200 bg-white px-4 py-2 text-xs font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-40 transition">
+                        className="rounded-xl border border-brand-200 bg-paper px-4 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40 transition">
                         {auditing ? "Auditando…" : "Ver env vars necessárias"}
                       </button>
                       {auditResult && (
                         <div className="space-y-3 pt-1">
-                          <div className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-[11px] space-y-1 text-gray-700">
-                            <p className="font-semibold text-orange-700 mb-1">Plano de ação:</p>
+                          <div className="rounded-lg border border-brand-200 bg-paper px-3 py-2 text-[11px] space-y-1 text-ink2">
+                            <p className="font-semibold text-brand-700 mb-1">Plano de ação:</p>
                             <p>1. {auditResult.summary.step1}</p>
                             <p>2. {auditResult.summary.step2}</p>
                             <p>3. {auditResult.summary.step3}</p>
                             <p>4. {auditResult.summary.step4}</p>
                           </div>
                           <div className="space-y-2">
-                            <p className="text-[11px] font-semibold text-gray-700">Correções prioritárias:</p>
+                            <p className="text-[11px] font-semibold text-ink2">Correções prioritárias:</p>
                             {auditResult.prioritisedFixes.slice(0, 8).map((fix) => (
-                              <div key={fix.variable} className={`rounded-lg border px-3 py-2 text-[11px] ${fix.priority <= 3 ? "border-red-200 bg-red-50" : fix.priority <= 6 ? "border-amber-100 bg-amber-50" : "border-gray-100 bg-gray-50"}`}>
+                              <div key={fix.variable} className={`rounded-lg border px-3 py-2 text-[11px] ${fix.priority <= 3 ? "border-red-200 bg-red-50" : fix.priority <= 6 ? "border-amber-100 bg-amber-50" : "border-line bg-[#FAFAF8]"}`}>
                                 <div className="flex items-center gap-2">
-                                  <span className={`font-mono font-semibold ${fix.priority <= 3 ? "text-red-700" : fix.priority <= 6 ? "text-amber-700" : "text-gray-700"}`}>{fix.priority}. {fix.variable}</span>
+                                  <span className={`font-mono font-semibold ${fix.priority <= 3 ? "text-red-700" : fix.priority <= 6 ? "text-amber-700" : "text-ink2"}`}>{fix.priority}. {fix.variable}</span>
                                   {fix.value && <span className="font-mono text-green-700 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded">= {fix.value}</span>}
                                 </div>
-                                <p className="mt-0.5 text-gray-600">{fix.reason}</p>
+                                <p className="mt-0.5 text-ink2">{fix.reason}</p>
                               </div>
                             ))}
                           </div>
@@ -1820,19 +1820,19 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         <p className="mt-0.5 text-xs text-purple-600">Cria instância temporária para determinar se o problema de QR é específico desta instância ou server-wide.</p>
                       </div>
                       <button type="button" onClick={() => void handleDeepProbe()} disabled={deepProbing || !isConfigured}
-                        className="rounded-xl border border-purple-200 bg-white px-4 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-40 transition">
+                        className="rounded-xl border border-purple-200 bg-paper px-4 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-40 transition">
                         {deepProbing ? "Analisando… (~35 s)" : "Executar diagnóstico profundo"}
                       </button>
                       {deepResult && (
                         <div className="space-y-3 pt-1">
-                          <div className={`rounded-lg border px-3 py-2.5 text-xs font-semibold ${deepResult.verdictCode === "instance_specific" ? "border-amber-200 bg-amber-50 text-amber-800" : deepResult.verdictCode === "server_wide" ? "border-red-200 bg-red-50 text-red-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
+                          <div className={`rounded-lg border px-3 py-2.5 text-xs font-semibold ${deepResult.verdictCode === "instance_specific" ? "border-amber-200 bg-amber-50 text-amber-800" : deepResult.verdictCode === "server_wide" ? "border-red-200 bg-red-50 text-red-800" : "border-line2 bg-[#FAFAF8] text-ink2"}`}>
                             {deepResult.verdict}
                           </div>
-                          <div className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-[11px] text-gray-700 whitespace-pre-wrap">
+                          <div className="rounded-lg border border-purple-200 bg-paper px-3 py-2 text-[11px] text-ink2 whitespace-pre-wrap">
                             <span className="font-semibold">Recomendação: </span>{deepResult.recommendation}
                           </div>
-                          <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
-                            <p className="font-semibold text-gray-700 mb-1">Instância temporária ({deepResult.tempInstanceTest.tempName})</p>
+                          <div className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2 text-[11px] font-mono space-y-0.5 text-ink2">
+                            <p className="font-semibold text-ink2 mb-1">Instância temporária ({deepResult.tempInstanceTest.tempName})</p>
                             <p>criada: {deepResult.tempInstanceTest.created ? "sim" : "não"}{deepResult.tempInstanceTest.error ? ` — ${deepResult.tempInstanceTest.error}` : ""}</p>
                             {deepResult.tempInstanceTest.created && (
                               <>
@@ -1869,7 +1869,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                           type="button"
                           disabled={resetConfirmText.trim().toUpperCase() !== `RESETAR ${(f.instanceName ?? "INSTANCIA").toUpperCase()}` || !isConfigured}
                           onClick={() => { setResetConfirmText(""); handleHardReset(); }}
-                          className="w-full rounded-xl border border-red-300 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                          className="w-full rounded-xl border border-red-300 bg-paper px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
                         >
                           Resetar instância WhatsApp
                         </button>

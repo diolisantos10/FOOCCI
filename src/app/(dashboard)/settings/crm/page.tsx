@@ -53,12 +53,12 @@ function SegmentSection() {
     else setErr("Erro ao salvar. Tente novamente.");
   }
 
-  if (!cfg) return <div className="py-8 text-center text-sm text-gray-400">Carregando…</div>;
+  if (!cfg) return <div className="py-8 text-center text-sm text-muted">Carregando…</div>;
 
   return (
     <PageCard>
-      <h3 className="mb-4 text-sm font-semibold text-gray-900">Regras de segmentação por recência</h3>
-      <p className="mb-4 text-xs text-gray-500">
+      <h3 className="mb-4 text-sm font-semibold text-ink">Regras de segmentação por recência</h3>
+      <p className="mb-4 text-xs text-muted">
         Define em quantos dias sem pedido um cliente passa de Ativo → Morno → Em Risco (Frio). Usado pelo CRM para segmentar e priorizar campanhas.
       </p>
       <form onSubmit={onSubmit} className="space-y-4">
@@ -88,13 +88,13 @@ function SegmentSection() {
             />
           </Field>
         </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-600">
+        <div className="rounded-xl bg-[#FAFAF8] px-4 py-3 text-xs text-ink2">
           <span className="mr-2">🔥 Ativo:</span> 0–{cfg.hotMaxDays}d
-          <span className="mx-3 text-gray-300">|</span>
+          <span className="mx-3 text-muted">|</span>
           <span className="mr-2">☀️ Morno:</span> {cfg.hotMaxDays + 1}–{cfg.warmMaxDays}d
-          <span className="mx-3 text-gray-300">|</span>
+          <span className="mx-3 text-muted">|</span>
           <span className="mr-2">❄️ Em Risco:</span> {cfg.warmMaxDays + 1}–{cfg.lostMinDays - 1}d
-          <span className="mx-3 text-gray-300">|</span>
+          <span className="mx-3 text-muted">|</span>
           <span className="mr-2">💀 Perdido:</span> {cfg.lostMinDays}d+
         </div>
         <Feedback success={ok} error={err} onDismiss={() => { setOk(null); setErr(null); }} />
@@ -120,7 +120,7 @@ interface CapacityForecast {
 const RISK_META: Record<string, { label: string; cls: string }> = {
   HEALTHY:          { label: "Saudável",            cls: "bg-green-50 text-green-700" },
   ATTENTION:        { label: "Atenção",             cls: "bg-amber-50 text-amber-700" },
-  BLOCKED_BY_LIMIT: { label: "Travada por limite",  cls: "bg-orange-50 text-orange-700" },
+  BLOCKED_BY_LIMIT: { label: "Travada por limite",  cls: "bg-brand-50 text-brand-700" },
   COMPETING:        { label: "Competindo",          cls: "bg-red-50 text-red-600" },
 };
 const PRIO_LABEL: Record<string, string> = { LOW: "Baixa", NORMAL: "Normal", HIGH: "Alta", CRITICAL: "Crítica" };
@@ -136,7 +136,7 @@ function CapacityForecastBlock() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-400">Calculando previsão de capacidade…</div>;
+  if (loading) return <div className="rounded-xl border border-line bg-[#FAFAF8] p-4 text-xs text-muted">Calculando previsão de capacidade…</div>;
   if (!data) return null;
 
   const b = data.budget;
@@ -165,18 +165,18 @@ function CapacityForecastBlock() {
       )}
 
       <div className="mt-3 space-y-1.5">
-        {a.campaigns.length === 0 && <p className="text-[11px] text-gray-500">Nenhuma campanha recorrente ativa.</p>}
+        {a.campaigns.length === 0 && <p className="text-[11px] text-muted">Nenhuma campanha recorrente ativa.</p>}
         {a.campaigns.map(c => {
           const risk = RISK_META[c.riskLevel] ?? RISK_META.HEALTHY!;
           return (
-            <div key={c.campaignId} className="rounded-lg border border-gray-100 bg-white px-2.5 py-2">
+            <div key={c.campaignId} className="rounded-lg border border-line bg-paper px-2.5 py-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-gray-800">{c.campaignName}</span>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">{PRIO_LABEL[c.priority] ?? c.priority}</span>
+                <span className="text-xs font-semibold text-ink">{c.campaignName}</span>
+                <span className="rounded bg-[#F4F4F2] px-1.5 py-0.5 text-[10px] font-semibold text-ink2">{PRIO_LABEL[c.priority] ?? c.priority}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${risk.cls}`}>{risk.label}</span>
-                <span className="ml-auto text-[10px] text-gray-500">Elegíveis: {c.eligibleNow} · Previsto hoje: {c.allocatedToday}</span>
+                <span className="ml-auto text-[10px] text-muted">Elegíveis: {c.eligibleNow} · Previsto hoje: {c.allocatedToday}</span>
               </div>
-              <p className="mt-0.5 text-[10px] text-gray-500">{c.explanation}</p>
+              <p className="mt-0.5 text-[10px] text-muted">{c.explanation}</p>
             </div>
           );
         })}
@@ -187,9 +187,9 @@ function CapacityForecastBlock() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-center">
-      <p className="text-sm font-bold text-gray-800">{value}</p>
-      <p className="mt-0.5 text-[9px] text-gray-500">{label}</p>
+    <div className="rounded-lg border border-line bg-paper px-2 py-1.5 text-center">
+      <p className="text-sm font-bold text-ink">{value}</p>
+      <p className="mt-0.5 text-[9px] text-muted">{label}</p>
     </div>
   );
 }
@@ -217,32 +217,32 @@ function SafetySection() {
     else setErr("Erro ao salvar. Tente novamente.");
   }
 
-  if (!cfg) return <div className="py-8 text-center text-sm text-gray-400">Carregando…</div>;
+  if (!cfg) return <div className="py-8 text-center text-sm text-muted">Carregando…</div>;
 
   return (
     <PageCard>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Segurança de envio WhatsApp</h3>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <h3 className="text-sm font-semibold text-ink">Segurança de envio WhatsApp</h3>
+          <p className="mt-0.5 text-xs text-muted">
             Limites globais que protegem sua conta WhatsApp de bloqueios por envio excessivo.
           </p>
         </div>
         {cfg.todaySent !== undefined && (
-          <div className="shrink-0 rounded-xl bg-orange-50 px-3 py-1.5 text-center">
-            <p className="text-[11px] text-gray-500">Hoje enviados</p>
-            <p className="text-lg font-bold text-orange-700">{cfg.todaySent}</p>
+          <div className="shrink-0 rounded-xl bg-brand-50 px-3 py-1.5 text-center">
+            <p className="text-[11px] text-muted">Hoje enviados</p>
+            <p className="text-lg font-bold text-brand-700">{cfg.todaySent}</p>
             {cfg.dailyGlobalCap > 0 && (
-              <p className="text-[10px] text-gray-400">de {cfg.dailyGlobalCap}</p>
+              <p className="text-[10px] text-muted">de {cfg.dailyGlobalCap}</p>
             )}
           </div>
         )}
       </div>
       <form onSubmit={onSubmit} className="space-y-5">
         {/* ── Orçamento de envio (protege o WhatsApp) ── */}
-        <div className="space-y-3 rounded-xl border border-gray-100 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Orçamento de envio</p>
-          <p className="-mt-1 text-[11px] text-gray-500">Volume máximo de mensagens de CRM, somando todas as campanhas e automações, para proteger o WhatsApp.</p>
+        <div className="space-y-3 rounded-xl border border-line p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Orçamento de envio</p>
+          <p className="-mt-1 text-[11px] text-muted">Volume máximo de mensagens de CRM, somando todas as campanhas e automações, para proteger o WhatsApp.</p>
 
           <Toggle
             label="Limitar mensagens por 24h"
@@ -278,9 +278,9 @@ function SafetySection() {
         </div>
 
         {/* ── Limites por cliente ── */}
-        <div className="space-y-3 rounded-xl border border-gray-100 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Limites por cliente</p>
-          <p className="-mt-1 text-[11px] text-gray-500">Evita que o mesmo cliente receba mensagens demais. Vale somando <strong>todas</strong> as campanhas.</p>
+        <div className="space-y-3 rounded-xl border border-line p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Limites por cliente</p>
+          <p className="-mt-1 text-[11px] text-muted">Evita que o mesmo cliente receba mensagens demais. Vale somando <strong>todas</strong> as campanhas.</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Máximo de contatos por cliente / semana" hint="0 = sem limite">
               <input type="number" min={0} value={cfg.maxPerWeekPerCustomer}
@@ -301,10 +301,10 @@ function SafetySection() {
         </div>
 
         {/* ── Política de distribuição ── */}
-        <div className="rounded-xl border border-gray-100 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Distribuição entre campanhas</p>
-          <p className="mt-1 text-[11px] text-gray-500">Define como o Foocci divide a capacidade de envio quando várias campanhas estão ativas ao mesmo tempo.</p>
-          <p className="mt-2 text-[11px] text-gray-600">
+        <div className="rounded-xl border border-line p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Distribuição entre campanhas</p>
+          <p className="mt-1 text-[11px] text-muted">Define como o Foocci divide a capacidade de envio quando várias campanhas estão ativas ao mesmo tempo.</p>
+          <p className="mt-2 text-[11px] text-ink2">
             <strong>Hoje (runtime real):</strong> a primeira campanha do ciclo consome o orçamento — pode travar outras.
             <br /><strong>Previsão abaixo:</strong> mostra como uma distribuição <strong>equilibrada por prioridade</strong> dividiria a capacidade e onde há risco de competição.
           </p>
@@ -313,7 +313,7 @@ function SafetySection() {
         {/* ── Previsão de capacidade ── */}
         <CapacityForecastBlock />
 
-        <div className="space-y-3 rounded-xl border border-gray-100 p-4">
+        <div className="space-y-3 rounded-xl border border-line p-4">
           <Toggle
             label="Horário silencioso"
             desc="Não enviar mensagens CRM fora do horário comercial"
@@ -336,7 +336,7 @@ function SafetySection() {
           )}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-gray-100 p-4">
+        <div className="space-y-3 rounded-xl border border-line p-4">
           <Toggle
             label="Enviar nos fins de semana"
             desc="Permite envios CRM também em sábado e domingo"
@@ -378,8 +378,8 @@ export default function CrmSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">CRM</h2>
-        <p className="mt-0.5 text-sm text-gray-500">
+        <h2 className="text-base font-semibold text-ink">CRM</h2>
+        <p className="mt-0.5 text-sm text-muted">
           Configurações de segmentação de clientes e segurança de envio WhatsApp.
         </p>
       </div>

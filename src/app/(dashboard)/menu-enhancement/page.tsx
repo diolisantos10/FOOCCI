@@ -22,11 +22,11 @@ export default async function MenuEnhancementPage() {
   // Only OWNER and MANAGER can access this tool
   if (!["OWNER", "MANAGER"].includes(user.role ?? "")) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="max-w-sm rounded-xl border border-red-200 bg-white p-8 text-center shadow">
+      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
+        <div className="max-w-sm rounded-xl border border-red-200 bg-paper p-8 text-center shadow">
           <p className="text-2xl">🔒</p>
-          <p className="mt-2 font-semibold text-gray-900">Acesso restrito</p>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-2 font-semibold text-ink">Acesso restrito</p>
+          <p className="mt-1 text-sm text-muted">
             Apenas o proprietário ou gerente pode acessar esta página.
           </p>
         </div>

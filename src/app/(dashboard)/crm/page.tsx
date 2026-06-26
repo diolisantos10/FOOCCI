@@ -122,7 +122,7 @@ export default async function CRMPage({
     <>
       <TopBar title="CRM — Motor de Receita" />
       <Suspense fallback={
-        <div className="flex items-center justify-center py-24 text-sm text-gray-400">
+        <div className="flex items-center justify-center py-24 text-sm text-muted">
           Carregando CRM…
         </div>
       }>

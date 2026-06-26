@@ -59,7 +59,7 @@ const STATUS_COLORS: Record<string, string> = {
   OPEN: "bg-blue-100 text-blue-700",
   BOT: "bg-purple-100 text-purple-700",
   HUMAN: "bg-yellow-100 text-yellow-800",
-  RESOLVED: "bg-gray-100 text-gray-600",
+  RESOLVED: "bg-[#F4F4F2] text-ink2",
 };
 
 // ─── component ────────────────────────────────────────────────
@@ -168,7 +168,7 @@ export default function ConversationDetailPage({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-400">
+      <div className="flex h-full items-center justify-center text-muted">
         Carregando...
       </div>
     );
@@ -177,10 +177,10 @@ export default function ConversationDetailPage({
   if (error && !conv) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-        <p className="text-gray-500">{error}</p>
+        <p className="text-muted">{error}</p>
         <button
           onClick={() => router.push("/conversations")}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="rounded-lg border border-line2 px-4 py-2 text-sm hover:bg-[#FAFAF8]"
         >
           ← Voltar
         </button>
@@ -195,11 +195,11 @@ export default function ConversationDetailPage({
   return (
     <div className="flex h-screen flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+      <div className="flex items-center justify-between border-b border-line2 bg-paper px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/conversations")}
-            className="text-sm text-gray-400 hover:text-gray-600"
+            className="text-sm text-muted hover:text-ink2"
           >
             ←
           </button>
@@ -207,8 +207,8 @@ export default function ConversationDetailPage({
             {conv.customer.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">{conv.customer.name}</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-semibold text-ink">{conv.customer.name}</p>
+            <p className="text-xs text-muted">
               {isGuestIdentifier(conv.customer.phone) ? "Telefone não informado" : conv.customer.phone}
             </p>
           </div>
@@ -225,7 +225,7 @@ export default function ConversationDetailPage({
             <button
               onClick={() => handleAction("resolve")}
               disabled={actionLoading}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
             >
               Resolver
             </button>
@@ -235,7 +235,7 @@ export default function ConversationDetailPage({
             <button
               onClick={() => handleAction("reopen")}
               disabled={actionLoading}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
             >
               Reabrir
             </button>
@@ -254,9 +254,9 @@ export default function ConversationDetailPage({
       )}
 
       {/* Message thread */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-4">
+      <div className="flex-1 overflow-y-auto bg-[#FAFAF8] px-4 py-4">
         {messages.length === 0 && (
-          <p className="text-center text-sm text-gray-400">Sem mensagens ainda.</p>
+          <p className="text-center text-sm text-muted">Sem mensagens ainda.</p>
         )}
         <div className="space-y-2">
           {messages.map((msg) => {
@@ -270,7 +270,7 @@ export default function ConversationDetailPage({
                   className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
                     isOutbound
                       ? "rounded-br-sm bg-brand-600 text-white"
-                      : "rounded-bl-sm bg-white text-gray-900"
+                      : "rounded-bl-sm bg-paper text-ink"
                   }`}
                 >
                   {msg.type !== "TEXT" && (
@@ -279,7 +279,7 @@ export default function ConversationDetailPage({
                     </p>
                   )}
                   <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                  <div className={`mt-1 flex items-center justify-end gap-1 text-xs ${isOutbound ? "text-brand-200" : "text-gray-400"}`}>
+                  <div className={`mt-1 flex items-center justify-end gap-1 text-xs ${isOutbound ? "text-brand-200" : "text-muted"}`}>
                     {new Date(msg.sentAt).toLocaleTimeString("pt-BR", {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -306,7 +306,7 @@ export default function ConversationDetailPage({
       {!isResolved ? (
         <form
           onSubmit={handleSend}
-          className="flex items-end gap-2 border-t border-gray-200 bg-white px-4 py-3"
+          className="flex items-end gap-2 border-t border-line2 bg-paper px-4 py-3"
         >
           <textarea
             value={text}
@@ -319,7 +319,7 @@ export default function ConversationDetailPage({
             }}
             placeholder="Digite uma mensagem… (Enter para enviar)"
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <button
             type="submit"
@@ -330,7 +330,7 @@ export default function ConversationDetailPage({
           </button>
         </form>
       ) : (
-        <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-sm text-gray-400">
+        <div className="border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-sm text-muted">
           Conversa resolvida.{" "}
           <button
             className="font-medium text-brand-600 hover:underline"

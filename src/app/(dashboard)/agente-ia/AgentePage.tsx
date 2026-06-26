@@ -323,8 +323,8 @@ function StatCard({
     <div className={`rounded-xl border px-4 py-3 ${bg}`}>
       <p className="text-base leading-none">{emoji}</p>
       <p className={`mt-2 text-2xl font-bold leading-none ${color}`}>{value.toLocaleString("pt-BR")}</p>
-      <p className="mt-1 text-xs font-semibold text-gray-700">{label}</p>
-      <p className="mt-0.5 text-[10px] text-gray-400">{desc}</p>
+      <p className="mt-1 text-xs font-semibold text-ink2">{label}</p>
+      <p className="mt-0.5 text-[10px] text-muted">{desc}</p>
     </div>
   );
 }
@@ -337,7 +337,7 @@ function StatusBadge({ status, label }: { status: AgentStatus; label: string }) 
       ? "bg-green-100 text-green-700 border-green-200"
       : status === "parcial"
       ? "bg-amber-100 text-amber-700 border-amber-200"
-      : "bg-gray-100 text-gray-500 border-gray-200";
+      : "bg-[#F4F4F2] text-muted border-line2";
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${cls}`}>
       {label}
@@ -357,10 +357,10 @@ function Section({
   children:  React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
+    <section className="rounded-xl border border-line2 bg-paper p-5 space-y-5">
       <div>
-        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+        <h2 className="text-sm font-semibold text-ink">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -384,7 +384,7 @@ function ChipGroup<T extends string>({
     cols === 4 ? "sm:grid-cols-4" : cols === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2";
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
         {label}
       </p>
       <div className={`grid grid-cols-2 gap-2 ${colClass}`}>
@@ -396,13 +396,13 @@ function ChipGroup<T extends string>({
             className={`flex flex-col gap-0.5 rounded-lg border p-3 text-left transition-colors ${
               value === opt.value
                 ? "border-brand-500 bg-brand-50"
-                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
             }`}
           >
-            <span className={`text-sm font-semibold ${value === opt.value ? "text-brand-700" : "text-gray-800"}`}>
+            <span className={`text-sm font-semibold ${value === opt.value ? "text-brand-700" : "text-ink"}`}>
               {opt.label}
             </span>
-            <span className="text-xs text-gray-500">{opt.desc}</span>
+            <span className="text-xs text-muted">{opt.desc}</span>
           </button>
         ))}
       </div>
@@ -423,7 +423,7 @@ function RadioRow({
 }) {
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-gray-700">{label}</p>
+      <p className="mb-2 text-sm font-medium text-ink2">{label}</p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {options.map((opt) => (
           <label
@@ -431,7 +431,7 @@ function RadioRow({
             className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-3 text-sm transition-colors ${
               value === opt.value
                 ? "border-brand-500 bg-brand-50 text-brand-700"
-                : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                : "border-line2 text-ink2 hover:border-line2 hover:bg-[#FAFAF8]"
             }`}
           >
             <input
@@ -442,7 +442,7 @@ function RadioRow({
               onChange={() => onChange(opt.value)}
             />
             <span className="font-medium">{opt.label}</span>
-            <span className="text-xs text-gray-500">{opt.desc}</span>
+            <span className="text-xs text-muted">{opt.desc}</span>
           </label>
         ))}
       </div>
@@ -453,7 +453,7 @@ function RadioRow({
 function SaveRow({ saving, label }: { saving: boolean; label: string }) {
   return (
     <div className="flex items-center justify-end gap-3 pt-2 pb-4">
-      <p className="text-xs text-gray-400">Aplicado em novas conversas imediatamente.</p>
+      <p className="text-xs text-muted">Aplicado em novas conversas imediatamente.</p>
       <button
         type="submit"
         disabled={saving}
@@ -468,7 +468,7 @@ function SaveRow({ saving, label }: { saving: boolean; label: string }) {
 function CharCount({ current, max }: { current: number; max: number }) {
   const near = current > max * 0.85;
   return (
-    <p className={`mt-0.5 text-right text-xs ${near ? "text-amber-500" : "text-gray-400"}`}>
+    <p className={`mt-0.5 text-right text-xs ${near ? "text-amber-500" : "text-muted"}`}>
       {current} / {max}
     </p>
   );
@@ -487,9 +487,9 @@ function OptionCard({
 }) {
   const flow = FLOW_CONFIG[option.flow];
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+    <div className="rounded-xl border border-line2 bg-[#FAFAF8] p-3 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-line2 text-xs font-bold text-ink2">
           {index + 1}
         </span>
         <input
@@ -498,12 +498,12 @@ function OptionCard({
           onChange={(e) => onChange({ label: e.target.value })}
           maxLength={60}
           placeholder="Ex: Fazer pedido"
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="flex-1 min-w-0 rounded-lg border border-line2 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <select
           value={option.flow}
           onChange={(e) => onChange({ flow: e.target.value as FlowType })}
-          className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="rounded-lg border border-line2 bg-paper px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           {FLOW_TYPES.map((f) => (
             <option key={f} value={f}>{FLOW_CONFIG[f].icon} {FLOW_CONFIG[f].label}</option>
@@ -511,17 +511,17 @@ function OptionCard({
         </select>
         <div className="flex flex-col gap-0.5 shrink-0">
           <button type="button" onClick={onMoveUp} disabled={index === 0}
-            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-muted hover:bg-line2 disabled:opacity-30"
             aria-label="Mover para cima">▲</button>
           <button type="button" onClick={onMoveDown} disabled={index === total - 1}
-            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-muted hover:bg-line2 disabled:opacity-30"
             aria-label="Mover para baixo">▼</button>
         </div>
         <button type="button" onClick={onRemove}
           className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
           aria-label="Remover opção">✕</button>
       </div>
-      <p className="pl-8 text-xs text-gray-500">{flow.icon} {flow.desc}</p>
+      <p className="pl-8 text-xs text-muted">{flow.icon} {flow.desc}</p>
       {option.flow === "custom" && (
         <div className="pl-8">
           <textarea
@@ -530,13 +530,13 @@ function OptionCard({
             rows={2}
             maxLength={500}
             placeholder="Mensagem enviada ao cliente ao selecionar esta opção…"
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       )}
       {option.flow === "submenu" && (
         <div className="pl-8 space-y-2">
-          <p className="text-xs font-medium text-gray-600">Opções do submenu:</p>
+          <p className="text-xs font-medium text-ink2">Opções do submenu:</p>
           {(option.submenuOptions ?? []).map((sub, si) => (
             <div key={sub.id} className="flex items-center gap-2">
               <input
@@ -549,7 +549,7 @@ function OptionCard({
                 }}
                 maxLength={60}
                 placeholder="Ex: Digitar pedido"
-                className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="flex-1 min-w-0 rounded-lg border border-line2 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <select
                 value={sub.flow}
@@ -558,7 +558,7 @@ function OptionCard({
                   next[si] = { ...sub, flow: e.target.value as FlowType };
                   onChange({ submenuOptions: next });
                 }}
-                className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="rounded-lg border border-line2 bg-paper px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 {FLOW_TYPES.filter((f) => f !== "submenu").map((f) => (
                   <option key={f} value={f}>{FLOW_CONFIG[f].icon} {FLOW_CONFIG[f].label}</option>
@@ -592,13 +592,13 @@ function OptionCard({
 
 function ComingSoon({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Em breve</p>
-      <p className="text-sm font-semibold text-gray-700 mb-3">{title}</p>
+    <div className="rounded-xl border border-dashed border-line2 bg-[#FAFAF8] p-5">
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Em breve</p>
+      <p className="text-sm font-semibold text-ink2 mb-3">{title}</p>
       <ul className="space-y-1.5">
         {items.map((item) => (
-          <li key={item} className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+          <li key={item} className="flex items-center gap-2 text-xs text-muted">
+            <span className="h-1 w-1 shrink-0 rounded-full bg-line2" />
             {item}
           </li>
         ))}
@@ -859,7 +859,7 @@ export function AgentePage() {
   if (loading || agentLoading) {
     return (
       <div className="flex h-48 items-center justify-center">
-        <p className="text-sm text-gray-400">Carregando configuração…</p>
+        <p className="text-sm text-muted">Carregando configuração…</p>
       </div>
     );
   }
@@ -879,8 +879,8 @@ export function AgentePage() {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Agentes IA</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-xl font-bold text-ink">Agentes IA</h1>
+        <p className="mt-1 text-sm text-muted">
           Configure os agentes de inteligência artificial que atendem seus clientes.
         </p>
       </div>
@@ -895,11 +895,11 @@ export function AgentePage() {
             className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
               activeTab === agent.id
                 ? "border-brand-500 bg-brand-50 shadow-sm"
-                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
             }`}
           >
             <span className="text-2xl leading-none">{agent.icon}</span>
-            <span className={`text-sm font-bold ${activeTab === agent.id ? "text-brand-700" : "text-gray-800"}`}>
+            <span className={`text-sm font-bold ${activeTab === agent.id ? "text-brand-700" : "text-ink"}`}>
               {agent.label}
             </span>
             <StatusBadge status={agent.status} label={agent.statusLabel} />
@@ -908,9 +908,9 @@ export function AgentePage() {
       </div>
 
       {/* Active agent description bar */}
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
         <span className="mt-0.5 text-xl leading-none">{activeAgent.icon}</span>
-        <p className="flex-1 text-xs text-gray-500">{activeAgent.description}</p>
+        <p className="flex-1 text-xs text-muted">{activeAgent.description}</p>
         <StatusBadge status={activeAgent.status} label={activeAgent.statusLabel} />
       </div>
 
@@ -922,7 +922,7 @@ export function AgentePage() {
         {/* Entry point to the detailed WhatsApp agent management view — kept under
             Agentes (it used to be a misplaced standalone "WhatsApp" sidebar tab). */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-ink2">
             Acompanhe conversas, saúde e aprendizados do agente no WhatsApp.
           </p>
           <Link
@@ -949,20 +949,20 @@ export function AgentePage() {
           {/* 1 — Status do agente */}
           <Section title="Status do agente" subtitle="Identidade e modo de operação do WhatsApp Host.">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Nome do agente</label>
+              <label className="mb-1 block text-sm font-medium text-ink2">Nome do agente</label>
               <input
                 type="text"
                 value={agentForm.agentName}
                 onChange={(e) => patchAgent("agentName")(e.target.value)}
                 maxLength={50}
                 placeholder="Ex: Ju, Max, Agente Foocci"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
-              <p className="mt-1 text-xs text-gray-400">Nome que o agente usa para se apresentar ao cliente.</p>
+              <p className="mt-1 text-xs text-muted">Nome que o agente usa para se apresentar ao cliente.</p>
             </div>
 
             <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">Modo de operação</p>
+              <p className="mb-2 text-sm font-medium text-ink2">Modo de operação</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {AGENT_MODE_OPTIONS.map((opt) => (
                   <label
@@ -970,7 +970,7 @@ export function AgentePage() {
                     className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-3 text-sm transition-colors ${
                       agentForm.agentMode === opt.value
                         ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                        : "border-line2 text-ink2 hover:border-line2 hover:bg-[#FAFAF8]"
                     }`}
                   >
                     <input
@@ -981,7 +981,7 @@ export function AgentePage() {
                       onChange={() => setAgentForm((prev) => ({ ...prev, agentMode: opt.value }))}
                     />
                     <span className="font-medium">{opt.label}</span>
-                    <span className="text-xs text-gray-500">{opt.desc}</span>
+                    <span className="text-xs text-muted">{opt.desc}</span>
                   </label>
                 ))}
               </div>
@@ -994,24 +994,24 @@ export function AgentePage() {
           {/* 2 — Menu inicial */}
           <Section title="Menu inicial" subtitle="Primeira mensagem enviada ao cliente e as opções do menu.">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem de boas-vindas</label>
+              <label className="mb-1 block text-sm font-medium text-ink2">Mensagem de boas-vindas</label>
               <textarea
                 value={agentForm.welcomeMessage}
                 onChange={(e) => patchAgent("welcomeMessage")(e.target.value)}
                 rows={4}
                 maxLength={1000}
                 placeholder="Ex: Olá! Bem-vindo ao restaurante 🍣 O que você deseja?"
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <CharCount current={agentForm.welcomeMessage.length} max={1000} />
             </div>
 
-            <div className="border-t border-gray-100 pt-4">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Opções do menu</p>
-              <p className="mb-3 text-xs text-gray-500">Botões exibidos após a mensagem. Cada opção aciona um fluxo.</p>
+            <div className="border-t border-line pt-4">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Opções do menu</p>
+              <p className="mb-3 text-xs text-muted">Botões exibidos após a mensagem. Cada opção aciona um fluxo.</p>
               <div className="space-y-2">
                 {menuOptions.length === 0 && (
-                  <p className="rounded-lg border border-dashed border-gray-300 py-4 text-center text-xs text-gray-400">
+                  <p className="rounded-lg border border-dashed border-line2 py-4 text-center text-xs text-muted">
                     Nenhuma opção configurada. Adicione abaixo.
                   </p>
                 )}
@@ -1037,14 +1037,14 @@ export function AgentePage() {
                   + Nova opção em branco
                 </button>
                 <div>
-                  <p className="mb-2 text-xs font-medium text-gray-500">Adicionar predefinição:</p>
+                  <p className="mb-2 text-xs font-medium text-muted">Adicionar predefinição:</p>
                   <div className="flex flex-wrap gap-2">
                     {PRESETS_AGENT.map((p) => (
                       <button
                         key={p.label}
                         type="button"
                         onClick={() => addOption(p)}
-                        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-brand-300 hover:text-brand-600 transition-colors"
+                        className="rounded-full border border-line2 bg-paper px-3 py-1 text-xs font-medium text-ink2 hover:border-brand-300 hover:text-brand-600 transition-colors"
                       >
                         {FLOW_CONFIG[p.flow].icon} {p.label}
                       </button>
@@ -1055,7 +1055,7 @@ export function AgentePage() {
                   <button
                     type="button"
                     onClick={() => setMenuOptions(DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() })))}
-                    className="text-xs text-gray-400 underline hover:text-gray-600"
+                    className="text-xs text-muted underline hover:text-ink2"
                   >
                     Restaurar padrões
                   </button>
@@ -1066,50 +1066,50 @@ export function AgentePage() {
 
           {/* 3 — Fluxos de atendimento */}
           <Section title="Fluxos de atendimento" subtitle="O que acontece quando o cliente seleciona cada opção do menu.">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div className="rounded-xl border border-line2 bg-[#FAFAF8] p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-lg">🛒</span>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">Fazer pedido</p>
-                  <p className="text-xs text-gray-500">Ativado pelas opções com fluxo &ldquo;Fazer pedido&rdquo;</p>
+                  <p className="text-sm font-semibold text-ink">Fazer pedido</p>
+                  <p className="text-xs text-muted">Ativado pelas opções com fluxo &ldquo;Fazer pedido&rdquo;</p>
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Mensagem ao iniciar pedido</label>
+                <label className="mb-1 block text-xs font-medium text-ink2">Mensagem ao iniciar pedido</label>
                 <textarea
                   value={agentForm.orderPreMessage}
                   onChange={(e) => patchAgent("orderPreMessage")(e.target.value)}
                   rows={2}
                   maxLength={500}
                   placeholder="Ex: Ótimo! Aqui está nosso cardápio 👇"
-                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">
+                <label className="mb-1 block text-xs font-medium text-ink2">
                   URL do cardápio{" "}
-                  <span className="font-normal text-gray-400">(opcional)</span>
+                  <span className="font-normal text-muted">(opcional)</span>
                 </label>
                 <input
                   type="url"
                   value={agentForm.menuUrl}
                   onChange={(e) => patchAgent("menuUrl")(e.target.value)}
                   placeholder="https://seudominio.com/qr/slug"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
-                <p className="mt-1 text-xs text-gray-400">Enviado junto com a mensagem acima.</p>
+                <p className="mt-1 text-xs text-muted">Enviado junto com a mensagem acima.</p>
               </div>
             </div>
 
             <div className="space-y-2">
               {PLACEHOLDER_FLOWS.map((flow) => (
-                <div key={flow.label} className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 opacity-70">
+                <div key={flow.label} className="flex items-center gap-3 rounded-xl border border-dashed border-line2 bg-[#FAFAF8] px-4 py-3 opacity-70">
                   <span className="text-base leading-none">{flow.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-600">{flow.label}</p>
-                    <p className="text-xs text-gray-400">{flow.desc}</p>
+                    <p className="text-sm font-medium text-ink2">{flow.label}</p>
+                    <p className="text-xs text-muted">{flow.desc}</p>
                   </div>
-                  <span className="shrink-0 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  <span className="shrink-0 rounded-full border border-line2 bg-paper px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">
                     Em breve
                   </span>
                 </div>
@@ -1120,9 +1120,9 @@ export function AgentePage() {
           {/* 4 — Encaminhamento humano */}
           <Section title="Encaminhamento humano" subtitle="Ativado quando o cliente pede para falar com um atendente.">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-ink2">
                 Telefone do atendente{" "}
-                <span className="font-normal text-gray-400">(WhatsApp, com DDI)</span>
+                <span className="font-normal text-muted">(WhatsApp, com DDI)</span>
               </label>
               <input
                 type="tel"
@@ -1130,18 +1130,18 @@ export function AgentePage() {
                 onChange={(e) => patchAgent("handoffPhone")(e.target.value)}
                 maxLength={30}
                 placeholder="5511999999999"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem de transferência</label>
+              <label className="mb-1 block text-sm font-medium text-ink2">Mensagem de transferência</label>
               <textarea
                 value={agentForm.handoffMessage}
                 onChange={(e) => patchAgent("handoffMessage")(e.target.value)}
                 rows={2}
                 maxLength={500}
                 placeholder="Ex: Vou te conectar com um atendente. Um momento! 👋"
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
           </Section>
@@ -1153,15 +1153,15 @@ export function AgentePage() {
           >
             <div className="space-y-2">
               {SAFETY_CASES.map((rule) => (
-                <div key={rule} className="flex items-center gap-2.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                <div key={rule} className="flex items-center gap-2.5 rounded-lg border border-line bg-[#FAFAF8] px-3 py-2.5">
                   <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100">
                     <span className="block h-1.5 w-1.5 rounded-full bg-green-500" />
                   </span>
-                  <p className="text-sm text-gray-700">{rule}</p>
+                  <p className="text-sm text-ink2">{rule}</p>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted">
               Estas regras são fixas e não podem ser desativadas para garantir a segurança do atendimento.
             </p>
           </Section>
@@ -1170,8 +1170,8 @@ export function AgentePage() {
           <Section title="Fora do horário">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-gray-800">Mensagem automática fora do horário</p>
-                <p className="mt-0.5 text-xs text-gray-500">Enviada quando o cliente contata fora do horário de funcionamento.</p>
+                <p className="text-sm font-medium text-ink">Mensagem automática fora do horário</p>
+                <p className="mt-0.5 text-xs text-muted">Enviada quando o cliente contata fora do horário de funcionamento.</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
@@ -1183,10 +1183,10 @@ export function AgentePage() {
                   aria-checked={oohEnabled}
                   onClick={() => setOohEnabled((v) => !v)}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors ${
-                    oohEnabled ? "border-brand-500 bg-brand-500" : "border-gray-300 bg-gray-200"
+                    oohEnabled ? "border-brand-500 bg-brand-500" : "border-line2 bg-line2"
                   }`}
                 >
-                  <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                  <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-paper shadow transition-transform ${
                     oohEnabled ? "translate-x-[17px]" : "translate-x-0.5"
                   }`} />
                 </button>
@@ -1199,7 +1199,7 @@ export function AgentePage() {
                   onChange={(e) => setOohMessage(e.target.value)}
                   rows={3}
                   maxLength={500}
-                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
                 <p className="mt-1 text-xs text-amber-500">Esta mensagem ainda não é persistida — configuração em desenvolvimento.</p>
               </div>
@@ -1210,8 +1210,8 @@ export function AgentePage() {
           <Section title="Mensagens de fallback">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-gray-800">Quando o agente não entende a mensagem</p>
-                <p className="mt-0.5 text-xs text-gray-500">Enviada quando nenhuma intenção é reconhecida.</p>
+                <p className="text-sm font-medium text-ink">Quando o agente não entende a mensagem</p>
+                <p className="mt-0.5 text-xs text-muted">Enviada quando nenhuma intenção é reconhecida.</p>
               </div>
               <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
                 Em breve
@@ -1223,7 +1223,7 @@ export function AgentePage() {
                 onChange={(e) => setFallbackMessage(e.target.value)}
                 rows={2}
                 maxLength={500}
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <p className="mt-1 text-xs text-amber-500">Esta mensagem ainda não é persistida — configuração em desenvolvimento.</p>
             </div>
@@ -1234,9 +1234,9 @@ export function AgentePage() {
             <div className="mx-auto max-w-xs rounded-2xl bg-[#e5ddd5] p-3 shadow-inner space-y-2">
               {/* Agent welcome bubble */}
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white px-3 py-2 shadow-sm">
+                <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-paper px-3 py-2 shadow-sm">
                   <p className="mb-0.5 text-[11px] font-semibold text-[#075e54]">{agentForm.agentName || "Agente"}</p>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{agentForm.welcomeMessage || "…"}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{agentForm.welcomeMessage || "…"}</p>
                   {menuOptions.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {menuOptions.map((o, i) => (
@@ -1263,21 +1263,21 @@ export function AgentePage() {
                 <>
                   <div className="flex justify-end">
                     <div className="max-w-[85%] rounded-2xl rounded-tr-none bg-[#dcf8c6] px-3 py-2 shadow-sm">
-                      <p className="text-xs text-gray-700">{previewOpt.label}</p>
+                      <p className="text-xs text-ink2">{previewOpt.label}</p>
                     </div>
                   </div>
                   {previewResponse.trim() !== "" && (
                     <div className="flex justify-start">
-                      <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white px-3 py-2 shadow-sm">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-paper px-3 py-2 shadow-sm">
                         <p className="mb-0.5 text-[11px] font-semibold text-[#075e54]">{agentForm.agentName || "Agente"}</p>
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{previewResponse}</p>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{previewResponse}</p>
                       </div>
                     </div>
                   )}
                 </>
               )}
             </div>
-            <p className="text-center text-xs text-gray-400">
+            <p className="text-center text-xs text-muted">
               Clique em uma opção para simular a resposta do agente.
             </p>
           </Section>
@@ -1294,7 +1294,7 @@ export function AgentePage() {
               title={`Aprendizados pendentes ${suggested.length + gaps.length > 0 ? `(${suggested.length + gaps.length})` : ""}`}
               subtitle="Respostas sugeridas pela equipe aguardando sua aprovação. Aprove para que a IA passe a usar."
             >
-              {knowledgeLoading && <p className="text-sm text-gray-400">Carregando…</p>}
+              {knowledgeLoading && <p className="text-sm text-muted">Carregando…</p>}
               {suggested.map((item) => (
                 <div key={item.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
                   <div className="flex items-start justify-between gap-2">
@@ -1307,19 +1307,19 @@ export function AgentePage() {
                           {item.source === "HUMAN_REPLY" ? "Aprendido da equipe" : item.source.toLowerCase()}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-gray-800 truncate">{item.title}</p>
+                      <p className="mt-1 text-sm font-semibold text-ink truncate">{item.title}</p>
                       {item.questionPatterns.length > 0 && (
-                        <p className="mt-0.5 text-xs text-gray-500">
+                        <p className="mt-0.5 text-xs text-muted">
                           Ex: <em>&ldquo;{item.questionPatterns[0]}&rdquo;</em>
                         </p>
                       )}
                       {item.answer && (
-                        <p className="mt-1 text-xs text-gray-700 bg-white border border-gray-100 rounded-lg px-3 py-2">
+                        <p className="mt-1 text-xs text-ink2 bg-paper border border-line rounded-lg px-3 py-2">
                           {item.answer}
                         </p>
                       )}
                       {!item.answer && item.category === "UNKNOWN_GAP" && (
-                        <p className="mt-1 text-xs italic text-gray-400">
+                        <p className="mt-1 text-xs italic text-muted">
                           Gap detectado — a IA pediu ajuda da equipe. Preencha a resposta abaixo.
                         </p>
                       )}
@@ -1335,7 +1335,7 @@ export function AgentePage() {
                       <button
                         type="button"
                         onClick={() => handleKnowledgeStatusChange(item.id, "REJECTED")}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+                        className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-muted hover:bg-[#F4F4F2] transition-colors"
                       >
                         Rejeitar
                       </button>
@@ -1348,15 +1348,15 @@ export function AgentePage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <span className="text-xs font-bold text-red-600 uppercase tracking-wide">Gap — sem resposta</span>
-                      <p className="mt-1 text-sm text-gray-800">{item.title}</p>
-                      <p className="mt-0.5 text-xs text-gray-500">
+                      <p className="mt-1 text-sm text-ink">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-muted">
                         O cliente perguntou e a IA não soube responder. Adicione a resposta manualmente.
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleKnowledgeDelete(item.id)}
-                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-medium text-gray-400 hover:bg-gray-100"
+                      className="shrink-0 rounded-lg border border-line2 px-2.5 py-1.5 text-[11px] font-medium text-muted hover:bg-[#F4F4F2]"
                     >
                       Ignorar
                     </button>
@@ -1371,9 +1371,9 @@ export function AgentePage() {
             title={`Base de conhecimento ativa (${active.length})`}
             subtitle="Fatos aprovados que a IA usa para responder clientes automaticamente."
           >
-            {knowledgeLoading && <p className="text-sm text-gray-400">Carregando…</p>}
+            {knowledgeLoading && <p className="text-sm text-muted">Carregando…</p>}
             {!knowledgeLoading && active.length === 0 && (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted">
                 Nenhum conhecimento ativo ainda. Adicione manualmente ou aprove sugestões acima.
               </p>
             )}
@@ -1391,14 +1391,14 @@ export function AgentePage() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-sm font-semibold text-gray-800">{item.title}</p>
-                    <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{item.answer}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-ink">{item.title}</p>
+                    <p className="mt-0.5 text-xs text-ink2 line-clamp-2">{item.answer}</p>
                   </div>
                   <div className="flex gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleKnowledgeStatusChange(item.id, "REJECTED")}
-                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] text-gray-500 hover:bg-gray-100"
+                      className="rounded-lg border border-line2 px-2.5 py-1.5 text-[11px] text-muted hover:bg-[#F4F4F2]"
                     >
                       Desativar
                     </button>
@@ -1419,51 +1419,51 @@ export function AgentePage() {
               <button
                 type="button"
                 onClick={() => setAddKnowledge(true)}
-                className="mt-2 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 w-full transition-colors"
+                className="mt-2 rounded-lg border border-dashed border-line2 px-4 py-2 text-sm text-muted hover:border-brand-400 hover:text-brand-600 w-full transition-colors"
               >
                 + Adicionar conhecimento manualmente
               </button>
             ) : (
-              <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-                <p className="text-sm font-semibold text-gray-800">Novo conhecimento</p>
+              <div className="mt-2 rounded-xl border border-line2 bg-[#FAFAF8] p-4 space-y-3">
+                <p className="text-sm font-semibold text-ink">Novo conhecimento</p>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Título</label>
+                  <label className="mb-1 block text-xs font-medium text-ink2">Título</label>
                   <input
                     type="text"
                     value={kNewTitle}
                     onChange={(e) => setKNewTitle(e.target.value)}
                     placeholder="Ex: Benefício para aniversariante"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-1.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">
-                    Exemplos de pergunta <span className="font-normal text-gray-400">(uma por linha)</span>
+                  <label className="mb-1 block text-xs font-medium text-ink2">
+                    Exemplos de pergunta <span className="font-normal text-muted">(uma por linha)</span>
                   </label>
                   <textarea
                     rows={2}
                     value={kNewPatterns}
                     onChange={(e) => setKNewPatterns(e.target.value)}
                     placeholder={"Tem algo para aniversariante?\nAniversariante ganha algo?"}
-                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full resize-none rounded-lg border border-line2 px-3 py-1.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Resposta da IA</label>
+                  <label className="mb-1 block text-xs font-medium text-ink2">Resposta da IA</label>
                   <textarea
                     rows={3}
                     value={kNewAnswer}
                     onChange={(e) => setKNewAnswer(e.target.value)}
                     placeholder="Sim! Aqui o aniversariante ganha uma sobremesa 🎉"
-                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full resize-none rounded-lg border border-line2 px-3 py-1.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Categoria</label>
+                  <label className="mb-1 block text-xs font-medium text-ink2">Categoria</label>
                   <select
                     value={kNewCategory}
                     onChange={(e) => setKNewCategory(e.target.value as KnowledgeCategory)}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-orange-400 focus:outline-none"
+                    className="w-full rounded-lg border border-line2 bg-paper px-3 py-1.5 text-sm text-ink2 focus:border-brand-400 focus:outline-none"
                   >
                     {KNOWLEDGE_CATEGORIES.filter((c) => c.id !== "UNKNOWN_GAP").map((c) => (
                       <option key={c.id} value={c.id}>{c.label}</option>
@@ -1476,14 +1476,14 @@ export function AgentePage() {
                     type="button"
                     onClick={handleKnowledgeSave}
                     disabled={kSaving || !kNewTitle.trim() || !kNewAnswer.trim() || !kNewPatterns.trim()}
-                    className="rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                    className="rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
                   >
                     {kSaving ? "Salvando…" : "Salvar como ativo"}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setAddKnowledge(false); setKSaveErr(null); }}
-                    className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                    className="rounded-lg border border-line2 px-4 py-1.5 text-xs font-medium text-muted hover:bg-[#F4F4F2]"
                   >
                     Cancelar
                   </button>
@@ -1529,13 +1529,13 @@ export function AgentePage() {
                     className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
                       active
                         ? "border-brand-500 bg-brand-50 shadow-sm"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
                     }`}
                   >
-                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-gray-800"}`}>
+                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-ink"}`}>
                       {p.label}
                     </span>
-                    <span className={`text-xs ${active ? "text-brand-500" : "text-gray-500"}`}>
+                    <span className={`text-xs ${active ? "text-brand-500" : "text-muted"}`}>
                       {p.tagline}
                     </span>
                     <div className="flex flex-wrap gap-1">
@@ -1543,7 +1543,7 @@ export function AgentePage() {
                         <span
                           key={b}
                           className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            active ? "bg-brand-100 text-brand-600" : "bg-gray-100 text-gray-500"
+                            active ? "bg-brand-100 text-brand-600" : "bg-[#F4F4F2] text-muted"
                           }`}
                         >
                           {b}
@@ -1554,8 +1554,8 @@ export function AgentePage() {
                 );
               })}
             </div>
-            <div className="border-t border-gray-100 pt-4 space-y-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Ajuste fino</p>
+            <div className="border-t border-line pt-4 space-y-4">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Ajuste fino</p>
               <ChipGroup
                 label="Formalidade"
                 options={FORMALITY_OPTIONS}
@@ -1587,17 +1587,17 @@ export function AgentePage() {
                     className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
                       active
                         ? "border-brand-500 bg-brand-50"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
                     }`}
                   >
-                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-gray-800"}`}>
+                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-ink"}`}>
                       {opt.label}
                     </span>
-                    <span className={`text-xs ${active ? "text-brand-500" : "text-gray-400"}`}>
+                    <span className={`text-xs ${active ? "text-brand-500" : "text-muted"}`}>
                       {opt.desc}
                     </span>
                     <div className={`mt-1 rounded-lg px-3 py-2 text-xs leading-relaxed ${
-                      active ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"
+                      active ? "bg-brand-100 text-brand-700" : "bg-[#F4F4F2] text-muted"
                     }`}>
                       &ldquo;{opt.example}&rdquo;
                     </div>
@@ -1606,9 +1606,9 @@ export function AgentePage() {
               })}
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
                 Abertura personalizada{" "}
-                <span className="font-normal normal-case text-gray-400">
+                <span className="font-normal normal-case text-muted">
                   (opcional — deixe em branco para usar o estilo acima)
                 </span>
               </label>
@@ -1618,9 +1618,9 @@ export function AgentePage() {
                 rows={2}
                 maxLength={300}
                 placeholder="Ex: Olá! Bem-vindo ao Restaurante XYZ 🍕 Pronto para pedir?"
-                className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                className="w-full resize-none rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2 text-sm text-ink placeholder-gray-400 focus:border-brand-400 focus:bg-paper focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
-              <p className="mt-1 text-[11px] text-gray-400">
+              <p className="mt-1 text-[11px] text-muted">
                 Quando preenchido, substitui o estilo selecionado acima.
               </p>
             </div>
@@ -1661,7 +1661,7 @@ export function AgentePage() {
                   className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${
                     form.upsellStyle === opt.value
                       ? "border-brand-400 bg-brand-50"
-                      : "border-gray-200 hover:border-gray-300"
+                      : "border-line2 hover:border-line2"
                   }`}
                 >
                   <input
@@ -1672,10 +1672,10 @@ export function AgentePage() {
                     onChange={() => patch("upsellStyle", opt.value)}
                   />
                   <div>
-                    <p className={`text-sm font-medium ${form.upsellStyle === opt.value ? "text-brand-700" : "text-gray-800"}`}>
+                    <p className={`text-sm font-medium ${form.upsellStyle === opt.value ? "text-brand-700" : "text-ink"}`}>
                       {opt.label}
                     </p>
-                    <p className="text-xs text-gray-500">{opt.desc}</p>
+                    <p className="text-xs text-muted">{opt.desc}</p>
                   </div>
                 </label>
               ))}
@@ -1693,10 +1693,10 @@ export function AgentePage() {
                 rows={5}
                 maxLength={2000}
                 placeholder="Ex: Seja mais consultivo, sugira combos com bebidas, evite insistir após uma recusa, destaque pratos quentes em dias frios..."
-                className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                className="w-full resize-none rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2 text-sm text-ink placeholder-gray-400 focus:border-brand-400 focus:bg-paper focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
               <div className="flex items-start justify-between mt-1 gap-3">
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-muted">
                   As regras críticas do sistema sempre prevalecem sobre estas instruções. O agente ignorará qualquer instrução que conflite com segurança, cardápio real ou etapas do pedido.
                 </p>
                 <CharCount current={(form.waiterPrompt ?? "").length} max={2000} />
@@ -1726,22 +1726,22 @@ export function AgentePage() {
 
           {/* Page header */}
           <div>
-            <h2 className="text-base font-bold text-gray-900">Agente CRM</h2>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <h2 className="text-base font-bold text-ink">Agente CRM</h2>
+            <p className="mt-0.5 text-xs text-muted">
               Identifica oportunidades de recompra, clientes inativos, VIPs, campanhas, automações e receita gerada pelo relacionamento.
             </p>
           </div>
 
           {/* Loading */}
           {crmLoading && (
-            <div className="py-10 text-center text-sm text-gray-400">
+            <div className="py-10 text-center text-sm text-muted">
               Carregando dados do CRM…
             </div>
           )}
 
           {/* Error / not loaded */}
           {!crmLoading && crmLoaded && !crmSummary && (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 py-8 text-center text-sm text-gray-400">
+            <div className="rounded-xl border border-line2 bg-[#FAFAF8] py-8 text-center text-sm text-muted">
               Não foi possível carregar os dados do CRM.
             </div>
           )}
@@ -1806,7 +1806,7 @@ export function AgentePage() {
                 {/* 2 — Oportunidades */}
                 <Section title="Oportunidades para agir agora" subtitle="Segmentos com maior potencial de resultado hoje.">
                   {opportunities.length === 0 ? (
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-muted">
                       Nenhuma oportunidade identificada no momento — base de clientes ativa e bem aquecida.
                     </p>
                   ) : (
@@ -1814,13 +1814,13 @@ export function AgentePage() {
                       {opportunities.map((opp) => (
                         <div
                           key={opp.label}
-                          className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
+                          className="flex items-start gap-3 rounded-xl border border-line bg-[#FAFAF8] px-4 py-3"
                         >
                           <span className="text-xl leading-none mt-0.5 shrink-0">{opp.emoji}</span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">{opp.label}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{opp.desc}</p>
-                            <p className="text-[11px] text-gray-400 mt-1 italic">{opp.why}</p>
+                            <p className="text-sm font-semibold text-ink">{opp.label}</p>
+                            <p className="text-xs text-muted mt-0.5">{opp.desc}</p>
+                            <p className="text-[11px] text-muted mt-1 italic">{opp.why}</p>
                           </div>
                           <Link
                             href="/crm?tab=campanhas"
@@ -1838,7 +1838,7 @@ export function AgentePage() {
                 <Section title="Campanhas em andamento" subtitle="Campanhas ativas, agendadas e em pausa.">
                   {s.campaigns.list.length === 0 ? (
                     <div className="space-y-3">
-                      <p className="text-sm text-gray-400">Nenhuma campanha ativa no momento.</p>
+                      <p className="text-sm text-muted">Nenhuma campanha ativa no momento.</p>
                       <Link
                         href="/crm?tab=campanhas"
                         className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
@@ -1865,11 +1865,11 @@ export function AgentePage() {
                           ? Math.round((c.totalConverted / c.totalSent) * 100)
                           : null;
                         return (
-                          <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+                          <div key={c.id} className="rounded-xl border border-line bg-paper px-4 py-3">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                <p className="text-sm font-semibold text-ink truncate">{c.name}</p>
+                                <p className="text-[10px] text-muted mt-0.5">
                                   {CRM_SEGMENT_LABELS[c.targetSegment ?? ""] ?? c.targetSegment ?? "—"} · {modeLabel}
                                 </p>
                               </div>
@@ -1878,7 +1878,7 @@ export function AgentePage() {
                               </span>
                             </div>
                             {hasStats && (
-                              <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
+                              <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted border-t border-line pt-2">
                                 <span>{c.totalSent.toLocaleString("pt-BR")} enviados</span>
                                 {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} respostas</span>}
                                 {c.totalConverted > 0 && (
@@ -1912,20 +1912,20 @@ export function AgentePage() {
                         <div
                           key={trigger}
                           className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-                            enabled ? "border-green-200 bg-green-50/40" : "border-gray-100 bg-white"
+                            enabled ? "border-green-200 bg-green-50/40" : "border-line bg-paper"
                           }`}
                         >
-                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${enabled ? "bg-green-500" : "bg-gray-300"}`} />
+                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${enabled ? "bg-green-500" : "bg-line2"}`} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">
+                            <p className="text-sm font-semibold text-ink">
                               {CRM_TRIGGER_LABELS[trigger] ?? trigger}
                             </p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">
+                            <p className="text-[10px] text-muted mt-0.5">
                               {CRM_TRIGGER_DESC[trigger]}
                               {auto && trigger !== "BIRTHDAY" && ` · ${auto.triggerAfterDays}d`}
                             </p>
                           </div>
-                          <span className={`shrink-0 text-[10px] font-bold ${enabled ? "text-green-600" : "text-gray-400"}`}>
+                          <span className={`shrink-0 text-[10px] font-bold ${enabled ? "text-green-600" : "text-muted"}`}>
                             {enabled ? "Ativa" : "Inativa"}
                           </span>
                         </div>
@@ -1945,19 +1945,19 @@ export function AgentePage() {
                 {/* 5 — Resultado do CRM */}
                 <Section title="Resultado do CRM" subtitle="Receita e conversões atribuídas a campanhas e automações.">
                   {!hasRevenue ? (
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-muted">
                       Ainda não há receita atribuída ao CRM. Quando campanhas e automações gerarem pedidos, os resultados aparecerão aqui.
                     </p>
                   ) : (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Mensagens enviadas</p>
-                          <p className="mt-1 text-xl font-bold text-gray-900">{s.revenue.totalSent.toLocaleString("pt-BR")}</p>
+                        <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Mensagens enviadas</p>
+                          <p className="mt-1 text-xl font-bold text-ink">{s.revenue.totalSent.toLocaleString("pt-BR")}</p>
                         </div>
-                        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Respostas</p>
-                          <p className="mt-1 text-xl font-bold text-gray-900">{s.revenue.totalResponded.toLocaleString("pt-BR")}</p>
+                        <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Respostas</p>
+                          <p className="mt-1 text-xl font-bold text-ink">{s.revenue.totalResponded.toLocaleString("pt-BR")}</p>
                         </div>
                         <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3">
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Conversões</p>

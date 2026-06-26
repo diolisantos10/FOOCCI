@@ -47,10 +47,10 @@ export function QRCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white shadow-sm">
       {/* Header strip */}
-      <div className="flex items-center gap-3 border-b border-orange-100 bg-paper px-5 py-3.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white text-base">
+      <div className="flex items-center gap-3 border-b border-brand-100 bg-paper px-5 py-3.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-white text-base">
           📲
         </div>
         <div>
@@ -81,7 +81,7 @@ export function QRCard({
                 readOnly
                 value={url}
                 onFocus={(e) => e.target.select()}
-                className="min-w-0 flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink2 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                className="min-w-0 flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink2 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
             </div>
           </div>
@@ -90,13 +90,13 @@ export function QRCard({
           <div className="flex flex-wrap gap-2">
             <button
               onClick={copyLink}
-              className="flex items-center gap-1.5 rounded-xl border border-line2 bg-paper px-4 py-2 text-xs font-semibold text-ink2 shadow-sm transition-all hover:border-orange-200 hover:bg-brand-50 hover:text-brand-600 active:scale-95"
+              className="flex items-center gap-1.5 rounded-xl border border-line2 bg-paper px-4 py-2 text-xs font-semibold text-ink2 shadow-sm transition-all hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600 active:scale-95"
             >
               {copied ? "✓ Copiado!" : "📋 Copiar link"}
             </button>
             <button
               onClick={downloadQR}
-              className="flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-orange-600 active:scale-95"
+              className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-600 active:scale-95"
             >
               ⬇ Baixar QR
             </button>

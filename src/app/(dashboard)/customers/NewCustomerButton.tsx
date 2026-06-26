@@ -151,7 +151,7 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
     <>
       <button
         onClick={() => { reset(); setOpen(true); }}
-        className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 transition-colors"
+        className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 transition-colors"
       >
         <span className="text-base leading-none">+</span>
         Novo cliente
@@ -163,14 +163,14 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
           <div className="absolute inset-0 bg-black/40" onClick={close} />
 
           {/* Modal panel */}
-          <div className="relative z-10 w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col max-h-[90dvh]">
+          <div className="relative z-10 w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-paper shadow-xl flex flex-col max-h-[90dvh]">
 
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h2 className="text-base font-bold text-gray-900">Novo cliente</h2>
+            <div className="flex items-center justify-between border-b border-line px-6 py-4">
+              <h2 className="text-base font-bold text-ink">Novo cliente</h2>
               <button
                 onClick={close}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className="text-muted hover:text-ink2 text-xl leading-none"
                 aria-label="Fechar"
               >
                 ×
@@ -184,22 +184,22 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
                   ✓
                 </div>
                 <div>
-                  <p className="text-base font-bold text-gray-900">Cliente criado com sucesso.</p>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="text-base font-bold text-ink">Cliente criado com sucesso.</p>
+                  <p className="mt-1 text-sm text-muted">
                     {onCreated ? "Atualizando lista…" : "Redirecionando para o perfil…"}
                   </p>
                 </div>
                 {onCreated ? (
                   <button
                     onClick={() => { onCreated(createdId); setOpen(false); reset(); }}
-                    className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                    className="rounded-lg bg-brand-500 px-6 py-2 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
                   >
                     Fechar
                   </button>
                 ) : (
                   <button
                     onClick={() => router.push(`/customers/${createdId}`)}
-                    className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                    className="rounded-lg bg-brand-500 px-6 py-2 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
                   >
                     Ver perfil agora
                   </button>
@@ -211,7 +211,7 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
 
                 {/* Nome */}
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-700">
+                  <label className="block text-xs font-medium text-ink2">
                     Nome <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -221,13 +221,13 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
                     placeholder="Nome completo"
                     maxLength={100}
                     autoComplete="off"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
                 {/* Telefone */}
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-700">
+                  <label className="block text-xs font-medium text-ink2">
                     Telefone <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -236,18 +236,18 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
                     onChange={patch("phone")}
                     placeholder="(11) 99999-0000"
                     autoComplete="off"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
-                  <p className="text-[11px] text-gray-400">
+                  <p className="text-[11px] text-muted">
                     Aceita: 11999990000 · (11) 99999-0000 · +5511999990000
                   </p>
                 </div>
 
                 {/* E-mail */}
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-700">
+                  <label className="block text-xs font-medium text-ink2">
                     E-mail{" "}
-                    <span className="font-normal text-gray-400">(opcional)</span>
+                    <span className="font-normal text-muted">(opcional)</span>
                   </label>
                   <input
                     type="email"
@@ -255,30 +255,30 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
                     onChange={patch("email")}
                     placeholder="email@exemplo.com"
                     autoComplete="off"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
                 {/* Data de nascimento */}
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-700">
+                  <label className="block text-xs font-medium text-ink2">
                     Data de nascimento{" "}
-                    <span className="font-normal text-gray-400">(opcional)</span>
+                    <span className="font-normal text-muted">(opcional)</span>
                   </label>
                   <input
                     type="date"
                     value={form.birthDate}
                     onChange={patch("birthDate")}
                     max={TODAY}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
                 {/* Observações */}
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-700">
+                  <label className="block text-xs font-medium text-ink2">
                     Observações{" "}
-                    <span className="font-normal text-gray-400">(opcional)</span>
+                    <span className="font-normal text-muted">(opcional)</span>
                   </label>
                   <textarea
                     value={form.notes}
@@ -286,7 +286,7 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
                     placeholder="Preferências, restrições alimentares…"
                     rows={3}
                     maxLength={1000}
-                    className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
@@ -303,14 +303,14 @@ export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => v
                     type="button"
                     onClick={close}
                     disabled={busy}
-                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    className="flex-1 rounded-lg border border-line2 px-4 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={busy || !form.name.trim() || !form.phone.trim()}
-                    className="flex-1 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60 transition-colors"
+                    className="flex-1 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
                   >
                     {busy ? "Criando…" : "Criar cliente"}
                   </button>

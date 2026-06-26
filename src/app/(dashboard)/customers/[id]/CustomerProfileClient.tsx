@@ -117,19 +117,19 @@ const INTERACTION_META: Record<InteractionItem["type"], { icon: string; iconBg: 
   order_placed:    { icon: "🛒", iconBg: "bg-blue-50",    textColor: "text-blue-700"   },
   order_delivered: { icon: "✅", iconBg: "bg-green-50",   textColor: "text-green-700"  },
   order_cancelled: { icon: "✕",  iconBg: "bg-red-50",     textColor: "text-red-700"    },
-  message_in:      { icon: "💬", iconBg: "bg-gray-100",   textColor: "text-gray-700"   },
-  message_out:     { icon: "📤", iconBg: "bg-orange-50",  textColor: "text-orange-700" },
+  message_in:      { icon: "💬", iconBg: "bg-[#F4F4F2]",   textColor: "text-ink2"   },
+  message_out:     { icon: "📤", iconBg: "bg-brand-50",  textColor: "text-brand-700" },
 };
 
 const STATUS_META: Record<string, { dot: string; badge: string; label: string }> = {
   PENDING:          { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-700",   label: "Pendente"      },
   AWAITING_PAYMENT: { dot: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700", label: "Ag. pagamento" },
   CONFIRMED:        { dot: "bg-blue-400",   badge: "bg-blue-100 text-blue-700",     label: "Confirmado"    },
-  PREPARING:        { dot: "bg-orange-400", badge: "bg-orange-100 text-orange-700", label: "Preparando"    },
+  PREPARING:        { dot: "bg-brand-400", badge: "bg-brand-100 text-brand-700", label: "Preparando"    },
   READY:            { dot: "bg-teal-400",   badge: "bg-teal-100 text-teal-700",     label: "Pronto"        },
   OUT_FOR_DELIVERY: { dot: "bg-purple-400", badge: "bg-purple-100 text-purple-700", label: "Em entrega"    },
   DELIVERED:        { dot: "bg-green-500",  badge: "bg-green-100 text-green-700",   label: "Entregue"      },
-  CANCELLED:        { dot: "bg-gray-300",   badge: "bg-gray-100 text-gray-400",     label: "Cancelado"     },
+  CANCELLED:        { dot: "bg-line2",   badge: "bg-[#F4F4F2] text-muted",     label: "Cancelado"     },
 };
 
 const INSIGHT_STYLES: Record<InsightItem["type"], { bg: string; border: string; iconBg: string; title: string; action: string }> = {
@@ -155,15 +155,15 @@ const TAG_STYLES: Record<CustomerTag["color"], { chip: string }> = {
   blue:   { chip: "bg-blue-50 text-blue-700 border border-blue-200"      },
   purple: { chip: "bg-purple-50 text-purple-700 border border-purple-200"},
   teal:   { chip: "bg-teal-50 text-teal-700 border border-teal-200"      },
-  orange: { chip: "bg-orange-50 text-orange-700 border border-orange-200"},
+  orange: { chip: "bg-brand-50 text-brand-700 border border-brand-200"},
   rose:   { chip: "bg-rose-50 text-rose-700 border border-rose-200"      },
 };
 
 const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: string; avatarBg: string }> = {
   Diamond: { badge: "bg-cyan-50 text-cyan-700 border border-cyan-200",         avatarRing: "ring-2 ring-cyan-300",   avatarBg: "bg-cyan-500"   },
   Gold:    { badge: "bg-amber-50 text-amber-700 border border-amber-200",       avatarRing: "ring-2 ring-amber-300",  avatarBg: "bg-amber-500"  },
-  Silver:  { badge: "bg-gray-100 text-gray-600 border border-gray-300",         avatarRing: "ring-2 ring-gray-300",   avatarBg: "bg-gray-400"   },
-  Bronze:  { badge: "bg-orange-50 text-orange-700 border border-orange-200",    avatarRing: "ring-2 ring-orange-300", avatarBg: "bg-orange-500" },
+  Silver:  { badge: "bg-[#F4F4F2] text-ink2 border border-line2",         avatarRing: "ring-2 ring-gray-300",   avatarBg: "bg-muted"   },
+  Bronze:  { badge: "bg-brand-50 text-brand-700 border border-brand-200",    avatarRing: "ring-2 ring-brand-300", avatarBg: "bg-brand-500" },
 };
 
 const SEGMENT_CONFIG: Record<string, { label: string; emoji: string; bg: string; text: string }> = {
@@ -171,7 +171,7 @@ const SEGMENT_CONFIG: Record<string, { label: string; emoji: string; bg: string;
   MORNO:       { label: "Morno",       emoji: "🌡️", bg: "bg-amber-50",  text: "text-amber-700"  },
   FRIO:        { label: "Frio",        emoji: "🥶", bg: "bg-blue-50",    text: "text-blue-700"   },
   PERDIDO:     { label: "Perdido",     emoji: "👻", bg: "bg-purple-50",  text: "text-purple-700" },
-  SEM_PEDIDOS: { label: "Sem pedidos", emoji: "💤", bg: "bg-gray-100",   text: "text-gray-500"   },
+  SEM_PEDIDOS: { label: "Sem pedidos", emoji: "💤", bg: "bg-[#F4F4F2]",   text: "text-muted"   },
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -212,9 +212,9 @@ function Placeholder({
 }) {
   return (
     <div
-      className={`${height} flex items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white`}
+      className={`${height} flex items-center justify-center rounded-2xl border-2 border-dashed border-line2 bg-paper`}
     >
-      <span className="text-sm font-medium text-gray-300">{label}</span>
+      <span className="text-sm font-medium text-muted">{label}</span>
     </div>
   );
 }
@@ -232,7 +232,7 @@ function Section({
 }) {
   return (
     <div className="space-y-3">
-      <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-gray-400">
+      <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-muted">
         {icon && <span className="text-sm leading-none">{icon}</span>}
         {title}
       </h2>
@@ -246,10 +246,10 @@ function Section({
 function AIInsights({ insights }: { insights: InsightItem[] }) {
   if (insights.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-12">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-paper py-12">
         <span className="text-2xl">🤔</span>
-        <p className="mt-2 text-sm font-medium text-gray-400">Dados insuficientes para gerar insights</p>
-        <p className="mt-0.5 text-xs text-gray-300">Mais pedidos geram análises automáticas</p>
+        <p className="mt-2 text-sm font-medium text-muted">Dados insuficientes para gerar insights</p>
+        <p className="mt-0.5 text-xs text-muted">Mais pedidos geram análises automáticas</p>
       </div>
     );
   }
@@ -266,7 +266,7 @@ function AIInsights({ insights }: { insights: InsightItem[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className={`text-sm font-bold ${s.title}`}>{ins.title}</p>
-                <p className="mt-0.5 text-sm text-gray-600">{ins.message}</p>
+                <p className="mt-0.5 text-sm text-ink2">{ins.message}</p>
                 <p className={`mt-2 text-xs font-semibold ${s.action}`}>
                   💡 {ins.action}
                 </p>
@@ -285,11 +285,11 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
   const maxTime = Math.max(...behavior.timeSlots.map((t) => t.count), 1);
 
   return (
-    <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
 
       {/* ── Preferred time ── */}
       <div className="px-5 py-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
           Horário preferido
         </p>
         <div className="flex gap-2">
@@ -300,22 +300,22 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
               <div
                 key={slot.id}
                 className={`flex flex-1 flex-col items-center rounded-lg px-2 py-2.5 ${
-                  active ? "border border-orange-200 bg-orange-50" : "bg-gray-50"
+                  active ? "border border-brand-200 bg-brand-50" : "bg-[#FAFAF8]"
                 }`}
               >
                 <span className="text-base leading-none">{slot.icon}</span>
-                <span className={`mt-1 text-xs font-semibold ${active ? "text-orange-700" : "text-gray-500"}`}>
+                <span className={`mt-1 text-xs font-semibold ${active ? "text-brand-700" : "text-muted"}`}>
                   {slot.label}
                 </span>
-                <span className="text-[10px] text-gray-400">{slot.range}</span>
+                <span className="text-[10px] text-muted">{slot.range}</span>
                 {/* Mini bar */}
-                <div className="mt-2 flex h-7 w-8 items-end justify-center rounded-sm bg-gray-100">
+                <div className="mt-2 flex h-7 w-8 items-end justify-center rounded-sm bg-[#F4F4F2]">
                   <div
-                    className={`w-full rounded-sm ${active ? "bg-orange-400" : "bg-gray-300"}`}
+                    className={`w-full rounded-sm ${active ? "bg-brand-400" : "bg-line2"}`}
                     style={{ height: `${barH}px` }}
                   />
                 </div>
-                <span className={`mt-1 text-xs font-bold ${active ? "text-orange-600" : "text-gray-400"}`}>
+                <span className={`mt-1 text-xs font-bold ${active ? "text-brand-600" : "text-muted"}`}>
                   {slot.count}
                 </span>
               </div>
@@ -327,12 +327,12 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
       {/* ── Days of week ── */}
       <div className="px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Dias preferidos
           </p>
           <div className="flex gap-1">
             {behavior.preferredDays.map((d) => (
-              <span key={d} className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+              <span key={d} className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
                 {d}
               </span>
             ))}
@@ -345,11 +345,11 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
               <div key={d.day} className="flex flex-1 flex-col items-center gap-1">
                 <div className="flex w-full items-end" style={{ height: "28px" }}>
                   <div
-                    className={`w-full rounded-t-sm ${active ? "bg-orange-400" : "bg-gray-200"}`}
+                    className={`w-full rounded-t-sm ${active ? "bg-brand-400" : "bg-line2"}`}
                     style={{ height: `${Math.max(d.pct, 4)}%` }}
                   />
                 </div>
-                <span className="text-[9px] leading-none text-gray-400">{d.day}</span>
+                <span className="text-[9px] leading-none text-muted">{d.day}</span>
               </div>
             );
           })}
@@ -359,14 +359,14 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
       {/* ── Categories ── */}
       <div className="px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Categorias
           </p>
           {behavior.leastCategories.length > 0 && (
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-gray-300">menos pedidas:</span>
+              <span className="text-[10px] text-muted">menos pedidas:</span>
               {behavior.leastCategories.map((c) => (
-                <span key={c.name} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-400">
+                <span key={c.name} className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-muted">
                   {c.name}
                 </span>
               ))}
@@ -377,29 +377,29 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
           <div className="space-y-2">
             {behavior.favoriteCategories.map((cat) => (
               <div key={cat.name} className="flex items-center gap-2.5">
-                <span className="w-24 shrink-0 truncate text-xs text-gray-700" title={cat.name}>
+                <span className="w-24 shrink-0 truncate text-xs text-ink2" title={cat.name}>
                   {cat.name}
                 </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#F4F4F2]">
                   <div
-                    className="h-full rounded-full bg-orange-400 transition-all duration-500"
+                    className="h-full rounded-full bg-brand-400 transition-all duration-500"
                     style={{ width: `${cat.pct}%` }}
                   />
                 </div>
-                <span className="w-8 text-right text-xs font-medium text-gray-400">
+                <span className="w-8 text-right text-xs font-medium text-muted">
                   {cat.pct}%
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="py-3 text-center text-xs text-gray-300">Nenhum pedido entregue ainda</p>
+          <p className="py-3 text-center text-xs text-muted">Nenhum pedido entregue ainda</p>
         )}
       </div>
 
       {/* ── Payment ── */}
       <div className="px-5 py-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
           Pagamento preferido
         </p>
         {behavior.paymentDistribution.length > 0 ? (
@@ -408,18 +408,18 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
               const preferred = p.method === behavior.preferredPayment;
               return (
                 <div key={p.method} className="flex items-center gap-2.5">
-                  <span className="w-28 shrink-0 truncate text-xs text-gray-700">
+                  <span className="w-28 shrink-0 truncate text-xs text-ink2">
                     {PAYMENT_LABELS[p.method] ?? p.method}
                   </span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#F4F4F2]">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
-                        preferred ? "bg-orange-400" : "bg-gray-300"
+                        preferred ? "bg-brand-400" : "bg-line2"
                       }`}
                       style={{ width: `${p.pct}%` }}
                     />
                   </div>
-                  <span className={`w-8 text-right text-xs font-medium ${preferred ? "text-orange-600" : "text-gray-400"}`}>
+                  <span className={`w-8 text-right text-xs font-medium ${preferred ? "text-brand-600" : "text-muted"}`}>
                     {p.pct}%
                   </span>
                 </div>
@@ -427,7 +427,7 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
             })}
           </div>
         ) : (
-          <p className="py-3 text-center text-xs text-gray-300">Nenhum pagamento registrado ainda</p>
+          <p className="py-3 text-center text-xs text-muted">Nenhum pagamento registrado ainda</p>
         )}
       </div>
     </div>
@@ -439,15 +439,15 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
 function TagsPanel({ tags }: { tags: CustomerTag[] }) {
   if (tags.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-paper px-4 py-6">
         <span className="text-xl">🏷️</span>
-        <p className="mt-2 text-xs font-medium text-gray-400">Sem tags atribuídas</p>
-        <p className="mt-0.5 text-xs text-gray-300">Tags são geradas automaticamente</p>
+        <p className="mt-2 text-xs font-medium text-muted">Sem tags atribuídas</p>
+        <p className="mt-0.5 text-xs text-muted">Tags são geradas automaticamente</p>
       </div>
     );
   }
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper px-4 py-4 shadow-sm">
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => (
           <span
@@ -541,23 +541,23 @@ function HeaderSection({
   ];
 
   return (
-    <div className="border-b border-[#E5E5E5] bg-white px-6 py-5">
+    <div className="border-b border-[#E5E5E5] bg-paper px-6 py-5">
       {/* Breadcrumb + actions */}
-      <div className="mb-4 flex items-center gap-2 text-sm text-gray-400">
-        <Link href="/customers" className="transition-colors hover:text-gray-600">
+      <div className="mb-4 flex items-center gap-2 text-sm text-muted">
+        <Link href="/customers" className="transition-colors hover:text-ink2">
           Clientes
         </Link>
         <span>/</span>
-        <span className="font-medium text-gray-700">{name}</span>
+        <span className="font-medium text-ink2">{name}</span>
         {!isActive && (
-          <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+          <span className="ml-1 rounded-full bg-[#F4F4F2] px-2 py-0.5 text-xs text-muted">
             Inativo
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={onEdit}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+            className="flex items-center gap-1.5 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]"
           >
             ✏️ Editar
           </button>
@@ -581,7 +581,7 @@ function HeaderSection({
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">{name}</h1>
+            <h1 className="text-2xl font-bold text-ink">{name}</h1>
 
             {/* CRM tier badge */}
             <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-semibold ${ts.badge}`}>
@@ -593,7 +593,7 @@ function HeaderSection({
             </span>
           </div>
 
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-gray-400">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted">
             <span>{isGuestIdentifier(phone) ? "Conta de convidado" : phone}</span>
             {email && <><span>·</span><span>{email}</span></>}
             <span>·</span>
@@ -611,17 +611,17 @@ function HeaderSection({
       {/* Stats row */}
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-2xl bg-gray-50 px-4 py-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          <div key={s.label} className="rounded-2xl bg-[#FAFAF8] px-4 py-3.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
               {s.label}
             </p>
             <p
-              className={`mt-1 text-lg font-bold leading-tight text-gray-900 ${s.truncate ? "truncate" : ""}`}
+              className={`mt-1 text-lg font-bold leading-tight text-ink ${s.truncate ? "truncate" : ""}`}
               title={s.truncate ? (s.value ?? "") : undefined}
             >
               {s.value}
             </p>
-            <p className="truncate text-[11px] text-gray-400">{s.sub}</p>
+            <p className="truncate text-[11px] text-muted">{s.sub}</p>
           </div>
         ))}
       </div>
@@ -638,22 +638,22 @@ function HeaderSection({
       {classification.nextTier && classification.nextThreshold && (
         <div className="mt-4 pb-1">
           <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="text-gray-400">
+            <span className="text-muted">
               Progresso para{" "}
-              <strong className="font-semibold text-gray-600">
+              <strong className="font-semibold text-ink2">
                 {classification.nextTier}
               </strong>
             </span>
-            <span className="text-gray-400">
+            <span className="text-muted">
               {classification.progressPercent}%{" "}
-              <span className="text-gray-300">
+              <span className="text-muted">
                 — falta {fmtCurrency(classification.nextThreshold - totalSpend)}
               </span>
             </span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#F4F4F2]">
             <div
-              className="h-full rounded-full bg-orange-500 transition-all duration-700"
+              className="h-full rounded-full bg-brand-500 transition-all duration-700"
               style={{ width: `${classification.progressPercent}%` }}
             />
           </div>
@@ -667,7 +667,7 @@ function HeaderSection({
 
 function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="border-b border-[#E5E5E5] bg-white px-6">
+    <div className="border-b border-[#E5E5E5] bg-paper px-6">
       <div className="flex">
         {TABS.map((t) => (
           <button
@@ -675,8 +675,8 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
             onClick={() => onChange(t.id)}
             className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
               active === t.id
-                ? "border-orange-500 text-orange-600"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "border-brand-500 text-brand-600"
+                : "border-transparent text-muted hover:text-ink"
             }`}
           >
             {t.label}
@@ -692,9 +692,9 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 function AddressList({ addresses }: { addresses: AddressItem[] }) {
   if (addresses.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-paper px-4 py-6">
         <span className="text-xl">📍</span>
-        <p className="mt-2 text-xs font-medium text-gray-400">Nenhum endereço cadastrado</p>
+        <p className="mt-2 text-xs font-medium text-muted">Nenhum endereço cadastrado</p>
       </div>
     );
   }
@@ -703,27 +703,27 @@ function AddressList({ addresses }: { addresses: AddressItem[] }) {
       {addresses.map((a) => (
         <div
           key={a.id}
-          className={`rounded-2xl border bg-white px-4 py-3 shadow-sm ${
-            a.isDefault ? "border-orange-200 ring-1 ring-orange-100" : "border-gray-100"
+          className={`rounded-2xl border bg-paper px-4 py-3 shadow-sm ${
+            a.isDefault ? "border-brand-200 ring-1 ring-brand-100" : "border-line"
           }`}
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold text-gray-800">
+            <p className="text-sm font-semibold text-ink">
               {a.street}, {a.number}
               {a.complement && ` — ${a.complement}`}
             </p>
             {a.isDefault && (
-              <span className="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-600">
+              <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">
                 padrão
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <p className="mt-0.5 text-xs text-muted">
             {a.neighborhood} · {a.city} / {a.state}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400">{a.zipCode}</p>
+          <p className="mt-0.5 text-xs text-muted">{a.zipCode}</p>
           {a.label && (
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-300">
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
               {a.label}
             </p>
           )}
@@ -740,12 +740,12 @@ function AddressList({ addresses }: { addresses: AddressItem[] }) {
 const CONTACTABILITY_STYLE: Record<string, { badge: string; label: string }> = {
   CONTACTABLE:     { badge: "bg-green-100 text-green-700",  label: "Contatável"       },
   NON_CONTACTABLE: { badge: "bg-red-100 text-red-700",      label: "Não contatável"   },
-  OPT_OUT:         { badge: "bg-gray-200 text-gray-600",    label: "Opt-out"          },
+  OPT_OUT:         { badge: "bg-line2 text-ink2",    label: "Opt-out"          },
   NEEDS_REVIEW:    { badge: "bg-amber-100 text-amber-700",  label: "Revisar"          },
 };
 
 const PRIORITY_STYLE: Record<string, { bar: string; label: string }> = {
-  NONE:   { bar: "bg-gray-200",   label: "Completo"  },
+  NONE:   { bar: "bg-line2",   label: "Completo"  },
   LOW:    { bar: "bg-blue-400",   label: "Baixa"     },
   MEDIUM: { bar: "bg-amber-400",  label: "Média"     },
   HIGH:   { bar: "bg-red-500",    label: "Alta"      },
@@ -754,7 +754,7 @@ const PRIORITY_STYLE: Record<string, { bar: string; label: string }> = {
 const SIGNAL_STATUS_STYLE: Record<string, { chip: string }> = {
   INFERRED:     { chip: "bg-blue-50 text-blue-700"   },
   CONFIRMED:    { chip: "bg-green-50 text-green-700" },
-  REJECTED:     { chip: "bg-gray-100 text-gray-500"  },
+  REJECTED:     { chip: "bg-[#F4F4F2] text-muted"  },
   NEEDS_REVIEW: { chip: "bg-amber-50 text-amber-700" },
 };
 
@@ -793,14 +793,14 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
   const visibleSignals = intel.signals.filter((s) => s.status !== "REJECTED").slice(0, 5);
 
   return (
-    <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
       {/* Score bar */}
       <div className="px-4 py-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-semibold text-gray-500">Completude do cadastro</span>
-          <span className="text-xs font-bold text-gray-700">{intel.completenessScore}%</span>
+          <span className="text-xs font-semibold text-muted">Completude do cadastro</span>
+          <span className="text-xs font-bold text-ink2">{intel.completenessScore}%</span>
         </div>
-        <div className="h-2 w-full rounded-full bg-gray-100">
+        <div className="h-2 w-full rounded-full bg-[#F4F4F2]">
           <div
             className={`h-2 rounded-full transition-all ${scoreColor}`}
             style={{ width: scoreBarWidth }}
@@ -810,7 +810,7 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
 
       {/* Contactability + enrichment priority */}
       <div className="flex items-center justify-between px-4 py-3">
-        <span className="text-xs text-gray-500">Contatabilidade</span>
+        <span className="text-xs text-muted">Contatabilidade</span>
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${contactStyle.badge}`}>
           {contactStyle.label}
         </span>
@@ -831,7 +831,7 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
       {/* Enrichment priority */}
       {intel.enrichmentPriority !== "NONE" && (
         <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs text-gray-500">Prioridade de enriquecimento</span>
+          <span className="text-xs text-muted">Prioridade de enriquecimento</span>
           <span className={`inline-flex h-2 w-2 rounded-full ${priorityStyle.bar}`} title={priorityStyle.label} />
         </div>
       )}
@@ -839,18 +839,18 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
       {/* Recommended next action */}
       {intel.recommendedNextDataToCollect && (
         <div className="px-4 py-3">
-          <p className="text-[11px] text-gray-500 mb-0.5">Próximo dado sugerido</p>
-          <p className="text-xs font-medium text-gray-700 capitalize">{intel.recommendedNextDataToCollect}</p>
+          <p className="text-[11px] text-muted mb-0.5">Próximo dado sugerido</p>
+          <p className="text-xs font-medium text-ink2 capitalize">{intel.recommendedNextDataToCollect}</p>
         </div>
       )}
 
       {/* Missing fields */}
       {intel.missingFields.length > 0 && (
         <div className="px-4 py-3">
-          <p className="text-[11px] text-gray-500 mb-1.5">Dados ausentes</p>
+          <p className="text-[11px] text-muted mb-1.5">Dados ausentes</p>
           <div className="flex flex-wrap gap-1">
             {intel.missingFields.map((f) => (
-              <span key={f} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
+              <span key={f} className="inline-flex items-center rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-ink2">
                 {fieldLabels[f] ?? f}
               </span>
             ))}
@@ -861,15 +861,15 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
       {/* Enrichment opportunities */}
       {intel.enrichmentOpportunities.length > 0 && (
         <div className="px-4 py-3">
-          <p className="text-[11px] text-gray-500 mb-1.5">Oportunidades de enriquecimento</p>
+          <p className="text-[11px] text-muted mb-1.5">Oportunidades de enriquecimento</p>
           <ul className="space-y-2">
             {intel.enrichmentOpportunities.slice(0, 3).map((op) => (
-              <li key={op.id} className="text-[11px] text-gray-600 leading-snug">
-                <span className="font-medium text-gray-700">{op.title}</span>
+              <li key={op.id} className="text-[11px] text-ink2 leading-snug">
+                <span className="font-medium text-ink2">{op.title}</span>
                 {" — "}
-                <span className="text-gray-500">{op.description}</span>
+                <span className="text-muted">{op.description}</span>
                 {" "}
-                <span className="text-[10px] text-gray-400">({channelLabel[op.channel] ?? op.channel})</span>
+                <span className="text-[10px] text-muted">({channelLabel[op.channel] ?? op.channel})</span>
               </li>
             ))}
           </ul>
@@ -879,7 +879,7 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
       {/* Inferred signals */}
       {visibleSignals.length > 0 && (
         <div className="px-4 py-3">
-          <p className="text-[11px] text-gray-500 mb-1.5">Sinais de dados</p>
+          <p className="text-[11px] text-muted mb-1.5">Sinais de dados</p>
           <ul className="space-y-1.5">
             {visibleSignals.map((s) => {
               const style = SIGNAL_STATUS_STYLE[s.status] ?? SIGNAL_STATUS_STYLE.INFERRED!;
@@ -888,7 +888,7 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
                   <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${style.chip}`}>
                     {SIGNAL_STATUS_LABEL[s.status] ?? s.status}
                   </span>
-                  <span className="text-[11px] text-gray-600 leading-snug">
+                  <span className="text-[11px] text-ink2 leading-snug">
                     {s.value
                       ? <>Possível preferência: <span className="font-medium">{s.value}</span>{s.notes ? ` — ${s.notes}` : ""}</>
                       : s.notes ?? s.type}
@@ -909,7 +909,7 @@ const NBA_PRIORITY_STYLE: Record<string, { badge: string; label: string }> = {
   HIGH:   { badge: "bg-red-100 text-red-700",     label: "Alta"  },
   MEDIUM: { badge: "bg-amber-100 text-amber-700", label: "Média" },
   LOW:    { badge: "bg-blue-100 text-blue-700",   label: "Baixa" },
-  NONE:   { badge: "bg-gray-100 text-gray-500",   label: "—"     },
+  NONE:   { badge: "bg-[#F4F4F2] text-muted",   label: "—"     },
 };
 
 const NBA_ACTION_LABEL: Record<string, string> = {
@@ -934,9 +934,9 @@ const NBA_CHANNEL_LABEL: Record<string, string> = {
 function NextBestActionCard({ nba }: { nba: NextBestAction }) {
   const ps = NBA_PRIORITY_STYLE[nba.priority] ?? NBA_PRIORITY_STYLE.NONE!;
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <span className="text-sm font-semibold text-gray-800">
+    <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+        <span className="text-sm font-semibold text-ink">
           {NBA_ACTION_LABEL[nba.actionType] ?? nba.actionType}
         </span>
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${ps.badge}`}>
@@ -944,9 +944,9 @@ function NextBestActionCard({ nba }: { nba: NextBestAction }) {
         </span>
       </div>
       <div className="px-4 py-3 space-y-2">
-        <p className="text-xs text-gray-600 leading-snug">{nba.reason}</p>
+        <p className="text-xs text-ink2 leading-snug">{nba.reason}</p>
         <div className="flex flex-wrap gap-2 pt-1">
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
+          <span className="inline-flex items-center rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-ink2">
             Canal: {NBA_CHANNEL_LABEL[nba.recommendedChannel] ?? nba.recommendedChannel}
           </span>
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] ${nba.safeToContact ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
@@ -954,8 +954,8 @@ function NextBestActionCard({ nba }: { nba: NextBestAction }) {
           </span>
         </div>
         <div className="pt-1">
-          <p className="text-[11px] text-gray-500 mb-0.5">Objetivo da mensagem</p>
-          <p className="text-xs text-gray-700 leading-snug">{nba.suggestedMessageGoal}</p>
+          <p className="text-[11px] text-muted mb-0.5">Objetivo da mensagem</p>
+          <p className="text-xs text-ink2 leading-snug">{nba.suggestedMessageGoal}</p>
         </div>
       </div>
     </div>
@@ -1022,47 +1022,47 @@ function OverviewTab({
 
         {hasImported && (
           <Section title="Dados Importados" icon="📥">
-            <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
               {document !== null && (
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-gray-500">CPF / CNPJ</span>
-                  <span className="text-sm font-semibold text-gray-800">{document}</span>
+                  <span className="text-xs text-muted">CPF / CNPJ</span>
+                  <span className="text-sm font-semibold text-ink">{document}</span>
                 </div>
               )}
               {financialBalance !== null && (
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-gray-500">Saldo financeiro</span>
-                  <span className="text-sm font-semibold text-gray-800">{fmtCurrency(financialBalance)}</span>
+                  <span className="text-xs text-muted">Saldo financeiro</span>
+                  <span className="text-sm font-semibold text-ink">{fmtCurrency(financialBalance)}</span>
                 </div>
               )}
               {importedOrderCount !== null && (
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-gray-500">Pedidos (importado)</span>
-                  <span className="text-sm font-semibold text-gray-800">{importedOrderCount}</span>
+                  <span className="text-xs text-muted">Pedidos (importado)</span>
+                  <span className="text-sm font-semibold text-ink">{importedOrderCount}</span>
                 </div>
               )}
               {importedTotalSpent !== null && (
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-gray-500">Total gasto (importado)</span>
-                  <span className="text-sm font-semibold text-gray-800">{fmtCurrency(importedTotalSpent)}</span>
+                  <span className="text-xs text-muted">Total gasto (importado)</span>
+                  <span className="text-sm font-semibold text-ink">{fmtCurrency(importedTotalSpent)}</span>
                 </div>
               )}
               {averageTicket !== null && (
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-gray-500">Ticket médio (importado)</span>
-                  <span className="text-sm font-semibold text-gray-800">{fmtCurrency(averageTicket)}</span>
+                  <span className="text-xs text-muted">Ticket médio (importado)</span>
+                  <span className="text-sm font-semibold text-ink">{fmtCurrency(averageTicket)}</span>
                 </div>
               )}
               {importedLastOrderAt !== null && (
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-gray-500">Última compra (importado)</span>
-                  <span className="text-sm font-semibold text-gray-800">{new Date(importedLastOrderAt).toLocaleDateString("pt-BR")}</span>
+                  <span className="text-xs text-muted">Última compra (importado)</span>
+                  <span className="text-sm font-semibold text-ink">{new Date(importedLastOrderAt).toLocaleDateString("pt-BR")}</span>
                 </div>
               )}
               {notes !== null && (
                 <div className="px-4 py-3">
-                  <p className="text-xs text-gray-500 mb-1">Observações</p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{notes}</p>
+                  <p className="text-xs text-muted mb-1">Observações</p>
+                  <p className="text-sm text-ink2 whitespace-pre-wrap">{notes}</p>
                 </div>
               )}
             </div>
@@ -1132,16 +1132,16 @@ function OrderDetailModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden"
+        className="w-full max-w-md rounded-2xl bg-paper shadow-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
               Pedido {formatOrderNumber(order.orderNumber, order.id)}
             </p>
-            <p className="text-sm text-gray-500 mt-0.5">{date}</p>
+            <p className="text-sm text-muted mt-0.5">{date}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${meta.badge}`}>
@@ -1149,7 +1149,7 @@ function OrderDetailModal({
             </span>
             <button
               onClick={onClose}
-              className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="rounded-full p-1.5 text-muted hover:bg-[#F4F4F2] hover:text-ink2 transition-colors"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1163,12 +1163,12 @@ function OrderDetailModal({
           {/* Meta row */}
           <div className="flex flex-wrap gap-2">
             {order.type && (
-              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+              <span className="rounded-full bg-[#F4F4F2] px-2.5 py-1 text-xs font-semibold text-ink2">
                 {ORDER_TYPE_LABEL[order.type] ?? order.type}
               </span>
             )}
             {order.payment && (
-              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+              <span className="rounded-full bg-[#F4F4F2] px-2.5 py-1 text-xs font-semibold text-ink2">
                 {PAYMENT_LABELS[order.payment] ?? order.payment}
               </span>
             )}
@@ -1176,18 +1176,18 @@ function OrderDetailModal({
 
           {/* Items */}
           <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Itens</p>
-            <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Itens</p>
+            <div className="divide-y divide-line rounded-xl border border-line bg-[#FAFAF8] overflow-hidden">
               {order.items.map((item, i) => (
                 <div key={i} className="flex items-center justify-between px-3 py-2.5">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                    <span className="shrink-0 rounded-full bg-line2 px-2 py-0.5 text-[11px] font-bold text-ink2">
                       {item.quantity}×
                     </span>
-                    <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                    <p className="text-sm text-ink truncate">{item.name}</p>
                   </div>
                   {item.price !== undefined && (
-                    <p className="shrink-0 text-sm font-medium text-gray-600 ml-3">
+                    <p className="shrink-0 text-sm font-medium text-ink2 ml-3">
                       {fmtCurrency(item.price * item.quantity)}
                     </p>
                   )}
@@ -1199,32 +1199,32 @@ function OrderDetailModal({
           {/* Notes */}
           {order.notes && (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Observações</p>
-              <p className="text-sm text-gray-600 italic">{order.notes}</p>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Observações</p>
+              <p className="text-sm text-ink2 italic">{order.notes}</p>
             </div>
           )}
 
           {/* Totals */}
-          <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="rounded-xl border border-line overflow-hidden">
             {order.subtotal !== undefined && (
-              <div className="flex justify-between px-4 py-2 text-sm text-gray-600">
+              <div className="flex justify-between px-4 py-2 text-sm text-ink2">
                 <span>Subtotal</span>
                 <span>{fmtCurrency(order.subtotal)}</span>
               </div>
             )}
             {order.deliveryFee !== undefined && order.deliveryFee > 0 && (
-              <div className="flex justify-between px-4 py-2 text-sm text-gray-600 border-t border-gray-50">
+              <div className="flex justify-between px-4 py-2 text-sm text-ink2 border-t border-line">
                 <span>Entrega</span>
                 <span>{fmtCurrency(order.deliveryFee)}</span>
               </div>
             )}
             {order.discount !== undefined && order.discount > 0 && (
-              <div className="flex justify-between px-4 py-2 text-sm text-green-600 border-t border-gray-50">
+              <div className="flex justify-between px-4 py-2 text-sm text-green-600 border-t border-line">
                 <span>Desconto</span>
                 <span>−{fmtCurrency(order.discount)}</span>
               </div>
             )}
-            <div className="flex justify-between px-4 py-3 font-bold text-gray-900 bg-gray-50 border-t border-gray-100">
+            <div className="flex justify-between px-4 py-3 font-bold text-ink bg-[#FAFAF8] border-t border-line">
               <span>Total</span>
               <span>{fmtCurrency(order.total)}</span>
             </div>
@@ -1240,10 +1240,10 @@ function OrderDetailModal({
 function OrderHistory({ orders, onOrderClick }: { orders: OrderHistoryItem[]; onOrderClick: (o: OrderHistoryItem) => void }) {
   if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-16">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-paper py-16">
         <span className="text-3xl">📭</span>
-        <p className="mt-2 text-sm font-medium text-gray-400">Nenhum pedido encontrado</p>
-        <p className="mt-0.5 text-xs text-gray-300">Os pedidos aparecerão aqui após a primeira compra</p>
+        <p className="mt-2 text-sm font-medium text-muted">Nenhum pedido encontrado</p>
+        <p className="mt-0.5 text-xs text-muted">Os pedidos aparecerão aqui após a primeira compra</p>
       </div>
     );
   }
@@ -1257,11 +1257,11 @@ function OrderHistory({ orders, onOrderClick }: { orders: OrderHistoryItem[]; on
         <div key={group.key}>
           {/* Date separator */}
           <div className="mb-3 flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-100" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <div className="h-px flex-1 bg-[#F4F4F2]" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">
               {group.label}
             </span>
-            <div className="h-px flex-1 bg-gray-100" />
+            <div className="h-px flex-1 bg-[#F4F4F2]" />
           </div>
 
           <div className="space-y-2">
@@ -1283,30 +1283,30 @@ function OrderHistory({ orders, onOrderClick }: { orders: OrderHistoryItem[]; on
                   key={order.id}
                   type="button"
                   onClick={() => onOrderClick(order)}
-                  className={`w-full flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 rounded-2xl border bg-paper px-4 py-3.5 text-left transition-colors cursor-pointer ${
                     isLatest
-                      ? "border-orange-200 shadow-sm ring-1 ring-orange-100 hover:shadow-md"
-                      : "border-gray-100 hover:border-gray-200 hover:shadow-sm"
+                      ? "border-brand-200 shadow-sm ring-1 ring-brand-100 hover:shadow-md"
+                      : "border-line hover:border-line2 hover:shadow-sm"
                   }`}
                 >
                   {/* Status dot */}
                   <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
 
                   {/* Time */}
-                  <span className="w-10 shrink-0 font-mono text-xs text-gray-400">
+                  <span className="w-10 shrink-0 font-mono text-xs text-muted">
                     {time}
                   </span>
 
                   {/* Items */}
-                  <span className="min-w-0 flex-1 truncate text-sm text-gray-700">
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink2">
                     {itemsStr || "—"}
                     {extra > 0 && (
-                      <span className="ml-1 text-xs text-gray-400">+{extra}</span>
+                      <span className="ml-1 text-xs text-muted">+{extra}</span>
                     )}
                   </span>
 
                   {/* Total */}
-                  <span className="shrink-0 text-sm font-semibold text-gray-900">
+                  <span className="shrink-0 text-sm font-semibold text-ink">
                     {order.total.toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
@@ -1318,7 +1318,7 @@ function OrderHistory({ orders, onOrderClick }: { orders: OrderHistoryItem[]; on
                     {meta.label}
                   </span>
                   {/* Click cue */}
-                  <svg className="shrink-0 h-3.5 w-3.5 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <svg className="shrink-0 h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
                   </svg>
                 </button>
@@ -1337,7 +1337,7 @@ function HistoryTab({ orders, onOrderClick }: { orders: OrderHistoryItem[]; onOr
   return (
     <div className="space-y-6">
       <Section title="Histórico de Pedidos" icon="🧾">
-        <p className="text-xs text-gray-400">Clique em um pedido para ver os detalhes.</p>
+        <p className="text-xs text-muted">Clique em um pedido para ver os detalhes.</p>
         <OrderHistory orders={orders} onOrderClick={onOrderClick} />
       </Section>
     </div>
@@ -1349,19 +1349,19 @@ function HistoryTab({ orders, onOrderClick }: { orders: OrderHistoryItem[]; onOr
 function InteractionTimeline({ interactions }: { interactions: InteractionItem[] }) {
   if (interactions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-16">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-paper py-16">
         <span className="text-3xl">💬</span>
-        <p className="mt-2 text-sm font-medium text-gray-400">Nenhuma interação registrada</p>
-        <p className="mt-0.5 text-xs text-gray-300">Pedidos e mensagens aparecerão aqui</p>
+        <p className="mt-2 text-sm font-medium text-muted">Nenhuma interação registrada</p>
+        <p className="mt-0.5 text-xs text-muted">Pedidos e mensagens aparecerão aqui</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper px-5 py-4 shadow-sm">
       <div className="relative">
         {/* Vertical connecting line */}
-        <div className="absolute left-3 top-3 bottom-3 w-px bg-gray-100" />
+        <div className="absolute left-3 top-3 bottom-3 w-px bg-[#F4F4F2]" />
 
         <div className="space-y-0">
           {interactions.map((item) => {
@@ -1384,7 +1384,7 @@ function InteractionTimeline({ interactions }: { interactions: InteractionItem[]
                   <p className={`truncate text-sm font-medium leading-snug ${meta.textColor}`}>
                     {item.description}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-400">
+                  <p className="mt-0.5 text-xs text-muted">
                     {time} · {date}
                   </p>
                 </div>
@@ -1433,11 +1433,11 @@ const ACTION_CARDS = [
   {
     id:      "discount",
     icon:    "🎁",
-    iconBg:  "bg-orange-100",
+    iconBg:  "bg-brand-100",
     title:   "Oferecer desconto",
     desc:    "Envie um cupom ou promoção exclusiva para este cliente.",
     btn:     "Criar cupom",
-    btnCls:  "bg-orange-500 hover:bg-orange-600 text-white",
+    btnCls:  "bg-brand-500 hover:bg-brand-600 text-white",
   },
   {
     id:      "reactivate",
@@ -1463,18 +1463,18 @@ function ActionsTab({ tags }: { tags: CustomerTag[] }) {
           {ACTION_CARDS.map((card) => (
             <div
               key={card.id}
-              className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+              className="flex flex-col gap-4 rounded-2xl border border-line bg-paper p-5 shadow-sm transition-shadow hover:shadow-md"
             >
               {/* Icon + title row */}
               <div className="flex items-center gap-3">
                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl ${card.iconBg}`}>
                   {card.icon}
                 </div>
-                <p className="text-base font-bold text-gray-900">{card.title}</p>
+                <p className="text-base font-bold text-ink">{card.title}</p>
               </div>
 
               {/* Description */}
-              <p className="text-sm text-gray-500 leading-relaxed">{card.desc}</p>
+              <p className="text-sm text-muted leading-relaxed">{card.desc}</p>
 
               {/* Action button */}
               <button
@@ -1633,37 +1633,37 @@ export default function CustomerProfileClient({
       {/* ── Edit modal ──────────────────────────────────────────────────────── */}
       {editOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-bold text-gray-900">Editar cliente</h2>
+          <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-bold text-ink">Editar cliente</h2>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Nome</label>
+                <label className="mb-1 block text-xs font-semibold text-ink2">Nome</label>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">
-                  Telefone {isGuest && <span className="font-normal text-gray-400">(opcional)</span>}
+                <label className="mb-1 block text-xs font-semibold text-ink2">
+                  Telefone {isGuest && <span className="font-normal text-muted">(opcional)</span>}
                 </label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                   placeholder={isGuest ? "Ex: +5511999990000" : undefined}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">
-                  Email <span className="font-normal text-gray-400">(opcional)</span>
+                <label className="mb-1 block text-xs font-semibold text-ink2">
+                  Email <span className="font-normal text-muted">(opcional)</span>
                 </label>
                 <input
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
                   type="email"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
             </div>
@@ -1672,14 +1672,14 @@ export default function CustomerProfileClient({
               <button
                 onClick={() => setEditOpen(false)}
                 disabled={editBusy}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={submitEdit}
                 disabled={editBusy || !editName.trim() || (!isGuest && !editPhone.trim())}
-                className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50"
               >
                 {editBusy ? "Salvando…" : "Salvar"}
               </button>
@@ -1691,20 +1691,20 @@ export default function CustomerProfileClient({
       {/* ── Delete confirm modal ─────────────────────────────────────────────── */}
       {delOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-xl">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-2xl">
               🗑️
             </div>
-            <h2 className="mb-1 text-lg font-bold text-gray-900">Excluir cliente</h2>
-            <p className="mb-5 text-sm text-gray-500">
+            <h2 className="mb-1 text-lg font-bold text-ink">Excluir cliente</h2>
+            <p className="mb-5 text-sm text-muted">
               Tem certeza que deseja excluir{" "}
-              <strong className="text-gray-900">{name}</strong>? Esta ação não pode ser desfeita.
+              <strong className="text-ink">{name}</strong>? Esta ação não pode ser desfeita.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setDelOpen(false)}
                 disabled={delBusy}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
               >
                 Cancelar
               </button>

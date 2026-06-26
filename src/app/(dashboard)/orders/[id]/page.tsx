@@ -103,7 +103,7 @@ export default async function OrderDetailPage({
           <div className="flex items-center gap-2">
             <Link
               href={`/orders/${order.id}/imprimir`}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition"
             >
               🔍 Pré-visualizar comanda
             </Link>
@@ -113,7 +113,7 @@ export default async function OrderDetailPage({
         </div>
 
         {/* Status + meta */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="rounded-xl border border-line2 bg-paper p-5">
           <div className="flex items-start justify-between">
             <div>
               <Link
@@ -122,22 +122,22 @@ export default async function OrderDetailPage({
               >
                 {order.customer.name}
               </Link>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted">
                 {!order.customer.phone || isGuestIdentifier(order.customer.phone) ? "Telefone não informado" : order.customer.phone}
               </p>
             </div>
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+            <span className="rounded-full bg-[#F4F4F2] px-3 py-1 text-sm font-medium text-ink2">
               {STATUS_LABELS[order.status] ?? order.status}
             </span>
           </div>
 
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div>
-              <dt className="text-gray-500">Tipo</dt>
+              <dt className="text-muted">Tipo</dt>
               <dd className="font-medium">{order.type}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Data</dt>
+              <dt className="text-muted">Data</dt>
               <dd className="font-medium">
                 {new Date(order.createdAt).toLocaleString("pt-BR", {
                   day: "2-digit", month: "2-digit", year: "numeric",
@@ -147,7 +147,7 @@ export default async function OrderDetailPage({
             </div>
             {order.deliveryAddress && (
               <div className="col-span-2">
-                <dt className="text-gray-500">Endereço de entrega</dt>
+                <dt className="text-muted">Endereço de entrega</dt>
                 <dd className="font-medium">
                   {order.deliveryAddress.street}, {order.deliveryAddress.number} —{" "}
                   {order.deliveryAddress.neighborhood}, {order.deliveryAddress.city}/
@@ -157,7 +157,7 @@ export default async function OrderDetailPage({
             )}
             {order.notes && (
               <div className="col-span-2">
-                <dt className="text-gray-500">Observações</dt>
+                <dt className="text-muted">Observações</dt>
                 <dd className="font-medium">{order.notes}</dd>
               </div>
             )}
@@ -170,25 +170,25 @@ export default async function OrderDetailPage({
         )}
 
         {/* Items */}
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+        <div className="rounded-xl border border-line2 bg-paper overflow-hidden">
+          <div className="border-b border-line bg-[#FAFAF8] px-5 py-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">
               Itens
             </h2>
             {canEdit && order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
-              <span className="text-xs text-gray-400">Clique em &ldquo;Trocar&rdquo; para alterar um item</span>
+              <span className="text-xs text-muted">Clique em &ldquo;Trocar&rdquo; para alterar um item</span>
             )}
           </div>
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-line">
             {order.items.map((item) => (
               <li key={item.id} className="flex items-center justify-between px-5 py-3 text-sm">
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-900">
+                  <span className="text-ink">
                     {item.quantity}× {item.name}
                     {item.variantName && (
-                      <span className="ml-1 text-xs text-gray-500">({item.variantName})</span>
+                      <span className="ml-1 text-xs text-muted">({item.variantName})</span>
                     )}
-                    {item.notes && <span className="ml-1 text-xs text-gray-400">({item.notes})</span>}
+                    {item.notes && <span className="ml-1 text-xs text-muted">({item.notes})</span>}
                   </span>
                   <ItemReplacementButton
                     orderId={order.id}
@@ -210,13 +210,13 @@ export default async function OrderDetailPage({
               </li>
             ))}
           </ul>
-          <div className="border-t border-gray-100 px-5 py-3">
-            <div className="flex justify-between text-sm text-gray-500">
+          <div className="border-t border-line px-5 py-3">
+            <div className="flex justify-between text-sm text-muted">
               <span>Subtotal</span>
               <span>R$ {Number(order.subtotal).toFixed(2)}</span>
             </div>
             {Number(order.deliveryFee) > 0 && (
-              <div className="flex justify-between text-sm text-gray-500">
+              <div className="flex justify-between text-sm text-muted">
                 <span>Taxa de entrega</span>
                 <span>R$ {Number(order.deliveryFee).toFixed(2)}</span>
               </div>
@@ -227,7 +227,7 @@ export default async function OrderDetailPage({
                 <span>– R$ {Number(order.discount).toFixed(2)}</span>
               </div>
             )}
-            <div className="mt-2 flex justify-between font-semibold text-gray-900">
+            <div className="mt-2 flex justify-between font-semibold text-ink">
               <span>Total</span>
               <span>R$ {Number(order.total).toFixed(2)}</span>
             </div>
@@ -235,27 +235,27 @@ export default async function OrderDetailPage({
         </div>
 
         {/* Payment */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">
+        <div className="rounded-xl border border-line2 bg-paper p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
             Pagamento
           </h2>
           {order.payment ? (
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <dt className="text-gray-500">Método</dt>
+                <dt className="text-muted">Método</dt>
                 <dd className="font-medium">{order.payment.method}</dd>
               </div>
               <div>
-                <dt className="text-gray-500">Status</dt>
+                <dt className="text-muted">Status</dt>
                 <dd className="font-medium">{order.payment.status}</dd>
               </div>
               <div>
-                <dt className="text-gray-500">Valor</dt>
+                <dt className="text-muted">Valor</dt>
                 <dd className="font-medium">R$ {Number(order.payment.amount).toFixed(2)}</dd>
               </div>
               {order.payment.paidAt && (
                 <div>
-                  <dt className="text-gray-500">Pago em</dt>
+                  <dt className="text-muted">Pago em</dt>
                   <dd className="font-medium">
                     {new Date(order.payment.paidAt).toLocaleString("pt-BR")}
                   </dd>
@@ -263,13 +263,13 @@ export default async function OrderDetailPage({
               )}
             </dl>
           ) : (
-            <p className="text-sm text-gray-400">Nenhum registro de pagamento ainda.</p>
+            <p className="text-sm text-muted">Nenhum registro de pagamento ainda.</p>
           )}
         </div>
 
         {/* Saipos POS integration */}
         {(order.saiposStatus || order.saiposSentAt || order.saiposError) && (
-          <div className="rounded-xl border border-violet-100 bg-white p-5">
+          <div className="rounded-xl border border-violet-100 bg-paper p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-violet-400">
               Saipos PDV
             </h2>
@@ -288,7 +288,7 @@ export default async function OrderDetailPage({
             <dl className="grid grid-cols-2 gap-3 text-sm">
               {order.saiposStatus && (
                 <div>
-                  <dt className="text-gray-500">Status Saipos</dt>
+                  <dt className="text-muted">Status Saipos</dt>
                   <dd className="font-medium">
                     {order.saiposStatus === "AUTH_BLOCKED_403"
                       ? "Falha na integração (HTTP 403)"
@@ -302,7 +302,7 @@ export default async function OrderDetailPage({
               )}
               {order.saiposSentAt && (
                 <div>
-                  <dt className="text-gray-500">Enviado em</dt>
+                  <dt className="text-muted">Enviado em</dt>
                   <dd className="font-medium">
                     {new Date(order.saiposSentAt).toLocaleString("pt-BR")}
                   </dd>
@@ -310,13 +310,13 @@ export default async function OrderDetailPage({
               )}
               {order.saiposOrderId && (
                 <div>
-                  <dt className="text-gray-500">ID Saipos</dt>
+                  <dt className="text-muted">ID Saipos</dt>
                   <dd className="font-mono font-medium text-xs">{order.saiposOrderId}</dd>
                 </div>
               )}
               {order.saiposLastAttemptAt && (
                 <div>
-                  <dt className="text-gray-500">Última tentativa</dt>
+                  <dt className="text-muted">Última tentativa</dt>
                   <dd className="font-medium">
                     {new Date(order.saiposLastAttemptAt).toLocaleString("pt-BR")}
                   </dd>
@@ -324,13 +324,13 @@ export default async function OrderDetailPage({
               )}
               {order.saiposLastErrorCode && (
                 <div>
-                  <dt className="text-gray-500">Código de erro</dt>
+                  <dt className="text-muted">Código de erro</dt>
                   <dd className="font-mono font-medium text-red-600">{order.saiposLastErrorCode}</dd>
                 </div>
               )}
               {order.saiposError && (
                 <div className="col-span-2">
-                  <dt className="text-gray-500">Erro</dt>
+                  <dt className="text-muted">Erro</dt>
                   <dd className="font-medium text-red-600 text-xs break-words">{order.saiposError}</dd>
                 </div>
               )}

@@ -74,7 +74,7 @@ function calcDistanceFee(km: number, baseFee: number, perKm: number, includedKm:
 // ── Zone-bar color palettes ───────────────────────────────────────────────────
 
 const ZONE_BAR_COLORS = [
-  "bg-orange-400",
+  "bg-brand-400",
   "bg-violet-500",
   "bg-purple-500",
   "bg-fuchsia-500",
@@ -82,7 +82,7 @@ const ZONE_BAR_COLORS = [
 ];
 
 const ZONE_BG_COLORS = [
-  "bg-orange-50",
+  "bg-brand-50",
   "bg-violet-50",
   "bg-purple-50",
   "bg-fuchsia-50",
@@ -116,17 +116,17 @@ function CoverageOverview({
           title="Visão da cobertura"
           subtitle="Como o cliente verá sua entrega."
         />
-        <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
+        <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-orange-900">Toda a área de entrega</span>
-            <span className="text-sm font-bold text-orange-700">
+            <span className="text-sm font-semibold text-brand-900">Toda a área de entrega</span>
+            <span className="text-sm font-bold text-brand-700">
               {fee == null || fee === 0
                 ? <span className="text-green-600">Grátis</span>
                 : `R$ ${fee.toFixed(2).replace(".", ",")}`}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-orange-100">
-            <div className="h-2 w-full rounded-full bg-orange-400" />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-brand-100">
+            <div className="h-2 w-full rounded-full bg-brand-400" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
             {minutes != null && minutes > 0 && (
@@ -164,15 +164,15 @@ function CoverageOverview({
           title="Visão da cobertura"
           subtitle="Prévia das taxas que o cliente verá no checkout."
         />
-        <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
+        <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-orange-900">Frete por distância</span>
+            <span className="text-sm font-semibold text-brand-900">Frete por distância</span>
             {maxKm != null && (
-              <span className="text-sm font-bold text-orange-700">até {maxKm} km</span>
+              <span className="text-sm font-bold text-brand-700">até {maxKm} km</span>
             )}
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-orange-100">
-            <div className="h-2 w-full rounded-full bg-gradient-to-r from-orange-300 to-orange-600" />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-brand-100">
+            <div className="h-2 w-full rounded-full bg-gradient-to-r from-brand-300 to-brand-600" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
             {baseFee != null && inclKm != null && inclKm > 0 && (
@@ -225,8 +225,8 @@ function CoverageOverview({
           return (
             <div key={zone.id} className={`rounded-xl border border-white/80 p-3.5 ${bgColor}`}>
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-gray-900">{zone.name}</span>
-                <span className="shrink-0 text-sm font-bold text-gray-800">
+                <span className="text-sm font-semibold text-ink">{zone.name}</span>
+                <span className="shrink-0 text-sm font-bold text-ink">
                   {fee === 0
                     ? <span className="text-green-600">Grátis</span>
                     : `R$ ${fee.toFixed(2).replace(".", ",")}`}
@@ -242,10 +242,10 @@ function CoverageOverview({
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="text-xs text-gray-600">
+                <span className="text-xs text-ink2">
                   até <strong>{zone.maxDistanceKm} km</strong>
                 </span>
-                <span className="text-xs text-gray-600">
+                <span className="text-xs text-ink2">
                   ~<strong>{zone.estimatedMinutes} min</strong>
                 </span>
                 {zoneMin != null && zoneMin > 0 && (
@@ -342,8 +342,8 @@ function CommercialSummary({
   if (chips.length === 0) return null;
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4">
-      <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+    <div className="mt-4 border-t border-line pt-4">
+      <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-muted">
         Resumo para o cliente
       </p>
       <div className="flex flex-wrap gap-2">
@@ -504,7 +504,7 @@ function DeliverySimulator({
             <button
               type="button"
               onClick={() => { setResult(null); setDistanceKm(""); setOrderValue(""); }}
-              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50"
+              className="rounded-xl border border-line2 px-4 py-2 text-sm font-medium text-muted hover:bg-[#FAFAF8]"
             >
               Limpar
             </button>
@@ -540,19 +540,19 @@ function DeliverySimulator({
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-xs">
             {result.zoneName && (
               <>
-                <dt className="text-gray-500">Zona</dt>
-                <dd className="font-semibold text-gray-900">{result.zoneName}</dd>
+                <dt className="text-muted">Zona</dt>
+                <dd className="font-semibold text-ink">{result.zoneName}</dd>
               </>
             )}
             {result.estimatedMinutes != null && (
               <>
-                <dt className="text-gray-500">Prazo estimado</dt>
-                <dd className="font-semibold text-gray-900">~{result.estimatedMinutes} min</dd>
+                <dt className="text-muted">Prazo estimado</dt>
+                <dd className="font-semibold text-ink">~{result.estimatedMinutes} min</dd>
               </>
             )}
             <>
-              <dt className="text-gray-500">Taxa de entrega</dt>
-              <dd className="font-semibold text-gray-900">
+              <dt className="text-muted">Taxa de entrega</dt>
+              <dd className="font-semibold text-ink">
                 {result.fee === 0
                   ? "Grátis"
                   : `R$ ${result.fee.toFixed(2).replace(".", ",")}`}
@@ -560,13 +560,13 @@ function DeliverySimulator({
             </>
             {result.freeDeliveryApplied && (
               <>
-                <dt className="text-gray-500">Frete cobrado</dt>
+                <dt className="text-muted">Frete cobrado</dt>
                 <dd className="font-semibold text-green-700">Grátis 🎁</dd>
               </>
             )}
             {result.minOrderBlocked && result.minOrderRequired != null && (
               <>
-                <dt className="text-gray-500">Pedido mínimo</dt>
+                <dt className="text-muted">Pedido mínimo</dt>
                 <dd className="font-semibold text-red-600">
                   R$ {result.minOrderRequired.toFixed(2).replace(".", ",")} — não atingido
                 </dd>
@@ -582,10 +582,10 @@ function DeliverySimulator({
 // ── Chip ──────────────────────────────────────────────────────────────────────
 
 const CHIP_STYLES = {
-  indigo: "bg-orange-100 text-orange-700",
+  indigo: "bg-brand-100 text-brand-700",
   green:  "bg-green-100  text-green-700",
   amber:  "bg-amber-100  text-amber-700",
-  gray:   "bg-gray-100   text-gray-500",
+  gray:   "bg-[#F4F4F2]   text-muted",
 } as const;
 
 function Chip({
@@ -615,25 +615,25 @@ interface ZoneRowProps {
 function ZoneRow({ zone, index, onDelete, onToggle, onEdit }: ZoneRowProps) {
   return (
     <div
-      className={`rounded-xl border bg-white p-4 transition ${
-        zone.isActive ? "border-gray-200" : "border-dashed border-gray-200 opacity-60"
+      className={`rounded-xl border bg-paper p-4 transition ${
+        zone.isActive ? "border-line2" : "border-dashed border-line2 opacity-60"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-600">
             {index + 1}
           </span>
           <div>
-            <p className="text-sm font-semibold text-gray-900">{zone.name}</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-semibold text-ink">{zone.name}</p>
+            <p className="text-xs text-muted">
               até {zone.maxDistanceKm} km · {zone.estimatedMinutes} min
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-800">
+          <span className="text-sm font-semibold text-ink">
             {Number(zone.fee) === 0
               ? "Grátis"
               : `R$ ${Number(zone.fee).toFixed(2).replace(".", ",")}`}
@@ -641,7 +641,7 @@ function ZoneRow({ zone, index, onDelete, onToggle, onEdit }: ZoneRowProps) {
           <button
             type="button"
             onClick={() => onEdit(zone)}
-            className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            className="rounded-lg border border-line2 px-2.5 py-1 text-xs font-medium text-ink2 hover:bg-[#FAFAF8]"
           >
             Editar
           </button>
@@ -650,7 +650,7 @@ function ZoneRow({ zone, index, onDelete, onToggle, onEdit }: ZoneRowProps) {
             onClick={() => onToggle(zone.id, !zone.isActive)}
             className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
               zone.isActive
-                ? "border-gray-200 text-gray-500 hover:bg-gray-50"
+                ? "border-line2 text-muted hover:bg-[#FAFAF8]"
                 : "border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100"
             }`}
           >
@@ -667,7 +667,7 @@ function ZoneRow({ zone, index, onDelete, onToggle, onEdit }: ZoneRowProps) {
       </div>
 
       {zone.minOrderValue != null && Number(zone.minOrderValue) > 0 && (
-        <p className="mt-2 text-[11px] text-gray-400">
+        <p className="mt-2 text-[11px] text-muted">
           Pedido mínimo: R$ {Number(zone.minOrderValue).toFixed(2).replace(".", ",")}
         </p>
       )}
@@ -715,8 +715,8 @@ function ZoneEditor({ initial, onSave, onCancel, saving }: ZoneEditorProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className="mb-4 text-base font-semibold text-gray-900">
+      <div className="w-full max-w-md rounded-2xl bg-paper p-6 shadow-xl">
+        <h3 className="mb-4 text-base font-semibold text-ink">
           {initial?.id ? "Editar zona" : "Nova zona de entrega"}
         </h3>
 
@@ -795,7 +795,7 @@ function ZoneEditor({ initial, onSave, onCancel, saving }: ZoneEditorProps) {
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="rounded-xl border border-line2 px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8]"
             >
               Cancelar
             </button>
@@ -995,7 +995,7 @@ export default function DeliveryPage() {
     setShowZoneEditor(true);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   const activeZones = zones.filter((z) => z.isActive);
 
@@ -1017,8 +1017,8 @@ export default function DeliveryPage() {
         <PageCard>
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Modalidades de atendimento</h2>
-              <p className="mt-0.5 text-sm text-gray-500">Defina como seu restaurante recebe pedidos.</p>
+              <h2 className="text-base font-semibold text-ink">Modalidades de atendimento</h2>
+              <p className="mt-0.5 text-sm text-muted">Defina como seu restaurante recebe pedidos.</p>
             </div>
             {/* Live status chips — read-only summary */}
             <div className="flex shrink-0 items-center gap-1.5">
@@ -1026,7 +1026,7 @@ export default function DeliveryPage() {
                 className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                   form.enabled
                     ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-400"
+                    : "bg-[#F4F4F2] text-muted"
                 }`}
               >
                 {form.enabled ? "Delivery ativo" : "Delivery off"}
@@ -1035,7 +1035,7 @@ export default function DeliveryPage() {
                 className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                   form.pickupEnabled
                     ? "bg-blue-100 text-blue-700"
-                    : "bg-gray-100 text-gray-400"
+                    : "bg-[#F4F4F2] text-muted"
                 }`}
               >
                 {form.pickupEnabled ? "Retirada ativa" : "Retirada off"}
@@ -1050,7 +1050,7 @@ export default function DeliveryPage() {
               checked={form.enabled}
               onChange={(v) => setForm((f) => ({ ...f, enabled: v }))}
             />
-            <div className="border-t border-gray-100" />
+            <div className="border-t border-line" />
             <Toggle
               label="Retirada no balcão ativa"
               desc="Aceitar pedidos para retirada pelo cliente."
@@ -1061,7 +1061,7 @@ export default function DeliveryPage() {
 
           {/* Quick context: what the current delivery config means */}
           {form.enabled && (
-            <div className="mt-4 border-t border-gray-100 pt-4">
+            <div className="mt-4 border-t border-line pt-4">
               <div className="flex flex-wrap gap-2">
                 {form.mode === "simple" && toNum(form.fee) === 0 && (
                   <Chip color="green">Frete grátis (taxa fixa)</Chip>
@@ -1113,11 +1113,11 @@ export default function DeliveryPage() {
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "simple"
                       ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-gray-900">Taxa fixa</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
+                  <p className="text-sm font-semibold text-ink">Taxa fixa</p>
+                  <p className="mt-0.5 text-xs text-muted">
                     Cobrar sempre o mesmo valor de entrega.
                   </p>
                 </button>
@@ -1127,11 +1127,11 @@ export default function DeliveryPage() {
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "advanced"
                       ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-gray-900">Por zonas</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
+                  <p className="text-sm font-semibold text-ink">Por zonas</p>
+                  <p className="mt-0.5 text-xs text-muted">
                     Taxas e tempos diferentes por distância ou bairro.
                   </p>
                 </button>
@@ -1141,11 +1141,11 @@ export default function DeliveryPage() {
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "distance"
                       ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-gray-900">Por distância</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
+                  <p className="text-sm font-semibold text-ink">Por distância</p>
+                  <p className="mt-0.5 text-xs text-muted">
                     Taxa calculada com base nos km percorridos.
                   </p>
                 </button>
@@ -1155,11 +1155,11 @@ export default function DeliveryPage() {
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "manual"
                       ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      : "border-line2 hover:border-line2 hover:bg-[#FAFAF8]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-gray-900">Manual</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
+                  <p className="text-sm font-semibold text-ink">Manual</p>
+                  <p className="mt-0.5 text-xs text-muted">
                     Frete combinado pelo restaurante a cada pedido.
                   </p>
                 </button>
@@ -1229,8 +1229,8 @@ export default function DeliveryPage() {
               <PageCard>
                 <div className="mb-5 flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-semibold text-gray-900">Zonas de entrega</h2>
-                    <p className="mt-0.5 text-sm text-gray-500">
+                    <h2 className="text-base font-semibold text-ink">Zonas de entrega</h2>
+                    <p className="mt-0.5 text-sm text-muted">
                       {zones.length === 0
                         ? "Adicione zonas para definir taxas por distância."
                         : `${activeZones.length} zona${activeZones.length !== 1 ? "s" : ""} ativa${activeZones.length !== 1 ? "s" : ""}`}
@@ -1246,8 +1246,8 @@ export default function DeliveryPage() {
                 </div>
 
                 {zones.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center">
-                    <p className="text-sm text-gray-400">Nenhuma zona configurada.</p>
+                  <div className="rounded-xl border border-dashed border-line2 py-10 text-center">
+                    <p className="text-sm text-muted">Nenhuma zona configurada.</p>
                     <button
                       type="button"
                       onClick={openNewZone}
@@ -1275,7 +1275,7 @@ export default function DeliveryPage() {
                 )}
 
                 {zones.length > 0 && (
-                  <div className="mt-4 border-t border-gray-100 pt-4">
+                  <div className="mt-4 border-t border-line pt-4">
                     <Field label="Área de cobertura (descrição)">
                       <textarea
                         className={INPUT + " resize-none"}
@@ -1302,8 +1302,8 @@ export default function DeliveryPage() {
                 {/* Main fields: intuitive sentence layout */}
                 <div className="space-y-5">
                   {/* "Até X km: R$ Y" */}
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                    <p className="mb-3 text-sm font-semibold text-gray-700">Entregas até</p>
+                  <div className="rounded-xl border border-line bg-[#FAFAF8] p-4">
+                    <p className="mb-3 text-sm font-semibold text-ink2">Entregas até</p>
                     <div className="flex flex-wrap items-end gap-3">
                       <div className="w-28">
                         <Field label="Distância (km)">
@@ -1318,7 +1318,7 @@ export default function DeliveryPage() {
                           />
                         </Field>
                       </div>
-                      <p className="mb-2 text-sm text-gray-500">km custam</p>
+                      <p className="mb-2 text-sm text-muted">km custam</p>
                       <div className="w-32">
                         <Field label="Taxa (R$)">
                           <input
@@ -1336,8 +1336,8 @@ export default function DeliveryPage() {
                   </div>
 
                   {/* "+ R$ X por km adicional" */}
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                    <p className="mb-3 text-sm font-semibold text-gray-700">Cada km extra além disso</p>
+                  <div className="rounded-xl border border-line bg-[#FAFAF8] p-4">
+                    <p className="mb-3 text-sm font-semibold text-ink2">Cada km extra além disso</p>
                     <div className="flex flex-wrap items-end gap-3">
                       <div className="w-32">
                         <Field label="Valor por km (R$)">
@@ -1352,7 +1352,7 @@ export default function DeliveryPage() {
                           />
                         </Field>
                       </div>
-                      <p className="mb-2 text-sm text-gray-500">/ km</p>
+                      <p className="mb-2 text-sm text-muted">/ km</p>
                     </div>
                   </div>
 
@@ -1374,16 +1374,16 @@ export default function DeliveryPage() {
 
                 {/* Live preview chips */}
                 {(toNum(form.distanceBaseFee) != null || toNum(form.distancePricePerKm) != null) && (
-                  <div className="mt-5 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-orange-700 mb-2">Prévia de preços</p>
-                    <div className="flex flex-wrap gap-2 text-xs text-orange-800">
+                  <div className="mt-5 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-brand-700 mb-2">Prévia de preços</p>
+                    <div className="flex flex-wrap gap-2 text-xs text-brand-800">
                       {[1, 3, 5, 7, 10].filter((km) => toNum(form.distanceMaxKm) == null || km <= (toNum(form.distanceMaxKm) ?? 99)).map((km) => {
                         const base  = toNum(form.distanceBaseFee) ?? 0;
                         const perK  = toNum(form.distancePricePerKm) ?? 0;
                         const inclK = toNum(form.distanceMinFeeKm) ?? 0;
                         const fee   = calcDistanceFee(km, base, perK, inclK);
                         return (
-                          <span key={km} className="rounded-full bg-orange-100 px-2.5 py-1 font-medium">
+                          <span key={km} className="rounded-full bg-brand-100 px-2.5 py-1 font-medium">
                             {km} km → R$ {fee.toFixed(2).replace(".", ",")}
                           </span>
                         );
@@ -1399,11 +1399,11 @@ export default function DeliveryPage() {
 
                 {/* Advanced settings — collapsed by default */}
                 <details className="mt-5 group">
-                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-muted hover:text-ink2">
                     <span className="transition-transform group-open:rotate-90">▶</span>
                     Configurações avançadas
                   </summary>
-                  <div className="mt-4 space-y-4 pl-4 border-l-2 border-gray-100">
+                  <div className="mt-4 space-y-4 pl-4 border-l-2 border-line">
                     <Field
                       label="Se não conseguirmos calcular a distância: cobrar R$"
                       hint="Taxa usada quando o endereço do cliente não pode ser verificado. Deixe em branco para bloquear o pedido nesses casos."

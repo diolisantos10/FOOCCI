@@ -216,7 +216,7 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-2xl px-4 pt-6 sm:px-6"><div className="h-40 animate-pulse rounded-2xl bg-gray-100" /></div>;
+    return <div className="mx-auto max-w-2xl px-4 pt-6 sm:px-6"><div className="h-40 animate-pulse rounded-2xl bg-[#F4F4F2]" /></div>;
   }
 
   const connected = status?.connected ?? false;
@@ -225,8 +225,8 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-6 sm:px-6 space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-base font-bold text-gray-900">Google</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-base font-bold text-ink">Google</h1>
+        <p className="mt-1 text-sm text-muted">
           Conecte sua conta Google uma vez para usar o <strong>Meu Negócio</strong> (avaliações) e o{" "}
           <strong>Analytics GA4</strong> (métricas do site). Um clique, sem códigos.
         </p>
@@ -237,15 +237,15 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
       )}
 
       {/* Connection card */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="rounded-2xl border border-line2 bg-paper p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 text-lg text-white">G</div>
             <div>
-              <p className="text-sm font-semibold text-gray-900">Conta Google</p>
+              <p className="text-sm font-semibold text-ink">Conta Google</p>
               {connected
                 ? <p className="text-xs text-green-700">✓ Conectado{status?.googleEmail ? ` · ${status.googleEmail}` : ""}</p>
-                : <p className="text-xs text-gray-500">Não conectado</p>}
+                : <p className="text-xs text-muted">Não conectado</p>}
             </div>
           </div>
           {connected ? (
@@ -265,35 +265,35 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
           )}
         </div>
         {!status?.featureEnabled && !connected && (
-          <p className="mt-3 text-xs text-gray-400">Disponível quando ativado pela Foocci.</p>
+          <p className="mt-3 text-xs text-muted">Disponível quando ativado pela Foocci.</p>
         )}
         {!isManager && (
-          <p className="mt-3 text-xs text-gray-400">Apenas o proprietário ou gerente pode conectar o Google.</p>
+          <p className="mt-3 text-xs text-muted">Apenas o proprietário ou gerente pode conectar o Google.</p>
         )}
       </div>
 
       {connected && (
         <>
           {/* Google Meu Negócio */}
-          <section className="rounded-2xl border border-gray-200 bg-white p-5">
+          <section className="rounded-2xl border border-line2 bg-paper p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-900">Google Meu Negócio</h2>
-              <span className="text-[10px] font-semibold text-gray-400">Avaliações &amp; perfil</span>
+              <h2 className="text-sm font-bold text-ink">Google Meu Negócio</h2>
+              <span className="text-[10px] font-semibold text-muted">Avaliações &amp; perfil</span>
             </div>
 
             {!status?.hasBusinessScope ? (
               <p className="mt-2 text-xs text-amber-600">Faltou liberar o acesso ao Meu Negócio. Clique em Conectar de novo e marque todas as caixas.</p>
             ) : status?.businessLocationName ? (
               <div className="mt-3">
-                <p className="text-xs text-gray-500">Local selecionado</p>
-                <p className="text-sm font-semibold text-gray-800">{status.businessLocationName}</p>
+                <p className="text-xs text-muted">Local selecionado</p>
+                <p className="text-sm font-semibold text-ink">{status.businessLocationName}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" disabled={!!busy} onClick={loadReviews}
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
                     {busy === "reviews" ? "Carregando…" : "Ver avaliações"}
                   </button>
                   <button type="button" disabled={!!busy} onClick={() => { setLocations(null); void loadLocations(); }}
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                    className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-muted hover:bg-[#FAFAF8] disabled:opacity-50">
                     Trocar local
                   </button>
                 </div>
@@ -301,10 +301,10 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-xs text-gray-500">Escolha o local do seu restaurante no Google Meu Negócio.</p>
+                <p className="text-xs text-muted">Escolha o local do seu restaurante no Google Meu Negócio.</p>
                 {!locations ? (
                   <button type="button" disabled={!!busy} onClick={loadLocations}
-                    className="mt-2 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-50">
+                    className="mt-2 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-50">
                     {busy === "locations" ? "Buscando…" : "Buscar meus locais"}
                   </button>
                 ) : (
@@ -315,10 +315,10 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
           </section>
 
           {/* Google Analytics GA4 */}
-          <section className="rounded-2xl border border-gray-200 bg-white p-5">
+          <section className="rounded-2xl border border-line2 bg-paper p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-900">Métricas do seu site (Google Analytics)</h2>
-              <span className="text-[10px] font-semibold text-gray-400">Métricas do site</span>
+              <h2 className="text-sm font-bold text-ink">Métricas do seu site (Google Analytics)</h2>
+              <span className="text-[10px] font-semibold text-muted">Métricas do site</span>
             </div>
 
             {!status?.hasAnalyticsScope ? (
@@ -327,31 +327,31 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
               <div className="mt-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-500">Propriedade selecionada</p>
-                    <p className="text-sm font-semibold text-gray-800">{status.ga4PropertyName}</p>
+                    <p className="text-xs text-muted">Propriedade selecionada</p>
+                    <p className="text-sm font-semibold text-ink">{status.ga4PropertyName}</p>
                   </div>
                   <div className="flex gap-1">
                     {[7, 28, 90].map((d) => (
                       <button key={d} type="button" onClick={() => setRangeDays(d)}
-                        className={`rounded-md px-2 py-1 text-[11px] font-semibold ${rangeDays === d ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                        className={`rounded-md px-2 py-1 text-[11px] font-semibold ${rangeDays === d ? "bg-blue-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"}`}>
                         {d}d
                       </button>
                     ))}
                   </div>
                 </div>
                 {snapshot ? <SnapshotBlock snapshot={snapshot} loading={busy === "snapshot"} />
-                  : <p className="mt-3 text-xs text-gray-400">{busy === "snapshot" ? "Carregando métricas…" : "—"}</p>}
+                  : <p className="mt-3 text-xs text-muted">{busy === "snapshot" ? "Carregando métricas…" : "—"}</p>}
                 <button type="button" disabled={!!busy} onClick={() => { setProperties(null); void loadProperties(); }}
-                  className="mt-3 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                  className="mt-3 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-muted hover:bg-[#FAFAF8] disabled:opacity-50">
                   Trocar propriedade
                 </button>
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-xs text-gray-500">Escolha o site que você acompanha no Google Analytics.</p>
+                <p className="text-xs text-muted">Escolha o site que você acompanha no Google Analytics.</p>
                 {!properties ? (
                   <button type="button" disabled={!!busy} onClick={loadProperties}
-                    className="mt-2 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-50">
+                    className="mt-2 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-50">
                     {busy === "properties" ? "Buscando…" : "Buscar minhas propriedades"}
                   </button>
                 ) : (
@@ -367,13 +367,13 @@ export function GoogleIntegrationClient({ userRole }: { userRole: string }) {
       {isManager && status?.env && (
         <div>
           <button type="button" onClick={() => setShowAdvanced((s) => !s)}
-            className="text-[11px] font-medium text-gray-400 hover:text-gray-600">
+            className="text-[11px] font-medium text-muted hover:text-ink2">
             {showAdvanced ? "Ocultar avançado" : "Avançado · configuração da plataforma"}
           </button>
           {showAdvanced && (
-            <div className="mt-2 space-y-2 rounded-lg bg-gray-50 px-3 py-3 text-[11px] text-gray-600">
+            <div className="mt-2 space-y-2 rounded-lg bg-[#FAFAF8] px-3 py-3 text-[11px] text-ink2">
               <button type="button" onClick={copyInstructions}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink2 hover:bg-[#FAFAF8]">
                 {copied ? "Copiado ✓" : "Copiar instruções para configurar Google"}
               </button>
               <div className="space-y-0.5 pt-1">
@@ -396,10 +396,10 @@ function LocationPicker({ locations, busy, onSelect }: { locations: BusinessLoca
     <div className="mt-2 space-y-1.5">
       {locations.map((loc) => (
         <button key={loc.name} type="button" disabled={busy} onClick={() => onSelect(loc)}
-          className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50/40 disabled:opacity-50">
+          className="flex w-full items-center justify-between rounded-lg border border-line2 px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50/40 disabled:opacity-50">
           <div>
-            <p className="text-sm font-medium text-gray-800">{loc.title}</p>
-            {loc.address && <p className="text-[11px] text-gray-400">{loc.address}</p>}
+            <p className="text-sm font-medium text-ink">{loc.title}</p>
+            {loc.address && <p className="text-[11px] text-muted">{loc.address}</p>}
           </div>
           <span className="text-xs font-semibold text-blue-600">Selecionar</span>
         </button>
@@ -414,10 +414,10 @@ function PropertyPicker({ properties, busy, onSelect }: { properties: Ga4Propert
     <div className="mt-2 space-y-1.5">
       {properties.map((p) => (
         <button key={p.property} type="button" disabled={busy} onClick={() => onSelect(p)}
-          className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50/40 disabled:opacity-50">
+          className="flex w-full items-center justify-between rounded-lg border border-line2 px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50/40 disabled:opacity-50">
           <div>
-            <p className="text-sm font-medium text-gray-800">{p.displayName}</p>
-            <p className="text-[11px] text-gray-400">{p.account}</p>
+            <p className="text-sm font-medium text-ink">{p.displayName}</p>
+            <p className="text-[11px] text-muted">{p.account}</p>
           </div>
           <span className="text-xs font-semibold text-blue-600">Selecionar</span>
         </button>
@@ -434,23 +434,23 @@ function ReviewsBlock({ reviews }: { reviews: ReviewSummary }) {
     <div className="mt-3 space-y-2">
       <div className="flex items-center gap-3 text-xs">
         {reviews.averageRating != null && (
-          <span className="font-semibold text-gray-800">★ {reviews.averageRating.toFixed(1)}</span>
+          <span className="font-semibold text-ink">★ {reviews.averageRating.toFixed(1)}</span>
         )}
         {reviews.totalReviewCount != null && (
-          <span className="text-gray-500">{reviews.totalReviewCount} avaliações</span>
+          <span className="text-muted">{reviews.totalReviewCount} avaliações</span>
         )}
       </div>
       {reviews.reviews.length === 0 ? (
-        <p className="text-[11px] text-gray-400">Nenhuma avaliação recente.</p>
+        <p className="text-[11px] text-muted">Nenhuma avaliação recente.</p>
       ) : (
         <div className="space-y-1.5">
           {reviews.reviews.slice(0, 8).map((r, i) => (
-            <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+            <div key={i} className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-700">{r.reviewer}</span>
+                <span className="text-xs font-medium text-ink2">{r.reviewer}</span>
                 {r.starRating != null && <span className="text-[11px] text-amber-500">{"★".repeat(r.starRating)}</span>}
               </div>
-              {r.comment && <p className="mt-0.5 text-[11px] text-gray-500 line-clamp-3">{r.comment}</p>}
+              {r.comment && <p className="mt-0.5 text-[11px] text-muted line-clamp-3">{r.comment}</p>}
             </div>
           ))}
         </div>
@@ -474,20 +474,20 @@ function SnapshotBlock({ snapshot, loading }: { snapshot: Ga4Snapshot; loading: 
     <div className={`mt-3 ${loading ? "opacity-50" : ""}`}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {cells.map(([label, val]) => (
-          <div key={label} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-            <p className="text-lg font-bold text-gray-900">{val.toLocaleString("pt-BR")}</p>
-            <p className="text-[10px] text-gray-500">{label}</p>
+          <div key={label} className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2">
+            <p className="text-lg font-bold text-ink">{val.toLocaleString("pt-BR")}</p>
+            <p className="text-[10px] text-muted">{label}</p>
           </div>
         ))}
       </div>
       {snapshot.topPages.length > 0 && (
         <div className="mt-3">
-          <p className="mb-1 text-[11px] font-semibold text-gray-500">Páginas mais vistas</p>
+          <p className="mb-1 text-[11px] font-semibold text-muted">Páginas mais vistas</p>
           <div className="space-y-1">
             {snapshot.topPages.map((p, i) => (
               <div key={i} className="flex items-center justify-between text-[11px]">
-                <span className="truncate text-gray-600">{p.path}</span>
-                <span className="ml-2 shrink-0 font-semibold text-gray-800">{p.views.toLocaleString("pt-BR")}</span>
+                <span className="truncate text-ink2">{p.path}</span>
+                <span className="ml-2 shrink-0 font-semibold text-ink">{p.views.toLocaleString("pt-BR")}</span>
               </div>
             ))}
           </div>

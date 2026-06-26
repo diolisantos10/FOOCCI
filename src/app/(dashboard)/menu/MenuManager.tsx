@@ -182,8 +182,8 @@ function ToggleSwitch({
         aria-checked={checked}
         disabled={disabled}
         onClick={onChange}
-        className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 ${
-          checked ? "bg-orange-500" : "bg-line2"
+        className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+          checked ? "bg-brand-500" : "bg-line2"
         }`}
       >
         <span
@@ -975,9 +975,9 @@ function SortableItemRow({
                               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-ink2 hover:bg-brand-50 disabled:opacity-50 transition-colors"
                             >
                               {placingIn === cat.id ? (
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-orange-400 border-t-transparent shrink-0" />
+                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-400 border-t-transparent shrink-0" />
                               ) : (
-                                <span className="h-2.5 w-2.5 rounded-full bg-orange-300 shrink-0" />
+                                <span className="h-2.5 w-2.5 rounded-full bg-brand-300 shrink-0" />
                               )}
                               {cat.name}
                             </button>
@@ -1057,7 +1057,7 @@ function AddItemForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="Nome do item"
           required
-          className="flex-1 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+          className="flex-1 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
         />
         <input
           value={price}
@@ -1067,12 +1067,12 @@ function AddItemForm({
           step="0.01"
           min="0.01"
           required
-          className="w-24 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+          className="w-24 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+          className="rounded bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
         >
           {busy ? <Spinner /> : "OK"}
         </button>
@@ -1256,7 +1256,7 @@ function CategoryCard({
               setCatForm((f) => ({ ...f, name: e.target.value }))
             }
             placeholder="Nome da categoria"
-            className="w-full rounded border border-line2 px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-orange-400"
+            className="w-full rounded border border-line2 px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-brand-400"
           />
           <input
             value={catForm.description}
@@ -1264,14 +1264,14 @@ function CategoryCard({
               setCatForm((f) => ({ ...f, description: e.target.value }))
             }
             placeholder="Descrição (opcional)"
-            className="w-full rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            className="w-full rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
           />
           {error && <InlineError message={error} />}
           <div className="flex gap-2">
             <button
               onClick={saveCat}
               disabled={busy}
-              className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              className="rounded bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
               {busy ? <Spinner /> : "Salvar"}
             </button>
@@ -1374,7 +1374,7 @@ function CategoryCard({
             items={category.items.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-line">
               {category.items.map((item) => (
                 <SortableItemRow
                   key={item.id}
@@ -1496,7 +1496,7 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+        className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
       >
         + Nova categoria
       </button>
@@ -1506,7 +1506,7 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-xl border border-orange-200 bg-brand-50 p-4 space-y-2"
+      className="rounded-xl border border-brand-200 bg-brand-50 p-4 space-y-2"
     >
       <p className="text-sm font-semibold text-ink2">Nova categoria</p>
       <input
@@ -1514,7 +1514,7 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         placeholder="Nome (ex: Pizzas, Bebidas)"
         required
-        className="w-full rounded border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+        className="w-full rounded border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
       />
       <input
         value={form.description}
@@ -1522,14 +1522,14 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
           setForm((f) => ({ ...f, description: e.target.value }))
         }
         placeholder="Descrição (opcional)"
-        className="w-full rounded border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+        className="w-full rounded border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
       />
       {error && <InlineError message={error} />}
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={busy}
-          className="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+          className="rounded bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
         >
           {busy ? <Spinner /> : "Criar categoria"}
         </button>
@@ -1749,7 +1749,7 @@ function NewItemModal({
                       <select
                         value={form.categoryId}
                         onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                        className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                       >
                         {manualCategories.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
@@ -1766,7 +1766,7 @@ function NewItemModal({
                       onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                       placeholder="Nome do produto"
                       required
-                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
 
@@ -1778,7 +1778,7 @@ function NewItemModal({
                       onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                       placeholder="Descrição exibida no cardápio (opcional)"
                       rows={4}
-                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                     <p className="text-[11px] text-muted">Explique o produto de forma clara para o cliente.</p>
                   </div>
@@ -1796,7 +1796,7 @@ function NewItemModal({
                         step="0.01"
                         min="0.01"
                         required
-                        className="w-full rounded-lg border border-line2 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        className="w-full rounded-lg border border-line2 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                       />
                     </div>
                   </div>
@@ -1813,8 +1813,8 @@ function NewItemModal({
                             onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
                             className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
                               form.servingSize === n
-                                ? "border-orange-500 bg-orange-500 text-white"
-                                : "border-line2 text-ink2 hover:border-orange-300"
+                                ? "border-brand-500 bg-brand-500 text-white"
+                                : "border-line2 text-ink2 hover:border-brand-300"
                             }`}
                           >
                             {n === 4 ? "4+" : n}
@@ -1829,7 +1829,7 @@ function NewItemModal({
                         onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
                         placeholder="ex: 300g, 500ml"
                         maxLength={50}
-                        className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                       />
                     </div>
                   </div>
@@ -1934,7 +1934,7 @@ function NewItemModal({
               <button
                 type="submit"
                 disabled={busy || manualCategories.length === 0}
-                className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
               >
                 {busy ? <Spinner /> : "Criar produto"}
               </button>
@@ -2064,7 +2064,7 @@ function TopBar({
           <button
             type="button"
             onClick={onNewItem}
-            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
           >
             + Novo Produto
           </button>
@@ -2091,7 +2091,7 @@ function CategoryFilter({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded-lg border border-line2 bg-paper px-3 py-2 text-sm text-ink2 focus:outline-none focus:ring-1 focus:ring-orange-400"
+      className="rounded-lg border border-line2 bg-paper px-3 py-2 text-sm text-ink2 focus:outline-none focus:ring-1 focus:ring-brand-400"
     >
       <option value="">Todas categorias</option>
       {categories.map((c) => (
@@ -2192,7 +2192,7 @@ function SortableVariantRow({
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Nome (ex: 350ml)"
-              className="flex-1 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="flex-1 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
             />
             <input
               value={form.price}
@@ -2202,7 +2202,7 @@ function SortableVariantRow({
               type="number"
               step="0.01"
               min="0"
-              className="w-24 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="w-24 rounded border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
             />
           </div>
           <div>
@@ -2216,7 +2216,7 @@ function SortableVariantRow({
               type="button"
               onClick={handleSave}
               disabled={busy}
-              className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              className="rounded bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
               {busy ? <Spinner /> : "Salvar"}
             </button>
@@ -2707,7 +2707,7 @@ function EditItemModal({
                   value={form.code}
                   onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
                   placeholder="Código do produto (opcional)"
-                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
               </div>
 
@@ -2736,7 +2736,7 @@ function EditItemModal({
             </div>
 
             {/* ── Main content ─────────────────────────────────────────── */}
-            <div className="flex-1 min-w-0 divide-y divide-gray-100">
+            <div className="flex-1 min-w-0 divide-y divide-line">
 
           {/* ── Informações básicas ───────────────────────────────────── */}
           <div className="px-5 py-4 space-y-3">
@@ -2750,7 +2750,7 @@ function EditItemModal({
                 <select
                   value={form.categoryId}
                   onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 >
                   {manualCategories.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -2767,7 +2767,7 @@ function EditItemModal({
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Nome do item"
-                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
             </div>
 
@@ -2778,7 +2778,7 @@ function EditItemModal({
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Descrição exibida no cardápio (opcional)"
                 rows={4}
-                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
               <p className="text-[11px] text-muted">Explique o produto de forma clara para o cliente.</p>
             </div>
@@ -2790,7 +2790,7 @@ function EditItemModal({
                 onChange={(e) => setForm((f) => ({ ...f, ingredients: e.target.value }))}
                 placeholder="Ex: frango grelhado, queijo prato, alface, tomate — usado pela IA para sugestões"
                 rows={3}
-                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
             </div>
 
@@ -2817,7 +2817,7 @@ function EditItemModal({
                   type="number"
                   step="0.01"
                   min="0.01"
-                  className="w-full rounded-lg border border-line2 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
               </div>
             </div>
@@ -2843,7 +2843,7 @@ function EditItemModal({
                       type="number"
                       step="0.01"
                       min="0.01"
-                      className="w-full rounded-lg border border-line2 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
                 </div>
@@ -2860,8 +2860,8 @@ function EditItemModal({
                     onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
                     className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${
                       form.servingSize === n
-                        ? "border-orange-500 bg-orange-500 text-white shadow-sm"
-                        : "border-line2 bg-paper text-muted hover:border-orange-300 hover:text-brand-600"
+                        ? "border-brand-500 bg-brand-500 text-white shadow-sm"
+                        : "border-line2 bg-paper text-muted hover:border-brand-300 hover:text-brand-600"
                     }`}
                   >
                     {n === 4 ? "4+" : n}
@@ -2882,7 +2882,7 @@ function EditItemModal({
                 onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
                 placeholder="ex: 300g, 500ml, 2 fatias"
                 maxLength={50}
-                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
             </div>
           </div>
@@ -3129,7 +3129,7 @@ function EditItemModal({
                 {extras.map((e) => (
                   <li
                     key={e.id}
-                    className="flex items-center gap-3 rounded-xl border border-orange-100 bg-brand-50 px-3 py-2.5"
+                    className="flex items-center gap-3 rounded-xl border border-brand-100 bg-brand-50 px-3 py-2.5"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium text-ink">{e.name}</p>
@@ -3137,7 +3137,7 @@ function EditItemModal({
                         {e.quantity > 1 ? `até ${e.quantity}x` : "1 unidade"}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-lg bg-orange-500 px-2 py-1 text-xs font-bold text-white">
+                    <span className="shrink-0 rounded-lg bg-brand-500 px-2 py-1 text-xs font-bold text-white">
                       +R$ {e.price.toFixed(2)}
                     </span>
                     <button
@@ -3162,14 +3162,14 @@ function EditItemModal({
             )}
 
             {addingExtra ? (
-              <div className="rounded-xl border border-dashed border-orange-300 bg-brand-50 p-3 space-y-2">
+              <div className="rounded-xl border border-dashed border-brand-300 bg-brand-50 p-3 space-y-2">
                 <p className="text-[11px] font-medium text-brand-700">Novo adicional</p>
                 <div className="flex gap-2">
                   <input
                     value={newExtra.name}
                     onChange={(e) => { setExtraAddError(""); setNewExtra((f) => ({ ...f, name: e.target.value })); }}
                     placeholder="Nome (ex: Queijo extra)"
-                    className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400 ${extraAddError && !newExtra.name.trim() ? "border-red-400" : "border-line2"}`}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400 ${extraAddError && !newExtra.name.trim() ? "border-red-400" : "border-line2"}`}
                   />
                   <input
                     value={newExtra.quantity}
@@ -3178,7 +3178,7 @@ function EditItemModal({
                     type="number"
                     min="1"
                     step="1"
-                    className="w-16 rounded-lg border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-16 rounded-lg border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                   <div className="relative w-24">
                     <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-muted">R$</span>
@@ -3189,7 +3189,7 @@ function EditItemModal({
                       type="number"
                       step="0.01"
                       min="0"
-                      className="w-full rounded-lg border border-line2 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-line2 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
                 </div>
@@ -3199,7 +3199,7 @@ function EditItemModal({
                     type="button"
                     onClick={handleAddExtra}
                     disabled={extraAddBusy}
-                    className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                    className="rounded-lg bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
                   >
                     {extraAddBusy ? <Spinner /> : "Adicionar"}
                   </button>
@@ -3278,14 +3278,14 @@ function EditItemModal({
                 )}
 
                 {addingVariant ? (
-                  <div className="rounded-xl border border-dashed border-orange-300 bg-brand-50 p-3 space-y-2">
+                  <div className="rounded-xl border border-dashed border-brand-300 bg-brand-50 p-3 space-y-2">
                     <p className="text-[11px] font-medium text-brand-700">Nova variante</p>
                     <div className="flex gap-2">
                       <input
                         value={newVariant.name}
                         onChange={(e) => { setAddError(""); setNewVariant((f) => ({ ...f, name: e.target.value })); }}
                         placeholder="Nome (ex: 350ml, Grande)"
-                        className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400 ${addError && !newVariant.name.trim() ? "border-red-400" : "border-line2"}`}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400 ${addError && !newVariant.name.trim() ? "border-red-400" : "border-line2"}`}
                       />
                       <div className="relative w-24">
                         <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-muted">R$</span>
@@ -3297,7 +3297,7 @@ function EditItemModal({
                           type="number"
                           step="0.01"
                           min="0"
-                          className="w-full rounded-lg border border-line2 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          className="w-full rounded-lg border border-line2 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                         />
                       </div>
                     </div>
@@ -3312,7 +3312,7 @@ function EditItemModal({
                         type="button"
                         onClick={handleAddVariant}
                         disabled={addBusy}
-                        className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                        className="rounded-lg bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
                       >
                         {addBusy ? <Spinner /> : "Adicionar"}
                       </button>
@@ -3449,7 +3449,7 @@ function EditItemModal({
               type="button"
               onClick={handleSave}
               disabled={busy}
-              className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
               {busy ? <Spinner /> : "Salvar alterações"}
             </button>
@@ -3602,7 +3602,7 @@ function BulkPriceModal({
                 <select
                   value={scope}
                   onChange={(e) => setScope(e.target.value)}
-                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 >
                   <option value="">Todo o cardápio</option>
                   {categories.map((c) => (
@@ -3621,7 +3621,7 @@ function BulkPriceModal({
                 <select
                   value={action}
                   onChange={(e) => setAction(e.target.value as BulkAction)}
-                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 >
                   <option value="increase">Aumentar em</option>
                   <option value="decrease">Diminuir em</option>
@@ -3641,7 +3641,7 @@ function BulkPriceModal({
                   step="0.01"
                   min="0.01"
                   placeholder="0,00"
-                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
               </div>
 
@@ -3668,7 +3668,7 @@ function BulkPriceModal({
                   type="button"
                   onClick={handlePreview}
                   disabled={!value || itemCount === 0}
-                  className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                  className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
                 >
                   Pré-visualizar
                 </button>
@@ -3727,7 +3727,7 @@ function BulkPriceModal({
                   type="button"
                   onClick={handleConfirm}
                   disabled={busy || itemCount === 0}
-                  className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                  className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
                 >
                   {busy ? <Spinner /> : "Confirmar"}
                 </button>
@@ -3755,7 +3755,7 @@ function BulkPriceModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600"
+                  className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-600"
                 >
                   Fechar
                 </button>

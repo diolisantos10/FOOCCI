@@ -14,7 +14,7 @@ export async function apiFetch(url: string, method = "GET", body?: object) {
 }
 
 export const INPUT =
-  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
+  "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
 
 export const SELECT = INPUT;
 
@@ -29,9 +29,9 @@ export function Field({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-ink2">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -98,17 +98,17 @@ export function Toggle({
           onChange={(e) => onChange(e.target.checked)}
         />
         <div
-          className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`}
+          className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-line2"}`}
         />
         <div
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-paper shadow transition-transform ${
             checked ? "translate-x-4" : "translate-x-0.5"
           }`}
         />
       </div>
       <div>
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        {desc && <p className="text-xs text-gray-500">{desc}</p>}
+        <p className="text-sm font-medium text-ink">{label}</p>
+        {desc && <p className="text-xs text-muted">{desc}</p>}
       </div>
     </label>
   );
@@ -122,7 +122,7 @@ export function PageCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-gray-100 bg-white p-6 shadow-sm ${className}`}>
+    <div className={`rounded-2xl border border-line bg-paper p-6 shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -137,8 +137,8 @@ export function SectionHeading({
 }) {
   return (
     <div className="mb-5">
-      <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-      {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+      <h2 className="text-base font-semibold text-ink">{title}</h2>
+      {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export default async function ProjectDetailPage({ params }: Params) {
     <>
       <TopBar title={project.name} />
       <Suspense fallback={
-        <div className="flex items-center justify-center py-24 text-sm text-gray-400">
+        <div className="flex items-center justify-center py-24 text-sm text-muted">
           Carregando…
         </div>
       }>

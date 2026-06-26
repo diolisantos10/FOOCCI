@@ -39,7 +39,7 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; bg: string; text: string }
 > = {
-  DRAFT:     { label: "Rascunho",  bg: "bg-gray-100",   text: "text-gray-600"  },
+  DRAFT:     { label: "Rascunho",  bg: "bg-[#F4F4F2]",   text: "text-ink2"  },
   ACTIVE:    { label: "Ativa",     bg: "bg-green-100",  text: "text-green-700" },
   PAUSED:    { label: "Pausada",   bg: "bg-yellow-100", text: "text-yellow-700"},
   SCHEDULED: { label: "Agendada", bg: "bg-blue-100",   text: "text-blue-700"  },
@@ -134,7 +134,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+    <p className="text-[11px] font-bold uppercase tracking-widest text-muted mb-3">
       {children}
     </p>
   );
@@ -151,15 +151,15 @@ function FormGroup({
 }) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      <label className="block text-sm font-medium text-ink2">{label}</label>
       {children}
-      {hint && <p className="text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }
 
 const inputCls =
-  "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 placeholder:text-gray-400";
+  "w-full rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 placeholder:text-muted";
 
 // ── Automations ────────────────────────────────────────────────────────────────
 
@@ -268,9 +268,9 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-muted">
         Mensagens enviadas automaticamente via WhatsApp para aumentar o retorno dos seus clientes.
-        <span className="ml-1 text-orange-500 font-medium">Requer integração WhatsApp ativa.</span>
+        <span className="ml-1 text-brand-600 font-medium">Requer integração WhatsApp ativa.</span>
       </p>
 
       {(["REACTIVATION", "BIRTHDAY", "POST_ORDER"] as const).map((trigger) => {
@@ -281,16 +281,16 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
         const tr = testResult[trigger];
 
         return (
-          <div key={trigger} className={`rounded-2xl border bg-white shadow-sm overflow-hidden transition-all ${
-            a.isEnabled ? "border-green-200" : "border-gray-100"
+          <div key={trigger} className={`rounded-2xl border bg-paper shadow-sm overflow-hidden transition-all ${
+            a.isEnabled ? "border-green-200" : "border-line"
           }`}>
             <div className="flex items-center gap-4 px-4 py-4">
               <span className="text-2xl">{meta.icon}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900">{meta.label}</p>
-                <p className="text-xs text-gray-500">{meta.description}</p>
+                <p className="text-sm font-bold text-ink">{meta.label}</p>
+                <p className="text-xs text-muted">{meta.description}</p>
                 {stat?.lastRunAt && (
-                  <p className="mt-0.5 text-[10px] text-gray-400">
+                  <p className="mt-0.5 text-[10px] text-muted">
                     Último envio:{" "}
                     {new Date(stat.lastRunAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
                     {" · "}{stat.lastSent} enviadas
@@ -302,58 +302,58 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
               <button
                 type="button"
                 onClick={() => handleUpdate(trigger, { isEnabled: !a.isEnabled })}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${a.isEnabled ? "bg-green-500" : "bg-gray-200"}`}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${a.isEnabled ? "bg-green-500" : "bg-line2"}`}
                 aria-label={a.isEnabled ? "Desativar" : "Ativar"}
               >
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${a.isEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-transform ${a.isEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>
 
               <button
                 onClick={() => setExpanded(isOpen ? null : trigger)}
-                className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-xs font-medium text-muted hover:text-ink2 transition-colors"
               >
                 {isOpen ? "▲" : "▼"}
               </button>
             </div>
 
             {isOpen && (
-              <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
+              <div className="border-t border-line bg-[#FAFAF8] p-4 space-y-4">
                 {trigger !== "BIRTHDAY" && (
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    <label className="block text-xs font-semibold text-ink2 mb-1">
                       {trigger === "REACTIVATION" ? "Disparar após quantos dias sem pedido" : "Disparar quantos dias após o pedido"}
                     </label>
                     <input
                       type="number" min={0} max={365}
                       value={a.triggerAfterDays}
                       onChange={(e) => handleUpdate(trigger, { triggerAfterDays: parseInt(e.target.value) || 0 })}
-                      className="w-32 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                      className="w-32 rounded-lg border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
-                    <span className="ml-2 text-xs text-gray-400">dias</span>
+                    <span className="ml-2 text-xs text-muted">dias</span>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Mensagem</label>
+                  <label className="block text-xs font-semibold text-ink2 mb-1">Mensagem</label>
                   <textarea
                     rows={4}
                     value={a.messageTemplate || placeholders[trigger as keyof typeof placeholders] || ""}
                     onChange={(e) => handleUpdate(trigger, { messageTemplate: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
+                    className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
                     placeholder={placeholders[trigger as keyof typeof placeholders]}
                   />
-                  <p className="mt-1 text-[10px] text-gray-400">
-                    Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para o nome do cliente.
+                  <p className="mt-1 text-[10px] text-muted">
+                    Use <code className="bg-[#F4F4F2] px-1 rounded">{"{nome}"}</code> para o nome do cliente.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-2">Desconto opcional</label>
+                  <label className="block text-xs font-semibold text-ink2 mb-2">Desconto opcional</label>
                   <div className="flex flex-wrap gap-3 items-center">
                     <select
                       value={a.discountType ?? ""}
                       onChange={(e) => handleUpdate(trigger, { discountType: e.target.value || null, discountValue: null })}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                      className="rounded-lg border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
                     >
                       <option value="">Sem desconto</option>
                       <option value="PERCENTAGE">% Desconto</option>
@@ -366,7 +366,7 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
                         max={a.discountType === "PERCENTAGE" ? 100 : undefined}
                         value={a.discountValue ?? ""}
                         onChange={(e) => handleUpdate(trigger, { discountValue: parseFloat(e.target.value) || null })}
-                        className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                        className="w-28 rounded-lg border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
                         placeholder={a.discountType === "PERCENTAGE" ? "10" : "5.00"}
                       />
                     )}
@@ -387,7 +387,7 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
                     onClick={() => testAutomation(trigger)}
                     disabled={testing === trigger || !a.isEnabled}
                     title={!a.isEnabled ? "Ative a automação para testar" : undefined}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 shadow-sm"
+                    className="rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors disabled:opacity-50 shadow-sm"
                   >
                     {testing === trigger ? "Executando…" : "▶ Executar agora"}
                   </button>
@@ -395,7 +395,7 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
 
                 {tr !== undefined && tr !== null && (
                   <p className={`text-xs font-medium rounded-lg px-3 py-2 ${
-                    tr.sent > 0 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"
+                    tr.sent > 0 ? "bg-green-50 text-green-700" : "bg-[#F4F4F2] text-ink2"
                   }`}>
                     {tr.sent > 0
                       ? `✓ ${tr.sent} mensage${tr.sent === 1 ? "m enviada" : "ns enviadas"} de ${tr.targeted} cliente${tr.targeted === 1 ? "" : "s"} elegíveis`
@@ -523,18 +523,18 @@ function PromotionDrawer({
       />
 
       {/* Full content-area panel */}
-      <div className="fixed inset-y-0 left-0 lg:left-56 right-0 z-50 flex flex-col bg-white shadow-2xl">
+      <div className="fixed inset-y-0 left-0 lg:left-56 right-0 z-50 flex flex-col bg-paper shadow-2xl">
 
         {/* Header: tabs + close */}
-        <div className="flex items-center gap-4 border-b border-gray-100 px-6 py-3">
-          <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        <div className="flex items-center gap-4 border-b border-line px-6 py-3">
+          <div className="flex gap-1 rounded-xl bg-[#F4F4F2] p-1">
             <button
               type="button"
               onClick={() => setDrawerTab("promotion")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                 drawerTab === "promotion"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-paper text-ink shadow-sm"
+                  : "text-muted hover:text-ink2"
               }`}
             >
               {editing ? "Editar promoção" : "Nova promoção"}
@@ -544,8 +544,8 @@ function PromotionDrawer({
               onClick={() => setDrawerTab("automations")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                 drawerTab === "automations"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-paper text-ink shadow-sm"
+                  : "text-muted hover:text-ink2"
               }`}
             >
               🤖 Automações WhatsApp
@@ -554,7 +554,7 @@ function PromotionDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink2"
           >
             ✕
           </button>
@@ -613,7 +613,7 @@ function PromotionDrawer({
                   className={`rounded-xl border-2 px-3 py-2.5 text-sm font-medium transition-all text-left ${
                     form.type === t
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                      : "border-line2 bg-paper text-ink2 hover:border-line2"
                   }`}
                 >
                   {TYPE_LABELS[t]}
@@ -661,10 +661,10 @@ function PromotionDrawer({
           {/* ── Banner opcional ── */}
           <div>
             <SectionTitle>Banner promocional</SectionTitle>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:bg-gray-100 transition-colors">
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 hover:bg-[#F4F4F2] transition-colors">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 accent-brand-500"
+                className="h-4 w-4 rounded border-line2 accent-brand-500"
                 checked={!!form.bannerImageUrl || showBannerSection}
                 onChange={(e) => {
                   if (!e.target.checked) {
@@ -675,21 +675,21 @@ function PromotionDrawer({
                   }
                 }}
               />
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-ink2">
                 Adicionar banner a esta promoção
               </span>
             </label>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-muted">
               O banner aparecerá no topo do cardápio QR e do delivery online enquanto a promoção estiver ativa.
             </p>
 
             {(showBannerSection || !!form.bannerImageUrl) && (
               <div className="mt-3 space-y-3">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   Imagem retangular (proporção 3:1 recomendada, ex: 1200×400 px).
                 </p>
                 {form.bannerImageUrl ? (
-                  <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                  <div className="relative overflow-hidden rounded-xl border border-line2 bg-[#FAFAF8]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={form.bannerImageUrl}
@@ -710,14 +710,14 @@ function PromotionDrawer({
                     className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ${
                       uploading
                         ? "border-brand-300 bg-brand-50"
-                        : "border-gray-300 bg-gray-50 hover:border-brand-400 hover:bg-brand-50"
+                        : "border-line2 bg-[#FAFAF8] hover:border-brand-400 hover:bg-brand-50"
                     }`}
                   >
                     <span className="text-2xl">{uploading ? "⏳" : "🖼️"}</span>
-                    <span className="text-sm font-semibold text-gray-700">
+                    <span className="text-sm font-semibold text-ink2">
                       {uploading ? "Enviando…" : "Clique para fazer upload do banner"}
                     </span>
-                    <span className="text-xs text-gray-400">JPEG, PNG ou WebP · máx. 5 MB</span>
+                    <span className="text-xs text-muted">JPEG, PNG ou WebP · máx. 5 MB</span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
@@ -747,7 +747,7 @@ function PromotionDrawer({
                   className={`rounded-xl border-2 px-3 py-2.5 text-sm font-medium transition-all ${
                     form.target === t
                       ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                      : "border-line2 bg-paper text-ink2 hover:border-line2"
                   }`}
                 >
                   {TARGET_LABELS[t]}
@@ -793,8 +793,8 @@ function PromotionDrawer({
             </div>
 
             <div className="mt-4">
-              <p className="text-sm font-medium text-gray-700 mb-2">Dias da semana</p>
-              <p className="text-xs text-gray-400 mb-2">Deixe em branco para todos os dias</p>
+              <p className="text-sm font-medium text-ink2 mb-2">Dias da semana</p>
+              <p className="text-xs text-muted mb-2">Deixe em branco para todos os dias</p>
               <div className="flex flex-wrap gap-2">
                 {DAY_LABELS.map((label, i) => (
                   <button
@@ -804,7 +804,7 @@ function PromotionDrawer({
                     className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                       form.daysOfWeek.includes(i)
                         ? "bg-brand-500 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
                     }`}
                   >
                     {label}
@@ -876,25 +876,25 @@ function PromotionDrawer({
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 accent-brand-500"
+                  className="h-4 w-4 rounded border-line2 accent-brand-500"
                   checked={form.oneTimePerUser}
                   onChange={(e) => set("oneTimePerUser", e.target.checked)}
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Uso único por cliente</p>
-                  <p className="text-xs text-gray-400">Cada cliente só pode usar esta promoção uma vez</p>
+                  <p className="text-sm font-medium text-ink2">Uso único por cliente</p>
+                  <p className="text-xs text-muted">Cada cliente só pode usar esta promoção uma vez</p>
                 </div>
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 accent-brand-500"
+                  className="h-4 w-4 rounded border-line2 accent-brand-500"
                   checked={form.combinable}
                   onChange={(e) => set("combinable", e.target.checked)}
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Combinável com outras promoções</p>
-                  <p className="text-xs text-gray-400">Permite acumular com outros descontos ativos</p>
+                  <p className="text-sm font-medium text-ink2">Combinável com outras promoções</p>
+                  <p className="text-xs text-muted">Permite acumular com outros descontos ativos</p>
                 </div>
               </label>
             </div>
@@ -911,11 +911,11 @@ function PromotionDrawer({
 
         {/* Footer — only for promotion tab */}
         {drawerTab === "promotion" && (
-        <div className="border-t border-gray-100 px-6 py-4 flex gap-3 max-w-3xl w-full mx-auto">
+        <div className="border-t border-line px-6 py-4 flex gap-3 max-w-3xl w-full mx-auto">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex-1 rounded-xl border border-line2 bg-paper py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
           >
             Cancelar
           </button>
@@ -968,10 +968,10 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
 
 function MetricTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className="text-xl font-bold text-gray-900 leading-tight">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    <div className="rounded-xl border border-line bg-[#FAFAF8] p-4">
+      <p className="text-xs text-muted mb-1">{label}</p>
+      <p className="text-xl font-bold text-ink leading-tight">{value}</p>
+      {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -1012,16 +1012,16 @@ function PromotionMetricsDrawer({
         className="fixed inset-y-0 left-0 lg:left-56 right-0 z-40 bg-black/20 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="fixed inset-y-0 left-0 lg:left-56 right-0 z-50 flex flex-col bg-white shadow-2xl">
+      <div className="fixed inset-y-0 left-0 lg:left-56 right-0 z-50 flex flex-col bg-paper shadow-2xl">
 
         {/* Header */}
-        <div className="flex items-center gap-4 border-b border-gray-100 px-6 py-3">
-          <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        <div className="flex items-center gap-4 border-b border-line px-6 py-3">
+          <div className="flex gap-1 rounded-xl bg-[#F4F4F2] p-1">
             <button
               type="button"
               onClick={() => setTab("resumo")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                tab === "resumo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                tab === "resumo" ? "bg-paper text-ink shadow-sm" : "text-muted hover:text-ink2"
               }`}
             >
               📊 Resumo
@@ -1030,7 +1030,7 @@ function PromotionMetricsDrawer({
               type="button"
               onClick={() => setTab("pedidos")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                tab === "pedidos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                tab === "pedidos" ? "bg-paper text-ink shadow-sm" : "text-muted hover:text-ink2"
               }`}
             >
               Pedidos {data && data.uses > 0 ? `(${data.uses})` : ""}
@@ -1039,7 +1039,7 @@ function PromotionMetricsDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink2"
           >
             ✕
           </button>
@@ -1053,7 +1053,7 @@ function PromotionMetricsDrawer({
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <StatusBadge status={promotion.displayStatus} />
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[11px] font-medium text-ink2">
                   {TYPE_LABELS[promotion.type] ?? promotion.type}
                 </span>
                 {promotion.couponCode && (
@@ -1062,8 +1062,8 @@ function PromotionMetricsDrawer({
                   </span>
                 )}
               </div>
-              <h2 className="text-lg font-bold text-gray-900">{promotion.name}</h2>
-              <p className="mt-1 text-sm text-gray-500">
+              <h2 className="text-lg font-bold text-ink">{promotion.name}</h2>
+              <p className="mt-1 text-sm text-muted">
                 {discountLabel} · {CHANNEL_LABELS[promotion.channel]}
                 {promotion.maxUses ? ` · Limite: ${promotion.maxUses} usos` : ""}
                 {promotion.oneTimePerUser ? " · 1× por cliente" : ""}
@@ -1085,10 +1085,10 @@ function PromotionMetricsDrawer({
             {!loading && !error && data && tab === "resumo" && (
               <>
                 {data.uses === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-12 text-center">
+                  <div className="rounded-xl border border-dashed border-line2 bg-[#FAFAF8] py-12 text-center">
                     <p className="text-3xl mb-2">📭</p>
-                    <p className="text-sm font-semibold text-gray-600">Nenhum pedido com este cupom ainda</p>
-                    <p className="text-xs text-gray-400 mt-1">Os dados aparecerão aqui conforme o cupom for utilizado.</p>
+                    <p className="text-sm font-semibold text-ink2">Nenhum pedido com este cupom ainda</p>
+                    <p className="text-xs text-muted mt-1">Os dados aparecerão aqui conforme o cupom for utilizado.</p>
                   </div>
                 ) : (
                   <>
@@ -1116,47 +1116,47 @@ function PromotionMetricsDrawer({
             {!loading && !error && data && tab === "pedidos" && (
               <>
                 {data.orders.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-12 text-center">
+                  <div className="rounded-xl border border-dashed border-line2 bg-[#FAFAF8] py-12 text-center">
                     <p className="text-3xl mb-2">📭</p>
-                    <p className="text-sm font-semibold text-gray-600">Nenhum pedido com este cupom ainda</p>
+                    <p className="text-sm font-semibold text-ink2">Nenhum pedido com este cupom ainda</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-gray-100">
+                  <div className="overflow-x-auto rounded-xl border border-line">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50">
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Pedido</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Cliente</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Data</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Subtotal</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Desconto</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Total</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Tipo</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Pagamento</th>
+                        <tr className="border-b border-line bg-[#FAFAF8]">
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted">Pedido</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted">Cliente</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted">Data</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted">Subtotal</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted">Desconto</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted">Total</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted">Tipo</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted">Pagamento</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.orders.map((o, i) => (
-                          <tr key={o.id} className={`border-b border-gray-50 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
-                            <td className="px-4 py-2.5 font-mono text-xs text-gray-600">#{o.orderRef}</td>
+                          <tr key={o.id} className={`border-b border-line ${i % 2 === 0 ? "bg-paper" : "bg-[#FAFAF8]/50"}`}>
+                            <td className="px-4 py-2.5 font-mono text-xs text-ink2">#{o.orderRef}</td>
                             <td className="px-4 py-2.5">
-                              <p className="font-medium text-gray-900 truncate max-w-[120px]">{o.customerName ?? "—"}</p>
+                              <p className="font-medium text-ink truncate max-w-[120px]">{o.customerName ?? "—"}</p>
                               {o.customerPhone && (
-                                <p className="text-xs text-gray-400">{o.customerPhone}</p>
+                                <p className="text-xs text-muted">{o.customerPhone}</p>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                            <td className="px-4 py-2.5 text-xs text-muted whitespace-nowrap">
                               {fmtDate(o.createdAt)}
                             </td>
-                            <td className="px-4 py-2.5 text-right text-sm text-gray-700">R$ {fmtBrl(o.subtotal)}</td>
-                            <td className="px-4 py-2.5 text-right text-sm text-orange-600">−R$ {fmtBrl(o.discount)}</td>
-                            <td className="px-4 py-2.5 text-right text-sm font-semibold text-gray-900">R$ {fmtBrl(o.total)}</td>
-                            <td className="px-4 py-2.5 text-xs text-gray-500">{ORDER_TYPE_LABEL[o.type] ?? o.type}</td>
+                            <td className="px-4 py-2.5 text-right text-sm text-ink2">R$ {fmtBrl(o.subtotal)}</td>
+                            <td className="px-4 py-2.5 text-right text-sm text-brand-600">−R$ {fmtBrl(o.discount)}</td>
+                            <td className="px-4 py-2.5 text-right text-sm font-semibold text-ink">R$ {fmtBrl(o.total)}</td>
+                            <td className="px-4 py-2.5 text-xs text-muted">{ORDER_TYPE_LABEL[o.type] ?? o.type}</td>
                             <td className="px-4 py-2.5 text-xs">
                               <span className={`rounded-full px-2 py-0.5 font-medium ${
                                 o.paymentStatus === "PAID"
                                   ? "bg-green-100 text-green-700"
-                                  : "bg-gray-100 text-gray-600"
+                                  : "bg-[#F4F4F2] text-ink2"
                               }`}>
                                 {o.paymentStatus ? (PAYMENT_STATUS_LABEL[o.paymentStatus] ?? o.paymentStatus) : "—"}
                               </span>
@@ -1166,7 +1166,7 @@ function PromotionMetricsDrawer({
                       </tbody>
                     </table>
                     {data.orders.length >= 200 && (
-                      <p className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+                      <p className="px-4 py-2 text-xs text-muted border-t border-line">
                         Exibindo os 200 pedidos mais recentes.
                       </p>
                     )}
@@ -1228,12 +1228,12 @@ function PromotionCard({
         : TYPE_LABELS[promotion.type] ?? promotion.type;
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className="rounded-2xl border border-line bg-paper p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <StatusBadge status={promotion.displayStatus} />
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+            <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[11px] font-medium text-ink2">
               {TYPE_LABELS[promotion.type] ?? promotion.type}
             </span>
             {promotion.couponCode && (
@@ -1242,13 +1242,13 @@ function PromotionCard({
               </span>
             )}
             {promotion.bannerImageUrl && (
-              <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600">
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-600">
                 🖼 banner
               </span>
             )}
           </div>
-          <p className="text-sm font-bold text-gray-900 truncate">{promotion.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+          <p className="text-sm font-bold text-ink truncate">{promotion.name}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted">
             <span className="font-semibold text-brand-600">{discountText}</span>
             <span>·</span>
             <span>{CHANNEL_LABELS[promotion.channel]}</span>
@@ -1256,12 +1256,12 @@ function PromotionCard({
             <span>{validityText}</span>
           </div>
           {promotion.minOrderValue != null && (
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-muted">
               Pedido mínimo: R${promotion.minOrderValue.toFixed(2)}
             </p>
           )}
           {promotion.daysOfWeek.length > 0 && (
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-muted">
               {promotion.daysOfWeek.map((d) => DAY_LABELS[d]).join(", ")}
               {promotion.timeFrom && promotion.timeTo ? ` · ${promotion.timeFrom}–${promotion.timeTo}` : ""}
             </p>
@@ -1271,7 +1271,7 @@ function PromotionCard({
 
       {/* Banner preview */}
       {promotion.type === "BANNER" && promotion.bannerImageUrl && (
-        <div className="mt-3 overflow-hidden rounded-xl border border-gray-100">
+        <div className="mt-3 overflow-hidden rounded-xl border border-line">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={promotion.bannerImageUrl}
@@ -1284,31 +1284,31 @@ function PromotionCard({
 
       {/* Compact metrics strip — shown when there are recorded uses */}
       {metrics && metrics.uses > 0 && (
-        <div className="mt-3 grid grid-cols-4 gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
+        <div className="mt-3 grid grid-cols-4 gap-2 rounded-xl bg-[#FAFAF8] px-3 py-2.5">
           <div className="text-center">
-            <p className="text-[10px] text-gray-400 leading-tight">Usos</p>
-            <p className="text-xs font-bold text-gray-900">{metrics.uses}</p>
+            <p className="text-[10px] text-muted leading-tight">Usos</p>
+            <p className="text-xs font-bold text-ink">{metrics.uses}</p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] text-gray-400 leading-tight">Receita</p>
+            <p className="text-[10px] text-muted leading-tight">Receita</p>
             <p className="text-xs font-bold text-green-700">R$&nbsp;{fmtBrl(metrics.revenue)}</p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] text-gray-400 leading-tight">Desconto</p>
-            <p className="text-xs font-bold text-orange-600">−R$&nbsp;{fmtBrl(metrics.discountGiven)}</p>
+            <p className="text-[10px] text-muted leading-tight">Desconto</p>
+            <p className="text-xs font-bold text-brand-600">−R$&nbsp;{fmtBrl(metrics.discountGiven)}</p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] text-gray-400 leading-tight">Clientes</p>
-            <p className="text-xs font-bold text-gray-900">{metrics.uniqueCustomers}</p>
+            <p className="text-[10px] text-muted leading-tight">Clientes</p>
+            <p className="text-xs font-bold text-ink">{metrics.uniqueCustomers}</p>
           </div>
         </div>
       )}
 
       {/* Actions */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
         <button
           onClick={onEdit}
-          className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+          className="rounded-lg bg-[#F4F4F2] px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-line2 transition-colors"
         >
           Editar
         </button>
@@ -1320,7 +1320,7 @@ function PromotionCard({
         </button>
         <button
           onClick={onDuplicate}
-          className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+          className="rounded-lg bg-[#F4F4F2] px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-line2 transition-colors"
         >
           Duplicar
         </button>
@@ -1453,7 +1453,7 @@ export function PromotionsClient({
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
                 statusFilter === f.value
                   ? "bg-brand-600 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
               }`}
             >
               {f.label}
@@ -1475,12 +1475,12 @@ export function PromotionsClient({
 
       {/* Promotion list */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-[#FAFAF8] py-16 text-center">
           <span className="mb-3 text-4xl">🎁</span>
-          <p className="text-sm font-semibold text-gray-700">
+          <p className="text-sm font-semibold text-ink2">
             {statusFilter === "ALL" ? "Nenhuma promoção criada" : "Nenhuma promoção neste status"}
           </p>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-muted">
             {statusFilter === "ALL" && "Crie sua primeira promoção para atrair mais clientes."}
           </p>
           {statusFilter === "ALL" && (

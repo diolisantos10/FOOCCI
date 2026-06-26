@@ -46,9 +46,9 @@ function fmtDate(iso: string | null): string {
 }
 
 function EnvCheck({ ok, label, soft }: { ok: boolean; label: string; soft?: boolean }) {
-  const okColor = soft ? "text-gray-600" : "text-emerald-600";
+  const okColor = soft ? "text-ink2" : "text-emerald-600";
   return (
-    <div className={`text-xs ${ok ? okColor : soft ? "text-gray-400" : "text-red-500"}`}>
+    <div className={`text-xs ${ok ? okColor : soft ? "text-muted" : "text-red-500"}`}>
       {ok ? "✓" : soft ? "○" : "✗"} {label}
     </div>
   );
@@ -124,16 +124,16 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
     await load();
   }
 
-  if (loading) return <div className="p-6 text-sm text-gray-500">Carregando…</div>;
+  if (loading) return <div className="p-6 text-sm text-muted">Carregando…</div>;
 
   const connected = view?.connected ?? false;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8 space-y-6 text-gray-800">
+    <div className="mx-auto max-w-3xl px-6 py-8 space-y-6 text-ink">
       <div>
-        <Link href="/integracoes" className="text-sm text-gray-500 hover:text-gray-700">← Integrações</Link>
+        <Link href="/integracoes" className="text-sm text-muted hover:text-ink2">← Integrações</Link>
         <h1 className="mt-1 text-2xl font-bold">Facebook</h1>
-        <p className="text-sm text-gray-500">Receba mensagens do Facebook Messenger na Central de Atendimento.</p>
+        <p className="text-sm text-muted">Receba mensagens do Facebook Messenger na Central de Atendimento.</p>
       </div>
 
       {msg && (
@@ -148,16 +148,16 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Seleção de Página (após retorno do OAuth) ── */}
       {flow === "select_page" && (
-        <section className="rounded-xl border border-sky-200 bg-white p-4">
+        <section className="rounded-xl border border-sky-200 bg-paper p-4">
           <h2 className="text-sm font-semibold">Escolha a Página do Facebook</h2>
-          <p className="mt-1 text-sm text-gray-500">Esta é a Página que enviará e receberá mensagens no Messenger.</p>
+          <p className="mt-1 text-sm text-muted">Esta é a Página que enviará e receberá mensagens no Messenger.</p>
           <div className="mt-3 space-y-2">
-            {candidates.length === 0 && <p className="text-sm text-gray-500">Nenhuma Página encontrada.</p>}
+            {candidates.length === 0 && <p className="text-sm text-muted">Nenhuma Página encontrada.</p>}
             {candidates.map((c) => (
-              <div key={c.pageId} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+              <div key={c.pageId} className="flex items-center justify-between rounded-lg border border-line2 px-3 py-2">
                 <div>
                   <p className="text-sm font-medium">{c.pageName || "Página do Facebook"}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted">
                     {c.hasInstagram
                       ? `Instagram conectado: ${c.instagramUsername ? "@" + c.instagramUsername : "sim"}`
                       : "Página do Facebook sem Instagram profissional."}
@@ -178,15 +178,15 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Não conectado: Conectar com Facebook ── */}
       {flow === "normal" && !connected && (
-        <section className="rounded-xl border border-gray-200 bg-white p-6 text-center">
-          <p className="text-sm text-gray-600">Conecte sua Página do Facebook para receber mensagens do Messenger na Central.</p>
+        <section className="rounded-xl border border-line2 bg-paper p-6 text-center">
+          <p className="text-sm text-ink2">Conecte sua Página do Facebook para receber mensagens do Messenger na Central.</p>
           <a
             href="/api/integrations/meta/oauth/start?from=facebook"
             className="mt-3 inline-block rounded-md bg-[#1877F2] px-5 py-2.5 font-semibold text-white hover:bg-[#166fe0]"
           >
             Conectar com Facebook
           </a>
-          <p className="mt-2 text-xs text-gray-400">Você será direcionado para a Meta para autorizar o Foocci.</p>
+          <p className="mt-2 text-xs text-muted">Você será direcionado para a Meta para autorizar o Foocci.</p>
           {view && !view.metaConnectAvailable && (
             <div className="mx-auto mt-3 max-w-md rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">
               <p>Conexão automática indisponível no momento. Fale com o suporte Foocci.</p>
@@ -216,11 +216,11 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
               <button
                 onClick={disconnect}
                 disabled={saving}
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-white disabled:opacity-50"
+                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-paper disabled:opacity-50"
               >
                 Desconectar
               </button>
-              <Link href="/atendimento" className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-white">
+              <Link href="/atendimento" className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">
                 Abrir Central de Atendimento
               </Link>
             </div>
@@ -241,11 +241,11 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Avançado · Variáveis de ambiente (support gate) ── */}
       {supportMode && (
-      <details className="rounded-xl border border-gray-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-600">Avançado · Uso interno Foocci</summary>
-        <div className="mt-3 space-y-4 text-sm text-gray-600">
+      <details className="rounded-xl border border-line2 bg-paper p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-ink2">Avançado · Uso interno Foocci</summary>
+        <div className="mt-3 space-y-4 text-sm text-ink2">
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Variáveis no servidor</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Variáveis no servidor</p>
             <EnvCheck
               ok={!!(view?.missingEnv && !view.missingEnv.some((m) => m.includes("APP_ID")))}
               label="META_APP_ID ou FACEBOOK_APP_ID"
@@ -262,15 +262,15 @@ export function FacebookIntegrationClient({ userRole }: { userRole: string }) {
           </div>
 
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Fluxo de teste</p>
-            <div className="text-xs text-gray-500">• 1. Conectar com Facebook → escolher Página</div>
-            <div className="text-xs text-gray-500">• 2. Enviar uma mensagem via Messenger da Página</div>
-            <div className="text-xs text-gray-500">• 3. Conferir na Central de Atendimento (selo Messenger)</div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Fluxo de teste</p>
+            <div className="text-xs text-muted">• 1. Conectar com Facebook → escolher Página</div>
+            <div className="text-xs text-muted">• 2. Enviar uma mensagem via Messenger da Página</div>
+            <div className="text-xs text-muted">• 3. Conferir na Central de Atendimento (selo Messenger)</div>
           </div>
 
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Nota sobre token</p>
-            <div className="text-xs text-gray-500">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Nota sobre token</p>
+            <div className="text-xs text-muted">
               O mesmo Page Access Token é usado para o Instagram Direct e o Facebook Messenger.
               Conectar via Instagram também habilita o Messenger automaticamente (e vice-versa).
             </div>

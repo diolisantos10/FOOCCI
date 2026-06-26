@@ -68,7 +68,7 @@ export default function PaymentsPage() {
     setSaving(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   const activeCount = Object.values(form).filter(Boolean).length;
 
@@ -87,13 +87,13 @@ export default function PaymentsPage() {
             <div
               key={key}
               className={`flex items-center gap-4 rounded-xl px-4 py-4 transition-colors ${
-                form[key as MethodKey] ? "bg-brand-50" : "bg-gray-50"
+                form[key as MethodKey] ? "bg-brand-50" : "bg-[#FAFAF8]"
               }`}
             >
               <span className="text-2xl">{icon}</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-900">{label}</p>
-                <p className="text-xs text-gray-500">{desc}</p>
+                <p className="text-sm font-semibold text-ink">{label}</p>
+                <p className="text-xs text-muted">{desc}</p>
               </div>
               <Toggle
                 label=""
@@ -106,8 +106,8 @@ export default function PaymentsPage() {
       </PageCard>
 
       {/* Info note — no marketing */}
-      <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-xs text-gray-400">
-        Configure o link de pagamento em <strong className="text-gray-600">Integrações</strong> quando precisar cobrar online antes da entrega.
+      <div className="rounded-xl border border-line bg-paper px-4 py-3 text-xs text-muted">
+        Configure o link de pagamento em <strong className="text-ink2">Integrações</strong> quando precisar cobrar online antes da entrega.
       </div>
 
       <SaveButton saving={saving} />

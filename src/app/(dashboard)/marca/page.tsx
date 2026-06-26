@@ -159,7 +159,7 @@ function Chips({
             className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
               active
                 ? "border-brand-500 bg-brand-600 text-white shadow-sm"
-                : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                : "border-line2 bg-paper text-ink2 hover:border-line2 hover:bg-[#FAFAF8]"
             }`}
           >
             {opt.emoji && <span className="mr-1.5">{opt.emoji}</span>}
@@ -215,7 +215,7 @@ function MultiChips({
               className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
                 active
                   ? "border-brand-500 bg-brand-600 text-white"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  : "border-line2 bg-paper text-ink2 hover:border-line2 hover:bg-[#FAFAF8]"
               }`}
             >
               {trait}
@@ -258,13 +258,13 @@ function MultiChips({
             }}
             placeholder="Adicionar traço personalizado…"
             maxLength={30}
-            className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
+            className="rounded-xl border border-line2 px-3 py-1.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
           />
           <button
             type="button"
             onClick={addCustom}
             disabled={!custom.trim()}
-            className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+            className="rounded-xl border border-line2 px-3 py-1.5 text-sm text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition"
           >
             +
           </button>
@@ -272,7 +272,7 @@ function MultiChips({
       )}
 
       {value.length > 0 && (
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted">
           {value.length}/{max} traços selecionados
         </p>
       )}
@@ -422,7 +422,7 @@ export default function MarcaPage() {
     setSaving(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
+  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -435,7 +435,7 @@ export default function MarcaPage() {
           subtitle="Usada no cardápio digital e nas comunicações com o cliente."
         />
         <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-line2 bg-[#FAFAF8]">
             {form.logoUrl ? (
               <img src={form.logoUrl} alt="Logo" className="h-full w-full object-contain p-1" />
             ) : (
@@ -458,14 +458,14 @@ export default function MarcaPage() {
               <span
                 className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
                   logoUploading
-                    ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                    : "border-brand-300 bg-white text-brand-600 hover:bg-brand-50 cursor-pointer"
+                    ? "border-line2 bg-[#FAFAF8] text-muted cursor-not-allowed"
+                    : "border-brand-300 bg-paper text-brand-600 hover:bg-brand-50 cursor-pointer"
                 }`}
               >
                 {logoUploading ? "Enviando…" : form.logoUrl ? "Trocar logo" : "Fazer upload"}
               </span>
             </label>
-            <p className="text-xs text-gray-400">JPEG, PNG ou WebP · máx. 5 MB</p>
+            <p className="text-xs text-muted">JPEG, PNG ou WebP · máx. 5 MB</p>
             {logoUploadError && (
               <p className="text-xs text-red-500">{logoUploadError}</p>
             )}
@@ -728,13 +728,13 @@ export default function MarcaPage() {
                 className={`flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-center transition-all ${
                   active
                     ? "border-brand-400 bg-brand-50 shadow-sm"
-                    : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                    : "border-line2 bg-paper hover:border-line2 hover:bg-[#FAFAF8]"
                 }`}
               >
                 <span className="text-2xl leading-none">{opt.emoji}</span>
                 <span
                   className={`text-[10px] font-medium leading-tight ${
-                    active ? "text-brand-700" : "text-gray-600"
+                    active ? "text-brand-700" : "text-ink2"
                   }`}
                 >
                   {opt.label}
@@ -768,7 +768,7 @@ export default function MarcaPage() {
                 maxLength={7}
                 className={`${INPUT} w-32 font-mono`}
               />
-              <div className="h-10 w-10 shrink-0 rounded-xl border border-gray-100 shadow-sm" style={{ backgroundColor: form.brandPrimaryColor || "#6366f1" }} />
+              <div className="h-10 w-10 shrink-0 rounded-xl border border-line shadow-sm" style={{ backgroundColor: form.brandPrimaryColor || "#6366f1" }} />
             </div>
           </Field>
           <Field label="Cor secundária">
@@ -787,7 +787,7 @@ export default function MarcaPage() {
                 maxLength={7}
                 className={`${INPUT} w-32 font-mono`}
               />
-              <div className="h-10 w-10 shrink-0 rounded-xl border border-gray-100 shadow-sm" style={{ backgroundColor: form.brandSecondaryColor || "#8b5cf6" }} />
+              <div className="h-10 w-10 shrink-0 rounded-xl border border-line shadow-sm" style={{ backgroundColor: form.brandSecondaryColor || "#8b5cf6" }} />
             </div>
           </Field>
         </div>
@@ -795,8 +795,8 @@ export default function MarcaPage() {
 
       {/* ── 10. Links de Avaliação ───────────────────────────────── */}
       <PageCard>
-        <h2 className="text-base font-semibold text-gray-900">⭐ Links de Avaliação</h2>
-        <p className="mt-0.5 mb-4 text-sm text-gray-500">
+        <h2 className="text-base font-semibold text-ink">⭐ Links de Avaliação</h2>
+        <p className="mt-0.5 mb-4 text-sm text-muted">
           Cole os links de avaliação do seu restaurante. Eles aparecem no CRM para facilitar campanhas pós-venda.
         </p>
         <div className="space-y-3">

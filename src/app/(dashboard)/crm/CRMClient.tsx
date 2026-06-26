@@ -3013,7 +3013,7 @@ function CampanhasAtivasSection({
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-line">
             {active.map((c) => {
               const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
               const cfg          = c.scheduleConfig as ScheduleCfg | null;
@@ -3314,7 +3314,7 @@ function CampaignCouponPerformance() {
                         <th className="py-1.5 pl-2 font-semibold text-right">Ticket médio</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-line">
                       {(showAllCoupons ? data.coupons.rows : data.coupons.rows.slice(0, 5)).map((r) => (
                         <tr key={r.promotionId} className="text-ink2">
                           <td className="py-2 pr-2">
@@ -3370,7 +3370,7 @@ function CampaignCouponPerformance() {
                       <th className="py-1.5 pl-2 font-semibold text-right">Receita</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-line">
                     {data.campaigns.rows.map((r) => {
                       const attr = attribution.get(r.campaignId);
                       const quality = attr?.attributionQuality ?? "NONE";
@@ -4410,7 +4410,7 @@ function CustomersTab({
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {sortedCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-[#FAFAF8] transition-colors">
                     <td className="px-4 py-3">
@@ -5037,7 +5037,7 @@ const DEFAULT_CFG = {
 type SafetyCfg = typeof DEFAULT_CFG;
 
 const CFG_INPUT =
-  "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
+  "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
 
 function CfgField({
   label,

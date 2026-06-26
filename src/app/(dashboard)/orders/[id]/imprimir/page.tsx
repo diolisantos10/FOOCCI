@@ -83,12 +83,12 @@ export default async function ImprimirPage({
       <TopBar title={`Comanda — ${order.customer.name}`} />
 
       {/* Action bar — screen only, hidden during print */}
-      <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3 print:hidden">
+      <div className="flex items-center justify-between border-b border-line bg-paper px-6 py-3 print:hidden">
         <Link href="/orders" className="text-sm text-brand-600 hover:underline">
           ← Voltar para Pedidos
         </Link>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-muted">
             Imprime a comanda da cozinha e a nota do caixa
           </span>
           <PrintButton />
@@ -96,12 +96,12 @@ export default async function ImprimirPage({
       </div>
 
       {/* On-screen preview labels (hidden in print) */}
-      <div className="bg-gray-100 px-6 pt-6 text-center text-xs font-semibold uppercase tracking-wide text-gray-400 print:hidden">
+      <div className="bg-[#F4F4F2] px-6 pt-6 text-center text-xs font-semibold uppercase tracking-wide text-muted print:hidden">
         Pré-visualização · 2 vias (cozinha + caixa)
       </div>
 
       {/* Ticket preview — both notinhas, centered on gray background */}
-      <div className="min-h-[calc(100vh-9rem)] space-y-8 bg-gray-100 py-8 print:min-h-0 print:space-y-0 print:bg-transparent print:py-0">
+      <div className="min-h-[calc(100vh-9rem)] space-y-8 bg-[#F4F4F2] py-8 print:min-h-0 print:space-y-0 print:bg-transparent print:py-0">
         {tickets("preview")}
       </div>
 

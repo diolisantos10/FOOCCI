@@ -34,7 +34,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT:            "bg-gray-100 text-gray-600",
+  DRAFT:            "bg-[#F4F4F2] text-ink2",
   STRATEGY_PENDING: "bg-yellow-50 text-yellow-700",
   STRATEGY_DONE:    "bg-blue-50 text-blue-700",
   PROPOSAL_READY:   "bg-purple-50 text-purple-700",
@@ -97,71 +97,71 @@ function NewProjectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Nome do projeto *</label>
+          <label className="block text-xs font-semibold text-ink2 mb-1">Nome do projeto *</label>
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder="Ex: Lançamento Sushi Cazza — Verão 2026"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             required
           />
         </div>
 
         <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Objetivo *</label>
+          <label className="block text-xs font-semibold text-ink2 mb-1">Objetivo *</label>
           <textarea
             value={form.objective}
             onChange={(e) => setForm((f) => ({ ...f, objective: e.target.value }))}
             rows={3}
             placeholder="Descreva o objetivo principal do projeto. Ex: Lançar a nova unidade do restaurante gerando awareness local e convertendo seguidores em primeiras visitas."
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             required
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Público-alvo</label>
+          <label className="block text-xs font-semibold text-ink2 mb-1">Público-alvo</label>
           <input
             value={form.audience}
             onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value }))}
             placeholder="Ex: Jovens adultos 22–35, bairro Vila Madalena"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Prazo estimado</label>
+          <label className="block text-xs font-semibold text-ink2 mb-1">Prazo estimado</label>
           <input
             value={form.timeline}
             onChange={(e) => setForm((f) => ({ ...f, timeline: e.target.value }))}
             placeholder="Ex: 3 meses, até dezembro/2026"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Budget disponível</label>
+          <label className="block text-xs font-semibold text-ink2 mb-1">Budget disponível</label>
           <input
             value={form.budget}
             onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))}
             placeholder="Ex: R$ 8.000/mês, até R$ 30.000"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">Notas internas</label>
+          <label className="block text-xs font-semibold text-ink2 mb-1">Notas internas</label>
           <input
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             placeholder="Observações para a equipe"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-2">Serviços — selecione os relevantes</label>
+        <label className="block text-xs font-semibold text-ink2 mb-2">Serviços — selecione os relevantes</label>
         <div className="flex flex-wrap gap-2">
           {AGENCY_SERVICES.map((svc) => {
             const selected = form.services.includes(svc.name);
@@ -173,7 +173,7 @@ function NewProjectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   selected
                     ? "bg-brand-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
                 }`}
               >
                 {svc.name}
@@ -189,7 +189,7 @@ function NewProjectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+          className="rounded-lg px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#F4F4F2]"
         >
           Cancelar
         </button>
@@ -222,8 +222,8 @@ export function AgenciaClient({ projects: initial, restaurantName }: Props) {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">Projetos de Agência</h1>
-          <p className="text-sm text-gray-500">{restaurantName} · Uso interno</p>
+          <h1 className="text-lg font-bold text-ink">Projetos de Agência</h1>
+          <p className="text-sm text-muted">{restaurantName} · Uso interno</p>
         </div>
         {!showForm && (
           <button
@@ -237,17 +237,17 @@ export function AgenciaClient({ projects: initial, restaurantName }: Props) {
 
       {/* New project form */}
       {showForm && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-bold text-gray-900">Novo Projeto</h2>
+        <div className="mb-6 rounded-xl border border-line2 bg-paper p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-bold text-ink">Novo Projeto</h2>
           <NewProjectForm onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />
         </div>
       )}
 
       {/* Projects list */}
       {projects.length === 0 && !showForm ? (
-        <div className="rounded-xl border border-dashed border-gray-200 py-16 text-center">
-          <p className="text-sm font-medium text-gray-500">Nenhum projeto ainda.</p>
-          <p className="mt-1 text-xs text-gray-400">Clique em &ldquo;Novo Projeto&rdquo; para começar.</p>
+        <div className="rounded-xl border border-dashed border-line2 py-16 text-center">
+          <p className="text-sm font-medium text-muted">Nenhum projeto ainda.</p>
+          <p className="mt-1 text-xs text-muted">Clique em &ldquo;Novo Projeto&rdquo; para começar.</p>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -257,12 +257,12 @@ export function AgenciaClient({ projects: initial, restaurantName }: Props) {
               <li
                 key={p.id}
                 onClick={() => router.push(`/agencia/${p.id}`)}
-                className="flex cursor-pointer items-start gap-4 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm hover:border-brand-200 hover:shadow-md transition-shadow"
+                className="flex cursor-pointer items-start gap-4 rounded-xl border border-line2 bg-paper px-5 py-4 shadow-sm hover:border-brand-200 hover:shadow-md transition-shadow"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900 text-sm">{p.name}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_COLORS[p.status] ?? "bg-gray-100 text-gray-600"}`}>
+                    <span className="font-semibold text-ink text-sm">{p.name}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_COLORS[p.status] ?? "bg-[#F4F4F2] text-ink2"}`}>
                       {STATUS_LABELS[p.status] ?? p.status}
                     </span>
                     {p.strategySession && (
@@ -271,20 +271,20 @@ export function AgenciaClient({ projects: initial, restaurantName }: Props) {
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 line-clamp-2">{p.objective}</p>
+                  <p className="mt-1 text-xs text-muted line-clamp-2">{p.objective}</p>
                   {services.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {services.slice(0, 4).map((s) => (
-                        <span key={s} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">{s}</span>
+                        <span key={s} className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-ink2">{s}</span>
                       ))}
                       {services.length > 4 && (
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">+{services.length - 4}</span>
+                        <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-muted">+{services.length - 4}</span>
                       )}
                     </div>
                   )}
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[10px] text-gray-400">{new Date(p.createdAt).toLocaleDateString("pt-BR")}</p>
+                  <p className="text-[10px] text-muted">{new Date(p.createdAt).toLocaleDateString("pt-BR")}</p>
                   {p.strategySession && (
                     <p className="text-[10px] text-indigo-400 mt-0.5">
                       Gerado {new Date(p.strategySession.generatedAt).toLocaleDateString("pt-BR")}

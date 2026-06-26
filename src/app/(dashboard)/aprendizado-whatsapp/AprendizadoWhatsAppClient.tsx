@@ -123,13 +123,13 @@ const SEVERITY_LABEL: Record<string, string> = {
 const SEVERITY_TONE: Record<string, string> = {
   P0: "bg-red-100 text-red-800",
   P1: "bg-amber-100 text-amber-800",
-  P2: "bg-gray-100 text-gray-700",
+  P2: "bg-[#F4F4F2] text-ink2",
 };
 
 const OUTCOME_TONE: Record<string, string> = {
   VENDA_CONCLUIDA: "bg-green-100 text-green-800",
   ATENDENTE_ASSUMIU: "bg-blue-100 text-blue-800",
-  OK_SEM_ACAO: "bg-gray-100 text-gray-700",
+  OK_SEM_ACAO: "bg-[#F4F4F2] text-ink2",
 };
 
 function outcomeTone(o: string): string {
@@ -148,12 +148,12 @@ export function AprendizadoWhatsAppClient() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-muted mb-4">
         Acompanhe o desempenho do agente, revise aprendizados e ajuste configurações do WhatsApp.
       </p>
 
       {/* Tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
+      <div className="flex gap-1 mb-6 border-b border-line2 overflow-x-auto">
         {WA_TABS.map((t) => (
           <TabButton key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
             <span className="mr-1.5">{t.icon}</span>
@@ -213,7 +213,7 @@ function VisaoGeralTab({ onTabChange }: { onTabChange: (t: WaTabId) => void }) {
       )}
 
       <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">WhatsApp hoje (últimas 24h)</h2>
+        <h2 className="text-sm font-semibold text-ink2 mb-3">WhatsApp hoje (últimas 24h)</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Metric label="Clientes atendidos"   value={String(snap.conversations)} />
           <Metric label="Pedidos gerados"       value={String(snap.ordersGenerated)} />
@@ -226,11 +226,11 @@ function VisaoGeralTab({ onTabChange }: { onTabChange: (t: WaTabId) => void }) {
 
       {snap.topErrors.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Erros detectados hoje</h2>
+          <h2 className="text-sm font-semibold text-ink2 mb-2">Erros detectados hoje</h2>
           <ul className="space-y-1">
             {snap.topErrors.slice(0, 3).map((e) => (
-              <li key={e.category} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
-                <span className="text-gray-700">{e.label}</span>
+              <li key={e.category} className="flex items-center justify-between rounded-lg border border-line2 bg-paper px-3 py-2 text-sm">
+                <span className="text-ink2">{e.label}</span>
                 <span className="font-semibold text-red-600">{e.count}</span>
               </li>
             ))}
@@ -259,7 +259,7 @@ function QuickAction({ icon, label, onClick }: { icon: string; label: string; on
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors text-left"
+      className="flex items-center gap-2 rounded-xl border border-line2 bg-paper px-4 py-3 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] hover:border-line2 transition-colors text-left"
     >
       <span className="text-base">{icon}</span>
       {label}
@@ -287,12 +287,12 @@ function ConversasTab() {
   return (
     <div className="space-y-2">
       {items.map((it) => (
-        <div key={it.conversationId} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3">
+        <div key={it.conversationId} className="flex items-center justify-between rounded-lg border border-line2 bg-paper p-3">
           <div>
             <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${outcomeTone(it.outcome)}`}>
               {it.summary}
             </span>
-            <p className="mt-1 text-xs text-gray-500">{it.outcomeReason}</p>
+            <p className="mt-1 text-xs text-muted">{it.outcomeReason}</p>
           </div>
           <div className="flex items-center gap-3">
             {it.issueCount > 0 && (
@@ -342,14 +342,14 @@ function AprendizadosTab() {
   return (
     <div className="space-y-4">
       {cards.map((c) => (
-        <div key={c.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div key={c.id} className="rounded-xl border border-line2 bg-paper p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <span className={`rounded px-2 py-0.5 text-xs font-semibold ${SEVERITY_TONE[c.severity]}`}>
               {SEVERITY_LABEL[c.severity] ?? c.severity}
             </span>
-            <h3 className="text-base font-semibold text-gray-900">{c.title}</h3>
+            <h3 className="text-base font-semibold text-ink">{c.title}</h3>
             {c.occurrences > 1 && (
-              <span className="ml-auto text-xs text-gray-500">{c.occurrences} conversas</span>
+              <span className="ml-auto text-xs text-muted">{c.occurrences} conversas</span>
             )}
           </div>
 
@@ -365,8 +365,8 @@ function AprendizadosTab() {
           </dl>
 
           <details className="mt-3">
-            <summary className="cursor-pointer text-xs text-gray-400">Detalhes técnicos</summary>
-            <pre className="mt-1 overflow-auto rounded bg-gray-50 p-2 text-[11px] text-gray-500">
+            <summary className="cursor-pointer text-xs text-muted">Detalhes técnicos</summary>
+            <pre className="mt-1 overflow-auto rounded bg-[#FAFAF8] p-2 text-[11px] text-muted">
               {JSON.stringify(c.technicalDetails, null, 2)}
             </pre>
           </details>
@@ -383,19 +383,19 @@ function AprendizadosTab() {
               <button
                 disabled={busy === c.id}
                 onClick={() => decide(c.id, "REJECT")}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-lg border border-line2 px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
               >
                 Rejeitar
               </button>
               <button
                 disabled={busy === c.id}
                 onClick={() => decide(c.id, "BACKLOG")}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-lg border border-line2 px-4 py-2 text-sm font-medium text-muted hover:bg-[#FAFAF8] disabled:opacity-50"
               >
                 Guardar para depois
               </button>
             </div>
-            <p className="text-xs text-gray-400 border-t border-gray-100 pt-2">
+            <p className="text-xs text-muted border-t border-line pt-2">
               ℹ️ {APPROVAL_DISCLAIMER}
             </p>
           </div>
@@ -428,7 +428,7 @@ const MASTER_STATUS_ICON: Record<string, string> = {
 const MASTER_SEVERITY_CHIP: Record<string, string> = {
   P0: "bg-red-200 text-red-800",
   P1: "bg-amber-200 text-amber-800",
-  P2: "bg-gray-200 text-gray-700",
+  P2: "bg-line2 text-ink2",
 };
 
 function MasterSimuladorSection() {
@@ -454,11 +454,11 @@ function MasterSimuladorSection() {
   const problems = report?.scenarios.filter((s) => s.status !== "PASS") ?? [];
 
   return (
-    <div className="space-y-4 pb-6 border-b border-gray-200">
+    <div className="space-y-4 pb-6 border-b border-line2">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Verificação completa do agente</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h3 className="text-sm font-semibold text-ink">Verificação completa do agente</h3>
+          <p className="text-xs text-muted mt-0.5">
             Testa todas as áreas: cardápio, recepção, pedido, pagamento, entrega e transferência.
             Seguro — nenhuma mensagem real é enviada.
           </p>
@@ -477,7 +477,7 @@ function MasterSimuladorSection() {
       )}
 
       {!report && !running && !error && (
-        <p className="text-xs text-gray-400 text-center py-3">
+        <p className="text-xs text-muted text-center py-3">
           Clique em &ldquo;Executar verificação&rdquo; para testar todas as áreas do agente WhatsApp.
         </p>
       )}
@@ -496,7 +496,7 @@ function MasterSimuladorSection() {
                 {report.p1 > 0 && report.p0 === 0 && ` · ${report.p1} atenção`}
               </p>
             </div>
-            <p className="text-xs text-gray-400 shrink-0 ml-4">
+            <p className="text-xs text-muted shrink-0 ml-4">
               {new Date(report.ranAt).toLocaleString("pt-BR")}
             </p>
           </div>
@@ -521,13 +521,13 @@ function MasterSimuladorSection() {
           {/* Problem list */}
           {problems.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-gray-700">
+              <h4 className="text-xs font-semibold text-ink2">
                 {problems.length} situaç{problems.length > 1 ? "ões" : "ão"} para atenção
               </h4>
               {problems.map((s) => (
                 <div key={s.id} className={`rounded-lg border p-3 ${MASTER_STATUS_BG[s.status]}`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${MASTER_SEVERITY_CHIP[s.severity] ?? "bg-gray-200 text-gray-700"}`}>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${MASTER_SEVERITY_CHIP[s.severity] ?? "bg-line2 text-ink2"}`}>
                       {MASTER_SEVERITY_LABEL[s.severity] ?? s.severity}
                     </span>
                     <span className={`text-xs font-medium ${MASTER_STATUS_TEXT[s.status]}`}>
@@ -536,21 +536,21 @@ function MasterSimuladorSection() {
                   </div>
                   <dl className="space-y-1 text-xs">
                     <div>
-                      <dt className="text-gray-500 inline">Situação: </dt>
-                      <dd className="inline text-gray-800">{s.what}</dd>
+                      <dt className="text-muted inline">Situação: </dt>
+                      <dd className="inline text-ink">{s.what}</dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500 inline">Esperado: </dt>
+                      <dt className="text-muted inline">Esperado: </dt>
                       <dd className="inline text-emerald-700">{s.expected}</dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500 inline">Aconteceu: </dt>
-                      <dd className="inline text-gray-700">{s.got}</dd>
+                      <dt className="text-muted inline">Aconteceu: </dt>
+                      <dd className="inline text-ink2">{s.got}</dd>
                     </div>
                     {s.recommendedFix && (
                       <div>
-                        <dt className="text-gray-500 inline">Correção sugerida: </dt>
-                        <dd className="inline text-gray-700">{s.recommendedFix}</dd>
+                        <dt className="text-muted inline">Correção sugerida: </dt>
+                        <dd className="inline text-ink2">{s.recommendedFix}</dd>
                       </div>
                     )}
                   </dl>
@@ -560,9 +560,9 @@ function MasterSimuladorSection() {
           )}
 
           {/* Safety flags */}
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs font-semibold text-gray-700 mb-2">Garantias de segurança</p>
-            <ul className="space-y-1 text-xs text-gray-600">
+          <div className="rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3">
+            <p className="text-xs font-semibold text-ink2 mb-2">Garantias de segurança</p>
+            <ul className="space-y-1 text-xs text-ink2">
               <li>✅ Nenhuma mensagem WhatsApp foi enviada</li>
               <li>✅ Nenhum pedido real foi criado</li>
               <li>✅ Nenhum Pix real foi gerado</li>
@@ -571,11 +571,11 @@ function MasterSimuladorSection() {
           </div>
 
           {/* Technical details accordion */}
-          <details className="rounded-xl border border-gray-200">
-            <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400">
+          <details className="rounded-xl border border-line2">
+            <summary className="cursor-pointer select-none px-4 py-2 text-xs text-muted">
               Detalhes técnicos ({report.total} verificações)
             </summary>
-            <pre className="overflow-auto rounded-b-xl bg-gray-50 p-3 text-[10px] text-gray-500 max-h-64">
+            <pre className="overflow-auto rounded-b-xl bg-[#FAFAF8] p-3 text-[10px] text-muted max-h-64">
               {JSON.stringify({ safety: report.safety, scenarios: report.scenarios }, null, 2)}
             </pre>
           </details>
@@ -638,7 +638,7 @@ function SimuladorTab() {
       <MasterSimuladorSection />
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Simular uma conversa</h3>
+        <h3 className="text-sm font-semibold text-ink mb-3">Simular uma conversa</h3>
         <div className="space-y-4">
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           <strong>Modo simulação</strong> — nenhuma mensagem real é enviada, nenhum pedido é criado.
@@ -648,7 +648,7 @@ function SimuladorTab() {
       {/* WA-style chat window */}
       <div className="rounded-2xl bg-[#e5ddd5] min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-2">
         {messages.length === 0 && (
-          <p className="text-center text-xs text-gray-400 pt-8">
+          <p className="text-center text-xs text-muted pt-8">
             Digite uma mensagem abaixo para simular uma conversa no WhatsApp.
           </p>
         )}
@@ -657,8 +657,8 @@ function SimuladorTab() {
             <div
               className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm whitespace-pre-wrap ${
                 m.role === "customer"
-                  ? "rounded-tr-none bg-[#dcf8c6] text-gray-800"
-                  : "rounded-tl-none bg-white text-gray-800"
+                  ? "rounded-tr-none bg-[#dcf8c6] text-ink"
+                  : "rounded-tl-none bg-paper text-ink"
               }`}
             >
               {m.role === "bot" && (
@@ -670,7 +670,7 @@ function SimuladorTab() {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="rounded-2xl rounded-tl-none bg-white px-3 py-2 text-xs text-gray-400 shadow-sm">
+            <div className="rounded-2xl rounded-tl-none bg-paper px-3 py-2 text-xs text-muted shadow-sm">
               Simulando…
             </div>
           </div>
@@ -690,7 +690,7 @@ function SimuladorTab() {
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
           placeholder="Digite uma mensagem…"
           disabled={loading}
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+          className="flex-1 rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
         />
         <button
           onClick={send}
@@ -702,7 +702,7 @@ function SimuladorTab() {
         {messages.length > 0 && (
           <button
             onClick={reset}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-lg border border-line2 px-3 py-2 text-sm text-ink2 hover:bg-[#FAFAF8]"
           >
             Reiniciar
           </button>
@@ -716,7 +716,7 @@ function SimuladorTab() {
           <button
             key={q}
             onClick={() => { setInput(q); }}
-            className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 hover:border-emerald-300 hover:text-emerald-700 transition-colors"
+            className="rounded-full border border-line2 bg-paper px-3 py-1 text-xs text-ink2 hover:border-emerald-300 hover:text-emerald-700 transition-colors"
           >
             {q}
           </button>
@@ -756,14 +756,14 @@ function SaudeTab() {
         <Metric label="Aprendizados pendentes"     value={String(snap.pendingLearnings)} />
       </div>
 
-      <h3 className="mt-6 mb-2 text-sm font-semibold text-gray-700">Erros detectados nas últimas 24h</h3>
+      <h3 className="mt-6 mb-2 text-sm font-semibold text-ink2">Erros detectados nas últimas 24h</h3>
       {snap.topErrors.length === 0 ? (
         <Empty>Nenhum erro detectado nas últimas 24h 🎉</Empty>
       ) : (
         <ul className="space-y-1">
           {snap.topErrors.map((e) => (
-            <li key={e.category} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-2 text-sm">
-              <span className="text-gray-700">{e.label}</span>
+            <li key={e.category} className="flex items-center justify-between rounded-lg border border-line2 bg-paper p-2 text-sm">
+              <span className="text-ink2">{e.label}</span>
               <span className="font-semibold text-red-600">{e.count}</span>
             </li>
           ))}
@@ -791,33 +791,33 @@ function ConfiguracoesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">Configuração atual do WhatsApp</h2>
+      <div className="rounded-xl border border-line2 bg-paper p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-ink">Configuração atual do WhatsApp</h2>
         <dl className="space-y-3 text-sm">
           <ConfigRow label="Nome do agente">
-            {config.agentName || <span className="text-gray-400">Não configurado</span>}
+            {config.agentName || <span className="text-muted">Não configurado</span>}
           </ConfigRow>
           <ConfigRow label="Modo de operação">
             {config.agentMode === "RECEPTIONIST_ONLY"
               ? "Recepcionista automático"
               : config.agentMode === "HUMAN_ASSISTED"
               ? "Com suporte humano"
-              : config.agentMode ?? <span className="text-gray-400">Padrão</span>}
+              : config.agentMode ?? <span className="text-muted">Padrão</span>}
           </ConfigRow>
           <ConfigRow label="Telefone de transferência">
             {config.handoffPhone
               ? <span className="font-mono text-xs">{config.handoffPhone}</span>
-              : <span className="text-gray-400">Não configurado</span>}
+              : <span className="text-muted">Não configurado</span>}
           </ConfigRow>
           <ConfigRow label="Link do cardápio">
             {config.menuUrl
               ? <a href={config.menuUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs">{config.menuUrl}</a>
-              : <span className="text-gray-400">Não configurado</span>}
+              : <span className="text-muted">Não configurado</span>}
           </ConfigRow>
         </dl>
       </div>
 
-      <p className="text-xs text-gray-400 text-center">
+      <p className="text-xs text-muted text-center">
         Para editar as configurações do agente, acesse{" "}
         <Link href="/agente-ia" className="text-brand-600 hover:underline">
           Agentes IA → WhatsApp Host
@@ -832,7 +832,7 @@ function ConfiguracoesTab() {
 function ModoAvancadoTab() {
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-amber-50 px-4 py-3">
+      <div className="rounded-xl border border-line2 bg-amber-50 px-4 py-3">
         <p className="text-sm font-semibold text-amber-800">Área técnica</p>
         <p className="text-xs text-amber-700 mt-0.5">
           Estas ferramentas são para equipe técnica e administradores. Modificações aqui podem
@@ -845,12 +845,12 @@ function ModoAvancadoTab() {
           <li key={link.href}>
             <Link
               href={link.href}
-              className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
+              className="flex items-start gap-3 rounded-xl border border-line2 bg-paper px-4 py-3 hover:bg-[#FAFAF8] hover:border-line2 transition-colors group"
             >
-              <span className="mt-0.5 text-gray-400 group-hover:text-gray-600">→</span>
+              <span className="mt-0.5 text-muted group-hover:text-ink2">→</span>
               <div>
-                <p className="text-sm font-medium text-gray-900">{link.label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{link.desc}</p>
+                <p className="text-sm font-medium text-ink">{link.label}</p>
+                <p className="text-xs text-muted mt-0.5">{link.desc}</p>
               </div>
             </Link>
           </li>
@@ -867,7 +867,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       onClick={onClick}
       className={`whitespace-nowrap px-4 py-2 text-sm font-medium -mb-px border-b-2 transition ${
-        active ? "border-emerald-600 text-emerald-700" : "border-transparent text-gray-500 hover:text-gray-700"
+        active ? "border-emerald-600 text-emerald-700" : "border-transparent text-muted hover:text-ink2"
       }`}
     >
       {children}
@@ -878,33 +878,33 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[160px_1fr] gap-2">
-      <dt className="text-gray-500">{label}</dt>
-      <dd className="text-gray-900">{children}</dd>
+      <dt className="text-muted">{label}</dt>
+      <dd className="text-ink">{children}</dd>
     </div>
   );
 }
 
 function ConfigRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2 border-b border-gray-100 last:border-0">
-      <dt className="text-gray-500 shrink-0">{label}</dt>
-      <dd className="text-gray-900 text-right">{children}</dd>
+    <div className="flex items-start justify-between gap-4 py-2 border-b border-line last:border-0">
+      <dt className="text-muted shrink-0">{label}</dt>
+      <dd className="text-ink text-right">{children}</dd>
     </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
+    <div className="rounded-xl border border-line2 bg-paper p-4">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
     </div>
   );
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
+    <div className="rounded-lg border border-dashed border-line2 p-6 text-center text-sm text-muted">
       {children}
     </div>
   );

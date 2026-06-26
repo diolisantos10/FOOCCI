@@ -40,7 +40,7 @@ function statusStyle(status: string): { label: string; cls: string } {
     case "APPROVED": return { label: "Aprovado",  cls: "bg-green-50 text-green-700" };
     case "PENDING":  return { label: "Em análise", cls: "bg-amber-50 text-amber-700" };
     case "REJECTED": return { label: "Rejeitado", cls: "bg-red-50 text-red-600" };
-    default:         return { label: "Inativo",   cls: "bg-gray-100 text-gray-500" };
+    default:         return { label: "Inativo",   cls: "bg-[#F4F4F2] text-muted" };
   }
 }
 
@@ -93,17 +93,17 @@ export function MetaTemplatesPanel() {
   if (templates === null) return null;
 
   return (
-    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-3">
+    <div className="mt-3 rounded-lg border border-line2 bg-[#FAFAF8]/60 px-3 py-3">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold text-gray-800">Modelos de mensagem (campanhas)</p>
-          <p className="text-[11px] text-gray-500">
+          <p className="text-xs font-semibold text-ink">Modelos de mensagem (campanhas)</p>
+          <p className="text-[11px] text-muted">
             Para enviar campanhas pelo WhatsApp oficial, a Meta exige modelos aprovados. Sincronize e indique
             em qual tipo de campanha cada modelo deve ser usado.
           </p>
         </div>
         <button type="button" disabled={busy === "sync"} onClick={sync}
-          className="ml-3 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          className="ml-3 flex-shrink-0 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
           {busy === "sync" ? "Sincronizando…" : "Sincronizar modelos"}
         </button>
       </div>
@@ -113,7 +113,7 @@ export function MetaTemplatesPanel() {
       )}
 
       {templates.length === 0 ? (
-        <p className="mt-3 text-[11px] text-gray-400">
+        <p className="mt-3 text-[11px] text-muted">
           Nenhum modelo ainda. Crie modelos no WhatsApp da Meta, espere a aprovação e clique em “Sincronizar modelos”.
         </p>
       ) : (
@@ -121,11 +121,11 @@ export function MetaTemplatesPanel() {
           {templates.map((t) => {
             const st = statusStyle(t.status);
             return (
-              <li key={t.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+              <li key={t.id} className="rounded-lg border border-line2 bg-paper px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-medium text-gray-800">{t.templateName}</p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="truncate text-xs font-medium text-ink">{t.templateName}</p>
+                    <p className="text-[10px] text-muted">
                       {t.languageCode} · {t.bodyVariables} variáve{t.bodyVariables === 1 ? "l" : "is"}
                     </p>
                   </div>
@@ -133,12 +133,12 @@ export function MetaTemplatesPanel() {
                 </div>
                 {t.status === "APPROVED" && (
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] text-gray-500">Usar em:</span>
+                    <span className="text-[10px] text-muted">Usar em:</span>
                     <select
                       value={t.mappedCampaignType ?? ""}
                       disabled={busy === t.id}
                       onChange={(e) => map(t, e.target.value)}
-                      className="flex-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] disabled:opacity-50"
+                      className="flex-1 rounded-md border border-line2 bg-paper px-2 py-1 text-[11px] disabled:opacity-50"
                     >
                       {CRM_OBJECTIVES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>

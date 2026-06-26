@@ -249,7 +249,7 @@ function StepDots({ step, importType }: { step: Step; importType?: ImportType })
   return (
     <div className="flex items-center justify-center gap-2 mb-5">
       {order.map((s,i) => (
-        <span key={s} className={`h-2 rounded-full transition-all ${i===idx ? "w-6 bg-brand-600" : i<idx ? "w-2 bg-brand-300" : "w-2 bg-gray-200"}`} />
+        <span key={s} className={`h-2 rounded-full transition-all ${i===idx ? "w-6 bg-brand-600" : i<idx ? "w-2 bg-brand-300" : "w-2 bg-line2"}`} />
       ))}
     </div>
   );
@@ -269,8 +269,8 @@ function TypeStep({ onSelect }: { onSelect: (t: ImportType) => void }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-semibold text-gray-800">O que você quer importar?</p>
-        <p className="text-xs text-gray-500 mt-0.5">Selecione o tipo da base que vai enviar.</p>
+        <p className="text-sm font-semibold text-ink">O que você quer importar?</p>
+        <p className="text-xs text-muted mt-0.5">Selecione o tipo da base que vai enviar.</p>
       </div>
 
       <div className="space-y-2">
@@ -279,12 +279,12 @@ function TypeStep({ onSelect }: { onSelect: (t: ImportType) => void }) {
             key={opt.value}
             type="button"
             onClick={() => onSelect(opt.value)}
-            className="w-full flex items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left hover:border-brand-400 hover:bg-brand-50/50 transition-colors"
+            className="w-full flex items-start gap-3 rounded-2xl border border-line2 bg-paper px-4 py-3 text-left hover:border-brand-400 hover:bg-brand-50/50 transition-colors"
           >
             <span className="text-xl shrink-0">{opt.icon}</span>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-gray-800">{opt.label}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+              <p className="text-sm font-bold text-ink">{opt.label}</p>
+              <p className="text-xs text-muted mt-0.5">{opt.desc}</p>
             </div>
           </button>
         ))}
@@ -331,13 +331,13 @@ function UploadStep({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-gray-800">Envie o arquivo</p>
-          <p className="text-xs text-gray-500 mt-0.5">CSV ou XLSX. Você pode baixar o modelo abaixo.</p>
+          <p className="text-sm font-semibold text-ink">Envie o arquivo</p>
+          <p className="text-xs text-muted mt-0.5">CSV ou XLSX. Você pode baixar o modelo abaixo.</p>
         </div>
         <button
           type="button"
           onClick={downloadTemplate}
-          className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          className="shrink-0 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8]"
         >
           ⬇ Baixar modelo
         </button>
@@ -351,18 +351,18 @@ function UploadStep({
         onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
         disabled={loading}
         className={`w-full rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-          dragging ? "border-brand-400 bg-brand-50" : "border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/50"
+          dragging ? "border-brand-400 bg-brand-50" : "border-line2 bg-[#FAFAF8] hover:border-brand-300 hover:bg-brand-50/50"
         } disabled:opacity-60`}
       >
         <div className="flex flex-col items-center gap-3">
-          <svg className="h-10 w-10 text-gray-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <svg className="h-10 w-10 text-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.338-2.32 5.75 5.75 0 0 1 1.14 11.093" />
           </svg>
           {loading
-            ? <span className="text-sm text-gray-500">Processando…</span>
+            ? <span className="text-sm text-muted">Processando…</span>
             : <>
-                <span className="text-sm font-semibold text-gray-700">Arraste o arquivo aqui ou clique para selecionar</span>
-                <span className="text-xs text-gray-400">CSV ou XLSX • máx. 50 000 linhas</span>
+                <span className="text-sm font-semibold text-ink2">Arraste o arquivo aqui ou clique para selecionar</span>
+                <span className="text-xs text-muted">CSV ou XLSX • máx. 50 000 linhas</span>
               </>
           }
         </div>
@@ -402,17 +402,17 @@ function FieldSelect({
 
   return (
     <div>
-      <label className="block text-xs font-semibold text-gray-700 mb-1">
+      <label className="block text-xs font-semibold text-ink2 mb-1">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <select
         value={value ?? none}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      {hint && <p className="mt-1 text-[10px] text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-[10px] text-muted">{hint}</p>}
     </div>
   );
 }
@@ -449,8 +449,8 @@ function MapStep({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm font-semibold text-gray-800">Mapeie as colunas</p>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-sm font-semibold text-ink">Mapeie as colunas</p>
+        <p className="text-xs text-muted mt-0.5">
           Arquivo: <strong>{parsed.fileName}</strong> · {parsed.totalRows} linhas
         </p>
       </div>
@@ -476,7 +476,7 @@ function MapStep({
       {showOrder && (
         <>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Cliente</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted mb-2">Cliente</p>
             <div className="space-y-3">
               <FieldSelect label="Telefone do cliente" required value={order.customerPhone} columns={parsed.columns} onChange={(v) => setO("customerPhone", v)} />
               <FieldSelect label="Nome do cliente"              value={order.customerName}  columns={parsed.columns} onChange={(v) => setO("customerName", v)} />
@@ -485,7 +485,7 @@ function MapStep({
           </div>
 
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Pedido</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted mb-2">Pedido</p>
             <div className="space-y-3">
               <FieldSelect label="Data do pedido"  required value={order.orderDate}        columns={parsed.columns} onChange={(v) => setO("orderDate", v)}      hint="DD/MM/AAAA ou ISO" />
               <FieldSelect label="Valor total"     required value={order.orderTotal}       columns={parsed.columns} onChange={(v) => setO("orderTotal", v)} />
@@ -498,8 +498,8 @@ function MapStep({
           </div>
 
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Item do pedido</p>
-            <p className="mb-2 text-[11px] text-gray-400">Use uma linha por item. Linhas com mesmo telefone + data + ID se agrupam em um pedido.</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted mb-2">Item do pedido</p>
+            <p className="mb-2 text-[11px] text-muted">Use uma linha por item. Linhas com mesmo telefone + data + ID se agrupam em um pedido.</p>
             <div className="space-y-3">
               <FieldSelect label="Produto"        value={order.productName}     columns={parsed.columns} onChange={(v) => setO("productName", v)} />
               <FieldSelect label="Categoria"      value={order.productCategory} columns={parsed.columns} onChange={(v) => setO("productCategory", v)} />
@@ -515,7 +515,7 @@ function MapStep({
       {/* Customer auxiliary fields when both */}
       {importType === "customers_orders" && (
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Dados extras de cliente</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted mb-2">Dados extras de cliente</p>
           <div className="space-y-3">
             <FieldSelect label="Aniversário"               value={customer.birthday}            columns={parsed.columns} onChange={(v) => setC("birthday", v)}            hint="DD/MM/AAAA" />
             <FieldSelect label="CPF / CNPJ"                value={customer.document}            columns={parsed.columns} onChange={(v) => setC("document", v)} />
@@ -530,7 +530,7 @@ function MapStep({
       )}
 
       <div className="flex gap-2 pt-2">
-        <button onClick={onBack} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">Voltar</button>
+        <button onClick={onBack} className="rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8]">Voltar</button>
         <button
           onClick={() => {
             const cm: CustomerMapping | undefined = showCustomer
@@ -562,13 +562,13 @@ function PreviewStep({
 }) {
   if (isOrderPreview(preview)) {
     const stats = [
-      { label: "Linhas no arquivo",      value: preview.totalRows,         color: "text-gray-900" },
-      { label: "Pedidos únicos",         value: preview.uniqueOrders,      color: "text-gray-900" },
+      { label: "Linhas no arquivo",      value: preview.totalRows,         color: "text-ink" },
+      { label: "Pedidos únicos",         value: preview.uniqueOrders,      color: "text-ink" },
       { label: "Novos clientes",         value: preview.newCustomers,      color: "text-green-700" },
       { label: "Clientes já existentes", value: preview.existingCustomers, color: "text-blue-700" },
       { label: "Produtos com match",     value: preview.productsMatched,   color: "text-green-700" },
-      { label: "Produtos sem match",     value: preview.productsUnmatched, color: "text-orange-600" },
-      { label: "Pedidos duplicados",     value: preview.duplicateOrders,   color: "text-orange-600" },
+      { label: "Produtos sem match",     value: preview.productsUnmatched, color: "text-brand-600" },
+      { label: "Pedidos duplicados",     value: preview.duplicateOrders,   color: "text-brand-600" },
       { label: "Linhas com erro",        value: preview.errorRows,         color: "text-red-600" },
     ];
     const importable = preview.uniqueOrders - preview.duplicateOrders;
@@ -576,14 +576,14 @@ function PreviewStep({
     return (
       <div className="space-y-5">
         <div>
-          <p className="text-sm font-semibold text-gray-800">Confirmar importação</p>
-          <p className="text-xs text-gray-500 mt-0.5">Revise antes de prosseguir. Pedidos duplicados serão ignorados.</p>
+          <p className="text-sm font-semibold text-ink">Confirmar importação</p>
+          <p className="text-xs text-muted mt-0.5">Revise antes de prosseguir. Pedidos duplicados serão ignorados.</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+        <div className="rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
           {stats.map((s) => (
             <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
-              <span className="text-sm text-gray-600">{s.label}</span>
+              <span className="text-sm text-ink2">{s.label}</span>
               <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
             </div>
           ))}
@@ -591,16 +591,16 @@ function PreviewStep({
 
         {preview.unmatchedProducts.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-gray-600 mb-2">Produtos não encontrados no cardápio</p>
-            <div className="rounded-xl border border-orange-100 bg-orange-50 max-h-32 overflow-y-auto divide-y divide-orange-100">
+            <p className="text-xs font-semibold text-ink2 mb-2">Produtos não encontrados no cardápio</p>
+            <div className="rounded-xl border border-brand-100 bg-brand-50 max-h-32 overflow-y-auto divide-y divide-brand-100">
               {preview.unmatchedProducts.slice(0, 12).map((p) => (
                 <div key={p.name} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                  <span className="text-gray-800 truncate">{p.name}</span>
-                  <span className="font-semibold text-orange-600 shrink-0 ml-2">{p.count}×</span>
+                  <span className="text-ink truncate">{p.name}</span>
+                  <span className="font-semibold text-brand-600 shrink-0 ml-2">{p.count}×</span>
                 </div>
               ))}
             </div>
-            <p className="mt-1 text-[10px] text-gray-500">Estes itens serão importados com o nome original — sem ligação ao produto.</p>
+            <p className="mt-1 text-[10px] text-muted">Estes itens serão importados com o nome original — sem ligação ao produto.</p>
           </div>
         )}
 
@@ -622,7 +622,7 @@ function PreviewStep({
         )}
 
         <div className="flex gap-2">
-          <button onClick={onBack} disabled={loading} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Voltar</button>
+          <button onClick={onBack} disabled={loading} className="rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">Voltar</button>
           <button
             onClick={onConfirm}
             disabled={loading || importable === 0}
@@ -637,10 +637,10 @@ function PreviewStep({
 
   // Customer-only preview (legacy)
   const stats = [
-    { label: "Total de linhas",      value: preview.totalRows,    color: "text-gray-900" },
+    { label: "Total de linhas",      value: preview.totalRows,    color: "text-ink" },
     { label: "Novos clientes",       value: preview.newCount,     color: "text-green-700" },
     { label: "Clientes a atualizar", value: preview.updateCount,  color: "text-blue-700" },
-    { label: "Duplicatas no arquivo",value: preview.dupesInFile,  color: "text-orange-600" },
+    { label: "Duplicatas no arquivo",value: preview.dupesInFile,  color: "text-brand-600" },
     { label: "Linhas inválidas",     value: preview.invalidCount, color: "text-red-600" },
   ];
   const importCount = preview.newCount + preview.updateCount;
@@ -648,14 +648,14 @@ function PreviewStep({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm font-semibold text-gray-800">Confirmar importação</p>
-        <p className="text-xs text-gray-500 mt-0.5">Revise os dados antes de prosseguir.</p>
+        <p className="text-sm font-semibold text-ink">Confirmar importação</p>
+        <p className="text-xs text-muted mt-0.5">Revise os dados antes de prosseguir.</p>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+      <div className="rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
         {stats.map((s) => (
           <div key={s.label} className="flex items-center justify-between px-4 py-3">
-            <span className="text-sm text-gray-600">{s.label}</span>
+            <span className="text-sm text-ink2">{s.label}</span>
             <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
           </div>
         ))}
@@ -674,7 +674,7 @@ function PreviewStep({
       )}
 
       <div className="flex gap-2">
-        <button onClick={onBack} disabled={loading} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Voltar</button>
+        <button onClick={onBack} disabled={loading} className="rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">Voltar</button>
         <button onClick={onConfirm} disabled={loading || importCount === 0} className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50">
           {loading ? "Importando…" : `Importar ${importCount} cliente${importCount !== 1 ? "s" : ""}`}
         </button>
@@ -692,9 +692,9 @@ function DoneStep({ result, onClose }: { result: ImportResult; onClose: () => vo
       { label: "Itens criados",         value: result.createdItems,      color: "text-green-700" },
       { label: "Clientes criados",      value: result.createdCustomers,  color: "text-green-700" },
       { label: "Clientes atualizados",  value: result.updatedCustomers,  color: "text-blue-700" },
-      { label: "Pedidos duplicados",    value: result.skippedDuplicates, color: "text-orange-600" },
+      { label: "Pedidos duplicados",    value: result.skippedDuplicates, color: "text-brand-600" },
       { label: "Linhas com erro",       value: result.errorRows,         color: "text-red-600" },
-      { label: "Métricas recalculadas", value: result.rebuildSummary.customersUpdated, color: "text-gray-700" },
+      { label: "Métricas recalculadas", value: result.rebuildSummary.customersUpdated, color: "text-ink2" },
     ];
 
     return (
@@ -705,25 +705,25 @@ function DoneStep({ result, onClose }: { result: ImportResult; onClose: () => vo
           </svg>
         </div>
         <div>
-          <p className="text-base font-bold text-gray-900">Importação concluída!</p>
-          <p className="mt-1 text-sm text-gray-500">{result.totalRows} linhas processadas</p>
+          <p className="text-base font-bold text-ink">Importação concluída!</p>
+          <p className="mt-1 text-sm text-muted">{result.totalRows} linhas processadas</p>
         </div>
-        <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+        <div className="w-full rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
           {rows.map((r) => (
             <div key={r.label} className="flex justify-between px-4 py-2.5 text-sm">
-              <span className="text-gray-600">{r.label}</span>
+              <span className="text-ink2">{r.label}</span>
               <span className={`font-bold ${r.color}`}>{r.value}</span>
             </div>
           ))}
         </div>
         {result.unmatchedProducts.length > 0 && (
           <div className="w-full text-left">
-            <p className="text-xs font-semibold text-gray-600 mb-1">Produtos não vinculados</p>
-            <div className="rounded-xl border border-orange-100 bg-orange-50 max-h-32 overflow-y-auto divide-y divide-orange-100">
+            <p className="text-xs font-semibold text-ink2 mb-1">Produtos não vinculados</p>
+            <div className="rounded-xl border border-brand-100 bg-brand-50 max-h-32 overflow-y-auto divide-y divide-brand-100">
               {result.unmatchedProducts.slice(0, 8).map((p) => (
                 <div key={p.name} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                  <span className="text-gray-800 truncate">{p.name}</span>
-                  <span className="text-orange-600 shrink-0 ml-2">{p.count}× · R$ {p.revenue.toFixed(2)}</span>
+                  <span className="text-ink truncate">{p.name}</span>
+                  <span className="text-brand-600 shrink-0 ml-2">{p.count}× · R$ {p.revenue.toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -743,21 +743,21 @@ function DoneStep({ result, onClose }: { result: ImportResult; onClose: () => vo
         </svg>
       </div>
       <div>
-        <p className="text-base font-bold text-gray-900">Importação concluída!</p>
-        <p className="mt-1 text-sm text-gray-500">{result.total} linhas processadas</p>
+        <p className="text-base font-bold text-ink">Importação concluída!</p>
+        <p className="mt-1 text-sm text-muted">{result.total} linhas processadas</p>
       </div>
-      <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+      <div className="w-full rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
         <div className="flex justify-between px-4 py-3 text-sm">
-          <span className="text-gray-600">Clientes criados</span>
+          <span className="text-ink2">Clientes criados</span>
           <span className="font-bold text-green-700">{result.created}</span>
         </div>
         <div className="flex justify-between px-4 py-3 text-sm">
-          <span className="text-gray-600">Clientes atualizados</span>
+          <span className="text-ink2">Clientes atualizados</span>
           <span className="font-bold text-blue-700">{result.updated}</span>
         </div>
         {result.invalid > 0 && (
           <div className="flex justify-between px-4 py-3 text-sm">
-            <span className="text-gray-600">Linhas ignoradas</span>
+            <span className="text-ink2">Linhas ignoradas</span>
             <span className="font-bold text-red-600">{result.invalid}</span>
           </div>
         )}
@@ -794,8 +794,8 @@ function SaiposNemoUploadStep({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-semibold text-gray-800">Envie a planilha compilada</p>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-sm font-semibold text-ink">Envie a planilha compilada</p>
+        <p className="text-xs text-muted mt-0.5">
           Arquivo <strong>Foocci_Base_Compilada_Saipos_Nemo.xlsx</strong> com as abas Clientes_Master, Sem_Telefone e Produtos_Agregados.
         </p>
       </div>
@@ -808,16 +808,16 @@ function SaiposNemoUploadStep({
         onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
         disabled={loading}
         className={`w-full rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-          dragging ? "border-brand-400 bg-brand-50" : "border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/50"
+          dragging ? "border-brand-400 bg-brand-50" : "border-line2 bg-[#FAFAF8] hover:border-brand-300 hover:bg-brand-50/50"
         } disabled:opacity-60`}
       >
         <div className="flex flex-col items-center gap-3">
           <span className="text-4xl">🏭</span>
           {loading
-            ? <span className="text-sm text-gray-500">Processando planilha…</span>
+            ? <span className="text-sm text-muted">Processando planilha…</span>
             : <>
-                <span className="text-sm font-semibold text-gray-700">Arraste o arquivo aqui ou clique para selecionar</span>
-                <span className="text-xs text-gray-400">XLSX · planilha compilada Saipos + Nemo</span>
+                <span className="text-sm font-semibold text-ink2">Arraste o arquivo aqui ou clique para selecionar</span>
+                <span className="text-xs text-muted">XLSX · planilha compilada Saipos + Nemo</span>
               </>
           }
         </div>
@@ -923,29 +923,29 @@ function SaiposNemoPreviewStep({
   const stats = [
     { label: "Clientes contatáveis",              value: contactableCount,     color: "text-green-700" },
     { label: "Clientes não contatáveis",           value: nonContactableCount,  color: "text-amber-600" },
-    { label: "Sem dados suficientes (ignorados)",  value: skippedCount,         color: "text-gray-500"  },
-    { label: "Requer revisão (sem telefone)",      value: needsReviewCount,     color: "text-orange-600" },
+    { label: "Sem dados suficientes (ignorados)",  value: skippedCount,         color: "text-muted"  },
+    { label: "Requer revisão (sem telefone)",      value: needsReviewCount,     color: "text-brand-600" },
     { label: "Produtos agregados",                 value: preview.productCount, color: "text-blue-700"  },
   ];
 
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm font-semibold text-gray-800">Prévia da importação</p>
-        <p className="text-xs text-gray-500 mt-0.5">Revise antes de executar. A importação não pode ser desfeita.</p>
+        <p className="text-sm font-semibold text-ink">Prévia da importação</p>
+        <p className="text-xs text-muted mt-0.5">Revise antes de executar. A importação não pode ser desfeita.</p>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+      <div className="rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
         {stats.map((s) => (
           <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-sm text-gray-600">{s.label}</span>
+            <span className="text-sm text-ink2">{s.label}</span>
             <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
           </div>
         ))}
         {preview.periodStart && (
           <div className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-sm text-gray-600">Período dos produtos</span>
-            <span className="text-sm font-semibold text-gray-700">{preview.periodStart} → {preview.periodEnd ?? "?"}</span>
+            <span className="text-sm text-ink2">Período dos produtos</span>
+            <span className="text-sm font-semibold text-ink2">{preview.periodStart} → {preview.periodEnd ?? "?"}</span>
           </div>
         )}
       </div>
@@ -956,11 +956,11 @@ function SaiposNemoPreviewStep({
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">Garantias de segurança</p>
-        <p className="text-xs text-gray-600">• Clientes sem telefone entram como não contatáveis para enriquecimento.</p>
-        <p className="text-xs text-gray-600">• Produtos agregados não criam pedidos nem itens de pedido.</p>
-        <p className="text-xs text-gray-600">• Nenhuma campanha WhatsApp será enviada automaticamente.</p>
+      <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 space-y-1.5">
+        <p className="text-xs font-bold uppercase tracking-wide text-muted mb-1">Garantias de segurança</p>
+        <p className="text-xs text-ink2">• Clientes sem telefone entram como não contatáveis para enriquecimento.</p>
+        <p className="text-xs text-ink2">• Produtos agregados não criam pedidos nem itens de pedido.</p>
+        <p className="text-xs text-ink2">• Nenhuma campanha WhatsApp será enviada automaticamente.</p>
       </div>
 
       <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
@@ -972,7 +972,7 @@ function SaiposNemoPreviewStep({
           type="button"
           onClick={handleDownloadV2}
           disabled={v2Loading || loading}
-          className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+          className="rounded-lg border border-blue-200 bg-paper px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
         >
           {v2Loading ? "Gerando…" : "⬇ Gerar Dataset V2"}
         </button>
@@ -988,7 +988,7 @@ function SaiposNemoPreviewStep({
           type="button"
           onClick={handleDownloadV2Importavel}
           disabled={v2ImportavelLoading || loading}
-          className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+          className="rounded-lg border border-indigo-200 bg-paper px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
         >
           {v2ImportavelLoading ? "Gerando…" : "⬇ Gerar V2 Importável"}
         </button>
@@ -996,7 +996,7 @@ function SaiposNemoPreviewStep({
       </div>
 
       <div className="flex gap-2">
-        <button onClick={onBack} disabled={loading} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Voltar</button>
+        <button onClick={onBack} disabled={loading} className="rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">Voltar</button>
         <button
           onClick={() => setConfirmOpen(true)}
           disabled={loading || (contactableCount + nonContactableCount) === 0}
@@ -1009,9 +1009,9 @@ function SaiposNemoPreviewStep({
       {confirmOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { if (!loading) setConfirmOpen(false); }} />
-          <div className="relative z-10 w-full max-w-sm mx-4 bg-white rounded-3xl shadow-2xl p-6 space-y-4">
-            <p className="text-base font-bold text-gray-900">Confirmar importação</p>
-            <p className="text-sm text-gray-600">
+          <div className="relative z-10 w-full max-w-sm mx-4 bg-paper rounded-3xl shadow-2xl p-6 space-y-4">
+            <p className="text-base font-bold text-ink">Confirmar importação</p>
+            <p className="text-sm text-ink2">
               Essa ação vai criar/atualizar clientes e importar agregados de produtos. Não cria pedidos nem itens de pedido.
             </p>
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 space-y-1">
@@ -1020,7 +1020,7 @@ function SaiposNemoPreviewStep({
               <p className="text-xs text-amber-700">• Nenhuma campanha WhatsApp será enviada.</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setConfirmOpen(false)} disabled={loading} className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button onClick={() => setConfirmOpen(false)} disabled={loading} className="flex-1 rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">Cancelar</button>
               <button
                 onClick={() => { setConfirmOpen(false); onConfirm(jobId); }}
                 disabled={loading}
@@ -1044,10 +1044,10 @@ function SaiposNemoDoneStep({ result, onClose }: { result: SaiposNemoExecuteResu
     { label: "Clientes contatáveis atualizados",   value: result.contactableCustomersUpdated,    color: "text-blue-700"  },
     { label: "Não contatáveis criados",             value: result.nonContactableCustomersCreated, color: "text-amber-600" },
     { label: "Não contatáveis atualizados",         value: result.nonContactableCustomersUpdated, color: "text-amber-600" },
-    { label: "Endereços salvos",                    value: result.addressesCreated,               color: "text-gray-700"  },
+    { label: "Endereços salvos",                    value: result.addressesCreated,               color: "text-ink2"  },
     { label: "Produtos agregados importados",       value: result.productAggregatesCreated,       color: "text-blue-700"  },
-    { label: "Produtos agregados ignorados (dup.)", value: result.productAggregatesSkipped,       color: "text-orange-600" },
-    { label: "Sem dados suficientes (ignorados)",   value: result.noPhoneSkippedInsufficientData, color: "text-gray-500"  },
+    { label: "Produtos agregados ignorados (dup.)", value: result.productAggregatesSkipped,       color: "text-brand-600" },
+    { label: "Sem dados suficientes (ignorados)",   value: result.noPhoneSkippedInsufficientData, color: "text-muted"  },
   ];
 
   return (
@@ -1058,13 +1058,13 @@ function SaiposNemoDoneStep({ result, onClose }: { result: SaiposNemoExecuteResu
         </svg>
       </div>
       <div>
-        <p className="text-base font-bold text-gray-900">Importação Saipos + Nemo concluída!</p>
-        <p className="mt-1 text-sm text-gray-500">Dados importados com sucesso.</p>
+        <p className="text-base font-bold text-ink">Importação Saipos + Nemo concluída!</p>
+        <p className="mt-1 text-sm text-muted">Dados importados com sucesso.</p>
       </div>
-      <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+      <div className="w-full rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
         {rows.map((r) => (
           <div key={r.label} className="flex justify-between px-4 py-2.5 text-sm">
-            <span className="text-gray-600">{r.label}</span>
+            <span className="text-ink2">{r.label}</span>
             <span className={`font-bold ${r.color}`}>{r.value}</span>
           </div>
         ))}
@@ -1092,13 +1092,13 @@ function UniversalPreviewStep({
     "text-red-600";
 
   const stats = [
-    { label: "Total de linhas",           value: result.totalRows,        color: "text-gray-900" },
-    { label: "Linhas mapeadas",           value: result.mappedRows,       color: "text-gray-900" },
+    { label: "Total de linhas",           value: result.totalRows,        color: "text-ink" },
+    { label: "Linhas mapeadas",           value: result.mappedRows,       color: "text-ink" },
     { label: "Com telefone válido",       value: result.contactable,      color: "text-green-700" },
     { label: "Sem telefone (nome/e-mail)",value: result.nonContactable,   color: "text-amber-600" },
-    { label: "Linhas ignoradas",          value: result.skipped,          color: "text-gray-500" },
+    { label: "Linhas ignoradas",          value: result.skipped,          color: "text-muted" },
     { label: "Telefones inválidos",       value: result.invalidPhones,    color: "text-red-600" },
-    { label: "Duplicatas no arquivo",     value: result.duplicatesInFile, color: "text-orange-600" },
+    { label: "Duplicatas no arquivo",     value: result.duplicatesInFile, color: "text-brand-600" },
     { label: "Clientes já existentes",    value: result.conflicts,        color: "text-blue-700" },
   ];
 
@@ -1106,12 +1106,12 @@ function UniversalPreviewStep({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-gray-800">Análise do arquivo</p>
-          <p className="text-xs text-gray-500 mt-0.5">Nenhum dado foi importado — esta é apenas uma análise.</p>
+          <p className="text-sm font-semibold text-ink">Análise do arquivo</p>
+          <p className="text-xs text-muted mt-0.5">Nenhum dado foi importado — esta é apenas uma análise.</p>
         </div>
         <div className="flex flex-col items-center">
           <span className={`text-2xl font-bold ${scoreColor}`}>{result.qualityScore}</span>
-          <span className="text-[10px] text-gray-500">qualidade</span>
+          <span className="text-[10px] text-muted">qualidade</span>
         </div>
       </div>
 
@@ -1126,10 +1126,10 @@ function UniversalPreviewStep({
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+      <div className="rounded-2xl border border-line bg-[#FAFAF8] divide-y divide-line">
         {stats.map((s) => (
           <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-sm text-gray-600">{s.label}</span>
+            <span className="text-sm text-ink2">{s.label}</span>
             <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
           </div>
         ))}
@@ -1137,21 +1137,21 @@ function UniversalPreviewStep({
 
       {result.fieldCoverage.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-600 mb-2">Cobertura de campos</p>
+          <p className="text-xs font-semibold text-ink2 mb-2">Cobertura de campos</p>
           <div className="space-y-1.5">
             {result.fieldCoverage
               .filter((f) => f.nonEmptyCount > 0)
               .sort((a, b) => b.percent - a.percent)
               .map((f) => (
                 <div key={f.canonicalKey} className="flex items-center gap-2">
-                  <span className="w-36 shrink-0 text-xs text-gray-600 truncate">{f.label}</span>
-                  <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                  <span className="w-36 shrink-0 text-xs text-ink2 truncate">{f.label}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-line2 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-indigo-500"
                       style={{ width: `${f.percent}%` }}
                     />
                   </div>
-                  <span className="text-xs text-gray-500 w-8 text-right">{f.percent}%</span>
+                  <span className="text-xs text-muted w-8 text-right">{f.percent}%</span>
                 </div>
               ))}
           </div>
@@ -1164,7 +1164,7 @@ function UniversalPreviewStep({
 
       <button
         onClick={onBack}
-        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+        className="w-full rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8]"
       >
         ← Ajustar mapeamento
       </button>
@@ -1203,20 +1203,20 @@ function RecentJobs() {
   if (jobs.length === 0) return null;
 
   return (
-    <div className="mt-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Importações recentes</p>
+    <div className="mt-2 rounded-xl border border-line bg-[#FAFAF8] p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted mb-1.5">Importações recentes</p>
       <div className="space-y-1 max-h-28 overflow-y-auto">
         {jobs.slice(0, 5).map((job) => (
           <div key={job.id} className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="truncate text-gray-700">
+            <span className="truncate text-ink2">
               {job.filename || job.type} ·{" "}
-              <span className="text-gray-500">{new Date(job.createdAt).toLocaleDateString("pt-BR")}</span>
+              <span className="text-muted">{new Date(job.createdAt).toLocaleDateString("pt-BR")}</span>
             </span>
             <span className="shrink-0 font-semibold text-green-700">
               {job.createdOrders > 0
                 ? `${job.createdOrders} pedidos`
                 : `${job.createdCustomers} clientes`}
-              {job.skippedDuplicates > 0 && <span className="ml-1 text-orange-600">({job.skippedDuplicates} dup.)</span>}
+              {job.skippedDuplicates > 0 && <span className="ml-1 text-brand-600">({job.skippedDuplicates} dup.)</span>}
             </span>
           </div>
         ))}
@@ -1444,11 +1444,11 @@ export function ImportModal({
         onClick={step !== "importing" ? handleClose : undefined}
       />
 
-      <div className="relative z-10 w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative z-10 w-full sm:max-w-md bg-paper rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 pt-5 pb-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{titleByStep[step]}</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">{titleByStep[step]}</p>
           {step !== "importing" && (
-            <button onClick={handleClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100" aria-label="Fechar">
+            <button onClick={handleClose} className="rounded-full p-1.5 text-muted hover:bg-[#F4F4F2]" aria-label="Fechar">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
               </svg>
@@ -1478,8 +1478,8 @@ export function ImportModal({
           {importType === "universal_mapper" && step === "universal_map" && parsed && (
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-semibold text-gray-800">Confirmar mapeamento de colunas</p>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-sm font-semibold text-ink">Confirmar mapeamento de colunas</p>
+                <p className="text-xs text-muted mt-0.5">
                   Arquivo: <strong>{parsed.fileName}</strong> · {parsed.totalRows} linhas
                 </p>
               </div>
@@ -1496,7 +1496,7 @@ export function ImportModal({
               />
               <button
                 onClick={() => setStep("upload")}
-                className="text-xs text-gray-500 hover:underline"
+                className="text-xs text-muted hover:underline"
               >
                 ← Voltar
               </button>

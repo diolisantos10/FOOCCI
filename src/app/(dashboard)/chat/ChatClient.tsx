@@ -112,10 +112,10 @@ function getStatusBadge(conv: ConvSummary): StatusBadge {
   if (conv.status === "AI_ATENDENDO" || conv.aiEnabled)
     return { label: "IA atendendo",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
   if (conv.status === "RESOLVED")
-    return { label: "Finalizada",     cls: "bg-gray-100 text-gray-500 border-gray-200" };
+    return { label: "Finalizada",     cls: "bg-[#F4F4F2] text-muted border-line2" };
   if (conv.unreadCount > 0)
     return { label: "Nova mensagem",  cls: "bg-red-100 text-red-700 border-red-200" };
-  return { label: conv.status,        cls: "bg-gray-100 text-gray-500 border-gray-200" };
+  return { label: conv.status,        cls: "bg-[#F4F4F2] text-muted border-line2" };
 }
 
 function convSortKey(conv: ConvSummary): number {
@@ -271,12 +271,12 @@ export function ChatClient({ userId }: { userId: string }) {
 
       {/* ── LEFT PANEL ──────────────────────────────────────────────────── */}
       <aside className={`
-        flex-col border-r border-gray-200 bg-white
+        flex-col border-r border-line2 bg-paper
         ${mobileView === "list" ? "flex w-full" : "hidden"}
         lg:flex lg:w-80 lg:shrink-0
       `}>
         {/* Search */}
-        <div className="border-b border-gray-100 px-3 pt-3 pb-2">
+        <div className="border-b border-line px-3 pt-3 pb-2">
           <form
             onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }}
             className="flex gap-2"
@@ -286,11 +286,11 @@ export function ChatClient({ userId }: { userId: string }) {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Nome, telefone…"
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="min-w-0 flex-1 rounded-lg border border-line2 px-3 py-1.5 text-sm placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
             />
             <button
               type="submit"
-              className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-600 transition-colors"
+              className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-600 transition-colors"
             >
               Buscar
             </button>
@@ -298,7 +298,7 @@ export function ChatClient({ userId }: { userId: string }) {
         </div>
 
         {/* Filter chips */}
-        <div className="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-3 py-2 scrollbar-hide">
+        <div className="flex gap-1.5 overflow-x-auto border-b border-line px-3 py-2 scrollbar-hide">
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.id}
@@ -306,8 +306,8 @@ export function ChatClient({ userId }: { userId: string }) {
               onClick={() => setStatusFilter(f.id)}
               className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                 statusFilter === f.id
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-brand-500 text-white"
+                  : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
               }`}
             >
               {f.label}
@@ -318,16 +318,16 @@ export function ChatClient({ userId }: { userId: string }) {
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           {loadingList ? (
-            <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+            <div className="flex items-center justify-center py-12 text-sm text-muted">
               Carregando…
             </div>
           ) : displayed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-gray-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted">
               <span className="text-2xl">🤖</span>
               <p>Nenhuma conversa encontrada.</p>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-line">
               {displayed.map((conv) => {
                 const last      = conv.messages[0];
                 const preview   = last ? last.content.slice(0, 60) : "Sem mensagens";
@@ -342,33 +342,33 @@ export function ChatClient({ userId }: { userId: string }) {
                       onClick={() => handleSelectConv(conv.id)}
                       className={`w-full border-l-2 px-3 py-3 text-left transition-colors ${
                         isSelected
-                          ? "border-orange-500 bg-orange-50"
+                          ? "border-brand-500 bg-brand-50"
                           : conv.unreadCount > 0
                           ? "border-red-400 bg-red-50/40 hover:bg-red-50/70"
                           : !conv.aiEnabled
                           ? "border-blue-400 hover:bg-blue-50/20"
-                          : "border-transparent hover:bg-gray-50"
+                          : "border-transparent hover:bg-[#FAFAF8]"
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
                         {/* Avatar */}
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
                           {initials(name)}
                         </div>
 
                         {/* Content */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="truncate text-sm font-semibold text-gray-900">
+                            <span className="truncate text-sm font-semibold text-ink">
                               {name}
                             </span>
-                            <span className="shrink-0 text-[10px] text-gray-400">
+                            <span className="shrink-0 text-[10px] text-muted">
                               {fmtTime(conv.lastMessageAt)}
                             </span>
                           </div>
 
                           <div className="mt-0.5 flex items-center gap-1.5">
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-[10px] text-muted">
                               {CHANNEL_ICONS[conv.channel] ?? "💬"}
                             </span>
                             {conv.unreadCount > 0 && (
@@ -381,7 +381,7 @@ export function ChatClient({ userId }: { userId: string }) {
                             </span>
                           </div>
 
-                          <p className="mt-1 truncate text-xs text-gray-500">{preview}</p>
+                          <p className="mt-1 truncate text-xs text-muted">{preview}</p>
                         </div>
                       </div>
                     </button>
@@ -392,7 +392,7 @@ export function ChatClient({ userId }: { userId: string }) {
           )}
         </div>
 
-        <div className="border-t border-gray-100 px-3 py-2 text-xs text-gray-400">
+        <div className="border-t border-line px-3 py-2 text-xs text-muted">
           {displayed.length} conversa{displayed.length !== 1 ? "s" : ""}
         </div>
       </aside>
@@ -404,13 +404,13 @@ export function ChatClient({ userId }: { userId: string }) {
         lg:flex lg:flex-1
       `}>
         {!selectedId ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-gray-400">
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted">
             <span className="text-5xl">🤖</span>
-            <p className="text-sm font-medium text-gray-500">Selecione uma conversa</p>
-            <p className="text-xs text-gray-400">para ver o histórico e gerenciar o atendimento</p>
+            <p className="text-sm font-medium text-muted">Selecione uma conversa</p>
+            <p className="text-xs text-muted">para ver o histórico e gerenciar o atendimento</p>
           </div>
         ) : loadingThread && !thread ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
+          <div className="flex h-full items-center justify-center text-sm text-muted">
             Carregando…
           </div>
         ) : thread ? (
@@ -475,33 +475,33 @@ function ThreadPanel({
   return (
     <>
       {/* Header */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3">
+      <div className="shrink-0 border-b border-line2 bg-paper px-4 py-3">
         <div className="flex items-center gap-2">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
               aria-label="Voltar"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] lg:hidden"
             >
               ←
             </button>
           )}
 
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               {initials(name)}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-gray-900">{name}</p>
-              <p className="text-xs text-gray-500">
+              <p className="truncate text-sm font-bold text-ink">{name}</p>
+              <p className="text-xs text-muted">
                 {thread.customerPhone ?? thread.customer?.phone ?? "Sem telefone"}
               </p>
             </div>
           </div>
 
           <div className="hidden items-center gap-1.5 sm:flex">
-            <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+            <span className="flex items-center gap-1 rounded-full bg-[#F4F4F2] px-2 py-0.5 text-xs font-medium text-ink2">
               {CHANNEL_ICONS[thread.channel] ?? "💬"}
               <span className="hidden md:inline ml-1">{thread.channel.replace("_", " ")}</span>
             </span>
@@ -518,7 +518,7 @@ function ThreadPanel({
               type="button"
               onClick={onTakeover}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               Assumir atendimento
             </button>
@@ -528,7 +528,7 @@ function ThreadPanel({
               type="button"
               onClick={onRelease}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
             >
               Devolver para IA
             </button>
@@ -537,9 +537,9 @@ function ThreadPanel({
       </div>
 
       {/* Message thread */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-4">
+      <div className="flex-1 overflow-y-auto bg-[#FAFAF8] px-4 py-4">
         {thread.messages.length === 0 ? (
-          <p className="text-center text-sm text-gray-400">Sem mensagens ainda.</p>
+          <p className="text-center text-sm text-muted">Sem mensagens ainda.</p>
         ) : (
           <div className="space-y-2">
             {thread.messages.map((msg) => (
@@ -566,7 +566,7 @@ function ThreadPanel({
 
       {/* Composer */}
       {isHuman ? (
-        <div className="shrink-0 border-t border-gray-200 bg-white">
+        <div className="shrink-0 border-t border-line2 bg-paper">
           <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-1.5">
             <span className="text-[10px] text-amber-700">
               ⚠️ Resposta registrada internamente — envio ao cliente será conectado na próxima etapa.
@@ -584,19 +584,19 @@ function ThreadPanel({
               }}
               placeholder="Digite uma resposta… (Enter para enviar)"
               rows={1}
-              className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
             />
             <button
               type="submit"
               disabled={sending || !replyText.trim()}
-              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               {sending ? "…" : "Enviar"}
             </button>
           </form>
         </div>
       ) : (
-        <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs text-gray-400">
+        <div className="shrink-0 border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-xs text-muted">
           {isAI
             ? "IA está respondendo automaticamente. Assuma o atendimento para enviar mensagens."
             : "Conversa finalizada."}
@@ -625,7 +625,7 @@ function ChatBubble({
   if (isSystem) {
     return (
       <div className="flex justify-center">
-        <span className="rounded-full bg-gray-200 px-3 py-1 text-[10px] text-gray-500">
+        <span className="rounded-full bg-line2 px-3 py-1 text-[10px] text-muted">
           {msg.content}
         </span>
       </div>
@@ -635,10 +635,10 @@ function ChatBubble({
   const alignRight = isAI || isHuman;
 
   const bubbleCls = isCustomer
-    ? "rounded-bl-sm bg-white text-gray-900 border border-gray-100"
+    ? "rounded-bl-sm bg-paper text-ink border border-line"
     : isAI
     ? "rounded-br-sm bg-purple-500 text-white"
-    : "rounded-br-sm bg-orange-500 text-white";
+    : "rounded-br-sm bg-brand-500 text-white";
 
   const senderLabel = isCustomer
     ? customerName
@@ -648,11 +648,11 @@ function ChatBubble({
 
   return (
     <div className={`flex flex-col gap-1 ${alignRight ? "items-end" : "items-start"}`}>
-      <span className="px-1 text-[10px] text-gray-400">{senderLabel}</span>
+      <span className="px-1 text-[10px] text-muted">{senderLabel}</span>
       <div className={`max-w-[72%] rounded-2xl px-4 py-2 text-sm shadow-sm ${bubbleCls}`}>
         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
       </div>
-      <span className="px-1 text-[10px] text-gray-400">{fmtTime(msg.sentAt)}</span>
+      <span className="px-1 text-[10px] text-muted">{fmtTime(msg.sentAt)}</span>
     </div>
   );
 }

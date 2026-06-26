@@ -182,16 +182,16 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
     navigator.clipboard?.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 1500); });
   }
 
-  if (loading) return <div className="p-6 text-sm text-gray-500">Carregando…</div>;
+  if (loading) return <div className="p-6 text-sm text-muted">Carregando…</div>;
   const connected = isConnected(view);
   const env = view?.env ?? null;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8 space-y-6 text-gray-800">
+    <div className="mx-auto max-w-3xl px-6 py-8 space-y-6 text-ink">
       <div>
-        <Link href="/integracoes" className="text-sm text-gray-500 hover:text-gray-700">← Integrações</Link>
+        <Link href="/integracoes" className="text-sm text-muted hover:text-ink2">← Integrações</Link>
         <h1 className="mt-1 text-2xl font-bold">Instagram</h1>
-        <p className="text-sm text-gray-500">Receba mensagens do Instagram Direct na Central de Atendimento.</p>
+        <p className="text-sm text-muted">Receba mensagens do Instagram Direct na Central de Atendimento.</p>
       </div>
 
       {msg && (
@@ -200,16 +200,16 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Page selection (após retorno do OAuth) ── */}
       {flow === "select_page" && (
-        <section className="rounded-xl border border-sky-200 bg-white p-4">
+        <section className="rounded-xl border border-sky-200 bg-paper p-4">
           <h2 className="text-sm font-semibold">Escolha a Página do Facebook</h2>
-          <p className="mt-1 text-sm text-gray-500">Conectada ao Instagram profissional do restaurante.</p>
+          <p className="mt-1 text-sm text-muted">Conectada ao Instagram profissional do restaurante.</p>
           <div className="mt-3 space-y-2">
-            {candidates.length === 0 && <p className="text-sm text-gray-500">Nenhuma Página encontrada.</p>}
+            {candidates.length === 0 && <p className="text-sm text-muted">Nenhuma Página encontrada.</p>}
             {candidates.map((c) => (
-              <div key={c.pageId} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+              <div key={c.pageId} className="flex items-center justify-between rounded-lg border border-line2 px-3 py-2">
                 <div>
                   <p className="text-sm font-medium">{c.pageName || "Página do Facebook"}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted">
                     {c.hasInstagram ? `Instagram conectado: ${c.instagramUsername ? "@" + c.instagramUsername : "sim"}` : "Esta Página não possui Instagram profissional conectado."}
                   </p>
                 </div>
@@ -225,13 +225,13 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Não conectado: Conectar com Facebook (caminho principal) ── */}
       {flow === "normal" && !connected && (
-        <section className="rounded-xl border border-gray-200 bg-white p-6 text-center">
-          <p className="text-sm text-gray-600">Conecte sua conta da Meta para receber o Instagram Direct na Central.</p>
+        <section className="rounded-xl border border-line2 bg-paper p-6 text-center">
+          <p className="text-sm text-ink2">Conecte sua conta da Meta para receber o Instagram Direct na Central.</p>
           <a href="/api/integrations/meta/oauth/start"
             className="mt-3 inline-block rounded-md bg-[#1877F2] px-5 py-2.5 font-semibold text-white hover:bg-[#166fe0]">
             Conectar com Facebook
           </a>
-          <p className="mt-2 text-xs text-gray-400">Você será direcionado para a Meta para autorizar o Foocci.</p>
+          <p className="mt-2 text-xs text-muted">Você será direcionado para a Meta para autorizar o Foocci.</p>
           {view && !view.metaConnectAvailable && (
             <div className="mx-auto mt-3 max-w-md rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">
               <p>Conexão automática indisponível no momento. Fale com o suporte Foocci.</p>
@@ -260,17 +260,17 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={runTest} disabled={testing} className="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50">{testing ? "Testando…" : "Rodar diagnóstico"}</button>
-            {canEdit && view?.mode !== "REPLY_ONLY" && <button onClick={() => save({ mode: "REPLY_ONLY" }, "Resposta manual ativada.")} disabled={saving} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-white">Ativar resposta manual</button>}
-            {canEdit && <button onClick={() => save({ paused: !view?.paused })} disabled={saving} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-white">{view?.paused ? "Despausar" : "Pausar"}</button>}
-            {canEdit && <button onClick={disconnect} disabled={saving} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-white">Desconectar</button>}
-            <Link href="/atendimento" className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-white">Abrir Central de Atendimento</Link>
+            {canEdit && view?.mode !== "REPLY_ONLY" && <button onClick={() => save({ mode: "REPLY_ONLY" }, "Resposta manual ativada.")} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Ativar resposta manual</button>}
+            {canEdit && <button onClick={() => save({ paused: !view?.paused })} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">{view?.paused ? "Despausar" : "Pausar"}</button>}
+            {canEdit && <button onClick={disconnect} disabled={saving} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-paper">Desconectar</button>}
+            <Link href="/atendimento" className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Abrir Central de Atendimento</Link>
           </div>
         </section>
       )}
 
       {/* Diagnóstico amigável */}
       {test && (
-        <section className="rounded-xl border border-gray-200 bg-white p-4 text-sm">
+        <section className="rounded-xl border border-line2 bg-paper p-4 text-sm">
           <h2 className="text-sm font-semibold">Diagnóstico</h2>
           <div className="mt-2 space-y-0.5">
             <p>Conta conectada: <b>{view?.facebookPageId ? "OK" : "pendente"}</b></p>
@@ -279,7 +279,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <p>Webhook: <b>{test.webhook}</b></p>
             <p>Central: <b>{test.centralChannel}</b></p>
             <p>Envio real: <b>{test.realSend}</b></p>
-            <p className="text-xs text-gray-500">Nenhuma mensagem foi enviada.{supportMode ? ` (runtimeTouched: ${String(test.runtimeTouched)})` : ""}</p>
+            <p className="text-xs text-muted">Nenhuma mensagem foi enviada.{supportMode ? ` (runtimeTouched: ${String(test.runtimeTouched)})` : ""}</p>
           </div>
         </section>
       )}
@@ -296,12 +296,12 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* ── Avançado · Uso interno Foocci — prontidão da plataforma (support gate) ── */}
       {supportMode && (
-      <details className="rounded-xl border border-gray-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-600">Avançado · Uso interno Foocci</summary>
-        <div className="mt-3 space-y-4 text-sm text-gray-600">
+      <details className="rounded-xl border border-line2 bg-paper p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-ink2">Avançado · Uso interno Foocci</summary>
+        <div className="mt-3 space-y-4 text-sm text-ink2">
           <button
             onClick={() => copy(buildInstagramSetupInstructions(), "setup")}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8]"
           >
             {copied === "setup" ? "Copiado!" : "Copiar instruções de setup Instagram"}
           </button>
@@ -309,7 +309,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
           {/* A — Variáveis no servidor (✓/✗, nomes apenas — nunca valores) */}
           {env && (
             <div className="space-y-0.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">A · Variáveis no servidor</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">A · Variáveis no servidor</p>
               <IgCheck ok={env.appId}              label="META_APP_ID ou FACEBOOK_APP_ID" />
               <IgCheck ok={env.appSecret}          label="META_APP_SECRET ou FACEBOOK_APP_SECRET" />
               <IgCheck ok={env.webhookVerifyToken} label="INSTAGRAM_WEBHOOK_VERIFY_TOKEN" />
@@ -321,7 +321,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
           {/* B — Webhook */}
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">B · Webhook</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">B · Webhook</p>
             <IgItem label={`URL: ${view?.webhookUrl ?? instagramWebhookUrl()}`} />
             <IgCheck ok={env?.webhookReachable ?? false} label="Endpoint público / alcançável" />
             <IgCheck ok={(env?.webhookVerifyToken ?? false) || (view?.verifyTokenConfigured ?? false)} label="Verify token configurado" />
@@ -332,14 +332,14 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
           {/* C — Permissões (App Review) */}
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">C · Permissões (App Review)</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">C · Permissões (App Review)</p>
             {INSTAGRAM_REVIEW_SCOPES.map((s) => <IgItem key={s} label={s} />)}
             <div className="text-amber-600">⚠ instagram_manage_messages e pages_messaging exigem App Review. Antes da aprovação, use uma conta Tester.</div>
           </div>
 
           {/* D — Fluxo de teste seguro */}
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">D · Fluxo de teste seguro</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">D · Fluxo de teste seguro</p>
             <IgItem label="1. Conectar com Facebook → escolher Página" />
             <IgItem label="2. Rodar diagnóstico (não envia nenhuma mensagem)" />
             <IgItem label="3. Enviar DM de uma conta Tester" />
@@ -352,13 +352,13 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* Webhook (support gate) */}
       {supportMode && (
-      <section className="rounded-xl border border-gray-200 bg-white p-4">
+      <section className="rounded-xl border border-line2 bg-paper p-4">
         <h2 className="text-sm font-semibold">Webhook</h2>
-        <p className="mt-1 text-sm text-gray-500">Callback URL para o painel da Meta (configurada automaticamente quando você conecta).</p>
+        <p className="mt-1 text-sm text-muted">Callback URL para o painel da Meta (configurada automaticamente quando você conecta).</p>
         {view?.webhookUrl ? (
           <div className="mt-2 flex items-center gap-2">
-            <code className="flex-1 overflow-x-auto rounded-md bg-gray-100 px-3 py-2 text-xs">{view.webhookUrl}</code>
-            <button onClick={() => copy(view.webhookUrl ?? "", "wh")} className="rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50">{copied === "wh" ? "Copiado!" : "Copiar"}</button>
+            <code className="flex-1 overflow-x-auto rounded-md bg-[#F4F4F2] px-3 py-2 text-xs">{view.webhookUrl}</code>
+            <button onClick={() => copy(view.webhookUrl ?? "", "wh")} className="rounded-md border border-line2 px-3 py-2 text-xs hover:bg-[#FAFAF8]">{copied === "wh" ? "Copiado!" : "Copiar"}</button>
           </div>
         ) : (
           <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -370,10 +370,10 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* Configuração manual avançada (accordion, support gate) */}
       {supportMode && (
-      <details className="rounded-xl border border-gray-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-gray-600">Configuração manual avançada</summary>
+      <details className="rounded-xl border border-line2 bg-paper p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-ink2">Configuração manual avançada</summary>
         <div className="mt-3 space-y-3">
-          <p className="text-xs text-gray-500">Use apenas se preferir configurar manualmente em vez de &ldquo;Conectar com Facebook&rdquo;.</p>
+          <p className="text-xs text-muted">Use apenas se preferir configurar manualmente em vez de &ldquo;Conectar com Facebook&rdquo;.</p>
           <Field label="Facebook Page ID" value={pageId} onChange={setPageId} placeholder="ex.: 1029384756" disabled={!canEdit} />
           <Field label="Instagram Business Account ID" value={igId} onChange={setIgId} placeholder="ex.: 1789...456" disabled={!canEdit} />
 
@@ -387,9 +387,9 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             ) : (
               <input type="password" value={pageToken} onChange={(e) => setPageToken(e.target.value)} disabled={!canEdit}
                 placeholder="Cole o Page Access Token (não será exibido depois de salvo)" autoComplete="off"
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+                className="mt-1 w-full rounded-md border border-line2 px-3 py-2 text-sm" />
             )}
-            <p className="mt-1 text-xs text-gray-500">Guardado de forma criptografada. O Foocci nunca exibe o token salvo.</p>
+            <p className="mt-1 text-xs text-muted">Guardado de forma criptografada. O Foocci nunca exibe o token salvo.</p>
           </div>
 
           <div>
@@ -397,9 +397,9 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <div className="mt-1 flex items-center gap-2">
               <input value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} disabled={!canEdit}
                 placeholder={view?.verifyTokenConfigured ? "Já configurado — gere um novo para substituir" : "Gere e cole o mesmo valor na Meta"}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm" />
-              {canEdit && <button onClick={() => setVerifyToken(randomVerifyToken())} className="rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50">Gerar</button>}
-              {verifyToken && <button onClick={() => copy(verifyToken, "vt")} className="rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50">{copied === "vt" ? "Copiado!" : "Copiar"}</button>}
+                className="flex-1 rounded-md border border-line2 px-3 py-2 text-sm" />
+              {canEdit && <button onClick={() => setVerifyToken(randomVerifyToken())} className="rounded-md border border-line2 px-3 py-2 text-xs hover:bg-[#FAFAF8]">Gerar</button>}
+              {verifyToken && <button onClick={() => copy(verifyToken, "vt")} className="rounded-md border border-line2 px-3 py-2 text-xs hover:bg-[#FAFAF8]">{copied === "vt" ? "Copiado!" : "Copiar"}</button>}
             </div>
             <p className="mt-1 text-xs text-amber-600">Copie este token agora. Por segurança, ele não será exibido novamente.</p>
           </div>
@@ -410,14 +410,14 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
               {(["DISABLED", "RECEIVE_ONLY", "REPLY_ONLY"] as Mode[]).map((m) => (
                 <label key={m} className="flex items-center gap-2 text-sm"><input type="radio" name="mode" checked={mode === m} onChange={() => setMode(m)} disabled={!canEdit} />{MODE_LABEL[m]}</label>
               ))}
-              <label className="flex items-center gap-2 text-sm text-gray-400"><input type="radio" disabled checked={false} readOnly />{MODE_LABEL.FULL}</label>
+              <label className="flex items-center gap-2 text-sm text-muted"><input type="radio" disabled checked={false} readOnly />{MODE_LABEL.FULL}</label>
             </div>
-            <p className="mt-1 text-xs text-gray-500">A IA automática no Instagram ainda não está ativada. Nesta fase, o Foocci apenas recebe mensagens e permite resposta manual pela Central.</p>
+            <p className="mt-1 text-xs text-muted">A IA automática no Instagram ainda não está ativada. Nesta fase, o Foocci apenas recebe mensagens e permite resposta manual pela Central.</p>
           </div>
 
           {canEdit && (
             <div className="flex justify-end">
-              <button onClick={saveManual} disabled={saving} className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50">{saving ? "Salvando…" : "Salvar configuração manual"}</button>
+              <button onClick={saveManual} disabled={saving} className="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-50">{saving ? "Salvando…" : "Salvar configuração manual"}</button>
             </div>
           )}
         </div>
@@ -426,7 +426,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
       {/* Checklist da Meta (support gate) */}
       {supportMode && (
-      <section className="rounded-xl border border-gray-200 bg-white p-4">
+      <section className="rounded-xl border border-line2 bg-paper p-4">
         <h2 className="text-sm font-semibold">Checklist da Meta</h2>
         <ul className="mt-2 space-y-1 text-sm">
           {[
@@ -438,7 +438,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             { label: "Diagnóstico do Foocci aprovado", done: !!test && test.parser === "OK" },
             { label: "Modo inicial recomendado: Receber mensagens", done: view?.mode === "RECEIVE_ONLY" || view?.mode === "REPLY_ONLY" },
           ].map((c) => (
-            <li key={c.label} className="flex items-start gap-2"><span className={c.done ? "text-emerald-500" : "text-gray-300"}>{c.done ? "✓" : "○"}</span><span className={c.done ? "text-gray-700" : "text-gray-500"}>{c.label}</span></li>
+            <li key={c.label} className="flex items-start gap-2"><span className={c.done ? "text-emerald-500" : "text-muted"}>{c.done ? "✓" : "○"}</span><span className={c.done ? "text-ink2" : "text-muted"}>{c.label}</span></li>
           ))}
         </ul>
       </section>
@@ -448,23 +448,23 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 }
 
 function IgCheck({ ok, label, soft }: { ok: boolean; label: string; soft?: boolean }) {
-  const okColor = soft ? "text-gray-600" : "text-emerald-600";
+  const okColor = soft ? "text-ink2" : "text-emerald-600";
   return (
-    <div className={`text-xs ${ok ? okColor : soft ? "text-gray-400" : "text-red-500"}`}>
+    <div className={`text-xs ${ok ? okColor : soft ? "text-muted" : "text-red-500"}`}>
       {ok ? "✓" : soft ? "○" : "✗"} {label}
     </div>
   );
 }
 
 function IgItem({ label }: { label: string }) {
-  return <div className="text-xs text-gray-500">• {label}</div>;
+  return <div className="text-xs text-muted">• {label}</div>;
 }
 
 function Field({ label, value, onChange, placeholder, disabled }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; disabled?: boolean }) {
   return (
     <div>
       <label className="block text-sm font-medium">{label}</label>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} className="mt-1 w-full rounded-md border border-line2 px-3 py-2 text-sm" />
     </div>
   );
 }

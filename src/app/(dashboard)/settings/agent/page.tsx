@@ -200,7 +200,7 @@ export default function AgentSettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-6 text-sm text-gray-400">
+      <div className="p-6 text-sm text-muted">
         Carregando configuração do agente…
       </div>
     );
@@ -210,10 +210,10 @@ export default function AgentSettingsPage() {
     <form onSubmit={handleSave} className="p-6 max-w-2xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">
+        <h1 className="text-xl font-semibold text-ink">
           Agente WhatsApp — Configuração
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted">
           Configure como o agente se apresenta, responde e encaminha clientes
           no WhatsApp.
         </p>
@@ -237,7 +237,7 @@ export default function AgentSettingsPage() {
       {/* ── 1. Personalidade ─────────────────────────────────────── */}
       <Section title="Personalidade do agente">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-ink2">
             Nome do agente
           </label>
           <input
@@ -246,9 +246,9 @@ export default function AgentSettingsPage() {
             onChange={(e) => set("agentName")(e.target.value)}
             maxLength={50}
             placeholder="Ex: Ju, Max, Agente Foocci"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-muted">
             Nome que o agente usa para se apresentar.
           </p>
         </div>
@@ -259,7 +259,7 @@ export default function AgentSettingsPage() {
       {/* ── 2. Mensagem de boas-vindas ───────────────────────────── */}
       <Section title="Mensagem de boas-vindas">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-ink2">
             Mensagem inicial
           </label>
           <textarea
@@ -268,19 +268,19 @@ export default function AgentSettingsPage() {
             rows={4}
             maxLength={1000}
             placeholder="Ex: Olá! Bem-vindo ao restaurante 🍣 O que você deseja?"
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <CharCount current={form.welcomeMessage.length} max={1000} />
         </div>
         {/* Live preview */}
-        <div className="rounded-xl bg-[#dcf8c6] px-4 py-3 text-sm text-gray-800 shadow-inner max-w-xs">
-          <p className="text-[11px] font-semibold text-gray-500 mb-1">Pré-visualização</p>
+        <div className="rounded-xl bg-[#dcf8c6] px-4 py-3 text-sm text-ink shadow-inner max-w-xs">
+          <p className="text-[11px] font-semibold text-muted mb-1">Pré-visualização</p>
           <p className="whitespace-pre-wrap leading-relaxed">{form.welcomeMessage || "…"}</p>
           {menuOptions.length > 0 && (
             <div className="mt-2 space-y-1">
               {menuOptions.map((o, i) => (
-                <div key={o.id} className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-gray-700">
-                  {i + 1}. {o.label || <span className="text-gray-400 italic">sem rótulo</span>}
+                <div key={o.id} className="rounded bg-paper/70 px-2 py-1 text-xs font-medium text-ink2">
+                  {i + 1}. {o.label || <span className="text-muted italic">sem rótulo</span>}
                 </div>
               ))}
             </div>
@@ -290,7 +290,7 @@ export default function AgentSettingsPage() {
 
       {/* ── 3. Opções de entrada ─────────────────────────────────── */}
       <Section title="Opções de entrada">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           Botões exibidos após a mensagem de boas-vindas. Cada opção aciona um fluxo.
           Você pode editar, remover, reordenar e adicionar novas opções.
         </p>
@@ -298,7 +298,7 @@ export default function AgentSettingsPage() {
         {/* Options list */}
         <div className="space-y-2">
           {menuOptions.length === 0 && (
-            <p className="rounded-lg border border-dashed border-gray-300 py-4 text-center text-xs text-gray-400">
+            <p className="rounded-lg border border-dashed border-line2 py-4 text-center text-xs text-muted">
               Nenhuma opção configurada. Adicione abaixo.
             </p>
           )}
@@ -327,14 +327,14 @@ export default function AgentSettingsPage() {
           </button>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-gray-500">Adicionar predefinição:</p>
+            <p className="mb-2 text-xs font-medium text-muted">Adicionar predefinição:</p>
             <div className="flex flex-wrap gap-2">
               {PRESETS.map((p) => (
                 <button
                   key={p.label}
                   type="button"
                   onClick={() => addOption(p)}
-                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-brand-300 hover:text-brand-600 transition-colors"
+                  className="rounded-full border border-line2 bg-paper px-3 py-1 text-xs font-medium text-ink2 hover:border-brand-300 hover:text-brand-600 transition-colors"
                 >
                   {FLOW_CONFIG[p.flow].icon} {p.label}
                 </button>
@@ -346,7 +346,7 @@ export default function AgentSettingsPage() {
             <button
               type="button"
               onClick={resetToDefaults}
-              className="text-xs text-gray-400 underline hover:text-gray-600"
+              className="text-xs text-muted underline hover:text-ink2"
             >
               Restaurar padrões
             </button>
@@ -356,12 +356,12 @@ export default function AgentSettingsPage() {
 
       {/* ── 4. Fluxo: Fazer pedido ───────────────────────────────── */}
       <Section title='Fluxo — "Fazer pedido"'>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           Ativado quando o cliente escolhe uma opção com fluxo{" "}
-          <span className="font-semibold text-gray-700">Fazer pedido</span>.
+          <span className="font-semibold text-ink2">Fazer pedido</span>.
         </p>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-ink2">
             Mensagem enviada ao iniciar pedido
           </label>
           <textarea
@@ -370,22 +370,22 @@ export default function AgentSettingsPage() {
             rows={2}
             maxLength={500}
             placeholder="Ex: Ótimo! Aqui está nosso cardápio 👇"
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-ink2">
             URL do cardápio web{" "}
-            <span className="font-normal text-gray-400">(opcional)</span>
+            <span className="font-normal text-muted">(opcional)</span>
           </label>
           <input
             type="url"
             value={form.menuUrl}
             onChange={(e) => set("menuUrl")(e.target.value)}
             placeholder="https://seudominio.com/qr/slug"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-muted">
             Enviado junto com a mensagem acima.
           </p>
         </div>
@@ -393,14 +393,14 @@ export default function AgentSettingsPage() {
 
       {/* ── 5. Fluxo: Transferência para humano ─────────────────── */}
       <Section title='Fluxo — "Falar com atendente"'>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           Ativado quando o cliente escolhe uma opção com fluxo{" "}
-          <span className="font-semibold text-gray-700">Falar com atendente</span>.
+          <span className="font-semibold text-ink2">Falar com atendente</span>.
         </p>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-ink2">
             Telefone do atendente{" "}
-            <span className="font-normal text-gray-400">(WhatsApp, com DDI)</span>
+            <span className="font-normal text-muted">(WhatsApp, com DDI)</span>
           </label>
           <input
             type="tel"
@@ -408,11 +408,11 @@ export default function AgentSettingsPage() {
             onChange={(e) => set("handoffPhone")(e.target.value)}
             maxLength={30}
             placeholder="5511999999999"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-ink2">
             Mensagem de transferência
           </label>
           <textarea
@@ -421,7 +421,7 @@ export default function AgentSettingsPage() {
             rows={2}
             maxLength={500}
             placeholder="Ex: Vou te conectar com um atendente. Um momento! 👋"
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       </Section>
@@ -489,10 +489,10 @@ function OptionCard({
   const flow = FLOW_CONFIG[option.flow];
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+    <div className="rounded-xl border border-line2 bg-[#FAFAF8] p-3 space-y-2">
       <div className="flex items-center gap-2">
         {/* Position badge */}
-        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-line2 text-xs font-bold text-ink2">
           {index + 1}
         </span>
 
@@ -503,14 +503,14 @@ function OptionCard({
           onChange={(e) => onChange({ label: e.target.value })}
           maxLength={60}
           placeholder="Ex: Fazer pedido"
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="flex-1 min-w-0 rounded-lg border border-line2 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
 
         {/* Flow selector */}
         <select
           value={option.flow}
           onChange={(e) => onChange({ flow: e.target.value as FlowType })}
-          className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="rounded-lg border border-line2 bg-paper px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           {FLOW_TYPES.map((f) => (
             <option key={f} value={f}>
@@ -525,7 +525,7 @@ function OptionCard({
             type="button"
             onClick={onMoveUp}
             disabled={index === 0}
-            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-muted hover:bg-line2 disabled:opacity-30"
             aria-label="Mover para cima"
           >
             ▲
@@ -534,7 +534,7 @@ function OptionCard({
             type="button"
             onClick={onMoveDown}
             disabled={index === total - 1}
-            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-muted hover:bg-line2 disabled:opacity-30"
             aria-label="Mover para baixo"
           >
             ▼
@@ -553,7 +553,7 @@ function OptionCard({
       </div>
 
       {/* Flow description */}
-      <p className="pl-8 text-xs text-gray-500">
+      <p className="pl-8 text-xs text-muted">
         {flow.icon} {flow.desc}
       </p>
 
@@ -566,7 +566,7 @@ function OptionCard({
             rows={2}
             maxLength={500}
             placeholder="Mensagem enviada ao cliente ao selecionar esta opção…"
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       )}
@@ -578,8 +578,8 @@ function OptionCard({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-      <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
+    <section className="rounded-xl border border-line2 bg-paper p-5 space-y-4">
+      <h2 className="text-sm font-semibold text-ink2">{title}</h2>
       {children}
     </section>
   );
@@ -598,7 +598,7 @@ function RadioGroup({
 }) {
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-gray-700">{label}</p>
+      <p className="mb-2 text-sm font-medium text-ink2">{label}</p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {options.map((opt) => (
           <label
@@ -606,7 +606,7 @@ function RadioGroup({
             className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-3 text-sm transition-colors ${
               value === opt.value
                 ? "border-brand-500 bg-brand-50 text-brand-700"
-                : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                : "border-line2 text-ink2 hover:border-line2 hover:bg-[#FAFAF8]"
             }`}
           >
             <input
@@ -617,7 +617,7 @@ function RadioGroup({
               onChange={() => onChange(opt.value)}
             />
             <span className="font-medium">{opt.label}</span>
-            <span className="text-xs text-gray-500">{opt.desc}</span>
+            <span className="text-xs text-muted">{opt.desc}</span>
           </label>
         ))}
       </div>
@@ -628,7 +628,7 @@ function RadioGroup({
 function CharCount({ current, max }: { current: number; max: number }) {
   const near = current > max * 0.85;
   return (
-    <p className={`mt-0.5 text-right text-xs ${near ? "text-amber-500" : "text-gray-400"}`}>
+    <p className={`mt-0.5 text-right text-xs ${near ? "text-amber-500" : "text-muted"}`}>
       {current} / {max}
     </p>
   );

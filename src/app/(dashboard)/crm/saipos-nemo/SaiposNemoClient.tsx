@@ -20,17 +20,17 @@ function fmtNum(v: number) {
 
 function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{typeof value === "number" ? fmtNum(value) : value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
+    <div className="rounded-xl border border-line2 bg-paper p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-ink">{typeof value === "number" ? fmtNum(value) : value}</p>
+      {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
     </div>
   );
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">{children}</p>
+    <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">{children}</p>
   );
 }
 
@@ -48,25 +48,25 @@ function FileInput({
   const [fileName, setFileName] = useState<string | null>(null);
   return (
     <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-gray-700">
+      <label className="block text-sm font-medium text-ink2">
         {label}
         {required && <span className="ml-1 text-red-500">*</span>}
       </label>
       <div
-        className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-gray-200 px-4 py-3 transition hover:border-orange-300 hover:bg-orange-50"
+        className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-line2 px-4 py-3 transition hover:border-brand-300 hover:bg-brand-50"
         onClick={() => inputRef.current?.click()}
       >
         <span className="text-2xl">{fileName ? "📄" : "📂"}</span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-700">
+          <p className="truncate text-sm font-medium text-ink2">
             {fileName ?? "Clique para selecionar"}
           </p>
-          <p className="text-xs text-gray-400">{hint}</p>
+          <p className="text-xs text-muted">{hint}</p>
         </div>
         {fileName && (
           <button
             type="button"
-            className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="shrink-0 rounded-full p-1 text-muted hover:bg-[#F4F4F2] hover:text-ink2"
             onClick={(e) => {
               e.stopPropagation();
               setFileName(null);
@@ -141,10 +141,10 @@ function PreviewReport({
       {preview.topProducts.length > 0 && (
         <div>
           <SectionTitle>Top produtos por receita</SectionTitle>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-line2 bg-paper">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b text-left text-gray-400">
+                <tr className="border-b text-left text-muted">
                   <th className="px-4 py-2 font-medium">#</th>
                   <th className="px-4 py-2 font-medium">Produto</th>
                   <th className="px-4 py-2 font-medium">Categoria</th>
@@ -152,13 +152,13 @@ function PreviewReport({
                   <th className="px-4 py-2 font-medium text-right">Receita</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {preview.topProducts.map((p, i) => (
                   <tr key={i}>
-                    <td className="px-4 py-2 text-gray-400">{i + 1}</td>
-                    <td className="px-4 py-2 font-medium text-gray-800">{p.productName}</td>
-                    <td className="px-4 py-2 text-gray-500">{p.categoryName}</td>
-                    <td className="px-4 py-2 text-right text-gray-600">{fmtNum(p.quantitySold)}</td>
+                    <td className="px-4 py-2 text-muted">{i + 1}</td>
+                    <td className="px-4 py-2 font-medium text-ink">{p.productName}</td>
+                    <td className="px-4 py-2 text-muted">{p.categoryName}</td>
+                    <td className="px-4 py-2 text-right text-ink2">{fmtNum(p.quantitySold)}</td>
                     <td className="px-4 py-2 text-right font-medium">{fmtBRL(p.grossRevenue)}</td>
                   </tr>
                 ))}
@@ -172,10 +172,10 @@ function PreviewReport({
       {preview.sampleMerged.length > 0 && (
         <div>
           <SectionTitle>Amostra — primeiros clientes mesclados</SectionTitle>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-line2 bg-paper">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b text-left text-gray-400">
+                <tr className="border-b text-left text-muted">
                   <th className="px-4 py-2 font-medium">Nome</th>
                   <th className="px-4 py-2 font-medium">Telefone</th>
                   <th className="px-4 py-2 font-medium">Fontes</th>
@@ -184,18 +184,18 @@ function PreviewReport({
                   <th className="px-4 py-2 font-medium">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-line">
                 {preview.sampleMerged.map((c, i) => (
                   <tr key={i}>
-                    <td className="px-4 py-2 font-medium text-gray-800">{c.name}</td>
-                    <td className="px-4 py-2 text-gray-600">{c.phone}</td>
+                    <td className="px-4 py-2 font-medium text-ink">{c.name}</td>
+                    <td className="px-4 py-2 text-ink2">{c.phone}</td>
                     <td className="px-4 py-2">
                       {c.sourceSystems.map(s => (
-                        <span key={s} className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">{s}</span>
+                        <span key={s} className="mr-1 rounded bg-[#F4F4F2] px-1.5 py-0.5 text-[10px] font-semibold text-ink2">{s}</span>
                       ))}
                     </td>
-                    <td className="px-4 py-2 text-right text-gray-600">{c.importedOrderCount ?? "—"}</td>
-                    <td className="px-4 py-2 text-right text-gray-600">
+                    <td className="px-4 py-2 text-right text-ink2">{c.importedOrderCount ?? "—"}</td>
+                    <td className="px-4 py-2 text-right text-ink2">
                       {c.importedTotalSpent != null ? fmtBRL(c.importedTotalSpent) : "—"}
                     </td>
                     <td className="px-4 py-2">
@@ -262,7 +262,7 @@ function PreviewReport({
           type="button"
           onClick={onBack}
           disabled={loading}
-          className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          className="rounded-xl border border-line2 px-5 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50"
         >
           ← Voltar
         </button>
@@ -270,7 +270,7 @@ function PreviewReport({
           type="button"
           onClick={onConfirm}
           disabled={loading || stats.readyCount + stats.needsReviewCount === 0}
-          className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 sm:flex-none sm:px-8"
+          className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 sm:flex-none sm:px-8"
         >
           {loading ? "Importando…" : `Confirmar e importar ${fmtNum(stats.readyCount + stats.needsReviewCount)} clientes`}
         </button>
@@ -313,14 +313,14 @@ function DoneScreen({
       <div className="flex gap-3">
         <a
           href="/crm"
-          className="flex-1 rounded-xl border border-gray-300 py-2.5 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="flex-1 rounded-xl border border-line2 py-2.5 text-center text-sm font-medium text-ink2 hover:bg-[#FAFAF8]"
         >
           Ver CRM →
         </a>
         <button
           type="button"
           onClick={onReset}
-          className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          className="rounded-xl border border-line2 px-5 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8]"
         >
           Nova importação
         </button>
@@ -418,8 +418,8 @@ export function SaiposNemoClient() {
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Importação Saipos + Nemo</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-xl font-bold text-ink">Importação Saipos + Nemo</h1>
+        <p className="mt-1 text-sm text-muted">
           Cruzamento inteligente de bases de clientes Saipos e Nemo + análise agregada de vendas.
           Prévia obrigatória antes da execução.
         </p>
@@ -429,13 +429,13 @@ export function SaiposNemoClient() {
       <div className="flex items-center gap-2 text-xs">
         {(["upload", "preview", "done"] as const).map((s, i) => (
           <div key={s} className="flex items-center gap-2">
-            {i > 0 && <div className="h-px w-8 bg-gray-200" />}
+            {i > 0 && <div className="h-px w-8 bg-line2" />}
             <span className={`rounded-full px-2.5 py-1 font-semibold ${
               step === s || (step === "importing" && s === "preview")
-                ? "bg-orange-500 text-white"
+                ? "bg-brand-500 text-white"
                 : step === "done" && s !== "done"
                   ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-500"
+                  : "bg-[#F4F4F2] text-muted"
             }`}>
               {i + 1}. {s === "upload" ? "Upload" : s === "preview" ? "Prévia" : "Concluído"}
             </span>
@@ -452,7 +452,7 @@ export function SaiposNemoClient() {
       {/* Upload step */}
       {step === "upload" && (
         <form onSubmit={handlePreview} className="space-y-6">
-          <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-5">
+          <div className="rounded-xl border border-line2 bg-paper p-6 space-y-5">
             <FileInput
               label="Base de Clientes Saipos"
               hint="BASE CLIENTES SAIPOS.xlsx — planilha de clientes do POS"
@@ -472,8 +472,8 @@ export function SaiposNemoClient() {
             />
           </div>
 
-          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-500 space-y-1">
-            <p className="font-semibold text-gray-600">O que acontece na prévia:</p>
+          <div className="rounded-xl border border-line bg-[#FAFAF8] p-4 text-xs text-muted space-y-1">
+            <p className="font-semibold text-ink2">O que acontece na prévia:</p>
             <ul className="list-disc list-inside space-y-0.5">
               <li>Os três arquivos são lidos e analisados localmente no servidor</li>
               <li>Clientes são cruzados por telefone normalizado (principal) e CPF/CNPJ</li>
@@ -485,7 +485,7 @@ export function SaiposNemoClient() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+            className="w-full rounded-xl bg-brand-500 py-3 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
           >
             {loading ? "Processando arquivos…" : "Gerar prévia →"}
           </button>
@@ -505,10 +505,10 @@ export function SaiposNemoClient() {
       {/* Importing spinner */}
       {step === "importing" && loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="rounded-2xl bg-white p-8 shadow-2xl text-center space-y-3">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-orange-500" />
-            <p className="text-sm font-semibold text-gray-700">Importando clientes e dados de vendas…</p>
-            <p className="text-xs text-gray-400">Isso pode levar alguns segundos.</p>
+          <div className="rounded-2xl bg-paper p-8 shadow-2xl text-center space-y-3">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-line2 border-t-brand-500" />
+            <p className="text-sm font-semibold text-ink2">Importando clientes e dados de vendas…</p>
+            <p className="text-xs text-muted">Isso pode levar alguns segundos.</p>
           </div>
         </div>
       )}

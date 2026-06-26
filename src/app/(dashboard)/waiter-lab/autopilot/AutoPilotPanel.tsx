@@ -596,7 +596,7 @@ function ScoreRing({ score }: { score: number }) {
     score >= 50 ? "text-amber-400" : "text-red-400";
   return (
     <span className={`text-4xl font-bold tabular-nums ${color}`}>
-      {score}<span className="text-lg text-gray-600">/100</span>
+      {score}<span className="text-lg text-ink2">/100</span>
     </span>
   );
 }
@@ -606,7 +606,7 @@ function StatusBadge({ status }: { status: string }) {
     status === "PASS"    ? "bg-green-900 text-green-300" :
     status === "FAIL"    ? "bg-red-900   text-red-300"   :
     status === "running" ? "bg-amber-900 text-amber-300 animate-pulse" :
-                           "bg-gray-800  text-gray-400";
+                           "bg-ink  text-muted";
   return (
     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${cls}`}>
       {status}
@@ -617,9 +617,9 @@ function StatusBadge({ status }: { status: string }) {
 function SeverityBadge({ severity }: { severity: Severity }) {
   const cls =
     severity === "critical" ? "bg-red-900    text-red-200"    :
-    severity === "high"     ? "bg-orange-900 text-orange-300" :
+    severity === "high"     ? "bg-brand-900 text-brand-300" :
     severity === "medium"   ? "bg-amber-900  text-amber-300"  :
-                              "bg-gray-800   text-gray-500";
+                              "bg-ink   text-muted";
   return (
     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${cls}`}>
       {severity}
@@ -630,7 +630,7 @@ function SeverityBadge({ severity }: { severity: Severity }) {
 function TypeBadge({ isSilent }: { isSilent: boolean }) {
   return (
     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-      isSilent ? "bg-blue-900 text-blue-300" : "bg-gray-800 text-gray-500"
+      isSilent ? "bg-blue-900 text-blue-300" : "bg-ink text-muted"
     }`}>
       {isSilent ? "silent" : "typed"}
     </span>
@@ -642,8 +642,8 @@ function AreaScoreBar({ label, score }: { label: string; score: number }) {
   const barColor = score >= 80 ? "bg-green-700"   : score >= 50 ? "bg-amber-700"   : "bg-red-700";
   return (
     <div className="flex items-center gap-1.5">
-      <span className="w-20 shrink-0 text-[9px] text-gray-600 leading-none">{label}</span>
-      <div className="flex-1 h-1 rounded-full bg-gray-800">
+      <span className="w-20 shrink-0 text-[9px] text-ink2 leading-none">{label}</span>
+      <div className="flex-1 h-1 rounded-full bg-ink">
         <div className={`h-1 rounded-full ${barColor}`} style={{ width: `${score}%` }} />
       </div>
       <span className={`w-6 shrink-0 text-right text-[9px] tabular-nums font-bold ${color}`}>
@@ -789,17 +789,17 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         {/* Profile selector */}
         <div className="border-b border-gray-800 px-3 py-2">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-widest text-gray-600">Perfis</span>
+            <span className="text-[10px] uppercase tracking-widest text-ink2">Perfis</span>
             <span className="flex gap-1.5">
-              <button onClick={selectAll}    className="text-[9px] text-gray-600 hover:text-amber-400">todos</button>
-              <button onClick={selectNone}   className="text-[9px] text-gray-600 hover:text-red-400">nenhum</button>
-              <button onClick={selectTyped}  className="text-[9px] text-gray-600 hover:text-gray-300">T</button>
+              <button onClick={selectAll}    className="text-[9px] text-ink2 hover:text-amber-400">todos</button>
+              <button onClick={selectNone}   className="text-[9px] text-ink2 hover:text-red-400">nenhum</button>
+              <button onClick={selectTyped}  className="text-[9px] text-ink2 hover:text-muted">T</button>
               <button onClick={selectSilent} className="text-[9px] text-blue-700 hover:text-blue-400">S</button>
             </span>
           </div>
 
           {/* Typed profiles */}
-          <div className="mb-1 text-[9px] text-gray-700 uppercase tracking-wide">Digitados</div>
+          <div className="mb-1 text-[9px] text-ink2 uppercase tracking-wide">Digitados</div>
           <div className="space-y-1 mb-2">
             {CUSTOMER_PROFILES.filter((p) => !p.isSilent).map((p) => (
               <label key={p.id} className="flex cursor-pointer items-start gap-1.5">
@@ -809,7 +809,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                   onChange={() => toggleProfile(p.id)}
                   className="mt-px shrink-0 accent-amber-500"
                 />
-                <span className="text-[10px] leading-snug text-gray-400">{p.name}</span>
+                <span className="text-[10px] leading-snug text-muted">{p.name}</span>
               </label>
             ))}
           </div>
@@ -825,18 +825,18 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                   onChange={() => toggleProfile(p.id)}
                   className="mt-px shrink-0 accent-blue-500"
                 />
-                <span className="text-[10px] leading-snug text-gray-400">{p.name}</span>
+                <span className="text-[10px] leading-snug text-muted">{p.name}</span>
               </label>
             ))}
           </div>
-          <p className="mt-1.5 text-[9px] text-gray-700">
+          <p className="mt-1.5 text-[9px] text-ink2">
             {selectedIds.size}/{CUSTOMER_PROFILES.length} selecionados
           </p>
         </div>
 
         {/* Speed */}
         <div className="border-b border-gray-800 px-3 py-2">
-          <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Velocidade</div>
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-ink2">Velocidade</div>
           <div className="flex gap-1">
             {SPEED_OPTIONS.map((s, i) => (
               <button
@@ -845,14 +845,14 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                 className={`flex-1 rounded border px-1 py-0.5 text-[9px] transition-colors ${
                   speedIdx === i
                     ? "border-amber-600 text-amber-300"
-                    : "border-gray-800 text-gray-600 hover:border-gray-700 hover:text-gray-400"
+                    : "border-gray-800 text-ink2 hover:border-gray-700 hover:text-muted"
                 }`}
               >
                 {s.label}
               </button>
             ))}
           </div>
-          <p className="mt-0.5 text-[9px] text-gray-700">{stepDelay}ms entre passos</p>
+          <p className="mt-0.5 text-[9px] text-ink2">{stepDelay}ms entre passos</p>
         </div>
 
         {/* Controls */}
@@ -867,14 +867,14 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
           <button
             onClick={stopAutoPilot}
             disabled={status !== "running"}
-            className="w-full rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400 disabled:opacity-30"
+            className="w-full rounded border border-gray-700 px-2 py-1 text-[10px] text-muted hover:border-red-700 hover:text-red-400 disabled:opacity-30"
           >
             ■ Stop
           </button>
           <button
             onClick={resetAll}
             disabled={status === "running"}
-            className="w-full rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-500 hover:border-gray-600 hover:text-gray-300 disabled:opacity-30"
+            className="w-full rounded border border-gray-700 px-2 py-1 text-[10px] text-muted hover:border-gray-600 hover:text-muted disabled:opacity-30"
           >
             ↺ Reset Results
           </button>
@@ -886,22 +886,22 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         {/* Export */}
         {report && (
           <div className="px-3 py-2 space-y-1">
-            <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Exportar</div>
+            <div className="mb-1 text-[10px] uppercase tracking-widest text-ink2">Exportar</div>
             <button
               onClick={() => download(JSON.stringify(report, null, 2), `waiter-autopilot-${slug}-${Date.now()}.json`, "application/json")}
-              className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-gray-500 hover:border-amber-700 hover:text-amber-400"
+              className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-muted hover:border-amber-700 hover:text-amber-400"
             >
               ⬇ JSON (completo)
             </button>
             <button
               onClick={() => download(toCsv(report), `waiter-autopilot-${slug}-${Date.now()}.csv`, "text/csv")}
-              className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-gray-500 hover:border-amber-700 hover:text-amber-400"
+              className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-muted hover:border-amber-700 hover:text-amber-400"
             >
               ⬇ CSV (cenários)
             </button>
             <button
               onClick={() => download(toSummaryText(report), `waiter-autopilot-${slug}-${Date.now()}.txt`, "text/plain")}
-              className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-gray-500 hover:border-amber-700 hover:text-amber-400"
+              className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-muted hover:border-amber-700 hover:text-amber-400"
             >
               ⬇ Relatório TXT
             </button>
@@ -916,18 +916,18 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         {status === "idle" && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center p-6">
             <span className="text-3xl">🤖</span>
-            <p className="text-sm font-semibold text-gray-400">AutoPilot pronto</p>
-            <p className="max-w-xs text-[11px] text-gray-600">
+            <p className="text-sm font-semibold text-muted">AutoPilot pronto</p>
+            <p className="max-w-xs text-[11px] text-ink2">
               {selectedIds.size} perfis ({
                 CUSTOMER_PROFILES.filter((p) => selectedIds.has(p.id) && !p.isSilent).length
               }T + {
                 CUSTOMER_PROFILES.filter((p) => selectedIds.has(p.id) && p.isSilent).length
               }S) · catálogo: {catalog.length} itens
             </p>
-            <p className="text-[10px] text-gray-700">
+            <p className="text-[10px] text-ink2">
               Clique <span className="text-amber-500">▶ Run AutoPilot</span> para iniciar
             </p>
-            <p className="text-[9px] text-gray-800 font-mono">
+            <p className="text-[9px] text-ink font-mono">
               evaluator: {EVALUATOR_VERSION}
             </p>
           </div>
@@ -940,14 +940,14 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
               <div className="flex items-center gap-2">
                 <StatusBadge status="running" />
                 {currentProfile && <TypeBadge isSilent={currentProfile.isSilent ?? false} />}
-                <span className="text-[11px] font-semibold text-gray-300">
+                <span className="text-[11px] font-semibold text-muted">
                   {currentProfile?.name ?? "…"}
                 </span>
-                <span className="text-[10px] text-gray-600">
+                <span className="text-[10px] text-ink2">
                   {profileIdx + 1}/{selectedIds.size}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[10px] text-gray-600">{currentStepLabel}</p>
+              <p className="mt-0.5 truncate text-[10px] text-ink2">{currentStepLabel}</p>
             </div>
 
             <div className="shrink-0 border-b border-gray-800 px-3 py-1.5">
@@ -959,7 +959,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                     className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
                       r.status === "PASS" ? "bg-green-900 text-green-300" :
                       r.status === "FAIL" ? "bg-red-900   text-red-300"   :
-                                            "bg-gray-800  text-gray-500"
+                                            "bg-ink  text-muted"
                     }`}
                   >
                     {r.status === "PASS" ? "✓" : "✗"} {r.profileName.split(" ").slice(-1)}
@@ -969,7 +969,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
             </div>
 
             <div className="flex-1 overflow-y-auto px-3 py-2">
-              <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">
+              <div className="mb-1 text-[10px] uppercase tracking-widest text-ink2">
                 Passos — {currentProfile?.name ?? ""}
               </div>
               <div className="space-y-1.5">
@@ -981,19 +981,19 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                       <span className={step.passed ? "text-green-400" : "text-red-400"}>
                         {step.passed ? "✓" : "✗"}
                       </span>
-                      <span className="text-[10px] font-mono text-gray-400">{step.event}</span>
+                      <span className="text-[10px] font-mono text-muted">{step.event}</span>
                       {step.message && (
-                        <span className="truncate text-[9px] text-gray-600">
+                        <span className="truncate text-[9px] text-ink2">
                           {'"'}{step.message.slice(0, 50)}{'"'}
                         </span>
                       )}
-                      <span className="ml-auto text-[9px] text-gray-700">{step.durationMs}ms</span>
+                      <span className="ml-auto text-[9px] text-ink2">{step.durationMs}ms</span>
                     </div>
                     {step.response && (
-                      <div className="mt-0.5 flex gap-2 text-[9px] text-gray-600">
-                        <span>mode: <span className="text-gray-400">{step.response.mode}</span></span>
-                        <span>cards: <span className="text-gray-400">{step.response.cards.length}</span></span>
-                        <span>opts: <span className="text-gray-400">{step.response.options.length}</span></span>
+                      <div className="mt-0.5 flex gap-2 text-[9px] text-ink2">
+                        <span>mode: <span className="text-muted">{step.response.mode}</span></span>
+                        <span>cards: <span className="text-muted">{step.response.cards.length}</span></span>
+                        <span>opts: <span className="text-muted">{step.response.options.length}</span></span>
                       </div>
                     )}
                     {!step.passed && step.failureTypes.length > 0 && (
@@ -1004,7 +1004,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                   </div>
                 ))}
                 {currentSteps.length === 0 && (
-                  <div className="animate-pulse text-[10px] text-gray-700">Aguardando primeiro passo…</div>
+                  <div className="animate-pulse text-[10px] text-ink2">Aguardando primeiro passo…</div>
                 )}
               </div>
             </div>
@@ -1027,14 +1027,14 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                 <div className="flex items-start gap-6">
                   <div className="flex flex-col items-center">
                     <ScoreRing score={report.score} />
-                    <span className="mt-0.5 text-[9px] uppercase tracking-wide text-gray-600">Score</span>
+                    <span className="mt-0.5 text-[9px] uppercase tracking-wide text-ink2">Score</span>
                   </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
                     <div>
                       <span className={typedPassed === typed.length ? "text-green-400" : "text-amber-400"} style={{ fontWeight: "bold" }}>
                         {typedPassed}/{typed.length}
                       </span>
-                      <span className="ml-1 text-gray-600">typed</span>
+                      <span className="ml-1 text-ink2">typed</span>
                     </div>
                     <div>
                       <span className={silentPassed === silent.length ? "text-green-400" : "text-red-400"} style={{ fontWeight: "bold" }}>
@@ -1044,25 +1044,25 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                     </div>
                     <div>
                       <span className="text-amber-300 font-bold">{report.conversionRate}%</span>
-                      <span className="ml-1 text-gray-600">checkout</span>
+                      <span className="ml-1 text-ink2">checkout</span>
                     </div>
                     <div>
-                      <span className="text-gray-300 font-bold">{report.avgTurns}</span>
-                      <span className="ml-1 text-gray-600">turnos avg</span>
+                      <span className="text-muted font-bold">{report.avgTurns}</span>
+                      <span className="ml-1 text-ink2">turnos avg</span>
                     </div>
                   </div>
                   <div className="ml-auto flex flex-col items-end gap-1">
                     {status === "stopped" && (
                       <span className="text-[10px] text-amber-500">Interrompido</span>
                     )}
-                    <span className="text-[8px] font-mono text-gray-800">{EVALUATOR_VERSION}</span>
+                    <span className="text-[8px] font-mono text-ink">{EVALUATOR_VERSION}</span>
                   </div>
                 </div>
               </div>
 
               {/* Area scores */}
               <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Scores por área</div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">Scores por área</div>
                 <div className="space-y-1">
                   <AreaScoreBar label="Intenção"     score={report.areaScores.intentScore} />
                   <AreaScoreBar label="Produto"      score={report.areaScores.productFitScore} />
@@ -1081,29 +1081,29 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                   </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px]">
                     <div>
-                      <span className="text-gray-600">Conversão: </span>
+                      <span className="text-ink2">Conversão: </span>
                       <span className={sm.silentConversionRate >= 80 ? "text-green-400" : "text-amber-400"}>
                         {sm.silentConversionRate}%
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Upsell oferecido: </span>
+                      <span className="text-ink2">Upsell oferecido: </span>
                       <span className={sm.finalUpsellOfferedRate >= 80 ? "text-green-400" : "text-amber-400"}>
                         {sm.finalUpsellOfferedRate}%
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Upsell aceito: </span>
-                      <span className="text-gray-300">{sm.finalUpsellAcceptedRate}%</span>
+                      <span className="text-ink2">Upsell aceito: </span>
+                      <span className="text-muted">{sm.finalUpsellAcceptedRate}%</span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Invasões: </span>
+                      <span className="text-ink2">Invasões: </span>
                       <span className={sm.invasionFailures === 0 ? "text-green-400" : "text-red-400"}>
                         {sm.invasionFailures}
                       </span>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-600">Upsells perdidos: </span>
+                      <span className="text-ink2">Upsells perdidos: </span>
                       <span className={sm.missedUpsellOpportunities === 0 ? "text-green-400" : "text-amber-400"}>
                         {sm.missedUpsellOpportunities}
                       </span>
@@ -1115,24 +1115,24 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
               {/* Top fixes */}
               {report.topFixes.length > 0 && (
                 <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-                  <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
+                  <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">
                     Top {report.topFixes.length} correções
                   </div>
                   <div className="space-y-1.5">
                     {report.topFixes.map((fix) => (
-                      <div key={fix.failureType} className="rounded border border-gray-800 bg-gray-900/50 px-2 py-1.5">
+                      <div key={fix.failureType} className="rounded border border-gray-800 bg-ink/50 px-2 py-1.5">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           <span className="shrink-0 text-[9px] font-bold text-amber-500">#{fix.priority}</span>
                           <span className="rounded bg-red-950/60 px-1 py-px text-[9px] font-mono text-red-400">
                             {fix.failureType}
                           </span>
-                          <span className="text-[9px] text-gray-600">{fix.affectedScenarios.length} cenário(s)</span>
+                          <span className="text-[9px] text-ink2">{fix.affectedScenarios.length} cenário(s)</span>
                         </div>
-                        <p className="text-[9px] text-gray-500">
-                          <span className="text-gray-600">Área:</span>{" "}
+                        <p className="text-[9px] text-muted">
+                          <span className="text-ink2">Área:</span>{" "}
                           <span className="text-amber-400/80">{fix.implementationArea}</span>
                         </p>
-                        <p className="text-[9px] text-gray-500">{fix.expectedImpact}</p>
+                        <p className="text-[9px] text-muted">{fix.expectedImpact}</p>
                       </div>
                     ))}
                   </div>
@@ -1142,7 +1142,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
               {/* Failure type tags */}
               {Object.keys(report.failureTypes).length > 0 && (
                 <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-                  <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Falhas detectadas</div>
+                  <div className="mb-1 text-[10px] uppercase tracking-widest text-ink2">Falhas detectadas</div>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(report.failureTypes)
                       .sort(([, a], [, b]) => b - a)
@@ -1161,7 +1161,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
 
               {/* Scenario results */}
               <div className="flex-1 overflow-y-auto px-3 py-2">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Cenários</div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-ink2">Cenários</div>
                 <div className="space-y-2">
                   {report.scenarioResults.map((r) => (
                     <div
@@ -1182,14 +1182,14 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                         <StatusBadge status={r.status} />
                         <SeverityBadge severity={r.severity} />
                         <TypeBadge isSilent={r.isSilent} />
-                        <span className="flex-1 text-[10px] font-semibold text-gray-300">
+                        <span className="flex-1 text-[10px] font-semibold text-muted">
                           {r.profileName}
                         </span>
-                        <span className="text-[9px] text-gray-600">
+                        <span className="text-[9px] text-ink2">
                           {r.stepsRun}t · {r.cardsShown.length}c
                           {r.checkoutReached ? " · ✓chk" : ""}
                         </span>
-                        <span className="text-[10px] text-gray-700">
+                        <span className="text-[10px] text-ink2">
                           {expandedResult === r.profileId ? "▲" : "▼"}
                         </span>
                       </button>
@@ -1199,23 +1199,23 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                         <div className="border-t border-gray-800 px-2 py-2 space-y-2">
 
                           {/* Intent comparison */}
-                          <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
-                            <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">Intenção</p>
+                          <div className="rounded bg-ink/60 px-2 py-1.5 space-y-0.5">
+                            <p className="text-[9px] text-ink2 font-semibold uppercase tracking-wide mb-1">Intenção</p>
                             <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
-                              <span className="text-gray-600">Esperada:</span>
-                              <span className="text-gray-400">{r.expectedIntent}</span>
-                              <span className="text-gray-600">Detectada:</span>
+                              <span className="text-ink2">Esperada:</span>
+                              <span className="text-muted">{r.expectedIntent}</span>
+                              <span className="text-ink2">Detectada:</span>
                               <span className="text-amber-400">{r.detectedIntent}</span>
                             </div>
                           </div>
 
                           {/* Action comparison */}
-                          <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
-                            <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">Ação</p>
+                          <div className="rounded bg-ink/60 px-2 py-1.5 space-y-0.5">
+                            <p className="text-[9px] text-ink2 font-semibold uppercase tracking-wide mb-1">Ação</p>
                             <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
-                              <span className="text-gray-600">Esperada:</span>
-                              <span className="text-gray-400">{r.expectedAction}</span>
-                              <span className="text-gray-600">Real:</span>
+                              <span className="text-ink2">Esperada:</span>
+                              <span className="text-muted">{r.expectedAction}</span>
+                              <span className="text-ink2">Real:</span>
                               <span className={r.status === "PASS" ? "text-green-400" : "text-amber-400"}>
                                 {r.actualAction}
                               </span>
@@ -1229,18 +1229,18 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                                 Falhas: {r.failures.join(", ")}
                               </p>
                               {r.failures.map((f) => (
-                                <p key={f} className="text-[9px] text-gray-600">
-                                  <span className="text-gray-500 font-mono">{f}</span>
+                                <p key={f} className="text-[9px] text-ink2">
+                                  <span className="text-muted font-mono">{f}</span>
                                   {" → "}
                                   <span className="text-amber-400/70">{FAILURE_TO_FIX_AREA[f]}</span>
                                 </p>
                               ))}
                               <div className="mt-1 border-t border-red-900/40 pt-1 space-y-0.5">
-                                <p className="text-[9px] text-gray-500">
-                                  <span className="text-gray-600">Causa:</span> {r.probableRootCause}
+                                <p className="text-[9px] text-muted">
+                                  <span className="text-ink2">Causa:</span> {r.probableRootCause}
                                 </p>
-                                <p className="text-[9px] text-gray-500">
-                                  <span className="text-gray-600">Correção:</span>{" "}
+                                <p className="text-[9px] text-muted">
+                                  <span className="text-ink2">Correção:</span>{" "}
                                   <span className="text-green-400/80">{r.recommendedFix}</span>
                                 </p>
                               </div>
@@ -1249,21 +1249,21 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
 
                           {/* Steps */}
                           <div>
-                            <p className="text-[9px] text-gray-600 mb-0.5">Passos:</p>
+                            <p className="text-[9px] text-ink2 mb-0.5">Passos:</p>
                             <div className="space-y-0.5">
                               {r.steps.map((step, i) => (
                                 <div key={i} className="flex items-start gap-1.5 text-[9px]">
                                   <span className={step.passed ? "text-green-400" : "text-red-400"}>
                                     {step.passed ? "✓" : "✗"}
                                   </span>
-                                  <span className="font-mono text-gray-500">{step.event}</span>
+                                  <span className="font-mono text-muted">{step.event}</span>
                                   {step.message && (
-                                    <span className="truncate text-gray-600">
+                                    <span className="truncate text-ink2">
                                       {'"'}{step.message.slice(0, 40)}{'"'}
                                     </span>
                                   )}
                                   {step.response && (
-                                    <span className="ml-auto shrink-0 text-gray-700">
+                                    <span className="ml-auto shrink-0 text-ink2">
                                       {step.response.mode} · {step.response.cards.length}c
                                     </span>
                                   )}
@@ -1275,8 +1275,8 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                           {/* Last waiter message */}
                           {r.waiterMessage && (
                             <div>
-                              <p className="text-[9px] text-gray-600 mb-0.5">Última mensagem:</p>
-                              <p className="text-[9px] text-gray-400 italic">
+                              <p className="text-[9px] text-ink2 mb-0.5">Última mensagem:</p>
+                              <p className="text-[9px] text-muted italic">
                                 {'"'}{r.waiterMessage.slice(0, 120)}{r.waiterMessage.length > 120 ? "…" : ""}{'"'}
                               </p>
                             </div>
