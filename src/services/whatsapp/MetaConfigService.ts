@@ -42,6 +42,8 @@ export interface MetaConfigPublic {
   phoneNumberId:      string | null;
   businessId:         string | null;
   tokenPreview:       string | null; // "EAAB...0000"
+  tokenExpiresAt:     string | null; // ISO date or null (null = token never expires)
+  tokenExpiringSoon:  boolean;       // true when ≤ 30 days to expiry
   lastHealthCheckAt:  string | null;
   lastError:          string | null;
   qualityRating:      string | null;
@@ -94,6 +96,10 @@ export const MetaConfigService = {
     if (!cfg) return null;
     let tokenPreview: string | null = null;
     try { tokenPreview = maskSecret(decrypt(cfg.accessToken)); } catch { tokenPreview = "***"; }
+    const expiresAt = cfg.tokenExpiresAt;
+    const tokenExpiringSoon = expiresAt != null
+      ? expiresAt.getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000
+      : false;
     return {
       connected:          cfg.connectionStatus === "CONNECTED",
       connectionStatus:   cfg.connectionStatus,
@@ -102,6 +108,8 @@ export const MetaConfigService = {
       phoneNumberId:      cfg.phoneNumberId,
       businessId:         cfg.businessId,
       tokenPreview,
+      tokenExpiresAt:     expiresAt?.toISOString() ?? null,
+      tokenExpiringSoon,
       lastHealthCheckAt:  cfg.lastHealthCheckAt?.toISOString() ?? null,
       lastError:          cfg.lastError,
       qualityRating:      cfg.qualityRating,

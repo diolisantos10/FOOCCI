@@ -25,6 +25,8 @@ interface MetaPublic {
   phoneNumberId: string | null;
   businessId: string | null;
   tokenPreview: string | null;
+  tokenExpiresAt: string | null;
+  tokenExpiringSoon: boolean;
   lastError: string | null;
   qualityRating: string | null;
   metaCrmEnabled: boolean;
@@ -261,6 +263,11 @@ export function MetaProviderCard() {
           ) : metaConnected ? (
             <>
               <p className="mt-1 text-xs text-green-700">✓ Conectado{meta?.displayPhoneNumber ? ` · ${meta.displayPhoneNumber}` : ""}</p>
+              {meta?.tokenExpiringSoon && (
+                <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
+                  ⚠ Autorização expira em breve{meta.tokenExpiresAt ? ` (${new Date(meta.tokenExpiresAt).toLocaleDateString("pt-BR")})` : ""}. Reconecte o WhatsApp antes dessa data para não perder o envio de mensagens.
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" disabled={!!busy} onClick={() => action("test", {}, "Mensagem de teste enviada (número interno).")}
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
@@ -407,6 +414,7 @@ export function MetaProviderCard() {
                     <div>phoneNumberId: {maskId(meta.phoneNumberId)}</div>
                     <div>wabaId: {maskId(meta.wabaId)}</div>
                     <div>token: {meta.tokenPreview ?? "—"}</div>
+                    <div>token expira: {meta.tokenExpiresAt ? new Date(meta.tokenExpiresAt).toLocaleDateString("pt-BR") : "nunca"}</div>
                     <div>qualidade: {meta.qualityRating ?? "—"}</div>
                     {meta.lastError && <div className="text-red-500">último erro: {meta.lastError}</div>}
                   </div>
