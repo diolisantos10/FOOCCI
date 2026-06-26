@@ -14,15 +14,18 @@ Régua por tela (sempre):
   R$ nas barras, comparação **dia-da-semana** (hoje vs. mesma quinta passada),
   Mais vendidos = **top 10 com foto**.
 - ✅ **Pedidos** — lista (cards, filtros, performance) + painel de detalhe + modal "Novo pedido".
-- ✅ **Shell** — logomarca grande (anagrama + wordmark) na sidebar/topo; card do dono
-  subiu pro topo, exposto; nav retokenizada.
-- ✅ **Central de Conversas** — paleta da marca + inputs premium (bolhas, lista, busca, composer).
+- ✅ **Shell** — logomarca grande na sidebar/topo; card do dono exposto no topo; nav
+  retokenizada; fundo global do painel → canvas.
+- ✅ **Central de Conversas** — paleta da marca + inputs premium.
+- ✅ **CRM** — todas as abas (Visão geral, Campanhas, Automações, Clientes, Avaliações,
+  Configurações) + Programa, retokenizadas. Cores de segmento preservadas.
+- ✅ **Cardápio** (MenuManager + QRCard + upload) — retokenizado.
+- ✅ **Analytics** — retokenizado.
 
-## A fazer (telas grandes, uma por passo)
-- ⬜ **CRM / Clientes** (`crm/CRMClient.tsx` ~5978 linhas + abas + perfil do cliente)
-- ⬜ **Cardápio** (`menu`)
-- ⬜ **Analytics** OU **Integrações** (a definir com o Diego)
-- ⬜ Polimento: 3 mini-diálogos de Pedidos (cancelar/apagar/confirmar pagamento manual)
+## A fazer
+- ⬜ **Integrações** (`integracoes`) — última tela de conteúdo grande
+- ⬜ Polimento: 3 mini-diálogos de Pedidos (cancelar/apagar/confirmar pagamento manual);
+  perfil do cliente (`customers/[id]`); revisar visualmente CRM/Cardápio/Analytics no ar.
 
 ## Backlog (deixar pro FINAL)
 - ⬜ **Logo do restaurante na sidebar**, logo **abaixo da logo Foocci** (perto do card do dono),
