@@ -316,18 +316,18 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
       {/* Header + range selector */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-gray-900">Cardápio Delivery — Origem dos acessos</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h2 className="text-base font-bold text-ink">Cardápio Delivery — Origem dos acessos</h2>
+          <p className="text-xs text-muted mt-0.5">
             Visitas e pedidos por canal de origem
           </p>
         </div>
-        <div className="flex gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
+        <div className="flex gap-1 rounded-lg border border-line2 bg-paper p-0.5">
           {(["today", "7d", "30d"] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                range === r ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-100"
+                range === r ? "bg-orange-500 text-white" : "text-muted hover:bg-[#F4F4F2]"
               }`}
             >
               {r === "today" ? "Hoje" : r === "7d" ? "7 dias" : "30 dias"}
@@ -340,34 +340,34 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Visitas",  value: totalVisits.toLocaleString("pt-BR"),        color: "text-blue-700"  },
-          { label: "Pedidos",  value: totalOrders.toLocaleString("pt-BR"),        color: "text-orange-700"},
+          { label: "Pedidos",  value: totalOrders.toLocaleString("pt-BR"),        color: "text-brand-700"},
           { label: "Receita",  value: fmt(totalRevenue),                           color: "text-green-700" },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-            <p className="text-xs text-gray-400 font-medium">{kpi.label}</p>
+          <div key={kpi.label} className="rounded-xl border border-line bg-paper p-4 shadow-sm">
+            <p className="text-xs text-muted font-medium">{kpi.label}</p>
             <p className={`mt-1 text-xl font-bold ${kpi.color}`}>{kpi.value}</p>
           </div>
         ))}
       </div>
 
       {/* Source breakdown table */}
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-gray-100 px-5 py-3">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">Por canal</h3>
+      <div className="rounded-xl border border-line bg-paper shadow-sm overflow-hidden">
+        <div className="border-b border-line px-5 py-3">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-muted">Por canal</h3>
         </div>
         {loading ? (
-          <div className="py-10 text-center text-sm text-gray-400">Carregando…</div>
+          <div className="py-10 text-center text-sm text-muted">Carregando…</div>
         ) : rows.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">
+          <div className="py-10 text-center text-sm text-muted">
             Nenhum dado ainda. Use os links rastreáveis abaixo para começar a monitorar origens.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
+                <tr className="border-b border-line bg-[#FAFAF8]">
                   {["Canal", "Visitas", "Pedidos", "Receita", "Conversão", "Ticket médio"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-muted">
                       {h}
                     </th>
                   ))}
@@ -375,17 +375,17 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {rows.map((row) => (
-                  <tr key={row.source} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-gray-800">{row.label}</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-700">{row.visits.toLocaleString("pt-BR")}</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-700">{row.orders.toLocaleString("pt-BR")}</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-700">{fmt(row.revenue)}</td>
+                  <tr key={row.source} className="hover:bg-[#FAFAF8] transition-colors">
+                    <td className="px-4 py-3 font-semibold text-ink">{row.label}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink2">{row.visits.toLocaleString("pt-BR")}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink2">{row.orders.toLocaleString("pt-BR")}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink2">{fmt(row.revenue)}</td>
                     <td className="px-4 py-3 tabular-nums">
-                      <span className={`font-semibold ${row.conversionRate >= 5 ? "text-green-700" : "text-gray-600"}`}>
+                      <span className={`font-semibold ${row.conversionRate >= 5 ? "text-green-700" : "text-ink2"}`}>
                         {row.conversionRate}%
                       </span>
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-gray-700">
+                    <td className="px-4 py-3 tabular-nums text-ink2">
                       {row.avgTicket > 0 ? fmt(row.avgTicket) : "—"}
                     </td>
                   </tr>
@@ -397,10 +397,10 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
       </div>
 
       {/* Link generator */}
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-5 py-3">
-          <h3 className="text-sm font-bold text-gray-900">Links rastreáveis do cardápio</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Clique para copiar e cole na bio, stories ou QR Code</p>
+      <div className="rounded-xl border border-line bg-paper shadow-sm">
+        <div className="border-b border-line px-5 py-3">
+          <h3 className="text-sm font-bold text-ink">Links rastreáveis do cardápio</h3>
+          <p className="text-xs text-muted mt-0.5">Clique para copiar e cole na bio, stories ou QR Code</p>
         </div>
         <div className="divide-y divide-gray-50">
           {SOURCES.map((src) => {
@@ -410,15 +410,15 @@ function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
               <div key={src.key} className="flex items-center gap-3 px-5 py-3">
                 <span className="text-base">{src.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-gray-700">{src.label}</p>
-                  <p className="truncate text-[11px] font-mono text-gray-400">{url}</p>
+                  <p className="text-xs font-semibold text-ink2">{src.label}</p>
+                  <p className="truncate text-[11px] font-mono text-muted">{url}</p>
                 </div>
                 <button
                   onClick={() => copyLink(src.key)}
                   className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                     isCopied
                       ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
                   }`}
                 >
                   {isCopied ? "✓ Copiado!" : "Copiar link"}
@@ -457,7 +457,7 @@ const SEGMENT_COLOR: Record<string, string> = {
   QUENTE:      "bg-rose-500",
   MORNO:       "bg-amber-400",
   FRIO:        "bg-sky-400",
-  SEM_PEDIDOS: "bg-gray-300",
+  SEM_PEDIDOS: "bg-line2",
 };
 
 const TIER_LABEL: Record<string, string> = {
@@ -469,7 +469,7 @@ const TIER_LABEL: Record<string, string> = {
 const TIER_COLOR: Record<string, string> = {
   DIAMANTE: "bg-cyan-400",
   OURO:     "bg-yellow-400",
-  PRATA:    "bg-gray-400",
+  PRATA:    "bg-muted",
   BRONZE:   "bg-orange-400",
 };
 
@@ -540,13 +540,13 @@ function ProductTableControls({
         placeholder="Buscar por nome…"
         value={search}
         onChange={(e) => onSearch(e.target.value)}
-        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
+        className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs text-ink2 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
       />
       {categories.length > 0 && (
         <select
           value={category}
           onChange={(e) => onCategory(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300 max-w-[180px]"
+          className="rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink2 focus:outline-none focus:ring-1 focus:ring-indigo-300 max-w-[180px]"
         >
           <option value="">Todas as categorias</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -555,13 +555,13 @@ function ProductTableControls({
       <select
         value={sortValue}
         onChange={(e) => onSort(e.target.value)}
-        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+        className="rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink2 focus:outline-none focus:ring-1 focus:ring-indigo-300"
       >
         {SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {isFiltered && (
         <>
-          <span className="text-xs text-gray-400">{resultCount} de {totalCount}</span>
+          <span className="text-xs text-muted">{resultCount} de {totalCount}</span>
           <button
             onClick={() => { onSearch(""); onCategory(""); }}
             className="text-[11px] text-indigo-500 underline hover:text-indigo-700"
@@ -580,8 +580,8 @@ function Card({ title, children, className = "" }: {
   title: string; children: React.ReactNode; className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white p-5 ${className}`}>
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h2>
+    <div className={`rounded-xl border border-line2 bg-paper p-5 ${className}`}>
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
       {children}
     </div>
   );
@@ -589,10 +589,10 @@ function Card({ title, children, className = "" }: {
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
+    <div className="rounded-xl border border-line2 bg-paper p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-ink">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
     </div>
   );
 }
@@ -600,9 +600,9 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
 function Empty({ msg = "Sem dados no período", sub }: { msg?: string; sub?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-      <span className="text-3xl text-gray-200">📊</span>
-      <p className="text-sm text-gray-400">{msg}</p>
-      {sub && <p className="text-xs text-gray-300 max-w-sm">{sub}</p>}
+      <span className="text-3xl text-line2">📊</span>
+      <p className="text-sm text-muted">{msg}</p>
+      {sub && <p className="text-xs text-muted max-w-sm">{sub}</p>}
     </div>
   );
 }
@@ -610,9 +610,9 @@ function Empty({ msg = "Sem dados no período", sub }: { msg?: string; sub?: str
 function Skeleton() {
   return (
     <div className="animate-pulse space-y-3">
-      <div className="h-4 w-1/3 rounded bg-gray-100" />
-      <div className="h-4 w-2/3 rounded bg-gray-100" />
-      <div className="h-4 w-1/2 rounded bg-gray-100" />
+      <div className="h-4 w-1/3 rounded bg-[#F4F4F2]" />
+      <div className="h-4 w-2/3 rounded bg-[#F4F4F2]" />
+      <div className="h-4 w-1/2 rounded bg-[#F4F4F2]" />
     </div>
   );
 }
@@ -644,8 +644,8 @@ function SourceBadge({ source }: { source: "foocci" | "importado" | "mixed" }) {
 function FallbackPrompt({ preset }: { preset: Preset }) {
   if (preset === "all") return null;
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
-      <p className="text-xs text-gray-500">
+    <div className="rounded-lg border border-line2 bg-[#FAFAF8] p-4 text-center">
+      <p className="text-xs text-muted">
         Sem dados Foocci neste período.{" "}
         <span className="font-medium">Use &quot;Todo histórico&quot;</span> para ver a base importada Saipos/Nemo.
       </p>
@@ -671,13 +671,13 @@ function BarChart({ data, valueKey, labelKey, color = "bg-brand-500", formatValu
         const pct = (val / max) * 100;
         return (
           <div key={i} className="flex items-center gap-3">
-            <span className="w-32 shrink-0 truncate text-right text-xs text-gray-600">
+            <span className="w-32 shrink-0 truncate text-right text-xs text-ink2">
               {String(row[labelKey])}
             </span>
-            <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+            <div className="flex-1 rounded-full bg-[#F4F4F2] h-2.5">
               <div className={`${color} h-2.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
             </div>
-            <span className="w-20 shrink-0 text-right text-xs font-medium text-gray-800">
+            <span className="w-20 shrink-0 text-right text-xs font-medium text-ink">
               {formatValue(val)}
             </span>
           </div>
@@ -729,7 +729,7 @@ function StackedBar({ segments, colorMap, labelMap }: {
         {nonZero.map((s) => (
           <div
             key={s.key}
-            className={`${colorMap[s.key] ?? "bg-gray-300"} transition-all`}
+            className={`${colorMap[s.key] ?? "bg-line2"} transition-all`}
             style={{ width: `${s.share}%` }}
             title={`${labelMap[s.key] ?? s.key}: ${s.count}`}
           />
@@ -737,11 +737,11 @@ function StackedBar({ segments, colorMap, labelMap }: {
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {nonZero.map((s) => (
-          <div key={s.key} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorMap[s.key] ?? "bg-gray-300"}`} />
+          <div key={s.key} className="flex items-center gap-1.5 text-xs text-ink2">
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorMap[s.key] ?? "bg-line2"}`} />
             <span>{labelMap[s.key] ?? s.key}</span>
-            <span className="font-medium text-gray-900">{fmtNum(s.count)}</span>
-            <span className="text-gray-400">({fmtPct(s.share)})</span>
+            <span className="font-medium text-ink">{fmtNum(s.count)}</span>
+            <span className="text-muted">({fmtPct(s.share)})</span>
           </div>
         ))}
       </div>
@@ -776,7 +776,7 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
   const periodTo   = new Date(baseline.periodEnd).toLocaleDateString("pt-BR");
 
   return (
-    <div className="rounded-xl border-2 border-indigo-200 bg-white p-5">
+    <div className="rounded-xl border-2 border-indigo-200 bg-paper p-5">
       <div className="mb-4 flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-lg">
           📦
@@ -798,27 +798,27 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita histórica</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
+        <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Receita histórica</p>
+          <p className="mt-1 text-lg font-bold text-ink">{fmtBRL(baseline.totalRevenue)}</p>
         </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qtd vendida</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
+        <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Qtd vendida</p>
+          <p className="mt-1 text-lg font-bold text-ink">{fmtNum(baseline.totalQuantity)}</p>
         </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Prod./Categorias</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.rowCount)}</p>
+        <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Prod./Categorias</p>
+          <p className="mt-1 text-lg font-bold text-ink">{fmtNum(baseline.rowCount)}</p>
         </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Sem classificação</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.semClassificacaoCount)}</p>
+        <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Sem classificação</p>
+          <p className="mt-1 text-lg font-bold text-ink">{fmtNum(baseline.semClassificacaoCount)}</p>
         </div>
       </div>
 
       {baseline.topCategories.length > 0 && (
         <div className="mb-5">
-          <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <p className="mb-2 text-xs font-semibold text-muted uppercase tracking-wider">
             Top categorias (receita)
           </p>
           <div className="space-y-1.5">
@@ -826,13 +826,13 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
               const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
               return (
                 <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="w-4 text-right font-semibold text-gray-400">{i + 1}</span>
+                  <span className="w-4 text-right font-semibold text-muted">{i + 1}</span>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="font-medium text-gray-800">{cat.name}</span>
-                      <span className="text-gray-500">{fmtBRL(cat.revenue)} · {fmtNum(cat.qty)} un</span>
+                      <span className="font-medium text-ink">{cat.name}</span>
+                      <span className="text-muted">{fmtBRL(cat.revenue)} · {fmtNum(cat.qty)} un</span>
                     </div>
-                    <div className="h-1 w-full rounded bg-gray-100">
+                    <div className="h-1 w-full rounded bg-[#F4F4F2]">
                       <div className="h-1 rounded bg-indigo-400" style={{ width: `${share.toFixed(1)}%` }} />
                     </div>
                   </div>
@@ -845,13 +845,13 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
 
       {baseline.topProducts.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <p className="mb-2 text-xs font-semibold text-muted uppercase tracking-wider">
             Top produtos (receita)
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b text-left text-gray-400">
+                <tr className="border-b text-left text-muted">
                   <th className="pb-1.5 pr-3 font-medium">#</th>
                   <th className="pb-1.5 pr-3 font-medium">Produto</th>
                   <th className="pb-1.5 pr-3 font-medium">Categoria</th>
@@ -862,11 +862,11 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
               <tbody className="divide-y divide-gray-50">
                 {baseline.topProducts.slice(0, 15).map((p, i) => (
                   <tr key={i}>
-                    <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
-                    <td className="py-1.5 pr-3 font-medium text-gray-800">{p.name}</td>
-                    <td className="py-1.5 pr-3 text-gray-500">{p.category}</td>
-                    <td className="py-1.5 pr-3 text-right text-gray-700">{fmtBRL(p.revenue)}</td>
-                    <td className="py-1.5 text-right text-gray-500">{fmtNum(p.qty)}</td>
+                    <td className="py-1.5 pr-3 text-muted">{i + 1}</td>
+                    <td className="py-1.5 pr-3 font-medium text-ink">{p.name}</td>
+                    <td className="py-1.5 pr-3 text-muted">{p.category}</td>
+                    <td className="py-1.5 pr-3 text-right text-ink2">{fmtBRL(p.revenue)}</td>
+                    <td className="py-1.5 text-right text-muted">{fmtNum(p.qty)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -900,12 +900,12 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
   const { summary, cohorts, insights, limitations } = data;
 
   return (
-    <div className="rounded-xl border border-purple-100 bg-white p-5 shadow-sm space-y-4">
+    <div className="rounded-xl border border-purple-100 bg-paper p-5 shadow-sm space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-lg">🔄</span>
-        <h3 className="text-sm font-bold text-gray-800">Retenção de clientes</h3>
+        <h3 className="text-sm font-bold text-ink">Retenção de clientes</h3>
         {!data.hasData && (
-          <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">Sem dados</span>
+          <span className="ml-auto rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-muted">Sem dados</span>
         )}
       </div>
 
@@ -930,7 +930,7 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b text-left text-gray-400">
+              <tr className="border-b text-left text-muted">
                 <th className="pb-1.5 pr-3 font-medium">Coorte</th>
                 <th className="pb-1.5 pr-3 font-medium text-right">Novos</th>
                 <th className="pb-1.5 pr-3 font-medium text-right">30d</th>
@@ -942,12 +942,12 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
             <tbody className="divide-y divide-gray-50">
               {cohorts.map((c) => (
                 <tr key={c.cohortMonth}>
-                  <td className="py-1.5 pr-3 font-medium text-gray-800">{c.cohortMonth}</td>
-                  <td className="py-1.5 pr-3 text-right text-gray-600">{c.newCustomers}</td>
-                  <td className="py-1.5 pr-3 text-right text-gray-800">{c.retention30dPct.toFixed(1)}%</td>
-                  <td className="py-1.5 pr-3 text-right text-gray-600">{c.retention60dPct.toFixed(1)}%</td>
-                  <td className="py-1.5 pr-3 text-right text-gray-600">{c.retention90dPct.toFixed(1)}%</td>
-                  <td className="py-1.5 text-right text-gray-500">
+                  <td className="py-1.5 pr-3 font-medium text-ink">{c.cohortMonth}</td>
+                  <td className="py-1.5 pr-3 text-right text-ink2">{c.newCustomers}</td>
+                  <td className="py-1.5 pr-3 text-right text-ink">{c.retention30dPct.toFixed(1)}%</td>
+                  <td className="py-1.5 pr-3 text-right text-ink2">{c.retention60dPct.toFixed(1)}%</td>
+                  <td className="py-1.5 pr-3 text-right text-ink2">{c.retention90dPct.toFixed(1)}%</td>
+                  <td className="py-1.5 text-right text-muted">
                     {c.averageSecondOrderDays != null ? `${c.averageSecondOrderDays}d` : "—"}
                   </td>
                 </tr>
@@ -968,9 +968,9 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
 
       {/* Limitations */}
       {limitations.length > 0 && (
-        <div className="rounded-lg bg-gray-50 p-3 space-y-0.5">
+        <div className="rounded-lg bg-[#FAFAF8] p-3 space-y-0.5">
           {limitations.map((l, i) => (
-            <p key={i} className="text-[10px] text-gray-400">{l}</p>
+            <p key={i} className="text-[10px] text-muted">{l}</p>
           ))}
         </div>
       )}
@@ -986,12 +986,12 @@ function OperationsPanel({ data, loading }: { data: OperationalEfficiencyReport 
   const hasTiming = metrics.ordersWithTiming > 0;
 
   return (
-    <div className="rounded-xl border border-teal-100 bg-white p-5 shadow-sm space-y-4">
+    <div className="rounded-xl border border-teal-100 bg-paper p-5 shadow-sm space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-lg">⚙️</span>
-        <h3 className="text-sm font-bold text-gray-800">Eficiência operacional</h3>
+        <h3 className="text-sm font-bold text-ink">Eficiência operacional</h3>
         {!data.hasData && (
-          <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">Sem dados</span>
+          <span className="ml-auto rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] text-muted">Sem dados</span>
         )}
       </div>
 
@@ -1037,7 +1037,7 @@ function OperationsPanel({ data, loading }: { data: OperationalEfficiencyReport 
       {/* Bottlenecks */}
       {bottlenecks.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Gargalos identificados</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Gargalos identificados</p>
           {bottlenecks.map((bn, i) => (
             <div key={i} className={`rounded-lg border px-3 py-2 text-xs ${SEV_COLOR[bn.severity] ?? SEV_COLOR.INFO}`}>
               <div className="flex items-center justify-between">
@@ -1061,9 +1061,9 @@ function OperationsPanel({ data, loading }: { data: OperationalEfficiencyReport 
 
       {/* Limitations */}
       {limitations.length > 0 && (
-        <div className="rounded-lg bg-gray-50 p-3 space-y-0.5">
+        <div className="rounded-lg bg-[#FAFAF8] p-3 space-y-0.5">
           {limitations.slice(0, 2).map((l, i) => (
-            <p key={i} className="text-[10px] text-gray-400">{l}</p>
+            <p key={i} className="text-[10px] text-muted">{l}</p>
           ))}
         </div>
       )}
@@ -1098,13 +1098,13 @@ function AgentInsightCard({ insight }: { insight: AgentInsight }) {
         <span className="text-lg leading-none">{s.icon}</span>
       </div>
       <div>
-        <p className="text-sm font-semibold text-gray-900">{insight.title}</p>
+        <p className="text-sm font-semibold text-ink">{insight.title}</p>
         {insight.metric && (
-          <p className="mt-0.5 text-xs font-bold text-gray-500">{insight.metric}</p>
+          <p className="mt-0.5 text-xs font-bold text-muted">{insight.metric}</p>
         )}
       </div>
-      <p className="text-xs text-gray-600 leading-relaxed">{insight.explanation}</p>
-      <p className="text-xs text-gray-500 italic">{insight.recommendation}</p>
+      <p className="text-xs text-ink2 leading-relaxed">{insight.explanation}</p>
+      <p className="text-xs text-muted italic">{insight.recommendation}</p>
       {insight.ctaLabel && insight.ctaTarget && (
         <a
           href={insight.ctaTarget}
@@ -1124,14 +1124,14 @@ function ComparisonRow({ comparison }: { comparison: PeriodComparison }) {
   const Arrow = ({ trend }: { trend: "UP" | "DOWN" | "STABLE" }) => {
     if (trend === "UP")   return <span className="text-green-600 font-bold">↑</span>;
     if (trend === "DOWN") return <span className="text-red-500  font-bold">↓</span>;
-    return <span className="text-gray-400 font-bold">→</span>;
+    return <span className="text-muted font-bold">→</span>;
   };
 
   const DeltaLabel = ({ pt }: { pt: ComparisonPoint }) => {
     const color =
       pt.deltaPct > 2  ? "text-green-600" :
       pt.deltaPct < -2 ? "text-red-500"   :
-      "text-gray-400";
+      "text-muted";
     return (
       <span className={`text-xs font-semibold ${color}`}>
         {pt.deltaPct >= 0 ? "+" : ""}{pt.deltaPct.toFixed(1)}%
@@ -1140,8 +1140,8 @@ function ComparisonRow({ comparison }: { comparison: PeriodComparison }) {
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+    <div className="rounded-xl border border-line2 bg-paper p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
         Comparativo com período anterior
       </p>
       <div className="grid grid-cols-3 gap-4">
@@ -1151,13 +1151,13 @@ function ComparisonRow({ comparison }: { comparison: PeriodComparison }) {
           { label: "Ticket médio", pt: comparison.avgTicket, fmt: fmtBRL },
         ].map(({ label, pt, fmt }) => (
           <div key={label} className="text-center">
-            <p className="text-xs text-gray-500 mb-1">{label}</p>
+            <p className="text-xs text-muted mb-1">{label}</p>
             <div className="flex items-center justify-center gap-1">
               <Arrow trend={pt.trend} />
               <DeltaLabel pt={pt} />
             </div>
-            <p className="mt-0.5 text-[11px] text-gray-400">
-              {fmt(pt.previous)} → <span className="font-semibold text-gray-700">{fmt(pt.current)}</span>
+            <p className="mt-0.5 text-[11px] text-muted">
+              {fmt(pt.previous)} → <span className="font-semibold text-ink2">{fmt(pt.current)}</span>
             </p>
           </div>
         ))}
@@ -1180,26 +1180,26 @@ function AgentSkeleton() {
 
 function QuestionBoxPlaceholder() {
   return (
-    <div className="rounded-xl border border-dashed border-indigo-200 bg-white p-4">
+    <div className="rounded-xl border border-dashed border-indigo-200 bg-paper p-4">
       <div className="flex items-center gap-2 mb-2">
         <span className="text-base">💬</span>
-        <p className="text-sm font-semibold text-gray-700">Pergunte ao Gerente Comercial IA</p>
+        <p className="text-sm font-semibold text-ink2">Pergunte ao Gerente Comercial IA</p>
       </div>
       <div className="flex gap-2">
         <input
           type="text"
           placeholder="Ex: Como vender mais sobremesa?"
           readOnly
-          className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400 cursor-not-allowed"
+          className="flex-1 rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2 text-xs text-muted cursor-not-allowed"
         />
         <button
           disabled
-          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-400 cursor-not-allowed"
+          className="rounded-lg bg-[#F4F4F2] px-3 py-2 text-xs font-medium text-muted cursor-not-allowed"
         >
           Perguntar
         </button>
       </div>
-      <p className="mt-2 text-[11px] text-gray-400">
+      <p className="mt-2 text-[11px] text-muted">
         Perguntas ao agente serão conectadas em uma próxima etapa.
       </p>
     </div>
@@ -1226,25 +1226,25 @@ function DiagnosisFindingCard({ finding }: { finding: DiagnosisFinding }) {
   return (
     <div className={`rounded-xl border p-4 space-y-2 ${s.border} ${s.bg}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-gray-900">{finding.title}</p>
+        <p className="text-sm font-semibold text-ink">{finding.title}</p>
         <SeverityBadge severity={finding.severity} />
       </div>
       {finding.likelyCauses.length > 0 && (
         <ul className="space-y-1">
           {finding.likelyCauses.map((c, i) => (
-            <li key={i} className="text-xs text-gray-600 leading-relaxed">• {c}</li>
+            <li key={i} className="text-xs text-ink2 leading-relaxed">• {c}</li>
           ))}
         </ul>
       )}
       {finding.evidence.length > 0 && (
-        <div className="rounded-lg bg-white/70 px-2.5 py-1.5">
+        <div className="rounded-lg bg-paper/70 px-2.5 py-1.5">
           {finding.evidence.map((e, i) => (
-            <p key={i} className="text-[11px] font-mono text-gray-500">{e}</p>
+            <p key={i} className="text-[11px] font-mono text-muted">{e}</p>
           ))}
         </div>
       )}
-      <p className="text-xs font-medium text-gray-700">→ {finding.recommendedAction}</p>
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">
+      <p className="text-xs font-medium text-ink2">→ {finding.recommendedAction}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted">
         {CONFIDENCE_LABEL[finding.confidence] ?? finding.confidence}
       </p>
     </div>
@@ -1253,14 +1253,14 @@ function DiagnosisFindingCard({ finding }: { finding: DiagnosisFinding }) {
 
 function DiagnosisAnomalyRow({ anomaly }: { anomaly: DiagnosisAnomaly }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5">
+    <div className="flex items-start gap-3 rounded-lg border border-line bg-paper px-3 py-2.5">
       <SeverityBadge severity={anomaly.severity} />
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-gray-800">
-          {anomaly.metric} <span className="font-normal text-gray-400">· {anomaly.threshold}</span>
+        <p className="text-xs font-semibold text-ink">
+          {anomaly.metric} <span className="font-normal text-muted">· {anomaly.threshold}</span>
         </p>
-        <p className="text-[11px] text-gray-500 leading-relaxed">{anomaly.whyItMatters}</p>
-        <p className="mt-0.5 text-[11px] font-medium text-gray-600">→ {anomaly.recommendedAction}</p>
+        <p className="text-[11px] text-muted leading-relaxed">{anomaly.whyItMatters}</p>
+        <p className="mt-0.5 text-[11px] font-medium text-ink2">→ {anomaly.recommendedAction}</p>
       </div>
     </div>
   );
@@ -1277,8 +1277,8 @@ function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loadi
           🩺
         </div>
         <div>
-          <h2 className="text-base font-bold text-gray-900">Diagnóstico do período</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h2 className="text-base font-bold text-ink">Diagnóstico do período</h2>
+          <p className="text-xs text-muted mt-0.5">
             Por que mudou, onde está vazando e qual ação tomar — baseado nos seus dados.
           </p>
         </div>
@@ -1287,26 +1287,26 @@ function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loadi
       {loading && <AgentSkeleton />}
 
       {!loading && !data && (
-        <p className="text-sm text-gray-400">Não foi possível gerar o diagnóstico. Tente novamente.</p>
+        <p className="text-sm text-muted">Não foi possível gerar o diagnóstico. Tente novamente.</p>
       )}
 
       {!loading && data && data.dataQuality === "NONE" && (
-        <div className="rounded-xl border border-dashed border-rose-200 bg-white p-6 text-center">
+        <div className="rounded-xl border border-dashed border-rose-200 bg-paper p-6 text-center">
           <p className="text-2xl mb-2">🩺</p>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">{data.summary}</p>
+          <p className="text-sm text-muted max-w-md mx-auto">{data.summary}</p>
         </div>
       )}
 
       {!loading && data && data.dataQuality !== "NONE" && (
         <>
-          <div className="rounded-xl bg-white border border-rose-100 p-4">
+          <div className="rounded-xl bg-paper border border-rose-100 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-rose-400 mb-2">Resumo do diagnóstico</p>
-            <p className="text-sm text-gray-700 leading-relaxed">{data.summary}</p>
+            <p className="text-sm text-ink2 leading-relaxed">{data.summary}</p>
           </div>
 
           {topFindings.length > 0 ? (
             <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted px-1">
                 Principais achados
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1321,7 +1321,7 @@ function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loadi
 
           {topAnomalies.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted px-1">
                 Alertas (anomalias)
               </p>
               <div className="space-y-2">
@@ -1331,11 +1331,11 @@ function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loadi
           )}
 
           {data.recommendedActions.length > 0 && (
-            <div className="rounded-xl bg-white border border-rose-100 p-4">
+            <div className="rounded-xl bg-paper border border-rose-100 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-rose-400 mb-2">Ações recomendadas</p>
               <ol className="space-y-1.5">
                 {data.recommendedActions.map((a, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-gray-700">
+                  <li key={i} className="flex gap-2 text-xs text-ink2">
                     <span className="font-bold text-rose-400">{i + 1}.</span>
                     <span>{a}</span>
                   </li>
@@ -1345,10 +1345,10 @@ function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loadi
           )}
 
           {data.limitations.length > 0 && (
-            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Limitações</p>
+            <div className="rounded-lg bg-[#FAFAF8] border border-line px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-1">Limitações</p>
               {data.limitations.map((l, i) => (
-                <p key={i} className="text-[11px] text-gray-500 leading-relaxed">• {l}</p>
+                <p key={i} className="text-[11px] text-muted leading-relaxed">• {l}</p>
               ))}
             </div>
           )}
@@ -1366,8 +1366,8 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
           🧠
         </div>
         <div>
-          <h2 className="text-base font-bold text-gray-900">Gerente Comercial IA</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h2 className="text-base font-bold text-ink">Gerente Comercial IA</h2>
+          <p className="text-xs text-muted mt-0.5">
             Leitura inteligente dos seus dados para ajudar você a vender mais.
           </p>
         </div>
@@ -1376,15 +1376,15 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
       {loading && <AgentSkeleton />}
 
       {!loading && !data && (
-        <p className="text-sm text-gray-400">Não foi possível carregar a análise. Tente novamente.</p>
+        <p className="text-sm text-muted">Não foi possível carregar a análise. Tente novamente.</p>
       )}
 
       {!loading && data && !data.hasData && (
-        <div className="rounded-xl border border-dashed border-indigo-200 bg-white p-6 text-center">
+        <div className="rounded-xl border border-dashed border-indigo-200 bg-paper p-6 text-center">
           <p className="text-2xl mb-2">📊</p>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">{data.summary}</p>
+          <p className="text-sm text-muted max-w-md mx-auto">{data.summary}</p>
           {data.dataQuality === "NONE" && (
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-muted">
               Use <strong>Links Rastreáveis</strong> ou <strong>Importação de Histórico</strong> para começar.
             </p>
           )}
@@ -1393,20 +1393,20 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
 
       {!loading && data && data.hasData && (
         <>
-          <div className="rounded-xl bg-white border border-indigo-100 p-4">
+          <div className="rounded-xl bg-paper border border-indigo-100 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400 mb-2">Resumo executivo</p>
-            <p className="text-sm text-gray-700 leading-relaxed">{data.summary}</p>
+            <p className="text-sm text-ink2 leading-relaxed">{data.summary}</p>
           </div>
 
           {data.comparison.available ? (
             <ComparisonRow comparison={data.comparison} />
           ) : data.comparison.unavailableReason ? (
-            <p className="text-xs text-gray-400 italic px-1">{data.comparison.unavailableReason}</p>
+            <p className="text-xs text-muted italic px-1">{data.comparison.unavailableReason}</p>
           ) : null}
 
           {data.insights.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted px-1">
                 Oportunidades e alertas
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1459,9 +1459,9 @@ function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
           { label: "Pedidos com upsell",       val: fmtNum(orders) },
           { label: "Média por pedido",         val: fmtBRL(avgPerOrder) },
         ].map((item) => (
-          <div key={item.label} className="rounded-xl bg-white px-3 py-2.5 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{item.label}</p>
-            <p className="mt-0.5 text-base font-bold text-gray-900">{item.val}</p>
+          <div key={item.label} className="rounded-xl bg-paper px-3 py-2.5 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{item.label}</p>
+            <p className="mt-0.5 text-base font-bold text-ink">{item.val}</p>
           </div>
         ))}
       </div>
@@ -1501,7 +1501,7 @@ function TabVisaoGeral({
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <SourceBadge source={showAllMode && hasImported ? "mixed" : "foocci"} />
-          {loading && <span className="text-xs text-gray-400 animate-pulse">Carregando…</span>}
+          {loading && <span className="text-xs text-muted animate-pulse">Carregando…</span>}
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCard label="Receita"        value={kpi ? fmtBRL(kpi.revenue)         : "—"} />
@@ -1521,16 +1521,16 @@ function TabVisaoGeral({
       {!loading && hasImported && (
         <div className={`rounded-xl p-5 ${showAllMode
           ? "border-2 border-indigo-200 bg-indigo-50"
-          : "border border-indigo-100 bg-white"}`}>
+          : "border border-indigo-100 bg-paper"}`}>
           <div className="flex items-start gap-3 mb-4">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-base">
               📦
             </div>
             <div className="flex-1">
-              <p className={`text-sm font-bold ${showAllMode ? "text-indigo-900" : "text-gray-800"}`}>
+              <p className={`text-sm font-bold ${showAllMode ? "text-indigo-900" : "text-ink"}`}>
                 Histórico importado Saipos/Nemo
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 {(() => {
                   const b = data!.importedBaseline!;
                   const from = new Date(b.periodStart).getFullYear();
@@ -1552,9 +1552,9 @@ function TabVisaoGeral({
               { label: "Produtos/Categorias",  val: fmtNum(data!.importedBaseline!.rowCount) },
               { label: "Sem classificação",    val: fmtNum(data!.importedBaseline!.semClassificacaoCount) },
             ].map((item) => (
-              <div key={item.label} className="rounded-xl bg-white px-3 py-2.5 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{item.label}</p>
-                <p className="mt-0.5 text-base font-bold text-gray-900">{item.val}</p>
+              <div key={item.label} className="rounded-xl bg-paper px-3 py-2.5 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{item.label}</p>
+                <p className="mt-0.5 text-base font-bold text-ink">{item.val}</p>
               </div>
             ))}
           </div>
@@ -1597,13 +1597,13 @@ function ZeroSalesCard({ products }: { products: ZeroSalesProduct[] }) {
   if (products.length === 0) return null;
   return (
     <Card title={`Produtos parados no período (${products.length})`}>
-      <p className="mb-3 text-xs text-gray-400">
+      <p className="mb-3 text-xs text-muted">
         Produtos ativos no cardápio sem nenhuma venda no período selecionado. Considere revisar descrição, foto ou preço, ou criar uma promoção.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b text-left text-gray-400">
+            <tr className="border-b text-left text-muted">
               <th className="pb-2 pr-4 font-medium">Produto</th>
               <th className="pb-2 pr-4 font-medium">Categoria</th>
               <th className="pb-2 font-medium text-right">Preço</th>
@@ -1612,7 +1612,7 @@ function ZeroSalesCard({ products }: { products: ZeroSalesProduct[] }) {
           <tbody className="divide-y divide-gray-50">
             {products.map((p, i) => (
               <tr key={i}>
-                <td className="py-2 pr-4 font-medium text-gray-800">
+                <td className="py-2 pr-4 font-medium text-ink">
                   {p.name}
                   {!p.isAvailable && (
                     <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
@@ -1620,8 +1620,8 @@ function ZeroSalesCard({ products }: { products: ZeroSalesProduct[] }) {
                     </span>
                   )}
                 </td>
-                <td className="py-2 pr-4 text-gray-500">{p.category}</td>
-                <td className="py-2 text-right text-gray-500">{fmtBRL(p.price)}</td>
+                <td className="py-2 pr-4 text-muted">{p.category}</td>
+                <td className="py-2 text-right text-muted">{fmtBRL(p.price)}</td>
               </tr>
             ))}
           </tbody>
@@ -1669,28 +1669,28 @@ function TabProdutos({ data, loading, preset }: {
       <div className="space-y-6">
         <div className="flex items-center gap-2 flex-wrap">
           <SourceBadge source="importado" />
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-muted">
             {fmtNum(allProducts.length)} produtos · receita total {fmtBRL(baseline.totalRevenue)}
           </span>
         </div>
 
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita histórica</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
+          <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Receita histórica</p>
+            <p className="mt-1 text-lg font-bold text-ink">{fmtBRL(baseline.totalRevenue)}</p>
           </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qtd total vendida</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
+          <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Qtd total vendida</p>
+            <p className="mt-1 text-lg font-bold text-ink">{fmtNum(baseline.totalQuantity)}</p>
           </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Produtos analisados</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(allProducts.length)}</p>
+          <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Produtos analisados</p>
+            <p className="mt-1 text-lg font-bold text-ink">{fmtNum(allProducts.length)}</p>
           </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Sem classificação</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.semClassificacaoCount)}</p>
+          <div className="rounded-xl bg-[#FAFAF8] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Sem classificação</p>
+            <p className="mt-1 text-lg font-bold text-ink">{fmtNum(baseline.semClassificacaoCount)}</p>
           </div>
         </div>
 
@@ -1729,7 +1729,7 @@ function TabProdutos({ data, loading, preset }: {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b text-left text-gray-400">
+                  <tr className="border-b text-left text-muted">
                     <th className="pb-2 pr-4 font-medium">#</th>
                     <th className="pb-2 pr-4 font-medium">Produto</th>
                     <th className="pb-2 pr-4 font-medium">Categoria</th>
@@ -1743,12 +1743,12 @@ function TabProdutos({ data, loading, preset }: {
                     const share = baseline.totalRevenue > 0 ? (p.revenue / baseline.totalRevenue) * 100 : 0;
                     return (
                       <tr key={i}>
-                        <td className="py-1.5 pr-4 text-gray-400">{i + 1}</td>
-                        <td className="py-1.5 pr-4 font-medium text-gray-800">{p.name}</td>
-                        <td className="py-1.5 pr-4 text-gray-500">{p.category || "—"}</td>
+                        <td className="py-1.5 pr-4 text-muted">{i + 1}</td>
+                        <td className="py-1.5 pr-4 font-medium text-ink">{p.name}</td>
+                        <td className="py-1.5 pr-4 text-muted">{p.category || "—"}</td>
                         <td className="py-1.5 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
-                        <td className="py-1.5 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                        <td className="py-1.5 text-right text-gray-400">{share.toFixed(1)}%</td>
+                        <td className="py-1.5 pr-4 text-right text-muted">{fmtNum(p.qty)}</td>
+                        <td className="py-1.5 text-right text-muted">{share.toFixed(1)}%</td>
                       </tr>
                     );
                   })}
@@ -1785,7 +1785,7 @@ function TabProdutos({ data, loading, preset }: {
         <div className="flex items-center gap-2">
           <SourceBadge source="foocci" />
           {data!.topProducts.length < 5 && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-muted">
               Poucos produtos neste período. Use{" "}
               <button className="font-medium text-indigo-600 underline underline-offset-2">
                 Todo histórico
@@ -1808,7 +1808,7 @@ function TabProdutos({ data, loading, preset }: {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b text-left text-gray-400">
+                <tr className="border-b text-left text-muted">
                   <th className="pb-2 pr-4 font-medium">#</th>
                   <th className="pb-2 pr-4 font-medium">Produto</th>
                   <th className="pb-2 pr-4 font-medium">Categoria</th>
@@ -1821,13 +1821,13 @@ function TabProdutos({ data, loading, preset }: {
               <tbody className="divide-y divide-gray-50">
                 {data!.topProducts.map((p, i) => (
                   <tr key={i}>
-                    <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
-                    <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
-                    <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
+                    <td className="py-2 pr-4 text-muted">{i + 1}</td>
+                    <td className="py-2 pr-4 font-medium text-ink">{p.name}</td>
+                    <td className="py-2 pr-4 text-muted">{p.category ?? "—"}</td>
                     <td className="py-2 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-400">{fmtPct(p.share ?? 0)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                    <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
+                    <td className="py-2 pr-4 text-right text-muted">{fmtPct(p.share ?? 0)}</td>
+                    <td className="py-2 pr-4 text-right text-muted">{fmtNum(p.qty)}</td>
+                    <td className="py-2 text-right text-muted">{fmtNum(p.orderCount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1837,13 +1837,13 @@ function TabProdutos({ data, loading, preset }: {
 
         {slow.length > 0 && (
           <Card title="Produtos com baixo desempenho no período">
-            <p className="mb-3 text-xs text-gray-400">
+            <p className="mb-3 text-xs text-muted">
               Itens com menor receita no período. Considere promoção ou revisão de preço.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b text-left text-gray-400">
+                  <tr className="border-b text-left text-muted">
                     <th className="pb-2 pr-4 font-medium">Produto</th>
                     <th className="pb-2 pr-4 font-medium">Categoria</th>
                     <th className="pb-2 pr-4 font-medium text-right">Receita</th>
@@ -1854,11 +1854,11 @@ function TabProdutos({ data, loading, preset }: {
                 <tbody className="divide-y divide-gray-50">
                   {slow.map((p, i) => (
                     <tr key={i}>
-                      <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
-                      <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
+                      <td className="py-2 pr-4 font-medium text-ink">{p.name}</td>
+                      <td className="py-2 pr-4 text-muted">{p.category ?? "—"}</td>
                       <td className="py-2 pr-4 text-right text-amber-600 font-medium">{fmtBRL(p.revenue)}</td>
-                      <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                      <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
+                      <td className="py-2 pr-4 text-right text-muted">{fmtNum(p.qty)}</td>
+                      <td className="py-2 text-right text-muted">{fmtNum(p.orderCount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1917,7 +1917,7 @@ function TabCategorias({ data, loading, preset }: {
       <div className="space-y-6">
         <div className="flex items-center gap-2 flex-wrap">
           <SourceBadge source="importado" />
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-muted">
             {fmtNum(categories.length)} categorias · {fmtBRL(baseline.totalRevenue)} receita total
           </span>
         </div>
@@ -1929,12 +1929,12 @@ function TabCategorias({ data, loading, preset }: {
               const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
               return (
                 <div key={i} className="flex items-center gap-3 text-xs">
-                  <span className="w-36 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
-                  <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                  <span className="w-36 shrink-0 truncate text-right text-ink2">{cat.name}</span>
+                  <div className="flex-1 rounded-full bg-[#F4F4F2] h-2.5">
                     <div className="bg-indigo-400 h-2.5 rounded-full" style={{ width: `${share.toFixed(1)}%` }} />
                   </div>
-                  <span className="w-24 shrink-0 text-right font-medium text-gray-800">{fmtBRL(cat.revenue)}</span>
-                  <span className="w-12 shrink-0 text-right text-gray-400">{share.toFixed(1)}%</span>
+                  <span className="w-24 shrink-0 text-right font-medium text-ink">{fmtBRL(cat.revenue)}</span>
+                  <span className="w-12 shrink-0 text-right text-muted">{share.toFixed(1)}%</span>
                 </div>
               );
             })}
@@ -1949,12 +1949,12 @@ function TabCategorias({ data, loading, preset }: {
               const share    = totalQty > 0 ? (cat.qty / totalQty) * 100 : 0;
               return (
                 <div key={i} className="flex items-center gap-3 text-xs">
-                  <span className="w-36 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
-                  <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                  <span className="w-36 shrink-0 truncate text-right text-ink2">{cat.name}</span>
+                  <div className="flex-1 rounded-full bg-[#F4F4F2] h-2.5">
                     <div className="bg-violet-400 h-2.5 rounded-full" style={{ width: `${share.toFixed(1)}%` }} />
                   </div>
-                  <span className="w-20 shrink-0 text-right font-medium text-gray-800">{fmtNum(cat.qty)} un</span>
-                  <span className="w-12 shrink-0 text-right text-gray-400">{share.toFixed(1)}%</span>
+                  <span className="w-20 shrink-0 text-right font-medium text-ink">{fmtNum(cat.qty)} un</span>
+                  <span className="w-12 shrink-0 text-right text-muted">{share.toFixed(1)}%</span>
                 </div>
               );
             })}
@@ -1969,18 +1969,18 @@ function TabCategorias({ data, loading, preset }: {
               placeholder="Buscar categoria…"
               value={catSearch}
               onChange={(e) => setCatSearch(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
+              className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs text-ink2 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
             />
             <select
               value={catSort}
               onChange={(e) => setCatSort(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+              className="rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink2 focus:outline-none focus:ring-1 focus:ring-indigo-300"
             >
               {SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             {catSearch && (
               <>
-                <span className="text-xs text-gray-400">{sortedCats.length} de {categories.length}</span>
+                <span className="text-xs text-muted">{sortedCats.length} de {categories.length}</span>
                 <button onClick={() => setCatSearch("")} className="text-[11px] text-indigo-500 underline hover:text-indigo-700">Limpar</button>
               </>
             )}
@@ -1991,7 +1991,7 @@ function TabCategorias({ data, loading, preset }: {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b text-left text-gray-400">
+                  <tr className="border-b text-left text-muted">
                     <th className="pb-2 pr-4 font-medium">#</th>
                     <th className="pb-2 pr-4 font-medium">Categoria</th>
                     <th className="pb-2 pr-4 font-medium text-right">Receita</th>
@@ -2004,11 +2004,11 @@ function TabCategorias({ data, loading, preset }: {
                     const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
                     return (
                       <tr key={i}>
-                        <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
-                        <td className="py-2 pr-4 font-medium text-gray-800">{cat.name}</td>
+                        <td className="py-2 pr-4 text-muted">{i + 1}</td>
+                        <td className="py-2 pr-4 font-medium text-ink">{cat.name}</td>
                         <td className="py-2 pr-4 text-right font-medium">{fmtBRL(cat.revenue)}</td>
-                        <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(cat.qty)}</td>
-                        <td className="py-2 text-right text-gray-400">{share.toFixed(1)}%</td>
+                        <td className="py-2 pr-4 text-right text-muted">{fmtNum(cat.qty)}</td>
+                        <td className="py-2 text-right text-muted">{share.toFixed(1)}%</td>
                       </tr>
                     );
                   })}
@@ -2044,8 +2044,8 @@ function TabCategorias({ data, loading, preset }: {
                       <div className="space-y-1">
                         {products.slice(0, 5).map((p, i) => (
                           <div key={i} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-700">{p.name}</span>
-                            <span className="text-gray-500">{fmtBRL(p.revenue)} · {fmtNum(p.qty)} un</span>
+                            <span className="text-ink2">{p.name}</span>
+                            <span className="text-muted">{fmtBRL(p.revenue)} · {fmtNum(p.qty)} un</span>
                           </div>
                         ))}
                       </div>
@@ -2071,12 +2071,12 @@ function TabCategorias({ data, loading, preset }: {
           <div className="space-y-2">
             {data!.categories.map((cat) => (
               <div key={cat.name} className="flex items-center gap-3 text-xs">
-                <span className="w-28 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
-                <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                <span className="w-28 shrink-0 truncate text-right text-ink2">{cat.name}</span>
+                <div className="flex-1 rounded-full bg-[#F4F4F2] h-2.5">
                   <div className="bg-violet-500 h-2.5 rounded-full" style={{ width: `${cat.share}%` }} />
                 </div>
                 <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(cat.revenue)}</span>
-                <span className="w-12 shrink-0 text-right text-gray-400">{fmtPct(cat.share)}</span>
+                <span className="w-12 shrink-0 text-right text-muted">{fmtPct(cat.share)}</span>
               </div>
             ))}
           </div>
@@ -2148,7 +2148,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <SourceBadge source="importado" />
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-muted">
               Histórico de compras importado do Saipos/Nemo — não reflete pedidos Foocci
             </span>
           </div>
@@ -2158,7 +2158,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b text-left text-gray-400">
+                  <tr className="border-b text-left text-muted">
                     <th className="pb-1.5 pr-3 font-medium">Nome</th>
                     <th className="pb-1.5 pr-3 font-medium text-right">Gasto histórico</th>
                     <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
@@ -2170,21 +2170,21 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                 <tbody className="divide-y divide-gray-50">
                   {data!.importedTopCustomers.map((c) => (
                     <tr key={c.id}>
-                      <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
-                      <td className="py-1.5 pr-3 text-right font-medium text-gray-900">
+                      <td className="py-1.5 pr-3 font-medium text-ink">{c.name}</td>
+                      <td className="py-1.5 pr-3 text-right font-medium text-ink">
                         {fmtBRL(c.importedTotalSpent)}
                       </td>
-                      <td className="py-1.5 pr-3 text-right text-gray-500">{fmtNum(c.importedOrderCount)}</td>
-                      <td className="py-1.5 pr-3 text-right text-gray-500">
+                      <td className="py-1.5 pr-3 text-right text-muted">{fmtNum(c.importedOrderCount)}</td>
+                      <td className="py-1.5 pr-3 text-right text-muted">
                         {c.averageTicket > 0 ? fmtBRL(c.averageTicket) : "—"}
                       </td>
-                      <td className="py-1.5 pr-3 text-gray-500">
+                      <td className="py-1.5 pr-3 text-muted">
                         {c.importedLastOrderAt
                           ? new Date(c.importedLastOrderAt).toLocaleDateString("pt-BR")
                           : "—"}
                       </td>
                       <td className="py-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-line2"}`}>
                           {TIER_LABEL[c.tier] ?? c.tier}
                         </span>
                       </td>
@@ -2201,7 +2201,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b text-left text-gray-400">
+                    <tr className="border-b text-left text-muted">
                       <th className="pb-1.5 pr-3 font-medium">#</th>
                       <th className="pb-1.5 pr-3 font-medium">Nome</th>
                       <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
@@ -2213,19 +2213,19 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                   <tbody className="divide-y divide-gray-50">
                     {data!.importedTopByOrders.map((c, i) => (
                       <tr key={c.id}>
-                        <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
-                        <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
+                        <td className="py-1.5 pr-3 text-muted">{i + 1}</td>
+                        <td className="py-1.5 pr-3 font-medium text-ink">{c.name}</td>
                         <td className="py-1.5 pr-3 text-right font-bold text-indigo-700">
                           {fmtNum(c.importedOrderCount)}
                         </td>
-                        <td className="py-1.5 pr-3 text-right text-gray-700">
+                        <td className="py-1.5 pr-3 text-right text-ink2">
                           {fmtBRL(c.importedTotalSpent)}
                         </td>
-                        <td className="py-1.5 pr-3 text-right text-gray-500">
+                        <td className="py-1.5 pr-3 text-right text-muted">
                           {c.averageTicket > 0 ? fmtBRL(c.averageTicket) : "—"}
                         </td>
                         <td className="py-1.5">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-line2"}`}>
                             {TIER_LABEL[c.tier] ?? c.tier}
                           </span>
                         </td>
@@ -2240,7 +2240,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
           {/* Temperature distribution (based on importedLastOrderAt) */}
           {Object.values(tempCounts).some((v) => v > 0) && (
             <Card title="Temperatura dos clientes (baseado no histórico importado)">
-              <p className="mb-3 text-xs text-gray-400">
+              <p className="mb-3 text-xs text-muted">
                 Classificação baseada na data da última compra importada. A maioria dos clientes
                 históricos aparece como frio por ser anterior a 90 dias.
               </p>
@@ -2250,7 +2250,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                     { key: "quente",       label: "Quente (≤ 30 dias)",  color: "bg-rose-500" },
                     { key: "morno",        label: "Morno (31–90 dias)",  color: "bg-amber-400" },
                     { key: "frio",         label: "Frio (> 90 dias)",    color: "bg-sky-400"  },
-                    { key: "desconhecido", label: "Sem data",            color: "bg-gray-300" },
+                    { key: "desconhecido", label: "Sem data",            color: "bg-line2" },
                   ] as const
                 ).map(({ key, label, color }) => {
                   const count = tempCounts[key] ?? 0;
@@ -2260,12 +2260,12 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                   return (
                     <div key={key} className="flex items-center gap-3 text-xs">
                       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
-                      <span className="w-36 shrink-0 text-gray-600">{label}</span>
-                      <div className="flex-1 rounded-full bg-gray-100 h-2">
+                      <span className="w-36 shrink-0 text-ink2">{label}</span>
+                      <div className="flex-1 rounded-full bg-[#F4F4F2] h-2">
                         <div className={`${color} h-2 rounded-full`} style={{ width: `${pct.toFixed(1)}%` }} />
                       </div>
-                      <span className="w-8 shrink-0 text-right font-medium text-gray-800">{count}</span>
-                      <span className="w-10 shrink-0 text-right text-gray-400">{pct.toFixed(0)}%</span>
+                      <span className="w-8 shrink-0 text-right font-medium text-ink">{count}</span>
+                      <span className="w-10 shrink-0 text-right text-muted">{pct.toFixed(0)}%</span>
                     </div>
                   );
                 })}
@@ -2301,7 +2301,7 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b text-left text-gray-400">
+                  <tr className="border-b text-left text-muted">
                     <th className="pb-1.5 pr-3 font-medium">Nome</th>
                     <th className="pb-1.5 pr-3 font-medium text-right">Gasto</th>
                     <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
@@ -2311,11 +2311,11 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
                 <tbody className="divide-y divide-gray-50">
                   {data!.topCustomers.map((c) => (
                     <tr key={c.id}>
-                      <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
+                      <td className="py-1.5 pr-3 font-medium text-ink">{c.name}</td>
                       <td className="py-1.5 pr-3 text-right">{fmtBRL(c.totalSpend)}</td>
-                      <td className="py-1.5 pr-3 text-right text-gray-500">{c.totalOrders}</td>
+                      <td className="py-1.5 pr-3 text-right text-muted">{c.totalOrders}</td>
                       <td className="py-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-line2"}`}>
                           {TIER_LABEL[c.tier] ?? c.tier}
                         </span>
                       </td>
@@ -2363,16 +2363,16 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
             {data.attachRates.map((ar) => (
               <div key={ar.label} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-700">{ar.label}</span>
-                  <span className="text-lg font-bold text-gray-900">{fmtPct(ar.rate)}</span>
+                  <span className="font-medium text-ink2">{ar.label}</span>
+                  <span className="text-lg font-bold text-ink">{fmtPct(ar.rate)}</span>
                 </div>
-                <div className="h-2.5 w-full rounded-full bg-gray-100">
+                <div className="h-2.5 w-full rounded-full bg-[#F4F4F2]">
                   <div
                     className={`h-2.5 rounded-full transition-all ${ar.rate >= 40 ? "bg-green-500" : ar.rate >= 20 ? "bg-amber-400" : "bg-rose-400"}`}
                     style={{ width: `${Math.min(ar.rate, 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted">
                   {fmtNum(ar.withCount)} de {fmtNum(ar.total)} pedidos · {fmtBRL(ar.addedRevenue)} em receita
                 </p>
               </div>
@@ -2401,21 +2401,21 @@ function TabCanais({ data, loading }: { data: AnalyticsOverview | null; loading:
           <div className="space-y-2">
             {data!.channels.map((ch) => (
               <div key={ch.source} className="flex items-center gap-3 text-xs">
-                <span className="w-24 shrink-0 truncate text-right capitalize text-gray-600">{ch.source}</span>
-                <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                <span className="w-24 shrink-0 truncate text-right capitalize text-ink2">{ch.source}</span>
+                <div className="flex-1 rounded-full bg-[#F4F4F2] h-2.5">
                   <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: `${ch.share}%` }} />
                 </div>
-                <span className="w-10 shrink-0 text-right text-gray-500">{fmtNum(ch.orders)}</span>
+                <span className="w-10 shrink-0 text-right text-muted">{fmtNum(ch.orders)}</span>
                 <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(ch.revenue)}</span>
-                <span className="w-12 shrink-0 text-right text-gray-400">{fmtPct(ch.share)}</span>
+                <span className="w-12 shrink-0 text-right text-muted">{fmtPct(ch.share)}</span>
               </div>
             ))}
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <span className="text-3xl text-gray-200">🔗</span>
-            <p className="text-sm text-gray-500 font-medium">Sem dados de canais ainda</p>
-            <p className="text-xs text-gray-400 max-w-sm">
+            <span className="text-3xl text-line2">🔗</span>
+            <p className="text-sm text-muted font-medium">Sem dados de canais ainda</p>
+            <p className="text-xs text-muted max-w-sm">
               Os canais serão preenchidos a partir de links rastreáveis, QR Codes e campanhas futuras.
               Configure em <strong>Canais</strong> no menu lateral.
             </p>
@@ -2430,7 +2430,7 @@ function TabCanais({ data, loading }: { data: AnalyticsOverview | null; loading:
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b text-left text-gray-400">
+                  <tr className="border-b text-left text-muted">
                     <th className="pb-1.5 pr-4 font-medium">Data</th>
                     <th className="pb-1.5 pr-4 font-medium text-right">Receita</th>
                     <th className="pb-1.5 font-medium text-right">Pedidos</th>
@@ -2439,9 +2439,9 @@ function TabCanais({ data, loading }: { data: AnalyticsOverview | null; loading:
                 <tbody className="divide-y divide-gray-50">
                   {[...data!.salesByDay].reverse().slice(0, 14).map((pt) => (
                     <tr key={pt.date}>
-                      <td className="py-1 pr-4 text-gray-600">{pt.date}</td>
+                      <td className="py-1 pr-4 text-ink2">{pt.date}</td>
                       <td className="py-1 pr-4 text-right font-medium">{fmtBRL(pt.revenue)}</td>
-                      <td className="py-1 text-right text-gray-600">{fmtNum(pt.orders)}</td>
+                      <td className="py-1 text-right text-ink2">{fmtNum(pt.orders)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2464,7 +2464,7 @@ function TabHistorico({ data, loading }: { data: AnalyticsOverview | null; loadi
     return (
       <div className="space-y-4">
         <Empty msg="Nenhum histórico importado disponível para este restaurante." />
-        <p className="text-center text-xs text-gray-400">
+        <p className="text-center text-xs text-muted">
           Importe seu histórico do Saipos/Nemo em{" "}
           <strong>Configurações → Importação</strong> para ver seus dados aqui.
         </p>
@@ -2502,7 +2502,7 @@ const INTENT_LABELS: Record<AnalyticsIntent, string> = {
 const CONFIDENCE_CONFIG: Record<"LOW" | "MEDIUM" | "HIGH", { label: string; cls: string }> = {
   HIGH:   { label: "Alta confiança",   cls: "bg-green-100 text-green-700"  },
   MEDIUM: { label: "Média confiança",  cls: "bg-yellow-100 text-yellow-700" },
-  LOW:    { label: "Baixa confiança",  cls: "bg-gray-100 text-gray-600"    },
+  LOW:    { label: "Baixa confiança",  cls: "bg-[#F4F4F2] text-ink2"    },
 };
 
 function TabAnalista({ from, to }: { from: string; to: string }) {
@@ -2550,7 +2550,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
 
       {/* ── Quick prompts ── */}
       <div className="space-y-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Perguntas rápidas</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Perguntas rápidas</p>
         <div className="flex flex-wrap gap-2">
           {QUICK_PROMPTS.map((q) => (
             <button
@@ -2558,7 +2558,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
               type="button"
               disabled={loading}
               onClick={() => { setQuestion(q); void ask(q); }}
-              className="rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+              className="rounded-full border border-indigo-200 bg-paper px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
             >
               {q}
             </button>
@@ -2574,7 +2574,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
           onKeyDown={(e) => { if (e.key === "Enter") void ask(question); }}
           placeholder="Digite sua pergunta sobre o negócio…"
           disabled={loading}
-          className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"
+          className="flex-1 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"
         />
         <button
           type="button"
@@ -2597,7 +2597,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
 
       {/* ── Answer card ── */}
       {answer && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100">
+        <div className="rounded-xl border border-line2 bg-paper shadow-sm divide-y divide-gray-100">
 
           {/* Intent + confidence header */}
           <div className="flex flex-wrap items-center gap-2 px-5 py-3">
@@ -2610,7 +2610,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
               </span>
             )}
             {answer.dataSourcesUsed.length > 0 && (
-              <span className="ml-auto text-[10px] text-gray-400">
+              <span className="ml-auto text-[10px] text-muted">
                 Fontes: {answer.dataSourcesUsed.join(", ")}
               </span>
             )}
@@ -2618,18 +2618,18 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
 
           {/* Answer text */}
           <div className="px-5 py-4">
-            <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-line">{answer.answer}</p>
+            <p className="text-sm leading-relaxed text-ink whitespace-pre-line">{answer.answer}</p>
           </div>
 
           {/* Metrics */}
           {answer.metrics.length > 0 && (
             <div className="px-5 py-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Métricas</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Métricas</p>
               <div className="flex flex-wrap gap-3">
                 {answer.metrics.map((m, i) => (
-                  <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                    <p className="text-[10px] text-gray-500">{m.label}</p>
-                    <p className="text-sm font-semibold text-gray-800">{String(m.value)}</p>
+                  <div key={i} className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2">
+                    <p className="text-[10px] text-muted">{m.label}</p>
+                    <p className="text-sm font-semibold text-ink">{String(m.value)}</p>
                   </div>
                 ))}
               </div>
@@ -2639,10 +2639,10 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
           {/* Recommended actions */}
           {answer.recommendedActions.length > 0 && (
             <div className="px-5 py-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Ações recomendadas</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Ações recomendadas</p>
               <ul className="space-y-1.5">
                 {answer.recommendedActions.map((a, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                  <li key={i} className="flex items-start gap-2 text-sm text-ink2">
                     <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">{i + 1}</span>
                     {a}
                   </li>
@@ -2666,7 +2666,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
           {/* Follow-up questions */}
           {answer.followUpQuestions.length > 0 && (
             <div className="px-5 py-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Perguntas de continuidade</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Perguntas de continuidade</p>
               <div className="flex flex-wrap gap-2">
                 {answer.followUpQuestions.map((q) => (
                   <button
@@ -2674,7 +2674,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
                     type="button"
                     disabled={loading}
                     onClick={() => { setQuestion(q); void ask(q); }}
-                    className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                    className="rounded-full border border-line2 bg-[#FAFAF8] px-3 py-1 text-xs text-ink2 hover:bg-[#F4F4F2] disabled:opacity-50 transition-colors"
                   >
                     {q}
                   </button>
@@ -2688,12 +2688,12 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
             <button
               type="button"
               onClick={() => setShowRaw((v) => !v)}
-              className="text-[10px] text-gray-400 hover:text-gray-600"
+              className="text-[10px] text-muted hover:text-ink2"
             >
               {showRaw ? "Ocultar detalhes técnicos" : "Ver detalhes técnicos"}
             </button>
             {showRaw && (
-              <pre className="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 text-[10px] text-gray-500">
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-[#FAFAF8] p-3 text-[10px] text-muted">
                 {JSON.stringify({ intent: answer.intent, confidence: answer.confidence, dataSourcesUsed: answer.dataSourcesUsed, findings: answer.findings }, null, 2)}
               </pre>
             )}
@@ -2826,7 +2826,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
     <div className="mx-auto max-w-7xl space-y-0 px-4 py-6 sm:px-6">
 
       {/* ── 1. Tab navigation — FIRST ── */}
-      <div className="overflow-x-auto border-b border-gray-200">
+      <div className="overflow-x-auto border-b border-line2">
         <div className="flex min-w-max gap-0">
           {TABS.map((tab) => (
             <button
@@ -2835,7 +2835,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
               className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"
+                  : "border-transparent text-muted hover:text-ink hover:border-line2"
               }`}
             >
               {tab.label}
@@ -2850,7 +2850,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
       </div>
 
       {/* ── 2. Date filter bar — SECOND, below tabs ── */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-gray-50/60 px-2 py-3">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-[#FAFAF8]/60 px-2 py-3">
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
             <button
@@ -2859,7 +2859,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 preset === p.id
                   ? "bg-indigo-600 text-white"
-                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
+                  : "bg-paper border border-line2 text-ink2 hover:bg-[#F4F4F2]"
               }`}
             >
               {p.label}
@@ -2873,21 +2873,21 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
               value={from}
               max={to}
               onChange={(e) => setFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
+              className="rounded-lg border border-line2 px-2 py-1.5 text-xs"
             />
-            <span className="text-xs text-gray-400">até</span>
+            <span className="text-xs text-muted">até</span>
             <input
               type="date"
               value={to}
               min={from}
               onChange={(e) => setTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
+              className="rounded-lg border border-line2 px-2 py-1.5 text-xs"
             />
           </div>
         )}
         <div className="ml-auto flex items-center gap-2">
-          {loading && <span className="text-xs text-gray-400 animate-pulse">Carregando…</span>}
-          <span className="hidden text-[10px] text-gray-400 sm:block">{sourceLabel}</span>
+          {loading && <span className="text-xs text-muted animate-pulse">Carregando…</span>}
+          <span className="hidden text-[10px] text-muted sm:block">{sourceLabel}</span>
         </div>
       </div>
 

@@ -56,7 +56,7 @@ function Spinner({ size = "sm" }: { size?: "sm" | "lg" }) {
       : "h-3.5 w-3.5 border-2";
   return (
     <span
-      className={`inline-block animate-spin rounded-full border-gray-200 border-t-orange-500 ${cls}`}
+      className={`inline-block animate-spin rounded-full border-line2 border-t-orange-500 ${cls}`}
     />
   );
 }
@@ -75,16 +75,16 @@ function StepBadge({
   ];
   const idx = steps.findIndex((s) => s.key === current);
   return (
-    <div className="flex items-center gap-1 text-xs text-gray-400">
+    <div className="flex items-center gap-1 text-xs text-muted">
       {steps.map((s, i) => (
         <span key={s.key} className="flex items-center gap-1">
           <span
             className={`rounded-full px-2 py-0.5 font-medium ${
               i === idx
-                ? "bg-orange-100 text-orange-600"
+                ? "bg-brand-100 text-brand-600"
                 : i < idx
-                ? "text-gray-500"
-                : "text-gray-300"
+                ? "text-muted"
+                : "text-muted"
             }`}
           >
             {s.label}
@@ -128,20 +128,20 @@ function UploadZone({
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-10">
+    <div className="min-h-screen bg-[#FAFAF8] px-4 py-10">
       <div className="mx-auto max-w-xl">
         {/* Header */}
         <div className="mb-1 flex items-center gap-2 text-sm">
-          <Link href="/menu" className="text-gray-400 hover:text-gray-600">
+          <Link href="/menu" className="text-muted hover:text-ink2">
             ← Cardápio
           </Link>
         </div>
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-ink">
               Importar planilha
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted">
               Envie uma planilha com seu cardápio e importe categorias e itens
               automaticamente
             </p>
@@ -150,11 +150,11 @@ function UploadZone({
         </div>
 
         {parsing ? (
-          <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-gray-200 bg-white px-8 py-16">
+          <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-line2 bg-paper px-8 py-16">
             <Spinner size="lg" />
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted">
               Analisando{" "}
-              <span className="font-medium text-gray-700">{fileName}</span>…
+              <span className="font-medium text-ink2">{fileName}</span>…
             </p>
           </div>
         ) : (
@@ -166,10 +166,10 @@ function UploadZone({
             role="button"
             tabIndex={0}
             onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
-            className={`cursor-pointer rounded-xl border-2 border-dashed bg-white px-8 py-14 text-center transition-all ${
+            className={`cursor-pointer rounded-xl border-2 border-dashed bg-paper px-8 py-14 text-center transition-all ${
               dragOver
-                ? "border-orange-400 bg-orange-50"
-                : "border-gray-300 hover:border-gray-400"
+                ? "border-orange-400 bg-brand-50"
+                : "border-line2 hover:border-gray-400"
             }`}
           >
             <input
@@ -184,10 +184,10 @@ function UploadZone({
               }}
             />
             <div className="mb-3 text-4xl">📊</div>
-            <p className="text-sm font-semibold text-gray-700">
+            <p className="text-sm font-semibold text-ink2">
               Arraste sua planilha aqui
             </p>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-muted">
               Formatos aceitos: .xlsx · .xls · .csv — até 100 MB
             </p>
             <button
@@ -207,19 +207,19 @@ function UploadZone({
 
         {/* Format reference */}
         {!parsing && (
-          <div className="mt-6 rounded-xl border border-gray-100 bg-white px-5 py-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <div className="mt-6 rounded-xl border border-line bg-paper px-5 py-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
               Formato esperado
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr className="border-b border-line">
                     {["Foto", "Categoria", "Nome do Item", "Descrição", "Preço"].map(
                       (h) => (
                         <th
                           key={h}
-                          className="pb-2 pr-4 text-left font-semibold text-gray-700"
+                          className="pb-2 pr-4 text-left font-semibold text-ink2"
                         >
                           {h}
                         </th>
@@ -227,7 +227,7 @@ function UploadZone({
                     )}
                   </tr>
                 </thead>
-                <tbody className="text-gray-400">
+                <tbody className="text-muted">
                   <tr>
                     <td className="py-1.5 pr-4 italic">URL (opcional)</td>
                     <td className="py-1.5 pr-4">Pizzas</td>
@@ -245,9 +245,9 @@ function UploadZone({
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-muted">
               Colunas obrigatórias:{" "}
-              <span className="font-medium text-gray-600">
+              <span className="font-medium text-ink2">
                 Categoria, Nome do Item, Preço
               </span>
               . Foto e Descrição são opcionais.
@@ -255,7 +255,7 @@ function UploadZone({
             <a
               href="/api/menu/import/template"
               download
-              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700"
+              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
             >
               ↓ Baixar planilha modelo (.xlsx)
             </a>
@@ -331,15 +331,15 @@ function PreviewTable({
   const canConfirm = stats.valid > 0 && !confirming;
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-8">
+    <div className="min-h-screen bg-[#FAFAF8] px-4 py-8">
       <div className="mx-auto max-w-4xl">
         {/* Header */}
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">
+            <h1 className="text-xl font-bold text-ink">
               Revisar importação
             </h1>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-muted">
               Confira os dados antes de importar
             </p>
           </div>
@@ -347,7 +347,7 @@ function PreviewTable({
             <StepBadge current="preview" />
             <button
               onClick={onBack}
-              className="text-sm text-gray-400 hover:text-gray-600"
+              className="text-sm text-muted hover:text-ink2"
             >
               ← Novo arquivo
             </button>
@@ -383,7 +383,7 @@ function PreviewTable({
         {/* Stats bar + filter tabs */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           {/* Filter tabs */}
-          <div className="flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-medium">
+          <div className="flex rounded-lg border border-line2 bg-paper p-0.5 text-xs font-medium">
             {(
               [
                 { key: "all", label: `Todas (${stats.total})` },
@@ -404,8 +404,8 @@ function PreviewTable({
                 onClick={() => setFilter(tab.key)}
                 className={`rounded-md px-3 py-1.5 transition-colors ${
                   filter === tab.key
-                    ? "bg-gray-100 text-gray-900 shadow-sm"
-                    : `text-gray-500 hover:text-gray-700 ${
+                    ? "bg-[#F4F4F2] text-ink shadow-sm"
+                    : `text-muted hover:text-ink2 ${
                         "color" in tab ? tab.color : ""
                       }`
                 }`}
@@ -418,7 +418,7 @@ function PreviewTable({
           {/* Stats chips */}
           <div className="flex items-center gap-2 text-xs">
             {stats.skipped > 0 && (
-              <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-500">
+              <span className="rounded-full bg-[#F4F4F2] px-2 py-1 text-muted">
                 {stats.skipped} ignoradas (vazias)
               </span>
             )}
@@ -434,14 +434,14 @@ function PreviewTable({
         </div>
 
         {/* Grouped preview table */}
-        <div className="max-h-[480px] overflow-y-auto rounded-xl border border-gray-200 bg-white">
+        <div className="max-h-[480px] overflow-y-auto rounded-xl border border-line2 bg-paper">
           {grouped.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-gray-400">
+            <p className="px-5 py-8 text-center text-sm text-muted">
               Nenhuma linha para exibir.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 border-b border-gray-100 bg-gray-50 text-xs font-semibold text-gray-500">
+              <thead className="sticky top-0 border-b border-line bg-[#FAFAF8] text-xs font-semibold text-muted">
                 <tr>
                   <th className="w-10 px-3 py-2.5 text-left">#</th>
                   <th className="w-10 px-3 py-2.5 text-left hidden sm:table-cell">Foto</th>
@@ -460,16 +460,16 @@ function PreviewTable({
                     {/* Category separator */}
                     <tr
                       key={`cat-${group.name}`}
-                      className="border-t border-gray-100 bg-gray-50"
+                      className="border-t border-line bg-[#FAFAF8]"
                     >
                       <td colSpan={6} className="px-3 py-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-700">
+                          <span className="text-xs font-semibold text-ink2">
                             {group.name === "__errors__"
                               ? "Linhas com erro de categoria"
                               : group.name}
                           </span>
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-muted">
                             {group.rows.length}{" "}
                             {group.rows.length === 1 ? "item" : "itens"}
                           </span>
@@ -490,10 +490,10 @@ function PreviewTable({
                         className={
                           row.status === "error"
                             ? "bg-red-50"
-                            : "hover:bg-gray-50"
+                            : "hover:bg-[#FAFAF8]"
                         }
                       >
-                        <td className="px-3 py-2 text-xs text-gray-400">
+                        <td className="px-3 py-2 text-xs text-muted">
                           {row.rowIndex}
                         </td>
                         <td className="hidden px-3 py-2 sm:table-cell">
@@ -502,13 +502,13 @@ function PreviewTable({
                             <img
                               src={row.foto}
                               alt=""
-                              className="h-8 w-8 rounded object-cover bg-gray-100"
+                              className="h-8 w-8 rounded object-cover bg-[#F4F4F2]"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = "none";
                               }}
                             />
                           ) : (
-                            <span className="flex h-8 w-8 items-center justify-center rounded bg-gray-100 text-xs text-gray-300">
+                            <span className="flex h-8 w-8 items-center justify-center rounded bg-[#F4F4F2] text-xs text-muted">
                               —
                             </span>
                           )}
@@ -518,7 +518,7 @@ function PreviewTable({
                             className={
                               !row.categoria && row.status === "error"
                                 ? "italic text-red-400"
-                                : "text-gray-600"
+                                : "text-ink2"
                             }
                           >
                             {row.categoria || "—"}
@@ -529,7 +529,7 @@ function PreviewTable({
                             className={
                               !row.nome && row.status === "error"
                                 ? "italic text-red-400"
-                                : "font-medium text-gray-800"
+                                : "font-medium text-ink"
                             }
                           >
                             {row.nome || "—"}
@@ -547,7 +547,7 @@ function PreviewTable({
                             </div>
                           )}
                         </td>
-                        <td className="hidden px-3 py-2 text-xs text-gray-400 md:table-cell">
+                        <td className="hidden px-3 py-2 text-xs text-muted md:table-cell">
                           {truncate(row.descricao, 60) || "—"}
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -557,7 +557,7 @@ function PreviewTable({
                               {row.precoRaw || "—"}
                             </span>
                           ) : (
-                            <span className="font-semibold text-gray-700">
+                            <span className="font-semibold text-ink2">
                               R$ {formatPrice(row.preco)}
                             </span>
                           )}
@@ -579,10 +579,10 @@ function PreviewTable({
         </div>
 
         {/* Import mode + confirm */}
-        <div className="mt-4 rounded-xl border border-gray-200 bg-white px-5 py-4 space-y-4">
+        <div className="mt-4 rounded-xl border border-line2 bg-paper px-5 py-4 space-y-4">
           {/* Mode selection */}
           <div>
-            <p className="mb-2 text-sm font-semibold text-gray-800">
+            <p className="mb-2 text-sm font-semibold text-ink">
               Modo de importação
             </p>
             <div className="space-y-2">
@@ -596,10 +596,10 @@ function PreviewTable({
                   className="mt-0.5 accent-orange-500"
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">
+                  <p className="text-sm font-medium text-ink">
                     Substituir cardápio atual
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-muted">
                     Remove todas as categorias e itens existentes antes de
                     importar
                   </p>
@@ -615,10 +615,10 @@ function PreviewTable({
                   className="mt-0.5 accent-orange-500"
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">
+                  <p className="text-sm font-medium text-ink">
                     Adicionar ao cardápio atual
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-muted">
                     Mantém o cardápio existente e adiciona os novos itens.
                     Categorias com o mesmo nome receberão os novos itens.
                   </p>
@@ -672,46 +672,46 @@ function SummaryScreen({ summary }: { summary: ImportSummary }) {
   const [showErrors, setShowErrors] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-16">
+    <div className="min-h-screen bg-[#FAFAF8] px-4 py-16">
       <div className="mx-auto max-w-md">
         {/* Icon + title */}
         <div className="mb-8 text-center">
           <div className="mb-3 text-5xl">{hasErrors ? "⚠️" : "✅"}</div>
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-xl font-bold text-ink">
             {hasErrors
               ? "Importação concluída com avisos"
               : "Cardápio importado com sucesso"}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted">
             Seu cardápio foi atualizado.
           </p>
         </div>
 
         {/* Stats grid */}
         <div className="mb-6 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
-            <p className="text-2xl font-bold text-orange-500">
+          <div className="rounded-xl border border-line2 bg-paper px-4 py-4 text-center">
+            <p className="text-2xl font-bold text-brand-600">
               {summary.categoriesCreated}
             </p>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-muted">
               {summary.categoriesCreated === 1
                 ? "Categoria criada"
                 : "Categorias criadas"}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
-            <p className="text-2xl font-bold text-orange-500">
+          <div className="rounded-xl border border-line2 bg-paper px-4 py-4 text-center">
+            <p className="text-2xl font-bold text-brand-600">
               {summary.itemsCreated}
             </p>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-muted">
               {summary.itemsCreated === 1 ? "Item criado" : "Itens criados"}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
-            <p className="text-2xl font-bold text-gray-400">
+          <div className="rounded-xl border border-line2 bg-paper px-4 py-4 text-center">
+            <p className="text-2xl font-bold text-muted">
               {summary.skipped}
             </p>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-muted">
               {summary.skipped === 1
                 ? "Linha ignorada"
                 : "Linhas ignoradas"}
@@ -730,20 +730,20 @@ function SummaryScreen({ summary }: { summary: ImportSummary }) {
             </div>
           )}
           <div
-            className={`rounded-xl border bg-white px-4 py-4 text-center ${
+            className={`rounded-xl border bg-paper px-4 py-4 text-center ${
               summary.failed > 0
                 ? "border-red-200"
-                : "border-gray-200"
+                : "border-line2"
             }`}
           >
             <p
               className={`text-2xl font-bold ${
-                summary.failed > 0 ? "text-red-500" : "text-gray-400"
+                summary.failed > 0 ? "text-red-500" : "text-muted"
               }`}
             >
               {summary.failed}
             </p>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-muted">
               {summary.failed === 1 ? "Linha com falha" : "Linhas com falha"}
             </p>
           </div>
@@ -781,7 +781,7 @@ function SummaryScreen({ summary }: { summary: ImportSummary }) {
           </Link>
           <Link
             href="/menu/upload"
-            className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="flex items-center justify-center rounded-lg border border-line2 bg-paper px-6 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8]"
           >
             Importar outra planilha
           </Link>
