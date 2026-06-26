@@ -99,32 +99,43 @@ export function Sidebar() {
           Desktop: static, always visible (lg:static, lg:translate-x-0) */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 flex h-screen w-56 shrink-0 flex-col
-          border-r border-[#E5E5E5] bg-white
+          fixed inset-y-0 left-0 z-50 flex h-screen w-60 shrink-0 flex-col
+          border-r border-line bg-paper
           transition-transform duration-200 ease-in-out
           lg:static lg:z-auto lg:translate-x-0
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
       >
-        {/* Brand */}
-        <div className="flex h-14 items-center justify-between border-b border-[#E5E5E5] px-4">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-bold tracking-tight text-[#0B0B0B]">
-              Foocci
-            </span>
-            <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-600">
-              beta
-            </span>
-          </div>
+        {/* Brand — logomark + wordmark, prominent */}
+        <div className="flex items-center justify-between border-b border-line px-4 py-4">
+          <Link href="/dashboard" onClick={close} className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-10 w-10 rounded-[11px]" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/foocci/foocci-wordmark.png" alt="Foocci" className="h-[26px]" />
+          </Link>
           {/* Close button — mobile only */}
           <button
             type="button"
             onClick={close}
             aria-label="Fechar menu"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink2 lg:hidden"
           >
             ✕
           </button>
+        </div>
+
+        {/* User — exposed up top */}
+        <div className="border-b border-line px-3 py-3">
+          <div className="flex items-center gap-2.5 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink text-[14px] font-bold text-white">
+              {(session?.user?.name ?? "?").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[13.5px] font-bold text-ink">{session?.user?.name ?? "—"}</p>
+              <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted">{session?.user?.role}</p>
+            </div>
+          </div>
         </div>
 
         {/* Nav */}
@@ -140,7 +151,7 @@ export function Sidebar() {
                   className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
                     active
                       ? "bg-brand-50 text-brand-600"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      : "text-ink2 hover:bg-[#F4F4F2] hover:text-ink"
                   }`}
                 >
                   <span className="text-[15px] leading-none">{HOME_ITEM.icon}</span>
@@ -153,8 +164,8 @@ export function Sidebar() {
           <ul className="space-y-4">
             {NAV_GROUPS.map((group) => (
               <li key={group.label}>
-                <div className="mb-3 border-t border-gray-100" />
-                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                <div className="mb-3 border-t border-line" />
+                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
                   {group.label}
                 </p>
                 <ul className="space-y-0.5">
@@ -170,8 +181,8 @@ export function Sidebar() {
                             active
                               ? "bg-brand-50 font-semibold text-brand-600"
                               : item.soon
-                                ? "text-gray-400 hover:bg-gray-50 hover:text-gray-500"
-                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                                ? "text-muted hover:bg-[#FAFAF8]"
+                                : "text-ink2 hover:bg-[#F4F4F2] hover:text-ink"
                           }`}
                         >
                           <span className="flex items-center gap-2.5">
@@ -179,7 +190,7 @@ export function Sidebar() {
                             {item.label}
                           </span>
                           {item.soon && (
-                            <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[8px] font-bold uppercase leading-none tracking-wide text-gray-400">
+                            <span className="shrink-0 rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[8px] font-bold uppercase leading-none tracking-wide text-muted">
                               breve
                             </span>
                           )}
@@ -193,14 +204,9 @@ export function Sidebar() {
           </ul>
         </nav>
 
-        {/* User badge */}
-        <div className="border-t border-[#E5E5E5] px-3 py-3">
-          <p className="truncate text-xs font-semibold text-gray-800">
-            {session?.user?.name ?? "—"}
-          </p>
-          <p className="truncate text-[10px] uppercase tracking-wide text-gray-400">
-            {session?.user?.role}
-          </p>
+        {/* Footer */}
+        <div className="border-t border-line px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Foocci · v1</p>
         </div>
       </aside>
     </>

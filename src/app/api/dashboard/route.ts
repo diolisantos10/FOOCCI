@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
     }
     const topProducts = [...productMap.values()]
       .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5)
+      .slice(0, 10)
       .map(p => ({ ...p, revenue: Math.round(p.revenue * 100) / 100 }));
 
     // ── Order type breakdown (period) ──────────────────────────────────────────

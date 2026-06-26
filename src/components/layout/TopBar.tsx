@@ -270,13 +270,11 @@ export function TopBar({ title }: TopBarProps) {
           </svg>
         </button>
 
-        <span className="text-sm font-bold tracking-tight text-[#0B0B0B]">
-          Foocci
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-7 w-7 rounded-lg lg:hidden" />
         {title && (
           <>
-            <span className="hidden text-sm text-gray-300 sm:inline">/</span>
-            <span className="hidden text-sm text-gray-500 sm:inline">{title}</span>
+            <span className="text-sm font-semibold text-gray-700 sm:text-gray-500">{title}</span>
           </>
         )}
       </div>

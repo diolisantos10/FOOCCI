@@ -171,17 +171,23 @@ export function TopSellers({ products }: { products: TopProduct[] }) {
   const max = Math.max(1, ...products.map((p) => p.quantity));
   return (
     <Card className="p-5">
-      <SectionTitle meta="no período">Mais vendidos</SectionTitle>
+      <SectionTitle meta="top 10 no período">Mais vendidos</SectionTitle>
       {products.length === 0 ? (
         <EmptyState icon="🍽" title="Sem vendas no período" />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {products.map((p, i) => (
-            <div key={p.name} className="flex items-center gap-3">
-              <span className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-[12px] font-bold ${i === 0 ? "bg-ink text-white" : "bg-[#F4F4F2] text-ink2"}`}>{i + 1}</span>
+            <div key={p.name} className="flex items-center gap-2.5">
+              <span className={`w-4 shrink-0 text-center text-[12px] font-bold ${i === 0 ? "text-brand-600" : "text-muted"}`}>{i + 1}</span>
+              {p.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg border border-line object-cover" />
+              ) : (
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F4F4F2] text-[14px]">🍽</div>
+              )}
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold text-ink">{p.name}</div>
-                <div className="mt-1.5 h-[5px] overflow-hidden rounded-[3px] bg-[#F0F0EE]"><i className="block h-full rounded-[3px] bg-brand-500" style={{ width: `${Math.max(8, (p.quantity / max) * 100)}%` }} /></div>
+                <div className="truncate text-[13px] font-semibold text-ink">{p.name}</div>
+                <div className="mt-1 h-[5px] overflow-hidden rounded-[3px] bg-[#F0F0EE]"><i className="block h-full rounded-[3px] bg-brand-500" style={{ width: `${Math.max(8, (p.quantity / max) * 100)}%` }} /></div>
               </div>
               <span className="shrink-0 text-[12.5px] font-bold text-ink2">{p.quantity}</span>
             </div>
