@@ -134,10 +134,6 @@ function overview(p: {
     tiers:                    [],
     channels:                 p.channels ?? [],
     insights:                 [],
-    importedBaseline:         null,
-    importedTopCustomers:     [],
-    importedTopByOrders:      [],
-    importedSemTelefoneCount: 0,
     zeroSalesProducts:        p.zeroSalesProducts ?? [],
     upsellRevenue:            upsell(p.upsellRevenue),
   };

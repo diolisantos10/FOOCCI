@@ -13,8 +13,6 @@ import type {
   TierCount,
   ChannelRow,
   Insight,
-  ImportedBaseline,
-  ImportedCustomerRow,
   ZeroSalesProduct,
   UpsellRevenue,
 } from "@/services/analytics/AnalyticsService";
@@ -205,7 +203,7 @@ function today() {
   return new Date(new Date().toLocaleDateString("en-CA"));
 }
 
-type Preset = "today" | "yesterday" | "7d" | "30d" | "90d" | "year" | "all" | "custom";
+type Preset = "today" | "yesterday" | "7d" | "30d" | "90d" | "year" | "custom";
 
 const PRESETS: { id: Preset; label: string }[] = [
   { id: "today",     label: "Hoje" },
@@ -214,7 +212,6 @@ const PRESETS: { id: Preset; label: string }[] = [
   { id: "30d",       label: "30 dias" },
   { id: "90d",       label: "90 dias" },
   { id: "year",      label: "12 meses" },
-  { id: "all",       label: "Todo histórico" },
   { id: "custom",    label: "Personalizado" },
 ];
 
@@ -227,7 +224,6 @@ function presetRange(preset: Preset): { from: string; to: string } {
     case "30d":       return { from: toISO(addDays(t,-29)), to: toISO(t) };
     case "90d":       return { from: toISO(addDays(t,-89)), to: toISO(t) };
     case "year":      return { from: toISO(addDays(t,-364)), to: toISO(t) };
-    case "all":       return { from: "2000-01-01",           to: toISO(t) };
     default:          return { from: toISO(addDays(t,-29)), to: toISO(t) };
   }
 }
@@ -242,7 +238,6 @@ const TABS = [
   { id: "clientes",     label: "Clientes"            },
   { id: "canais",       label: "Canais"              },
   { id: "delivery",     label: "Cardápio Delivery"   },
-  { id: "historico",    label: "Histórico Importado" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
@@ -473,28 +468,6 @@ const TIER_COLOR: Record<string, string> = {
   BRONZE:   "bg-orange-400",
 };
 
-// ─── Data-source helpers ──────────────────────────────────────────────────────
-
-function shouldUseImportedProducts(
-  preset: Preset,
-  data: AnalyticsOverview | null,
-): boolean {
-  if (preset !== "all") return false;
-  const importedCount = data?.importedBaseline?.topProducts.length ?? 0;
-  const realCount     = data?.topProducts.length ?? 0;
-  return importedCount > realCount;
-}
-
-function shouldUseImportedCategories(
-  preset: Preset,
-  data: AnalyticsOverview | null,
-): boolean {
-  if (preset !== "all") return false;
-  const importedCount = data?.importedBaseline?.topCategories.length ?? 0;
-  const realCount     = data?.categories.length ?? 0;
-  return importedCount > realCount;
-}
-
 // ─── Table sort helpers ───────────────────────────────────────────────────────
 
 const SORT_OPTS: { value: string; label: string }[] = [
@@ -619,35 +592,20 @@ function Skeleton() {
 
 // ─── Source badge ─────────────────────────────────────────────────────────────
 
-function SourceBadge({ source }: { source: "foocci" | "importado" | "mixed" }) {
-  if (source === "foocci") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
-        📋 Pedidos Foocci
-      </span>
-    );
-  }
-  if (source === "mixed") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
-        📊 Foocci + histórico importado
-      </span>
-    );
-  }
+function SourceBadge({ source }: { source: "foocci" }) {
+  void source;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-      📦 Histórico importado — dados agregados, não pedidos detalhados
+    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
+      📋 Pedidos Foocci
     </span>
   );
 }
 
-function FallbackPrompt({ preset }: { preset: Preset }) {
-  if (preset === "all") return null;
+function FallbackPrompt() {
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
       <p className="text-xs text-gray-500">
-        Sem dados Foocci neste período.{" "}
-        <span className="font-medium">Use &quot;Todo histórico&quot;</span> para ver a base importada Saipos/Nemo.
+        Sem dados Foocci neste período.
       </p>
     </div>
   );
@@ -765,122 +723,6 @@ function InsightCard({ insight }: { insight: Insight }) {
         <span className="mr-2">{s.icon}</span>
         {insight.message}
       </p>
-    </div>
-  );
-}
-
-// ─── Imported baseline section ────────────────────────────────────────────────
-
-function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
-  const periodFrom = new Date(baseline.periodStart).toLocaleDateString("pt-BR");
-  const periodTo   = new Date(baseline.periodEnd).toLocaleDateString("pt-BR");
-
-  return (
-    <div className="rounded-xl border-2 border-indigo-200 bg-white p-5">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-lg">
-          📦
-        </div>
-        <div>
-          <h2 className="text-sm font-bold text-indigo-900">Histórico importado — Saipos/Nemo</h2>
-          <p className="mt-0.5 text-xs text-indigo-600">
-            Dados anteriores ao Foocci, importados de bases externas. Não representam pedidos detalhados — são agregados históricos.
-          </p>
-        </div>
-        <span className="ml-auto shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
-          Histórico
-        </span>
-      </div>
-
-      <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-        Período importado: <strong>{periodFrom}</strong> a <strong>{periodTo}</strong>
-        {" · "}esse período é independente do filtro de datas acima.
-      </div>
-
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita histórica</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qtd vendida</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Prod./Categorias</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.rowCount)}</p>
-        </div>
-        <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Sem classificação</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.semClassificacaoCount)}</p>
-        </div>
-      </div>
-
-      {baseline.topCategories.length > 0 && (
-        <div className="mb-5">
-          <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Top categorias (receita)
-          </p>
-          <div className="space-y-1.5">
-            {baseline.topCategories.slice(0, 10).map((cat, i) => {
-              const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
-              return (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="w-4 text-right font-semibold text-gray-400">{i + 1}</span>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="font-medium text-gray-800">{cat.name}</span>
-                      <span className="text-gray-500">{fmtBRL(cat.revenue)} · {fmtNum(cat.qty)} un</span>
-                    </div>
-                    <div className="h-1 w-full rounded bg-gray-100">
-                      <div className="h-1 rounded bg-indigo-400" style={{ width: `${share.toFixed(1)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {baseline.topProducts.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Top produtos (receita)
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b text-left text-gray-400">
-                  <th className="pb-1.5 pr-3 font-medium">#</th>
-                  <th className="pb-1.5 pr-3 font-medium">Produto</th>
-                  <th className="pb-1.5 pr-3 font-medium">Categoria</th>
-                  <th className="pb-1.5 pr-3 font-medium text-right">Receita</th>
-                  <th className="pb-1.5 font-medium text-right">Qtd</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {baseline.topProducts.slice(0, 15).map((p, i) => (
-                  <tr key={i}>
-                    <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
-                    <td className="py-1.5 pr-3 font-medium text-gray-800">{p.name}</td>
-                    <td className="py-1.5 pr-3 text-gray-500">{p.category}</td>
-                    <td className="py-1.5 pr-3 text-right text-gray-700">{fmtBRL(p.revenue)}</td>
-                    <td className="py-1.5 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {baseline.semClassificacaoCount > 0 && (
-        <p className="mt-3 text-[11px] text-amber-600">
-          ⚠ {baseline.semClassificacaoCount} produto
-          {baseline.semClassificacaoCount !== 1 ? "s" : ""} sem classificação de categoria.
-        </p>
-      )}
     </div>
   );
 }
@@ -1478,7 +1320,7 @@ function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
 
 function TabVisaoGeral({
   data, loading, agentData, agentLoading, diagnosisData, diagnosisLoading,
-  operationsData, operationsLoading, preset,
+  operationsData, operationsLoading,
 }: {
   data: AnalyticsOverview | null;
   loading: boolean;
@@ -1488,19 +1330,16 @@ function TabVisaoGeral({
   diagnosisLoading: boolean;
   operationsData: OperationalEfficiencyReport | null;
   operationsLoading: boolean;
-  preset: Preset;
 }) {
   const kpi            = data?.kpi;
   const hasRealOrders  = (kpi?.orders ?? 0) > 0;
-  const hasImported    = (data?.importedBaseline?.rowCount ?? 0) > 0;
-  const showAllMode    = preset === "all";
 
   return (
     <div className="space-y-6">
       {/* Real Foocci KPIs */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <SourceBadge source={showAllMode && hasImported ? "mixed" : "foocci"} />
+          <SourceBadge source="foocci" />
           {loading && <span className="text-xs text-gray-400 animate-pulse">Carregando…</span>}
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -1517,59 +1356,9 @@ function TabVisaoGeral({
       {/* Foocci incremental revenue — shown when there are real orders */}
       {!loading && hasRealOrders && <UpsellRevenueCard upsell={data?.upsellRevenue} />}
 
-      {/* Imported baseline summary card — always shown when data exists; more prominent in "all" mode */}
-      {!loading && hasImported && (
-        <div className={`rounded-xl p-5 ${showAllMode
-          ? "border-2 border-indigo-200 bg-indigo-50"
-          : "border border-indigo-100 bg-white"}`}>
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-base">
-              📦
-            </div>
-            <div className="flex-1">
-              <p className={`text-sm font-bold ${showAllMode ? "text-indigo-900" : "text-gray-800"}`}>
-                Histórico importado Saipos/Nemo
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {(() => {
-                  const b = data!.importedBaseline!;
-                  const from = new Date(b.periodStart).getFullYear();
-                  const to   = new Date(b.periodEnd).getFullYear();
-                  return `${fmtNum(b.rowCount)} registros · ${from}–${to} · dados agregados, não pedidos`;
-                })()}
-              </p>
-            </div>
-            {showAllMode && (
-              <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-700">
-                Em destaque
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: "Receita histórica",   val: fmtBRL(data!.importedBaseline!.totalRevenue) },
-              { label: "Qtd vendida",          val: fmtNum(data!.importedBaseline!.totalQuantity) },
-              { label: "Produtos/Categorias",  val: fmtNum(data!.importedBaseline!.rowCount) },
-              { label: "Sem classificação",    val: fmtNum(data!.importedBaseline!.semClassificacaoCount) },
-            ].map((item) => (
-              <div key={item.label} className="rounded-xl bg-white px-3 py-2.5 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{item.label}</p>
-                <p className="mt-0.5 text-base font-bold text-gray-900">{item.val}</p>
-              </div>
-            ))}
-          </div>
-          {!hasRealOrders && (
-            <p className="mt-3 text-xs text-indigo-700">
-              Acesse as abas <strong>Produtos</strong>, <strong>Categorias</strong> e{" "}
-              <strong>Histórico Importado</strong> para análise detalhada.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Fallback when no real orders AND no imported data */}
-      {!loading && !hasRealOrders && !hasImported && preset !== "all" && (
-        <FallbackPrompt preset={preset} />
+      {/* Fallback when no real orders */}
+      {!loading && !hasRealOrders && (
+        <FallbackPrompt />
       )}
 
       {/* Operational Efficiency — fulfillment timing + delays (W2) */}
@@ -1633,10 +1422,9 @@ function ZeroSalesCard({ products }: { products: ZeroSalesProduct[] }) {
 
 // ─── Tab: Produtos ────────────────────────────────────────────────────────────
 
-function TabProdutos({ data, loading, preset }: {
+function TabProdutos({ data, loading }: {
   data: AnalyticsOverview | null;
   loading: boolean;
-  preset: Preset;
 }) {
   // Hooks must be before any early return
   const [search,    setSearch]    = useState("");
@@ -1645,132 +1433,7 @@ function TabProdutos({ data, loading, preset }: {
 
   if (loading) return <Skeleton />;
 
-  const useImported = shouldUseImportedProducts(preset, data);
   const hasReal     = (data?.topProducts.length ?? 0) > 0;
-  const hasImported = (data?.importedBaseline?.topProducts.length ?? 0) > 0;
-
-  // ── Imported path ─────────────────────────────────────────────────────────
-  if (useImported && hasImported) {
-    const baseline    = data!.importedBaseline!;
-    const allProducts = baseline.topProducts;
-
-    const categories = [...new Set(
-      allProducts.map((p) => p.category).filter(Boolean)
-    )].sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-    const filtered = allProducts.filter((p) => {
-      const matchName = !search   || p.name.toLowerCase().includes(search.toLowerCase());
-      const matchCat  = !catFilter || p.category === catFilter;
-      return matchName && matchCat;
-    });
-    const sorted = applySort(filtered, sortValue);
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <SourceBadge source="importado" />
-          <span className="text-xs text-gray-400">
-            {fmtNum(allProducts.length)} produtos · receita total {fmtBRL(baseline.totalRevenue)}
-          </span>
-        </div>
-
-        {/* Summary KPIs */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita histórica</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qtd total vendida</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Produtos analisados</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(allProducts.length)}</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Sem classificação</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.semClassificacaoCount)}</p>
-          </div>
-        </div>
-
-        {/* Top by revenue bar chart */}
-        <Card title="Top 20 produtos por receita">
-          <BarChart
-            data={allProducts.slice(0, 20) as unknown as Record<string, number | string>[]}
-            valueKey="revenue"
-            labelKey="name"
-            color="bg-indigo-500"
-          />
-        </Card>
-
-        {/* Top by quantity */}
-        <Card title="Top 20 produtos por quantidade vendida">
-          <BarChart
-            data={[...allProducts].sort((a, b) => b.qty - a.qty).slice(0, 20) as unknown as Record<string, number | string>[]}
-            valueKey="qty"
-            labelKey="name"
-            color="bg-violet-400"
-            formatValue={fmtNum}
-          />
-        </Card>
-
-        {/* Full filterable/sortable table */}
-        <Card title={`Tabela completa — ${fmtNum(allProducts.length)} produtos`}>
-          <ProductTableControls
-            search={search}       onSearch={setSearch}
-            category={catFilter}  onCategory={setCatFilter}  categories={categories}
-            sortValue={sortValue}  onSort={setSortValue}
-            resultCount={sorted.length}  totalCount={allProducts.length}
-          />
-          {sorted.length === 0 ? (
-            <Empty msg="Nenhum produto encontrado com esses filtros." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-400">
-                    <th className="pb-2 pr-4 font-medium">#</th>
-                    <th className="pb-2 pr-4 font-medium">Produto</th>
-                    <th className="pb-2 pr-4 font-medium">Categoria</th>
-                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
-                    <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
-                    <th className="pb-2 font-medium text-right">% receita</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {sorted.map((p, i) => {
-                    const share = baseline.totalRevenue > 0 ? (p.revenue / baseline.totalRevenue) * 100 : 0;
-                    return (
-                      <tr key={i}>
-                        <td className="py-1.5 pr-4 text-gray-400">{i + 1}</td>
-                        <td className="py-1.5 pr-4 font-medium text-gray-800">{p.name}</td>
-                        <td className="py-1.5 pr-4 text-gray-500">{p.category || "—"}</td>
-                        <td className="py-1.5 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
-                        <td className="py-1.5 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                        <td className="py-1.5 text-right text-gray-400">{share.toFixed(1)}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        {/* Sem classificação callout */}
-        {baseline.semClassificacaoCount > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p className="text-xs text-amber-800">
-              ⚠ <strong>{fmtNum(baseline.semClassificacaoCount)} produto
-              {baseline.semClassificacaoCount !== 1 ? "s" : ""}</strong> sem classificação de categoria —
-              podem precisar de revisão no cardápio.
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   // ── Real Foocci path ──────────────────────────────────────────────────────
   if (hasReal) {
@@ -1786,11 +1449,7 @@ function TabProdutos({ data, loading, preset }: {
           <SourceBadge source="foocci" />
           {data!.topProducts.length < 5 && (
             <span className="text-xs text-gray-400">
-              Poucos produtos neste período. Use{" "}
-              <button className="font-medium text-indigo-600 underline underline-offset-2">
-                Todo histórico
-              </button>{" "}
-              para analisar a base Saipos/Nemo.
+              Poucos produtos neste período.
             </span>
           )}
         </div>
@@ -1875,11 +1534,8 @@ function TabProdutos({ data, loading, preset }: {
   const noSalesZero: ZeroSalesProduct[] = data?.zeroSalesProducts ?? [];
   return (
     <div className="space-y-4">
-      <Empty
-        msg="Sem dados de produtos neste período."
-        sub={preset !== "all" ? 'Use "Todo histórico" para explorar a base importada Saipos/Nemo.' : undefined}
-      />
-      {preset !== "all" && <FallbackPrompt preset={preset} />}
+      <Empty msg="Sem dados de produtos neste período." />
+      <FallbackPrompt />
       <ZeroSalesCard products={noSalesZero} />
     </div>
   );
@@ -1887,10 +1543,9 @@ function TabProdutos({ data, loading, preset }: {
 
 // ─── Tab: Categorias ──────────────────────────────────────────────────────────
 
-function TabCategorias({ data, loading, preset }: {
+function TabCategorias({ data, loading }: {
   data: AnalyticsOverview | null;
   loading: boolean;
-  preset: Preset;
 }) {
   // Hooks before early returns
   const [catSearch, setCatSearch] = useState("");
@@ -1898,167 +1553,7 @@ function TabCategorias({ data, loading, preset }: {
 
   if (loading) return <Skeleton />;
 
-  const useImported = shouldUseImportedCategories(preset, data);
   const hasReal     = (data?.categories.length ?? 0) > 0;
-  const hasImported = (data?.importedBaseline?.topCategories.length ?? 0) > 0;
-
-  // ── Imported path ─────────────────────────────────────────────────────────
-  if (useImported && hasImported) {
-    const baseline   = data!.importedBaseline!;
-    const categories = baseline.topCategories;
-
-    // Apply search + sort to the detail table only (bar charts use full list)
-    const filteredCats = catSearch
-      ? categories.filter((c) => c.name.toLowerCase().includes(catSearch.toLowerCase()))
-      : categories;
-    const sortedCats = applySort(filteredCats, catSort);
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <SourceBadge source="importado" />
-          <span className="text-xs text-gray-400">
-            {fmtNum(categories.length)} categorias · {fmtBRL(baseline.totalRevenue)} receita total
-          </span>
-        </div>
-
-        {/* Revenue bar */}
-        <Card title="Participação por receita">
-          <div className="space-y-2">
-            {categories.map((cat, i) => {
-              const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
-              return (
-                <div key={i} className="flex items-center gap-3 text-xs">
-                  <span className="w-36 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
-                  <div className="flex-1 rounded-full bg-gray-100 h-2.5">
-                    <div className="bg-indigo-400 h-2.5 rounded-full" style={{ width: `${share.toFixed(1)}%` }} />
-                  </div>
-                  <span className="w-24 shrink-0 text-right font-medium text-gray-800">{fmtBRL(cat.revenue)}</span>
-                  <span className="w-12 shrink-0 text-right text-gray-400">{share.toFixed(1)}%</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* Quantity bar */}
-        <Card title="Participação por quantidade vendida">
-          <div className="space-y-2">
-            {[...categories].sort((a, b) => b.qty - a.qty).map((cat, i) => {
-              const totalQty = categories.reduce((s, c) => s + c.qty, 0);
-              const share    = totalQty > 0 ? (cat.qty / totalQty) * 100 : 0;
-              return (
-                <div key={i} className="flex items-center gap-3 text-xs">
-                  <span className="w-36 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
-                  <div className="flex-1 rounded-full bg-gray-100 h-2.5">
-                    <div className="bg-violet-400 h-2.5 rounded-full" style={{ width: `${share.toFixed(1)}%` }} />
-                  </div>
-                  <span className="w-20 shrink-0 text-right font-medium text-gray-800">{fmtNum(cat.qty)} un</span>
-                  <span className="w-12 shrink-0 text-right text-gray-400">{share.toFixed(1)}%</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* Searchable/sortable detail table */}
-        <Card title="Detalhamento por categoria">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              placeholder="Buscar categoria…"
-              value={catSearch}
-              onChange={(e) => setCatSearch(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
-            />
-            <select
-              value={catSort}
-              onChange={(e) => setCatSort(e.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-            >
-              {SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            {catSearch && (
-              <>
-                <span className="text-xs text-gray-400">{sortedCats.length} de {categories.length}</span>
-                <button onClick={() => setCatSearch("")} className="text-[11px] text-indigo-500 underline hover:text-indigo-700">Limpar</button>
-              </>
-            )}
-          </div>
-          {sortedCats.length === 0 ? (
-            <Empty msg="Nenhuma categoria encontrada." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-400">
-                    <th className="pb-2 pr-4 font-medium">#</th>
-                    <th className="pb-2 pr-4 font-medium">Categoria</th>
-                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
-                    <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
-                    <th className="pb-2 font-medium text-right">% receita</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {sortedCats.map((cat, i) => {
-                    const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
-                    return (
-                      <tr key={i}>
-                        <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
-                        <td className="py-2 pr-4 font-medium text-gray-800">{cat.name}</td>
-                        <td className="py-2 pr-4 text-right font-medium">{fmtBRL(cat.revenue)}</td>
-                        <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(cat.qty)}</td>
-                        <td className="py-2 text-right text-gray-400">{share.toFixed(1)}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        {/* Top products per category — derived from imported product rows */}
-        {data!.importedBaseline!.topProducts.length > 0 && (
-          <Card title="Top produtos por categoria">
-            {(() => {
-              type IRow = { name: string; category: string; revenue: number; qty: number; rowType: string };
-              const byCategory = new Map<string, IRow[]>();
-              for (const p of data!.importedBaseline!.topProducts) {
-                const cat = p.category || "Sem categoria";
-                if (!byCategory.has(cat)) byCategory.set(cat, []);
-                byCategory.get(cat)!.push(p);
-              }
-              const sorted = [...byCategory.entries()].sort((a, b) => {
-                const ra = a[1].reduce((s, p) => s + p.revenue, 0);
-                const rb = b[1].reduce((s, p) => s + p.revenue, 0);
-                return rb - ra;
-              });
-              return (
-                <div className="space-y-6">
-                  {sorted.slice(0, 10).map(([catName, products]) => (
-                    <div key={catName}>
-                      <p className="mb-2 text-xs font-semibold text-indigo-700 uppercase tracking-wide">
-                        {catName}
-                      </p>
-                      <div className="space-y-1">
-                        {products.slice(0, 5).map((p, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-700">{p.name}</span>
-                            <span className="text-gray-500">{fmtBRL(p.revenue)} · {fmtNum(p.qty)} un</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </Card>
-        )}
-      </div>
-    );
-  }
 
   // ── Real Foocci path ──────────────────────────────────────────────────────
   if (hasReal) {
@@ -2087,207 +1582,27 @@ function TabCategorias({ data, loading, preset }: {
 
   return (
     <div className="space-y-4">
-      <Empty
-        msg="Sem dados de categorias neste período."
-        sub={preset !== "all" ? 'Use "Todo histórico" para explorar categorias da base Saipos/Nemo.' : undefined}
-      />
-      {preset !== "all" && <FallbackPrompt preset={preset} />}
+      <Empty msg="Sem dados de categorias neste período." />
+      <FallbackPrompt />
     </div>
   );
 }
 
 // ─── Tab: Clientes ────────────────────────────────────────────────────────────
 
-function classifyImportedTemp(
-  lastOrderAt: string | null,
-  nowISO: string,
-): "quente" | "morno" | "frio" | "desconhecido" {
-  if (!lastOrderAt) return "desconhecido";
-  const days = Math.round(
-    (new Date(nowISO).getTime() - new Date(lastOrderAt).getTime()) / 86_400_000,
-  );
-  if (days <=  30) return "quente";
-  if (days <=  90) return "morno";
-  return "frio";
-}
-
-function TabClientes({ data, loading, preset, retentionData, retentionLoading }: {
+function TabClientes({ data, loading, retentionData, retentionLoading }: {
   data: AnalyticsOverview | null;
   loading: boolean;
-  preset: Preset;
   retentionData: RetentionReport | null;
   retentionLoading: boolean;
 }) {
-  const hasRealCustomers     = (data?.topCustomers.length ?? 0) > 0;
-  const hasImportedCustomers = (data?.importedTopCustomers.length ?? 0) > 0;
-  const hasImportedByOrders  = (data?.importedTopByOrders.length ?? 0) > 0;
-  const semTelefone          = data?.importedSemTelefoneCount ?? 0;
-  const showAllMode          = preset === "all";
-
-  // Derived temperature distribution from top-by-spend list
-  const nowISO = new Date().toISOString().slice(0, 10);
-  const tempCounts = showAllMode && hasImportedCustomers
-    ? data!.importedTopCustomers.reduce(
-        (acc, c) => {
-          const bucket = classifyImportedTemp(c.importedLastOrderAt, nowISO);
-          acc[bucket] = (acc[bucket] ?? 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>,
-      )
-    : {};
+  const hasRealCustomers = (data?.topCustomers.length ?? 0) > 0;
 
   return (
     <div className="space-y-6">
 
       {/* ── Retention cohorts (W2) ────────────────────────────────────────── */}
       <RetentionPanel data={retentionData} loading={retentionLoading} />
-
-      {/* ── Imported customers section (Todo histórico) ─────────────────── */}
-      {!loading && showAllMode && hasImportedCustomers && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <SourceBadge source="importado" />
-            <span className="text-xs text-gray-400">
-              Histórico de compras importado do Saipos/Nemo — não reflete pedidos Foocci
-            </span>
-          </div>
-
-          {/* Top clientes por gasto histórico */}
-          <Card title="Top clientes por gasto histórico">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-400">
-                    <th className="pb-1.5 pr-3 font-medium">Nome</th>
-                    <th className="pb-1.5 pr-3 font-medium text-right">Gasto histórico</th>
-                    <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
-                    <th className="pb-1.5 pr-3 font-medium text-right">Ticket médio</th>
-                    <th className="pb-1.5 pr-3 font-medium">Última compra</th>
-                    <th className="pb-1.5 font-medium">Tier</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {data!.importedTopCustomers.map((c) => (
-                    <tr key={c.id}>
-                      <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
-                      <td className="py-1.5 pr-3 text-right font-medium text-gray-900">
-                        {fmtBRL(c.importedTotalSpent)}
-                      </td>
-                      <td className="py-1.5 pr-3 text-right text-gray-500">{fmtNum(c.importedOrderCount)}</td>
-                      <td className="py-1.5 pr-3 text-right text-gray-500">
-                        {c.averageTicket > 0 ? fmtBRL(c.averageTicket) : "—"}
-                      </td>
-                      <td className="py-1.5 pr-3 text-gray-500">
-                        {c.importedLastOrderAt
-                          ? new Date(c.importedLastOrderAt).toLocaleDateString("pt-BR")
-                          : "—"}
-                      </td>
-                      <td className="py-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
-                          {TIER_LABEL[c.tier] ?? c.tier}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Top clientes por recorrência histórica */}
-          {hasImportedByOrders && (
-            <Card title="Clientes com maior recorrência histórica">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b text-left text-gray-400">
-                      <th className="pb-1.5 pr-3 font-medium">#</th>
-                      <th className="pb-1.5 pr-3 font-medium">Nome</th>
-                      <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
-                      <th className="pb-1.5 pr-3 font-medium text-right">Gasto total</th>
-                      <th className="pb-1.5 pr-3 font-medium text-right">Ticket médio</th>
-                      <th className="pb-1.5 font-medium">Tier</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {data!.importedTopByOrders.map((c, i) => (
-                      <tr key={c.id}>
-                        <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
-                        <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
-                        <td className="py-1.5 pr-3 text-right font-bold text-indigo-700">
-                          {fmtNum(c.importedOrderCount)}
-                        </td>
-                        <td className="py-1.5 pr-3 text-right text-gray-700">
-                          {fmtBRL(c.importedTotalSpent)}
-                        </td>
-                        <td className="py-1.5 pr-3 text-right text-gray-500">
-                          {c.averageTicket > 0 ? fmtBRL(c.averageTicket) : "—"}
-                        </td>
-                        <td className="py-1.5">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
-                            {TIER_LABEL[c.tier] ?? c.tier}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
-
-          {/* Temperature distribution (based on importedLastOrderAt) */}
-          {Object.values(tempCounts).some((v) => v > 0) && (
-            <Card title="Temperatura dos clientes (baseado no histórico importado)">
-              <p className="mb-3 text-xs text-gray-400">
-                Classificação baseada na data da última compra importada. A maioria dos clientes
-                históricos aparece como frio por ser anterior a 90 dias.
-              </p>
-              <div className="space-y-2">
-                {(
-                  [
-                    { key: "quente",       label: "Quente (≤ 30 dias)",  color: "bg-rose-500" },
-                    { key: "morno",        label: "Morno (31–90 dias)",  color: "bg-amber-400" },
-                    { key: "frio",         label: "Frio (> 90 dias)",    color: "bg-sky-400"  },
-                    { key: "desconhecido", label: "Sem data",            color: "bg-gray-300" },
-                  ] as const
-                ).map(({ key, label, color }) => {
-                  const count = tempCounts[key] ?? 0;
-                  if (count === 0) return null;
-                  const total  = Object.values(tempCounts).reduce((s, v) => s + v, 0);
-                  const pct    = total > 0 ? (count / total) * 100 : 0;
-                  return (
-                    <div key={key} className="flex items-center gap-3 text-xs">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
-                      <span className="w-36 shrink-0 text-gray-600">{label}</span>
-                      <div className="flex-1 rounded-full bg-gray-100 h-2">
-                        <div className={`${color} h-2 rounded-full`} style={{ width: `${pct.toFixed(1)}%` }} />
-                      </div>
-                      <span className="w-8 shrink-0 text-right font-medium text-gray-800">{count}</span>
-                      <span className="w-10 shrink-0 text-right text-gray-400">{pct.toFixed(0)}%</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
-
-          {/* Sem telefone callout */}
-          {semTelefone > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs text-amber-800">
-                ⚠{" "}
-                <strong>
-                  {fmtNum(semTelefone)} cliente{semTelefone !== 1 ? "s" : ""} importado
-                  {semTelefone !== 1 ? "s" : ""}
-                </strong>{" "}
-                sem telefone cadastrado — enriquecimento de contato aumenta o alcance de campanhas WhatsApp.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Real Foocci top customers ───────────────────────────────────────── */}
       <div className="space-y-2">
@@ -2327,7 +1642,6 @@ function TabClientes({ data, loading, preset, retentionData, retentionLoading }:
           ) : (
             <Empty
               msg={loading ? "Carregando…" : "Sem pedidos Foocci no período."}
-              sub={!showAllMode ? 'Use "Todo histórico" para ver clientes por gasto histórico.' : undefined}
             />
           )}
         </Card>
@@ -2454,24 +1768,6 @@ function TabCanais({ data, loading }: { data: AnalyticsOverview | null; loading:
       </Card>
     </div>
   );
-}
-
-// ─── Tab: Histórico Importado ─────────────────────────────────────────────────
-
-function TabHistorico({ data, loading }: { data: AnalyticsOverview | null; loading: boolean }) {
-  if (loading) return <Skeleton />;
-  if (!data?.importedBaseline) {
-    return (
-      <div className="space-y-4">
-        <Empty msg="Nenhum histórico importado disponível para este restaurante." />
-        <p className="text-center text-xs text-gray-400">
-          Importe seu histórico do Saipos/Nemo em{" "}
-          <strong>Configurações → Importação</strong> para ver seus dados aqui.
-        </p>
-      </div>
-    );
-  }
-  return <ImportedBaselineSection baseline={data.importedBaseline} />;
 }
 
 // ─── Tab: Analista (W3 — Conversational Analytics) ───────────────────────────
@@ -2816,11 +2112,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
   }
 
   // Source label for the filter area
-  const hasImported = (data?.importedBaseline?.rowCount ?? 0) > 0;
-  const sourceLabel =
-    preset === "all" && hasImported ? "Fonte: Foocci + histórico importado" :
-    hasImported                     ? "Fonte: Pedidos Foocci (histórico importado disponível)" :
-    "Fonte: Pedidos Foocci";
+  const sourceLabel = "Fonte: Pedidos Foocci";
 
   return (
     <div className="mx-auto max-w-7xl space-y-0 px-4 py-6 sm:px-6">
@@ -2839,11 +2131,6 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
               }`}
             >
               {tab.label}
-              {tab.id === "historico" && hasImported && (
-                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 px-1 text-[9px] font-bold text-indigo-600">
-                  {fmtNum(data!.importedBaseline!.rowCount)}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -2913,20 +2200,18 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
             diagnosisLoading={diagnosisLoading}
             operationsData={operationsData}
             operationsLoading={operationsLoading}
-            preset={preset}
           />
         )}
         {activeTab === "produtos" && (
-          <TabProdutos data={data} loading={loading} preset={preset} />
+          <TabProdutos data={data} loading={loading} />
         )}
         {activeTab === "categorias" && (
-          <TabCategorias data={data} loading={loading} preset={preset} />
+          <TabCategorias data={data} loading={loading} />
         )}
         {activeTab === "clientes" && (
           <TabClientes
             data={data}
             loading={loading}
-            preset={preset}
             retentionData={retentionData}
             retentionLoading={retentionLoading}
           />
@@ -2936,9 +2221,6 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
         )}
         {activeTab === "delivery" && (
           <TabDelivery restaurantSlug={restaurantSlug} />
-        )}
-        {activeTab === "historico" && (
-          <TabHistorico data={data} loading={loading} />
         )}
       </div>
     </div>
