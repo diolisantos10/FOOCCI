@@ -15,6 +15,7 @@ interface ChartBucket { bucketKey: string; label: string; revenue: number; order
 interface DashboardData {
   period: PeriodKey; periodLabel: string; periodDays: number;
   ordersPeriod: number; revenuePeriod: number; avgTicket: number; ordersPrev: number; revenuePrev: number;
+  avgTicketPrev: number; newCustomersPrev: number;
   openOrders: number; totalCustomers: number; newCustomersPeriod: number;
   pipeline: { pending: number; confirmed: number; preparing: number; ready: number; outForDelivery: number };
   delayedCount: number; pendingPaymentsCount: number;
@@ -245,19 +246,56 @@ export function ActionsNow({ actions }: { actions: CockpitAction[] }) {
 
 // ── Foocci em ação (brand proof + mascote) ─────────────────────────────────────
 
-export function FoocciProof({ proof, className }: { proof: DashboardData["foocciProof"]; className?: string }) {
+function FoocciMetric({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
   return (
-    <Card className={`relative overflow-hidden p-5 ring-1 ring-brand-200 ${className ?? ""}`}>
-      {/* subtle brand wash — this is the product, so it's the hero square */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50 to-transparent" />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/foocci/foocci-mascot-cutout.png" alt="" className="pointer-events-none absolute -bottom-2 -right-2 w-16 opacity-90" />
-      <div className="relative">
-        <p className="text-[11.5px] font-semibold uppercase tracking-[.06em] text-brand-600">Foocci em ação</p>
-        <p className="mt-2.5 text-[28px] font-extrabold leading-none tracking-[-.03em] text-ink">{fmtCurrency(proof.upsellRevenue)}</p>
-        <p className="mt-3 max-w-[78%] text-xs text-ink2">
-          em upsell · {proof.recoveryConverted}/{proof.recoveryTotal} recuperados hoje
-        </p>
+    <div className="rounded-xl border border-line bg-paper/70 px-4 py-3.5">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted">{label}</p>
+      <p className="mt-1.5 text-[22px] font-extrabold leading-none tracking-[-.02em] text-ink">{value}</p>
+      {sub && <p className="mt-1.5 text-[11.5px] leading-snug text-ink2">{sub}</p>}
+    </div>
+  );
+}
+
+/**
+ * "Foocci em ação" — the product's impact, as one big card combining what
+ * Foocci sells (upsell), what it rescues (abandoned/recovered carts) and the
+ * relationship base it nurtures (CRM segments). Full-width hero, not a square.
+ */
+export function FoocciProof({ proof, crm }: { proof: DashboardData["foocciProof"]; crm: DashboardData["crmSegments"] }) {
+  const abandoned = Math.max(0, proof.recoveryTotal - proof.recoveryConverted);
+  return (
+    <Card className="relative overflow-hidden ring-1 ring-brand-200">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50 via-transparent to-transparent" />
+      <div className="relative flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:gap-6">
+        {/* Brand lockup + mascot */}
+        <div className="flex items-center gap-3 lg:w-60 lg:shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/foocci/foocci-mascot-cutout.png" alt="" className="-my-2 w-[68px] shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-bold uppercase tracking-[.04em] text-brand-600">Foocci em ação</p>
+            <p className="mt-1 text-[13px] leading-snug text-ink2">O que o Foocci faz por você hoje — vende, recupera e cuida da base.</p>
+          </div>
+        </div>
+        {/* Mini-metrics — upsell · carrinhos · CRM */}
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+          <FoocciMetric
+            label="Vendas no upsell"
+            value={fmtCurrency(proof.upsellRevenue)}
+            sub={`${fmtNum(proof.upsellItemCount)} ${proof.upsellItemCount === 1 ? "item sugerido" : "itens sugeridos"}`}
+          />
+          <FoocciMetric
+            label="Carrinhos recuperados"
+            value={`${fmtNum(proof.recoveryConverted)}/${fmtNum(proof.recoveryTotal)}`}
+            sub={proof.recoveryTotal > 0
+              ? `${proof.recoveryRate ?? 0}% recuperados · ${fmtNum(abandoned)} ainda perdidos`
+              : "nenhum carrinho abandonado"}
+          />
+          <FoocciMetric
+            label="Clientes quentes (CRM)"
+            value={fmtNum(crm.quente)}
+            sub={`${fmtNum(crm.morno)} mornos · ${fmtNum(crm.frio)} frios`}
+          />
+        </div>
       </div>
     </Card>
   );
@@ -364,12 +402,11 @@ export default function DashboardClient({ userName }: { userName: string }) {
             {/* KPIs */}
             <div>
               <SectionTitle meta={`${data.periodLabel} · ${data.prevPeriodLabel}`}>Saúde do negócio</SectionTitle>
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-                <Stat label="Faturamento" value={fmtCurrency(data.revenuePeriod)} change={delta(data.revenuePeriod, data.revenuePrev)} sub={`de ${fmtCurrency(data.revenuePrev)}`} />
-                <Stat label="Pedidos" value={fmtNum(data.ordersPeriod)} change={delta(data.ordersPeriod, data.ordersPrev)} sub={`de ${fmtNum(data.ordersPrev)}`} />
-                <Stat label="Ticket médio" value={data.ordersPeriod > 0 ? fmtCurrency(data.avgTicket) : "—"} sub="por pedido" />
-                <Stat label="Novos clientes" value={fmtNum(data.newCustomersPeriod)} sub={`${fmtNum(data.totalCustomers)} na base`} />
-                <FoocciProof proof={data.foocciProof} className="col-span-2 lg:col-span-1" />
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <Stat label="Faturamento" value={fmtCurrency(data.revenuePeriod)} change={delta(data.revenuePeriod, data.revenuePrev)} sub={data.revenuePrev > 0 ? `de ${fmtCurrency(data.revenuePrev)}` : undefined} />
+                <Stat label="Pedidos" value={fmtNum(data.ordersPeriod)} change={delta(data.ordersPeriod, data.ordersPrev)} sub={data.ordersPrev > 0 ? `de ${fmtNum(data.ordersPrev)}` : undefined} />
+                <Stat label="Ticket médio" value={data.ordersPeriod > 0 ? fmtCurrency(data.avgTicket) : "—"} change={delta(data.avgTicket, data.avgTicketPrev)} sub={data.avgTicketPrev > 0 ? `de ${fmtCurrency(data.avgTicketPrev)}` : "por pedido"} />
+                <Stat label="Novos clientes" value={fmtNum(data.newCustomersPeriod)} change={delta(data.newCustomersPeriod, data.newCustomersPrev)} sub={data.newCustomersPrev > 0 ? `de ${fmtNum(data.newCustomersPrev)}` : `${fmtNum(data.totalCustomers)} na base`} />
               </div>
             </div>
 
@@ -384,6 +421,9 @@ export default function DashboardClient({ userName }: { userName: string }) {
                 <TopSellers products={data.topProducts} />
               </div>
             </div>
+
+            {/* Foocci em ação — full-width hero: upsell + carrinhos + CRM */}
+            <FoocciProof proof={data.foocciProof} crm={data.crmSegments} />
 
             {/* Deep-dive + discreet setup nudge (relocated noise) */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">

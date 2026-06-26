@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
       crmSegmentCounts,
       cancelledPeriodCount,
       orderSourceCounts,
+      newCustomersPrev,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + chart)
       prisma.order.findMany({
@@ -154,6 +155,14 @@ export async function GET(req: NextRequest) {
         },
         _count: { id: true },
       }),
+      // 12. New customers in the COMPLETE previous period (KPI comparison)
+      prisma.customer.count({
+        where: {
+          restaurantId: ctx.restaurantId,
+          isGuest:      false,
+          createdAt:    { gte: prevStart, lt: prevFetchEnd },
+        },
+      }),
     ]);
 
     // ── Period KPIs ────────────────────────────────────────────────────────────
@@ -161,10 +170,13 @@ export async function GET(req: NextRequest) {
     const ordersPeriod  = periodOrders.length;
     const avgTicket     = ordersPeriod > 0 ? revenuePeriod / ordersPeriod : 0;
 
-    // ── Previous period comparison (time-aligned: same elapsed window only) ────
-    const prevAligned = prevOrders.filter(o => o.createdAt < prevEnd);
-    const revenuePrev = prevAligned.reduce((s, o) => s + Number(o.total), 0);
-    const ordersPrev  = prevAligned.length;
+    // ── Previous period comparison — the COMPLETE previous period total, so the
+    //    KPI squares show "what last week actually did" (the target to beat),
+    //    not only up to the current time. prevOrders already spans the full
+    //    bucket window (prevFetchEnd). The CHART keeps its hour-by-hour series.
+    const revenuePrev   = prevOrders.reduce((s, o) => s + Number(o.total), 0);
+    const ordersPrev    = prevOrders.length;
+    const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -253,6 +265,8 @@ export async function GET(req: NextRequest) {
       avgTicket:       Math.round(avgTicket       * 100) / 100,
       ordersPrev,
       revenuePrev:     Math.round(revenuePrev     * 100) / 100,
+      avgTicketPrev:   Math.round(avgTicketPrev   * 100) / 100,
+      newCustomersPrev,
 
       // Real-time
       openOrders,
