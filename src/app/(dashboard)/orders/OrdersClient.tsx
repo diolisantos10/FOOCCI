@@ -5,6 +5,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
+import { EmptyState } from "@/components/ui";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
 import {
   SOUND_PREF_KEY,
@@ -278,14 +279,14 @@ const DELAY_THRESHOLD = 20;
 
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; border: string; badge: string }> = {
-  PENDING:          { label: "Novo",              border: "border-l-amber-400",  badge: "bg-amber-100 text-amber-800"   },
-  AWAITING_PAYMENT: { label: "Aguardando Pix",   border: "border-l-yellow-400", badge: "bg-yellow-100 text-yellow-800" },
-  CONFIRMED:        { label: "Confirmado",        border: "border-l-blue-400",   badge: "bg-blue-100 text-blue-800"     },
-  PREPARING:        { label: "Preparando",        border: "border-l-orange-400", badge: "bg-orange-100 text-orange-800" },
-  READY:            { label: "Pronto",            border: "border-l-teal-400",   badge: "bg-teal-100 text-teal-800"     },
-  OUT_FOR_DELIVERY: { label: "Em entrega",        border: "border-l-purple-400", badge: "bg-purple-100 text-purple-800" },
-  DELIVERED:        { label: "Entregue",          border: "border-l-green-400",  badge: "bg-green-100 text-green-800"   },
-  CANCELLED:        { label: "Cancelado",         border: "border-l-gray-300",   badge: "bg-gray-100 text-gray-500"     },
+  PENDING:          { label: "Novo",            border: "border-l-amber-400",  badge: "bg-amber-50 text-amber-700"   },
+  AWAITING_PAYMENT: { label: "Aguardando Pix",  border: "border-l-yellow-400", badge: "bg-yellow-50 text-yellow-700" },
+  CONFIRMED:        { label: "Confirmado",      border: "border-l-blue-400",   badge: "bg-blue-50 text-blue-600"     },
+  PREPARING:        { label: "Preparando",      border: "border-l-brand-400",  badge: "bg-brand-50 text-brand-600"   },
+  READY:            { label: "Pronto",          border: "border-l-teal-400",   badge: "bg-teal-50 text-teal-700"     },
+  OUT_FOR_DELIVERY: { label: "Em entrega",      border: "border-l-violet-400", badge: "bg-violet-50 text-violet-600" },
+  DELIVERED:        { label: "Entregue",        border: "border-l-green-400",  badge: "bg-green-50 text-green-700"   },
+  CANCELLED:        { label: "Cancelado",       border: "border-l-line2",      badge: "bg-[#F4F4F2] text-muted"      },
 };
 
 const NEXT_ACTION: Partial<Record<OrderStatus, { label: string; next: OrderStatus }>> = {
@@ -563,62 +564,43 @@ function SearchBar({
   onReconcile?: () => void;
   reconciling?: boolean;
 }) {
+  const inputCls = "min-w-0 rounded-xl border border-line2 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
+  const ghostBtn = "rounded-xl border border-line2 bg-paper px-4 py-2 text-[13px] font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]";
   return (
-    <div className="shrink-0 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
-      <div className="flex flex-wrap gap-2">
-        {/* Date inputs */}
-        <div className="flex min-w-0 flex-1 gap-2">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => onDateFromChange(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => onDateToChange(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-          />
-        </div>
+    <div className="shrink-0 border-b border-line bg-paper px-6 py-3">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Text search */}
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Busque por cliente ou pedido…"
-          className="w-full min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200 sm:w-auto"
+          placeholder="Buscar cliente ou nº do pedido…"
+          className={`${inputCls} w-full flex-1 sm:w-auto`}
         />
+        {/* Date inputs */}
+        <input type="date" value={dateFrom} onChange={(e) => onDateFromChange(e.target.value)} className={`${inputCls} flex-1 sm:flex-none`} />
+        <input type="date" value={dateTo} onChange={(e) => onDateToChange(e.target.value)} className={`${inputCls} flex-1 sm:flex-none`} />
         {/* Action buttons */}
-        <div className="flex w-full gap-2 sm:w-auto">
-          <button className="flex-1 rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600 sm:flex-none">
-            Filtrar
-          </button>
+        <button className={ghostBtn}>Filtrar</button>
+        <button onClick={onClear} className={`${ghostBtn} text-muted`}>Limpar</button>
+        {onReconcile && (
           <button
-            onClick={onClear}
-            className="flex-1 rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50 sm:flex-none"
+            onClick={onReconcile}
+            disabled={reconciling}
+            title="Buscar pagamentos Pix aprovados no Mercado Pago e confirmar automaticamente"
+            className={`${ghostBtn} disabled:opacity-50`}
           >
-            Limpar
+            {reconciling ? "Reconciliando…" : "Reconciliar MP"}
           </button>
-          {onManualOrder && (
-            <button
-              onClick={onManualOrder}
-              className="flex-1 rounded-lg border border-blue-300 bg-white px-4 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 sm:flex-none"
-            >
-              + Pedido manual
-            </button>
-          )}
-          {onReconcile && (
-            <button
-              onClick={onReconcile}
-              disabled={reconciling}
-              title="Buscar pagamentos Pix aprovados no Mercado Pago e confirmar automaticamente"
-              className="flex-1 rounded-lg border border-yellow-300 bg-white px-4 py-1.5 text-xs font-semibold text-yellow-700 transition-colors hover:bg-yellow-50 disabled:opacity-50 sm:flex-none"
-            >
-              {reconciling ? "Reconciliando…" : "Reconciliar MP"}
-            </button>
-          )}
-        </div>
+        )}
+        {onManualOrder && (
+          <button
+            onClick={onManualOrder}
+            className="rounded-xl bg-ink px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+          >
+            + Pedido manual
+          </button>
+        )}
       </div>
     </div>
   );
@@ -626,7 +608,7 @@ function SearchBar({
 
 // ─── StatusRow ────────────────────────────────────────────────
 
-function StatusRow({
+export function StatusRow({
   orders,
   statusFilter,
   onFilterChange,
@@ -648,44 +630,43 @@ function StatusRow({
 
   const total = orders.length;
 
-  const BTNS: Array<{ id: StatusFilter; label: string; count: number; on: string; off: string }> = [
-    { id: null,        label: "Todos",      count: total,            on: "bg-gray-700 text-white",   off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
-    { id: "PENDING",   label: "Novos",      count: counts.PENDING,   on: "bg-amber-500 text-white",  off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
-    { id: "PREPARING", label: "Preparando", count: counts.PREPARING, on: "bg-orange-500 text-white", off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
-    { id: "READY",     label: "Pronto",     count: counts.READY,     on: "bg-teal-600 text-white",   off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
-    { id: "DELAYED",   label: "Atrasados",  count: counts.DELAYED,   on: "bg-red-600 text-white",    off: counts.DELAYED > 0 ? "bg-red-50 text-red-700 hover:bg-red-100" : "bg-gray-100 text-gray-400" },
+  const BTNS: Array<{ id: StatusFilter; label: string; count: number; on: string }> = [
+    { id: null,        label: "Todos",      count: total,            on: "bg-ink text-white"      },
+    { id: "PENDING",   label: "Novos",      count: counts.PENDING,   on: "bg-amber-500 text-white" },
+    { id: "PREPARING", label: "Preparando", count: counts.PREPARING, on: "bg-brand-500 text-white" },
+    { id: "READY",     label: "Pronto",     count: counts.READY,     on: "bg-teal-600 text-white"  },
+    { id: "DELAYED",   label: "Atrasados",  count: counts.DELAYED,   on: "bg-red-600 text-white"   },
   ];
 
   return (
-    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[#E5E5E5] bg-white px-4 py-2.5 scrollbar-hide">
+    <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-line bg-paper px-6 py-2.5 scrollbar-hide">
       {/* Status chips */}
       {BTNS.map((btn) => {
         const isActive = statusFilter === btn.id;
+        const dim = btn.id === "DELAYED" && btn.count === 0;
         return (
           <button
             key={String(btn.id)}
             onClick={() => onFilterChange(btn.id)}
-            className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-              isActive ? btn.on : btn.off
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+              isActive ? btn.on : dim ? "bg-[#F4F4F2] text-muted" : "bg-[#F4F4F2] text-ink2 hover:bg-[#ECECEA]"
             }`}
           >
             {btn.label}
-            <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-              isActive ? "bg-white/25 text-inherit" : "bg-white/80 text-gray-500"
-            }`}>
+            <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none ${isActive ? "bg-white/20" : "bg-paper text-muted"}`}>
               {btn.count}
             </span>
           </button>
         );
       })}
 
-      {/* Sort control — right-aligned, visually next to status chips */}
+      {/* Sort control */}
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ordenar</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Ordenar</span>
         <select
           value={sortBy}
           onChange={(e) => onSortChange(e.target.value as SortKey)}
-          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+          className="rounded-xl border border-line2 bg-paper px-2.5 py-1.5 text-[12.5px] text-ink2 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -698,7 +679,7 @@ function StatusRow({
 
 // ─── PerformanceBar ───────────────────────────────────────────
 
-function PerformanceBar({ orders }: { orders: MockOrder[] }) {
+export function PerformanceBar({ orders }: { orders: MockOrder[] }) {
   const active     = orders.filter((o) => !TERMINAL.includes(o.status));
   const delayed    = orders.filter(isDelayed).length;
   const pctDelayed = active.length > 0 ? Math.round((delayed / active.length) * 100) : 0;
@@ -707,49 +688,23 @@ function PerformanceBar({ orders }: { orders: MockOrder[] }) {
   const pickup   = orders.filter((o) => o.type === "PICKUP").length;
   const table    = orders.filter((o) => o.type === "TABLE").length;
 
+  const kpi = (label: string, value: React.ReactNode, danger?: boolean) => (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-[11px] font-medium text-muted">{label}</span>
+      <span className={`text-[15px] font-bold tracking-[-.01em] ${danger ? "text-red-600" : "text-ink"}`}>{value}</span>
+    </div>
+  );
   return (
-    <div className="hidden shrink-0 items-center gap-6 border-b border-[#E5E5E5] bg-white px-4 py-2.5 sm:flex">
-      {/* Label */}
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
-        Performance
-      </span>
-
-      {/* KPIs */}
-      <div className="flex items-center gap-6">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[10px] font-medium text-gray-400">Tempo médio</span>
-          <span className="text-sm font-bold text-gray-800">22 min</span>
-        </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[10px] font-medium text-gray-400">Atrasados</span>
-          <span className={`text-sm font-bold ${pctDelayed >= 20 ? "text-red-600" : "text-gray-800"}`}>
-            {pctDelayed}%
-          </span>
-        </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[10px] font-medium text-gray-400">Total hoje</span>
-          <span className="text-sm font-bold text-gray-800">{orders.length}</span>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div className="h-5 w-px bg-gray-200 shrink-0" />
-
-      {/* Modalidades */}
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
-        Modalidades
-      </span>
+    <div className="hidden items-center gap-6 sm:flex">
+      {kpi("Tempo médio", "22 min")}
+      {kpi("Atrasados", `${pctDelayed}%`, pctDelayed >= 20)}
+      {kpi("Total hoje", orders.length)}
+      <div className="h-5 w-px bg-line2 shrink-0" />
       <div className="flex items-center gap-2">
-        {[
-          { label: "Delivery",  count: delivery },
-          { label: "Retirada",  count: pickup   },
-          { label: "Mesa",      count: table    },
-        ].map(({ label, count }) => (
-          <span key={label} className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+        {[{ label: "Delivery", count: delivery }, { label: "Retirada", count: pickup }, { label: "Mesa", count: table }].map(({ label, count }) => (
+          <span key={label} className="flex items-center gap-1.5 rounded-full bg-[#F4F4F2] px-3 py-1 text-[12px] font-semibold text-ink2">
             {label}
-            <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold leading-none text-gray-500">
-              {count}
-            </span>
+            <span className="rounded-full bg-paper px-1.5 py-0.5 text-[10px] font-bold leading-none text-muted">{count}</span>
           </span>
         ))}
       </div>
@@ -759,7 +714,7 @@ function PerformanceBar({ orders }: { orders: MockOrder[] }) {
 
 // ─── OrderCard ────────────────────────────────────────────────
 
-function OrderCard({
+export function OrderCard({
   order,
   active,
   checked,
@@ -792,47 +747,50 @@ function OrderCard({
 
   // Single badge: if delayed, show "Atrasado" — not the status label
   const badge = delayed
-    ? <span className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+    ? <span className="flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500 shrink-0" />
         Atrasado
       </span>
-    : <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cfg.badge}`}>{cfg.label}</span>;
+    : <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${cfg.badge}`}>{cfg.label}</span>;
+
+  const chip = "inline-flex items-center gap-0.5 rounded-md bg-[#F4F4F2] px-1.5 py-0.5 text-[10px] font-semibold text-ink2";
+  const ghost = "rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[12px] font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]";
 
   return (
     <div
       onClick={onClick}
-      className={`cursor-pointer rounded-xl border border-gray-200 border-l-4 bg-white shadow-sm transition-all select-none
+      className={`cursor-pointer rounded-2xl border border-line border-l-[3px] bg-paper shadow-[0_1px_2px_rgba(11,11,11,.03)] transition-all select-none
         ${border}
-        ${active  ? "ring-2 ring-orange-400 ring-offset-1" : "hover:shadow-md"}
-        ${delayed ? "bg-red-50/40" : ""}`}
+        ${active  ? "ring-2 ring-brand-400 ring-offset-1" : "hover:shadow-[0_4px_16px_-8px_rgba(11,11,11,.18)]"}
+        ${delayed ? "bg-red-50/30" : ""}`}
     >
-      <div className="p-3">
-        {/* Row 1: checkbox + num (prominent) + badge + elapsed */}
+      <div className="p-3.5">
+        {/* Row 1: checkbox + num + badge + elapsed */}
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
             checked={checked}
             onChange={(e) => { e.stopPropagation(); onCheck(order.id, e.target.checked); }}
             onClick={(e) => e.stopPropagation()}
-            className="h-3.5 w-3.5 shrink-0 accent-orange-500"
+            className="h-3.5 w-3.5 shrink-0 accent-brand-500"
           />
-          <span className="font-mono text-sm font-bold text-gray-700">
+          <span className="font-mono text-[13px] font-bold text-ink2">
             {formatOrderNumber(order.orderNumber, order.id)}
           </span>
           {badge}
-          <span className={`ml-auto text-xs font-semibold tabular-nums ${delayed ? "text-red-600" : "text-gray-400"}`}>
+          <span className={`ml-auto text-[12px] font-semibold tabular-nums ${delayed ? "text-red-600" : "text-muted"}`}>
             {formatCardDateTime(order.createdAt)}
           </span>
         </div>
 
-        {/* Row 2: customer name + inline tags + total */}
-        <div className="mt-1.5 flex items-start justify-between gap-2">
+        {/* Row 2: customer name + tags + total */}
+        <div className="mt-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
               {order.customerId ? (
-                <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="text-base font-bold text-gray-900 leading-tight hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
+                <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="text-[15px] font-bold leading-tight text-ink hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
               ) : (
-                <span className="text-base font-bold text-gray-900 leading-tight">{order.customer}</span>
+                <span className="text-[15px] font-bold leading-tight text-ink">{order.customer}</span>
               )}
               {order.profile && (() => {
                 const { totalOrders, totalSpend, lastOrderAt, tier: storedTier } = order.profile!;
@@ -841,132 +799,72 @@ function OrderCard({
                 const temp = customerTemperature(lastOrderAt);
                 return (
                   <>
-                    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tier.color}`}>
-                      {tier.icon} {tier.label}
-                    </span>
-                    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tag.color}`}>
-                      {tag.label}
-                    </span>
-                    {temp && (
-                      <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${temp.color}`}>
-                        {temp.label}
-                      </span>
-                    )}
+                    <span className={chip}>{tier.icon} {tier.label}</span>
+                    <span className={chip}>{tag.label}</span>
+                    {temp && <span className={chip}>{temp.label}</span>}
                   </>
                 );
               })()}
             </div>
           </div>
-          <span className="shrink-0 text-xs font-semibold text-gray-500">{fmtCurrency(order.total)}</span>
+          <span className="shrink-0 text-[15px] font-extrabold tracking-[-.02em] text-ink">{fmtCurrency(order.total)}</span>
         </div>
 
         {/* Row 3: meta */}
-        <p className="mt-0.5 text-xs text-gray-400">
+        <p className="mt-1 text-[12px] text-muted">
           {order.itemCount} {order.itemCount === 1 ? "item" : "itens"}
           {" · "}
           {order.type === "DELIVERY" ? "Delivery" : order.type === "TABLE" ? "Mesa" : "Retirada"}
           {" · "}
           {order.payment}
+          {order.profile && (() => {
+            const { totalOrders, totalSpend } = order.profile!;
+            return ` · ${totalOrders === 1 ? "1 pedido" : `${totalOrders} pedidos`} · ${totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`;
+          })()}
         </p>
 
-        {/* Row 3.5: spend context + note (tags moved inline to Row 2) */}
-        {order.profile && (() => {
-          const { totalOrders, totalSpend, note } = order.profile!;
-          return (
-            <>
-              <p className="mt-0.5 text-[10px] text-gray-400">
-                {totalOrders === 1 ? "1 pedido" : `${totalOrders} pedidos`}
-                {" · "}
-                {totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} gasto
-              </p>
-              {note && (
-                <p className="mt-1 text-[10px] text-gray-500 leading-tight">
-                  📝 {note}
-                </p>
-              )}
-            </>
-          );
-        })()}
+        {/* Note */}
+        {order.profile?.note && (
+          <p className="mt-1.5 rounded-lg bg-[#FAFAF8] px-2.5 py-1.5 text-[11.5px] leading-snug text-ink2">📝 {order.profile.note}</p>
+        )}
 
         {/* Saipos badge — compact, shown only when relevant */}
         {(() => {
           const sent = Boolean(order.saiposSentAt);
           const st   = order.saiposStatus;
           if (!st && !sent) return null;
-          if (sent) return (
-            <span className="mt-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-              Saipos: Enviado ✅
-            </span>
-          );
-          if (st === "AUTH_BLOCKED_403" || st === "FAILED" || st === "ORDER_SEND_FAILED") return (
-            <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
-              Saipos: Falha na integração ⚠️
-            </span>
-          );
-          if (st === "PENDING_SAIPOS_VALIDATION") return (
-            <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              Saipos: Aguardando envio
-            </span>
-          );
+          if (sent) return <span className="mt-1.5 inline-block rounded-md bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">Saipos: Enviado ✓</span>;
+          if (st === "AUTH_BLOCKED_403" || st === "FAILED" || st === "ORDER_SEND_FAILED") return <span className="mt-1.5 inline-block rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">Saipos: Falha na integração ⚠️</span>;
+          if (st === "PENDING_SAIPOS_VALIDATION") return <span className="mt-1.5 inline-block rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Saipos: Aguardando envio</span>;
           return null;
         })()}
 
         {/* Row 4: actions */}
-        <div className="mt-2 flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-2.5 flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
           {isPaymentPending && (
-            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-semibold text-yellow-800">
-              ⏳ Aguardando Pix
-            </span>
+            <span className="inline-flex items-center rounded-lg bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-700">⏳ Aguardando Pix</span>
           )}
           {isPaymentPending && onManualConfirm && (
-            <button
-              onClick={() => onManualConfirm(order.id)}
-              className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
-            >
-              Confirmar pagamento
-            </button>
+            <button onClick={() => onManualConfirm(order.id)} className={ghost}>Confirmar pagamento</button>
           )}
           {isPaymentPending && order.paymentProviderName === "mercadopago" && onVerifyPix && (
-            <button
-              onClick={() => onVerifyPix(order.id)}
-              disabled={verifyingPix}
-              className="rounded-lg border border-blue-300 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50"
-            >
+            <button onClick={() => onVerifyPix(order.id)} disabled={verifyingPix} className={`${ghost} disabled:opacity-50`}>
               {verifyingPix ? "Verificando…" : "Verificar Pix"}
             </button>
           )}
           {!isTerminal && !isPaymentPending && nextAction && (
-            <button
-              onClick={() => onAction(order.id, nextAction.next)}
-              className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600"
-            >
+            <button onClick={() => onAction(order.id, nextAction.next)} className="rounded-lg bg-brand-500 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-brand-600">
               {nextAction.label}
             </button>
           )}
           {!isTerminal && !isPaymentPending && (
-            <button
-              onClick={() => onCancel(order.id)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
+            <button onClick={() => onCancel(order.id)} className={`${ghost} text-muted`}>Cancelar</button>
           )}
           {!isPaymentPending && (
-            <button
-              onClick={(e) => { e.stopPropagation(); printOrder(order.id); }}
-              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-            >
-              🖨️ Imprimir
-            </button>
+            <button onClick={(e) => { e.stopPropagation(); printOrder(order.id); }} className={`${ghost} flex items-center gap-1`}>🖨️ Imprimir</button>
           )}
           {order.conversationId && (
-            <a
-              href={`/atendimento?conv=${order.conversationId}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-            >
-              💬 Abrir conversa
-            </a>
+            <a href={`/atendimento?conv=${order.conversationId}`} onClick={(e) => e.stopPropagation()} className={`${ghost} flex items-center gap-1`}>💬 Conversa</a>
           )}
         </div>
       </div>
@@ -993,22 +891,22 @@ function BulkBar({
   const canDispatch = selectedOrders.some((o) => o.status === "READY");
 
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-orange-200 bg-orange-50 px-4 py-2">
-      <span className="text-sm font-semibold text-orange-700">
+    <div className="flex shrink-0 items-center gap-3 border-b border-line bg-ink px-6 py-2.5">
+      <span className="text-[13px] font-semibold text-white">
         {count} selecionado{count > 1 ? "s" : ""}
       </span>
       <div className="ml-auto flex gap-2">
         {canConfirm && (
-          <button onClick={onConfirm} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors">
+          <button onClick={onConfirm} className="rounded-lg bg-brand-500 px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-brand-600 transition-colors">
             Confirmar todos
           </button>
         )}
         {canDispatch && (
-          <button onClick={onDispatch} className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition-colors">
+          <button onClick={onDispatch} className="rounded-lg bg-paper px-3.5 py-1.5 text-[12.5px] font-semibold text-ink hover:bg-[#F4F4F2] transition-colors">
             Despachar todos
           </button>
         )}
-        <button onClick={onClear} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors">
+        <button onClick={onClear} className="rounded-lg border border-white/25 px-3.5 py-1.5 text-[12.5px] font-semibold text-white/80 hover:bg-white/10 transition-colors">
           Limpar
         </button>
       </div>
@@ -1061,12 +959,9 @@ function OrderListPane({
         />
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
         {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <span className="mb-2 text-3xl">📭</span>
-            <p className="text-sm">Nenhum pedido neste período</p>
-          </div>
+          <EmptyState icon="📭" title="Nenhum pedido neste período" sub="Os novos pedidos aparecem aqui em tempo real." />
         ) : (
           orders.map((order) => (
             <OrderCard
@@ -2168,49 +2063,47 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   }
 
   return (
-    <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
+    <div className="flex flex-col bg-canvas" style={{ height: "calc(100vh - 56px)" }}>
 
-      <PerformanceBar orders={orders} />
-
-      {/* ── Alert toggles ── */}
-      <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-2">
-        {/* Active alert banner — sound-only visual cue, no config controls */}
-        {hasPendingOrders && soundEnabled && (
-          <span className="flex items-center gap-1.5 rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 animate-pulse">
-            🔊 Novo pedido aguardando aceite
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            setAutoPrintOnAccept((prev) => {
-              const next = !prev;
-              localStorage.setItem("foocci_autoprint_on_accept", String(next));
-              return next;
-            });
-          }}
-          title={autoPrintOnAccept ? "Desativar impressão automática ao aceitar" : "Ativar impressão automática ao aceitar"}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            autoPrintOnAccept
-              ? "bg-blue-50 text-blue-600 hover:bg-blue-100"
-              : "bg-gray-100 text-gray-400 hover:bg-gray-200"
-          }`}
-        >
-          🖨️
-          <span className="hidden sm:inline">{autoPrintOnAccept ? "Impr. automática" : "Impr. manual"}</span>
-        </button>
+      <div className="flex shrink-0 items-center gap-3 border-b border-line bg-paper px-6 py-2.5">
+        <PerformanceBar orders={orders} />
+        <div className="ml-auto flex items-center gap-2">
+          {/* Active alert banner — sound-only visual cue */}
+          {hasPendingOrders && soundEnabled && (
+            <span className="flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-[12px] font-semibold text-brand-600 animate-pulse">
+              🔊 Novo pedido aguardando aceite
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setAutoPrintOnAccept((prev) => {
+                const next = !prev;
+                localStorage.setItem("foocci_autoprint_on_accept", String(next));
+                return next;
+              });
+            }}
+            title={autoPrintOnAccept ? "Desativar impressão automática ao aceitar" : "Ativar impressão automática ao aceitar"}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+              autoPrintOnAccept ? "bg-[#F4F4F2] text-ink2 hover:bg-[#ECECEA]" : "bg-[#F4F4F2] text-muted hover:bg-[#ECECEA]"
+            }`}
+          >
+            🖨️
+            <span className="hidden sm:inline">{autoPrintOnAccept ? "Impr. automática" : "Impr. manual"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Reconcile toast */}
       {reconcileToast && (
-        <div className="mx-4 mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 shadow-sm">
+        <div className="mx-6 mt-2 rounded-xl border border-line bg-paper px-3.5 py-2.5 text-[12.5px] font-medium text-ink2 shadow-sm">
           {reconcileToast}
         </div>
       )}
 
       {/* Auto-print toast */}
       {printToast && (
-        <div className="mx-4 mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-800 shadow-sm">
+        <div className="mx-6 mt-2 rounded-xl border border-green-200 bg-green-50 px-3.5 py-2.5 text-[12.5px] font-medium text-green-800 shadow-sm">
           🖨️ {printToast}
         </div>
       )}
