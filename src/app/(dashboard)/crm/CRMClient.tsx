@@ -17,8 +17,8 @@ import { isGuestIdentifier } from "@/lib/guest";
 const TIER_CONFIG: Record<CustomerTier, { label: string; bg: string; text: string; icon: string }> = {
   DIAMANTE: { label: "Diamante", bg: "bg-cyan-100",   text: "text-cyan-700",   icon: "💎" },
   OURO:     { label: "Ouro",     bg: "bg-amber-100",  text: "text-amber-700",  icon: "🥇" },
-  PRATA:    { label: "Prata",    bg: "bg-gray-200",   text: "text-gray-700",   icon: "🥈" },
-  BRONZE:   { label: "Bronze",   bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
+  PRATA:    { label: "Prata",    bg: "bg-line2",   text: "text-ink2",   icon: "🥈" },
+  BRONZE:   { label: "Bronze",   bg: "bg-brand-100", text: "text-brand-700", icon: "🥉" },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
@@ -379,16 +379,16 @@ function CreateActionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-lg rounded-2xl bg-paper shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Salvar modelo de mensagem</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Rascunho — não envia mensagens automaticamente</p>
+            <h2 className="text-base font-bold text-ink">Salvar modelo de mensagem</h2>
+            <p className="text-xs text-muted mt-0.5">Rascunho — não envia mensagens automaticamente</p>
           </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+          <button onClick={onClose} className="rounded-full p-1.5 text-muted hover:bg-[#F4F4F2] hover:text-ink2 transition-colors">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -400,7 +400,7 @@ function CreateActionModal({
 
           {/* 1. Nome */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
+            <label className="mb-1 block text-xs font-semibold text-ink2">
               Nome da ação <span className="text-red-500">*</span>
             </label>
             <input
@@ -408,8 +408,8 @@ function CreateActionModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Reativação de clientes do almoço"
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 transition ${
-                errors.name ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 transition ${
+                errors.name ? "border-red-300 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"
               }`}
             />
             {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
@@ -417,14 +417,14 @@ function CreateActionModal({
 
           {/* 2. Objetivo */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
+            <label className="mb-1 block text-xs font-semibold text-ink2">
               Objetivo <span className="text-red-500">*</span>
             </label>
             <select
               value={objective}
               onChange={(e) => setObjective(e.target.value)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 transition ${
-                errors.objective ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-ink bg-paper focus:outline-none focus:ring-2 transition ${
+                errors.objective ? "border-red-300 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"
               }`}
             >
               <option value="">Selecione um objetivo</option>
@@ -437,14 +437,14 @@ function CreateActionModal({
 
           {/* 3. Segmento */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
+            <label className="mb-1 block text-xs font-semibold text-ink2">
               Público-alvo / Segmento <span className="text-red-500">*</span>
             </label>
             <select
               value={targetSegment}
               onChange={(e) => setTargetSegment(e.target.value)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 transition ${
-                errors.targetSegment ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-ink bg-paper focus:outline-none focus:ring-2 transition ${
+                errors.targetSegment ? "border-red-300 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"
               }`}
             >
               <option value="">Selecione um segmento</option>
@@ -454,7 +454,7 @@ function CreateActionModal({
             </select>
             {errors.targetSegment && <p className="mt-1 text-xs text-red-500">{errors.targetSegment}</p>}
             {targetSegment && (
-              <p className="mt-1.5 text-[11px] text-gray-500">
+              <p className="mt-1.5 text-[11px] text-muted">
                 {audienceLoading
                   ? "Buscando estimativa…"
                   : audienceCount !== null
@@ -466,7 +466,7 @@ function CreateActionModal({
 
           {/* 4. Canal */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">Canal</label>
+            <label className="mb-1 block text-xs font-semibold text-ink2">Canal</label>
             <div className="flex gap-2">
               {Object.entries(CHANNEL_LABELS).map(([k, v]) => (
                 <button
@@ -476,7 +476,7 @@ function CreateActionModal({
                   className={`flex-1 rounded-xl border py-2 text-xs font-semibold transition-colors ${
                     channel === k
                       ? "border-brand-400 bg-brand-50 text-brand-700"
-                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      : "border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
                   }`}
                 >
                   {v}
@@ -488,7 +488,7 @@ function CreateActionModal({
           {/* 5. Mensagem */}
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs font-semibold text-gray-700">
+              <label className="text-xs font-semibold text-ink2">
                 Mensagem <span className="text-red-500">*</span>
               </label>
               <button
@@ -507,8 +507,8 @@ function CreateActionModal({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Oi {nome}! 👋 Temos uma oferta especial para você..."
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 transition ${
-                errors.message ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-ink resize-none focus:outline-none focus:ring-2 transition ${
+                errors.message ? "border-red-300 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"
               }`}
             />
             {errors.message && <p className="mt-1 text-xs text-red-500">{errors.message}</p>}
@@ -518,32 +518,32 @@ function CreateActionModal({
                   key={v}
                   type="button"
                   onClick={() => setMessage((m) => m + v)}
-                  className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600 hover:bg-gray-200 transition-colors"
+                  className="rounded bg-[#F4F4F2] px-1.5 py-0.5 font-mono text-[10px] text-ink2 hover:bg-line2 transition-colors"
                 >
                   {v}
                 </button>
               ))}
-              <span className="ml-1 text-[10px] text-gray-400">clique para inserir variável</span>
+              <span className="ml-1 text-[10px] text-muted">clique para inserir variável</span>
             </div>
           </div>
 
           {/* 6. Observações internas */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
-              Observações internas <span className="font-normal text-gray-400">(opcional)</span>
+            <label className="mb-1 block text-xs font-semibold text-ink2">
+              Observações internas <span className="font-normal text-muted">(opcional)</span>
             </label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notas para sua equipe — não aparecem para o cliente"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-800 resize-none focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+              className="w-full rounded-xl border border-line2 px-3 py-2.5 text-sm text-ink resize-none focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
             />
           </div>
 
           {/* 7. Status info */}
           <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
-            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-bold text-gray-600 shrink-0">Rascunho</span>
+            <span className="rounded-full bg-line2 px-2.5 py-0.5 text-xs font-bold text-ink2 shrink-0">Rascunho</span>
             <p className="text-xs text-amber-700">
               Salvo como modelo. Para enviar mensagens, crie uma <strong>Campanha</strong> — única ou recorrente.
             </p>
@@ -551,12 +551,12 @@ function CreateActionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 border-t border-gray-100 px-5 py-4 shrink-0">
+        <div className="flex gap-2 border-t border-line px-5 py-4 shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
           >
             Cancelar
           </button>
@@ -603,8 +603,8 @@ type AudienceData = {
 const TIER_BADGE: Record<string, { bg: string; text: string; icon: string }> = {
   DIAMANTE: { bg: "bg-cyan-100",   text: "text-cyan-700",   icon: "💎" },
   OURO:     { bg: "bg-amber-100",  text: "text-amber-700",  icon: "🥇" },
-  PRATA:    { bg: "bg-gray-200",   text: "text-gray-700",   icon: "🥈" },
-  BRONZE:   { bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
+  PRATA:    { bg: "bg-line2",   text: "text-ink2",   icon: "🥈" },
+  BRONZE:   { bg: "bg-brand-100", text: "text-brand-700", icon: "🥉" },
 };
 
 const SEGMENT_BADGE: Record<string, { bg: string; text: string; label: string }> = {
@@ -612,7 +612,7 @@ const SEGMENT_BADGE: Record<string, { bg: string; text: string; label: string }>
   MORNO:       { bg: "bg-amber-100",  text: "text-amber-700",  label: "Morno"    },
   FRIO:        { bg: "bg-blue-100",   text: "text-blue-700",   label: "Frio"     },
   PERDIDO:     { bg: "bg-purple-100", text: "text-purple-700", label: "Perdido"  },
-  SEM_PEDIDOS: { bg: "bg-gray-100",   text: "text-gray-500",   label: "Sem pedidos" },
+  SEM_PEDIDOS: { bg: "bg-[#F4F4F2]",   text: "text-muted",   label: "Sem pedidos" },
 };
 
 // ── Ações Tab types ───────────────────────────────────────────────────────────
@@ -781,10 +781,10 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
 
 const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; text: string }> = {
   SUGGESTED_TEMPLATE: { label: "Sugerida",          bg: "bg-brand-100",   text: "text-brand-700"  },
-  DRAFT:              { label: "Rascunho",           bg: "bg-gray-100",    text: "text-gray-600"   },
+  DRAFT:              { label: "Rascunho",           bg: "bg-[#F4F4F2]",    text: "text-ink2"   },
   READY_TO_CONFIGURE: { label: "Pronta p/ configurar", bg: "bg-green-100", text: "text-green-700" },
   COMING_SOON:        { label: "Em breve",           bg: "bg-yellow-100",  text: "text-yellow-700" },
-  NEEDS_DATA:         { label: "Precisa de dados",   bg: "bg-gray-100",    text: "text-gray-500"   },
+  NEEDS_DATA:         { label: "Precisa de dados",   bg: "bg-[#F4F4F2]",    text: "text-muted"   },
 };
 
 // ── Action Config Drawer ───────────────────────────────────────────────────────
@@ -959,21 +959,21 @@ function ActionConfigDrawer({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-lg rounded-2xl bg-paper shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-line shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-2xl">{template.emoji}</span>
             <div>
-              <h2 className="text-base font-bold text-gray-900">{template.title}</h2>
-              <p className="text-xs text-gray-500">{template.objective}</p>
+              <h2 className="text-base font-bold text-ink">{template.title}</h2>
+              <p className="text-xs text-muted">{template.objective}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="shrink-0 rounded-full p-1.5 text-muted hover:bg-[#F4F4F2] hover:text-ink2 transition-colors"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -984,7 +984,7 @@ function ActionConfigDrawer({
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Campaign name */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
+            <label className="mb-1 block text-xs font-semibold text-ink2">
               Nome da campanha <span className="text-red-500">*</span>
             </label>
             <input
@@ -993,9 +993,9 @@ function ActionConfigDrawer({
               onChange={(e) => setCampaignName(e.target.value)}
               placeholder="Ex: Reativação frios — PROMO10"
               maxLength={120}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+              className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2.5 text-sm text-ink focus:border-brand-400 focus:bg-paper focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
             />
-            <p className="mt-1 text-[10px] text-gray-400">
+            <p className="mt-1 text-[10px] text-muted">
               Use um nome fácil para identificar depois nos relatórios.
             </p>
           </div>
@@ -1004,13 +1004,13 @@ function ActionConfigDrawer({
           <div className="grid grid-cols-2 gap-3">
             {isCustom ? (
               <div className="col-span-2">
-                <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                <label className="block text-[10px] font-semibold uppercase tracking-wide text-muted mb-1.5">
                   Público alvo
                 </label>
                 <select
                   value={customAudienceId}
                   onChange={(e) => setCustomAudienceId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 >
                   <option value="">Selecione o público…</option>
                   {MANUAL_AUDIENCE_OPTIONS.map((opt) => (
@@ -1021,15 +1021,15 @@ function ActionConfigDrawer({
                 </select>
               </div>
             ) : (
-              <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Segmento alvo</p>
-                <p className="mt-0.5 text-sm font-semibold text-gray-800">{template.targetLabel}</p>
+              <div className="rounded-xl bg-[#FAFAF8] px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Segmento alvo</p>
+                <p className="mt-0.5 text-sm font-semibold text-ink">{template.targetLabel}</p>
               </div>
             )}
-            <div className={`rounded-xl bg-gray-50 px-3 py-2.5 ${isCustom ? "col-span-2" : ""}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
+            <div className={`rounded-xl bg-[#FAFAF8] px-3 py-2.5 ${isCustom ? "col-span-2" : ""}`}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Canal</p>
               <div className="mt-0.5 flex items-center gap-1.5">
-                <p className="text-sm font-semibold text-gray-800">WhatsApp</p>
+                <p className="text-sm font-semibold text-ink">WhatsApp</p>
                 <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">ativo</span>
               </div>
             </div>
@@ -1037,12 +1037,12 @@ function ActionConfigDrawer({
 
           {/* Audience counts — the key fix */}
           {(template.hasAudienceQuery || (isCustom && !!customAudienceId)) && (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Público estimado</p>
+            <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted">Público estimado</p>
               {loadingAudience ? (
-                <p className="text-xs text-gray-400">Calculando…</p>
+                <p className="text-xs text-muted">Calculando…</p>
               ) : !audience ? null : !audience.computed ? (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   {audience.totalSegmentCount != null && audience.totalSegmentCount > 0
                     ? `${audience.totalSegmentCount} clientes no segmento — dados de contato ainda não disponíveis para esta ação.`
                     : "Dados insuficientes para calcular o público desta ação."}
@@ -1050,8 +1050,8 @@ function ActionConfigDrawer({
               ) : (
                 <>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">No segmento</span>
-                    <span className="font-bold text-gray-900">{audience.totalSegmentCount ?? audience.count}</span>
+                    <span className="text-ink2">No segmento</span>
+                    <span className="font-bold text-ink">{audience.totalSegmentCount ?? audience.count}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-green-700">Elegíveis WhatsApp</span>
@@ -1065,7 +1065,7 @@ function ActionConfigDrawer({
                     if (excl?.noPhone) reasons.push(`${excl.noPhone} sem telefone`);
                     if (excl?.notContactable) reasons.push(`${excl.notContactable} opt-out`);
                     return (
-                      <p className="text-[10px] text-gray-400 border-t border-gray-200 pt-1.5 mt-0.5">
+                      <p className="text-[10px] text-muted border-t border-line2 pt-1.5 mt-0.5">
                         {excluded} excluído{excluded !== 1 ? "s" : ""}: {reasons.join(", ")}
                       </p>
                     );
@@ -1078,25 +1078,25 @@ function ActionConfigDrawer({
           {/* Customer preview list — only when computed and has eligible customers */}
           {(template.hasAudienceQuery || (isCustom && !!customAudienceId)) && audience?.computed && (audience.eligibleCount ?? audience.count) > 0 && (
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted">
                 Prévia do público elegível
               </p>
               {loadingAudience ? (
-                <div className="py-4 text-center text-xs text-gray-400">Carregando clientes…</div>
+                <div className="py-4 text-center text-xs text-muted">Carregando clientes…</div>
               ) : audience.customers.length === 0 ? (
-                <div className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
+                <div className="rounded-xl bg-[#FAFAF8] px-4 py-3 text-xs text-muted">
                   Nenhum cliente elegível no momento.
                 </div>
               ) : (
-                <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-xl border border-gray-100 p-2">
+                <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-xl border border-line p-2">
                   {audience.customers.map((c) => {
-                    const tierCfg = TIER_BADGE[c.tier] ?? { bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" };
-                    const segCfg  = SEGMENT_BADGE[c.segment] ?? { bg: "bg-gray-100", text: "text-gray-500", label: "—" };
+                    const tierCfg = TIER_BADGE[c.tier] ?? { bg: "bg-brand-100", text: "text-brand-700", icon: "🥉" };
+                    const segCfg  = SEGMENT_BADGE[c.segment] ?? { bg: "bg-[#F4F4F2]", text: "text-muted", label: "—" };
                     return (
-                      <div key={c.id} className="flex items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-2">
+                      <div key={c.id} className="flex items-center gap-2 rounded-lg bg-[#FAFAF8] px-2.5 py-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
-                          <p className="text-[10px] text-gray-400">{c.phone}</p>
+                          <p className="text-xs font-semibold text-ink truncate">{c.name}</p>
+                          <p className="text-[10px] text-muted">{c.phone}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${tierCfg.bg} ${tierCfg.text}`}>
@@ -1107,16 +1107,16 @@ function ActionConfigDrawer({
                           </span>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-[10px] font-semibold text-gray-700">
+                          <p className="text-[10px] font-semibold text-ink2">
                             R${c.totalSpend.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
                           </p>
-                          <p className="text-[10px] text-gray-400">{c.totalOrders} pedidos</p>
+                          <p className="text-[10px] text-muted">{c.totalOrders} pedidos</p>
                         </div>
                       </div>
                     );
                   })}
                   {(audience.eligibleCount ?? audience.count) > audience.customers.length && (
-                    <p className="text-center text-[10px] text-gray-400 py-1">
+                    <p className="text-center text-[10px] text-muted py-1">
                       +{(audience.eligibleCount ?? audience.count) - audience.customers.length} clientes não exibidos
                     </p>
                   )}
@@ -1128,27 +1128,27 @@ function ActionConfigDrawer({
           {/* Message editor */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-600">
+              <p className="text-xs font-semibold text-ink2">
                 Mensagem sugerida
-                <span className="ml-1 font-normal text-gray-400">(edite à vontade)</span>
+                <span className="ml-1 font-normal text-muted">(edite à vontade)</span>
               </p>
             </div>
             <textarea
               rows={5}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
+              className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2.5 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
             />
-            <p className="mt-1 text-[10px] text-gray-400">
-              Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
+            <p className="mt-1 text-[10px] text-muted">
+              Use <code className="bg-[#F4F4F2] px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
             </p>
           </div>
 
           {/* Coupon attribution link (optional) */}
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-700">
+            <label className="mb-1 block text-xs font-semibold text-ink2">
               Cupom vinculado{" "}
-              <span className="font-normal text-gray-400">(opcional — para relatório de atribuição)</span>
+              <span className="font-normal text-muted">(opcional — para relatório de atribuição)</span>
             </label>
             <input
               type="text"
@@ -1156,38 +1156,38 @@ function ActionConfigDrawer({
               onChange={(e) => setLinkedCouponCode(e.target.value.toUpperCase())}
               placeholder="Ex: PROMO10"
               maxLength={40}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 uppercase focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+              className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2.5 text-sm text-ink uppercase focus:border-brand-400 focus:bg-paper focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
             />
-            <p className="mt-1 text-[10px] text-gray-400">
+            <p className="mt-1 text-[10px] text-muted">
               Se esta campanha usa um cupom, vincule-o aqui para ver a receita comprovada nos relatórios.
             </p>
           </div>
 
           {/* Governance: identity + anti-spam dedupe */}
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Identidade & evitar repetição</p>
-            <label className="mt-2 block text-[11px] font-semibold text-gray-700">
+          <div className="rounded-xl border border-line2 bg-[#FAFAF8] p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Identidade & evitar repetição</p>
+            <label className="mt-2 block text-[11px] font-semibold text-ink2">
               Identidade da campanha
               <input
                 type="text"
                 value={familyKey}
                 onChange={(e) => setFamilyKey(e.target.value)}
                 placeholder="ex: pascoa-2026 (sugerido pelo nome)"
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs lowercase focus:border-brand-400 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs lowercase focus:border-brand-400 focus:outline-none"
               />
             </label>
-            <p className="mt-1 text-[10px] text-gray-400">Use para não reenviar a mesma campanha/conceito a quem já foi impactado — mesmo se a campanha for recriada.</p>
+            <p className="mt-1 text-[10px] text-muted">Use para não reenviar a mesma campanha/conceito a quem já foi impactado — mesmo se a campanha for recriada.</p>
             <div className="mt-2 space-y-1.5">
-              <label className="flex items-center gap-2 text-[11px] text-gray-700">
+              <label className="flex items-center gap-2 text-[11px] text-ink2">
                 <input type="checkbox" checked={dedupeByConcept} onChange={(e) => setDedupeByConcept(e.target.checked)} /> Não reenviar para quem já recebeu esta campanha/conceito
               </label>
-              <label className="flex items-center gap-2 text-[11px] text-gray-700">
+              <label className="flex items-center gap-2 text-[11px] text-ink2">
                 <input type="checkbox" checked={dedupeByMessage} onChange={(e) => setDedupeByMessage(e.target.checked)} /> Não reenviar mensagem igual ou parecida
               </label>
-              <label className="flex items-center gap-2 text-[11px] text-gray-700">
+              <label className="flex items-center gap-2 text-[11px] text-ink2">
                 Janela de dedupe (dias)
                 <input type="number" min={0} value={dedupeWindowDays} onChange={(e) => setDedupeWindowDays(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-20 rounded border border-gray-200 px-2 py-1 text-xs" />
+                  className="w-20 rounded border border-line2 px-2 py-1 text-xs" />
               </label>
               <label className="flex items-center gap-2 text-[11px] text-amber-700">
                 <input type="checkbox" checked={allowResend} onChange={(e) => setAllowResend(e.target.checked)} /> Permitir reenviar para já impactados (use com cuidado)
@@ -1196,8 +1196,8 @@ function ActionConfigDrawer({
           </div>
 
           {/* Scheduling section */}
-          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Tipo de campanha</p>
+          <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted">Tipo de campanha</p>
 
               {/* Mode selector — envio único / agendada / recorrente */}
               <div className="flex gap-1.5">
@@ -1210,7 +1210,7 @@ function ActionConfigDrawer({
                       className={`flex-1 rounded-lg py-2 text-xs font-semibold border transition-colors ${
                         sendMode === mode
                           ? "bg-brand-600 text-white border-brand-600"
-                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                          : "bg-paper text-ink2 border-line2 hover:bg-[#FAFAF8]"
                       }`}
                     >
                       {labels[mode]}
@@ -1220,7 +1220,7 @@ function ActionConfigDrawer({
               </div>
 
               {/* Friendly explainer per type */}
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px] text-muted">
                 {sendMode === "now"
                   ? "Envia uma vez, agora, para o público selecionado."
                   : sendMode === "scheduled_once"
@@ -1232,22 +1232,22 @@ function ActionConfigDrawer({
               {sendMode === "scheduled_once" && (
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Data</label>
+                    <label className="block text-[10px] font-semibold text-muted mb-1">Data</label>
                     <input
                       type="date"
                       value={scheduleDate}
                       min={new Date().toISOString().split("T")[0]}
                       onChange={(e) => setScheduleDate(e.target.value)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Hora</label>
+                    <label className="block text-[10px] font-semibold text-muted mb-1">Hora</label>
                     <input
                       type="time"
                       value={scheduleTime}
                       onChange={(e) => setScheduleTime(e.target.value)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1258,7 +1258,7 @@ function ActionConfigDrawer({
                 <div className="space-y-3 pt-1">
                   {/* Weekdays */}
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1.5">Dias da semana</label>
+                    <label className="block text-[10px] font-semibold text-muted mb-1.5">Dias da semana</label>
                     <div className="flex gap-1">
                       {WEEKDAY_LABELS.map((label, day) => (
                         <button
@@ -1267,7 +1267,7 @@ function ActionConfigDrawer({
                           className={`flex-1 rounded-lg py-1.5 text-[10px] font-bold border transition-colors ${
                             weekdays.includes(day)
                               ? "bg-brand-600 text-white border-brand-600"
-                              : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                              : "bg-paper text-muted border-line2 hover:bg-[#FAFAF8]"
                           }`}
                         >
                           {label}
@@ -1282,29 +1282,29 @@ function ActionConfigDrawer({
                   {/* Time window */}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Horário início</label>
+                      <label className="block text-[10px] font-semibold text-muted mb-1">Horário início</label>
                       <input
                         type="time"
                         value={timeWindowStart}
                         onChange={(e) => setTimeWindowStart(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                        className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Horário fim</label>
+                      <label className="block text-[10px] font-semibold text-muted mb-1">Horário fim</label>
                       <input
                         type="time"
                         value={timeWindowEnd}
                         onChange={(e) => setTimeWindowEnd(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                        className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                       />
                     </div>
                   </div>
 
                   {/* Daily limit */}
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">
-                      Limite diário <span className="font-normal text-gray-400">(1–200)</span>
+                    <label className="block text-[10px] font-semibold text-muted mb-1">
+                      Limite diário <span className="font-normal text-muted">(1–200)</span>
                     </label>
                     <input
                       type="number"
@@ -1312,43 +1312,43 @@ function ActionConfigDrawer({
                       max={200}
                       value={dailyLimit}
                       onChange={(e) => setDailyLimit(Math.max(1, Math.min(200, parseInt(e.target.value) || 1)))}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                     />
-                    <p className="mt-1 text-[10px] text-gray-400">Ritmo da campanha. O envio real também respeita o orçamento global do restaurante e o limite por cliente.</p>
+                    <p className="mt-1 text-[10px] text-muted">Ritmo da campanha. O envio real também respeita o orçamento global do restaurante e o limite por cliente.</p>
                   </div>
 
                   {/* Priority */}
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Prioridade</label>
+                    <label className="block text-[10px] font-semibold text-muted mb-1">Prioridade</label>
                     <select
                       value={priority}
                       onChange={(e) => setPriority(e.target.value as "LOW" | "NORMAL" | "HIGH" | "CRITICAL")}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                     >
                       <option value="LOW">Baixa</option>
                       <option value="NORMAL">Normal</option>
                       <option value="HIGH">Alta (aniversário, pós-pedido, reativação)</option>
                       <option value="CRITICAL">Crítica (urgente)</option>
                     </select>
-                    <p className="mt-1 text-[10px] text-gray-400">Na previsão de capacidade, campanhas de prioridade alta recebem orçamento primeiro.</p>
+                    <p className="mt-1 text-[10px] text-muted">Na previsão de capacidade, campanhas de prioridade alta recebem orçamento primeiro.</p>
                   </div>
 
                   {/* Priority override */}
-                  <label className="flex items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  <label className="flex items-start gap-2 rounded-lg border border-line bg-[#FAFAF8] px-2.5 py-2">
                     <input type="checkbox" checked={allowWeeklyOverride} onChange={(e) => setAllowWeeklyOverride(e.target.checked)} className="mt-0.5" />
-                    <span className="text-[10px] text-gray-600">
-                      <strong className="text-gray-800">Permitir envio prioritário acima do limite semanal por cliente.</strong> Use apenas para campanhas importantes (ex.: aniversário).
+                    <span className="text-[10px] text-ink2">
+                      <strong className="text-ink">Permitir envio prioritário acima do limite semanal por cliente.</strong> Use apenas para campanhas importantes (ex.: aniversário).
                       Ainda respeita opt-out, telefone válido, janela de envio, quiet hours, dedupe e limite global do restaurante.
                     </span>
                   </label>
 
                   {/* End condition */}
                   <div>
-                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Condição de término</label>
+                    <label className="block text-[10px] font-semibold text-muted mb-1">Condição de término</label>
                     <select
                       value={endCondition}
                       onChange={(e) => setEndCondition(e.target.value as EndCondition)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                     >
                       <option value="AUDIENCE_EXHAUSTED">Até acabar o público</option>
                       <option value="END_DATE">Até uma data final</option>
@@ -1358,26 +1358,26 @@ function ActionConfigDrawer({
 
                   {endCondition === "END_DATE" && (
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Data final</label>
+                      <label className="block text-[10px] font-semibold text-muted mb-1">Data final</label>
                       <input
                         type="date"
                         value={endDate}
                         min={new Date().toISOString().split("T")[0]}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                        className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                       />
                     </div>
                   )}
 
                   {endCondition === "MAX_TOTAL" && (
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Máximo total de envios</label>
+                      <label className="block text-[10px] font-semibold text-muted mb-1">Máximo total de envios</label>
                       <input
                         type="number"
                         min={1}
                         value={maxTotal}
                         onChange={(e) => setMaxTotal(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                        className="w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-xs text-ink focus:border-brand-400 focus:outline-none"
                       />
                     </div>
                   )}
@@ -1392,13 +1392,13 @@ function ActionConfigDrawer({
             {prepError}
           </p>
         )}
-        <div className="flex gap-2 border-t border-gray-100 px-5 py-4 shrink-0">
+        <div className="flex gap-2 border-t border-line px-5 py-4 shrink-0">
           <button
             onClick={copyMessage}
             className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
               copied
                 ? "bg-green-100 text-green-700"
-                : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                : "border border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
             }`}
           >
             {copied ? "✓ Copiado" : "Copiar"}
@@ -1441,7 +1441,7 @@ function ActionConfigDrawer({
                     ? "Calculando público…"
                     : "Aguardando dados do público…"
               }
-              className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
+              className="flex-1 cursor-not-allowed rounded-xl bg-[#F4F4F2] py-2.5 text-sm font-semibold text-muted"
             >
               {loadingAudience ? "Calculando público…" : "Aguardando público…"}
             </button>
@@ -1466,7 +1466,7 @@ const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
 };
 
 const CAMPAIGN_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  DRAFT:     { bg: "bg-gray-100",   text: "text-gray-600"   },
+  DRAFT:     { bg: "bg-[#F4F4F2]",   text: "text-ink2"   },
   SCHEDULED: { bg: "bg-amber-100",  text: "text-amber-700"  },
   ACTIVE:    { bg: "bg-green-100",  text: "text-green-700"  },
   SENDING:   { bg: "bg-blue-100",   text: "text-blue-700"   },
@@ -1572,14 +1572,14 @@ function CampaignReviewModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl rounded-2xl bg-paper shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line shrink-0">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Revisar e enviar</h2>
-            <p className={`text-xs mt-0.5 ${active.length > effectiveMax ? "text-yellow-600 font-semibold" : "text-gray-500"}`}>
+            <h2 className="text-base font-bold text-ink">Revisar e enviar</h2>
+            <p className={`text-xs mt-0.5 ${active.length > effectiveMax ? "text-yellow-600 font-semibold" : "text-muted"}`}>
               {active.length} destinatário{active.length !== 1 ? "s" : ""}
               {active.length > effectiveMax
                 ? effectiveMax === 0
@@ -1588,7 +1588,7 @@ function CampaignReviewModal({
                 : " · Canal: WhatsApp"}
             </p>
           </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 transition-colors">
+          <button onClick={onClose} className="rounded-full p-1.5 text-muted hover:bg-[#F4F4F2] transition-colors">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -1599,11 +1599,11 @@ function CampaignReviewModal({
         {result ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
             <span className="text-4xl">{result.totalFailed === 0 ? "✅" : result.totalSent === 0 ? "❌" : "⚠️"}</span>
-            <p className="text-base font-bold text-gray-900">
+            <p className="text-base font-bold text-ink">
               {result.totalSent} enviada{result.totalSent !== 1 ? "s" : ""}
               {result.totalFailed > 0 ? ` · ${result.totalFailed} falha${result.totalFailed !== 1 ? "s" : ""}` : ""}
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted">
               As mensagens aparecem no Chat Inbox de cada conversa.
             </p>
             {result.warning && (
@@ -1662,17 +1662,17 @@ function CampaignReviewModal({
             {/* Recipients list */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {active.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 py-8">Nenhum destinatário selecionado.</p>
+                <p className="text-center text-sm text-muted py-8">Nenhum destinatário selecionado.</p>
               ) : active.map((r) => (
-                <div key={r.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div key={r.id} className="rounded-xl border border-line bg-[#FAFAF8] p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-gray-900 truncate">{r.customerName}</p>
-                      <p className="text-[10px] text-gray-400">{r.customerPhone}</p>
+                      <p className="text-xs font-bold text-ink truncate">{r.customerName}</p>
+                      <p className="text-[10px] text-muted">{r.customerPhone}</p>
                     </div>
                     <button
                       onClick={() => setRemoved((prev) => new Set([...prev, r.id]))}
-                      className="shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors"
+                      className="shrink-0 rounded-lg border border-line2 px-2 py-1 text-[10px] font-semibold text-muted hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors"
                     >
                       Remover
                     </button>
@@ -1681,7 +1681,7 @@ function CampaignReviewModal({
                     rows={3}
                     value={messages[r.id] ?? r.messageText}
                     onChange={(e) => setMessages((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100 resize-none"
+                    className="w-full rounded-lg border border-line2 bg-paper px-3 py-2 text-xs text-ink focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100 resize-none"
                   />
                 </div>
               ))}
@@ -1695,10 +1695,10 @@ function CampaignReviewModal({
             )}
 
             {/* Footer */}
-            <div className="border-t border-gray-100 px-5 py-4 shrink-0 flex gap-2">
+            <div className="border-t border-line px-5 py-4 shrink-0 flex gap-2">
               <button
                 onClick={onClose}
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                className="rounded-xl border border-line2 px-4 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
               >
                 Cancelar
               </button>
@@ -1765,7 +1765,7 @@ const FAILURE_REASON_LABELS: Record<string, string> = {
 };
 
 const EXEC_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  PENDING:   { bg: "bg-gray-100",   text: "text-gray-600"  },
+  PENDING:   { bg: "bg-[#F4F4F2]",   text: "text-ink2"  },
   SENT:      { bg: "bg-blue-50",    text: "text-blue-700"  },
   DELIVERED: { bg: "bg-blue-100",   text: "text-blue-700"  },
   READ:      { bg: "bg-indigo-50",  text: "text-indigo-700"},
@@ -1908,7 +1908,7 @@ function CampaignManageModal({
       .catch(() => {});
   }, [detailId]);
 
-  const sc           = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-gray-100", text: "text-gray-600" }) : null;
+  const sc           = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" }) : null;
   const cfg          = detail?.scheduleConfig as ScheduleCfg | null | undefined;
   const isRecurring  = cfg?.mode === "RECURRING";
   const isControllable = isRecurring && detail && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(detail.status);
@@ -1988,14 +1988,14 @@ function CampaignManageModal({
 
       {/* Modal card */}
       <div className="relative min-h-full flex items-start justify-center p-0 sm:p-4 sm:py-6">
-        <div className="relative w-full bg-white shadow-2xl sm:rounded-3xl sm:max-w-4xl overflow-hidden">
+        <div className="relative w-full bg-paper shadow-2xl sm:rounded-3xl sm:max-w-4xl overflow-hidden">
 
           {/* ── Sticky header + tab bar ── */}
-          <div className="sticky top-0 z-10 border-b border-gray-100 bg-white">
+          <div className="sticky top-0 z-10 border-b border-line bg-paper">
             <div className="flex items-center justify-between px-5 py-4 sm:px-8">
               <div className="min-w-0 pr-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Gerenciar campanha</p>
-                <h2 className="mt-0.5 text-base font-bold text-gray-900 truncate">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Gerenciar campanha</p>
+                <h2 className="mt-0.5 text-base font-bold text-ink truncate">
                   {detail ? detail.name : loading ? "Carregando…" : "Campanha"}
                 </h2>
               </div>
@@ -2028,7 +2028,7 @@ function CampaignManageModal({
                     >Cancelar</button>
                   </>
                 )}
-                <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 transition-colors">
+                <button onClick={onClose} className="rounded-xl p-2 text-muted hover:bg-[#F4F4F2] transition-colors">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -2037,7 +2037,7 @@ function CampaignManageModal({
             </div>
 
             {/* Tab bar */}
-            <div className="flex overflow-x-auto border-t border-gray-100 px-5 sm:px-8 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+            <div className="flex overflow-x-auto border-t border-line px-5 sm:px-8 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
               {TABS.filter((t) => !t.hidden).map((tab) => (
                 <button
                   key={tab.id}
@@ -2045,7 +2045,7 @@ function CampaignManageModal({
                   className={`shrink-0 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors ${
                     activeTab === tab.id
                       ? "border-brand-600 text-brand-700"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      : "border-transparent text-muted hover:text-ink2"
                   }`}
                 >
                   {tab.label}
@@ -2056,7 +2056,7 @@ function CampaignManageModal({
 
           {/* ── Body ── */}
           <div className="px-5 py-6 sm:px-8 sm:py-8">
-            {loading && <div className="flex items-center justify-center py-20 text-sm text-gray-400">Carregando campanha…</div>}
+            {loading && <div className="flex items-center justify-center py-20 text-sm text-muted">Carregando campanha…</div>}
             {error   && <div className="flex items-center justify-center py-20 text-sm text-red-500">Erro ao carregar. Tente novamente.</div>}
 
             {detail && !loading && (
@@ -2068,49 +2068,49 @@ function CampaignManageModal({
                     <div className="flex flex-wrap gap-2">
                       {sc && <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>{CAMPAIGN_STATUS_LABELS[detail.status] ?? detail.status}</span>}
                       {isRecurring && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">Recorrente</span>}
-                      {detail.objective && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">{OBJECTIVE_LABELS[detail.objective] ?? detail.objective}</span>}
-                      {detail.targetSegment && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">{SEGMENT_LABELS[detail.targetSegment] ?? detail.targetSegment}</span>}
+                      {detail.objective && <span className="rounded-full bg-line2 px-2 py-0.5 text-[10px] font-semibold text-ink2">{OBJECTIVE_LABELS[detail.objective] ?? detail.objective}</span>}
+                      {detail.targetSegment && <span className="rounded-full bg-line2 px-2 py-0.5 text-[10px] font-semibold text-ink2">{SEGMENT_LABELS[detail.targetSegment] ?? detail.targetSegment}</span>}
                     </div>
 
                     {/* Dates */}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
-                        <p className="text-gray-700 mt-0.5">{CHANNEL_LABELS[detail.channel] ?? detail.channel}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Canal</p>
+                        <p className="text-ink2 mt-0.5">{CHANNEL_LABELS[detail.channel] ?? detail.channel}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Criada em</p>
-                        <p className="text-gray-700 mt-0.5">{new Date(detail.createdAt).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Criada em</p>
+                        <p className="text-ink2 mt-0.5">{new Date(detail.createdAt).toLocaleDateString("pt-BR")}</p>
                       </div>
                       {detail.sentAt && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Último disparo</p>
-                          <p className="text-gray-700 mt-0.5">{new Date(detail.sentAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Último disparo</p>
+                          <p className="text-ink2 mt-0.5">{new Date(detail.sentAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                         </div>
                       )}
                       {debug?.nextRunAt && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Próximo envio</p>
-                          <p className="text-gray-700 mt-0.5">{new Date(debug.nextRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Próximo envio</p>
+                          <p className="text-ink2 mt-0.5">{new Date(debug.nextRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                         </div>
                       )}
                     </div>
 
                     {/* KPI grid */}
                     <div>
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Métricas de performance</p>
+                      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted">Métricas de performance</p>
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                         {[
-                          { label: "Audiência",   value: detail.totalAudience,  color: "text-gray-900" },
+                          { label: "Audiência",   value: detail.totalAudience,  color: "text-ink" },
                           { label: "Enviados",    value: detail.totalSent,      color: "text-blue-700" },
                           { label: "Respostas",   value: detail.totalResponded, color: "text-indigo-700" },
-                          { label: "Tx. Resp.",   value: responseRate ? `${responseRate}%` : "—", color: responseRate ? "text-green-700" : "text-gray-400" },
-                          { label: "Pedidos",     value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-                          { label: "Falhas reais", value: detail.eligibility?.providerFailures ?? detail.totalFailed, color: (detail.eligibility?.providerFailures ?? detail.totalFailed) > 0 ? "text-red-600" : "text-gray-400" },
+                          { label: "Tx. Resp.",   value: responseRate ? `${responseRate}%` : "—", color: responseRate ? "text-green-700" : "text-muted" },
+                          { label: "Pedidos",     value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-muted" },
+                          { label: "Falhas reais", value: detail.eligibility?.providerFailures ?? detail.totalFailed, color: (detail.eligibility?.providerFailures ?? detail.totalFailed) > 0 ? "text-red-600" : "text-muted" },
                         ].map((m) => (
-                          <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
+                          <div key={m.label} className="rounded-xl border border-line bg-paper px-2 py-3 text-center shadow-sm">
                             <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
-                            <p className="mt-1.5 text-[9px] text-gray-500 leading-tight">{m.label}</p>
+                            <p className="mt-1.5 text-[9px] text-muted leading-tight">{m.label}</p>
                           </div>
                         ))}
                       </div>
@@ -2139,8 +2139,8 @@ function CampaignManageModal({
                           <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Diagnóstico de falhas</p>
                           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                             {entries.map(([reason, count]) => (
-                              <div key={reason} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 border border-red-100">
-                                <span className="text-xs text-gray-700 truncate">{FAILURE_REASON_LABELS[reason] ?? reason}</span>
+                              <div key={reason} className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2 border border-red-100">
+                                <span className="text-xs text-ink2 truncate">{FAILURE_REASON_LABELS[reason] ?? reason}</span>
                                 <span className="text-xs font-bold text-red-600 shrink-0">{count}</span>
                               </div>
                             ))}
@@ -2163,23 +2163,23 @@ function CampaignManageModal({
                             {debug.isDueNow ? "Campanha será processada no próximo ciclo do cron" : debug.safetyBlocks.length > 0 ? debug.safetyBlocks[0] : (debug.notDueReason ?? "Fora da janela de envio")}
                           </p>
                         </div>
-                        {debug.dailyCapStatus && <p className="mt-1.5 text-[11px] text-gray-600 ml-4">{debug.dailyCapStatus}</p>}
+                        {debug.dailyCapStatus && <p className="mt-1.5 text-[11px] text-ink2 ml-4">{debug.dailyCapStatus}</p>}
                       </div>
                     )}
 
                     {/* Schedule summary */}
                     {isRecurring && cfg && (
-                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-2 text-xs">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Programação recorrente</p>
+                      <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4 space-y-2 text-xs">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Programação recorrente</p>
                         <div className="flex flex-wrap gap-1">
                           {(cfg.weekdays ?? []).map((d) => (
                             <span key={d} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">{WEEKDAY_LABELS_PT[d] ?? `D${d}`}</span>
                           ))}
                         </div>
-                        {cfg.timeWindow && <p className="text-gray-700"><span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}{cfg.timezone ? ` (${cfg.timezone})` : ""}</p>}
-                        {cfg.dailyLimit && <p className="text-gray-700"><span className="font-semibold">Limite diário:</span> {cfg.dailyLimit} mensagens</p>}
+                        {cfg.timeWindow && <p className="text-ink2"><span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}{cfg.timezone ? ` (${cfg.timezone})` : ""}</p>}
+                        {cfg.dailyLimit && <p className="text-ink2"><span className="font-semibold">Limite diário:</span> {cfg.dailyLimit} mensagens</p>}
                         {cfg.endCondition && (
-                          <p className="text-gray-700">
+                          <p className="text-ink2">
                             <span className="font-semibold">Encerramento:</span>{" "}
                             {cfg.endCondition === "AUDIENCE_EXHAUSTED" ? "Quando audiência esgotar"
                               : cfg.endCondition === "END_DATE" && cfg.endDate ? `Em ${new Date(cfg.endDate).toLocaleDateString("pt-BR")}`
@@ -2192,14 +2192,14 @@ function CampaignManageModal({
 
                     {/* Name edit (inline, bottom of overview) */}
                     {canEdit && (
-                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Editar nome da campanha</p>
+                      <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Editar nome da campanha</p>
                         <div className="flex gap-2">
                           <input
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             maxLength={120}
-                            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-300 focus:outline-none"
+                            className="flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-300 focus:outline-none"
                           />
                           <button
                             onClick={handleSaveName}
@@ -2219,15 +2219,15 @@ function CampaignManageModal({
                 {activeTab === "message" && (
                   <div className="space-y-5">
                     <div>
-                      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Mensagem atual</p>
-                      <div className="rounded-2xl border border-gray-200 bg-[#e7ffd1] px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Mensagem atual</p>
+                      <div className="rounded-2xl border border-line2 bg-[#e7ffd1] px-4 py-3 text-sm text-ink whitespace-pre-wrap leading-relaxed shadow-sm">
                         {detail.message}
                       </div>
                     </div>
                     {canEdit ? (
                       <div>
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Editar mensagem</p>
-                        <p className="mb-2 text-xs text-gray-500">
+                        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted">Editar mensagem</p>
+                        <p className="mb-2 text-xs text-muted">
                           Alterações valem para os próximos envios. Mensagens já enviadas não são afetadas.
                         </p>
                         <textarea
@@ -2235,9 +2235,9 @@ function CampaignManageModal({
                           onChange={(e) => setMsgText(e.target.value)}
                           rows={7}
                           maxLength={4000}
-                          className="w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                          className="w-full resize-y rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 text-sm text-ink placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
                         />
-                        <p className="mt-1 text-[10px] text-gray-400">Variáveis: {"{nome}"}, {"{restaurante}"}, {"{ultimo_pedido}"}, {"{nivel}"}</p>
+                        <p className="mt-1 text-[10px] text-muted">Variáveis: {"{nome}"}, {"{restaurante}"}, {"{ultimo_pedido}"}, {"{nivel}"}</p>
                         <div className="mt-3 flex items-center gap-3">
                           <button
                             onClick={handleSaveMessage}
@@ -2250,7 +2250,7 @@ function CampaignManageModal({
                         </div>
                       </div>
                     ) : (
-                      <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+                      <p className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-xs text-muted">
                         Campanha finalizada — a mensagem não pode ser editada.
                       </p>
                     )}
@@ -2260,30 +2260,30 @@ function CampaignManageModal({
                 {/* ── Agendamento (recurring only) ── */}
                 {activeTab === "schedule" && isRecurring && (
                   <div className="space-y-5">
-                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-2 text-xs">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Configuração atual</p>
+                    <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4 space-y-2 text-xs">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Configuração atual</p>
                       <div className="flex flex-wrap gap-1">
                         {(cfg?.weekdays ?? []).map((d) => (
                           <span key={d} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">{WEEKDAY_LABELS_PT[d] ?? `D${d}`}</span>
                         ))}
                       </div>
-                      {cfg?.timeWindow && <p className="text-gray-700"><span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}</p>}
-                      {cfg?.dailyLimit && <p className="text-gray-700"><span className="font-semibold">Limite diário:</span> {cfg.dailyLimit} mensagens</p>}
+                      {cfg?.timeWindow && <p className="text-ink2"><span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}</p>}
+                      {cfg?.dailyLimit && <p className="text-ink2"><span className="font-semibold">Limite diário:</span> {cfg.dailyLimit} mensagens</p>}
                     </div>
 
                     {canEdit && (
                       <div className="space-y-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Editar agendamento</p>
-                        <p className="text-xs text-gray-500">Alterações valem para os próximos ciclos. Disparos já realizados não são afetados.</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Editar agendamento</p>
+                        <p className="text-xs text-muted">Alterações valem para os próximos ciclos. Disparos já realizados não são afetados.</p>
 
                         <div>
-                          <p className="mb-2 text-xs font-semibold text-gray-700">Dias da semana</p>
+                          <p className="mb-2 text-xs font-semibold text-ink2">Dias da semana</p>
                           <div className="flex flex-wrap gap-2">
                             {WEEKDAY_LABELS_PT.map((label, d) => (
                               <button
                                 key={d}
                                 onClick={() => setEditWd((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort())}
-                                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${editWd.includes(d) ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${editWd.includes(d) ? "bg-brand-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"}`}
                               >{label}</button>
                             ))}
                           </div>
@@ -2291,23 +2291,23 @@ function CampaignManageModal({
 
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-700">Início</label>
+                            <label className="mb-1 block text-xs font-semibold text-ink2">Início</label>
                             <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)}
-                              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none" />
+                              className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-300 focus:outline-none" />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-700">Fim</label>
+                            <label className="mb-1 block text-xs font-semibold text-ink2">Fim</label>
                             <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)}
-                              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none" />
+                              className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-300 focus:outline-none" />
                           </div>
                         </div>
 
                         <div>
-                          <label className="mb-1 block text-xs font-semibold text-gray-700">Limite diário (mensagens)</label>
+                          <label className="mb-1 block text-xs font-semibold text-ink2">Limite diário (mensagens)</label>
                           <input type="number" min={1} max={200} value={editLimit}
                             onChange={(e) => setEditLimit(Math.max(1, Math.min(200, parseInt(e.target.value) || 1)))}
-                            className="w-32 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none" />
-                          <p className="mt-1 text-[10px] text-gray-400">Máximo: 200/dia</p>
+                            className="w-32 rounded-xl border border-line2 bg-paper px-3 py-2 text-sm focus:border-brand-300 focus:outline-none" />
+                          <p className="mt-1 text-[10px] text-muted">Máximo: 200/dia</p>
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -2341,24 +2341,24 @@ function CampaignManageModal({
                             <div>
                               <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-purple-500">Último ciclo</p>
                               {detail.lastRunAt && (
-                                <p className="mb-2 text-[9px] text-gray-400">Desde {new Date(detail.lastRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+                                <p className="mb-2 text-[9px] text-muted">Desde {new Date(detail.lastRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                               )}
                               <div className="grid grid-cols-3 gap-2">
                                 {[
                                   { label: "Enviados",             value: cycle.sent,           color: "text-blue-700" },
-                                  { label: "Bloqueados",           value: cycle.blockedSafety,  color: cycle.blockedSafety > 0 ? "text-amber-600" : "text-gray-400" },
-                                  { label: "Falhas",               value: cycle.failedProvider, color: cycle.failedProvider > 0 ? "text-red-600" : "text-gray-400" },
+                                  { label: "Bloqueados",           value: cycle.blockedSafety,  color: cycle.blockedSafety > 0 ? "text-amber-600" : "text-muted" },
+                                  { label: "Falhas",               value: cycle.failedProvider, color: cycle.failedProvider > 0 ? "text-red-600" : "text-muted" },
                                 ].map((m) => (
                                   <div key={m.label} className="rounded-xl border border-purple-100 bg-purple-50/40 px-2 py-3 text-center">
                                     <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
-                                    <p className="mt-1.5 text-[9px] text-gray-500 leading-tight">{m.label}</p>
+                                    <p className="mt-1.5 text-[9px] text-muted leading-tight">{m.label}</p>
                                   </div>
                                 ))}
                               </div>
                               {cycle.reasonGroups.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {cycle.reasonGroups.map((g) => (
-                                    <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                                    <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-[#F4F4F2] text-ink2"}`}>
                                       {g.badge}: {g.count}{g.kind === "FAILED" && g.retryabilityLabel ? ` · ${g.retryabilityLabel}` : ""}
                                     </span>
                                   ))}
@@ -2368,23 +2368,23 @@ function CampaignManageModal({
                           )}
 
                           <div>
-                            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted">
                               {isRecurring ? "Total histórico (todos os ciclos)" : "Resultados totais"}
                             </p>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                               {[
-                                { label: "Audiência",          value: detail.eligibility?.audienceTotal ?? perf?.audience ?? detail.totalAudience, color: "text-gray-700" },
-                                { label: "Elegíveis WhatsApp", value: detail.eligibility?.whatsAppEligible ?? "—", color: "text-gray-700" },
+                                { label: "Audiência",          value: detail.eligibility?.audienceTotal ?? perf?.audience ?? detail.totalAudience, color: "text-ink2" },
+                                { label: "Elegíveis WhatsApp", value: detail.eligibility?.whatsAppEligible ?? "—", color: "text-ink2" },
                                 { label: "Enviados",           value: sent,    color: "text-blue-700" },
-                                { label: "Ignorados",          value: (detail.eligibility?.skipped ?? perf?.skipped ?? 0) + blocked, color: (detail.eligibility?.skipped ?? 0) + blocked > 0 ? "text-amber-600" : "text-gray-400" },
-                                { label: "Falhas reais",       value: detail.eligibility?.providerFailures ?? failed, color: (detail.eligibility?.providerFailures ?? failed) > 0 ? "text-red-600" : "text-gray-400" },
+                                { label: "Ignorados",          value: (detail.eligibility?.skipped ?? perf?.skipped ?? 0) + blocked, color: (detail.eligibility?.skipped ?? 0) + blocked > 0 ? "text-amber-600" : "text-muted" },
+                                { label: "Falhas reais",       value: detail.eligibility?.providerFailures ?? failed, color: (detail.eligibility?.providerFailures ?? failed) > 0 ? "text-red-600" : "text-muted" },
                                 { label: "Respostas",          value: detail.totalResponded, color: "text-blue-600" },
-                                { label: "Pedidos",            value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-                                { label: "Conversão",          value: convRate ? `${convRate}%` : "—", color: convRate ? "text-green-700" : "text-gray-400" },
+                                { label: "Pedidos",            value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-muted" },
+                                { label: "Conversão",          value: convRate ? `${convRate}%` : "—", color: convRate ? "text-green-700" : "text-muted" },
                               ].map((m) => (
-                                <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
+                                <div key={m.label} className="rounded-xl border border-line bg-paper px-2 py-3 text-center shadow-sm">
                                   <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
-                                  <p className="mt-1.5 text-[9px] text-gray-500 leading-tight">{m.label}</p>
+                                  <p className="mt-1.5 text-[9px] text-muted leading-tight">{m.label}</p>
                                 </div>
                               ))}
                             </div>
@@ -2416,7 +2416,7 @@ function CampaignManageModal({
                               ].filter((r) => r.n > 0);
                               return (
                                 <div className="mt-3 space-y-3">
-                                  <p className="rounded-lg bg-gray-50 px-3 py-2 text-[10px] text-gray-500">
+                                  <p className="rounded-lg bg-[#FAFAF8] px-3 py-2 text-[10px] text-muted">
                                     <strong>Ignorados</strong> são clientes que não foram enviados por falta de telefone, opt-out ou regra de segurança.
                                     <strong> Falhas reais</strong> são erros após a tentativa de envio pelo WhatsApp.
                                   </p>
@@ -2425,10 +2425,10 @@ function CampaignManageModal({
                                       <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Ignorados antes do envio · {el.skipped + el.blockedSafety}</p>
                                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                                         {skipRows.map((r) => (
-                                          <span key={r.label} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">{r.label}: {r.n} · {r.tag}</span>
+                                          <span key={r.label} className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">{r.label}: {r.n} · {r.tag}</span>
                                         ))}
                                         {el.blockedSafety > 0 && (
-                                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">Limite de segurança: {el.blockedSafety} · Ignorado por segurança</span>
+                                          <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">Limite de segurança: {el.blockedSafety} · Ignorado por segurança</span>
                                         )}
                                       </div>
                                     </div>
@@ -2438,10 +2438,10 @@ function CampaignManageModal({
                                       <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Falhas reais de envio · {el.providerFailures}</p>
                                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                                         {failRows.map((r) => (
-                                          <span key={r.label} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600 border border-red-200">{r.label}: {r.n} · {r.tag}</span>
+                                          <span key={r.label} className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-red-600 border border-red-200">{r.label}: {r.n} · {r.tag}</span>
                                         ))}
                                       </div>
-                                      <p className="mt-1.5 text-[10px] text-gray-500">
+                                      <p className="mt-1.5 text-[10px] text-muted">
                                         <strong className="text-violet-700">{el.recoverableFailures}</strong> podem ser reenviadas depois · <strong>{el.permanentFailures}</strong> precisam de correção.
                                       </p>
                                     </div>
@@ -2451,7 +2451,7 @@ function CampaignManageModal({
                                     Um <strong>ciclo</strong> é cada execução do robô de campanhas. No <strong>modo seguro WhatsApp Web</strong>, o Foocci envia até <strong>{detail.safeSend?.maxPerCycle ?? 5} mensagens por ciclo</strong> para evitar travamentos e reduzir risco de bloqueio.
                                   </p>
                                   {el.recoverableFailures > 0 && (
-                                    <div className="rounded-xl border border-violet-200 bg-white px-3 py-2.5">
+                                    <div className="rounded-xl border border-violet-200 bg-paper px-3 py-2.5">
                                       <div className="flex items-center justify-between gap-2">
                                         <p className="text-[11px] font-semibold text-violet-800">{el.recoverableFailures} falha(s) recuperável(is) — pode reenviar depois.</p>
                                         <button
@@ -2518,20 +2518,20 @@ function CampaignManageModal({
                       </div>
                     )}
 
-                    <p className="text-[10px] text-gray-400 italic">
+                    <p className="text-[10px] text-muted italic">
                       Conversões atribuídas: pedidos realizados pelo cliente após receber a mensagem da campanha.
                     </p>
 
                     <div>
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted">
                         Clientes contactados ({detail.executions.length})
                       </p>
                       {detail.executions.length === 0 ? (
-                        <div className="rounded-2xl border-2 border-dashed border-gray-100 py-8 text-center text-xs text-gray-400">
+                        <div className="rounded-2xl border-2 border-dashed border-line py-8 text-center text-xs text-muted">
                           {isRecurring ? "Nenhum envio registrado ainda. Aguardando próximo ciclo." : "Nenhum destinatário registrado."}
                         </div>
                       ) : (
-                        <div className="space-y-1.5 max-h-72 overflow-y-auto rounded-xl border border-gray-100 p-2">
+                        <div className="space-y-1.5 max-h-72 overflow-y-auto rounded-xl border border-line p-2">
                           {detail.executions.map((ex) => {
                             // Prefer the server classification so a safety block reads
                             // "Bloqueado", an invalid number reads "Telefone inválido",
@@ -2541,13 +2541,13 @@ function CampaignManageModal({
                             const tone = kind === "SENT" ? { bg: "bg-green-50", text: "text-green-700" }
                               : kind === "BLOCKED" ? { bg: "bg-amber-50", text: "text-amber-700" }
                               : kind === "FAILED" ? { bg: "bg-red-50", text: "text-red-600" }
-                              : (EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-gray-100", text: "text-gray-600" });
+                              : (EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" });
                             const reasonColor = kind === "BLOCKED" ? "text-amber-600" : "text-red-500";
                             return (
-                              <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-gray-50 bg-white px-3 py-2 shadow-sm">
+                              <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-line bg-paper px-3 py-2 shadow-sm">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-gray-800 truncate">{ex.customerName ?? "Cliente"}</p>
-                                  <p className="text-[10px] text-gray-400 truncate">{ex.customerPhone ?? "—"}</p>
+                                  <p className="text-xs font-semibold text-ink truncate">{ex.customerName ?? "Cliente"}</p>
+                                  <p className="text-[10px] text-muted truncate">{ex.customerPhone ?? "—"}</p>
                                   {ex.failedReason && <p className={`text-[10px] truncate ${reasonColor}`}>{ex.failedReason}</p>}
                                 </div>
                                 <div className="shrink-0 flex flex-col items-end gap-0.5">
@@ -2583,9 +2583,9 @@ function CampaignManageModal({
                             { l: "Telefone inválido", v: preflight.blocked.invalidPhone },
                             { l: "Orçamento global", v: preflight.blocked.globalCap },
                           ].map((m) => (
-                            <div key={m.l} className="rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-center">
-                              <p className="text-sm font-bold text-gray-800">{m.v}</p>
-                              <p className="text-[9px] text-gray-500">{m.l}</p>
+                            <div key={m.l} className="rounded-lg border border-line bg-paper px-2 py-1.5 text-center">
+                              <p className="text-sm font-bold text-ink">{m.v}</p>
+                              <p className="text-[9px] text-muted">{m.l}</p>
                             </div>
                           ))}
                         </div>
@@ -2593,25 +2593,25 @@ function CampaignManageModal({
                         {preflight.recommendations.map((r, i) => <p key={`r${i}`} className="mt-1 text-[10px] text-blue-700">→ {r}</p>)}
                       </div>
                     )}
-                    {loadingDebug && <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-400">Verificando estado do runner…</div>}
+                    {loadingDebug && <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4 text-xs text-muted">Verificando estado do runner…</div>}
                     {!loadingDebug && !debug && (
-                      <div className="rounded-2xl border-2 border-dashed border-gray-100 py-8 text-center text-xs text-gray-400">
+                      <div className="rounded-2xl border-2 border-dashed border-line py-8 text-center text-xs text-muted">
                         Diagnóstico disponível apenas para campanhas recorrentes ativas.
                       </div>
                     )}
                     {!loadingDebug && debug && (
                       <div className="space-y-3">
                         {detail.performance && (detail.performance.blockedSafety > 0 || detail.performance.failedProvider > 0) && (
-                          <div className="rounded-xl border border-gray-100 bg-white px-3 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Por que clientes não receberam</p>
+                          <div className="rounded-xl border border-line bg-paper px-3 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Por que clientes não receberam</p>
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {detail.performance.reasonGroups.map((g) => (
-                                <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                                <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-[#F4F4F2] text-ink2"}`}>
                                   {g.badge}: {g.count}{g.kind === "FAILED" && g.retryabilityLabel ? ` · ${g.retryabilityLabel}` : ""}
                                 </span>
                               ))}
                             </div>
-                            <p className="mt-2 text-[10px] text-gray-500">
+                            <p className="mt-2 text-[10px] text-muted">
                               <strong className="text-amber-700">{detail.performance.blockedSafety}</strong> bloqueio(s) de segurança (não é falha — voltam a ser elegíveis quando a janela expira) ·
                               <strong className="text-red-600"> {detail.performance.failedProvider}</strong> falha(s) real(is) de envio.
                             </p>
@@ -2642,9 +2642,9 @@ function CampaignManageModal({
                           </p>
                         </div>
                         {debug.nextRunAt && (
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
-                            <span className="font-semibold text-gray-700">Próximo envio: </span>
-                            <span className="text-gray-600">{new Date(debug.nextRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                          <div className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-2 text-xs">
+                            <span className="font-semibold text-ink2">Próximo envio: </span>
+                            <span className="text-ink2">{new Date(debug.nextRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                           </div>
                         )}
                         {debug.safetyBlocks.length > 0 && (
@@ -2654,20 +2654,20 @@ function CampaignManageModal({
                           </div>
                         )}
                         {debug.dailyCapStatus && (
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
-                            <span className="font-semibold text-gray-700">Cap diário: </span>
-                            <span className="text-gray-600">{debug.dailyCapStatus}</span>
+                          <div className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-2 text-xs">
+                            <span className="font-semibold text-ink2">Cap diário: </span>
+                            <span className="text-ink2">{debug.dailyCapStatus}</span>
                           </div>
                         )}
                         {debug.audience && (
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-xs space-y-1">
-                            <p className="font-semibold text-gray-700">Audiência em tempo real:</p>
+                          <div className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-3 text-xs space-y-1">
+                            <p className="font-semibold text-ink2">Audiência em tempo real:</p>
                             {debug.audience.error ? (
                               <p className="text-red-500">Erro: {debug.audience.error}</p>
                             ) : (
                               <>
-                                <p className="text-gray-600">• {debug.audience.totalEligible} clientes elegíveis no segmento</p>
-                                <p className="text-gray-600">• {debug.audience.alreadySent} já receberam esta campanha</p>
+                                <p className="text-ink2">• {debug.audience.totalEligible} clientes elegíveis no segmento</p>
+                                <p className="text-ink2">• {debug.audience.alreadySent} já receberam esta campanha</p>
                                 <p className={`font-semibold ${debug.audience.newEligible === 0 ? "text-amber-700" : "text-green-700"}`}>
                                   • {debug.audience.newEligible} novos destinatários disponíveis
                                 </p>
@@ -2732,8 +2732,8 @@ function getOperationalStatus(c: CampaignHistoryRow): { text: string; color: str
     const d = new Date(c.scheduledAt);
     return { text: `Agendada para ${d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`, color: "text-amber-700", dot: "bg-amber-400" };
   }
-  if (c.totalSent === 0 && c.totalAudience === 0) return { text: "Calculando audiência…", color: "text-gray-500", dot: "bg-gray-400" };
-  if (c.totalSent === 0) return { text: "Aguardando próximo ciclo de envio", color: "text-gray-600", dot: "bg-gray-400" };
+  if (c.totalSent === 0 && c.totalAudience === 0) return { text: "Calculando audiência…", color: "text-muted", dot: "bg-muted" };
+  if (c.totalSent === 0) return { text: "Aguardando próximo ciclo de envio", color: "text-ink2", dot: "bg-muted" };
   if (cfg?.mode === "RECURRING" && cfg.timeWindow) {
     return { text: `Ativa · janela de envio ${cfg.timeWindow.start}–${cfg.timeWindow.end}`, color: "text-green-700", dot: "bg-green-500" };
   }
@@ -2748,7 +2748,7 @@ const HISTORY_STATUSES = new Set(["SENT", "COMPLETED", "CANCELLED", "DRAFT"]);
 type CampaignTipo = "Única" | "Agendada" | "Recorrente";
 
 const TIPO_BADGE: Record<CampaignTipo, string> = {
-  "Única":      "bg-gray-100 text-gray-600",
+  "Única":      "bg-[#F4F4F2] text-ink2",
   "Agendada":   "bg-amber-50 text-amber-700",
   "Recorrente": "bg-purple-50 text-purple-700",
 };
@@ -2843,9 +2843,9 @@ function CampaignPerformanceSummary({ campaigns }: { campaigns: CampaignHistoryR
     { label: "Campanhas",  value: String(active.length),                              color: "text-brand-700" },
     { label: "Enviados",   value: totalSent      > 0 ? String(totalSent)      : "—",  color: "text-blue-700" },
     { label: "Respostas",  value: totalResponded > 0 ? String(totalResponded) : "—",  color: "text-indigo-700" },
-    { label: "Tx. Resp.",  value: avgRate ? `${avgRate}%` : "—",                      color: avgRate ? "text-green-700" : "text-gray-400" },
-    { label: "Pedidos",    value: totalConverted > 0 ? String(totalConverted) : "—",  color: totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-    { label: "Receita",    value: totalRevenue   > 0 ? `R$ ${totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: totalRevenue > 0 ? "text-green-700" : "text-gray-400" },
+    { label: "Tx. Resp.",  value: avgRate ? `${avgRate}%` : "—",                      color: avgRate ? "text-green-700" : "text-muted" },
+    { label: "Pedidos",    value: totalConverted > 0 ? String(totalConverted) : "—",  color: totalConverted > 0 ? "text-green-700" : "text-muted" },
+    { label: "Receita",    value: totalRevenue   > 0 ? `R$ ${totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: totalRevenue > 0 ? "text-green-700" : "text-muted" },
   ];
 
   return (
@@ -2855,7 +2855,7 @@ function CampaignPerformanceSummary({ campaigns }: { campaigns: CampaignHistoryR
         {kpis.map((kpi) => (
           <div key={kpi.label} className="text-center">
             <p className={`text-lg font-bold leading-none ${kpi.color}`}>{kpi.value}</p>
-            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">{kpi.label}</p>
+            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted">{kpi.label}</p>
           </div>
         ))}
       </div>
@@ -2874,7 +2874,7 @@ function ActiveCampaignCard({
   onDetail:  (id: string) => void;
   onAction:  (id: string, action: "pause" | "resume" | "cancel") => void;
 }) {
-  const sc          = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+  const sc          = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
   const cfg         = c.scheduleConfig as ScheduleCfg | null;
   const isRecurring = cfg?.mode === "RECURRING";
   const controllable = ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
@@ -2886,17 +2886,17 @@ function ActiveCampaignCard({
   // For SENDING campaigns, 0 is a real value (not "unknown") — show it explicitly.
   const isSending = c.status === "SENDING";
   const kpis = [
-    { label: "Audiência",  value: c.totalAudience  > 0 ? c.totalAudience  : "—", color: "text-gray-900" },
-    { label: "Enviados",   value: c.totalSent > 0 ? c.totalSent : isSending ? 0 : "—", color: c.totalSent > 0 ? "text-blue-700" : isSending ? "text-blue-400" : "text-gray-400" },
-    { label: "Respostas",  value: c.totalResponded  > 0 ? c.totalResponded  : "—", color: c.totalResponded > 0 ? "text-indigo-700" : "text-gray-400" },
-    { label: "Tx. Resp.",  value: responseRate ? `${responseRate}%` : "—",          color: responseRate ? "text-green-700" : "text-gray-400" },
-    { label: "Pedidos",    value: c.totalConverted  > 0 ? c.totalConverted  : "—", color: c.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-    { label: "Receita",    value: Number(c.totalRevenue) > 0 ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: Number(c.totalRevenue) > 0 ? "text-green-700" : "text-gray-400" },
-    { label: "Falhas",     value: c.totalFailed > 0 ? c.totalFailed : isSending ? 0 : "—", color: c.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
+    { label: "Audiência",  value: c.totalAudience  > 0 ? c.totalAudience  : "—", color: "text-ink" },
+    { label: "Enviados",   value: c.totalSent > 0 ? c.totalSent : isSending ? 0 : "—", color: c.totalSent > 0 ? "text-blue-700" : isSending ? "text-blue-400" : "text-muted" },
+    { label: "Respostas",  value: c.totalResponded  > 0 ? c.totalResponded  : "—", color: c.totalResponded > 0 ? "text-indigo-700" : "text-muted" },
+    { label: "Tx. Resp.",  value: responseRate ? `${responseRate}%` : "—",          color: responseRate ? "text-green-700" : "text-muted" },
+    { label: "Pedidos",    value: c.totalConverted  > 0 ? c.totalConverted  : "—", color: c.totalConverted > 0 ? "text-green-700" : "text-muted" },
+    { label: "Receita",    value: Number(c.totalRevenue) > 0 ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: Number(c.totalRevenue) > 0 ? "text-green-700" : "text-muted" },
+    { label: "Falhas",     value: c.totalFailed > 0 ? c.totalFailed : isSending ? 0 : "—", color: c.totalFailed > 0 ? "text-red-600" : "text-muted" },
   ];
 
   return (
-    <div className="rounded-2xl border-2 border-brand-100 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border-2 border-brand-100 bg-paper p-4 shadow-sm">
       {/* ── Header ── */}
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
@@ -2905,19 +2905,19 @@ function ActiveCampaignCard({
             <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
               {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isRecurring ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isRecurring ? "bg-purple-50 text-purple-700" : "bg-[#F4F4F2] text-ink2"}`}>
               {isRecurring ? "Recorrente" : "Pontual"}
             </span>
             {c.targetSegment && (
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+              <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-ink2">
                 {SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment}
               </span>
             )}
           </div>
           {/* Name */}
-          <p className="text-sm font-bold text-gray-900 leading-tight">{c.name}</p>
+          <p className="text-sm font-bold text-ink leading-tight">{c.name}</p>
           {/* Meta */}
-          <p className="mt-0.5 text-[11px] text-gray-500">
+          <p className="mt-0.5 text-[11px] text-muted">
             WhatsApp
             {" · "}
             {daysRunning === 0 ? "Iniciada hoje" : daysRunning === 1 ? "Rodando há 1 dia" : `Rodando há ${daysRunning} dias`}
@@ -2933,17 +2933,17 @@ function ActiveCampaignCard({
       </div>
 
       {/* ── KPI row ── */}
-      <div className="mt-3 grid grid-cols-4 gap-2 border-t border-gray-100 pt-3 sm:grid-cols-7">
+      <div className="mt-3 grid grid-cols-4 gap-2 border-t border-line pt-3 sm:grid-cols-7">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="text-center">
             <p className={`text-sm font-bold leading-none ${kpi.color}`}>{String(kpi.value)}</p>
-            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">{kpi.label}</p>
+            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted">{kpi.label}</p>
           </div>
         ))}
       </div>
 
       {/* ── Operational status + secondary actions ── */}
-      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2.5">
         <div className="flex items-center gap-1.5">
           <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${opStatus.dot}`} />
           <p className={`text-[11px] font-medium ${opStatus.color}`}>{opStatus.text}</p>
@@ -2958,7 +2958,7 @@ function ActiveCampaignCard({
             ) : (
               <button
                 onClick={() => onAction(c.id, "pause")}
-                className="rounded-lg bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[11px] font-semibold text-ink2 hover:bg-line2 transition-colors"
               >Pausar</button>
             )}
             <button
@@ -2992,16 +2992,16 @@ function CampanhasAtivasSection({
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Campanhas ativas</h3>
-          <p className="mt-0.5 text-xs text-gray-400">Campanhas em execução, agendadas ou recorrentes.</p>
+          <p className="mt-0.5 text-xs text-muted">Campanhas em execução, agendadas ou recorrentes.</p>
         </div>
         <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{active.length}</span>
       </div>
       {/* 9 columns — fits 1280px+ without horizontal scroll.
           Respostas/Tx./Pedidos moved to the Gerenciar detail modal. */}
-      <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-line bg-paper shadow-sm">
         <table className="w-full min-w-[860px] text-left text-xs">
-          <thead className="border-b border-gray-100 bg-gray-50">
-            <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+          <thead className="border-b border-line bg-[#FAFAF8]">
+            <tr className="text-[10px] uppercase tracking-wide text-muted">
               <th className="py-2.5 pl-4 pr-2 font-semibold">Status</th>
               <th className="py-2.5 px-2 font-semibold">Nome</th>
               <th className="py-2.5 px-2 font-semibold">Tipo</th>
@@ -3015,7 +3015,7 @@ function CampanhasAtivasSection({
           </thead>
           <tbody className="divide-y divide-gray-50">
             {active.map((c) => {
-              const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+              const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
               const cfg          = c.scheduleConfig as ScheduleCfg | null;
               const isRecurring  = cfg?.mode === "RECURRING";
               const controllable = ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
@@ -3026,7 +3026,7 @@ function CampanhasAtivasSection({
                 : undefined;
 
               return (
-                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={c.id} className="hover:bg-[#FAFAF8] transition-colors">
                   {/* Status */}
                   <td className="py-3 pl-4 pr-2">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${sc.bg} ${sc.text}`}>
@@ -3036,9 +3036,9 @@ function CampanhasAtivasSection({
 
                   {/* Nome */}
                   <td className="py-3 px-2 max-w-[160px]">
-                    <p className="font-semibold text-gray-900 truncate">{c.name}</p>
+                    <p className="font-semibold text-ink truncate">{c.name}</p>
                     {c.objective && (
-                      <p className="text-[10px] text-gray-400 truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
+                      <p className="text-[10px] text-muted truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
                     )}
                   </td>
 
@@ -3051,7 +3051,7 @@ function CampanhasAtivasSection({
 
                   {/* Público */}
                   <td className="py-3 px-2 max-w-[100px]">
-                    <span className="text-gray-600 truncate block text-[11px]">
+                    <span className="text-ink2 truncate block text-[11px]">
                       {c.targetSegment ? (SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment) : "—"}
                     </span>
                   </td>
@@ -3072,7 +3072,7 @@ function CampanhasAtivasSection({
                         {failTitle && <span className="text-[10px] leading-none">ⓘ</span>}
                       </button>
                     ) : (
-                      <span className="text-gray-300">—</span>
+                      <span className="text-muted">—</span>
                     )}
                   </td>
 
@@ -3080,14 +3080,14 @@ function CampanhasAtivasSection({
                   <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
                     {Number(c.totalRevenue) > 0
                       ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                      : <span className="text-gray-300 font-normal">—</span>}
+                      : <span className="text-muted font-normal">—</span>}
                   </td>
 
                   {/* Agenda: time window on line 1, cadence on line 2 */}
                   <td className="py-3 px-2 text-[11px]">
-                    <p className="text-gray-600 whitespace-nowrap">{agenda.primary}</p>
+                    <p className="text-ink2 whitespace-nowrap">{agenda.primary}</p>
                     {agenda.secondary && (
-                      <p className="text-gray-400 whitespace-nowrap">{agenda.secondary}</p>
+                      <p className="text-muted whitespace-nowrap">{agenda.secondary}</p>
                     )}
                   </td>
 
@@ -3109,7 +3109,7 @@ function CampanhasAtivasSection({
                         ) : (
                           <button
                             onClick={() => onAction(c.id, "pause")}
-                            className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                            className="rounded-lg bg-[#F4F4F2] px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
                           >Pausar</button>
                         )
                       )}
@@ -3211,7 +3211,7 @@ const QUALITY_BADGE: Record<AttributionQuality, { bg: string; text: string }> = 
   COUPON_PROVEN:   { bg: "bg-green-100",  text: "text-green-700"  },
   CAMPAIGN_COUPON: { bg: "bg-blue-100",   text: "text-blue-700"   },
   ASSISTED:        { bg: "bg-amber-100",  text: "text-amber-700"  },
-  NONE:            { bg: "bg-gray-100",   text: "text-gray-500"   },
+  NONE:            { bg: "bg-[#F4F4F2]",   text: "text-muted"   },
 };
 
 const PERFORMANCE_PERIODS: { value: string; label: string }[] = [
@@ -3255,19 +3255,19 @@ function CampaignCouponPerformance() {
   ];
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper p-4 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">Performance de campanhas e cupons</h3>
-          <p className="mt-0.5 text-xs text-gray-500">Cupons com atribuição confiável; receita de campanha é assistida (pós-envio).</p>
+          <h3 className="text-sm font-bold text-ink">Performance de campanhas e cupons</h3>
+          <p className="mt-0.5 text-xs text-muted">Cupons com atribuição confiável; receita de campanha é assistida (pós-envio).</p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
+        <div className="flex items-center gap-1 rounded-lg border border-line2 p-0.5">
           {PERFORMANCE_PERIODS.map((p) => (
             <button
               key={p.value}
               onClick={() => setPeriod(p.value)}
               className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                period === p.value ? "bg-brand-600 text-white" : "text-gray-500 hover:bg-gray-100"
+                period === p.value ? "bg-brand-600 text-white" : "text-muted hover:bg-[#F4F4F2]"
               }`}
             >
               {p.label}
@@ -3279,25 +3279,25 @@ function CampaignCouponPerformance() {
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{c.label}</p>
-            <p className="mt-1 text-lg font-bold leading-none text-gray-900">{c.value}</p>
-            {c.sub && <p className="mt-1 text-[10px] text-gray-400">{c.sub}</p>}
+          <div key={c.label} className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">{c.label}</p>
+            <p className="mt-1 text-lg font-bold leading-none text-ink">{c.value}</p>
+            {c.sub && <p className="mt-1 text-[10px] text-muted">{c.sub}</p>}
           </div>
         ))}
       </div>
 
       {loading ? (
-        <p className="py-6 text-center text-xs text-gray-400">Carregando métricas…</p>
+        <p className="py-6 text-center text-xs text-muted">Carregando métricas…</p>
       ) : !data ? (
-        <p className="py-6 text-center text-xs text-gray-400">Não foi possível carregar as métricas.</p>
+        <p className="py-6 text-center text-xs text-muted">Não foi possível carregar as métricas.</p>
       ) : (
         <>
           {/* Coupon table */}
           <div className="mt-5">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Cupons</p>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-muted">Cupons</p>
             {data.coupons.rows.length === 0 ? (
-              <div className="rounded-xl border-2 border-dashed border-gray-100 py-5 text-center text-xs text-gray-400">
+              <div className="rounded-xl border-2 border-dashed border-line py-5 text-center text-xs text-muted">
                 Nenhum cupom cadastrado.
               </div>
             ) : (
@@ -3305,7 +3305,7 @@ function CampaignCouponPerformance() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                      <tr className="text-[10px] uppercase tracking-wide text-muted">
                         <th className="py-1.5 pr-2 font-semibold">Cupom</th>
                         <th className="py-1.5 px-2 font-semibold text-right">Usos</th>
                         <th className="py-1.5 px-2 font-semibold text-right">Pedidos</th>
@@ -3316,22 +3316,22 @@ function CampaignCouponPerformance() {
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {(showAllCoupons ? data.coupons.rows : data.coupons.rows.slice(0, 5)).map((r) => (
-                        <tr key={r.promotionId} className="text-gray-700">
+                        <tr key={r.promotionId} className="text-ink2">
                           <td className="py-2 pr-2">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-semibold text-gray-900">{r.couponCode ?? "—"}</span>
+                              <span className="font-semibold text-ink">{r.couponCode ?? "—"}</span>
                               {r.status !== "ACTIVE" && (
-                                <span className="rounded bg-gray-100 px-1 py-0.5 text-[9px] font-semibold text-gray-400">
+                                <span className="rounded bg-[#F4F4F2] px-1 py-0.5 text-[9px] font-semibold text-muted">
                                   {r.status}
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-gray-400">{r.name}</span>
+                            <span className="text-[10px] text-muted">{r.name}</span>
                           </td>
                           <td className="py-2 px-2 text-right tabular-nums">{r.orderCount}</td>
                           <td className="py-2 px-2 text-right tabular-nums">{r.uniqueCustomers} clientes</td>
                           <td className="py-2 px-2 text-right tabular-nums font-semibold text-green-700">R$ {formatCurrency(r.revenue)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-gray-500">R$ {formatCurrency(r.discount)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-muted">R$ {formatCurrency(r.discount)}</td>
                           <td className="py-2 pl-2 text-right tabular-nums">R$ {formatCurrency(r.averageTicket)}</td>
                         </tr>
                       ))}
@@ -3352,16 +3352,16 @@ function CampaignCouponPerformance() {
 
           {/* Campaign table */}
           <div className="mt-5">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Campanhas</p>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-muted">Campanhas</p>
             {data.campaigns.rows.length === 0 ? (
-              <div className="rounded-xl border-2 border-dashed border-gray-100 py-5 text-center text-xs text-gray-400">
+              <div className="rounded-xl border-2 border-dashed border-line py-5 text-center text-xs text-muted">
                 Nenhuma campanha no período.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                    <tr className="text-[10px] uppercase tracking-wide text-muted">
                       <th className="py-1.5 pr-2 font-semibold">Campanha</th>
                       <th className="py-1.5 px-2 font-semibold text-right">Enviados</th>
                       <th className="py-1.5 px-2 font-semibold text-right">Falhas</th>
@@ -3381,10 +3381,10 @@ function CampaignCouponPerformance() {
                         ? `R$ ${formatCurrency(r.assistedRevenue)}`
                         : "—";
                       return (
-                        <tr key={r.campaignId} className="text-gray-700">
+                        <tr key={r.campaignId} className="text-ink2">
                           <td className="py-2 pr-2">
-                            <span className="font-semibold text-gray-900">{r.name}</span>
-                            <span className="block text-[10px] text-gray-400">{r.audienceSize} no público</span>
+                            <span className="font-semibold text-ink">{r.name}</span>
+                            <span className="block text-[10px] text-muted">{r.audienceSize} no público</span>
                             {attr?.linkedCouponCode && (
                               <span className="block text-[10px] text-blue-500">cupom: {attr.linkedCouponCode}</span>
                             )}
@@ -3401,7 +3401,7 @@ function CampaignCouponPerformance() {
                                 {attr.attributionLabel}
                               </span>
                             ) : (
-                              <span className="text-gray-400">—</span>
+                              <span className="text-muted">—</span>
                             )}
                           </td>
                           <td className="py-2 pl-2 text-right tabular-nums font-semibold text-green-700">
@@ -3412,7 +3412,7 @@ function CampaignCouponPerformance() {
                     })}
                   </tbody>
                 </table>
-                <p className="mt-2 text-[10px] text-gray-400">
+                <p className="mt-2 text-[10px] text-muted">
                   Receita: comprovada por cupom quando vinculado; assistida (pós-envio) caso contrário.
                 </p>
               </div>
@@ -3522,8 +3522,8 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-gray-900">Campanhas de CRM</h2>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <h2 className="text-base font-bold text-ink">Campanhas de CRM</h2>
+          <p className="mt-0.5 text-xs text-muted">
             Envie agora, agende uma vez ou configure recorrência via WhatsApp.
           </p>
         </div>
@@ -3539,7 +3539,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
           >
             Novo modelo
           </button>
@@ -3557,7 +3557,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
       {/* ── Ações sugeridas ──────────────────────────────────────────────────── */}
       <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted">
           Templates de campanha
         </h3>
 
@@ -3570,13 +3570,13 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           return (
             <div
               key={tpl.id}
-              className="flex flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+              className="flex flex-col rounded-2xl border border-line bg-paper p-4 shadow-sm hover:shadow-md transition-shadow"
             >
               {/* Icon + title + recommended type */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">{tpl.emoji}</span>
-                  <p className="text-sm font-bold text-gray-900 leading-tight">{tpl.title}</p>
+                  <p className="text-sm font-bold text-ink leading-tight">{tpl.title}</p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[recommendedType]}`}>
                   {recommendedType}
@@ -3584,11 +3584,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
               </div>
 
               {/* Description */}
-              <p className="text-xs text-gray-500 leading-relaxed flex-1 mb-3">{tpl.description}</p>
+              <p className="text-xs text-muted leading-relaxed flex-1 mb-3">{tpl.description}</p>
 
               {/* Meta row */}
               <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-ink2">
                   {tpl.targetLabel}
                 </span>
                 {count !== null && (
@@ -3604,7 +3604,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
               {/* CTA */}
               <button
                 onClick={() => setSelectedTemplate(tpl)}
-                className="w-full rounded-xl bg-gray-900 py-2 text-xs font-bold text-white hover:bg-gray-700 transition-colors"
+                className="w-full rounded-xl bg-ink py-2 text-xs font-bold text-white hover:bg-ink2 transition-colors"
               >
                 Configurar campanha
               </button>
@@ -3633,7 +3633,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         <div data-testid="history-section">
           <button
             onClick={() => setShowHistory((v) => !v)}
-            className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+            className="flex items-center gap-2 text-xs font-semibold text-muted hover:text-ink2 transition-colors"
           >
             <svg
               className={`h-3.5 w-3.5 transition-transform ${showHistory ? "rotate-90" : ""}`}
@@ -3643,7 +3643,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             </svg>
             Ver histórico
             {historyRows.length > 0 && (
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+              <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-bold text-ink2">
                 {historyRows.length}
               </span>
             )}
@@ -3652,13 +3652,13 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           {showHistory && (
             <div className="mt-3">
               {historyRows.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-gray-100 py-6 text-center text-xs text-gray-400">
+                <div className="rounded-2xl border-2 border-dashed border-line py-6 text-center text-xs text-muted">
                   Nenhuma campanha concluída ainda.
                 </div>
               ) : (
                 <div className="space-y-2">
                   {historyRows.map((c) => {
-                    const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                    const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
                     const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number } | null;
                     const isRecurring = cfg?.mode === "RECURRING";
                     const displayDate = c.sentAt
@@ -3672,11 +3672,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                       : null;
                     const showStats = ["SENT", "SENDING", "ACTIVE", "PAUSED", "COMPLETED"].includes(c.status) && c.totalSent > 0;
                     return (
-                      <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                      <div key={c.id} className="rounded-xl border border-line bg-paper px-4 py-3 shadow-sm">
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">
+                            <p className="text-sm font-semibold text-ink truncate">{c.name}</p>
+                            <p className="text-[10px] text-muted mt-0.5">
                               {isRecurring ? "Recorrente · WhatsApp" : `WhatsApp · ${displayDate}`}
                             </p>
                           </div>
@@ -3686,7 +3686,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                             </span>
                             <button
                               onClick={() => setDetailId(c.id)}
-                              className="rounded-lg bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                              className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
                             >
                               Ver detalhes
                             </button>
@@ -3698,7 +3698,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                                   const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
                                   if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
                                 }}
-                                className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3709,7 +3709,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                         </div>
 
                         {isRecurring && cfg && (
-                          <div className="mt-1.5 text-[10px] text-gray-500">
+                          <div className="mt-1.5 text-[10px] text-muted">
                             {cfg.weekdays && cfg.weekdays.map((d: number) => WEEKDAY_LABELS[d]).join(", ")}
                             {cfg.timeWindow && ` · ${cfg.timeWindow.start}–${cfg.timeWindow.end}`}
                             {cfg.dailyLimit && ` · ${cfg.dailyLimit}/dia`}
@@ -3717,7 +3717,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                         )}
 
                         {showStats && (
-                          <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
+                          <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted border-t border-line pt-2">
                             <span>{c.totalSent} enviados</span>
                             {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
                             {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} responderam</span>}
@@ -3743,22 +3743,22 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {/* ── Modelos salvos (ex "Minhas ações") ──────────────────────────────── */}
       <div>
         <div className="mb-3">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-muted">
             Modelos salvos
           </h3>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-muted">
             Rascunhos de mensagens para referência.{" "}
-            <span className="font-semibold text-gray-500">Para enviar mensagens, use uma Campanha — única ou recorrente.</span>
+            <span className="font-semibold text-muted">Para enviar mensagens, use uma Campanha — única ou recorrente.</span>
           </p>
         </div>
 
         {loadingCustom ? (
-          <div className="py-6 text-center text-sm text-gray-400">Carregando…</div>
+          <div className="py-6 text-center text-sm text-muted">Carregando…</div>
         ) : customActions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line2 py-10 text-center">
             <span className="text-3xl">✍️</span>
-            <p className="mt-2 text-sm font-semibold text-gray-500">Nenhum modelo salvo ainda</p>
-            <p className="mt-0.5 text-xs text-gray-400">
+            <p className="mt-2 text-sm font-semibold text-muted">Nenhum modelo salvo ainda</p>
+            <p className="mt-0.5 text-xs text-muted">
               Salve rascunhos de mensagens aqui para reutilizá-los em Campanhas.
             </p>
             <button
@@ -3773,19 +3773,19 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             {customActions.map((action) => {
               const isExpanded = expandedCustom === action.id;
               return (
-                <div key={action.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                <div key={action.id} className="rounded-2xl border border-line bg-paper shadow-sm overflow-hidden">
                   <div className="flex items-center gap-3 px-4 py-3">
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                        <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-ink2">
                           {OBJECTIVE_LABELS[action.objective] ?? action.objective}
                         </span>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                        <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-ink2">
                           {SEGMENT_LABELS[action.targetSegment] ?? action.targetSegment}
                         </span>
                         {(() => {
-                          const sc = CAMPAIGN_STATUS_COLORS[action.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                          const sc = CAMPAIGN_STATUS_COLORS[action.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
                           return (
                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
                               {CAMPAIGN_STATUS_LABELS[action.status] ?? "Rascunho"}
@@ -3793,7 +3793,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                           );
                         })()}
                       </div>
-                      <p className="text-sm font-bold text-gray-900 truncate">{action.name}</p>
+                      <p className="text-sm font-bold text-ink truncate">{action.name}</p>
                     </div>
                     {/* Actions */}
                     <div className="shrink-0 flex items-center gap-1.5">
@@ -3805,7 +3805,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                       </button>
                       <button
                         onClick={() => setExpandedCustom(isExpanded ? null : action.id)}
-                        className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                        className="rounded-lg bg-[#F4F4F2] px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-line2 transition-colors"
                       >
                         {isExpanded ? "Fechar" : "Ver"}
                       </button>
@@ -3813,7 +3813,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                         onClick={() => handleDeleteAction(action.id)}
                         disabled={deletingAction === action.id}
                         title="Excluir modelo"
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+                        className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3823,29 +3823,29 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                   </div>
 
                   {isExpanded && (
-                    <div className="border-t border-gray-50 bg-gray-50 px-4 py-3 space-y-3">
+                    <div className="border-t border-line bg-[#FAFAF8] px-4 py-3 space-y-3">
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
-                          <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px]">Canal</p>
-                          <p className="text-gray-700 mt-0.5">{CHANNEL_LABELS[action.channel] ?? action.channel}</p>
+                          <p className="font-semibold text-muted uppercase tracking-wide text-[10px]">Canal</p>
+                          <p className="text-ink2 mt-0.5">{CHANNEL_LABELS[action.channel] ?? action.channel}</p>
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px]">Criada em</p>
-                          <p className="text-gray-700 mt-0.5">
+                          <p className="font-semibold text-muted uppercase tracking-wide text-[10px]">Criada em</p>
+                          <p className="text-ink2 mt-0.5">
                             {new Date(action.createdAt).toLocaleDateString("pt-BR")}
                           </p>
                         </div>
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px] mb-1">Mensagem</p>
-                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 whitespace-pre-wrap">
+                        <p className="font-semibold text-muted uppercase tracking-wide text-[10px] mb-1">Mensagem</p>
+                        <div className="rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink2 whitespace-pre-wrap">
                           {action.message}
                         </div>
                       </div>
                       {action.notes && (
                         <div>
-                          <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px] mb-1">Observações internas</p>
-                          <p className="text-xs text-gray-500 italic">{action.notes}</p>
+                          <p className="font-semibold text-muted uppercase tracking-wide text-[10px] mb-1">Observações internas</p>
+                          <p className="text-xs text-muted italic">{action.notes}</p>
                         </div>
                       )}
                     </div>
@@ -3938,7 +3938,7 @@ function CopyPhoneButton({ phone }: { phone: string }) {
       onClick={copy}
       title="Copiar telefone"
       className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
-        copied ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+        copied ? "bg-green-100 text-green-700" : "bg-[#F4F4F2] text-muted hover:bg-line2"
       }`}
     >
       {copied ? "✓" : "copiar"}
@@ -3997,23 +3997,23 @@ function ReactivationHelper({
       </button>
 
       {open && (
-        <div className="border-t border-brand-100 bg-white p-4 space-y-3">
+        <div className="border-t border-brand-100 bg-paper p-4 space-y-3">
           <textarea
             rows={3}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none resize-none"
+            className="w-full rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none resize-none"
           />
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[10px] text-gray-400 flex-1 min-w-0">
-              Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para personalizar.
+            <p className="text-[10px] text-muted flex-1 min-w-0">
+              Use <code className="bg-[#F4F4F2] px-1 rounded">{"{nome}"}</code> para personalizar.
             </p>
             <button
               onClick={copyTemplate}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                 copied === "__template__"
                   ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
               }`}
             >
               {copied === "__template__" ? "✓ Copiado!" : "Copiar modelo"}
@@ -4042,18 +4042,18 @@ function ReactivationHelper({
 
           {customers.length > 0 && (
             <div>
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
                 Copiar mensagem personalizada para cada cliente
               </p>
               <div className="max-h-52 overflow-y-auto space-y-1.5">
                 {customers.slice(0, 30).map((c) => (
                   <div
                     key={c.id}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
+                    className="flex items-center justify-between gap-2 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
-                      <p className="text-[10px] text-gray-400">{formatPhone(c.phone)}</p>
+                      <p className="text-xs font-semibold text-ink truncate">{c.name}</p>
+                      <p className="text-[10px] text-muted">{formatPhone(c.phone)}</p>
                     </div>
                     {c.phone && !isGuestIdentifier(c.phone) && (
                       <button
@@ -4070,7 +4070,7 @@ function ReactivationHelper({
                   </div>
                 ))}
                 {customers.length > 30 && (
-                  <p className="text-center text-[10px] text-gray-400 py-1.5">
+                  <p className="text-center text-[10px] text-muted py-1.5">
                     +{customers.length - 30} clientes. Use &quot;Exportar CSV&quot; para ver todos.
                   </p>
                 )}
@@ -4135,18 +4135,18 @@ function WhatsAppSendModal({
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-paper shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-ink">
               Enviar WhatsApp para {customer.name}
             </h3>
-            <p className="mt-0.5 text-xs text-gray-500">{maskedPhone}</p>
+            <p className="mt-0.5 text-xs text-muted">{maskedPhone}</p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="rounded-lg p-1.5 text-muted hover:bg-[#F4F4F2] hover:text-ink2 transition-colors"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -4179,18 +4179,18 @@ function WhatsAppSendModal({
                 rows={5}
                 maxLength={4096}
                 placeholder="Digite a mensagem…"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none transition"
+                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none transition"
               />
-              <p className="text-right text-xs text-gray-400">{message.length}/4096</p>
+              <p className="text-right text-xs text-muted">{message.length}/4096</p>
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+        <div className="flex gap-2 border-t border-line px-5 py-4">
           <button
             onClick={onClose}
-            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition-colors"
           >
             {result?.ok ? "Fechar" : "Cancelar"}
           </button>
@@ -4283,7 +4283,7 @@ function CustomersTab({
       {/* Search box */}
       <div className="relative">
         <svg
-          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted"
           fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -4293,12 +4293,12 @@ function CustomersTab({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar cliente por nome ou telefone…"
-          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+          className="w-full rounded-xl border border-line2 bg-paper py-2.5 pl-10 pr-10 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
         />
         {search && (
           <button
             onClick={() => setSearch("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-0.5 text-muted hover:text-ink2 transition-colors"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -4316,14 +4316,14 @@ function CustomersTab({
             className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
               filter === f
                 ? "bg-brand-600 text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
             }`}
           >
             {CUSTOMER_FILTER_LABELS[f]}
           </button>
         ))}
         <span
-          className="text-[10px] font-bold uppercase tracking-wide text-gray-400 pl-1"
+          className="text-[10px] font-bold uppercase tracking-wide text-muted pl-1"
           title="Os níveis Bronze, Prata, Ouro e Diamante são definidos no Programa de Relacionamento."
         >Nível:</span>
         {filterKeys.filter((f) => f.startsWith("tier-")).map((f) => (
@@ -4334,7 +4334,7 @@ function CustomersTab({
             className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
               filter === f
                 ? "bg-brand-600 text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
             }`}
           >
             {CUSTOMER_FILTER_LABELS[f]}
@@ -4343,12 +4343,12 @@ function CustomersTab({
         <select
           value={sortValue}
           onChange={(e) => setSortValue(e.target.value)}
-          className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-300"
+          className="rounded-full border border-line2 bg-paper px-3 py-1.5 text-xs font-medium text-ink2 focus:outline-none focus:ring-1 focus:ring-brand-300"
           aria-label="Ordenar clientes"
         >
           {CRM_SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <span className="text-xs text-gray-400 ml-1">
+        <span className="text-xs text-muted ml-1">
           {debSearch ? `${customers.length} resultado${customers.length !== 1 ? "s" : ""}` : `${customers.length} clientes`}
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -4356,7 +4356,7 @@ function CustomersTab({
           {customers.length > 0 && (
             <button
               onClick={() => exportCSV(customers)}
-              className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-line2 bg-paper px-3.5 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -4378,10 +4378,10 @@ function CustomersTab({
 
       {/* Table */}
       {loading ? (
-        <div className="py-12 text-center text-sm text-gray-400">Carregando…</div>
+        <div className="py-12 text-center text-sm text-muted">Carregando…</div>
       ) : customers.length === 0 ? (
         <div className="py-12 text-center space-y-3">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted">
             {debSearch
               ? "Não encontramos clientes com esse nome ou telefone."
               : "Nenhum cliente neste filtro."}
@@ -4389,7 +4389,7 @@ function CustomersTab({
           {debSearch && (
             <button
               onClick={() => setSearch("")}
-              className="rounded-full border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-full border border-line2 px-4 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] transition-colors"
             >
               Limpar busca
             </button>
@@ -4398,10 +4398,10 @@ function CustomersTab({
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="hidden sm:block overflow-x-auto rounded-2xl border border-line bg-paper shadow-sm">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Tier</th>
                   <th className="px-4 py-3 text-right">Gasto total</th>
@@ -4412,16 +4412,16 @@ function CustomersTab({
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {sortedCustomers.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={c.id} className="hover:bg-[#FAFAF8] transition-colors">
                     <td className="px-4 py-3">
                       <Link href={`/customers/${c.id}`} className="hover:text-brand-600 transition-colors">
-                        <p className="font-semibold text-gray-900 text-sm">
+                        <p className="font-semibold text-ink text-sm">
                           {c.name}
                           {c.isUsingImportedData && (
                             <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Histórico importado</span>
                           )}
                           {c.contactStatus === "SEM_TELEFONE" && (
-                            <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[9px] font-medium text-muted">Sem telefone</span>
                           )}
                           {!c.crmContactable && c.contactStatus !== "SEM_TELEFONE" && (
                             <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-medium text-red-600">Não contatável</span>
@@ -4430,7 +4430,7 @@ function CustomersTab({
                             <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Precisa enriquecer</span>
                           )}
                         </p>
-                        <span className="text-[11px] text-gray-400">
+                        <span className="text-[11px] text-muted">
                           {formatPhone(c.phone)}
                           <CopyPhoneButton phone={c.phone} />
                         </span>
@@ -4439,25 +4439,25 @@ function CustomersTab({
                     <td className="px-4 py-3">
                       <TierBadge tier={c.tier} />
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                    <td className="px-4 py-3 text-right font-semibold text-ink">
                       R${formatCurrency(c.totalSpend)}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
+                    <td className="px-4 py-3 text-right text-ink2">
                       {c.totalOrders}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className={c.daysSinceLastOrder != null && c.daysSinceLastOrder > 30
                         ? "text-red-500 font-medium"
-                        : "text-gray-600"
+                        : "text-ink2"
                       }>
                         {relativeDate(c.lastOrderAt)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {c.contactStatus === "OPT_OUT" ? (
-                        <span className="text-[10px] text-gray-400 italic">Opt-out</span>
+                        <span className="text-[10px] text-muted italic">Opt-out</span>
                       ) : !c.phone || c.contactStatus === "SEM_TELEFONE" ? (
-                        <span className="text-[10px] text-gray-400 italic">Sem telefone</span>
+                        <span className="text-[10px] text-muted italic">Sem telefone</span>
                       ) : (
                         <div className="inline-flex items-center gap-1.5">
                           <button
@@ -4487,12 +4487,12 @@ function CustomersTab({
               </tbody>
             </table>
             {/* Tier legend */}
-            <div className="border-t border-gray-50 px-4 py-3 flex flex-wrap gap-3">
+            <div className="border-t border-line px-4 py-3 flex flex-wrap gap-3">
               {tierOrder.map((t) => {
                 const cfg = TIER_CONFIG[t];
                 const count = customers.filter((c) => c.tier === t).length;
                 return (
-                  <span key={t} className="text-[11px] text-gray-500">
+                  <span key={t} className="text-[11px] text-muted">
                     {cfg.icon} {cfg.label}: <strong>{count}</strong>
                   </span>
                 );
@@ -4503,14 +4503,14 @@ function CustomersTab({
           {/* Mobile cards */}
           <div className="sm:hidden space-y-2">
             {sortedCustomers.map((c) => (
-              <div key={c.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div key={c.id} className="rounded-2xl border border-line bg-paper p-4 shadow-sm">
                 <Link href={`/customers/${c.id}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">
+                      <p className="text-sm font-bold text-ink truncate">
                         {c.name}
                         {c.contactStatus === "SEM_TELEFONE" && (
-                          <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[9px] font-medium text-muted">Sem telefone</span>
                         )}
                         {!c.crmContactable && c.contactStatus !== "SEM_TELEFONE" && (
                           <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-medium text-red-600">Não contatável</span>
@@ -4519,14 +4519,14 @@ function CustomersTab({
                           <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Precisa enriquecer</span>
                         )}
                       </p>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted">
                         {formatPhone(c.phone)}
                         <CopyPhoneButton phone={c.phone} />
                       </span>
                     </div>
                     <TierBadge tier={c.tier} />
                   </div>
-                  <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                  <div className="mt-2 flex gap-4 text-xs text-muted">
                     <span>R${formatCurrency(c.totalSpend)}</span>
                     <span>{c.totalOrders} pedido{c.totalOrders !== 1 ? "s" : ""}</span>
                     <span className={c.daysSinceLastOrder != null && c.daysSinceLastOrder > 30 ? "text-red-500 font-medium" : ""}>
@@ -4535,7 +4535,7 @@ function CustomersTab({
                   </div>
                 </Link>
                 {c.phone && c.contactStatus !== "SEM_TELEFONE" && c.contactStatus !== "OPT_OUT" && (
-                  <div className="mt-3 border-t border-gray-50 pt-3">
+                  <div className="mt-3 border-t border-line pt-3">
                     <button
                       onClick={() => setWaSend(c)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors"
@@ -4590,10 +4590,10 @@ function AvaliacoesTab({
       {/* Plataformas */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {/* Google */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+        <div className="rounded-xl border border-line2 bg-paper p-5 space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🌐</span>
-            <h3 className="text-sm font-semibold text-gray-900">Google Reviews</h3>
+            <h3 className="text-sm font-semibold text-ink">Google Reviews</h3>
           </div>
           {googleReviewUrl ? (
             <a
@@ -4605,33 +4605,33 @@ function AvaliacoesTab({
               Ver no Google →
             </a>
           ) : (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted">
               Link não configurado.{" "}
               <Link href="/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
           <div className="space-y-2 pt-1">
             {MOCK_REVIEWS.map((r) => (
-              <div key={r.author} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <div key={r.author} className="rounded-lg border border-line bg-[#FAFAF8] p-3">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-semibold text-gray-800">{r.author}</p>
-                  <span className="text-[10px] text-gray-400">{r.date}</span>
+                  <p className="text-xs font-semibold text-ink">{r.author}</p>
+                  <span className="text-[10px] text-muted">{r.date}</span>
                 </div>
                 <StarRating count={r.stars} />
-                <p className="mt-1 text-xs text-gray-600">{r.text}</p>
+                <p className="mt-1 text-xs text-ink2">{r.text}</p>
               </div>
             ))}
-            <p className="text-[10px] text-gray-400 pt-1">
+            <p className="text-[10px] text-muted pt-1">
               * Avaliações de exemplo — integração real com a API do Google em breve.
             </p>
           </div>
         </div>
 
         {/* iFood */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+        <div className="rounded-xl border border-line2 bg-paper p-5 space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🛵</span>
-            <h3 className="text-sm font-semibold text-gray-900">iFood Avaliações</h3>
+            <h3 className="text-sm font-semibold text-ink">iFood Avaliações</h3>
           </div>
           {ifoodReviewUrl ? (
             <a
@@ -4643,23 +4643,23 @@ function AvaliacoesTab({
               Ver no iFood →
             </a>
           ) : (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted">
               Link não configurado.{" "}
               <Link href="/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
           <div className="space-y-2 pt-1">
             {MOCK_REVIEWS.map((r) => (
-              <div key={r.author} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <div key={r.author} className="rounded-lg border border-line bg-[#FAFAF8] p-3">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-semibold text-gray-800">{r.author}</p>
-                  <span className="text-[10px] text-gray-400">{r.date}</span>
+                  <p className="text-xs font-semibold text-ink">{r.author}</p>
+                  <span className="text-[10px] text-muted">{r.date}</span>
                 </div>
                 <StarRating count={r.stars} />
-                <p className="mt-1 text-xs text-gray-600">{r.text}</p>
+                <p className="mt-1 text-xs text-ink2">{r.text}</p>
               </div>
             ))}
-            <p className="text-[10px] text-gray-400 pt-1">
+            <p className="text-[10px] text-muted pt-1">
               * Avaliações de exemplo — integração real com a API do iFood em breve.
             </p>
           </div>
@@ -4676,9 +4676,9 @@ function AvaliacoesTab({
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">📨 Template Pós-Venda</h3>
-        <p className="text-xs text-gray-500">Use este template nas campanhas de WhatsApp após o pedido.</p>
+      <div className="rounded-xl border border-line2 bg-paper p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-ink">📨 Template Pós-Venda</h3>
+        <p className="text-xs text-muted">Use este template nas campanhas de WhatsApp após o pedido.</p>
         <div className="rounded-lg border border-green-100 bg-green-50 p-4 font-mono text-xs text-green-800 whitespace-pre-wrap">
 {`Olá {nome}, o que achou do seu pedido? 😊
 Se puder, nos avalie — sua opinião faz toda a diferença!
@@ -4824,14 +4824,14 @@ function AutomacoesTab() {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-sm text-gray-400">Carregando automações…</div>;
+    return <div className="py-12 text-center text-sm text-muted">Carregando automações…</div>;
   }
 
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-base font-bold text-gray-900">Automações de CRM</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
+        <h2 className="text-base font-bold text-ink">Automações de CRM</h2>
+        <p className="mt-0.5 text-xs text-muted">
           Regras sempre ativas. Configure os dias e o horário de disparo para cada automação.
         </p>
       </div>
@@ -4844,7 +4844,7 @@ function AutomacoesTab() {
           <div
             key={trigger}
             className={`rounded-2xl border p-5 space-y-4 transition-colors ${
-              state.isEnabled ? "border-green-200 bg-green-50/30" : "border-gray-100 bg-white"
+              state.isEnabled ? "border-green-200 bg-green-50/30" : "border-line bg-paper"
             }`}
           >
             {/* Header row */}
@@ -4852,8 +4852,8 @@ function AutomacoesTab() {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{meta.emoji}</span>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">{meta.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>
+                  <p className="text-sm font-bold text-ink">{meta.label}</p>
+                  <p className="text-xs text-muted mt-0.5">{meta.description}</p>
                 </div>
               </div>
               {/* Toggle */}
@@ -4861,10 +4861,10 @@ function AutomacoesTab() {
                 onClick={() => updateLocal(trigger, { isEnabled: !state.isEnabled })}
                 aria-label={state.isEnabled ? "Desativar" : "Ativar"}
                 className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                  state.isEnabled ? "bg-green-500" : "bg-gray-200"
+                  state.isEnabled ? "bg-green-500" : "bg-line2"
                 }`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-paper shadow transition-transform ${
                   state.isEnabled ? "translate-x-6" : "translate-x-1"
                 }`} />
               </button>
@@ -4873,7 +4873,7 @@ function AutomacoesTab() {
             {/* Days field */}
             {meta.showDays && (
               <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                <label className="block text-[10px] font-semibold uppercase tracking-wide text-muted mb-1.5">
                   {meta.daysLabel}
                 </label>
                 <div className="flex items-center gap-2">
@@ -4883,16 +4883,16 @@ function AutomacoesTab() {
                     max={365}
                     value={state.triggerAfterDays}
                     onChange={(e) => updateLocal(trigger, { triggerAfterDays: Math.max(1, parseInt(e.target.value) || 1) })}
-                    className="w-20 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800 focus:border-brand-400 focus:outline-none"
+                    className="w-20 rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-sm text-ink focus:border-brand-400 focus:outline-none"
                   />
-                  <span className="text-xs text-gray-500">dias</span>
+                  <span className="text-xs text-muted">dias</span>
                 </div>
               </div>
             )}
 
             {/* Timing config */}
             <div className="space-y-2.5">
-              <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              <label className="block text-[10px] font-semibold uppercase tracking-wide text-muted">
                 Dias de envio
               </label>
               <div className="flex gap-1">
@@ -4910,7 +4910,7 @@ function AutomacoesTab() {
                     className={`flex-1 rounded-lg py-1.5 text-[10px] font-bold border transition-colors ${
                       state.sendDays.includes(day)
                         ? "bg-brand-600 text-white border-brand-600"
-                        : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                        : "bg-paper text-muted border-line2 hover:bg-[#FAFAF8]"
                     }`}
                   >
                     {label}
@@ -4921,23 +4921,23 @@ function AutomacoesTab() {
                 <p className="text-[10px] text-red-500">Selecione pelo menos um dia</p>
               )}
               <div className="flex items-center gap-2">
-                <label className="text-[10px] font-semibold text-gray-500 shrink-0">Horário de envio</label>
+                <label className="text-[10px] font-semibold text-muted shrink-0">Horário de envio</label>
                 <input
                   type="time"
                   value={state.sendTime}
                   onChange={(e) => updateLocal(trigger, { sendTime: e.target.value })}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                  className="rounded-lg border border-line2 bg-paper px-2.5 py-1 text-xs text-ink focus:border-brand-400 focus:outline-none"
                 />
-                <span className="text-[10px] text-gray-400">(Brasília)</span>
+                <span className="text-[10px] text-muted">(Brasília)</span>
               </div>
             </div>
 
             {/* Lifetime impact rule — POST_ORDER only */}
             {trigger === "POST_ORDER" && (
-              <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-line bg-paper px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-800">Impacto único por cliente</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
+                  <p className="text-xs font-semibold text-ink">Impacto único por cliente</p>
+                  <p className="text-[10px] text-muted mt-0.5">
                     Cada cliente recebe esta mensagem apenas uma vez na vida, independente da quantidade de pedidos.
                   </p>
                 </div>
@@ -4945,10 +4945,10 @@ function AutomacoesTab() {
                   onClick={() => updateLocal(trigger, { oncePerCustomerLifetime: !state.oncePerCustomerLifetime })}
                   aria-label={state.oncePerCustomerLifetime ? "Desativar impacto único" : "Ativar impacto único"}
                   className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                    state.oncePerCustomerLifetime ? "bg-brand-600" : "bg-gray-200"
+                    state.oncePerCustomerLifetime ? "bg-brand-600" : "bg-line2"
                   }`}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-paper shadow transition-transform ${
                     state.oncePerCustomerLifetime ? "translate-x-6" : "translate-x-1"
                   }`} />
                 </button>
@@ -4957,7 +4957,7 @@ function AutomacoesTab() {
 
             {/* Message template */}
             <div>
-              <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+              <label className="block text-[10px] font-semibold uppercase tracking-wide text-muted mb-1.5">
                 Mensagem
               </label>
               <textarea
@@ -4965,12 +4965,12 @@ function AutomacoesTab() {
                 value={state.messageTemplate}
                 onChange={(e) => updateLocal(trigger, { messageTemplate: e.target.value })}
                 placeholder="Oi {nome}! …"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 resize-none focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100"
+                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink resize-none focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100"
               />
-              <p className="mt-1 text-[10px] text-gray-400">
-                Use <code className="rounded bg-gray-100 px-1">{"{nome}"}</code> para o nome do cliente
+              <p className="mt-1 text-[10px] text-muted">
+                Use <code className="rounded bg-[#F4F4F2] px-1">{"{nome}"}</code> para o nome do cliente
                 {trigger === "POST_ORDER" && (
-                  <>, <code className="rounded bg-gray-100 px-1">{"{instagram}"}</code> para o link do Instagram</>
+                  <>, <code className="rounded bg-[#F4F4F2] px-1">{"{instagram}"}</code> para o link do Instagram</>
                 )}.
               </p>
             </div>
@@ -4988,15 +4988,15 @@ function AutomacoesTab() {
                 <span className="text-xs font-semibold text-green-600">✓ Salvo</span>
               )}
               {!state.isEnabled && (
-                <span className="text-[10px] text-gray-400">Desativada — salve após ativar para iniciar os disparos.</span>
+                <span className="text-[10px] text-muted">Desativada — salve após ativar para iniciar os disparos.</span>
               )}
             </div>
           </div>
         );
       })}
 
-      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
-        <p className="text-xs text-gray-500">
+      <div className="rounded-xl border border-dashed border-line2 bg-[#FAFAF8] px-4 py-3">
+        <p className="text-xs text-muted">
           <strong>Como funciona:</strong> O cron executa diariamente e envia para clientes elegíveis que ainda não receberam a automação no período. Ative e salve a mensagem para iniciar.
         </p>
       </div>
@@ -5037,7 +5037,7 @@ const DEFAULT_CFG = {
 type SafetyCfg = typeof DEFAULT_CFG;
 
 const CFG_INPUT =
-  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
+  "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
 
 function CfgField({
   label,
@@ -5050,9 +5050,9 @@ function CfgField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-ink2">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -5072,12 +5072,12 @@ function CfgToggle({
     <label className="flex cursor-pointer items-start gap-3">
       <div className="relative mt-0.5 shrink-0">
         <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <div className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`} />
-        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+        <div className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-line2"}`} />
+        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-paper shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
       </div>
       <div>
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        {desc && <p className="text-xs text-gray-500">{desc}</p>}
+        <p className="text-sm font-medium text-ink">{label}</p>
+        {desc && <p className="text-xs text-muted">{desc}</p>}
       </div>
     </label>
   );
@@ -5085,10 +5085,10 @@ function CfgToggle({
 
 function CfgCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper p-6 shadow-sm">
       <div className="mb-5">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -5206,7 +5206,7 @@ function CrmConfiguracoes() {
           </CfgField>
         </div>
 
-        <div className="mt-5 space-y-4 border-t border-gray-100 pt-5">
+        <div className="mt-5 space-y-4 border-t border-line pt-5">
           <CfgToggle
             label="Horário sem envios"
             desc="Bloqueia campanhas durante horários em que o restaurante não quer incomodar clientes."
@@ -5301,7 +5301,7 @@ function CrmConfiguracoes() {
             <span key={word} className="inline-flex items-center rounded-full bg-red-50 border border-red-200 px-3 py-1 text-xs font-semibold text-red-700">{word}</span>
           ))}
         </div>
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-muted">
           A detecção é automática via webhook do WhatsApp. Clientes com opt-out são excluídos de todos os envios futuros de CRM.
           A lista de palavras é gerenciada pela plataforma e não pode ser editada aqui.
         </p>
@@ -5319,7 +5319,7 @@ function CrmConfiguracoes() {
             Use o cap diário acima para limitar o volume. Recomendamos no máximo 20 mensagens por dia para campanhas de reativação.
           </p>
         </div>
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-muted">
           O cap diário configurado em &quot;Segurança de Envio&quot; se aplica a todos os envios manuais.
           Campanhas recorrentes usam a configuração de limite definida em cada campanha.
         </p>
@@ -5337,13 +5337,13 @@ function CrmConfiguracoes() {
             { icon: "⭐", text: "Pós-pedido / avaliação: envia depois da compra, no intervalo configurado na campanha" },
             { icon: "🛡️", text: "Todas as campanhas recorrentes respeitam o cooldown por cliente e o cap diário global" },
           ].map((item) => (
-            <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
+            <li key={item.text} className="flex items-start gap-2.5 text-sm text-ink2">
               <span className="shrink-0">{item.icon}</span>
               <span>{item.text}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-muted">
           Para criar ou ajustar uma campanha que roda automaticamente, abra a aba <strong>Campanhas</strong> e
           escolha o tipo <strong>Recorrente</strong>.
         </p>
@@ -5354,24 +5354,24 @@ function CrmConfiguracoes() {
         title="Avaliações"
         subtitle="Links de avaliação usados em templates de campanha e automações pós-pedido."
       >
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted">
           Configure os links de avaliação na aba{" "}
-          <span className="font-medium text-gray-700">Avaliações</span>{" "}
+          <span className="font-medium text-ink2">Avaliações</span>{" "}
           ou em{" "}
           <Link href="/settings/store" className="text-brand-600 hover:underline">Configurações → Loja</Link>.
         </p>
       </CfgCard>
 
       {/* G — IA de mensagens (futuro) */}
-      <div className="rounded-2xl border border-dashed border-gray-200 p-5">
+      <div className="rounded-2xl border border-dashed border-line2 p-5">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 text-lg">🤖</span>
           <div>
-            <p className="text-sm font-semibold text-gray-700">
+            <p className="text-sm font-semibold text-ink2">
               Mensagens dinâmicas por IA
-              <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">em breve</span>
+              <span className="ml-2 rounded-full bg-line2 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted">em breve</span>
             </p>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-muted">
               Em breve, o Agente CRM poderá variar mensagens automaticamente para evitar repetição e aumentar o engajamento.
             </p>
           </div>
@@ -5387,7 +5387,7 @@ function CrmConfiguracoes() {
             { icon: "🔄", text: "Deduplicação: mesmo cliente não recebe a mesma campanha duas vezes" },
             { icon: "⏱️", text: "Cooldown cruzado: cliente que recebeu qualquer campanha hoje aguarda cooldown (exceto mensagens de aniversário)" },
           ].map((item) => (
-            <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
+            <li key={item.text} className="flex items-start gap-2.5 text-sm text-ink2">
               <span className="shrink-0 text-base">{item.icon}</span>
               <span>{item.text}</span>
             </li>
@@ -5463,7 +5463,7 @@ function SegmentacaoConfig() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+      <div className="flex items-center gap-2 py-4 text-sm text-muted">
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
         Carregando segmentação…
       </div>
@@ -5474,10 +5474,10 @@ function SegmentacaoConfig() {
   const perdido  = seg.lostMinDays;
 
   return (
-    <form onSubmit={handleSave} className="max-w-2xl space-y-5 mt-8 border-t border-gray-100 pt-8">
+    <form onSubmit={handleSave} className="max-w-2xl space-y-5 mt-8 border-t border-line pt-8">
       <div>
-        <h2 className="text-base font-semibold text-gray-800">Segmentação de relacionamento</h2>
-        <p className="mt-1 text-xs text-gray-500">
+        <h2 className="text-base font-semibold text-ink">Segmentação de relacionamento</h2>
+        <p className="mt-1 text-xs text-muted">
           Define os limiares de dias sem pedido que classificam cada segmento. Afeta o agrupamento de clientes no painel e as campanhas de reativação.
         </p>
       </div>
@@ -5757,18 +5757,19 @@ export function CRMClient({
   }
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="min-h-full bg-canvas p-6 lg:p-8">
+     <div className="mx-auto max-w-5xl">
 
       {/* Tabs */}
-      <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1 flex-wrap">
+      <div className="mb-5 flex flex-wrap gap-1 rounded-xl border border-line bg-[#F4F4F2] p-1">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all whitespace-nowrap ${
               tab === t.id
-                ? "bg-white shadow-sm text-gray-900"
-                : "text-gray-500 hover:text-gray-700"
+                ? "bg-paper shadow-sm text-ink"
+                : "text-muted hover:text-ink2"
             }`}
           >
             {t.label}
@@ -5835,6 +5836,7 @@ export function CRMClient({
         onClose={() => setShowImport(false)}
         onComplete={() => { setShowImport(false); router.refresh(); }}
       />
+     </div>
     </div>
   );
 }
@@ -5921,7 +5923,7 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
   }
 
   if (loading) {
-    return <div className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-[10px] text-gray-400">Carregando reenvio seguro…</div>;
+    return <div className="rounded-xl border border-line bg-paper px-3 py-2 text-[10px] text-muted">Carregando reenvio seguro…</div>;
   }
   if (!plan || (plan.distinctRecipients === 0 && plan.recoverableExecutions === 0)) return null;
 
@@ -5929,11 +5931,11 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
     <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-3 py-3 space-y-2">
       <p className="text-[10px] font-bold uppercase tracking-widest text-violet-700">Reenvio de falhas recuperáveis</p>
       <div className="flex flex-wrap gap-1.5 text-[10px]">
-        <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Recuperáveis: {plan.distinctRecipients}</span>
+        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Recuperáveis: {plan.distinctRecipients}</span>
         {plan.duplicatesRemoved > 0 && (
-          <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-gray-500 border border-gray-200">Duplicados removidos: {plan.duplicatesRemoved}</span>
+          <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-muted border border-line2">Duplicados removidos: {plan.duplicatesRemoved}</span>
         )}
-        <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Próximo lote: {n}</span>
+        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Próximo lote: {n}</span>
         <span className={`rounded-full px-2 py-0.5 font-semibold border ${connected ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"}`}>
           {connected ? "WhatsApp conectado" : "WhatsApp desconectado"}
         </span>
@@ -5948,7 +5950,7 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
         {sending ? "Reprocessando…" : `Reprocessar ${n} agora`}
       </button>
       {!canSend && !sending && (
-        <p className="text-[10px] text-gray-500">
+        <p className="text-[10px] text-muted">
           {n === 0 ? "Nenhuma falha recuperável agora." : !connected ? "Conecte o WhatsApp (instância) para poder reenviar." : "Reenvio indisponível no momento."}
         </p>
       )}
@@ -5956,16 +5958,16 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
       {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-[10px] text-red-600">{err}</p>}
 
       {result && (
-        <div className="rounded-lg bg-white px-3 py-2 border border-gray-100 space-y-1">
-          <p className="text-[10px] font-semibold text-gray-700">
+        <div className="rounded-lg bg-paper px-3 py-2 border border-line space-y-1">
+          <p className="text-[10px] font-semibold text-ink2">
             Enviados: <span className="text-green-700">{result.sent}</span> · Ignorados: <span className="text-amber-700">{result.ignored}</span> · Falhas: <span className="text-red-600">{result.failed}</span>
             {result.aborted ? " · ⚠️ interrompido (instância caiu)" : ""}
           </p>
-          {result.message && <p className="text-[10px] text-gray-500">{result.message}</p>}
+          {result.message && <p className="text-[10px] text-muted">{result.message}</p>}
           {result.recipients.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {result.recipients.map((r, i) => (
-                <span key={i} className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${r.status === "SENT" ? "bg-green-50 text-green-700" : r.status === "FAILED" ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"}`}>
+                <span key={i} className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${r.status === "SENT" ? "bg-green-50 text-green-700" : r.status === "FAILED" ? "bg-red-50 text-red-600" : "bg-[#F4F4F2] text-muted"}`}>
                   {(r.customerName || r.phoneMasked)}: {r.status}
                 </span>
               ))}

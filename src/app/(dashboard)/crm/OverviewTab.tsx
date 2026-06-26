@@ -10,8 +10,8 @@ import { ReviewRequestModal } from "./ReviewRequestModal";
 const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: string; text: string }> = {
   DIAMANTE: { label: "Diamante", icon: "💎", bar: "bg-cyan-400",   text: "text-cyan-700"   },
   OURO:     { label: "Ouro",     icon: "🥇", bar: "bg-amber-400",  text: "text-amber-700"  },
-  PRATA:    { label: "Prata",    icon: "🥈", bar: "bg-gray-400",   text: "text-gray-600"   },
-  BRONZE:   { label: "Bronze",   icon: "🥉", bar: "bg-orange-400", text: "text-orange-700" },
+  PRATA:    { label: "Prata",    icon: "🥈", bar: "bg-muted",   text: "text-ink2"   },
+  BRONZE:   { label: "Bronze",   icon: "🥉", bar: "bg-brand-400", text: "text-brand-600" },
 };
 
 // ── Date filter ───────────────────────────────────────────────────────────────
@@ -22,8 +22,8 @@ export type DateFilterPreset = "today" | "week7" | "week" | "total" | "month" | 
 
 const PRIORITY_STYLE: Record<ActionPriority, { dot: string; badge: string; label: string; border: string; bg: string }> = {
   HIGH:   { dot: "bg-red-500",    badge: "bg-red-50 text-red-700",       label: "Alta",  border: "border-red-100",    bg: "bg-red-50/30"     },
-  MEDIUM: { dot: "bg-yellow-400", badge: "bg-yellow-50 text-yellow-700", label: "Média", border: "border-gray-100",   bg: "bg-gray-50/50"    },
-  LOW:    { dot: "bg-gray-300",   badge: "bg-gray-50 text-gray-500",     label: "Baixa", border: "border-gray-100",   bg: "bg-gray-50/30"    },
+  MEDIUM: { dot: "bg-yellow-400", badge: "bg-yellow-50 text-yellow-700", label: "Média", border: "border-line",   bg: "bg-[#FAFAF8]/50"    },
+  LOW:    { dot: "bg-line2",   badge: "bg-[#FAFAF8] text-muted",     label: "Baixa", border: "border-line",   bg: "bg-[#FAFAF8]/30"    },
 };
 
 const ACTION_ICON: Record<CrmActionType, string> = {
@@ -105,7 +105,7 @@ function DraftPreviewPanel({ action }: { action: CrmAction }) {
   }
 
   return (
-    <div className="mt-3 border-t border-gray-100 pt-3">
+    <div className="mt-3 border-t border-line pt-3">
       <button
         onClick={handleToggle}
         className="text-xs font-semibold text-brand-700 hover:text-brand-800"
@@ -116,7 +116,7 @@ function DraftPreviewPanel({ action }: { action: CrmAction }) {
       {open && (
         <div className="mt-2 space-y-2">
           {loading && (
-            <div className="h-12 animate-pulse rounded-lg bg-gray-100" />
+            <div className="h-12 animate-pulse rounded-lg bg-[#F4F4F2]" />
           )}
 
           {error && <p className="text-xs text-red-600">{error}</p>}
@@ -134,22 +134,22 @@ function DraftPreviewPanel({ action }: { action: CrmAction }) {
                 </div>
               ) : preview.draftMessage ? (
                 <>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-xs text-gray-800 whitespace-pre-wrap">{preview.draftMessage}</p>
+                  <div className="rounded-lg border border-line2 bg-paper p-3">
+                    <p className="text-xs text-ink whitespace-pre-wrap">{preview.draftMessage}</p>
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         onClick={copyDraft}
-                        className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50"
+                        className="rounded-md border border-line2 px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-[#FAFAF8]"
                       >
                         {copied ? "Copiado!" : "Copiar"}
                       </button>
                       <button
                         onClick={generate}
-                        className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50"
+                        className="rounded-md border border-line2 px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-[#FAFAF8]"
                       >
                         Gerar outra
                       </button>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="text-[10px] text-muted">
                         {preview.generatedBy === "llm" ? "Gerado por IA" : "Modelo padrão"} · requer aprovação
                       </span>
                     </div>
@@ -157,20 +157,20 @@ function DraftPreviewPanel({ action }: { action: CrmAction }) {
 
                   {preview.alternatives.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Alternativas</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Alternativas</p>
                       {preview.alternatives.map((alt, i) => (
-                        <p key={i} className="rounded-md bg-gray-50 p-2 text-[11px] text-gray-600">{alt}</p>
+                        <p key={i} className="rounded-md bg-[#FAFAF8] p-2 text-[11px] text-ink2">{alt}</p>
                       ))}
                     </div>
                   )}
 
                   {preview.usedFacts.length > 0 && (
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-[10px] text-muted">
                       <span className="font-semibold">Fatos usados:</span> {preview.usedFacts.join(" · ")}
                     </p>
                   )}
                   {preview.missingFacts.length > 0 && (
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-muted">
                       <span className="font-semibold">Dados ausentes:</span> {preview.missingFacts.join(" · ")}
                     </p>
                   )}
@@ -181,7 +181,7 @@ function DraftPreviewPanel({ action }: { action: CrmAction }) {
                   )}
                 </>
               ) : (
-                <p className="text-xs text-gray-500">Nenhum rascunho disponível.</p>
+                <p className="text-xs text-muted">Nenhum rascunho disponível.</p>
               )}
             </>
           )}
@@ -219,20 +219,20 @@ function ActionCard({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className={`h-2 w-2 rounded-full shrink-0 ${ps.dot}`} />
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-ink">
               {icon} {action.title}
             </span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0 ${ps.badge}`}>
               {ps.label}
             </span>
           </div>
-          <p className="text-xs text-gray-500 mb-2">{action.description}</p>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+          <p className="text-xs text-muted mb-2">{action.description}</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink2">
             {action.eligibleCount > 0 && (
               <span>{action.eligibleCount} contactável{action.eligibleCount !== 1 ? "is" : ""}</span>
             )}
             {action.blockedCount > 0 && (
-              <span className="text-gray-400">{action.blockedCount} bloqueado{action.blockedCount !== 1 ? "s" : ""}</span>
+              <span className="text-muted">{action.blockedCount} bloqueado{action.blockedCount !== 1 ? "s" : ""}</span>
             )}
             {action.estimatedRevenueOpportunity > 0 && (
               <span className="font-semibold text-green-700">
@@ -267,7 +267,7 @@ function ActionCard({
           {!isAlert && action.linkedCustomerSample.length > 0 && (
             <button
               onClick={() => onNavigateToTab("customers")}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+              className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] whitespace-nowrap"
             >
               Ver clientes
             </button>
@@ -275,7 +275,7 @@ function ActionCard({
           {isAlert && (
             <button
               onClick={() => onNavigateToTab("campanhas")}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+              className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] whitespace-nowrap"
             >
               Ver campanhas
             </button>
@@ -308,10 +308,10 @@ function CompactOpportunitiesSection({
   const highCount = commercialActions.filter((a) => a.priority === "HIGH").length;
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">
             Oportunidades de receita
           </p>
           {highCount > 0 && (
@@ -341,9 +341,9 @@ function CompactOpportunitiesSection({
               <span className={`h-2 w-2 shrink-0 rounded-full ${ps.dot}`} />
               <span className="text-sm">{icon}</span>
               <div className="flex-1 min-w-0">
-                <p className="truncate text-xs font-semibold text-gray-800">{action.title}</p>
+                <p className="truncate text-xs font-semibold text-ink">{action.title}</p>
                 {action.eligibleCount > 0 && (
-                  <p className="text-[10px] text-gray-500">
+                  <p className="text-[10px] text-muted">
                     {action.eligibleCount} cliente{action.eligibleCount !== 1 ? "s" : ""}
                     {action.estimatedRevenueOpportunity > 0 && ` · ~R$ ${action.estimatedRevenueOpportunity.toLocaleString("pt-BR")}`}
                   </p>
@@ -364,7 +364,7 @@ function CompactOpportunitiesSection({
       {commercialActions.length > COMPACT_LIMIT && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+          className="mt-3 w-full rounded-lg border border-line py-2 text-xs font-semibold text-muted hover:bg-[#FAFAF8] transition-colors"
         >
           {expanded
             ? "Ver menos"
@@ -401,7 +401,7 @@ function ConfigAlertsSection({
       </div>
       <div className="space-y-2">
         {configActions.map((action) => (
-          <div key={action.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2">
+          <div key={action.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-paper px-3 py-2">
             <p className="text-[11px] text-amber-800 flex-1 min-w-0">{ACTION_ICON[action.type]} {action.title}</p>
             <button
               onClick={() => onNavigateToTab("campanhas")}
@@ -412,7 +412,7 @@ function ConfigAlertsSection({
           </div>
         ))}
         {reviewBlockedNoLink && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-paper px-3 py-2">
             <p className="text-[11px] text-amber-800 flex-1">⭐ Configure o link do Google ou iFood para pedir avaliações.</p>
             <a
               href="/marca"
@@ -455,26 +455,26 @@ function KPICard({
     red:    "text-red-600",
     blue:   "text-blue-700",
     brand:  "text-brand-700",
-    gray:   "text-gray-700",
+    gray:   "text-ink2",
   }[accent ?? "brand"] ?? "text-brand-700";
 
   return (
     <div
-      className={`flex flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-sm${onClick ? " cursor-pointer hover:border-brand-200 hover:shadow-md transition-all" : ""}`}
+      className={`flex flex-col rounded-2xl border border-line bg-paper p-4 shadow-sm${onClick ? " cursor-pointer hover:border-brand-200 hover:shadow-md transition-all" : ""}`}
       onClick={onClick}
     >
       {loading ? (
-        <div className="h-8 w-16 animate-pulse rounded bg-gray-100" />
+        <div className="h-8 w-16 animate-pulse rounded bg-[#F4F4F2]" />
       ) : (
         <div className="flex items-baseline gap-1.5">
           <p className={`text-2xl font-extrabold ${accentClass}`}>{value}</p>
           {pct !== undefined && (
-            <span className="text-xs font-semibold text-gray-400">{pct}%</span>
+            <span className="text-xs font-semibold text-muted">{pct}%</span>
           )}
         </div>
       )}
-      <p className="mt-0.5 text-xs font-semibold text-gray-600">{label}</p>
-      {sub && <p className="mt-1 text-[10px] text-gray-400">{sub}</p>}
+      <p className="mt-0.5 text-xs font-semibold text-ink2">{label}</p>
+      {sub && <p className="mt-1 text-[10px] text-muted">{sub}</p>}
       {ctaLabel && onClick && (
         <p className="mt-auto pt-2 text-[10px] font-semibold text-brand-600">{ctaLabel} →</p>
       )}
@@ -528,7 +528,7 @@ function RevenueChart({
             <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e5e7eb" strokeWidth="1.5" />
           )}
         </svg>
-        <div className="mt-1 flex items-center justify-between text-[9px] text-gray-300">
+        <div className="mt-1 flex items-center justify-between text-[9px] text-muted">
           <span>R$ 0</span>
           <span className="capitalize">
             {granularity === "hour" ? "por hora" : granularity === "month" ? "por mês" : "por dia"}
@@ -536,7 +536,7 @@ function RevenueChart({
           <span>{allZero ? "R$ 0" : `R$ ${fmt(max)}`}</span>
         </div>
         {allZero && (
-          <p className="mt-1 text-center text-[10px] text-gray-400">
+          <p className="mt-1 text-center text-[10px] text-muted">
             Nenhuma conversão comprovada no período
           </p>
         )}
@@ -552,18 +552,18 @@ function RevenueChart({
           return (
             <div key={b.key} className="flex flex-1 flex-col items-center justify-end" style={{ minWidth: 3 }}>
               <div
-                className={`w-full rounded-t transition-all ${b.revenue > 0 ? "bg-green-500" : "bg-gray-100"}`}
+                className={`w-full rounded-t transition-all ${b.revenue > 0 ? "bg-green-500" : "bg-[#F4F4F2]"}`}
                 style={{ height: `${b.revenue > 0 ? Math.max(h, 4) : 3}%` }}
                 title={`${b.label}: R$ ${b.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${b.orders} pedido${b.orders !== 1 ? "s" : ""}`}
               />
-              <span className="mt-0.5 h-3 text-[7px] leading-none text-gray-400">
+              <span className="mt-0.5 h-3 text-[7px] leading-none text-muted">
                 {i % labelEvery === 0 ? b.label : ""}
               </span>
             </div>
           );
         })}
       </div>
-      <div className="mt-1 flex items-center justify-between text-[9px] text-gray-300">
+      <div className="mt-1 flex items-center justify-between text-[9px] text-muted">
         <span>R$ 0</span>
         <span className="capitalize">
           {granularity === "hour" ? "por hora" : granularity === "month" ? "por mês" : "por dia"}
@@ -571,7 +571,7 @@ function RevenueChart({
         <span>{allZero ? "R$ 0" : `R$ ${fmt(max)}`}</span>
       </div>
       {allZero && (
-        <p className="mt-1 text-center text-[10px] text-gray-400">
+        <p className="mt-1 text-center text-[10px] text-muted">
           Nenhuma conversão comprovada no período
         </p>
       )}
@@ -608,50 +608,50 @@ function RevenueBlock({
   const hasChartData = series.length > 0;
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted">
           Receita gerada pelo CRM
         </p>
         <div className="flex items-center gap-2">
           {hasChartData && (
-            <div className="flex rounded-lg border border-gray-100 overflow-hidden">
+            <div className="flex rounded-lg border border-line overflow-hidden">
               <button
                 onClick={() => setChartType("bar")}
-                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${chartType === "bar" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${chartType === "bar" ? "bg-ink text-white" : "text-muted hover:bg-[#FAFAF8]"}`}
               >
                 Barras
               </button>
               <button
                 onClick={() => setChartType("line")}
-                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${chartType === "line" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${chartType === "line" ? "bg-ink text-white" : "text-muted hover:bg-[#FAFAF8]"}`}
               >
                 Linha
               </button>
             </div>
           )}
           {revenueSummaryLoading && (
-            <span className="text-[10px] text-gray-400">Carregando…</span>
+            <span className="text-[10px] text-muted">Carregando…</span>
           )}
         </div>
       </div>
 
       {revenueSummaryLoading && !revenueSummary ? (
         <div className="space-y-3">
-          <div className="h-28 animate-pulse rounded-xl bg-gray-100" />
+          <div className="h-28 animate-pulse rounded-xl bg-[#F4F4F2]" />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-[#F4F4F2]" />)}
           </div>
         </div>
       ) : !revenueSummary ? (
-        <p className="text-sm text-gray-400">Ainda não há receita atribuída ao CRM neste período.</p>
+        <p className="text-sm text-muted">Ainda não há receita atribuída ao CRM neste período.</p>
       ) : (
         <div className="space-y-4">
           {/* Chart — always shown when series data exists */}
           {hasChartData ? (
             <div>
               <div className="mb-2 flex items-baseline justify-between">
-                <p className="text-[11px] font-semibold text-gray-500">
+                <p className="text-[11px] font-semibold text-muted">
                   {seriesRevenue > 0 ? "Receita comprovada por conversão" : "Conversões comprovadas no período"}
                 </p>
                 {seriesRevenue > 0 && (
@@ -663,8 +663,8 @@ function RevenueBlock({
               <RevenueChart series={series} granularity={revenueSummary.granularity} type={chartType} />
             </div>
           ) : (
-            <div className="flex h-24 items-center justify-center rounded-xl bg-gray-50">
-              <p className="text-[11px] text-gray-400">
+            <div className="flex h-24 items-center justify-center rounded-xl bg-[#FAFAF8]">
+              <p className="text-[11px] text-muted">
                 Gráfico disponível após as primeiras conversões comprovadas
               </p>
             </div>
@@ -693,10 +693,10 @@ function RevenueBlock({
                   : `${revenueSummary.totalResponded} responderam`}
               </p>
             </div>
-            <div className="rounded-xl bg-orange-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Cupons usados</p>
-              <p className="text-lg font-extrabold text-orange-700">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-orange-400 mt-0.5">
+            <div className="rounded-xl bg-brand-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 mb-1">Cupons usados</p>
+              <p className="text-lg font-extrabold text-brand-600">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-brand-500 mt-0.5">
                 {(revenueSummary.couponRevenue ?? 0) > 0
                   ? `R$ ${(revenueSummary.couponRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : (revenueSummary.couponCodesTracked ?? 0) > 0 ? "Nenhum resgatado" : "Sem cupom vinculado"}
@@ -705,7 +705,7 @@ function RevenueBlock({
           </div>
         </div>
       )}
-      <p className="mt-3 text-[10px] text-gray-400">
+      <p className="mt-3 text-[10px] text-muted">
         * Receita estimada com base em campanhas e cupons vinculados. O gráfico usa conversões comprovadas (pedido após o envio).
       </p>
     </div>
@@ -718,16 +718,16 @@ const TOP_SEGMENT_BADGE: Record<TopCustomerSegment, { label: string; cls: string
   QUENTE:      { label: "Quente",   cls: "bg-green-50 text-green-700"  },
   MORNO:       { label: "Morno",    cls: "bg-yellow-50 text-yellow-700" },
   FRIO:        { label: "Frio",     cls: "bg-red-50 text-red-600"      },
-  PERDIDO:     { label: "Perdido",  cls: "bg-gray-100 text-gray-500"   },
-  SEM_PEDIDOS: { label: "Sem pedidos", cls: "bg-gray-100 text-gray-400" },
+  PERDIDO:     { label: "Perdido",  cls: "bg-[#F4F4F2] text-muted"   },
+  SEM_PEDIDOS: { label: "Sem pedidos", cls: "bg-[#F4F4F2] text-muted" },
 };
 
 // Literal tier badge classes (Tailwind scans these at build — no dynamic strings).
 const TOP_TIER_BADGE: Record<CustomerTier, string> = {
   DIAMANTE: "bg-cyan-100 text-cyan-700",
   OURO:     "bg-amber-100 text-amber-700",
-  PRATA:    "bg-gray-200 text-gray-700",
-  BRONZE:   "bg-orange-100 text-orange-700",
+  PRATA:    "bg-line2 text-ink2",
+  BRONZE:   "bg-brand-100 text-brand-600",
 };
 
 function topRelativeDate(iso: string | null): string {
@@ -750,26 +750,26 @@ function TopCustomersBlock({
   const customers = data?.customers ?? [];
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
       <div className="mb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted">
           Clientes mais valiosos
         </p>
-        <p className="mt-0.5 text-[11px] text-gray-400">Quem mais gastou com o restaurante</p>
+        <p className="mt-0.5 text-[11px] text-muted">Quem mais gastou com o restaurante</p>
       </div>
 
       {loading && !data ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />)}
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-[#F4F4F2]" />)}
         </div>
       ) : customers.length === 0 ? (
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-muted">
           Sem dados suficientes para listar clientes valiosos neste período.
         </p>
       ) : (
         <>
           {data?.fallbackUsed && (
-            <p className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+            <p className="mb-3 rounded-lg bg-[#FAFAF8] px-3 py-2 text-[11px] text-muted">
               Mostrando os clientes que mais gastaram nos últimos 12 meses.
             </p>
           )}
@@ -780,22 +780,22 @@ function TopCustomersBlock({
               return (
                 <div
                   key={c.customerId}
-                  className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5"
+                  className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5"
                 >
-                  <span className="w-5 shrink-0 text-center text-sm font-bold text-gray-300">{i + 1}</span>
+                  <span className="w-5 shrink-0 text-center text-sm font-bold text-muted">{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <a
                         href={`/customers/${c.customerId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="truncate text-sm font-semibold text-gray-900 hover:text-brand-600 hover:underline"
+                        className="truncate text-sm font-semibold text-ink hover:text-brand-600 hover:underline"
                         title={c.name}
                       >
                         {c.name}
                       </a>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-gray-500">
+                    <p className="mt-0.5 text-[11px] text-muted">
                       <span className="font-semibold text-green-700">
                         R$ {c.totalSpent.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
@@ -940,7 +940,7 @@ export function OverviewTab({
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
                 datePreset === p.id
                   ? "bg-brand-600 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
               }`}
             >
               {p.label}
@@ -954,14 +954,14 @@ export function OverviewTab({
               type="date"
               value={localFrom}
               onChange={(e) => setLocalFrom(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="rounded-lg border border-line2 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
-            <span className="text-xs text-gray-400">até</span>
+            <span className="text-xs text-muted">até</span>
             <input
               type="date"
               value={localTo}
               onChange={(e) => setLocalTo(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="rounded-lg border border-line2 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             <button
               onClick={applyCustom}
@@ -1044,12 +1044,12 @@ export function OverviewTab({
       <TopCustomersBlock data={topCustomers ?? null} loading={!!topCustomersLoading} />
 
       {/* 5. Programa de relacionamento */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
+      <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-4">
           Programa de relacionamento
         </p>
         {totalSegmented === 0 ? (
-          <p className="text-sm text-gray-400">Nenhum cliente ainda.</p>
+          <p className="text-sm text-muted">Nenhum cliente ainda.</p>
         ) : (
           <>
             <div className="space-y-2">
@@ -1058,14 +1058,14 @@ export function OverviewTab({
                 const pct = totalSegmented > 0 ? Math.round((count / totalSegmented) * 100) : 0;
                 return (
                   <div key={tier} className="flex items-center gap-3">
-                    <span className="w-[80px] shrink-0 text-xs font-semibold text-gray-600">
+                    <span className="w-[80px] shrink-0 text-xs font-semibold text-ink2">
                       {cfg.icon} {cfg.label}
                     </span>
                     <span className={`text-sm font-bold ${cfg.text} w-16 shrink-0`}>
                       {count.toLocaleString("pt-BR")}
                     </span>
-                    <span className="text-xs text-gray-400 w-10 shrink-0">{pct}%</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <span className="text-xs text-muted w-10 shrink-0">{pct}%</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-[#F4F4F2] overflow-hidden">
                       <div
                         className={`h-full rounded-full ${cfg.bar} transition-all`}
                         style={{ width: count > 0 ? `${Math.max(pct, 2)}%` : "0%" }}

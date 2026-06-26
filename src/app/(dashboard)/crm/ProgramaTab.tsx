@@ -28,8 +28,8 @@ const TIERS: TierKey[] = ["BRONZE", "PRATA", "OURO", "DIAMANTE"];
 const TIER_META: Record<TierKey, {
   label: string; icon: string; bg: string; border: string; text: string; badgeBg: string;
 }> = {
-  BRONZE:   { label: "Bronze",   icon: "🥉", bg: "bg-orange-50",  border: "border-orange-200", text: "text-orange-700", badgeBg: "bg-orange-100" },
-  PRATA:    { label: "Prata",    icon: "🥈", bg: "bg-gray-50",    border: "border-gray-200",   text: "text-gray-700",   badgeBg: "bg-gray-100"   },
+  BRONZE:   { label: "Bronze",   icon: "🥉", bg: "bg-brand-50",  border: "border-orange-200", text: "text-brand-700", badgeBg: "bg-brand-100" },
+  PRATA:    { label: "Prata",    icon: "🥈", bg: "bg-[#FAFAF8]",    border: "border-line2",   text: "text-ink2",   badgeBg: "bg-[#F4F4F2]"   },
   OURO:     { label: "Ouro",     icon: "🥇", bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-700",  badgeBg: "bg-amber-100"  },
   DIAMANTE: { label: "Diamante", icon: "💎", bg: "bg-cyan-50",    border: "border-cyan-200",   text: "text-cyan-700",   badgeBg: "bg-cyan-100"   },
 };
@@ -98,7 +98,7 @@ function Skeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="animate-pulse space-y-2">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-4 rounded bg-gray-100" style={{ width: `${60 + (i % 3) * 15}%` }} />
+        <div key={i} className="h-4 rounded bg-[#F4F4F2]" style={{ width: `${60 + (i % 3) * 15}%` }} />
       ))}
     </div>
   );
@@ -112,8 +112,8 @@ function Section({ title, subtitle, children }: {
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-bold text-gray-800">{title}</h3>
-        {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        <h3 className="text-sm font-bold text-ink">{title}</h3>
+        {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -133,19 +133,19 @@ function TierCard({ stat }: { stat: TierStats }) {
         </span>
       </div>
       <p className={`text-sm font-bold ${m.text}`}>{m.label}</p>
-      <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">{stat.description}</p>
-      <div className="mt-3 space-y-1 border-t border-gray-200 pt-2">
-        <p className="text-[11px] text-gray-500">
-          Receita total: <span className="font-semibold text-gray-700">{fmtBRL(stat.totalRevenue)}</span>
+      <p className="text-[11px] text-muted mt-0.5 leading-tight">{stat.description}</p>
+      <div className="mt-3 space-y-1 border-t border-line2 pt-2">
+        <p className="text-[11px] text-muted">
+          Receita total: <span className="font-semibold text-ink2">{fmtBRL(stat.totalRevenue)}</span>
         </p>
-        <p className="text-[11px] text-gray-500">
-          Ticket médio: <span className="font-semibold text-gray-700">{fmtBRL(stat.avgTicket)}</span>
+        <p className="text-[11px] text-muted">
+          Ticket médio: <span className="font-semibold text-ink2">{fmtBRL(stat.avgTicket)}</span>
         </p>
-        <p className="text-[11px] text-gray-500">
-          Pedidos médios: <span className="font-semibold text-gray-700">{fmtNum(stat.avgOrders)}</span>
+        <p className="text-[11px] text-muted">
+          Pedidos médios: <span className="font-semibold text-ink2">{fmtNum(stat.avgOrders)}</span>
         </p>
         {stat.tier !== "BRONZE" && (
-          <p className="text-[11px] text-gray-400 mt-1">
+          <p className="text-[11px] text-muted mt-1">
             A partir de {fmtBRL(stat.minSpend)}
             {stat.minOrders > 0 ? ` ou ${stat.minOrders} pedidos` : ""}
           </p>
@@ -205,20 +205,20 @@ function TierSettingsForm({
 
   return (
     <form onSubmit={handleSave} className="space-y-4">
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-line2 bg-paper">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-gray-50 text-left text-xs text-gray-400">
+            <tr className="border-b bg-[#FAFAF8] text-left text-xs text-muted">
               <th className="px-4 py-2.5 font-medium">Nível</th>
               <th className="px-4 py-2.5 font-medium">Gasto mínimo (R$)</th>
               <th className="px-4 py-2.5 font-medium">Pedidos mínimos</th>
-              <th className="px-4 py-2.5 font-medium text-gray-300">Lógica</th>
+              <th className="px-4 py-2.5 font-medium text-muted">Lógica</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             <tr>
-              <td className="px-4 py-3 text-orange-600 font-medium text-sm">🥉 Bronze</td>
-              <td className="px-4 py-3 text-gray-400 text-xs" colSpan={3}>Padrão — todos os novos clientes</td>
+              <td className="px-4 py-3 text-brand-600 font-medium text-sm">🥉 Bronze</td>
+              <td className="px-4 py-3 text-muted text-xs" colSpan={3}>Padrão — todos os novos clientes</td>
             </tr>
             {ROWS.map((row) => {
               const m = TIER_META[row.tier];
@@ -232,7 +232,7 @@ function TierSettingsForm({
                       step={50}
                       value={form[row.spendKey]}
                       onChange={(e) => set(row.spendKey, e.target.value)}
-                      className="w-28 rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                      className="w-28 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -242,18 +242,18 @@ function TierSettingsForm({
                       step={1}
                       value={form[row.ordersKey]}
                       onChange={(e) => set(row.ordersKey, e.target.value)}
-                      className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                      className="w-20 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
                       placeholder="0 = off"
                     />
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400">OU</td>
+                  <td className="px-4 py-3 text-xs text-muted">OU</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted">
         Regra: cliente sobe de nível se atingir o gasto mínimo <strong>OU</strong> o número de pedidos mínimos (se configurado). 0 pedidos = considera apenas o gasto.
       </p>
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -352,26 +352,26 @@ function BenefitsPanel({
       {benefits.length === 0 && !adding && (
         <div className="space-y-1">
           {DEFAULT_BENEFITS[tier].map((d) => (
-            <div key={d.title} className="rounded-lg border border-dashed border-gray-200 bg-white px-3 py-2 opacity-50">
-              <p className="text-xs font-medium text-gray-600">{d.title}</p>
-              {d.description && <p className="text-[10px] text-gray-400">{d.description}</p>}
+            <div key={d.title} className="rounded-lg border border-dashed border-line2 bg-paper px-3 py-2 opacity-50">
+              <p className="text-xs font-medium text-ink2">{d.title}</p>
+              {d.description && <p className="text-[10px] text-muted">{d.description}</p>}
             </div>
           ))}
-          <p className="text-[10px] text-gray-400 mt-1">Sugestões — clique em &quot;+ Adicionar&quot; para personalizar</p>
+          <p className="text-[10px] text-muted mt-1">Sugestões — clique em &quot;+ Adicionar&quot; para personalizar</p>
         </div>
       )}
 
       <div className="space-y-1.5">
         {benefits.map((b) => (
-          <div key={b.id} className={`flex items-start justify-between gap-2 rounded-lg border bg-white px-3 py-2 ${b.isActive ? "border-gray-200" : "border-gray-100 opacity-50"}`}>
+          <div key={b.id} className={`flex items-start justify-between gap-2 rounded-lg border bg-paper px-3 py-2 ${b.isActive ? "border-line2" : "border-line opacity-50"}`}>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-800 truncate">{b.title}</p>
-              {b.description && <p className="text-[10px] text-gray-500 truncate">{b.description}</p>}
+              <p className="text-xs font-medium text-ink truncate">{b.title}</p>
+              {b.description && <p className="text-[10px] text-muted truncate">{b.description}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 onClick={() => handleToggle(b.id, b.isActive)}
-                className={`text-[10px] font-medium ${b.isActive ? "text-green-600" : "text-gray-400"}`}
+                className={`text-[10px] font-medium ${b.isActive ? "text-green-600" : "text-muted"}`}
                 title={b.isActive ? "Ativo" : "Inativo"}
               >
                 {b.isActive ? "✓ Ativo" : "Inativo"}
@@ -388,13 +388,13 @@ function BenefitsPanel({
       </div>
 
       {adding && (
-        <div className="mt-3 space-y-2 rounded-lg border border-indigo-100 bg-white p-3">
+        <div className="mt-3 space-y-2 rounded-lg border border-indigo-100 bg-paper p-3">
           <input
             type="text"
             placeholder="Título do benefício"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
             maxLength={120}
           />
           <input
@@ -402,7 +402,7 @@ function BenefitsPanel({
             placeholder="Descrição (opcional)"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
             maxLength={300}
           />
           {error && <p className="text-[10px] text-red-600">{error}</p>}
@@ -416,7 +416,7 @@ function BenefitsPanel({
             </button>
             <button
               onClick={() => { setAdding(false); setTitle(""); setDesc(""); setError(null); }}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50"
+              className="rounded-lg border border-line2 px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8]"
             >
               Cancelar
             </button>
@@ -432,18 +432,18 @@ function BenefitsPanel({
 function CloseToNextTierTable({ customers }: { customers: CloseToNextTierCustomer[] }) {
   if (customers.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-100 bg-gray-50 py-10 text-center">
-        <p className="text-sm text-gray-400">Nenhum cliente próximo de subir de nível no momento.</p>
-        <p className="text-xs text-gray-300 mt-1">Os clientes aparecerão aqui quando estiverem a até 15% do próximo nível.</p>
+      <div className="rounded-xl border border-line bg-[#FAFAF8] py-10 text-center">
+        <p className="text-sm text-muted">Nenhum cliente próximo de subir de nível no momento.</p>
+        <p className="text-xs text-muted mt-1">Os clientes aparecerão aqui quando estiverem a até 15% do próximo nível.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-line2 bg-paper">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b bg-gray-50 text-left text-gray-400">
+          <tr className="border-b bg-[#FAFAF8] text-left text-muted">
             <th className="px-4 py-2.5 font-medium">Cliente</th>
             <th className="px-4 py-2.5 font-medium">Nível atual</th>
             <th className="px-4 py-2.5 font-medium">Próximo</th>
@@ -458,10 +458,10 @@ function CloseToNextTierTable({ customers }: { customers: CloseToNextTierCustome
             const curr = TIER_META[c.currentTier];
             const next = TIER_META[c.nextTier];
             return (
-              <tr key={c.id} className="hover:bg-gray-50">
+              <tr key={c.id} className="hover:bg-[#FAFAF8]">
                 <td className="px-4 py-3">
-                  <p className="font-medium text-gray-800">{c.name}</p>
-                  <p className="text-gray-400">{fmtPhone(c.phone)}</p>
+                  <p className="font-medium text-ink">{c.name}</p>
+                  <p className="text-muted">{fmtPhone(c.phone)}</p>
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${curr.badgeBg} ${curr.text}`}>
@@ -473,15 +473,15 @@ function CloseToNextTierTable({ customers }: { customers: CloseToNextTierCustome
                     {next.icon} {next.label}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right font-medium text-gray-700">{fmtBRL(c.totalSpend)}</td>
+                <td className="px-4 py-3 text-right font-medium text-ink2">{fmtBRL(c.totalSpend)}</td>
                 <td className="px-4 py-3 text-right">
                   <span className="font-semibold text-rose-600">{fmtBRL(c.missingSpend)}</span>
                   {c.missingOrders > 0 && (
-                    <span className="block text-[10px] text-gray-400">ou {c.missingOrders} pedidos</span>
+                    <span className="block text-[10px] text-muted">ou {c.missingOrders} pedidos</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-500">{SEGMENT_LABEL[c.segment] ?? c.segment}</td>
-                <td className="px-4 py-3 text-gray-400">{relDays(c.lastOrderAt)}</td>
+                <td className="px-4 py-3 text-muted">{SEGMENT_LABEL[c.segment] ?? c.segment}</td>
+                <td className="px-4 py-3 text-muted">{relDays(c.lastOrderAt)}</td>
               </tr>
             );
           })}
@@ -516,7 +516,7 @@ function RecommendedActions() {
                 <li key={action.label}>
                   <button
                     onClick={() => goToAcoes(action.objective, action.segment)}
-                    className="w-full rounded-lg border border-white bg-white px-3 py-2 text-left text-xs font-medium text-gray-700 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                    className="w-full rounded-lg border border-white bg-paper px-3 py-2 text-left text-xs font-medium text-ink2 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
                   >
                     {action.label} →
                   </button>
@@ -636,8 +636,8 @@ export function ProgramaTab() {
         <div className="flex items-center gap-3 mb-1.5">
           <span className="text-3xl">🤝</span>
           <div>
-            <h2 className="text-base font-bold text-gray-900">Programa de Relacionamento</h2>
-            <p className="text-xs text-gray-500">Configure níveis, benefícios e estratégias para aumentar a recorrência dos seus clientes.</p>
+            <h2 className="text-base font-bold text-ink">Programa de Relacionamento</h2>
+            <p className="text-xs text-muted">Configure níveis, benefícios e estratégias para aumentar a recorrência dos seus clientes.</p>
           </div>
         </div>
         {!loading && totalCustomers > 0 && (
@@ -657,7 +657,7 @@ export function ProgramaTab() {
         subtitle="Distribuição atual dos clientes por nível de relacionamento"
       >
         {loading ? <Skeleton rows={4} /> : tiers.length === 0 ? (
-          <p className="text-sm text-gray-400 py-4 text-center">
+          <p className="text-sm text-muted py-4 text-center">
             Os níveis serão preenchidos conforme os clientes fizerem pedidos ou uma base for importada.
           </p>
         ) : (
@@ -685,9 +685,9 @@ export function ProgramaTab() {
       </Section>
 
       {/* Recalculate */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <p className="text-xs font-semibold text-gray-700 mb-2">Recalcular todos os níveis</p>
-        <p className="text-xs text-gray-500 mb-3">
+      <div className="rounded-xl border border-line2 bg-paper p-4">
+        <p className="text-xs font-semibold text-ink2 mb-2">Recalcular todos os níveis</p>
+        <p className="text-xs text-muted mb-3">
           Aplica as regras atuais a todos os clientes. Use após salvar novas configurações.
         </p>
         <RecalculateButton onDone={loadOverview} />
