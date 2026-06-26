@@ -104,8 +104,13 @@ describe("Caso 4 — 'Quero 1 rodízio completo por favor\\nTemakis grelhados'",
     expect(orderingIntent(msg)).toBe("ORDER_REQUEST");
     expect(isExplicitOrderMessage(msg)).toBe(true);
   });
-  it("fora da allowlist: caminho numerado seguro, sem link e sem 'temos X sim'", () => {
-    const reply = buildOrderIntentReply(ctx());
+  it("fora da allowlist: conduz pelo menu configurável, sem link e sem 'temos X sim'", () => {
+    const reply = buildOrderIntentReply(ctx({
+      menuOptions: [
+        { id: "o", label: "Fazer pedido",        flow: "order"   },
+        { id: "h", label: "Falar com atendente", flow: "handoff" },
+      ],
+    }));
     expect(reply).not.toContain("http");
     expect(reply.toLowerCase()).not.toContain("temos");
     expect(reply.toLowerCase()).toContain("atendente");

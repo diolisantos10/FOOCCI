@@ -42,7 +42,7 @@ import {
 } from "@/services/ai/UnknownFallbackHandler";
 import { captureFailure as captureTrainingFailure } from "@/services/agent-training/AgentTrainingFailureCaptureService";
 import { detectIntent as detectOrderingIntent } from "@/services/whatsapp/ordering/parser";
-import { formatOptionNumber, renderNumberedOptions } from "@/services/whatsapp/ordering/menuFooter";
+import { formatOptionNumber } from "@/services/whatsapp/ordering/menuFooter";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -339,13 +339,10 @@ function buildIdentifiedPedidoUrl(
  * grouping primary order actions (1-2) from secondary options (3+). */
 export function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
-  const lines: string[] = [];
-  for (let i = 0; i < options.length; i++) {
-    if (i === 2 && options.length > 2) {
-      lines.push("\n────────────\n\nOutras opções:");
-    }
-    lines.push(`${formatOptionNumber(i + 1)} ${options[i]!.label}`);
-  }
+  // Single configurable menu, one option below another (no "Outras opções"
+  // divider). The numbering here is the SAME list run() resolves a numeric reply
+  // against (currentMenuOptions), so what the customer sees always maps 1:1.
+  const lines = options.map((o, i) => `${formatOptionNumber(i + 1)} ${o.label}`);
   return "\n\n" + lines.join("\n");
 }
 
@@ -359,6 +356,7 @@ function findCatalogMatch(
   message: string,
   catalog: { name: string; items: { name: string }[] }[],
   pedidoUrl: string | null,
+  menuOptions: MenuOption[] = [],
 ): string | null {
   if (catalog.length === 0) return null;
   const norm = (s: string) =>
@@ -384,11 +382,12 @@ function findCatalogMatch(
 
     const catDisplay = cat.name.charAt(0).toUpperCase() + cat.name.slice(1);
     // Confirm existence WITHOUT leading with a raw cardápio URL — a simple
-    // "tem X?" must not get a giant link as the primary body. The customer is
-    // offered a clean numbered path (tapping 1 opens the cardápio link).
-    return pedidoUrl
-      ? `Temos ${catDisplay} sim 😊 Para ver as opções e pedir, escolha:\n\n${renderNumberedOptions(["Fazer pedido pelo cardápio", "Falar com atendente"])}`
-      : `Temos ${catDisplay} sim 😊 É só nos perguntar mais detalhes!`;
+    // "tem X?" must not get a giant link as the primary body. Conduct the
+    // customer through the SINGLE configurable menu so any number they reply
+    // resolves against the same list run() will read.
+    const menuList = buildMenuList(menuOptions);
+    if (menuList) return `Temos ${catDisplay} sim 😊 É só escolher:${menuList}`;
+    return `Temos ${catDisplay} sim 😊 É só nos perguntar mais detalhes!`;
   }
   return null;
 }
@@ -477,11 +476,14 @@ export function appendBackToMainMenu(text: string): string {
  * cardápio URL as the primary body and NEVER claims "temos X sim" — it offers a
  * clean numbered path so the customer is conducted, not redirected to a link.
  */
-export function buildOrderIntentReply(_ctx: ReplyContext): string {
-  return (
-    "Claro 😊 Para fazer seu pedido, escolha uma opção:\n\n" +
-    renderNumberedOptions(["Já sei o que quero pedir", "Fazer pedido pelo cardápio", "Falar com atendente"])
-  );
+export function buildOrderIntentReply(ctx: ReplyContext): string {
+  // Conduct the customer through the SINGLE configurable menu (the one the owner
+  // sets up). The numbers shown here are the SAME list run() resolves the next
+  // numeric reply against, so "3" never lands on a different option than the one
+  // the customer tapped. No ad-hoc reduced menu (that was the legacy v1 agent).
+  const menuList = buildMenuList(ctx.menuOptions);
+  if (!menuList) return ctx.welcomeMessage;
+  return "Claro 😊 Para fazer seu pedido, é só escolher:" + menuList;
 }
 
 /**
@@ -490,7 +492,7 @@ export function buildOrderIntentReply(_ctx: ReplyContext): string {
  * conducts the customer to the next sales step. A consultative-sales response,
  * not a régua: "responder a pergunta real → conduzir para o pedido".
  */
-export function buildPaymentInfoReply(message: string): string {
+export function buildPaymentInfoReply(message: string, ctx: ReplyContext): string {
   const t = (message ?? "").toLowerCase();
   const asksPix  = /pix/.test(t);
   const asksCard = /cart[aã]o|cr[eé]dito|d[eé]bito|parcel/.test(t);
@@ -503,10 +505,8 @@ export function buildPaymentInfoReply(message: string): string {
   else if (asksCash && !asksPix && !asksCard)  head = "Sim, aceitamos dinheiro 😊";
   else                                          head = "Aceitamos Pix, cartão e dinheiro 😊";
 
-  return (
-    `${head} Quer fazer seu pedido agora?\n\n` +
-    renderNumberedOptions(["Fazer pedido", "Falar com atendente"])
-  );
+  const menuList = buildMenuList(ctx.menuOptions);
+  return `${head} Quer fazer seu pedido agora?` + (menuList || "");
 }
 
 /**
@@ -514,11 +514,12 @@ export function buildPaymentInfoReply(message: string): string {
  * Never exposes the restaurant's own location and never auto-hands off — guides
  * the customer to start an order (the CEP is collected when we ask for it).
  */
-export function buildLooseAddressReply(_ctx: ReplyContext): string {
+export function buildLooseAddressReply(ctx: ReplyContext): string {
+  const menuList = buildMenuList(ctx.menuOptions);
   return (
     "Para calcular a entrega certinho, comece seu pedido pelo item desejado " +
-    "ou envie o CEP quando eu pedir 😊\n\n" +
-    renderNumberedOptions(["Fazer pedido", "Falar com atendente"])
+    "ou envie o CEP quando eu pedir 😊" +
+    (menuList || "")
   );
 }
 
@@ -651,7 +652,7 @@ export function previewReceptionistResponse(message: string, ctx: ReplyContext):
           // UNKNOWN may be short-circuited by a catalog match (→ link) before GPT.
           const catalog =
             intent === "UNKNOWN" && ctx.agentMode !== "HUMAN_ASSISTED" && ctx.menuCatalog.length > 0
-              ? findCatalogMatch(raw, ctx.menuCatalog, ctx.pedidoUrl)
+              ? findCatalogMatch(raw, ctx.menuCatalog, ctx.pedidoUrl, ctx.menuOptions)
               : null;
           if (catalog) {
             text = appendBackToMainMenu(catalog);
@@ -712,7 +713,7 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext, message: string =
     case "PAYMENT_INFO":
       // Answer the actual payment question (method-aware) and conduct to the
       // order — NEVER a raw cardápio link (that triggers LINK_CARDAPIO, a P0).
-      return buildPaymentInfoReply(message);
+      return buildPaymentInfoReply(message, ctx);
 
     default:
       return null;
@@ -1222,7 +1223,7 @@ async function run(conversationId: string): Promise<void> {
           // For UNKNOWN in RECEPTIONIST_ONLY: check catalog before GPT to avoid false handoffs
           let gptNeeded = true;
           if (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED" && ctx.menuCatalog.length > 0) {
-            const catalogReply = findCatalogMatch(lastMessage.content, ctx.menuCatalog, ctx.pedidoUrl);
+            const catalogReply = findCatalogMatch(lastMessage.content, ctx.menuCatalog, ctx.pedidoUrl, ctx.menuOptions);
             if (catalogReply) {
               replyText      = appendBackToMainMenu(catalogReply);
               triggerHandoff = false;

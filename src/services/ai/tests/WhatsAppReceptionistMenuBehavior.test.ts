@@ -255,13 +255,13 @@ describe("buildMenuList", () => {
     expect(result).toContain("3️⃣ Falar com atendente");
   });
 
-  it("includes a visual separator and 'Outras opções:' header for 3+ options", () => {
+  it("lists all options sequentially with no 'Outras opções' divider", () => {
     const result = buildMenuList(THREE_OPTIONS);
-    expect(result).toContain("────────────");
-    expect(result).toContain("Outras opções:");
-    expect(result).toContain("1️⃣");
-    expect(result).toContain("2️⃣");
-    expect(result).toContain("3️⃣");
+    expect(result).not.toContain("────────────");
+    expect(result).not.toContain("Outras opções:");
+    expect(result).toContain("1️⃣ Fazer pedido");
+    expect(result).toContain("2️⃣ Ver cardápio");
+    expect(result).toContain("3️⃣ Falar com atendente");
   });
 
   it("does NOT add separator for 2-option menus", () => {
@@ -500,10 +500,9 @@ describe("buildOrderIntentReply — explicit order outside allowlist", () => {
     expect(buildOrderIntentReply(makeCtx())).not.toContain("http");
   });
 
-  it("offers a clean numbered path (text order + cardápio + atendente)", () => {
+  it("conducts through the single configurable menu (no ad-hoc reduced menu)", () => {
     const reply = buildOrderIntentReply(makeCtx());
-    expect(reply).toContain("1️⃣");
-    expect(reply.toLowerCase()).toContain("já sei");
+    expect(reply).toContain("1️⃣ Fazer pedido");
     expect(reply.toLowerCase()).toContain("cardápio");
     expect(reply.toLowerCase()).toContain("atendente");
   });
@@ -629,7 +628,7 @@ describe("buildClubReply", () => {
   });
 });
 
-describe("7-option menu with separator", () => {
+describe("7-option menu (single flat list)", () => {
   const SEVEN_OPTIONS: MenuOption[] = [
     { id: "1", label: "Já sei o que quero pedir",  flow: "text_order"  },
     { id: "2", label: "Ver cardápio",               flow: "menu"        },
@@ -647,14 +646,14 @@ describe("7-option menu with separator", () => {
     }
   });
 
-  it("separator appears between option 2 and option 3", () => {
+  it("lists options sequentially with no divider", () => {
     const result = buildMenuList(SEVEN_OPTIONS);
+    expect(result).not.toContain("────────────");
+    expect(result).not.toContain("Outras opções:");
     const pos2 = result.indexOf("2️⃣");
-    const posSep = result.indexOf("────────────");
     const pos3 = result.indexOf("3️⃣");
     expect(pos2).toBeGreaterThan(0);
-    expect(posSep).toBeGreaterThan(pos2);
-    expect(pos3).toBeGreaterThan(posSep);
+    expect(pos3).toBeGreaterThan(pos2);
   });
 
   it("detectSelectedOption maps '7' to handoff option", () => {
@@ -672,7 +671,7 @@ describe("7-option menu with separator", () => {
     const result = renderMainMenu(ctx);
     expect(result).toContain("Como você prefere começar?");
     expect(result).toContain("7️⃣ Falar com atendente");
-    expect(result).toContain("────────────");
+    expect(result).not.toContain("────────────");
   });
 
   it("approved menu: option 1 = Já sei o que quero pedir (text_order)", () => {
