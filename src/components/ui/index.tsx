@@ -96,9 +96,10 @@ export function Stat({
     <Card className="p-5">
       <p className="text-[11.5px] font-semibold uppercase tracking-[.06em] text-muted">{label}</p>
       <p className="mt-2.5 text-[28px] font-extrabold leading-none tracking-[-.03em] text-ink">{value}</p>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        {change !== undefined ? <Delta change={change} /> : sub ? <span className="text-xs text-muted">{sub}</span> : <span />}
-        {right}
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        {change !== undefined && <Delta change={change} />}
+        {sub && <span className="text-xs text-muted">{sub}</span>}
+        {right && <span className="ml-auto shrink-0">{right}</span>}
       </div>
     </Card>
   );

@@ -245,17 +245,18 @@ export function ActionsNow({ actions }: { actions: CockpitAction[] }) {
 
 // ── Foocci em ação (brand proof + mascote) ─────────────────────────────────────
 
-export function FoocciProof({ proof }: { proof: DashboardData["foocciProof"] }) {
-  const recovered = proof.upsellRevenue;
+export function FoocciProof({ proof, className }: { proof: DashboardData["foocciProof"]; className?: string }) {
   return (
-    <Card className="flex items-center gap-3 p-5">
+    <Card className={`relative overflow-hidden p-5 ring-1 ring-brand-200 ${className ?? ""}`}>
+      {/* subtle brand wash — this is the product, so it's the hero square */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50 to-transparent" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/foocci/foocci-mascot-cutout.png" alt="Foocci" className="-my-2 w-[78px]" />
-      <div className="min-w-0">
-        <p className="text-[12.5px] font-bold uppercase tracking-[.04em] text-brand-600">Foocci em ação</p>
-        <p className="mt-0.5 text-[24px] font-extrabold tracking-[-.02em] text-ink">{fmtCurrency(recovered)}</p>
-        <p className="mt-0.5 text-[12.5px] text-ink2">
-          em upsell · {proof.recoveryConverted}/{proof.recoveryTotal} carrinhos recuperados
+      <img src="/brand/foocci/foocci-mascot-cutout.png" alt="" className="pointer-events-none absolute -bottom-2 -right-2 w-16 opacity-90" />
+      <div className="relative">
+        <p className="text-[11.5px] font-semibold uppercase tracking-[.06em] text-brand-600">Foocci em ação</p>
+        <p className="mt-2.5 text-[28px] font-extrabold leading-none tracking-[-.03em] text-ink">{fmtCurrency(proof.upsellRevenue)}</p>
+        <p className="mt-3 max-w-[78%] text-xs text-ink2">
+          em upsell · {proof.recoveryConverted}/{proof.recoveryTotal} recuperados hoje
         </p>
       </div>
     </Card>
@@ -363,11 +364,12 @@ export default function DashboardClient({ userName }: { userName: string }) {
             {/* KPIs */}
             <div>
               <SectionTitle meta={`${data.periodLabel} · ${data.prevPeriodLabel}`}>Saúde do negócio</SectionTitle>
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <Stat label="Faturamento" value={fmtCurrency(data.revenuePeriod)} change={delta(data.revenuePeriod, data.revenuePrev)} />
-                <Stat label="Pedidos" value={fmtNum(data.ordersPeriod)} change={delta(data.ordersPeriod, data.ordersPrev)} />
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+                <Stat label="Faturamento" value={fmtCurrency(data.revenuePeriod)} change={delta(data.revenuePeriod, data.revenuePrev)} sub={`de ${fmtCurrency(data.revenuePrev)}`} />
+                <Stat label="Pedidos" value={fmtNum(data.ordersPeriod)} change={delta(data.ordersPeriod, data.ordersPrev)} sub={`de ${fmtNum(data.ordersPrev)}`} />
                 <Stat label="Ticket médio" value={data.ordersPeriod > 0 ? fmtCurrency(data.avgTicket) : "—"} sub="por pedido" />
                 <Stat label="Novos clientes" value={fmtNum(data.newCustomersPeriod)} sub={`${fmtNum(data.totalCustomers)} na base`} />
+                <FoocciProof proof={data.foocciProof} className="col-span-2 lg:col-span-1" />
               </div>
             </div>
 
@@ -380,7 +382,6 @@ export default function DashboardClient({ userName }: { userName: string }) {
               <div className="space-y-5">
                 {period === "today" && <ActionsNow actions={cockpit?.recommendedActions ?? []} />}
                 <TopSellers products={data.topProducts} />
-                <FoocciProof proof={data.foocciProof} />
               </div>
             </div>
 
