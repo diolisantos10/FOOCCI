@@ -34,6 +34,24 @@ export interface NormalizedAttachment {
   url?: string; // media URL when present (not downloaded in v1)
 }
 
+/**
+ * A normalized inbound Instagram COMMENT on a post (channel `comments` webhook).
+ * Distinct from a DM: it lives on a media/post and is replied to PUBLICLY via
+ * the Graph API (POST /{commentId}/replies), not the messaging API.
+ */
+export interface NormalizedInstagramComment {
+  kind: "comment";
+  instagramAccountId: string | null; // entry[].id — the business IG account
+  commentId: string;                 // value.id — the reply target
+  mediaId: string | null;            // value.media.id — the post it's on
+  parentCommentId: string | null;    // value.parent_id — set when it replies to a comment
+  fromUserId: string;                // value.from.id — commenter's scoped id
+  fromUsername: string | null;       // value.from.username
+  text: string;                      // value.text
+  timestamp: number;                 // epoch ms (entry[].time)
+  isEcho: boolean;                   // comment authored BY the business itself — skip
+}
+
 /** Result of attempting a manual reply (never throws on operational failure). */
 export interface InstagramSendResult {
   ok: boolean;

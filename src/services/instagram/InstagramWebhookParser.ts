@@ -12,7 +12,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
-import type { NormalizedInstagramMessage, NormalizedAttachment } from "./types";
+import type { NormalizedInstagramMessage, NormalizedAttachment, NormalizedInstagramComment } from "./types";
 
 /**
  * Verifies Meta's `X-Hub-Signature-256: sha256=<hex>` over the RAW body using the
@@ -102,6 +102,56 @@ export function normalizeInstagramPayload(payload: unknown): NormalizedInstagram
         timestamp,
         rawType,
         isEcho,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Normalizes a webhook payload into inbound COMMENTS. Instagram sends these as
+ * `entry[].changes[]` with `field: "comments"` and a `value` carrying the comment
+ * id, text, author and media. The business's own comment replies (from.id ===
+ * the account id) are flagged `isEcho` so they are not persisted as inbound.
+ *
+ *   { object:"instagram", entry:[{ id, time, changes:[
+ *       { field:"comments", value:{ id, text, parent_id?,
+ *           from:{id,username}, media:{id} } } ] }] }
+ */
+export function normalizeInstagramComments(payload: unknown): NormalizedInstagramComment[] {
+  const out: NormalizedInstagramComment[] = [];
+  const root = payload as { object?: string; entry?: unknown[] } | null;
+  if (!root || !Array.isArray(root.entry)) return out;
+
+  for (const entryRaw of root.entry) {
+    const entry = entryRaw as { id?: string; time?: number; changes?: unknown[] };
+    const accountId = typeof entry.id === "string" ? entry.id : null;
+    const entryTime = typeof entry.time === "number" ? entry.time * 1000 : Date.now();
+    const changes = Array.isArray(entry.changes) ? entry.changes : [];
+
+    for (const chRaw of changes) {
+      const ch = chRaw as { field?: string; value?: unknown };
+      if (ch.field !== "comments") continue;
+      const v = ch.value as {
+        id?: string; text?: string; parent_id?: string;
+        from?: { id?: string; username?: string };
+        media?: { id?: string };
+      } | undefined;
+      if (!v || typeof v.id !== "string") continue;
+      const fromUserId = typeof v.from?.id === "string" ? v.from.id : null;
+      if (!fromUserId) continue;
+
+      out.push({
+        kind: "comment",
+        instagramAccountId: accountId,
+        commentId: v.id,
+        mediaId: typeof v.media?.id === "string" ? v.media.id : null,
+        parentCommentId: typeof v.parent_id === "string" ? v.parent_id : null,
+        fromUserId,
+        fromUsername: typeof v.from?.username === "string" ? v.from.username : null,
+        text: typeof v.text === "string" ? v.text : "",
+        timestamp: entryTime,
+        isEcho: accountId != null && fromUserId === accountId,
       });
     }
   }
