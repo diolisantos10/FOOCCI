@@ -186,4 +186,24 @@ export class HelpThreadService {
       return serviceFail("Falha ao encaminhar para a equipe", 500);
     }
   }
+
+  /** Close the current thread and start a fresh AI conversation (back to start). */
+  static async resetThread(
+    restaurantId: string,
+    userId: string,
+  ): Promise<ServiceResult<ThreadWithMessages>> {
+    try {
+      await prisma.helpThread.updateMany({
+        where: { restaurantId, status: { not: "RESOLVED" } },
+        data: { status: "RESOLVED" },
+      });
+      const thread = await prisma.helpThread.create({
+        data: { restaurantId, userId, status: "OPEN", mode: "AI" },
+      });
+      return serviceOk({ thread: threadDTO(thread), messages: [] });
+    } catch (err) {
+      console.error("[HelpThreadService.resetThread]", err);
+      return serviceFail("Falha ao iniciar nova conversa", 500);
+    }
+  }
 }

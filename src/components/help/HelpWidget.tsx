@@ -67,6 +67,7 @@ export function HelpWidget() {
   const [loadingThread, setLoadingThread] = useState(false);
   const [threadLoaded, setThreadLoaded] = useState(false);
   const [escalating, setEscalating] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -214,6 +215,30 @@ export function HelpWidget() {
     }
   }, [escalating]);
 
+  // ── Start over — back to the assistant / initial menu ───────────────────────
+  const startNewConversation = useCallback(async () => {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      const res = await fetch("/api/help/reset", { method: "POST" });
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data as
+          | { thread: ThreadInfo; messages: ChatMessage[] }
+          | undefined;
+        if (data) {
+          setThread(data.thread);
+          setMessages(data.messages ?? []);
+          setInput("");
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setResetting(false);
+    }
+  }, [resetting]);
+
   function handleNotifClick(n: NotificationItem) {
     markRead(n.id);
     setOpen(false);
@@ -255,16 +280,33 @@ export function HelpWidget() {
           <ChatIcon className="h-5 w-5" />
           <span className="text-[15px] font-bold">Ajuda Foocci</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="Fechar"
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-white/90 transition-colors hover:bg-white/15"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1">
+          {tab === "ajuda" && hasUserMessages && (
+            <button
+              type="button"
+              onClick={startNewConversation}
+              disabled={resetting}
+              aria-label="Nova conversa"
+              title="Começar do zero"
+              className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11.5px] font-semibold text-white/90 transition-colors hover:bg-white/15 disabled:opacity-50"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M5 9a7 7 0 0111-3M19 15a7 7 0 01-11 3" />
+              </svg>
+              Nova
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Fechar"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-white/90 transition-colors hover:bg-white/15"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -322,7 +364,15 @@ export function HelpWidget() {
           {/* Escalation banner / link */}
           {isHuman ? (
             <div className="shrink-0 border-t border-line bg-amber-50 px-3.5 py-2 text-center text-[11.5px] font-medium text-amber-800">
-              Você está falando com a equipe Foocci. Responderemos por aqui.
+              Você está falando com a equipe Foocci. Responderemos por aqui.{" "}
+              <button
+                type="button"
+                onClick={startNewConversation}
+                disabled={resetting}
+                className="font-semibold text-brand-600 underline-offset-2 transition-colors hover:underline disabled:opacity-50"
+              >
+                Voltar ao assistente
+              </button>
             </div>
           ) : (
             hasUserMessages && (
