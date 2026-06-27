@@ -7,6 +7,7 @@ import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/se
 import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
+import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
 import { ProgramaTab } from "./ProgramaTab";
 import { ReviewRequestModal } from "./ReviewRequestModal";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
@@ -4218,11 +4219,15 @@ function CustomersTab({
   initialFilter = "all",
   onImportOpen,
   reviewLinks,
+  stats,
+  statsLoading,
 }: {
   initialCustomers: CRMCustomer[];
   initialFilter?: CRMFilter;
   onImportOpen: () => void;
   reviewLinks: { google: string | null; ifood: string | null };
+  stats: OverviewStats;
+  statsLoading?: boolean;
 }) {
   const [filter,     setFilter]     = useState<CRMFilter>(initialFilter);
   const [customers,  setCustomers]  = useState<CRMCustomer[]>(
@@ -4279,6 +4284,9 @@ function CustomersTab({
           onClose={() => setReviewReq(null)}
         />
       )}
+
+      {/* Saúde da base de contatos — movido da Visão Geral */}
+      <ContactBaseHealthPanel stats={stats} loading={statsLoading} />
 
       {/* Search box */}
       <div className="relative">
@@ -5814,6 +5822,8 @@ export function CRMClient({
           initialFilter={customerFilter}
           onImportOpen={() => setShowImport(true)}
           reviewLinks={reviewLinks}
+          stats={currentStats}
+          statsLoading={statsLoading}
         />
       )}
       {tab === "programa" && (
