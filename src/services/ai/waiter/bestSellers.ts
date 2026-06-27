@@ -9,8 +9,8 @@
  *   - counts only valid operational/completed orders
  *     (CONFIRMED, PREPARING, READY, OUT_FOR_DELIVERY, DELIVERED)
  *   - excludes PENDING / CANCELLED / failed-unpaid orders
- *   - uses COALESCE(importedAt, createdAt) for the time window so imported
- *     history counts too
+ *   - counts ONLY real Foocci orders (importedAt IS NULL); imported Saipos/Nemo
+ *     history is excluded — imported data is used only for customer records
  *
  * Cached in-memory per restaurant with a short TTL so it does NOT run a fresh
  * aggregation on every chat message. Pure read — no writes, no side effects.
@@ -65,7 +65,8 @@ export async function getBestSellerMap(
       WHERE o."restaurantId" = ${restaurantId}
         AND oi."menuItemId" IS NOT NULL
         AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
-        AND COALESCE(o."importedAt", o."createdAt") >= ${from}
+        AND o."importedAt" IS NULL
+        AND o."createdAt" >= ${from}
       GROUP BY oi."menuItemId"
     `;
 

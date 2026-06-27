@@ -290,27 +290,27 @@ export async function getCockpitReport(restaurantId: string): Promise<CockpitRep
     vipCount,
     staleDraftCount,
   ] = await Promise.all([
-    // 1. Today's revenue orders
+    // 1. Today's revenue orders (real Foocci orders only — imported excluded)
     prisma.order.findMany({
-      where:  { restaurantId, status: { in: [...REVENUE_STATUS] }, createdAt: { gte: todayStart } },
+      where:  { restaurantId, importedAt: null, status: { in: [...REVENUE_STATUS] }, createdAt: { gte: todayStart } },
       select: { total: true },
     }),
     // 2. Cancellations today
     prisma.order.count({
-      where: { restaurantId, status: "CANCELLED", createdAt: { gte: todayStart } },
+      where: { restaurantId, importedAt: null, status: "CANCELLED", createdAt: { gte: todayStart } },
     }),
     // 3. Last 7 days revenue (for avg baseline — exclude today)
     prisma.order.findMany({
-      where:  { restaurantId, status: { in: [...REVENUE_STATUS] }, createdAt: { gte: sevenDaysAgo, lt: todayStart } },
+      where:  { restaurantId, importedAt: null, status: { in: [...REVENUE_STATUS] }, createdAt: { gte: sevenDaysAgo, lt: todayStart } },
       select: { total: true },
     }),
     // 4. Pending payment orders (real-time)
     prisma.order.count({
-      where: { restaurantId, status: "AWAITING_PAYMENT" },
+      where: { restaurantId, importedAt: null, status: "AWAITING_PAYMENT" },
     }),
     // 5. Open orders for delayed check (real-time)
     prisma.order.findMany({
-      where:  { restaurantId, status: { in: [...OPEN_STATUS] } },
+      where:  { restaurantId, importedAt: null, status: { in: [...OPEN_STATUS] } },
       select: { status: true, createdAt: true },
     }),
     // 6. CRM segment breakdown

@@ -78,6 +78,7 @@ export async function GET(req: NextRequest) {
     const couponAgg = await prisma.order.aggregate({
       where: {
         restaurantId,
+        importedAt: null, // real Foocci orders only — imported history excluded
         couponCode: { in: couponCodes },
         status:     { notIn: REVENUE_EXCLUDED_STATUSES },
         ...(hasRange ? { createdAt: { gte: fromDate!, lte: toDate! } } : {}),

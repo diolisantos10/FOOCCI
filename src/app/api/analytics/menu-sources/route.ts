@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
       by:     ["trafficSource"],
       where:  {
         restaurantId: rid,
+        importedAt:   null, // real Foocci orders only — imported history excluded
         createdAt:    { gte: since },
         status:       { notIn: ["CANCELLED"] },
       },
