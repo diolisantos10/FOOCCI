@@ -122,18 +122,16 @@ function LoginForm() {
             />
           </div>
 
-          {/* Mascot in a clean white card — the card matches the mascot's own
-              light background, so there's no transparency fringe/halo. */}
-          <div className="mt-10 rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-black/5">
-            <Image
-              src="/brand/foocci/foocci-mascot.png"
-              alt=""
-              aria-hidden
-              width={196}
-              height={321}
-              className="h-44 w-auto"
-            />
-          </div>
+          {/* Clean ML-matted cutout — sits directly on the orange, no card,
+              with a soft grounding shadow. */}
+          <Image
+            src="/brand/foocci/foocci-mascot-cutout.png"
+            alt=""
+            aria-hidden
+            width={162}
+            height={307}
+            className="mt-8 h-52 w-auto drop-shadow-[0_18px_28px_rgba(0,0,0,0.22)]"
+          />
 
           <h2 className="mt-9 max-w-sm text-[28px] font-bold leading-tight tracking-tight text-white">
             O motor de receita do seu restaurante.
@@ -158,8 +156,9 @@ function LoginForm() {
         <div className="w-full max-w-sm">
           {/* Brand lockup — shown on mobile (the panel is hidden there) */}
           <div className="mb-8 flex flex-col items-center lg:hidden">
-            <span className="mb-4 inline-flex h-24 w-24 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-black/5">
-              <Image src="/brand/foocci/foocci-mascot.png" alt="" aria-hidden width={196} height={321} className="h-20 w-auto" />
+            {/* Orange badge so the (white) mascot reads on the white form area. */}
+            <span className="mb-4 inline-flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 shadow-md">
+              <Image src="/brand/foocci/foocci-mascot-cutout.png" alt="" aria-hidden width={162} height={307} className="h-[5.5rem] w-auto" />
             </span>
             <Image src="/brand/foocci/foocci-wordmark.png" alt="Foocci" width={200} height={50} priority className="h-7 w-auto" />
           </div>
