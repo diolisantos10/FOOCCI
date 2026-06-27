@@ -103,41 +103,45 @@ function LoginForm() {
 
   return (
     <div className="flex min-h-screen bg-white">
-      {/* ── Brand panel (desktop only) ─────────────────────────────── */}
-      <aside className="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600 lg:flex lg:flex-col lg:justify-between lg:p-12">
+      {/* ── Brand panel (desktop only) — everything centered in the square ── */}
+      <aside className="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600 lg:flex lg:flex-col lg:items-center lg:justify-center lg:p-12 lg:text-center">
         {/* soft glow accents */}
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/15 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-black/10 blur-3xl" />
 
-        {/* Wrapped in a div so the flex column's align-items:stretch can't blow
-            the logo out to full width (which smears the 4:1 wordmark). */}
-        <div className="relative">
-          <Image
-            src="/brand/foocci/foocci-wordmark.png"
-            alt="Foocci"
-            width={200}
-            height={50}
-            priority
-            className="h-8 w-auto brightness-0 invert"
-          />
-        </div>
+        <div className="relative flex flex-col items-center">
+          {/* Wordmark (wrapped so flex stretch can't smear the 4:1 logo) */}
+          <div>
+            <Image
+              src="/brand/foocci/foocci-wordmark.png"
+              alt="Foocci"
+              width={200}
+              height={50}
+              priority
+              className="h-8 w-auto brightness-0 invert"
+            />
+          </div>
 
-        <div className="relative">
-          <Image
-            src="/brand/foocci/foocci-mascot-cutout.png"
-            alt=""
-            aria-hidden
-            width={320}
-            height={520}
-            className="mb-8 h-44 w-auto drop-shadow-xl"
-          />
-          <h2 className="max-w-sm text-3xl font-bold leading-tight tracking-tight text-white">
+          {/* Mascot in a clean white card — the card matches the mascot's own
+              light background, so there's no transparency fringe/halo. */}
+          <div className="mt-10 rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-black/5">
+            <Image
+              src="/brand/foocci/foocci-mascot.png"
+              alt=""
+              aria-hidden
+              width={196}
+              height={321}
+              className="h-44 w-auto"
+            />
+          </div>
+
+          <h2 className="mt-9 max-w-sm text-[28px] font-bold leading-tight tracking-tight text-white">
             O motor de receita do seu restaurante.
           </h2>
-          <ul className="mt-7 space-y-3">
+          <ul className="mt-6 space-y-2.5">
             {VALUE_PROPS.map((v) => (
-              <li key={v} className="flex items-start gap-2.5 text-[15px] text-white/90">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="mt-0.5 shrink-0" aria-hidden>
+              <li key={v} className="flex items-center justify-center gap-2 text-[15px] text-white/90">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0" aria-hidden>
                   <path d="M16.5 5.5 8.25 14 4 9.75" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {v}
@@ -146,7 +150,7 @@ function LoginForm() {
           </ul>
         </div>
 
-        <p className="relative text-xs text-white/70">Foocci · IA CRM para restaurantes</p>
+        <p className="absolute inset-x-0 bottom-6 text-center text-xs text-white/70">Foocci · IA CRM para restaurantes</p>
       </aside>
 
       {/* ── Form panel ─────────────────────────────────────────────── */}
@@ -154,8 +158,8 @@ function LoginForm() {
         <div className="w-full max-w-sm">
           {/* Brand lockup — shown on mobile (the panel is hidden there) */}
           <div className="mb-8 flex flex-col items-center lg:hidden">
-            <span className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-50 ring-1 ring-gray-900/[0.03]">
-              <Image src="/brand/foocci/foocci-mascot.png" alt="" aria-hidden width={196} height={321} className="h-16 w-auto" />
+            <span className="mb-4 inline-flex h-24 w-24 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-black/5">
+              <Image src="/brand/foocci/foocci-mascot.png" alt="" aria-hidden width={196} height={321} className="h-20 w-auto" />
             </span>
             <Image src="/brand/foocci/foocci-wordmark.png" alt="Foocci" width={200} height={50} priority className="h-7 w-auto" />
           </div>
