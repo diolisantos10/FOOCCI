@@ -1034,6 +1034,48 @@ export function OverviewTab({
         />
       </div>
 
+      {/* 2b. Saúde da base de contatos — quem dá pra falar, quem é "inútil", e quem o Foocci conquistou */}
+      <div className="rounded-xl border border-line bg-white p-4">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold text-ink">Saúde da base de contatos</h3>
+          <span className="text-[11px] text-ink2">
+            Base total: {stats.totalCustomers.toLocaleString("pt-BR")}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <KPICard
+            label="Contactáveis (WhatsApp)"
+            value={stats.contactableCustomers.toLocaleString("pt-BR")}
+            pct={stats.totalCustomers > 0 ? Math.round((stats.contactableCustomers / stats.totalCustomers) * 100) : 0}
+            sub="Têm telefone válido para campanha"
+            accent="green"
+            loading={loading}
+          />
+          <KPICard
+            label="Com e-mail"
+            value={stats.withEmailCustomers.toLocaleString("pt-BR")}
+            sub="Canal alternativo de contato"
+            accent="blue"
+            loading={loading}
+          />
+          <KPICard
+            label="Sem contato (inúteis)"
+            value={stats.uncontactableCustomers.toLocaleString("pt-BR")}
+            pct={stats.totalCustomers > 0 ? Math.round((stats.uncontactableCustomers / stats.totalCustomers) * 100) : 0}
+            sub="Sem telefone e sem e-mail — vindos de marketplace"
+            accent="gray"
+            loading={loading}
+          />
+          <KPICard
+            label="Conquistados pelo Foocci"
+            value={stats.foocciAcquiredCustomers.toLocaleString("pt-BR")}
+            sub="Clientes novos, fora da base importada"
+            accent="brand"
+            loading={loading}
+          />
+        </div>
+      </div>
+
       {/* 3. Receita gerada pelo CRM (chart + summary) */}
       <RevenueBlock
         revenueSummary={revenueSummary ?? null}

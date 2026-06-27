@@ -136,6 +136,11 @@ export type OverviewStats = {
   deliveryOnlyCustomers:  number; // ordered only via delivery
   dineInOnlyCustomers:    number; // ordered only presencially
   bothChannelsCustomers:  number; // ordered via both channels
+  // ── Contactability health (the whole non-guest base) ──
+  contactableCustomers:   number; // valid phone → reachable on WhatsApp
+  withEmailCustomers:     number; // has an e-mail (alternative channel)
+  uncontactableCustomers: number; // no valid phone AND no e-mail → unreachable ("inúteis")
+  foocciAcquiredCustomers: number; // sourceSystem null → acquired through Foocci (not imported)
 };
 
 // ── Top customers (most valuable) ─────────────────────────────────────────────
@@ -526,6 +531,7 @@ export class CRMService {
       newCustomers,
       channelData,
       perdidoRows,
+      contactRows,
     ] = await Promise.all([
       prisma.customer.count({ where: { restaurantId, isGuest: false } }),
       prisma.$queryRaw<Array<{ bucket: string; cnt: bigint }>>`
@@ -570,6 +576,23 @@ export class CRMService {
           AND COALESCE("lastOrderAt", "importedLastOrderAt") IS NOT NULL
           AND COALESCE("lastOrderAt", "importedLastOrderAt") < ${lostCutoff}
       `,
+      // Contactability health across the whole non-guest base.
+      prisma.$queryRaw<Array<{
+        contactable:     bigint;
+        with_email:      bigint;
+        uncontactable:   bigint;
+        foocci_acquired: bigint;
+      }>>`
+        SELECT
+          COUNT(*) FILTER (WHERE "crmContactable" = true)                                AS contactable,
+          COUNT(*) FILTER (WHERE email IS NOT NULL AND email <> '')                       AS with_email,
+          COUNT(*) FILTER (WHERE "crmContactable" = false
+                             AND (email IS NULL OR email = ''))                           AS uncontactable,
+          COUNT(*) FILTER (WHERE "sourceSystem" IS NULL)                                  AS foocci_acquired
+        FROM customers
+        WHERE "restaurantId" = ${restaurantId}
+          AND "isGuest" = false
+      `,
     ]);
 
     const bucketNum = (bucket: string) => {
@@ -605,6 +628,12 @@ export class CRMService {
       else if (channels.has("DINE_IN"))  dineInOnlyCustomers++;
     }
 
+    const contactRow = contactRows[0];
+    const contactableCustomers    = contactRow ? Number(contactRow.contactable)     : 0;
+    const withEmailCustomers      = contactRow ? Number(contactRow.with_email)      : 0;
+    const uncontactableCustomers  = contactRow ? Number(contactRow.uncontactable)   : 0;
+    const foocciAcquiredCustomers = contactRow ? Number(contactRow.foocci_acquired) : 0;
+
     return serviceOk({
       totalCustomers,
       ativoCustomers,
@@ -621,6 +650,10 @@ export class CRMService {
       deliveryOnlyCustomers,
       dineInOnlyCustomers,
       bothChannelsCustomers,
+      contactableCustomers,
+      withEmailCustomers,
+      uncontactableCustomers,
+      foocciAcquiredCustomers,
     });
   }
 
