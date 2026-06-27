@@ -490,6 +490,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
             <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-start">
               <div className="space-y-5">
                 <SalesChart data={data} />
+                {/* Foocci em ação — logo abaixo do gráfico, acima do status da cozinha */}
+                <FoocciProof proof={data.foocciProof} crm={data.crmSegments} />
                 <OperationNow data={data} />
               </div>
               <div className="space-y-5">
