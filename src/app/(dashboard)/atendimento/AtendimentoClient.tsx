@@ -1750,8 +1750,16 @@ function ThreadPanel({
   // A locked conversation is neither AI-active nor a normal temporary takeover.
   const isAIActive     = thread.aiEnabled && !isResolved && !isLocked && !isPendingHuman;
   const isHumanHandling = !thread.aiEnabled && !isResolved && !isLocked;
-  const isMultichannel = thread.channel === "WHATSAPP" &&
-    thread.messages.some((m) => m.senderType === "CUSTOMER_CARDAPIO");
+  // A thread is multichannel when it genuinely mixes Cardápio and WhatsApp
+  // messages — independent of which channel is canonical, since the unified
+  // thread merges a customer's conversations across channels.
+  const hasCardapioMsg = thread.messages.some(
+    (m) => m.senderType === "CUSTOMER_CARDAPIO" || m.metadata?.source === "CARDAPIO",
+  );
+  const hasWhatsappMsg = thread.messages.some(
+    (m) => m.metadata?.source === "WHATSAPP" || m.senderType === "HUMAN_EXTERNAL" || m.metadata?.whatsappMedia === true,
+  );
+  const isMultichannel = hasCardapioMsg && hasWhatsappMsg;
 
   const [manualOrderOpen, setManualOrderOpen] = useState(false);
   const [orderCreatedId,  setOrderCreatedId]  = useState<string | null>(null);

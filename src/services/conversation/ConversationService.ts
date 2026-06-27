@@ -105,7 +105,19 @@ export class ConversationService {
   }
 
   /**
-   * Full conversation detail with paginated messages (newest-first for cursor load).
+   * Full conversation detail with the customer's UNIFIED cross-channel thread.
+   *
+   * A single customer can have separate conversations per channel — e.g. an
+   * anonymous Cardápio (QR_AGENT) session that only later identifies, plus a
+   * WhatsApp thread. The inbox (`/api/chat/conversations`) dedups these into a
+   * single row per customer, so the thread view must mirror that: it shows the
+   * messages of EVERY conversation that shares this customer's canonical key.
+   * Otherwise the Cardápio AI's replies (living in the sibling conversation) go
+   * missing from the operator's view — the reported "não aparece o que o chat do
+   * cardápio está falando" bug.
+   *
+   * The selected conversation supplies the envelope (status/channel/customer);
+   * replies still target it. Merging is read-only — no data is moved.
    */
   static async getById(
     restaurantId: string,
@@ -115,24 +127,6 @@ export class ConversationService {
       where: { id: conversationId },
       include: {
         customer: { select: { id: true, name: true, phone: true, email: true } },
-        messages: {
-          orderBy: { sentAt: "asc" },
-          select: {
-            id: true,
-            direction: true,
-            senderType: true,
-            content: true,
-            type: true,
-            mediaUrl: true,
-            metadata: true,
-            isRead: true,
-            sentAt: true,
-            deliveredAt: true,
-            readAt: true,
-            externalMessageId: true,
-            externalStatus: true,
-          },
-        },
       },
     });
 
@@ -140,7 +134,65 @@ export class ConversationService {
       return serviceFail("Conversation not found", 404);
     }
 
-    return serviceOk(conversation);
+    // Resolve the sibling conversations that the inbox dedups under this same
+    // customer (same key it uses: customerId, else anonymous-by-phone).
+    const conversationIds = await this.relatedConversationIds(restaurantId, conversation);
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: { in: conversationIds } },
+      orderBy: { sentAt: "asc" },
+      select: {
+        id: true,
+        direction: true,
+        senderType: true,
+        content: true,
+        type: true,
+        mediaUrl: true,
+        metadata: true,
+        isRead: true,
+        sentAt: true,
+        deliveredAt: true,
+        readAt: true,
+        externalMessageId: true,
+        externalStatus: true,
+      },
+    });
+
+    return serviceOk({ ...conversation, messages });
+  }
+
+  /**
+   * Conversation ids whose messages belong in this customer's unified thread.
+   * Mirrors the inbox dedup key so the thread shows exactly what the inbox
+   * collapsed into one row:
+   *   - identified customer → every conversation with that customerId
+   *   - anonymous (no customer) but has a phone → anonymous siblings by phone
+   *   - otherwise → just this conversation
+   * The selected conversation id is always included.
+   */
+  private static async relatedConversationIds(
+    restaurantId: string,
+    conversation: { id: string; customerId: string | null; customerPhone: string | null }
+  ): Promise<string[]> {
+    let where: { restaurantId: string; customerId?: string; customerPhone?: string } | null = null;
+    if (conversation.customerId) {
+      where = { restaurantId, customerId: conversation.customerId };
+    } else if (conversation.customerPhone) {
+      // Anonymous sessions only — an identified customer sharing this phone is a
+      // different inbox key (customerId), so it stays a separate thread.
+      where = { restaurantId, customerPhone: conversation.customerPhone };
+    }
+    if (!where) return [conversation.id];
+
+    const rows = await prisma.conversation.findMany({
+      where: conversation.customerId
+        ? where
+        : { ...where, customerId: null },
+      select: { id: true },
+    });
+    const ids = rows.map((r) => r.id);
+    if (!ids.includes(conversation.id)) ids.push(conversation.id);
+    return ids;
   }
 
   /**
