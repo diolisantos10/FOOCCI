@@ -63,26 +63,55 @@ const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Hoje" }, { key: "yesterday", label: "Ontem" },
   { key: "this_week", label: "Esta semana" }, { key: "7d", label: "7 dias" },
   { key: "current_month", label: "Este mês" }, { key: "30d", label: "30 dias" },
+  { key: "custom", label: "Personalizado" },
 ];
 
-function PeriodFilter({ period, loading, onChange }: { period: PeriodKey; loading: boolean; onChange: (p: PeriodKey) => void }) {
+function PeriodFilter({
+  period, loading, onChange,
+  customStart, customEnd, onCustomChange,
+}: {
+  period: PeriodKey; loading: boolean; onChange: (p: PeriodKey) => void;
+  customStart: string; customEnd: string;
+  onCustomChange: (start: string, end: string) => void;
+}) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {PERIOD_OPTIONS.map((opt) => (
-        <button
-          key={opt.key}
-          type="button"
-          onClick={() => onChange(opt.key)}
-          disabled={loading}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-            period === opt.key
-              ? "bg-ink text-white"
-              : "border border-line2 bg-paper text-ink2 hover:border-brand-300 hover:text-brand-600"
-          } ${loading ? "opacity-60" : ""}`}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex flex-col gap-2 sm:items-end">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {PERIOD_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onChange(opt.key)}
+            disabled={loading}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              period === opt.key
+                ? "bg-ink text-white"
+                : "border border-line2 bg-paper text-ink2 hover:border-brand-300 hover:text-brand-600"
+            } ${loading ? "opacity-60" : ""}`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {period === "custom" && (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={customStart}
+            max={customEnd || undefined}
+            onChange={(e) => onCustomChange(e.target.value, customEnd)}
+            className="rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-[12.5px] text-ink2 focus:border-brand-300 focus:outline-none"
+          />
+          <span className="text-[12.5px] text-muted">até</span>
+          <input
+            type="date"
+            value={customEnd}
+            min={customStart || undefined}
+            onChange={(e) => onCustomChange(customStart, e.target.value)}
+            className="rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-[12.5px] text-ink2 focus:border-brand-300 focus:outline-none"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -336,7 +365,20 @@ export default function DashboardClient({ userName }: { userName: string }) {
   const [dateStr, setDateStr] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [period, setPeriod] = useState<PeriodKey>("today");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const [cockpit, setCockpit] = useState<CockpitReport | null>(null);
+
+  // Seed the custom range with the last 7 days the first time it's opened.
+  function handlePeriodChange(p: PeriodKey) {
+    if (p === "custom" && (!customStart || !customEnd)) {
+      const brt = (offset: number) =>
+        new Date(Date.now() - offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      setCustomStart(brt(6));
+      setCustomEnd(brt(0));
+    }
+    setPeriod(p);
+  }
 
   useEffect(() => {
     setDateStr(new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Sao_Paulo" }));
@@ -344,11 +386,16 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
   useEffect(() => {
     let active = true;
+    // Custom range needs both dates before we can fetch.
+    if (period === "custom" && (!customStart || !customEnd)) { setLoading(false); return; }
     setLoading(true);
     setError(false);
     async function load() {
       try {
-        const res = await fetch(`/api/dashboard?period=${period}`);
+        const qs = period === "custom"
+          ? `period=custom&startDate=${customStart}&endDate=${customEnd}`
+          : `period=${period}`;
+        const res = await fetch(`/api/dashboard?${qs}`);
         if (!res.ok) throw new Error("api error");
         const json = (await res.json()) as { data: DashboardData };
         if (active) setData(json.data);
@@ -361,7 +408,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
     void load();
     const id = period === "today" ? setInterval(() => void load(), 120_000) : null;
     return () => { active = false; if (id) clearInterval(id); };
-  }, [period, retryCount]);
+  }, [period, customStart, customEnd, retryCount]);
 
   useEffect(() => {
     let active = true;
@@ -391,7 +438,14 @@ export default function DashboardClient({ userName }: { userName: string }) {
           <h1 className="text-[21px] font-bold tracking-[-.02em] text-ink">{getGreeting()}, {userName} 👋</h1>
           {dateStr && <p className="mt-0.5 text-[13px] capitalize text-ink2">{dateStr} · visão em tempo real</p>}
         </div>
-        <PeriodFilter period={period} loading={loading} onChange={setPeriod} />
+        <PeriodFilter
+          period={period}
+          loading={loading}
+          onChange={handlePeriodChange}
+          customStart={customStart}
+          customEnd={customEnd}
+          onCustomChange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}
+        />
       </div>
     </div>
   );
@@ -436,8 +490,6 @@ export default function DashboardClient({ userName }: { userName: string }) {
             <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-start">
               <div className="space-y-5">
                 <SalesChart data={data} />
-                {/* Foocci em ação — right below the chart, above kitchen status */}
-                <FoocciProof proof={data.foocciProof} crm={data.crmSegments} />
                 <OperationNow data={data} />
               </div>
               <div className="space-y-5">
