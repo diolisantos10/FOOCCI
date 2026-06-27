@@ -588,7 +588,10 @@ export class CRMService {
           COUNT(*) FILTER (WHERE email IS NOT NULL AND email <> '')                       AS with_email,
           COUNT(*) FILTER (WHERE "crmContactable" = false
                              AND (email IS NULL OR email = ''))                           AS uncontactable,
-          COUNT(*) FILTER (WHERE "sourceSystem" IS NULL)                                  AS foocci_acquired
+          COUNT(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM orders o
+            WHERE o."customerId" = customers.id AND o."importedAt" IS NULL
+          ))                                                                              AS foocci_acquired
         FROM customers
         WHERE "restaurantId" = ${restaurantId}
           AND "isGuest" = false

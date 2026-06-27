@@ -1069,7 +1069,7 @@ export function OverviewTab({
           <KPICard
             label="Conquistados pelo Foocci"
             value={stats.foocciAcquiredCustomers.toLocaleString("pt-BR")}
-            sub="Clientes novos, fora da base importada"
+            sub="Fizeram pedido real pelo app/cardápio (fora da base importada)"
             accent="brand"
             loading={loading}
           />
