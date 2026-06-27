@@ -16,7 +16,8 @@ interface DashboardData {
   period: PeriodKey; periodLabel: string; periodDays: number;
   ordersPeriod: number; revenuePeriod: number; avgTicket: number; ordersPrev: number; revenuePrev: number;
   avgTicketPrev: number; newCustomersPrev: number;
-  conversionRate: number | null; conversionRatePrev: number | null; abandonedCarts: number;
+  conversionRate: number | null; conversionRatePrev: number | null;
+  conversionIdentified: number; conversionConverted: number;
   openOrders: number; totalCustomers: number; newCustomersPeriod: number;
   pipeline: { pending: number; confirmed: number; preparing: number; ready: number; outForDelivery: number };
   delayedCount: number; pendingPaymentsCount: number;
@@ -424,7 +425,9 @@ export default function DashboardClient({ userName }: { userName: string }) {
                   label="Taxa de conversão"
                   value={data.conversionRate != null ? `${data.conversionRate}%` : "—"}
                   change={data.conversionRate != null && data.conversionRatePrev != null ? delta(data.conversionRate, data.conversionRatePrev) : undefined}
-                  sub={`${fmtNum(data.abandonedCarts)} ${data.abandonedCarts === 1 ? "carrinho abandonado" : "carrinhos abandonados"}`}
+                  sub={data.conversionIdentified > 0
+                    ? `${fmtNum(data.conversionConverted)} de ${fmtNum(data.conversionIdentified)} identificados`
+                    : "sem identificados ainda"}
                 />
               </div>
             </div>

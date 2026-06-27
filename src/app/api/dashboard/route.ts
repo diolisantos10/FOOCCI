@@ -64,8 +64,10 @@ export async function GET(req: NextRequest) {
       cancelledPeriodCount,
       orderSourceCounts,
       newCustomersPrev,
-      draftStatusNow,
-      draftStatusPrev,
+      convIdentifiedNow,
+      convConvertedNow,
+      convIdentifiedPrev,
+      convConvertedPrev,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + chart)
       prisma.order.findMany({
@@ -165,17 +167,39 @@ export async function GET(req: NextRequest) {
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
         },
       }),
-      // 13. Cart drafts (with items) by status, for the conversion-rate KPI.
-      prisma.orderDraft.groupBy({
-        by:     ["status"],
-        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, items: { some: {} } },
-        _count: { id: true },
+      // 13. Conversion funnel — IDENTIFIED entrants: real (non-guest) customers
+      //     who entered the Foocci agent (a conversation) within the period.
+      prisma.customer.count({
+        where: {
+          restaurantId: ctx.restaurantId,
+          isGuest:      false,
+          conversations: { some: { createdAt: { gte: rangeStart, lte: rangeEnd } } },
+        },
       }),
-      // 14. Same, previous period (conversion delta).
-      prisma.orderDraft.groupBy({
-        by:     ["status"],
-        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd }, items: { some: {} } },
-        _count: { id: true },
+      // 14. …and of those, how many finalized a sale (an order) in the period.
+      prisma.customer.count({
+        where: {
+          restaurantId: ctx.restaurantId,
+          isGuest:      false,
+          conversations: { some: { createdAt: { gte: rangeStart, lte: rangeEnd } } },
+          orders:        { some: { createdAt: { gte: rangeStart, lte: rangeEnd }, status: { in: REVENUE_STATUS } } },
+        },
+      }),
+      // 15-16. Same funnel for the previous period (conversion delta).
+      prisma.customer.count({
+        where: {
+          restaurantId: ctx.restaurantId,
+          isGuest:      false,
+          conversations: { some: { createdAt: { gte: prevStart, lt: prevFetchEnd } } },
+        },
+      }),
+      prisma.customer.count({
+        where: {
+          restaurantId: ctx.restaurantId,
+          isGuest:      false,
+          conversations: { some: { createdAt: { gte: prevStart, lt: prevFetchEnd } } },
+          orders:        { some: { createdAt: { gte: prevStart, lt: prevFetchEnd }, status: { in: REVENUE_STATUS } } },
+        },
       }),
     ]);
 
@@ -192,18 +216,11 @@ export async function GET(req: NextRequest) {
     const ordersPrev    = prevOrders.length;
     const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
 
-    // ── Conversion rate — carts (drafts) that became orders vs. those decided.
-    //    CONFIRMED / (CONFIRMED + ABANDONED); still-OPEN (undecided) carts are
-    //    excluded so an in-progress cart doesn't drag the rate down.
-    const draftCount = (rows: Array<{ status: string; _count: { id: number } }>, s: string) =>
-      rows.find((r) => r.status === s)?._count.id ?? 0;
-    const convNow      = draftCount(draftStatusNow, "CONFIRMED");
-    const abandonedNow = draftCount(draftStatusNow, "ABANDONED");
-    const decidedNow   = convNow + abandonedNow;
-    const conversionRate = decidedNow > 0 ? Math.round((convNow / decidedNow) * 100) : null;
-    const convPrev     = draftCount(draftStatusPrev, "CONFIRMED");
-    const decidedPrev  = convPrev + draftCount(draftStatusPrev, "ABANDONED");
-    const conversionRatePrev = decidedPrev > 0 ? Math.round((convPrev / decidedPrev) * 100) : null;
+    // ── Conversion rate — of the identified people who entered the Foocci agent
+    //    in the period (provided a number / got identified), how many finalized
+    //    a sale. converted ÷ identified.
+    const conversionRate     = convIdentifiedNow  > 0 ? Math.round((convConvertedNow  / convIdentifiedNow)  * 100) : null;
+    const conversionRatePrev = convIdentifiedPrev > 0 ? Math.round((convConvertedPrev / convIdentifiedPrev) * 100) : null;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -295,10 +312,11 @@ export async function GET(req: NextRequest) {
       avgTicketPrev:   Math.round(avgTicketPrev   * 100) / 100,
       newCustomersPrev,
 
-      // Conversion KPI (cart → order)
+      // Conversion KPI (identified entrant → finalized sale)
       conversionRate,
       conversionRatePrev,
-      abandonedCarts:  abandonedNow,
+      conversionIdentified: convIdentifiedNow,
+      conversionConverted:  convConvertedNow,
 
       // Real-time
       openOrders,
