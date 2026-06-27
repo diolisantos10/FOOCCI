@@ -717,6 +717,80 @@ function RevenueBlock({
   );
 }
 
+// ── Top campaigns (most profitable) ───────────────────────────────────────────
+
+type TopCampaignRow = {
+  id:            string;
+  name:          string;
+  status:        string;
+  targetSegment: string | null;
+  totalSent:     number;
+  totalRevenue:  number;
+};
+
+function TopCampaignsBlock({ onSeeAll }: { onSeeAll?: () => void }) {
+  const [campaigns, setCampaigns] = useState<TopCampaignRow[]>([]);
+  const [loading,   setLoading]   = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/crm/campaigns")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((json: { data?: TopCampaignRow[] }) => { if (alive) setCampaigns(json.data ?? []); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const top = [...campaigns]
+    .sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue))
+    .slice(0, 5);
+
+  return (
+    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Campanhas mais rentáveis</p>
+          <p className="mt-0.5 text-[11px] text-muted">As 5 que mais geraram receita</p>
+        </div>
+        {onSeeAll && (
+          <button
+            onClick={onSeeAll}
+            className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8]"
+          >
+            Ver todas{campaigns.length > 5 ? ` (${campaigns.length})` : ""} →
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <div key={i} className="h-11 animate-pulse rounded-lg bg-[#F4F4F2]" />)}
+        </div>
+      ) : top.length === 0 ? (
+        <p className="text-sm text-muted">Nenhuma campanha ainda.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {top.map((c) => (
+            <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg bg-[#FAFAF8] px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-ink">{c.name}</p>
+                <p className="text-[10px] text-muted">
+                  {Number(c.totalSent).toLocaleString("pt-BR")} enviados{c.targetSegment ? ` · ${c.targetSegment}` : ""}
+                </p>
+              </div>
+              <span className={`shrink-0 text-sm font-bold ${Number(c.totalRevenue) > 0 ? "text-green-700" : "text-muted"}`}>
+                {Number(c.totalRevenue) > 0
+                  ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Top customers (most valuable) ─────────────────────────────────────────────
 
 const TOP_SEGMENT_BADGE: Record<TopCustomerSegment, { label: string; cls: string }> = {
@@ -935,57 +1009,7 @@ export function OverviewTab({
   return (
     <div className="space-y-6">
 
-      {/* 1. Date filter */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-1.5">
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => handlePreset(p.id)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                datePreset === p.id
-                  ? "bg-brand-600 text-white shadow-sm"
-                  : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {datePreset === "custom" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={localFrom}
-              onChange={(e) => setLocalFrom(e.target.value)}
-              className="rounded-lg border border-line2 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-            <span className="text-xs text-muted">até</span>
-            <input
-              type="date"
-              value={localTo}
-              onChange={(e) => setLocalTo(e.target.value)}
-              className="rounded-lg border border-line2 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-            <button
-              onClick={applyCustom}
-              disabled={!localFrom || !localTo}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              Aplicar
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 1. Receita gerada pelo CRM (chart + summary) — PRIORIDADE, primeira seção */}
-      <RevenueBlock
-        revenueSummary={revenueSummary ?? null}
-        revenueSummaryLoading={!!revenueSummaryLoading}
-      />
-
-      {/* 2. Top KPI bar — full base status at a glance */}
+      {/* 1. Números de clientes — primeira camada (não dependem do período) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KPICard
           label="Clientes na base"
@@ -1045,7 +1069,60 @@ export function OverviewTab({
         />
       </div>
 
-      {/* 4. Clientes mais valiosos (replaces redundant temperature strip) */}
+      {/* 2. Filtro de período — abaixo dos números de clientes (não afeta frios/mornos/quentes) */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handlePreset(p.id)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                datePreset === p.id
+                  ? "bg-brand-600 text-white shadow-sm"
+                  : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {datePreset === "custom" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={localFrom}
+              onChange={(e) => setLocalFrom(e.target.value)}
+              className="rounded-lg border border-line2 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            <span className="text-xs text-muted">até</span>
+            <input
+              type="date"
+              value={localTo}
+              onChange={(e) => setLocalTo(e.target.value)}
+              className="rounded-lg border border-line2 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            <button
+              onClick={applyCustom}
+              disabled={!localFrom || !localTo}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              Aplicar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Receita gerada pelo CRM (gráfico) */}
+      <RevenueBlock
+        revenueSummary={revenueSummary ?? null}
+        revenueSummaryLoading={!!revenueSummaryLoading}
+      />
+
+      {/* 4. Campanhas mais rentáveis (top 5) + ver todas */}
+      <TopCampaignsBlock onSeeAll={onNavigateToTab ? () => onNavigateToTab("campanhas") : undefined} />
+
+      {/* 5. Clientes mais valiosos (replaces redundant temperature strip) */}
       <TopCustomersBlock data={topCustomers ?? null} loading={!!topCustomersLoading} />
 
       {/* 5. Programa de relacionamento */}
