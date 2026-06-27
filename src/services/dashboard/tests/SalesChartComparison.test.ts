@@ -191,15 +191,27 @@ describe("computePeriodRange — custom", () => {
     expect(pr.granularity).toBe("day");
   });
 
-  it("comparison is the same-duration window immediately before", () => {
+  it("comparison is the same window shifted back a whole week (weekday-aligned)", () => {
+    // 5-day range → shift back 7 days so weekdays line up, never a weekend.
     const pr = computePeriodRange("custom", "2026-06-01", "2026-06-05", now);
-    expect(pr.prevEnd.getTime()).toBe(pr.rangeStart.getTime());
-    expect(pr.prevStart.getTime()).toBe(pr.rangeStart.getTime() - pr.days * 86_400_000);
+    expect(pr.prevStart.getTime()).toBe(pr.rangeStart.getTime() - 7 * 86_400_000);
+    expect(pr.prevEnd.getTime()).toBe(pr.rangeEnd.getTime() - 7 * 86_400_000);
+    // prev window keeps the same duration as the current range
+    expect(pr.prevEnd.getTime() - pr.prevStart.getTime()).toBe(pr.rangeEnd.getTime() - pr.rangeStart.getTime());
   });
 
-  it("prevLabel includes the number of days", () => {
+  it("ranges over a week shift back enough weeks to avoid overlap", () => {
+    // 10-day range (fully in the past so it isn't clamped to `now`) →
+    // ceil(10/7)*7 = 14 days back.
+    const pr = computePeriodRange("custom", "2026-05-20", "2026-05-29", now);
+    expect(pr.days).toBe(10);
+    expect(pr.prevStart.getTime()).toBe(pr.rangeStart.getTime() - 14 * 86_400_000);
+    expect(pr.prevEnd.getTime()).toBeLessThanOrEqual(pr.rangeStart.getTime()); // no overlap
+  });
+
+  it("prevLabel reads 'semana passada' for a ≤7-day range", () => {
     const pr = computePeriodRange("custom", "2026-06-01", "2026-06-07", now);
-    expect(pr.prevLabel).toContain("dias");
+    expect(pr.prevLabel).toBe("vs. semana passada");
   });
 });
 

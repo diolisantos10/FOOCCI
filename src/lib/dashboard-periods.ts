@@ -211,11 +211,18 @@ export function computePeriodRange(
     ? `${startDateParam.slice(5)} – ${endDateParam.slice(5)}`
     : "Personalizado";
   const granularity: BucketGranularity = days <= 2 ? "hour" : "day";
+  // Compare to the SAME window shifted back a whole number of weeks, so the
+  // weekdays line up (Mon–Fri vs last week's Mon–Fri) instead of bleeding into
+  // a weekend — a weekend in the comparison window skews a weekday range. The
+  // shift is the smallest multiple of 7 ≥ the range, so it never overlaps.
+  const weekShiftDays = Math.ceil(days / 7) * 7;
+  const shiftMs       = weekShiftDays * 86_400_000;
   return {
     rangeStart: safeStart, rangeEnd: safeEnd,
-    prevStart:  new Date(safeStart.getTime() - days * 86_400_000),
-    prevEnd:    safeStart,
-    period, label, prevLabel: `vs. ${days} dia${days !== 1 ? "s" : ""} anteriores`,
+    prevStart:  new Date(safeStart.getTime() - shiftMs),
+    prevEnd:    new Date(safeEnd.getTime()   - shiftMs),
+    period, label,
+    prevLabel:  weekShiftDays === 7 ? "vs. semana passada" : `vs. ${weekShiftDays} dias antes`,
     days, isToday: false, granularity,
   };
 }
