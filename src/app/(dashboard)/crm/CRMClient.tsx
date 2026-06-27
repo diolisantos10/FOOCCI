@@ -2980,13 +2980,22 @@ function CampanhasAtivasSection({
   campaigns,
   onDetail,
   onAction,
+  limit,
+  onSeeAll,
 }: {
   campaigns: CampaignHistoryRow[];
   onDetail: (id: string) => void;
   onAction: (id: string, action: "pause" | "resume" | "cancel") => void;
+  /** When set, show only the top N by revenue (used on the dashboard overview). */
+  limit?: number;
+  /** When set, render a "Ver todas" footer linking to the full CRM panel. */
+  onSeeAll?: () => void;
 }) {
   const active = campaigns.filter((c) => ACTIVE_STATUSES.has(c.status));
   if (active.length === 0) return null;
+  const shown = limit != null
+    ? [...active].sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue)).slice(0, limit)
+    : active;
 
   return (
     <div data-testid="campanhas-ativas-section">
@@ -3015,7 +3024,7 @@ function CampanhasAtivasSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {active.map((c) => {
+            {shown.map((c) => {
               const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
               const cfg          = c.scheduleConfig as ScheduleCfg | null;
               const isRecurring  = cfg?.mode === "RECURRING";
@@ -3121,6 +3130,16 @@ function CampanhasAtivasSection({
             })}
           </tbody>
         </table>
+        {onSeeAll && active.length > shown.length && (
+          <div className="border-t border-line bg-[#FAFAF8] p-3 text-center">
+            <button
+              onClick={onSeeAll}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Ver todas as campanhas ({active.length}) →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -5660,7 +5679,24 @@ export function CRMClient({
   const [topCustomers, setTopCustomers] = useState<import("@/services/crm/CRMService").TopCustomersResult | null>(null);
   const [topCustomersLoading, setTopCustomersLoading] = useState(false);
 
-  // Load initial revenue summary + top customers (all-time) on mount
+  // Campaigns for the overview "top 5 mais rentáveis" preview (same table as the CRM panel)
+  const [overviewCampaigns, setOverviewCampaigns] = useState<CampaignHistoryRow[]>([]);
+  const refreshOverviewCampaigns = useCallback(() => {
+    fetch("/api/crm/campaigns")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((json) => setOverviewCampaigns(json.data ?? []))
+      .catch(() => {});
+  }, []);
+  async function overviewCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
+    await fetch(`/api/crm/campaigns/${id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ action }),
+    }).catch(() => {});
+    refreshOverviewCampaigns();
+  }
+
+  // Load initial revenue summary + top customers + campaigns (all-time) on mount
   useEffect(() => {
     fetch("/api/crm/revenue-summary")
       .then((r) => (r.ok ? r.json() : null))
@@ -5670,6 +5706,7 @@ export function CRMClient({
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (json?.data) setTopCustomers(json.data); })
       .catch(() => {});
+    refreshOverviewCampaigns();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDateChange(
@@ -5807,6 +5844,15 @@ export function CRMClient({
           revenueSummaryLoading={revenueSummaryLoading}
           topCustomers={topCustomers}
           topCustomersLoading={topCustomersLoading}
+          campaignsSlot={
+            <CampanhasAtivasSection
+              campaigns={overviewCampaigns}
+              onDetail={() => setTab("campanhas")}
+              onAction={overviewCampaignAction}
+              limit={5}
+              onSeeAll={() => setTab("campanhas")}
+            />
+          }
         />
       )}
       {tab === "campanhas" && (

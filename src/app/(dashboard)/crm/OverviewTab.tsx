@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import type { OverviewStats, CustomerTier, TopCustomersResult, TopCustomerSegment } from "@/services/crm/CRMService";
 import type { CrmAction, CrmActionType, ActionPriority } from "@/services/crm/CrmActionCenterService";
 import { ReviewRequestModal } from "./ReviewRequestModal";
@@ -717,80 +717,6 @@ function RevenueBlock({
   );
 }
 
-// ── Top campaigns (most profitable) ───────────────────────────────────────────
-
-type TopCampaignRow = {
-  id:            string;
-  name:          string;
-  status:        string;
-  targetSegment: string | null;
-  totalSent:     number;
-  totalRevenue:  number;
-};
-
-function TopCampaignsBlock({ onSeeAll }: { onSeeAll?: () => void }) {
-  const [campaigns, setCampaigns] = useState<TopCampaignRow[]>([]);
-  const [loading,   setLoading]   = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/crm/campaigns")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json: { data?: TopCampaignRow[] }) => { if (alive) setCampaigns(json.data ?? []); })
-      .catch(() => {})
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
-
-  const top = [...campaigns]
-    .sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue))
-    .slice(0, 5);
-
-  return (
-    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted">Campanhas mais rentáveis</p>
-          <p className="mt-0.5 text-[11px] text-muted">As 5 que mais geraram receita</p>
-        </div>
-        {onSeeAll && (
-          <button
-            onClick={onSeeAll}
-            className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8]"
-          >
-            Ver todas{campaigns.length > 5 ? ` (${campaigns.length})` : ""} →
-          </button>
-        )}
-      </div>
-      {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => <div key={i} className="h-11 animate-pulse rounded-lg bg-[#F4F4F2]" />)}
-        </div>
-      ) : top.length === 0 ? (
-        <p className="text-sm text-muted">Nenhuma campanha ainda.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {top.map((c) => (
-            <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg bg-[#FAFAF8] px-3 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink">{c.name}</p>
-                <p className="text-[10px] text-muted">
-                  {Number(c.totalSent).toLocaleString("pt-BR")} enviados{c.targetSegment ? ` · ${c.targetSegment}` : ""}
-                </p>
-              </div>
-              <span className={`shrink-0 text-sm font-bold ${Number(c.totalRevenue) > 0 ? "text-green-700" : "text-muted"}`}>
-                {Number(c.totalRevenue) > 0
-                  ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : "—"}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Top customers (most valuable) ─────────────────────────────────────────────
 
 const TOP_SEGMENT_BADGE: Record<TopCustomerSegment, { label: string; cls: string }> = {
@@ -925,6 +851,7 @@ export function OverviewTab({
   revenueSummaryLoading,
   topCustomers,
   topCustomersLoading,
+  campaignsSlot,
 }: {
   stats: OverviewStats;
   opportunitiesCount: number;
@@ -953,6 +880,8 @@ export function OverviewTab({
   revenueSummaryLoading?: boolean;
   topCustomers?: TopCustomersResult | null;
   topCustomersLoading?: boolean;
+  /** The campaigns table (top 5) — same component used in the CRM panel. */
+  campaignsSlot?: ReactNode;
 }) {
   const [localFrom, setLocalFrom] = useState(customFrom);
   const [localTo,   setLocalTo]   = useState(customTo);
@@ -1119,8 +1048,8 @@ export function OverviewTab({
         revenueSummaryLoading={!!revenueSummaryLoading}
       />
 
-      {/* 4. Campanhas mais rentáveis (top 5) + ver todas */}
-      <TopCampaignsBlock onSeeAll={onNavigateToTab ? () => onNavigateToTab("campanhas") : undefined} />
+      {/* 4. Campanhas mais rentáveis (top 5) — mesma tabela do painel de CRM */}
+      {campaignsSlot}
 
       {/* 5. Clientes mais valiosos (replaces redundant temperature strip) */}
       <TopCustomersBlock data={topCustomers ?? null} loading={!!topCustomersLoading} />
