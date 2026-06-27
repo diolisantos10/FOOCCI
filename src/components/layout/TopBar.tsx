@@ -493,7 +493,14 @@ export function TopBar({ title }: TopBarProps) {
 
         {/* ── Sign out ─────────────────────────────────────────────────── */}
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={async () => {
+            // Don't let NextAuth build the post-logout redirect: it resolves the
+            // callback against the configured base URL, which was sending users to
+            // the Railway internal host (…up.railway.app/login → 404). Clear the
+            // session, then navigate client-side to a relative path on THIS origin.
+            await signOut({ redirect: false });
+            window.location.href = "/login";
+          }}
           aria-label="Sair"
           className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
         >
