@@ -135,7 +135,6 @@ export interface AnalyticsOverview {
   insights:                 Insight[];
   zeroSalesProducts:        ZeroSalesProduct[];   // active menu items with no sales in the period
   upsellRevenue:            UpsellRevenue;
-  upsellExamples?:          UpsellExample[];      // concrete proof rows (social proof)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -171,7 +170,6 @@ export class AnalyticsService {
       channels,
       zeroSalesProducts,
       upsellRevenue,
-      upsellExamples,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -184,12 +182,11 @@ export class AnalyticsService {
       this.getChannels(restaurantId, from, to),
       this.getZeroSalesProducts(restaurantId, from, to),
       this.getUpsellRevenue(restaurantId, from, to),
-      this.getUpsellExamples(restaurantId, from, to),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, zeroSalesProducts, upsellRevenue, upsellExamples };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, zeroSalesProducts, upsellRevenue };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -668,7 +665,7 @@ export class AnalyticsService {
   }
 
   // Concrete upsell examples (social proof): items added AFTER a Foocci suggestion.
-  private static async getUpsellExamples(
+  static async getUpsellExamples(
     restaurantId: string,
     from: Date,
     to: Date,

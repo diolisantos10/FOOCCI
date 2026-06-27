@@ -238,6 +238,7 @@ const TABS = [
   { id: "categorias",   label: "Categorias"          },
   { id: "clientes",     label: "Clientes"            },
   { id: "canais",       label: "Canais"              },
+  { id: "incremental",  label: "Receita Incremental" },
   { id: "delivery",     label: "Cardápio Delivery"   },
 ] as const;
 
@@ -1197,12 +1198,11 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
 
 // ─── Foocci Incremental Revenue Card ─────────────────────────────────────────
 
-function UpsellRevenueCard({ upsell, examples }: { upsell: UpsellRevenue | undefined; examples?: UpsellExample[] }) {
+function UpsellRevenueCard({ upsell, onSeeHistory }: { upsell: UpsellRevenue | undefined; onSeeHistory?: () => void }) {
   const revenue    = upsell?.revenue         ?? 0;
   const share      = upsell?.revenueShare    ?? 0;
   const orders     = upsell?.ordersWithUpsell ?? 0;
   const avgPerOrder = upsell?.avgPerOrder    ?? 0;
-  const proofs     = examples ?? [];
 
   return (
     <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-5">
@@ -1236,30 +1236,86 @@ function UpsellRevenueCard({ upsell, examples }: { upsell: UpsellRevenue | undef
         </p>
       )}
 
-      {proofs.length > 0 && (
-        <div className="mt-4">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-            Prova: o cardápio sugeriu e o cliente comprou
-          </p>
-          <div className="space-y-1.5">
-            {proofs.map((ex) => (
-              <div
-                key={ex.orderId + ex.itemName}
-                className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2 shadow-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-ink">
-                    {ex.quantity > 1 ? `${ex.quantity}× ` : ""}{ex.itemName}
-                  </p>
-                  <p className="text-[10px] text-muted">
-                    {ex.customerName ? `${ex.customerName} · ` : ""}
-                    {new Date(ex.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · adicionado após sugestão
-                  </p>
-                </div>
-                <span className="shrink-0 text-sm font-bold text-emerald-700">+ {fmtBRL(ex.value)}</span>
-              </div>
-            ))}
+      {onSeeHistory && orders > 0 && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={onSeeHistory}
+            className="rounded-lg border border-emerald-200 bg-paper px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+          >
+            Ver histórico completo →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Receita Incremental (histórico completo de upsell) ──────────────────
+
+function TabIncremental({ from, to, upsell }: { from: string; to: string; upsell?: UpsellRevenue }) {
+  const [examples, setExamples] = useState<UpsellExample[]>([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/analytics/upsell-history?from=${from}&to=${to}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j: { data?: { examples?: UpsellExample[] } }) => setExamples(j.data?.examples ?? []))
+      .catch(() => setExamples([]))
+      .finally(() => setLoading(false));
+  }, [from, to]);
+
+  const totalValue = examples.reduce((s, e) => s + e.value, 0);
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-bold text-ink">Receita incremental — histórico completo</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          Cada item que o cliente adicionou <strong>após uma sugestão do Foocci</strong>, no período selecionado.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Itens adicionados",  val: loading ? "…" : fmtNum(examples.length) },
+          { label: "Receita adicional",  val: loading ? "…" : fmtBRL(upsell?.revenue ?? totalValue) },
+          { label: "Pedidos com upsell", val: loading ? "…" : fmtNum(upsell?.ordersWithUpsell ?? 0) },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">{s.label}</p>
+            <p className="mt-0.5 text-lg font-extrabold text-emerald-700">{s.val}</p>
           </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-[#F4F4F2]" />)}
+        </div>
+      ) : examples.length === 0 ? (
+        <div className="rounded-xl border border-line bg-paper p-8 text-center">
+          <p className="text-sm font-semibold text-ink">Sem upsell no período</p>
+          <p className="mt-1 text-xs text-muted">
+            Quando um cliente aceitar uma sugestão do Foocci, o item aparece aqui.
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-line rounded-xl border border-line bg-paper">
+          {examples.map((ex) => (
+            <div key={ex.orderId + ex.itemName + ex.date} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-ink">
+                  {ex.quantity > 1 ? `${ex.quantity}× ` : ""}{ex.itemName}
+                </p>
+                <p className="text-[10px] text-muted">
+                  {ex.customerName ? `${ex.customerName} · ` : ""}
+                  {new Date(ex.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })} · adicionado após sugestão
+                </p>
+              </div>
+              <span className="shrink-0 text-sm font-bold text-emerald-700">+ {fmtBRL(ex.value)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1270,7 +1326,7 @@ function UpsellRevenueCard({ upsell, examples }: { upsell: UpsellRevenue | undef
 
 function TabVisaoGeral({
   data, loading, agentData, agentLoading, diagnosisData, diagnosisLoading,
-  operationsData, operationsLoading,
+  operationsData, operationsLoading, onSeeUpsellHistory,
 }: {
   data: AnalyticsOverview | null;
   loading: boolean;
@@ -1280,6 +1336,7 @@ function TabVisaoGeral({
   diagnosisLoading: boolean;
   operationsData: OperationalEfficiencyReport | null;
   operationsLoading: boolean;
+  onSeeUpsellHistory?: () => void;
 }) {
   const kpi            = data?.kpi;
   const hasRealOrders  = (kpi?.orders ?? 0) > 0;
@@ -1304,7 +1361,7 @@ function TabVisaoGeral({
       </div>
 
       {/* Foocci incremental revenue — shown when there are real orders */}
-      {!loading && hasRealOrders && <UpsellRevenueCard upsell={data?.upsellRevenue} examples={data?.upsellExamples} />}
+      {!loading && hasRealOrders && <UpsellRevenueCard upsell={data?.upsellRevenue} onSeeHistory={onSeeUpsellHistory} />}
 
       {/* Fallback when no real orders */}
       {!loading && !hasRealOrders && (
@@ -2136,10 +2193,14 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
             diagnosisLoading={diagnosisLoading}
             operationsData={operationsData}
             operationsLoading={operationsLoading}
+            onSeeUpsellHistory={() => setActiveTab("incremental")}
           />
         )}
         {activeTab === "produtos" && (
           <TabProdutos data={data} loading={loading} />
+        )}
+        {activeTab === "incremental" && (
+          <TabIncremental from={from} to={to} upsell={data?.upsellRevenue} />
         )}
         {activeTab === "categorias" && (
           <TabCategorias data={data} loading={loading} />
