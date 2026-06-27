@@ -710,8 +710,12 @@ export function AtendimentoClient({
 
     // Status filter (client-side for non-RESOLVED)
     if (statusFilter === "CRM_SENT") {
-      // Show only CRM outbound-only conversations (customer hasn't replied).
-      items = items.filter((c) => isCrmOrigin(c) && !convHasCustomerReply(c));
+      // "CRM enviado" = EVERY conversation that received a CRM send, regardless of
+      // whether the customer ever replied. CRM sends reuse a customer's existing
+      // conversation, so requiring "no reply" hid every send to anyone who had
+      // ever messaged before — which made the tab look empty for established
+      // bases. The replied ones are still available under "Resposta CRM" below.
+      items = items.filter((c) => isCrmOrigin(c));
     } else if (statusFilter === "CRM_REPLIED") {
       // Show only CRM conversations where customer replied.
       items = items.filter((c) => isCrmOrigin(c) && convHasCustomerReply(c));
