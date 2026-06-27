@@ -546,22 +546,27 @@ function RevenueChart({
 
   return (
     <div>
+      {/* Bars are DIRECT children of a fixed-height (h-24) row, so the per-bar
+          percentage height resolves reliably. Labels live in a separate row. */}
       <div className="flex h-24 items-end gap-[2px]">
-        {series.map((b, i) => {
+        {series.map((b) => {
           const h = max > 0 ? Math.round((b.revenue / max) * 100) : 0;
           return (
-            <div key={b.key} className="flex flex-1 flex-col items-center justify-end" style={{ minWidth: 3 }}>
-              <div
-                className={`w-full rounded-t transition-all ${b.revenue > 0 ? "bg-green-500" : "bg-[#F4F4F2]"}`}
-                style={{ height: `${b.revenue > 0 ? Math.max(h, 4) : 3}%` }}
-                title={`${b.label}: R$ ${b.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${b.orders} pedido${b.orders !== 1 ? "s" : ""}`}
-              />
-              <span className="mt-0.5 h-3 text-[7px] leading-none text-muted">
-                {i % labelEvery === 0 ? b.label : ""}
-              </span>
-            </div>
+            <div
+              key={b.key}
+              className={`flex-1 rounded-t transition-all ${b.revenue > 0 ? "bg-green-500" : "bg-[#F4F4F2]"}`}
+              style={{ minWidth: 3, height: `${b.revenue > 0 ? Math.max(h, 4) : 3}%` }}
+              title={`${b.label}: R$ ${b.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${b.orders} pedido${b.orders !== 1 ? "s" : ""}`}
+            />
           );
         })}
+      </div>
+      <div className="mt-0.5 flex gap-[2px]">
+        {series.map((b, i) => (
+          <span key={b.key} className="flex-1 truncate text-center text-[7px] leading-none text-muted" style={{ minWidth: 3 }}>
+            {i % labelEvery === 0 ? b.label : ""}
+          </span>
+        ))}
       </div>
       <div className="mt-1 flex items-center justify-between text-[9px] text-muted">
         <span>R$ 0</span>
