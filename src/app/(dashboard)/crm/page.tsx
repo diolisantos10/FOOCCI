@@ -23,6 +23,8 @@ const TAB_PARAM_MAP: Record<string, Tab> = {
   "configuracoes": "configuracoes",
 };
 
+const CUSTOMERS_PAGE_SIZE = 20;
+
 export default async function CRMPage({
   searchParams,
 }: {
@@ -35,6 +37,7 @@ export default async function CRMPage({
   try { restaurantId = getTenantId(); } catch { /* unauthenticated */ }
 
   let customers:           CRMCustomer[]  = [];
+  let customersTotal       = 0;
   let opportunities:       Opportunity[]  = [];
   let actionCenterActions: CrmAction[]    = [];
   let overviewStats: OverviewStats = {
@@ -48,11 +51,12 @@ export default async function CRMPage({
   let reviewLinks: { google: string | null; ifood: string | null } = { google: null, ifood: null };
 
   if (restaurantId) {
-    const [restaurant, rows, opResult, statsResult, brandConfig, actionCenterResult] = await Promise.all([
+    const [restaurant, rows, custTotal, opResult, statsResult, brandConfig, actionCenterResult] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
       prisma.customer.findMany({
         where: { restaurantId, isGuest: false },
         orderBy: [{ totalSpend: "desc" }, { lastOrderAt: "desc" }],
+        take: CUSTOMERS_PAGE_SIZE, // first page only — list paginates server-side
         select: {
           id: true, name: true, phone: true,
           totalSpend: true, totalOrders: true,
@@ -62,6 +66,7 @@ export default async function CRMPage({
           importedLastOrderAt: true, averageTicket: true,
         },
       }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false } }),
       CRMService.getOpportunities(restaurantId, restaurantName),
       CRMService.getOverviewStats(restaurantId),
       prisma.restaurantBrandConfig.findUnique({
@@ -72,6 +77,7 @@ export default async function CRMPage({
     ]);
 
     restaurantName = restaurant?.name ?? "Restaurante";
+    customersTotal = custTotal;
 
     const now = new Date();
     customers = rows.map((c) => {
@@ -131,6 +137,8 @@ export default async function CRMPage({
       }>
         <CRMClient
           initialCustomers={customers}
+          initialCustomersTotal={customersTotal}
+          customersPageSize={CUSTOMERS_PAGE_SIZE}
           initialOpportunities={opportunities}
           initialActions={actionCenterActions}
           restaurantName={restaurantName}

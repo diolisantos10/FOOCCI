@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
@@ -4236,6 +4236,8 @@ type CRMFilter = "all" | "inactive" | "quente" | "morno" | "frio" | "neverOrdere
 
 function CustomersTab({
   initialCustomers,
+  initialTotal = 0,
+  pageSize: initialPageSize = 20,
   initialFilter = "all",
   onImportOpen,
   reviewLinks,
@@ -4243,6 +4245,8 @@ function CustomersTab({
   statsLoading,
 }: {
   initialCustomers: CRMCustomer[];
+  initialTotal?: number;
+  pageSize?: number;
   initialFilter?: CRMFilter;
   onImportOpen: () => void;
   reviewLinks: { google: string | null; ifood: string | null };
@@ -4261,33 +4265,45 @@ function CustomersTab({
   const [reviewReq,  setReviewReq]  = useState<CRMCustomer | null>(null);
   const hasReviewLink = !!(reviewLinks.google || reviewLinks.ifood);
 
-  // Debounce search → debSearch triggers the API call
+  // Pagination — server-side, so the list never loads the whole base at once.
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [total,    setTotal]    = useState(initialFilter === "all" ? initialTotal : 0);
+  const firstRender = useRef(true);
+
+  // Debounce search → debSearch (and jump back to page 1 on a new search)
   useEffect(() => {
-    const t = setTimeout(() => setDebSearch(search), 350);
+    const t = setTimeout(() => { setDebSearch(search); setPage(1); }, 350);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Single fetch effect: runs on filter OR debounced search change
+  // Single fetch effect: runs on filter / search / page / pageSize change.
+  // First render uses the SSR-seeded first page (no redundant fetch).
   useEffect(() => {
-    if (filter === "all" && !debSearch) {
-      setCustomers(initialCustomers);
-      setLoading(false);
-      return;
-    }
+    if (firstRender.current) { firstRender.current = false; return; }
     setLoading(true);
-    const qs = new URLSearchParams({ filter });
+    const qs = new URLSearchParams({ filter, page: String(page), pageSize: String(pageSize) });
     if (debSearch) qs.set("search", debSearch);
     fetch(`/api/crm/customers?${qs}`)
       .then((r) => r.json())
-      .then((json) => setCustomers((json.data as CRMCustomer[]) ?? []))
-      .catch(() => setCustomers([]))
+      .then((json) => {
+        const d = json.data as { customers?: CRMCustomer[]; total?: number } | undefined;
+        setCustomers(d?.customers ?? []);
+        setTotal(d?.total ?? 0);
+      })
+      .catch(() => { setCustomers([]); setTotal(0); })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, debSearch]);
+  }, [filter, debSearch, page, pageSize]);
 
   function applyFilter(f: CRMFilter) {
     setFilter(f);
+    setPage(1);
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageStart  = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd    = Math.min(page * pageSize, total);
 
   const sortedCustomers = applyCRMSort(customers, sortValue);
   const tierOrder: CustomerTier[] = ["DIAMANTE", "OURO", "PRATA", "BRONZE"];
@@ -4580,6 +4596,41 @@ function CustomersTab({
             ))}
           </div>
         </>
+      )}
+
+      {/* Paginação — server-side; a lista nunca carrega a base inteira de uma vez */}
+      {!loading && total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-paper px-4 py-2.5">
+          <span className="text-[11px] text-muted">
+            Mostrando <strong className="text-ink2">{pageStart}–{pageEnd}</strong> de{" "}
+            <strong className="text-ink2">{total.toLocaleString("pt-BR")}</strong> clientes
+          </span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-[11px] text-muted">
+              Por página:
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="rounded-lg border border-line2 px-2 py-1 text-xs text-ink2 focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                {[10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+                className="rounded-lg border border-line2 px-2.5 py-1 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40"
+              >← Anterior</button>
+              <span className="px-2 text-[11px] text-muted">{page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || loading}
+                className="rounded-lg border border-line2 px-2.5 py-1 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40"
+              >Próxima →</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Reactivation Helper */}
@@ -5620,6 +5671,8 @@ const TAB_URL_MAP: Record<Tab, string> = {
 
 export function CRMClient({
   initialCustomers,
+  initialCustomersTotal = 0,
+  customersPageSize = 20,
   initialOpportunities,
   initialActions = [],
   overviewStats,
@@ -5627,14 +5680,16 @@ export function CRMClient({
   reviewLinks = { google: null, ifood: null },
   initialTab,
 }: {
-  initialCustomers:     CRMCustomer[];
-  initialOpportunities: Opportunity[];
-  initialActions?:      CrmAction[];
-  restaurantName:       string;
-  overviewStats:        OverviewStats;
-  opportunitiesCount:   number;
-  reviewLinks?:         { google: string | null; ifood: string | null };
-  initialTab?:          Tab;
+  initialCustomers:      CRMCustomer[];
+  initialCustomersTotal?: number;
+  customersPageSize?:    number;
+  initialOpportunities:  Opportunity[];
+  initialActions?:       CrmAction[];
+  restaurantName:        string;
+  overviewStats:         OverviewStats;
+  opportunitiesCount:    number;
+  reviewLinks?:          { google: string | null; ifood: string | null };
+  initialTab?:           Tab;
 }) {
   const googleReviewUrl = reviewLinks.google;
   const ifoodReviewUrl  = reviewLinks.ifood;
@@ -5872,6 +5927,8 @@ export function CRMClient({
         <CustomersTab
           key={customerFilter}
           initialCustomers={initialCustomers}
+          initialTotal={initialCustomersTotal}
+          pageSize={customersPageSize}
           initialFilter={customerFilter}
           onImportOpen={() => setShowImport(true)}
           reviewLinks={reviewLinks}

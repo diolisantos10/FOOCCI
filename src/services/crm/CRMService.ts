@@ -54,6 +54,14 @@ export type CRMCustomer = {
   isUsingImportedData: boolean;
 };
 
+/** Paginated customers result for the CRM Clientes list. */
+export type PaginatedCustomers = {
+  customers: CRMCustomer[];
+  total:     number;
+  page:      number;
+  pageSize:  number;
+};
+
 function serializeCustomer(c: {
   id: string;
   name: string;
@@ -246,8 +254,10 @@ export class CRMService {
   static async getCustomers(
     restaurantId: string,
     filter?: "inactive" | "neverOrdered" | "quente" | "morno" | "frio" | "recent" | "all" | "firstTime" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante",
-    search?: string
-  ): Promise<ServiceResult<CRMCustomer[]>> {
+    search?: string,
+    page = 1,
+    pageSize = 20,
+  ): Promise<ServiceResult<PaginatedCustomers>> {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
     const sixtyDaysAgo  = new Date(now.getTime() - 60 * 86_400_000);
@@ -319,20 +329,33 @@ export class CRMService {
       where = { ...where, AND: [searchClause] };
     }
 
-    const rows = await prisma.customer.findMany({
-      where,
-      orderBy: [{ totalSpend: "desc" }, { lastOrderAt: "desc" }],
-      select: {
-        id: true, name: true, phone: true,
-        totalSpend: true, totalOrders: true,
-        lastOrderAt: true, isActive: true, birthDate: true,
-        crmContactable: true, contactStatus: true, dataEnrichmentStatus: true,
-        importedOrderCount: true, importedTotalSpent: true,
-        importedLastOrderAt: true, averageTicket: true,
-      },
-    });
+    const safePageSize = Math.min(Math.max(1, Math.trunc(pageSize) || 20), 100);
+    const safePage     = Math.max(1, Math.trunc(page) || 1);
 
-    return serviceOk(rows.map(serializeCustomer));
+    const [total, rows] = await prisma.$transaction([
+      prisma.customer.count({ where }),
+      prisma.customer.findMany({
+        where,
+        orderBy: [{ totalSpend: "desc" }, { lastOrderAt: "desc" }],
+        skip: (safePage - 1) * safePageSize,
+        take: safePageSize,
+        select: {
+          id: true, name: true, phone: true,
+          totalSpend: true, totalOrders: true,
+          lastOrderAt: true, isActive: true, birthDate: true,
+          crmContactable: true, contactStatus: true, dataEnrichmentStatus: true,
+          importedOrderCount: true, importedTotalSpent: true,
+          importedLastOrderAt: true, averageTicket: true,
+        },
+      }),
+    ]);
+
+    return serviceOk({
+      customers: rows.map(serializeCustomer),
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+    });
   }
 
   // ── Opportunities ──────────────────────────────────────────────────────────

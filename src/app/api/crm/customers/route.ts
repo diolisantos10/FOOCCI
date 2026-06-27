@@ -7,6 +7,8 @@ import { z } from "zod";
 const querySchema = z.object({
   filter: z.enum(["all", "inactive", "neverOrdered", "quente", "morno", "frio", "recent", "firstTime", "tier-bronze", "tier-prata", "tier-ouro", "tier-diamante"]).default("all"),
   search: z.string().max(100).optional(),
+  page:     z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export async function GET(req: NextRequest) {
@@ -17,7 +19,9 @@ export async function GET(req: NextRequest) {
     const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
     if (!parsed.success) return badRequest("Parâmetros inválidos");
 
-    const result = await CRMService.getCustomers(ctx.restaurantId, parsed.data.filter, parsed.data.search);
+    const result = await CRMService.getCustomers(
+      ctx.restaurantId, parsed.data.filter, parsed.data.search, parsed.data.page, parsed.data.pageSize,
+    );
     if (!result.ok) return serverError(result.error);
 
     return ok(result.data);
