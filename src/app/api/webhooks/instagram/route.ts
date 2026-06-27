@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isValidWebhookVerifyToken } from "@/services/instagram/InstagramConfigService";
-import { handleWebhookEvent } from "@/services/instagram/InstagramChannelService";
+import { handleWebhookEvent, handleCommentWebhookEvent } from "@/services/instagram/InstagramChannelService";
 import { verifyInstagramSignature } from "@/services/instagram/InstagramWebhookParser";
 
 export const runtime = "nodejs";
@@ -51,15 +51,21 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await handleWebhookEvent(payload);
+    // A payload is either DMs (entry[].messaging) or comments (entry[].changes);
+    // each handler no-ops on the other's event type, so running both is safe.
+    const [dm, comments] = await Promise.all([
+      handleWebhookEvent(payload),
+      handleCommentWebhookEvent(payload),
+    ]);
     // Safe summary only — no message content, no PII, no token.
     return NextResponse.json({
       ok: true,
-      resolved: result.resolved,
-      persisted: result.persisted,
-      skippedDuplicates: result.skippedDuplicates,
-      skippedNonMessage: result.skippedNonMessage,
-      skippedNotAllowlisted: result.skippedNotAllowlisted,
+      resolved: dm.resolved || comments.resolved,
+      persisted: dm.persisted + comments.persisted,
+      persistedComments: comments.persisted,
+      skippedDuplicates: dm.skippedDuplicates + comments.skippedDuplicates,
+      skippedNonMessage: dm.skippedNonMessage + comments.skippedNonMessage,
+      skippedNotAllowlisted: dm.skippedNotAllowlisted + comments.skippedNotAllowlisted,
       noRealInstagramSend: true,
     }, { status: 200 });
   } catch (err) {

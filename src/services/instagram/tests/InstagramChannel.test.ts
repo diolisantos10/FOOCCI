@@ -19,11 +19,21 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 import { normalizeInstagramPayload, verifyInstagramSignature, extractAccountId } from "../InstagramWebhookParser";
 import { sendInstagramText } from "../InstagramSendClient";
 import { sha256, toView, verifyTokenMatches, type InstagramConfigRow } from "../InstagramConfigService";
-import { handleWebhookEvent, sendManualReply } from "../InstagramChannelService";
+import { handleWebhookEvent, handleCommentWebhookEvent, sendManualReply } from "../InstagramChannelService";
 import { createHmac } from "crypto";
 
 const ACCOUNT = "ig-acct-1";
 const SENDER = "ig-sender-1";
+
+function commentPayload(commentId: string, opts: { fromId?: string; text?: string } = {}) {
+  return {
+    object: "instagram",
+    entry: [{ id: ACCOUNT, time: 1_700_000_000, changes: [{ field: "comments", value: {
+      id: commentId, text: opts.text ?? "que delícia!",
+      from: { id: opts.fromId ?? "ig-commenter-1", username: "cliente_feliz" }, media: { id: "media-1" },
+    } }] }],
+  };
+}
 
 function payload(mid: string, opts: { echo?: boolean; text?: string } = {}) {
   return {
@@ -195,5 +205,40 @@ describe("(9/10/11) envio manual gated + dry-run", () => {
     const s = await sendInstagramText({ recipientId: SENDER, text: "x", pageAccessToken: null });
     expect(s.sent).toBe(false);
     expect(s.reason).toMatch(/não configurado/i);
+  });
+});
+
+describe("comentários de post entram na central (INSTAGRAM_COMMENT)", () => {
+  it("cria conversa INSTAGRAM_COMMENT + message INBOUND com commentId", async () => {
+    const r = await handleCommentWebhookEvent(commentPayload("comment-1"));
+    expect(r.resolved).toBe(true);
+    expect(r.persisted).toBe(1);
+    const convArg = db.conversation.create.mock.calls[0][0];
+    expect(convArg.data.channel).toBe("INSTAGRAM_COMMENT");
+    expect(convArg.data.aiEnabled).toBe(false);
+    const msgArg = db.message.create.mock.calls[0][0];
+    expect(msgArg.data.direction).toBe("INBOUND");
+    expect(msgArg.data.externalMessageId).toBe("comment-1"); // idempotency = comment id
+    expect((msgArg.data.metadata as { source: string }).source).toBe("INSTAGRAM_COMMENT");
+    expect((msgArg.data.metadata as { mediaId: string }).mediaId).toBe("media-1");
+  });
+
+  it("idempotência por commentId — comentário repetido não persiste", async () => {
+    db.message.findUnique.mockResolvedValueOnce({ id: "existing" });
+    const r = await handleCommentWebhookEvent(commentPayload("comment-dup"));
+    expect(r.persisted).toBe(0);
+    expect(r.skippedDuplicates).toBe(1);
+    expect(db.message.create).not.toHaveBeenCalled();
+  });
+
+  it("comentário do próprio negócio (echo) é ignorado", async () => {
+    const r = await handleCommentWebhookEvent(commentPayload("comment-echo", { fromId: ACCOUNT }));
+    expect(r.persisted).toBe(0);
+    expect(r.skippedNonMessage).toBe(1);
+  });
+
+  it("DM e comentário não se confundem no mesmo handler", async () => {
+    const dmAsComment = await handleCommentWebhookEvent(payload("m-x"));
+    expect(dmAsComment.persisted).toBe(0); // DM payload has no comment changes
   });
 });

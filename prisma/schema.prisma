@@ -703,6 +703,7 @@ enum Channel {
   QR_AGENT
   MANUAL
   INSTAGRAM_DIRECT
+  INSTAGRAM_COMMENT
 }
 
 enum ConversationStatus {

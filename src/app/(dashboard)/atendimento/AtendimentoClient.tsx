@@ -51,7 +51,7 @@ type ConvStatus =
   | "AI_ATENDENDO"
   | "HUMANO_ASSUMIU";
 
-type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT";
+type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT" | "INSTAGRAM_COMMENT";
 
 type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED" | "LOCKED";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
@@ -166,8 +166,9 @@ const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
   SMS:              { label: "SMS",          icon: "💬"  },
   QR_AGENT:         { label: "Cardápio",     icon: "📋"  },
   WEB_AGENT:        { label: "Cardápio",     icon: "📋"  },
-  MANUAL:           { label: "Manual",       icon: "✍️"  },
-  INSTAGRAM_DIRECT: { label: "Instagram DM", icon: "📷"  },
+  MANUAL:            { label: "Manual",       icon: "✍️"  },
+  INSTAGRAM_DIRECT:  { label: "Instagram DM", icon: "📷"  },
+  INSTAGRAM_COMMENT: { label: "Instagram comentário", icon: "💬" },
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
@@ -1209,6 +1210,10 @@ export function AtendimentoClient({
                             ) : conv.channel === "MANUAL" ? (
                               <span className="rounded-full border border-line2 bg-[#F4F4F2] px-1.5 py-px text-[9px] font-bold leading-none text-ink2">
                                 ✍️ Manual
+                              </span>
+                            ) : conv.channel === "INSTAGRAM_DIRECT" || conv.channel === "INSTAGRAM_COMMENT" ? (
+                              <span className="rounded-full border border-pink-200 bg-pink-50 px-1.5 py-px text-[9px] font-bold leading-none text-pink-700">
+                                {conv.channel === "INSTAGRAM_COMMENT" ? "💬 IG comentário" : "📷 Instagram DM"}
                               </span>
                             ) : (
                               <span className="rounded-full border border-line2 bg-[#F4F4F2] px-1.5 py-px text-[9px] font-bold leading-none text-muted">

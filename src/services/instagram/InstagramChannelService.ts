@@ -15,11 +15,12 @@ import {
   recordWebhookError,
   type InstagramConfigRow,
 } from "./InstagramConfigService";
-import { normalizeInstagramPayload } from "./InstagramWebhookParser";
+import { normalizeInstagramPayload, normalizeInstagramComments } from "./InstagramWebhookParser";
 import { sendInstagramText } from "./InstagramSendClient";
-import type { NormalizedInstagramMessage, InstagramSendResult } from "./types";
+import type { NormalizedInstagramMessage, NormalizedInstagramComment, InstagramSendResult } from "./types";
 
 const IG: Channel = "INSTAGRAM_DIRECT";
+const IGC: Channel = "INSTAGRAM_COMMENT";
 
 export interface WebhookHandleResult {
   ok: boolean;
@@ -204,6 +205,140 @@ export async function handleWebhookEvent(payload: unknown): Promise<WebhookHandl
     }
   }
 
+  return base;
+}
+
+// ── Instagram post COMMENTS ────────────────────────────────────────────────────
+// Comments arrive on a separate channel (INSTAGRAM_COMMENT). They are persisted
+// into the SAME Central tables so the operator sees them in the inbox; replies
+// are public (handled by the comment-reply path, separate from the DM send).
+
+function commentAuthorName(c: NormalizedInstagramComment): string {
+  return c.fromUsername ? `@${c.fromUsername}` : `Instagram ${c.fromUserId.slice(-6)}`;
+}
+
+/** Upserts the per-channel identity for a commenter (+ a lightweight Customer). */
+export async function upsertInstagramCommentIdentity(
+  config: InstagramConfigRow,
+  c: NormalizedInstagramComment,
+): Promise<{ customerId: string }> {
+  const existing = await prisma.customerChannelIdentity.findUnique({
+    where: { restaurantId_channel_externalUserId: { restaurantId: config.restaurantId, channel: IGC, externalUserId: c.fromUserId } },
+    select: { customerId: true },
+  });
+  let customerId = existing?.customerId ?? null;
+  if (!customerId) {
+    const customer = await prisma.customer.create({
+      data: {
+        restaurantId: config.restaurantId,
+        name: commentAuthorName(c),
+        phone: null,
+        crmContactable: false,
+        contactStatus: "SEM_TELEFONE",
+      },
+      select: { id: true },
+    });
+    customerId = customer.id;
+  }
+  await prisma.customerChannelIdentity.upsert({
+    where: { restaurantId_channel_externalUserId: { restaurantId: config.restaurantId, channel: IGC, externalUserId: c.fromUserId } },
+    create: { restaurantId: config.restaurantId, customerId, channel: IGC, externalUserId: c.fromUserId },
+    update: { customerId },
+    select: { id: true },
+  });
+  return { customerId };
+}
+
+/** Finds an open comment conversation for this commenter, or creates one. */
+export async function findOrCreateCommentConversation(
+  config: InstagramConfigRow,
+  customerId: string,
+  c: NormalizedInstagramComment,
+): Promise<string> {
+  const existing = await prisma.conversation.findFirst({
+    where: { restaurantId: config.restaurantId, channel: IGC, customerId, status: { in: ["OPEN", "HUMAN", "HUMANO_ASSUMIU", "AI_ATENDENDO"] } },
+    orderBy: { lastMessageAt: "desc" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const conv = await prisma.conversation.create({
+    data: {
+      restaurantId: config.restaurantId,
+      customerId,
+      channel: IGC,
+      status: "OPEN",
+      aiEnabled: false, // manual only — AI never auto-replies to comments
+      contextType: "INBOUND",
+      customerName: commentAuthorName(c),
+    },
+    select: { id: true },
+  });
+  return conv.id;
+}
+
+/** Persists one inbound comment idempotently (keyed by the comment id). */
+export async function persistInboundComment(
+  conversationId: string,
+  c: NormalizedInstagramComment,
+): Promise<boolean> {
+  const existing = await prisma.message.findUnique({ where: { externalMessageId: c.commentId }, select: { id: true } });
+  if (existing) return false;
+  const now = new Date(c.timestamp);
+  await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        conversationId,
+        direction: "INBOUND",
+        senderType: "CUSTOMER",
+        content: c.text || "[comentário sem texto]",
+        type: "TEXT",
+        sentAt: now,
+        externalMessageId: c.commentId,
+        externalStatus: "delivered",
+        // commentId/mediaId/parentCommentId are what the public reply targets.
+        metadata: { source: "INSTAGRAM_COMMENT", commentId: c.commentId, mediaId: c.mediaId, parentCommentId: c.parentCommentId, username: c.fromUsername } as object,
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: now, unreadCount: { increment: 1 } },
+    }),
+  ]);
+  return true;
+}
+
+/** Handles a comments webhook payload: resolve config, normalize, persist. */
+export async function handleCommentWebhookEvent(payload: unknown): Promise<WebhookHandleResult> {
+  const base: WebhookHandleResult = {
+    ok: true, resolved: false, restaurantId: null, persisted: 0,
+    skippedDuplicates: 0, skippedNonMessage: 0, skippedNotAllowlisted: 0,
+    noRealInstagramSend: true, runtimeTouched: false,
+  };
+  const comments = normalizeInstagramComments(payload);
+  if (comments.length === 0) return base;
+
+  const accountId = comments.find(c => c.instagramAccountId)?.instagramAccountId ?? null;
+  if (!accountId) return base;
+  const config = await resolveConfigByInstagramAccountId(accountId);
+  if (!config) return base;
+  base.resolved = true;
+  base.restaurantId = config.restaurantId;
+  await recordWebhookReceived(config.restaurantId);
+  if (config.mode === "DISABLED" || config.paused) return base;
+
+  for (const c of comments) {
+    if (c.isEcho) { base.skippedNonMessage++; continue; }
+    if (!isSenderAllowed(config, c.fromUserId)) { base.skippedNotAllowlisted++; continue; }
+    try {
+      const { customerId } = await upsertInstagramCommentIdentity(config, c);
+      const conversationId = await findOrCreateCommentConversation(config, customerId, c);
+      const persisted = await persistInboundComment(conversationId, c);
+      if (persisted) base.persisted++;
+      else base.skippedDuplicates++;
+    } catch (err) {
+      await recordWebhookError(config.restaurantId, err instanceof Error ? err.message : "erro ao persistir comentário");
+    }
+  }
   return base;
 }
 
