@@ -110,6 +110,17 @@ export interface UpsellRevenue {
   avgPerOrder:       number; // average upsell revenue per order-with-upsell
 }
 
+// Social proof: concrete examples of the menu converting — items a customer added
+// AFTER a Foocci suggestion (OrderItem.isUpsell), in real Foocci orders.
+export interface UpsellExample {
+  orderId:      string;
+  date:         string;        // ISO
+  customerName: string | null;
+  itemName:     string;
+  quantity:     number;
+  value:        number;        // item total added
+}
+
 export interface AnalyticsOverview {
   range:                    DateRange;
   kpi:                      KpiOverview;
@@ -124,6 +135,7 @@ export interface AnalyticsOverview {
   insights:                 Insight[];
   zeroSalesProducts:        ZeroSalesProduct[];   // active menu items with no sales in the period
   upsellRevenue:            UpsellRevenue;
+  upsellExamples?:          UpsellExample[];      // concrete proof rows (social proof)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -159,6 +171,7 @@ export class AnalyticsService {
       channels,
       zeroSalesProducts,
       upsellRevenue,
+      upsellExamples,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -171,11 +184,12 @@ export class AnalyticsService {
       this.getChannels(restaurantId, from, to),
       this.getZeroSalesProducts(restaurantId, from, to),
       this.getUpsellRevenue(restaurantId, from, to),
+      this.getUpsellExamples(restaurantId, from, to),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, zeroSalesProducts, upsellRevenue };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, zeroSalesProducts, upsellRevenue, upsellExamples };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -651,6 +665,51 @@ export class AnalyticsService {
     const avgPerOrder     = ordersWithUpsell > 0 ? Math.round((revenue / ordersWithUpsell) * 100) / 100 : 0;
 
     return { revenue, revenueShare, ordersWithUpsell, avgPerOrder };
+  }
+
+  // Concrete upsell examples (social proof): items added AFTER a Foocci suggestion.
+  private static async getUpsellExamples(
+    restaurantId: string,
+    from: Date,
+    to: Date,
+    limit = 15,
+  ): Promise<UpsellExample[]> {
+    const rows = await prisma.$queryRaw<Array<{
+      order_id:      string;
+      created_at:    Date;
+      customer_name: string | null;
+      item_name:     string;
+      quantity:      RawBigint;
+      value:         string;
+    }>>`
+      SELECT
+        o.id            AS order_id,
+        o."createdAt"   AS created_at,
+        c.name          AS customer_name,
+        oi.name         AS item_name,
+        oi.quantity     AS quantity,
+        oi.total::text  AS value
+      FROM order_items oi
+      JOIN orders o      ON o.id = oi."orderId"
+      LEFT JOIN customers c ON c.id = o."customerId"
+      WHERE o."restaurantId" = ${restaurantId}
+        AND oi."isUpsell" = true
+        AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
+        AND o."importedAt" IS NULL
+        AND o."createdAt" >= ${from}
+        AND o."createdAt" <  ${to}
+      ORDER BY o."createdAt" DESC
+      LIMIT ${limit}
+    `;
+
+    return rows.map((r) => ({
+      orderId:      r.order_id,
+      date:         r.created_at.toISOString(),
+      customerName: r.customer_name,
+      itemName:     r.item_name,
+      quantity:     toNum(r.quantity),
+      value:        toNum(r.value),
+    }));
   }
 
   private static async getZeroSalesProducts(

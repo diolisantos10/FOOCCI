@@ -15,6 +15,7 @@ import type {
   Insight,
   ZeroSalesProduct,
   UpsellRevenue,
+  UpsellExample,
 } from "@/services/analytics/AnalyticsService";
 
 // ─── Analytics Agent types ────────────────────────────────────────────────────
@@ -1196,11 +1197,12 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
 
 // ─── Foocci Incremental Revenue Card ─────────────────────────────────────────
 
-function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
+function UpsellRevenueCard({ upsell, examples }: { upsell: UpsellRevenue | undefined; examples?: UpsellExample[] }) {
   const revenue    = upsell?.revenue         ?? 0;
   const share      = upsell?.revenueShare    ?? 0;
   const orders     = upsell?.ordersWithUpsell ?? 0;
   const avgPerOrder = upsell?.avgPerOrder    ?? 0;
+  const proofs     = examples ?? [];
 
   return (
     <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-5">
@@ -1232,6 +1234,33 @@ function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
         <p className="mt-3 text-xs text-emerald-700">
           Nenhum upsell convertido neste período. Ative o agente IA para começar a gerar receita incremental.
         </p>
+      )}
+
+      {proofs.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+            Prova: o cardápio sugeriu e o cliente comprou
+          </p>
+          <div className="space-y-1.5">
+            {proofs.map((ex) => (
+              <div
+                key={ex.orderId + ex.itemName}
+                className="flex items-center justify-between gap-3 rounded-lg bg-paper px-3 py-2 shadow-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-ink">
+                    {ex.quantity > 1 ? `${ex.quantity}× ` : ""}{ex.itemName}
+                  </p>
+                  <p className="text-[10px] text-muted">
+                    {ex.customerName ? `${ex.customerName} · ` : ""}
+                    {new Date(ex.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · adicionado após sugestão
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm font-bold text-emerald-700">+ {fmtBRL(ex.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1275,7 +1304,7 @@ function TabVisaoGeral({
       </div>
 
       {/* Foocci incremental revenue — shown when there are real orders */}
-      {!loading && hasRealOrders && <UpsellRevenueCard upsell={data?.upsellRevenue} />}
+      {!loading && hasRealOrders && <UpsellRevenueCard upsell={data?.upsellRevenue} examples={data?.upsellExamples} />}
 
       {/* Fallback when no real orders */}
       {!loading && !hasRealOrders && (
