@@ -102,9 +102,10 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
-      {/* ── Brand panel (desktop only) — everything centered in the square ── */}
-      <aside className="relative hidden w-1/2 overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600 lg:flex lg:flex-col lg:items-center lg:justify-center lg:p-12 lg:text-center">
+    <div className="flex min-h-screen flex-col bg-white lg:flex-row">
+      {/* ── Brand panel — orange band (mobile top) / left half (desktop).
+          The mascot ALWAYS sits on orange, never white-on-white. ── */}
+      <aside className="relative flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600 px-6 py-9 text-center lg:w-1/2 lg:py-12">
         {/* soft glow accents */}
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/15 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-black/10 blur-3xl" />
@@ -128,15 +129,15 @@ function LoginForm() {
             src="/brand/foocci/foocci-mascot-cutout.png"
             alt=""
             aria-hidden
-            width={162}
-            height={307}
-            className="mt-8 h-52 w-auto drop-shadow-[0_18px_28px_rgba(0,0,0,0.22)]"
+            width={158}
+            height={305}
+            className="mt-5 h-32 w-auto drop-shadow-[0_18px_28px_rgba(0,0,0,0.22)] lg:mt-8 lg:h-52"
           />
 
-          <h2 className="mt-9 max-w-sm text-[28px] font-bold leading-tight tracking-tight text-white">
+          <h2 className="mt-9 hidden max-w-sm text-[28px] font-bold leading-tight tracking-tight text-white lg:block">
             O motor de receita do seu restaurante.
           </h2>
-          <ul className="mt-6 space-y-2.5">
+          <ul className="mt-6 hidden space-y-2.5 lg:block">
             {VALUE_PROPS.map((v) => (
               <li key={v} className="flex items-center justify-center gap-2 text-[15px] text-white/90">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0" aria-hidden>
@@ -148,20 +149,12 @@ function LoginForm() {
           </ul>
         </div>
 
-        <p className="absolute inset-x-0 bottom-6 text-center text-xs text-white/70">Foocci · IA CRM para restaurantes</p>
+        <p className="absolute inset-x-0 bottom-6 hidden text-center text-xs text-white/70 lg:block">Foocci · IA CRM para restaurantes</p>
       </aside>
 
       {/* ── Form panel ─────────────────────────────────────────────── */}
-      <main className="flex w-full items-center justify-center px-5 py-12 lg:w-1/2">
+      <main className="flex flex-1 items-center justify-center px-5 py-12">
         <div className="w-full max-w-sm">
-          {/* Brand lockup — shown on mobile (the panel is hidden there) */}
-          <div className="mb-8 flex flex-col items-center lg:hidden">
-            {/* Orange badge so the (white) mascot reads on the white form area. */}
-            <span className="mb-4 inline-flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 shadow-md">
-              <Image src="/brand/foocci/foocci-mascot-cutout.png" alt="" aria-hidden width={162} height={307} className="h-[5.5rem] w-auto" />
-            </span>
-            <Image src="/brand/foocci/foocci-wordmark.png" alt="Foocci" width={200} height={50} priority className="h-7 w-auto" />
-          </div>
 
           <h1 className="text-2xl font-bold tracking-tight text-[#0B0B0B]">Entrar</h1>
           <p className="mt-1.5 text-sm text-gray-500">Acesse o painel do seu restaurante.</p>
