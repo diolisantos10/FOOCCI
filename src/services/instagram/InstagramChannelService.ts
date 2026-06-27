@@ -16,7 +16,7 @@ import {
   type InstagramConfigRow,
 } from "./InstagramConfigService";
 import { normalizeInstagramPayload, normalizeInstagramComments } from "./InstagramWebhookParser";
-import { sendInstagramText } from "./InstagramSendClient";
+import { sendInstagramText, replyToInstagramComment } from "./InstagramSendClient";
 import type { NormalizedInstagramMessage, NormalizedInstagramComment, InstagramSendResult } from "./types";
 
 const IG: Channel = "INSTAGRAM_DIRECT";
@@ -387,6 +387,71 @@ export async function sendManualReply(
       externalStatus: send.sent ? "sent" : send.dryRun ? "pending" : "failed",
       errorMessage: send.error ?? undefined,
       metadata: { source: "INSTAGRAM_DIRECT", dryRun: send.dryRun } as object,
+    },
+    select: { id: true },
+  });
+  await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } }).catch(() => undefined);
+
+  return { ok: send.ok, send, messageId: message.id, reason: send.reason };
+}
+
+/** Reads the comment id that a public reply should target from a message's metadata. */
+function commentIdFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const m = metadata as Record<string, unknown>;
+  if (m.source !== "INSTAGRAM_COMMENT") return null;
+  const id = m.commentId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
+ * Posts a PUBLIC reply to the latest inbound comment of a comment conversation,
+ * gated by mode (same rules as sendManualReply). The target comment id is read
+ * from the conversation's most recent inbound INSTAGRAM_COMMENT message metadata.
+ * The outbound reply is persisted to the central reflecting the real result.
+ */
+export async function sendCommentReply(
+  restaurantId: string,
+  conversationId: string,
+  text: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<ManualReplyResult> {
+  const config = await getInstagramConfig(restaurantId);
+  if (!config) {
+    return { ok: false, send: dryStub("Instagram não configurado para responder por aqui."), messageId: null, reason: "Instagram não configurado." };
+  }
+  if (config.mode === "DISABLED" || config.mode === "RECEIVE_ONLY") {
+    return { ok: false, send: dryStub("Instagram conectado em modo somente recebimento."), messageId: null, reason: "Modo somente recebimento." };
+  }
+
+  // The reply targets the most recent inbound comment in this conversation.
+  const inbound = await prisma.message.findFirst({
+    where: { conversationId, direction: "INBOUND" },
+    orderBy: { sentAt: "desc" },
+    select: { metadata: true },
+  });
+  const commentId = commentIdFromMetadata(inbound?.metadata);
+  if (!commentId) {
+    return { ok: false, send: dryStub("Comentário original não encontrado para responder."), messageId: null, reason: "Comentário original não encontrado." };
+  }
+
+  const token = decryptPageToken(config);
+  const send = await replyToInstagramComment({ commentId, text, pageAccessToken: token, dryRun: opts.dryRun });
+
+  const now = new Date();
+  const message = await prisma.message.create({
+    data: {
+      conversationId,
+      direction: "OUTBOUND",
+      senderType: "HUMAN",
+      content: text,
+      type: "TEXT",
+      sentAt: now,
+      externalMessageId: send.externalMessageId,
+      externalStatus: send.sent ? "sent" : send.dryRun ? "pending" : "failed",
+      errorMessage: send.error ?? undefined,
+      // Public reply under the original comment — replyToCommentId records the target.
+      metadata: { source: "INSTAGRAM_COMMENT", dryRun: send.dryRun, replyToCommentId: commentId } as object,
     },
     select: { id: true },
   });

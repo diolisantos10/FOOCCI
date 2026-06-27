@@ -20,7 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { sendManualReply as sendInstagramManualReply } from "@/services/instagram/InstagramChannelService";
+import { sendManualReply as sendInstagramManualReply, sendCommentReply as sendInstagramCommentReply } from "@/services/instagram/InstagramChannelService";
 import type { SendMessageInput, MessageListQuery } from "@/validators/conversation";
 import { ConversationStatus, MessageType } from "@prisma/client";
 
@@ -127,6 +127,20 @@ export class MessageService {
         return serviceFail(result.reason ?? "Não foi possível enviar pelo Instagram.", 502);
       }
       return serviceOk({ id: result.messageId, _channel: "INSTAGRAM_DIRECT", _dryRun: result.send.dryRun });
+    }
+
+    // Instagram comments: the reply is PUBLIC, posted under the original comment
+    // on the post (not a DM). The channel service resolves the target comment id
+    // from the conversation's latest inbound comment and persists the outbound.
+    if (conv.channel === "INSTAGRAM_COMMENT") {
+      if (input.type !== "TEXT") {
+        return serviceFail("Resposta a comentário do Instagram suporta apenas texto.", 400);
+      }
+      const result = await sendInstagramCommentReply(restaurantId, conversationId, input.content);
+      if (!result.ok) {
+        return serviceFail(result.reason ?? "Não foi possível responder o comentário no Instagram.", 502);
+      }
+      return serviceOk({ id: result.messageId, _channel: "INSTAGRAM_COMMENT", _dryRun: result.send.dryRun });
     }
 
     // Non-WhatsApp channels: persist internally. For Cardápio (QR/WEB agent)

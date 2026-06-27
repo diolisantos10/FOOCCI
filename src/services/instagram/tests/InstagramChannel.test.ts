@@ -11,15 +11,15 @@ const db = vi.hoisted(() => ({
   customerChannelIdentity: { findUnique: vi.fn(), upsert: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn() },
   customer: { create: vi.fn(), delete: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-  message: { findUnique: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
+  message: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 import { normalizeInstagramPayload, verifyInstagramSignature, extractAccountId } from "../InstagramWebhookParser";
-import { sendInstagramText } from "../InstagramSendClient";
+import { sendInstagramText, replyToInstagramComment } from "../InstagramSendClient";
 import { sha256, toView, verifyTokenMatches, type InstagramConfigRow } from "../InstagramConfigService";
-import { handleWebhookEvent, handleCommentWebhookEvent, sendManualReply } from "../InstagramChannelService";
+import { handleWebhookEvent, handleCommentWebhookEvent, sendManualReply, sendCommentReply } from "../InstagramChannelService";
 import { createHmac } from "crypto";
 
 const ACCOUNT = "ig-acct-1";
@@ -64,6 +64,7 @@ beforeEach(() => {
   db.conversation.create.mockResolvedValue({ id: "conv1" });
   db.conversation.update.mockResolvedValue({});
   db.message.findUnique.mockResolvedValue(null);
+  db.message.findFirst.mockResolvedValue({ metadata: { source: "INSTAGRAM_COMMENT", commentId: "comment-1" } });
   db.message.create.mockResolvedValue({ id: "msg1" });
 });
 
@@ -240,5 +241,44 @@ describe("comentários de post entram na central (INSTAGRAM_COMMENT)", () => {
   it("DM e comentário não se confundem no mesmo handler", async () => {
     const dmAsComment = await handleCommentWebhookEvent(payload("m-x"));
     expect(dmAsComment.persisted).toBe(0); // DM payload has no comment changes
+  });
+});
+
+describe("resposta pública a comentário (sendCommentReply)", () => {
+  it("REPLY_ONLY publica resposta em dry-run e persiste OUTBOUND no comentário", async () => {
+    db.instagramChannelConfig.findUnique.mockResolvedValue({ ...baseConfig, mode: "REPLY_ONLY" });
+    const r = await sendCommentReply("r1", "conv1", "obrigado pelo carinho! 🧡");
+    // sem token configurado o envio fica em dry-run (mesmo padrão do envio de DM)
+    expect(r.send.dryRun).toBe(true);
+    expect(r.send.sent).toBe(false);
+    const msgArg = db.message.create.mock.calls[0][0];
+    expect(msgArg.data.direction).toBe("OUTBOUND");
+    expect(msgArg.data.externalStatus).toBe("pending");
+    const meta = msgArg.data.metadata as { source: string; replyToCommentId: string };
+    expect(meta.source).toBe("INSTAGRAM_COMMENT");
+    expect(meta.replyToCommentId).toBe("comment-1"); // targets the inbound comment
+  });
+
+  it("RECEIVE_ONLY bloqueia a resposta pública", async () => {
+    db.instagramChannelConfig.findUnique.mockResolvedValue({ ...baseConfig, mode: "RECEIVE_ONLY" });
+    const r = await sendCommentReply("r1", "conv1", "oi");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/somente recebimento/i);
+    expect(db.message.create).not.toHaveBeenCalled();
+  });
+
+  it("sem comentário original na conversa retorna erro claro", async () => {
+    db.instagramChannelConfig.findUnique.mockResolvedValue({ ...baseConfig, mode: "REPLY_ONLY" });
+    db.message.findFirst.mockResolvedValue(null); // nenhum inbound de comentário
+    const r = await sendCommentReply("r1", "conv1", "oi");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/não encontrado/i);
+    expect(db.message.create).not.toHaveBeenCalled();
+  });
+
+  it("send client de comentário em ambiente de teste nunca publica de verdade", async () => {
+    const s = await replyToInstagramComment({ commentId: "comment-1", text: "x", pageAccessToken: "real-token" });
+    expect(s.sent).toBe(false);
+    expect(s.dryRun).toBe(true);
   });
 });

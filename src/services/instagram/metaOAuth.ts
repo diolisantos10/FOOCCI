@@ -25,6 +25,7 @@ export const META_SCOPES = [
   "pages_manage_metadata",
   "instagram_basic",
   "instagram_manage_messages",
+  "instagram_manage_comments",
   "pages_messaging",
 ] as const;
 

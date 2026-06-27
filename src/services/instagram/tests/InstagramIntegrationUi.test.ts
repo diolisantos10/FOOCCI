@@ -23,9 +23,10 @@ import { runInstagramChannelDiagnostic } from "../InstagramChannelDiagnostic";
 
 describe("(1/7/8/11) card e labels do lojista", () => {
   it("card Meta / Instagram aponta para a sub-página de configuração", () => {
-    expect(INSTAGRAM_INTEGRATION_CARD.name).toBe("Meta / Instagram");
+    expect(INSTAGRAM_INTEGRATION_CARD.name).toBe("Instagram");
     expect(INSTAGRAM_INTEGRATION_CARD.configureHref).toBe("/integracoes/instagram");
     expect(INSTAGRAM_INTEGRATION_CARD.description).toContain("Instagram Direct");
+    expect(INSTAGRAM_INTEGRATION_CARD.description).toContain("comentários");
   });
 
   it("(7) RECEIVE_ONLY = 'Receber mensagens'; (8) REPLY_ONLY = 'Responder manualmente'", () => {

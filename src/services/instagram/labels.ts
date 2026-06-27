@@ -21,7 +21,7 @@ export const INSTAGRAM_SCOPE_LABEL: Record<InstagramScope, string> = {
 export const INSTAGRAM_INTEGRATION_CARD = {
   provider: "instagram",
   name: "Instagram",
-  description: "Receba e responda mensagens do Instagram Direct pela Central de Atendimento.",
+  description: "Receba e responda mensagens do Instagram Direct e comentários nas publicações pela Central de Atendimento.",
   configureHref: "/integracoes/instagram",
 } as const;
 

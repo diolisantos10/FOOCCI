@@ -11,13 +11,17 @@
 import { INSTAGRAM_WEBHOOK_PATH } from "./labels";
 
 export const INSTAGRAM_WEBHOOK_FIELD = "messages";
+export const INSTAGRAM_COMMENT_WEBHOOK_FIELD = "comments";
+/** Webhook fields to subscribe — DMs and post comments both land in the Central. */
+export const INSTAGRAM_WEBHOOK_FIELDS = [INSTAGRAM_WEBHOOK_FIELD, INSTAGRAM_COMMENT_WEBHOOK_FIELD] as const;
 export const INSTAGRAM_DEFAULT_BASE_URL = "https://foocci.com.br";
 
-/** Permissions the OAuth flow requests; the last two require Meta App Review. */
+/** Permissions the OAuth flow requests; the messaging/comment ones require Meta App Review. */
 export const INSTAGRAM_REVIEW_SCOPES = [
   "pages_show_list",
   "pages_manage_metadata",
   "instagram_manage_messages",
+  "instagram_manage_comments",
   "pages_messaging",
 ] as const;
 
@@ -56,17 +60,19 @@ export function buildInstagramSetupInstructions(baseUrl: string = INSTAGRAM_DEFA
     "2) Webhook (no app Meta → produto Instagram):",
     `URL: ${instagramWebhookUrl(baseUrl)}`,
     "Verify token: o MESMO valor de INSTAGRAM_WEBHOOK_VERIFY_TOKEN",
-    `Campo/evento a assinar: ${INSTAGRAM_WEBHOOK_FIELD}`,
+    `Campos/eventos a assinar: ${INSTAGRAM_WEBHOOK_FIELDS.join(" + ")}`,
+    "(messages = DMs do Direct; comments = comentários nas publicações)",
     "",
     `3) Permissões (App Review): ${INSTAGRAM_REVIEW_SCOPES.join(", ")}`,
-    "ATENÇÃO: instagram_manage_messages e pages_messaging exigem App Review. Antes da aprovação,",
-    "só contas Admin/Desenvolvedor/Testadora recebem e enviam DMs — use uma conta TESTER para o teste.",
+    "ATENÇÃO: instagram_manage_messages, instagram_manage_comments e pages_messaging exigem App Review.",
+    "Antes da aprovação, só contas Admin/Desenvolvedor/Testadora recebem e respondem — use uma conta TESTER para o teste.",
     "",
     "4) Teste seguro:",
     "1. Integrações → Instagram → Conectar com Facebook → escolher Página → Conectado",
     "2. Rodar diagnóstico (não envia nenhuma mensagem)",
     "3. Enviar um DM de uma conta TESTER para o Instagram conectado",
-    "4. Conferir em Atendimento (selo Instagram DM)",
-    "5. Responder manualmente pela Central (modo Responder manualmente)",
+    "4. Comentar em uma publicação com a conta TESTER",
+    "5. Conferir em Atendimento (selos Instagram DM e Instagram comentário)",
+    "6. Responder manualmente pela Central (modo Responder manualmente) — o comentário recebe uma resposta PÚBLICA no post",
   ].join("\n");
 }

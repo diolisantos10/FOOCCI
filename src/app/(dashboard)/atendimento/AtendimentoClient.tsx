@@ -909,6 +909,12 @@ export function AtendimentoClient({
       setAttachment(null);
       if (json.data?._deliveredVia === "CARDAPIO") {
         setSendNote("Enviado via Cardápio — o cliente verá no chat do /pedido.");
+      } else if (json.data?._channel === "INSTAGRAM_COMMENT") {
+        setSendNote(json.data?._dryRun
+          ? "Resposta registrada (modo somente recebimento/sem envio real)."
+          : "Resposta publicada no post do Instagram.");
+      } else if (json.data?._channel === "INSTAGRAM_DIRECT" && json.data?._dryRun) {
+        setSendNote("Mensagem registrada (envio real do Instagram não ativado).");
       } else if (json.data?._internalOnly) {
         setSendNote("Mensagem registrada internamente. Este canal não usa WhatsApp.");
       }
@@ -1732,6 +1738,10 @@ function ThreadPanel({
   const channel        = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
   const isResolved     = thread.status === "RESOLVED";
   const isLocked       = thread.aiLocked === true;
+  // Instagram channels are text-only; comments are answered with a PUBLIC reply
+  // posted under the original comment on the post (not a private DM).
+  const isInstagramComment = thread.channel === "INSTAGRAM_COMMENT";
+  const isInstagram        = thread.channel === "INSTAGRAM_DIRECT" || isInstagramComment;
   // Pending human request: customer asked for a human and NO operator has assumed
   // yet (status HUMAN). Escalation turns aiEnabled off, so this used to fall into
   // "human handling" and only offered "Devolver para IA" — the bug. This is the
@@ -1986,6 +1996,13 @@ function ThreadPanel({
         </div>
       )}
 
+      {/* ── Instagram comment: reply is public on the post ───────────── */}
+      {!isResolved && (isHumanHandling || isLocked) && isInstagramComment && (
+        <div className="shrink-0 border-t border-pink-200 bg-pink-50 px-4 py-2 text-xs text-pink-700">
+          💬 Sua resposta será <strong>pública no post do Instagram</strong>, abaixo do comentário do cliente.
+        </div>
+      )}
+
       {/* ── Composer ─────────────────────────────────────────────────── */}
       {(!isResolved && (isHumanHandling || isLocked)) ? (
         <form
@@ -2038,15 +2055,18 @@ function ThreadPanel({
 
           {/* Input row */}
           <div className="flex items-end gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || sending}
-              aria-label="Anexar arquivo"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line2 text-muted hover:bg-[#FAFAF8] hover:text-brand-500 disabled:opacity-40 transition-colors"
-            >
-              📎
-            </button>
+            {/* Instagram (DM and comments) is text-only — no attachments. */}
+            {!isInstagram && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || sending}
+                aria-label="Anexar arquivo"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line2 text-muted hover:bg-[#FAFAF8] hover:text-brand-500 disabled:opacity-40 transition-colors"
+              >
+                📎
+              </button>
+            )}
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -2056,7 +2076,7 @@ function ThreadPanel({
                   onSend(e as unknown as FormEvent);
                 }
               }}
-              placeholder={attachment ? "Legenda (opcional)…" : "Digite uma mensagem… (Enter para enviar)"}
+              placeholder={isInstagramComment ? "Responder publicamente o comentário… (Enter para enviar)" : attachment ? "Legenda (opcional)…" : "Digite uma mensagem… (Enter para enviar)"}
               rows={1}
               className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
