@@ -143,6 +143,32 @@ export type OverviewStats = {
   foocciAcquiredCustomers: number; // sourceSystem null → acquired through Foocci (not imported)
 };
 
+// ── CRM conversion proof (social proof) ───────────────────────────────────────
+
+/** A single proven CRM conversion: a campaign message that led to a real order. */
+export type ConversionProof = {
+  id:             string;
+  customerName:   string;
+  campaignName:   string;
+  objective:      string | null;
+  messageText:    string | null; // the exact message sent — the proof
+  sentAt:         string | null;
+  convertedAt:    string | null;
+  hoursToConvert: number | null; // time between send and order
+  revenue:        number;
+  orderId:        string | null;
+};
+
+export type ConversionsResult = {
+  proofs: ConversionProof[];
+  summary: {
+    totalConversions: number;
+    totalRevenue:     number;
+    totalSent:        number;
+    conversionRate:   number; // % of sent that converted
+  };
+};
+
 // ── Top customers (most valuable) ─────────────────────────────────────────────
 
 export type TopCustomerSegment = "QUENTE" | "MORNO" | "FRIO" | "PERDIDO" | "SEM_PEDIDOS";
@@ -706,6 +732,71 @@ export class CRMService {
       const detail = err instanceof Error ? err.message : String(err);
       console.error("[CRMService.deleteUncontactable]", err);
       return serviceFail(`Falha ao remover contatos: ${detail}`, 500);
+    }
+  }
+
+  // ── CRM conversion proof (social proof) ──────────────────────────────────────
+  //
+  // Proven conversions: campaign messages that were sent and then led to a real
+  // order (CampaignExecution.converted = true). Returns the exact message sent,
+  // who, when, how long it took, and the revenue — concrete proof the CRM works.
+  static async getConversions(
+    restaurantId: string,
+    limit = 50,
+  ): Promise<ServiceResult<ConversionsResult>> {
+    try {
+      const [rows, sentCount, convAgg] = await Promise.all([
+        prisma.campaignExecution.findMany({
+          where:   { converted: true, campaign: { restaurantId } },
+          orderBy: { convertedAt: "desc" },
+          take:    limit,
+          select: {
+            id: true, customerName: true, customerPhone: true, messageText: true,
+            sentAt: true, convertedAt: true, revenue: true, convertedOrderId: true,
+            campaign: { select: { name: true, objective: true } },
+          },
+        }),
+        prisma.campaignExecution.count({
+          where: { campaign: { restaurantId }, status: { in: ["SENT", "DELIVERED", "READ"] } },
+        }),
+        prisma.campaignExecution.aggregate({
+          where:  { converted: true, campaign: { restaurantId } },
+          _count: { _all: true },
+          _sum:   { revenue: true },
+        }),
+      ]);
+
+      const proofs: ConversionProof[] = rows.map((r) => {
+        const sent = r.sentAt ? r.sentAt.getTime() : null;
+        const conv = r.convertedAt ? r.convertedAt.getTime() : null;
+        const hoursToConvert = sent != null && conv != null && conv >= sent
+          ? Math.round(((conv - sent) / 3_600_000) * 10) / 10
+          : null;
+        return {
+          id:             r.id,
+          customerName:   r.customerName ?? r.customerPhone ?? "Cliente",
+          campaignName:   r.campaign?.name ?? "Campanha",
+          objective:      r.campaign?.objective ?? null,
+          messageText:    r.messageText,
+          sentAt:         r.sentAt?.toISOString() ?? null,
+          convertedAt:    r.convertedAt?.toISOString() ?? null,
+          hoursToConvert,
+          revenue:        r.revenue != null ? Number(r.revenue) : 0,
+          orderId:        r.convertedOrderId,
+        };
+      });
+
+      const totalConversions = convAgg._count._all;
+      const totalRevenue     = convAgg._sum.revenue != null ? Number(convAgg._sum.revenue) : 0;
+      const conversionRate   = sentCount > 0 ? Math.round((totalConversions / sentCount) * 1000) / 10 : 0;
+
+      return serviceOk({
+        proofs,
+        summary: { totalConversions, totalRevenue, totalSent: sentCount, conversionRate },
+      });
+    } catch (err) {
+      console.error("[CRMService.getConversions]", err);
+      return serviceFail("Falha ao carregar conversões do CRM", 500);
     }
   }
 

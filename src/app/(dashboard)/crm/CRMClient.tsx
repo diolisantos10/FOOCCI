@@ -8,6 +8,7 @@ import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
+import { ConversoesTab } from "./ConversoesTab";
 import { ProgramaTab } from "./ProgramaTab";
 import { ReviewRequestModal } from "./ReviewRequestModal";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
@@ -5594,11 +5595,12 @@ function SegmentacaoConfig() {
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
+type Tab = "overview" | "campanhas" | "conversoes" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
 
 const TAB_PARAM_MAP: Record<string, Tab> = {
   "visao-geral":   "overview",
   "campanhas":     "campanhas",
+  "conversoes":    "conversoes",
   "automacoes":    "automacoes",
   "clientes":      "customers",
   "avaliacoes":    "avaliacoes",
@@ -5608,6 +5610,7 @@ const TAB_PARAM_MAP: Record<string, Tab> = {
 const TAB_URL_MAP: Record<Tab, string> = {
   overview:       "visao-geral",
   campanhas:      "campanhas",
+  conversoes:     "conversoes",
   automacoes:     "automacoes",
   customers:      "clientes",
   programa:       "programa",
@@ -5780,6 +5783,7 @@ export function CRMClient({
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",      label: "Visão Geral" },
     { id: "campanhas",     label: "Campanhas" },
+    { id: "conversoes",    label: "Conversões" },
     { id: "customers",     label: "Clientes" },
     { id: "programa",      label: "Programa de Relacionamento" },
     { id: "avaliacoes",    label: "Avaliações" },
@@ -5857,6 +5861,9 @@ export function CRMClient({
       )}
       {tab === "campanhas" && (
         <CampanhasTab stats={currentStats} />
+      )}
+      {tab === "conversoes" && (
+        <ConversoesTab />
       )}
       {tab === "automacoes" && (
         <AutomacoesTab />
