@@ -246,44 +246,55 @@ export function ActionsNow({ actions }: { actions: CockpitAction[] }) {
 
 // ── Foocci em ação (brand proof + mascote) ─────────────────────────────────────
 
-function FoocciMetric({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-line bg-paper/70 px-4 py-3.5">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted">{label}</p>
+function FoocciMetric({ label, value, sub, href }: { label: string; value: React.ReactNode; sub?: React.ReactNode; href?: string }) {
+  const inner = (
+    <>
+      <p className="flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted">
+        {label}{href && <span className="text-brand-500">→</span>}
+      </p>
       <p className="mt-1.5 text-[22px] font-extrabold leading-none tracking-[-.02em] text-ink">{value}</p>
       {sub && <p className="mt-1.5 text-[11.5px] leading-snug text-ink2">{sub}</p>}
-    </div>
+    </>
+  );
+  const base = "block rounded-xl border border-line bg-paper/70 px-4 py-3.5";
+  return href ? (
+    <Link href={href} className={`${base} transition-colors hover:border-brand-200 hover:bg-brand-50/50`}>{inner}</Link>
+  ) : (
+    <div className={base}>{inner}</div>
   );
 }
 
 /**
- * "Foocci em ação" — the product's impact, as one big card combining what
- * Foocci sells (upsell), what it rescues (abandoned/recovered carts) and the
- * relationship base it nurtures (CRM segments). Full-width hero, not a square.
+ * "Foocci em ação" — the product's impact, as one card combining what Foocci
+ * sells (upsell), what it rescues (abandoned/recovered carts) and the
+ * relationship base it nurtures (CRM segments). Header on top, three clickable
+ * metrics below — each links to where you act on it.
  */
 export function FoocciProof({ proof, crm }: { proof: DashboardData["foocciProof"]; crm: DashboardData["crmSegments"] }) {
   const abandoned = Math.max(0, proof.recoveryTotal - proof.recoveryConverted);
   return (
     <Card className="relative overflow-hidden ring-1 ring-brand-200">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50 via-transparent to-transparent" />
-      <div className="relative flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:gap-6">
-        {/* Brand lockup + mascot */}
-        <div className="flex items-center gap-3 lg:w-60 lg:shrink-0">
+      <div className="relative p-5">
+        {/* Header — mascot + title */}
+        <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/foocci/foocci-mascot-cutout.png" alt="" className="-my-2 w-[68px] shrink-0" />
+          <img src="/brand/foocci/foocci-mascot-cutout.png" alt="" className="-my-1 w-14 shrink-0" />
           <div className="min-w-0">
             <p className="text-[13px] font-bold uppercase tracking-[.04em] text-brand-600">Foocci em ação</p>
-            <p className="mt-1 text-[13px] leading-snug text-ink2">O que o Foocci faz por você hoje — vende, recupera e cuida da base.</p>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-ink2">O que o Foocci faz por você hoje — vende, recupera e cuida da base.</p>
           </div>
         </div>
-        {/* Mini-metrics — upsell · carrinhos · CRM */}
-        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+        {/* Mini-metrics — upsell · carrinhos · CRM, each links somewhere useful */}
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <FoocciMetric
+            href="/analytics"
             label="Vendas no upsell"
             value={fmtCurrency(proof.upsellRevenue)}
             sub={`${fmtNum(proof.upsellItemCount)} ${proof.upsellItemCount === 1 ? "item sugerido" : "itens sugeridos"}`}
           />
           <FoocciMetric
+            href="/crm"
             label="Carrinhos recuperados"
             value={`${fmtNum(proof.recoveryConverted)}/${fmtNum(proof.recoveryTotal)}`}
             sub={proof.recoveryTotal > 0
@@ -291,6 +302,7 @@ export function FoocciProof({ proof, crm }: { proof: DashboardData["foocciProof"
               : "nenhum carrinho abandonado"}
           />
           <FoocciMetric
+            href="/crm"
             label="Clientes quentes (CRM)"
             value={fmtNum(crm.quente)}
             sub={`${fmtNum(crm.morno)} mornos · ${fmtNum(crm.frio)} frios`}
@@ -414,6 +426,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
             <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-start">
               <div className="space-y-5">
                 <SalesChart data={data} />
+                {/* Foocci em ação — right below the chart, above kitchen status */}
+                <FoocciProof proof={data.foocciProof} crm={data.crmSegments} />
                 <OperationNow data={data} />
               </div>
               <div className="space-y-5">
@@ -421,9 +435,6 @@ export default function DashboardClient({ userName }: { userName: string }) {
                 <TopSellers products={data.topProducts} />
               </div>
             </div>
-
-            {/* Foocci em ação — full-width hero: upsell + carrinhos + CRM */}
-            <FoocciProof proof={data.foocciProof} crm={data.crmSegments} />
 
             {/* Deep-dive + discreet setup nudge (relocated noise) */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">

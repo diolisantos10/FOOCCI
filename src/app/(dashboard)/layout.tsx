@@ -28,11 +28,11 @@ export default async function DashboardLayout({
     }
   }
 
-  // Partner restaurant brand for the sidebar co-brand lockup. The logo the owner
+  // Partner restaurant brand for the TopBar account cluster. The logo the owner
   // uploads on the "Marca" page is stored in RestaurantBrandConfig.brandPersona
   // (JSON), NOT Restaurant.logoUrl — so prefer that, falling back to the
   // restaurant record. Same for the display name (brandName overrides).
-  let restaurant: { name: string; logoUrl: string | null } | null = null;
+  let restaurant = { name: null as string | null, logoUrl: null as string | null };
   if (session?.user?.restaurantId) {
     const rid = session.user.restaurantId;
     const [r, brand] = await Promise.all([
@@ -51,12 +51,9 @@ export default async function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider restaurant={restaurant}>
       <div className="flex h-screen overflow-hidden bg-canvas">
-        <Sidebar
-          restaurantName={restaurant?.name ?? null}
-          restaurantLogoUrl={restaurant?.logoUrl ?? null}
-        />
+        <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>

@@ -102,7 +102,7 @@ function fmtLocalHM(iso: string): string {
 
 export function TopBar({ title }: TopBarProps) {
   const router = useRouter();
-  const { toggle: toggleSidebar } = useSidebar();
+  const { toggle: toggleSidebar, restaurant } = useSidebar();
   const { data: session } = useSession();
 
   // Panel open/close
@@ -456,12 +456,48 @@ export function TopBar({ title }: TopBarProps) {
           )}
         </div>
 
+        {/* ── Account: partner restaurant + logged-in user ─────────────── */}
+        <div className="mx-1 hidden h-6 w-px bg-[#E5E5E5] sm:block" />
+        <div className="flex items-center gap-2.5">
+          {/* Partner restaurant brand */}
+          {(restaurant.logoUrl || restaurant.name) && (
+            <div className="flex items-center gap-2">
+              {restaurant.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={restaurant.logoUrl}
+                  alt={restaurant.name ?? "Restaurante"}
+                  className="h-7 w-7 shrink-0 rounded-lg border border-[#E5E5E5] object-cover"
+                />
+              ) : (
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#E5E5E5] bg-[#FAFAF8] text-[12px] font-bold text-gray-600">
+                  {(restaurant.name ?? "?").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="hidden max-w-[150px] truncate text-[13px] font-bold text-gray-900 lg:block">
+                {restaurant.name ?? "Restaurante"}
+              </span>
+            </div>
+          )}
+          {/* Logged-in user */}
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[12px] font-bold text-white">
+              {(session?.user?.name ?? "?").charAt(0).toUpperCase()}
+            </div>
+            <div className="hidden leading-tight lg:block">
+              <p className="max-w-[120px] truncate text-[12.5px] font-semibold text-gray-900">{session?.user?.name ?? "—"}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{session?.user?.role}</p>
+            </div>
+          </div>
+        </div>
+
         {/* ── Sign out ─────────────────────────────────────────────────── */}
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          aria-label="Sair"
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
         >
-          <span>Sair</span>
+          <span className="hidden sm:inline">Sair</span>
           <span className="text-gray-300">↗</span>
         </button>
       </div>
