@@ -128,8 +128,9 @@ async function fetchKpiOnly(
         COUNT(*) FILTER (WHERE status != 'CANCELLED')                                  AS order_count
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
-        AND COALESCE("importedAt", "createdAt") >= ${from}
-        AND COALESCE("importedAt", "createdAt") <  ${to}
+        AND "importedAt" IS NULL
+        AND "createdAt" >= ${from}
+        AND "createdAt" <  ${to}
     `;
     const row      = rows[0];
     const revenue  = Number(row?.total_revenue ?? 0);

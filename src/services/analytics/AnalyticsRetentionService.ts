@@ -13,7 +13,7 @@
  *    Exported and unit-tested independently — no DB, no network.
  *
  * Convention matches AnalyticsService:
- *  - Effective order date = COALESCE("importedAt", "createdAt").
+ *  - Only real Foocci orders count (importedAt IS NULL); imported history excluded.
  *  - Revenue-valid statuses: CONFIRMED / PREPARING / READY / OUT_FOR_DELIVERY / DELIVERED.
  *  - Non-guest customers only.
  *  - Imported orders are included (they carry the customer's real history), but a
@@ -241,12 +241,13 @@ export class AnalyticsRetentionService {
         -- Global first revenue-valid order per non-guest customer
         SELECT
           o."customerId",
-          MIN(COALESCE(o."importedAt", o."createdAt")) AS first_order_at
+          MIN(o."createdAt") AS first_order_at
         FROM orders o
         JOIN customers c ON c.id = o."customerId"
         WHERE o."restaurantId" = ${restaurantId}
           AND c."restaurantId" = ${restaurantId}
           AND c."isGuest"      = false
+          AND o."importedAt"   IS NULL
           AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         GROUP BY o."customerId"
       ),
@@ -266,17 +267,18 @@ export class AnalyticsRetentionService {
           cc."customerId",
           cc.cohort_month,
           cc.first_order_at,
-          MIN(COALESCE(o."importedAt", o."createdAt"))
-            FILTER (WHERE COALESCE(o."importedAt", o."createdAt") > cc.first_order_at)
+          MIN(o."createdAt")
+            FILTER (WHERE o."createdAt" > cc.first_order_at)
             AS second_order_at,
           COALESCE(SUM(o.total), 0)                                            AS total_revenue,
           COALESCE(SUM(o.total)
-            FILTER (WHERE COALESCE(o."importedAt", o."createdAt") > cc.first_order_at), 0)
+            FILTER (WHERE o."createdAt" > cc.first_order_at), 0)
             AS repeat_revenue
         FROM cohort_customers cc
         LEFT JOIN orders o
           ON o."customerId"    = cc."customerId"
           AND o."restaurantId" = ${restaurantId}
+          AND o."importedAt"   IS NULL
           AND o.status         IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         GROUP BY cc."customerId", cc.cohort_month, cc.first_order_at
       )

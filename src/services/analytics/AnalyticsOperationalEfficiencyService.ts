@@ -334,8 +334,8 @@ export class AnalyticsOperationalEfficiencyService {
           AND o.status         = 'DELIVERED'
           AND o."completedAt"  IS NOT NULL
           AND o."importedAt"   IS NULL
-          AND COALESCE(o."importedAt", o."createdAt") >= ${from}
-          AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+          AND o."createdAt" >= ${from}
+          AND o."createdAt" <  ${to}
           AND EXTRACT(EPOCH FROM (o."completedAt" - o."createdAt")) > 0
           AND EXTRACT(EPOCH FROM (o."completedAt" - o."createdAt")) < 28800
       `,
@@ -355,8 +355,9 @@ export class AnalyticsOperationalEfficiencyService {
                                                                 AS awaiting_payment_total
         FROM orders
         WHERE "restaurantId" = ${restaurantId}
-          AND COALESCE("importedAt", "createdAt") >= ${from}
-          AND COALESCE("importedAt", "createdAt") <  ${to}
+          AND "importedAt" IS NULL
+          AND "createdAt" >= ${from}
+          AND "createdAt" <  ${to}
       `,
     ]);
 
