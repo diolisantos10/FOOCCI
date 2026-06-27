@@ -691,14 +691,21 @@ export class CRMService {
       let deleted = 0;
       for (let i = 0; i < deletableIds.length; i += 500) {
         const chunk = deletableIds.slice(i, i + 500);
-        const res = await prisma.customer.deleteMany({ where: { id: { in: chunk } } });
-        deleted += res.count;
+        // Addresses / preferences / segment memberships / data signals cascade on
+        // delete. Conversation is the only non-cascading FK on a customer with no
+        // orders — unlink it (keep the conversation) so the delete doesn't block.
+        await prisma.$transaction([
+          prisma.conversation.updateMany({ where: { customerId: { in: chunk } }, data: { customerId: null } }),
+          prisma.customer.deleteMany({ where: { id: { in: chunk } } }),
+        ]);
+        deleted += chunk.length;
       }
 
       return serviceOk({ deleted, skippedWithHistory, total: targets.length });
     } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
       console.error("[CRMService.deleteUncontactable]", err);
-      return serviceFail("Falha ao remover contatos sem contato", 500);
+      return serviceFail(`Falha ao remover contatos: ${detail}`, 500);
     }
   }
 
