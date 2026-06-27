@@ -16,6 +16,7 @@ interface DashboardData {
   period: PeriodKey; periodLabel: string; periodDays: number;
   ordersPeriod: number; revenuePeriod: number; avgTicket: number; ordersPrev: number; revenuePrev: number;
   avgTicketPrev: number; newCustomersPrev: number;
+  conversionRate: number | null; conversionRatePrev: number | null; abandonedCarts: number;
   openOrders: number; totalCustomers: number; newCustomersPeriod: number;
   pipeline: { pending: number; confirmed: number; preparing: number; ready: number; outForDelivery: number };
   delayedCount: number; pendingPaymentsCount: number;
@@ -414,11 +415,17 @@ export default function DashboardClient({ userName }: { userName: string }) {
             {/* KPIs */}
             <div>
               <SectionTitle meta={`${data.periodLabel} · ${data.prevPeriodLabel}`}>Saúde do negócio</SectionTitle>
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
                 <Stat label="Faturamento" value={fmtCurrency(data.revenuePeriod)} change={delta(data.revenuePeriod, data.revenuePrev)} sub={data.revenuePrev > 0 ? `de ${fmtCurrency(data.revenuePrev)}` : undefined} />
                 <Stat label="Pedidos" value={fmtNum(data.ordersPeriod)} change={delta(data.ordersPeriod, data.ordersPrev)} sub={data.ordersPrev > 0 ? `de ${fmtNum(data.ordersPrev)}` : undefined} />
                 <Stat label="Ticket médio" value={data.ordersPeriod > 0 ? fmtCurrency(data.avgTicket) : "—"} change={delta(data.avgTicket, data.avgTicketPrev)} sub={data.avgTicketPrev > 0 ? `de ${fmtCurrency(data.avgTicketPrev)}` : "por pedido"} />
                 <Stat label="Novos clientes" value={fmtNum(data.newCustomersPeriod)} change={delta(data.newCustomersPeriod, data.newCustomersPrev)} sub={data.newCustomersPrev > 0 ? `de ${fmtNum(data.newCustomersPrev)}` : `${fmtNum(data.totalCustomers)} na base`} />
+                <Stat
+                  label="Taxa de conversão"
+                  value={data.conversionRate != null ? `${data.conversionRate}%` : "—"}
+                  change={data.conversionRate != null && data.conversionRatePrev != null ? delta(data.conversionRate, data.conversionRatePrev) : undefined}
+                  sub={`${fmtNum(data.abandonedCarts)} ${data.abandonedCarts === 1 ? "carrinho abandonado" : "carrinhos abandonados"}`}
+                />
               </div>
             </div>
 
@@ -431,7 +438,9 @@ export default function DashboardClient({ userName }: { userName: string }) {
                 <OperationNow data={data} />
               </div>
               <div className="space-y-5">
-                {period === "today" && <ActionsNow actions={cockpit?.recommendedActions ?? []} />}
+                {/* Carrinhos abandonados now live in the "Taxa de conversão" KPI,
+                    so the RECOVERY action is dropped from "O que fazer agora". */}
+                {period === "today" && <ActionsNow actions={(cockpit?.recommendedActions ?? []).filter((a) => a.source !== "RECOVERY")} />}
                 <TopSellers products={data.topProducts} />
               </div>
             </div>

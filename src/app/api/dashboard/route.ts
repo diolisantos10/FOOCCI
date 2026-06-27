@@ -64,6 +64,8 @@ export async function GET(req: NextRequest) {
       cancelledPeriodCount,
       orderSourceCounts,
       newCustomersPrev,
+      draftStatusNow,
+      draftStatusPrev,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + chart)
       prisma.order.findMany({
@@ -163,6 +165,18 @@ export async function GET(req: NextRequest) {
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
         },
       }),
+      // 13. Cart drafts (with items) by status, for the conversion-rate KPI.
+      prisma.orderDraft.groupBy({
+        by:     ["status"],
+        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, items: { some: {} } },
+        _count: { id: true },
+      }),
+      // 14. Same, previous period (conversion delta).
+      prisma.orderDraft.groupBy({
+        by:     ["status"],
+        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd }, items: { some: {} } },
+        _count: { id: true },
+      }),
     ]);
 
     // ── Period KPIs ────────────────────────────────────────────────────────────
@@ -177,6 +191,19 @@ export async function GET(req: NextRequest) {
     const revenuePrev   = prevOrders.reduce((s, o) => s + Number(o.total), 0);
     const ordersPrev    = prevOrders.length;
     const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
+
+    // ── Conversion rate — carts (drafts) that became orders vs. those decided.
+    //    CONFIRMED / (CONFIRMED + ABANDONED); still-OPEN (undecided) carts are
+    //    excluded so an in-progress cart doesn't drag the rate down.
+    const draftCount = (rows: Array<{ status: string; _count: { id: number } }>, s: string) =>
+      rows.find((r) => r.status === s)?._count.id ?? 0;
+    const convNow      = draftCount(draftStatusNow, "CONFIRMED");
+    const abandonedNow = draftCount(draftStatusNow, "ABANDONED");
+    const decidedNow   = convNow + abandonedNow;
+    const conversionRate = decidedNow > 0 ? Math.round((convNow / decidedNow) * 100) : null;
+    const convPrev     = draftCount(draftStatusPrev, "CONFIRMED");
+    const decidedPrev  = convPrev + draftCount(draftStatusPrev, "ABANDONED");
+    const conversionRatePrev = decidedPrev > 0 ? Math.round((convPrev / decidedPrev) * 100) : null;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -267,6 +294,11 @@ export async function GET(req: NextRequest) {
       revenuePrev:     Math.round(revenuePrev     * 100) / 100,
       avgTicketPrev:   Math.round(avgTicketPrev   * 100) / 100,
       newCustomersPrev,
+
+      // Conversion KPI (cart → order)
+      conversionRate,
+      conversionRatePrev,
+      abandonedCarts:  abandonedNow,
 
       // Real-time
       openOrders,
