@@ -109,14 +109,18 @@ function LoginForm() {
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/15 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-black/10 blur-3xl" />
 
-        <Image
-          src="/brand/foocci/foocci-wordmark.png"
-          alt="Foocci"
-          width={200}
-          height={50}
-          priority
-          className="relative h-7 w-auto brightness-0 invert"
-        />
+        {/* Wrapped in a div so the flex column's align-items:stretch can't blow
+            the logo out to full width (which smears the 4:1 wordmark). */}
+        <div className="relative">
+          <Image
+            src="/brand/foocci/foocci-wordmark.png"
+            alt="Foocci"
+            width={200}
+            height={50}
+            priority
+            className="h-8 w-auto brightness-0 invert"
+          />
+        </div>
 
         <div className="relative">
           <Image
