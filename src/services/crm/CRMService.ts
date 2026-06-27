@@ -660,6 +660,48 @@ export class CRMService {
     });
   }
 
+  // ── Permanently delete "useless" contacts ────────────────────────────────────
+  //
+  // Removes non-guest customers that cannot be worked with in CRM: NO valid phone
+  // (crmContactable=false) AND no e-mail. These are typically marketplace contacts
+  // with no way to reach them. Cascades remove their addresses / preferences /
+  // segment memberships / data signals automatically.
+  //
+  // SAFETY: a customer that has any Order or OrderDraft is SKIPPED (never deleted),
+  // so real sales history is never destroyed — even if that customer has no contact.
+  static async deleteUncontactable(
+    restaurantId: string,
+  ): Promise<ServiceResult<{ deleted: number; skippedWithHistory: number; total: number }>> {
+    try {
+      const targets = await prisma.customer.findMany({
+        where: {
+          restaurantId,
+          isGuest:        false,
+          crmContactable: false,
+          OR: [{ email: null }, { email: "" }],
+        },
+        select: { id: true, _count: { select: { orders: true, orderDrafts: true } } },
+      });
+
+      const deletableIds = targets
+        .filter((t) => t._count.orders === 0 && t._count.orderDrafts === 0)
+        .map((t) => t.id);
+      const skippedWithHistory = targets.length - deletableIds.length;
+
+      let deleted = 0;
+      for (let i = 0; i < deletableIds.length; i += 500) {
+        const chunk = deletableIds.slice(i, i + 500);
+        const res = await prisma.customer.deleteMany({ where: { id: { in: chunk } } });
+        deleted += res.count;
+      }
+
+      return serviceOk({ deleted, skippedWithHistory, total: targets.length });
+    } catch (err) {
+      console.error("[CRMService.deleteUncontactable]", err);
+      return serviceFail("Falha ao remover contatos sem contato", 500);
+    }
+  }
+
   // ── Top customers (most valuable) ────────────────────────────────────────────
   //
   // Honest, read-only ranking of the restaurant's biggest spenders.
