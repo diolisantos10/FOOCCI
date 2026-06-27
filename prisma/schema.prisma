@@ -63,6 +63,7 @@ model Restaurant {
   orderDrafts            OrderDraft[]
   campaigns              Campaign[]
   conversations          Conversation[]
+  helpThreads            HelpThread[]
   offers                 Offer[]
   customerSegments       CustomerSegment[]
   aiLogs                 AIInteractionLog[]
@@ -2364,6 +2365,70 @@ model OperationalManualDecisionLog {
   @@index([area])
   @@index([status])
   @@map("operational_manual_decision_logs")
+}
+
+// ═══════════════════════════════════════════
+//  FOOCCI HELP WIDGET — lojista-facing guide / AI chat / support channel
+// ═══════════════════════════════════════════
+//
+//  Powers the floating, retractable in-app help widget for restaurant owners:
+//   • AI Q&A grounded on the published + agent-visible Operational Manual (RAG)
+//   • "Falar com a FOOD" — escalation to the Foocci team as a last resort
+//  The Foocci team answers escalated threads from /admin/support-inbox.
+//
+//  A thread starts in AI mode; escalation flips it to HUMAN mode + ESCALATED
+//  status. SUPPORT messages are written by the Foocci team, USER by the lojista,
+//  ASSISTANT by the AI, SYSTEM for state-change markers.
+
+model HelpThread {
+  id            String           @id @default(cuid())
+  restaurantId  String
+  userId        String? // lojista user who opened it (soft ref, no FK)
+  subject       String?
+  status        HelpThreadStatus @default(OPEN)
+  mode          HelpThreadMode   @default(AI)
+  lastMessageAt DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  restaurant Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  messages   HelpMessage[]
+
+  @@index([restaurantId])
+  @@index([status])
+  @@map("help_threads")
+}
+
+model HelpMessage {
+  id         String          @id @default(cuid())
+  threadId   String
+  role       HelpMessageRole
+  content    String          @db.Text
+  authorName String? // display name for SUPPORT/USER messages
+  createdAt  DateTime        @default(now())
+
+  thread HelpThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@map("help_messages")
+}
+
+enum HelpThreadStatus {
+  OPEN
+  ESCALATED
+  RESOLVED
+}
+
+enum HelpThreadMode {
+  AI
+  HUMAN
+}
+
+enum HelpMessageRole {
+  USER
+  ASSISTANT
+  SUPPORT
+  SYSTEM
 }
 
 // ═══════════════════════════════════════════

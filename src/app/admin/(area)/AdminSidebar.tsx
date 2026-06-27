@@ -24,6 +24,7 @@ export function AdminSidebar() {
     { href: "/admin/build-os",                             label: "Build OS",     icon: "🛠️" },
     { href: "/admin/preflight",                            label: "Pré-piloto",   icon: "✅" },
     { href: "/admin/manual-operacional",                   label: "Manual",       icon: "📖" },
+    { href: "/admin/support-inbox",                        label: "Suporte",      icon: "💬" },
     { href: "/admin/branding-book",                        label: "Branding Book", icon: "🎨" },
     { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",  icon: "🔍" },
     { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",  icon: "🧪" },

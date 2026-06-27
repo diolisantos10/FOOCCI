@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SidebarProvider } from "@/components/layout/SidebarContext";
+import { HelpWidget } from "@/components/help/HelpWidget";
 
 export default async function DashboardLayout({
   children,
@@ -57,6 +58,7 @@ export default async function DashboardLayout({
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
+        <HelpWidget />
       </div>
     </SidebarProvider>
   );
