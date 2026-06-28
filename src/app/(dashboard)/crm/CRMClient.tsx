@@ -4366,24 +4366,6 @@ function CustomersTab({
             {CUSTOMER_FILTER_LABELS[f]}
           </button>
         ))}
-        <span
-          className="text-[10px] font-bold uppercase tracking-wide text-muted pl-1"
-          title="Os níveis Bronze, Prata, Ouro e Diamante são definidos no Programa de Relacionamento."
-        >Nível:</span>
-        {filterKeys.filter((f) => f.startsWith("tier-")).map((f) => (
-          <button
-            key={f}
-            onClick={() => applyFilter(f)}
-            title="Os níveis são definidos no Programa de Relacionamento."
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
-              filter === f
-                ? "bg-brand-600 text-white shadow-sm"
-                : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
-            }`}
-          >
-            {CUSTOMER_FILTER_LABELS[f]}
-          </button>
-        ))}
         <select
           value={sortValue}
           onChange={(e) => setSortValue(e.target.value)}
