@@ -32,6 +32,7 @@ import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
+import { cartLineBaseIds } from "./cartNormalization";
 import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
 import { getWaiterRuntimeKnowledge } from "@/services/waiterRuntime/WaiterLibraryRuntimeBridge";
 import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
@@ -46,7 +47,7 @@ export interface AIWebTurnInput {
   restaurantId:    string;
   message:         string;
   history:         Array<{ role: "user" | "assistant"; content: string }>;
-  cart?:           Array<{ id?: string; name: string; price: number; qty: number }>;
+  cart?:           Array<{ id?: string; baseItemId?: string; name: string; price: number; qty: number }>;
   stage?:          OrderStage;
   upsellOffered?:  "drink" | "dessert" | "extras" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
@@ -165,7 +166,9 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
 
   // ── WaiterBrainV2 decision (always first) ───────────────────
   // Non-AI events return immediately — no OpenAI call needed.
-  const cartItemIds = cart.map((c) => c.id).filter((id): id is string => !!id);
+  // Normalize to product (base) ids so variant/customized/upsell lines are still
+  // recognized in cart analysis — otherwise the checkout upsell is skipped.
+  const cartItemIds = cartLineBaseIds(cart);
   const cartValue   = cart.reduce((s, c) => s + c.price * c.qty, 0);
 
   // Build session memory from request context.

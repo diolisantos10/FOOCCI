@@ -27,7 +27,9 @@ import { Channel } from "@prisma/client";
 // ── Request shape ─────────────────────────────────────────────────────────────
 
 interface HistoryEntry { role: "user" | "assistant"; content: string; }
-interface CartItem     { id?: string; name: string; price: number; qty: number; }
+// baseItemId = the plain product id; `id` may be suffixed for variant/customized/
+// upsell lines. The waiter brain needs baseItemId to match the catalog.
+interface CartItem     { id?: string; baseItemId?: string; name: string; price: number; qty: number; }
 
 interface PedidoChatRequest {
   message:         string;
