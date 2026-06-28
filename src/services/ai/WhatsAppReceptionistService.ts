@@ -720,13 +720,25 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext, message: string =
   }
 }
 
+/**
+ * Product decision (pré-lançamento): o recepcionista de WhatsApp NÃO deve
+ * responder perguntas livres com o LLM — ele raciocina mal e deu respostas
+ * erradas (ex.: negou que há rodízio, contradizendo o próprio menu). Enquanto
+ * isso não for retomado, qualquer mensagem fora do menu (intent UNKNOWN) é
+ * encaminhada para um atendente humano em vez de gerar uma resposta livre.
+ * Reativar = voltar para `true`.
+ */
+const ALLOW_FREE_FORM_REPLIES: boolean = false;
+
 /** Returns true when the conversation must be handed off to a human. */
 function needsHandoff(intent: Intent, agentMode: string): boolean {
   return (
     intent === "HUMAN_REQUEST" ||
     intent === "COMPLAINT" ||
     intent === "ORDER_STATUS" ||
-    (agentMode === "HUMAN_ASSISTED" && intent === "UNKNOWN")
+    (agentMode === "HUMAN_ASSISTED" && intent === "UNKNOWN") ||
+    // Free-form desligado: toda pergunta fora do menu vai para humano.
+    (!ALLOW_FREE_FORM_REPLIES && intent === "UNKNOWN")
   );
 }
 
@@ -1212,8 +1224,9 @@ async function run(conversationId: string): Promise<void> {
         // NOTE: GREETING and MENU_REQUEST are NEVER routed to GPT — both
         // always show the configured numbered menu (template path below).
         const useGpt =
-          (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
-          (templateReply === null && intent !== "GREETING" && intent !== "MENU_REQUEST");
+          ALLOW_FREE_FORM_REPLIES &&
+          ((intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
+           (templateReply === null && intent !== "GREETING" && intent !== "MENU_REQUEST"));
 
         // Within the 30-min session: short re-engagement only — menu already visible,
         // no need to repeat the numbered list. Compact footer keeps the escape hatch.
