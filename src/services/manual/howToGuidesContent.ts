@@ -247,4 +247,216 @@ No cartão **Identidade Visual**, escolha a **Cor principal** e a **Cor secundá
 
 Ao final, clique em **Salvar persona da marca**.`,
   },
+  {
+    slug: "guia-painel-inicial",
+    title: "Como ler o painel inicial (Início)",
+    area: "GENERAL",
+    description: "Entender os números e seções da tela inicial.",
+    content: `# Como ler o painel inicial (Início)
+
+No menu lateral, **Início** é o resumo do seu negócio em tempo real.
+
+No topo, escolha o período: **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **30 dias** ou **Personalizado**.
+
+- **Saúde do negócio** — os números do período: **Faturamento**, **Pedidos**, **Ticket médio**, **Novos clientes** e **Taxa de conversão** (cada um mostra a variação vs. o período anterior).
+- **Foocci em ação** — o que o Foocci fez por você: **Vendas no upsell**, **Carrinhos recuperados** e **Clientes quentes (CRM)**.
+- **Operação agora** — pedidos em andamento por etapa: **Aguardando**, **Em preparo**, **Prontos** e **Em entrega**, com avisos de atrasados e aguardando pagamento.
+- **O que fazer agora** — ações sugeridas para hoje.
+- **Mais vendidos** — ranking dos produtos do período.
+
+No rodapé, **Ver análise completa →** abre o Analytics.`,
+  },
+  {
+    slug: "guia-central-conversas",
+    title: "Como atender clientes na Central de Conversas",
+    area: "WHATSAPP",
+    description: "Ler conversas, assumir da IA, responder e resolver.",
+    content: `# Como atender clientes na Central de Conversas
+
+No menu lateral, **Central de Conversas** reúne todas as conversas (WhatsApp, Cardápio, Instagram).
+
+## Encontrar a conversa
+- Busque por **Nome, telefone ou mensagem** e use **Ordenar** (Mais recentes, Mais antigas, Nome A–Z…).
+- Filtre pelos chips: **Todas**, **IA ativa**, **Humano**, **Aguardando**, **Resolvidas**, **IA bloqueada**, **CRM enviado**, **Resposta CRM**.
+- Quando alguém pede atendente, aparece **"🙋 X aguardando atendimento humano"** — clique em **Ver pendentes**.
+
+## Assumir e responder
+1. Abra a conversa.
+2. Clique em **Assumir atendimento** — a IA para de responder e o campo de mensagem libera.
+3. Digite e clique em **Enviar** (ou tecle Enter). Para anexar imagem/PDF, use o **📎**.
+4. Ao terminar, clique em **Devolver para IA** (a IA volta a responder) ou **Resolver** para encerrar.
+
+> Dono e Gerente também podem lançar um pedido pela conversa em **+ Criar pedido**.`,
+  },
+  {
+    slug: "guia-agentes-ia",
+    title: "Como configurar os Agentes de IA",
+    area: "WAITER_AGENT",
+    description: "Ajustar WhatsApp Host, Waiter, CRM e Analytics.",
+    content: `# Como configurar os Agentes de IA
+
+No menu lateral, **Vendas → Agentes IA**. No topo, escolha o agente: **WhatsApp Host**, **Waiter**, **CRM** e **Analytics**.
+
+## WhatsApp Host (recepcionista do WhatsApp)
+- **Status do agente:** **Nome do agente**, **Modo de operação** (Menu fixo / Recepcionista / Com suporte humano), **Tom de voz** e **Estilo de atendimento**.
+- **Menu inicial:** a **Mensagem de boas-vindas** e as **Opções do menu** (cada opção tem um rótulo e um tipo de fluxo: fazer pedido, falar com atendente, ver cardápio, promoções, submenu…). Use **+ Nova opção** ou **Adicionar predefinição**.
+- **Encaminhamento humano:** **Telefone do atendente** e a mensagem de transferência.
+- Clique em **Salvar WhatsApp Host**.
+
+## Waiter (atendente do cardápio digital)
+Escolha uma **personalidade** (Tradicional, Moderno, Ágil, Premium, Vendas) e ajuste **Formalidade**, **Emojis**, **Saudação**, **Foco de vendas** e **Intensidade do upsell**. Se quiser, escreva **Instruções do agente**. Clique em **Salvar Waiter**.
+
+## CRM e Analytics
+**CRM** mostra o resumo da base (frios/mornos/VIP), oportunidades e campanhas. **Analytics** monitora KPIs e alertas (em evolução).
+
+> O que você salvar passa a valer **nas próximas conversas** imediatamente.`,
+  },
+  {
+    slug: "guia-ensinar-ia",
+    title: "Como ensinar a IA (base de conhecimento)",
+    area: "WAITER_AGENT",
+    description: "Aprovar aprendizados e adicionar respostas para a IA.",
+    content: `# Como ensinar a IA (base de conhecimento)
+
+Em **Vendas → Agentes IA → WhatsApp Host**, role até a base de conhecimento.
+
+- **Aprendizados pendentes** — respostas sugeridas aguardando sua aprovação. Clique em **Aprovar** para a IA passar a usar, ou **Rejeitar**.
+- **Gaps (sem resposta)** — perguntas que a IA não soube responder; adicione a resposta ou clique em **Ignorar**.
+- **Base de conhecimento ativa** — os fatos que a IA usa; você pode **Desativar** ou **Excluir** cada um.
+- **+ Adicionar conhecimento manualmente** — preencha **Título**, **Exemplos de pergunta** (um por linha), **Resposta da IA** e **Categoria**, e clique em **Salvar como ativo**.
+
+> É assim que a IA aprende as particularidades do seu restaurante.`,
+  },
+  {
+    slug: "guia-analytics",
+    title: "Como entender seus números (Analytics)",
+    area: "ANALYTICS",
+    description: "Ler KPIs, abas e perguntar ao analista de dados.",
+    content: `# Como entender seus números (Analytics)
+
+No menu lateral, **Vendas → Analytics**. Escolha o período (**Hoje, Ontem, 7 dias, 30 dias, 90 dias, 12 meses, Personalizado**) e navegue pelas abas:
+
+- **Visão Geral** — KPIs (Receita, Pedidos, Ticket médio, Novos clientes, Cancelamentos), receita incremental do Foocci, eficiência operacional e o **Diagnóstico do período**.
+- **Analista** — faça uma pergunta em linguagem natural (ex: "Por que as vendas caíram?") e receba resposta baseada nos seus dados.
+- **Produtos** e **Categorias** — o que mais vende e itens parados.
+- **Clientes** — retenção, top clientes, segmentos e tiers.
+- **Canais** — origem dos pedidos.
+- **Receita Incremental** — o que o Foocci vendeu a mais via sugestões.
+- **Cardápio Delivery** — visitas e pedidos por canal, com links rastreáveis para copiar.
+
+> Na Visão Geral, o **Gerente Comercial IA** resume tudo e sugere ações.`,
+  },
+  {
+    slug: "guia-promocoes",
+    title: "Como criar uma promoção",
+    area: "CHECKOUT",
+    description: "Criar descontos, cupons, combos e automações.",
+    content: `# Como criar uma promoção
+
+No menu lateral, **Marketing → Promoções**. Clique em **+ Criar promoção**.
+
+1. **Informações básicas** — **Nome da promoção** (e descrição interna, opcional).
+2. **Tipo de promoção** — **% Desconto**, **R$ Desconto**, **Combo**, **Frete grátis** ou **Cupom**. Para % ou R$, informe o valor; para **Cupom**, defina o **Código do cupom** (ex: PROMO10).
+3. **Banner (opcional)** — marque **Adicionar banner** e suba uma imagem (proporção 3:1, até 5 MB); ela aparece no topo do cardápio.
+4. **Alvo** — **Pedido**, **Categoria** ou **Produto**; e o **Canal** (Todos, Cardápio QR, Delivery, WhatsApp / IA).
+5. **Validade** — **Início** e **Término** (vazio = sem expiração), **Dias da semana** e **Hora início/fim** (opcionais).
+6. **Regras** — **Pedido mínimo**, **Qtd. mínima**, **Limite de usos**, **Uso único por cliente** e **Combinável**.
+7. Clique em **Criar promoção**.
+
+Em cada card depois: **Ativar/Pausar**, **Editar**, **📊 Métricas**, **Duplicar** ou **Excluir**. Na aba **🤖 Automações WhatsApp** você liga disparos de **Reativação**, **Aniversário** e **Pós-pedido**.`,
+  },
+  {
+    slug: "guia-canais-links",
+    title: "Como criar links rastreáveis (Canais)",
+    area: "GENERAL",
+    description: "Gerar links por canal e medir cliques, pedidos e receita.",
+    content: `# Como criar links rastreáveis (Canais)
+
+No menu lateral, **Marketing → Canais** ("Canais & Links Rastreáveis"). Crie um link único por canal para saber de onde vêm cliques, pedidos e receita.
+
+1. Clique em **+ Novo link**.
+2. Preencha **Nome do link** (ex: "Instagram Bio"), **Slug** (gerado automaticamente), **Destino** (**Cardápio Delivery /pedido** ou **Cardápio QR / Mesa /qr**), **Origem** (Instagram, WhatsApp, QR Code, Google…) e **Meio** (Bio, Stories, Mesa…). Campanha, Conteúdo e Termo são opcionais.
+3. Clique em **Criar link**.
+
+No card do link: **Copiar** o link, **📷 QR** para baixar o QR Code, e acompanhe **Cliques / Clientes / Pedidos / Receita**. Na aba **Analytics** dá para salvar o **GA4** e o **Google Tag Manager** do cardápio público.`,
+  },
+  {
+    slug: "guia-fotos-cardapio",
+    title: "Como melhorar as fotos do cardápio",
+    area: "UI_UX",
+    description: "Gerar, revisar e aprovar fotos melhoradas dos produtos.",
+    content: `# Como melhorar as fotos do cardápio
+
+No menu lateral, **Plataforma → Fotos do Cardápio** (acesso de Dono/Gerente). A IA gera uma versão melhorada de cada foto para você aprovar — o original nunca é apagado sozinho.
+
+1. Escolha o **Modo** (**Aprimorar + Upscale**, **Só aprimorar** ou **Só upscale**).
+2. Clique em **Iniciar processamento → Processar agora** (ou marque **Dry run** para simular).
+3. Abra a aba **Prontas** e compare **Original** × **Aprimorada**.
+4. Em cada foto: **Aprovar** (passa a valer no cardápio), **Rejeitar** ou **Regenerar**.
+
+> Aprovou e quer voltar atrás? Use **Restaurar original**.`,
+  },
+  {
+    slug: "guia-cardapio-digital-qr",
+    title: "Como compartilhar o cardápio digital (QR Code e link)",
+    area: "GENERAL",
+    description: "Baixar o QR e copiar o link do cardápio para clientes.",
+    content: `# Como compartilhar o cardápio digital (QR Code e link)
+
+No menu lateral, **Vendas → Cardápio**. No topo há dois QR Codes:
+
+- **QR Code Salão** — cardápio digital **só para consulta** (sem pedido). Cole nas mesas. Abre em /qr/seu-restaurante.
+- **QR Code Delivery** — **pedido online completo** (o cliente conversa, monta o pedido e paga). Compartilhe no WhatsApp/Instagram. Abre em /pedido/seu-restaurante.
+
+Em cada card: **⬇ Baixar QR** (para imprimir), **📋 Copiar link** (para enviar) e **👁 Visualizar**.
+
+> Cada alteração no Cardápio aparece **na hora** no cardápio digital. Para medir de onde vêm os acessos, gere versões rastreáveis em **Canais**.`,
+  },
+  {
+    slug: "guia-configuracoes",
+    title: "Onde fica cada configuração (Configurações)",
+    area: "GENERAL",
+    description: "Mapa das abas de Configurações e o que cada uma faz.",
+    content: `# Onde fica cada configuração (Configurações)
+
+No menu lateral, **Plataforma → Configurações**. Está dividido em dois grupos:
+
+**Operação**
+- **Loja** — dados da loja, dados fiscais, endereço, contatos e modalidades (delivery, retirada, presencial).
+- **Entrega** — zonas, taxas e área de cobertura.
+- **Operação** — horário de funcionamento.
+- **Pagamentos** — métodos aceitos (Pix, dinheiro, cartão, link).
+- **Impressoras** — impressão de comandas na cozinha.
+- **Sons e alertas** — sons de novo pedido e de atendimento.
+
+**Gestão**
+- **Equipe** — membros da equipe e permissões.
+- **Políticas** — termos, privacidade e cancelamento.
+
+> Marca, Agentes IA e Integrações têm telas próprias no menu lateral.`,
+  },
+  {
+    slug: "guia-integracoes",
+    title: "Quais integrações existem e como conectar",
+    area: "INTEGRATIONS",
+    description: "Visão geral das integrações e como conectar o Instagram.",
+    content: `# Quais integrações existem e como conectar
+
+No menu lateral, **Plataforma → Integrações**. Cada cartão tem um status: **Ativo**, **Erro**, **Validação pendente**, **Não conectado** ou **Não configurado**.
+
+Provedores disponíveis:
+- **WhatsApp** — conecte por QR Code ou pela conta oficial da Meta.
+- **Instagram** — receba e responda o Direct na Central de Conversas.
+- **Facebook** — mensagens do Messenger na Central.
+- **Google** — Google Meu Negócio e Google Analytics.
+- **Mercado Pago** e **Stone** — pagamentos (Pix e cartão).
+- **Saipos** — PDV e gestão de pedidos.
+- **OpenAI** — motor de IA dos agentes.
+
+### Conectar o Instagram
+1. Abra **Integrações → Instagram**.
+2. Clique em **Conectar com Facebook** e autorize na Meta.
+3. Em **Escolha a Página do Facebook**, selecione a Página ligada ao seu Instagram profissional e clique em **Conectar esta Página**.
+4. Pronto — as mensagens do Instagram Direct passam a aparecer na **Central de Conversas** com o selo **Instagram DM**.`,
+  },
 ];
