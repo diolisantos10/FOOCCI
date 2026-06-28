@@ -129,8 +129,8 @@ function LoginForm() {
             src="/brand/foocci/foocci-mascot-cutout.png"
             alt=""
             aria-hidden
-            width={158}
-            height={305}
+            width={448}
+            height={852}
             className="mt-5 h-32 w-auto drop-shadow-[0_18px_28px_rgba(0,0,0,0.22)] lg:mt-8 lg:h-52"
           />
 
