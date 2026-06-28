@@ -1157,6 +1157,7 @@ export default function ManualOperacionalPage() {
   // Import v0.1 panel
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [showSeedModal,   setShowSeedModal]   = useState(false);
+  const [showAdvanced,    setShowAdvanced]    = useState(false);
 
   // ── Fetch helpers ────────────────────────────────────────────────────────────
 
@@ -1296,46 +1297,66 @@ export default function ManualOperacionalPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setShowSeedModal(true)}
-              className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
-              title="Criar os 14 capítulos base do Manual Operacional"
-            >
-              🌱 Criar capítulos base
-            </button>
-            <button
-              onClick={() => setShowImportPanel(true)}
-              className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
-              title="Importar e publicar Manual Operacional v0.1"
-            >
-              📥 Importar v0.1
-            </button>
+            {/* Primary action — the only button the team normally needs.
+                It creates/updates the lojista guides AND releases them to the
+                assistant in one click. Everything else lives under "Avançado". */}
             <button
               onClick={handleSeedHowtos}
-              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-              title="Criar/atualizar os guias passo-a-passo do lojista (publicados e visíveis para o assistente)"
-            >
-              📚 Guias do lojista
-            </button>
-            <button
-              onClick={handleReleaseToAgent}
-              className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
-              title="Tornar todos os capítulos publicados visíveis para o assistente de ajuda"
-            >
-              🤖 Liberar pro assistente
-            </button>
-            <button
-              onClick={() => { setTab("chapters"); setShowNewRequest(true); }}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Criar atualização pendente
-            </button>
-            <button
-              onClick={() => { setTab("chapters"); setShowNewChapter(true); }}
               className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+              title="Cria e atualiza os guias do lojista e libera para o assistente de ajuda"
             >
-              + Novo capítulo
+              📚 Atualizar guias de ajuda
             </button>
+
+            {/* Advanced — legacy/manual tools, tucked away to keep the screen calm.
+                Nothing was removed; these still do exactly what they did before. */}
+            <div className="relative">
+              <button
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                title="Ferramentas avançadas (uso eventual)"
+              >
+                Avançado <span className="text-[10px] leading-none">▾</span>
+              </button>
+              {showAdvanced && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowAdvanced(false)} />
+                  <div className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                    <button
+                      onClick={() => { setShowAdvanced(false); handleReleaseToAgent(); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      🤖 Liberar publicados pro assistente
+                    </button>
+                    <button
+                      onClick={() => { setShowAdvanced(false); setTab("chapters"); setShowNewChapter(true); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      ➕ Novo capítulo
+                    </button>
+                    <button
+                      onClick={() => { setShowAdvanced(false); setTab("chapters"); setShowNewRequest(true); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      ✏️ Criar atualização pendente
+                    </button>
+                    <div className="my-1 border-t border-gray-100" />
+                    <button
+                      onClick={() => { setShowAdvanced(false); setShowSeedModal(true); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
+                    >
+                      🌱 Criar capítulos base (bíblia interna)
+                    </button>
+                    <button
+                      onClick={() => { setShowAdvanced(false); setShowImportPanel(true); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
+                    >
+                      📥 Importar v0.1 (bíblia interna)
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
