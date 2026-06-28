@@ -483,6 +483,7 @@ function ChapterDetail({
   const [savingContent, setSavingContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summaryInput, setSummaryInput] = useState("");
+  const [togglingVis, setTogglingVis] = useState(false);
 
   async function handlePublish() {
     if (!confirm(`Publicar capítulo "${chapter.title}" como v${bumpVersion(chapter.version)}?`)) return;
@@ -522,6 +523,26 @@ function ChapterDetail({
       setError(err instanceof Error ? err.message : "Erro desconhecido.");
     } finally {
       setSavingContent(false);
+    }
+  }
+
+  async function handleToggleAgentVisibility() {
+    setTogglingVis(true); setError(null);
+    try {
+      const res = await fetch(`/api/admin/manual/chapters/${chapter.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentVisibility: !chapter.agentVisibility }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? "Erro ao atualizar visibilidade.");
+      }
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido.");
+    } finally {
+      setTogglingVis(false);
     }
   }
 
@@ -611,6 +632,37 @@ function ChapterDetail({
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           </section>
 
+          {/* Agent visibility — the bridge to the lojista help assistant */}
+          <section className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700">Visível para o assistente de ajuda</h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Quando ligado <strong>e publicado</strong>, o assistente do lojista pode responder com base neste capítulo.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleAgentVisibility}
+                disabled={togglingVis}
+                role="switch"
+                aria-checked={chapter.agentVisibility}
+                title="Ligar/desligar visibilidade para o assistente"
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
+                  chapter.agentVisibility ? "bg-orange-500" : "bg-gray-300"
+                }`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  chapter.agentVisibility ? "translate-x-5" : "translate-x-0.5"
+                }`} />
+              </button>
+            </div>
+            {chapter.agentVisibility && !chapter.isPublished && (
+              <p className="mt-2 text-xs text-amber-600">
+                ⚠️ Ligado, mas o capítulo ainda não está publicado — publique para o assistente enxergar.
+              </p>
+            )}
+          </section>
+
           {/* Revisions */}
           {chapter.revisions.length > 0 && (
             <section>
@@ -656,7 +708,7 @@ function ChapterDetail({
               <span>Criado por: {chapter.createdBy ?? "—"}</span>
               <span>Atualizado: {fmtDate(chapter.updatedAt)}</span>
               {chapter.approvedBy && <span>Aprovado por: {chapter.approvedBy}</span>}
-              <span>Visível para agentes: {chapter.agentVisibility ? "Sim" : "Não (Phase 2+)"}</span>
+              <span>Visível para o assistente: {chapter.agentVisibility ? "Sim" : "Não"}</span>
             </div>
           </section>
         </div>
@@ -1153,6 +1205,32 @@ export default function ManualOperacionalPage() {
     }
   }, []);
 
+  async function handleSeedHowtos() {
+    if (!confirm("Criar/atualizar os guias do lojista (publicados e visíveis para o assistente)?")) return;
+    try {
+      const res = await fetch("/api/admin/manual/seed-howtos", { method: "POST" });
+      const d = await res.json().catch(() => ({})) as { success?: boolean; data?: { upserted?: number }; error?: string };
+      if (!res.ok || !d.success) throw new Error(d.error ?? "Falha ao criar guias.");
+      alert(`Guias do lojista prontos: ${d.data?.upserted ?? 0} capítulos publicados e visíveis para o assistente.`);
+      fetchChapters();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao criar guias.");
+    }
+  }
+
+  async function handleReleaseToAgent() {
+    if (!confirm("Tornar TODOS os capítulos publicados visíveis para o assistente de ajuda?")) return;
+    try {
+      const res = await fetch("/api/admin/manual/release-to-agent", { method: "POST" });
+      const d = await res.json().catch(() => ({})) as { success?: boolean; data?: { released?: number }; error?: string };
+      if (!res.ok || !d.success) throw new Error(d.error ?? "Falha ao liberar.");
+      alert(`${d.data?.released ?? 0} capítulo(s) liberado(s) para o assistente.`);
+      fetchChapters();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao liberar.");
+    }
+  }
+
   useEffect(() => { fetchChapters(); }, [fetchChapters]);
   useEffect(() => { if (tab === "requests") fetchRequests(); }, [tab, fetchRequests]);
   useEffect(() => { if (tab === "decisions") fetchDecisions(); }, [tab, fetchDecisions]);
@@ -1231,6 +1309,20 @@ export default function ManualOperacionalPage() {
               title="Importar e publicar Manual Operacional v0.1"
             >
               📥 Importar v0.1
+            </button>
+            <button
+              onClick={handleSeedHowtos}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+              title="Criar/atualizar os guias passo-a-passo do lojista (publicados e visíveis para o assistente)"
+            >
+              📚 Guias do lojista
+            </button>
+            <button
+              onClick={handleReleaseToAgent}
+              className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
+              title="Tornar todos os capítulos publicados visíveis para o assistente de ajuda"
+            >
+              🤖 Liberar pro assistente
             </button>
             <button
               onClick={() => { setTab("chapters"); setShowNewRequest(true); }}
