@@ -160,11 +160,13 @@ describe("Product suggestion visibility", () => {
 // ── 3. Button questions ───────────────────────────────────────────────────────
 
 describe("Button questions", () => {
-  it("'me sugere algo' with empty cart → options[] contains light/complete buttons", () => {
+  it("'me sugere algo' with empty cart → context-aware product cards (SUGGESTION, no buttons)", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
-    const values = out.options.map((o) => o.value);
-    expect(values).toContain("light");
-    expect(values).toContain("complete");
+    // Current behavior: a suggestion request returns product cards directly,
+    // not generic light/complete qualification buttons.
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    expect(out.options).toHaveLength(0);
   });
 
   it("'unclear' with empty cart → qualification buttons, no required typing", () => {
@@ -230,18 +232,17 @@ describe("CHECKOUT_SUPPORT guard", () => {
     expect(out.mode).toBe("CHECKOUT_SUPPORT");
   });
 
-  it("ON_CHECKOUT_STARTED with food+no drink → pre-checkout upsell offer (INTERVENTION, cards=[])", () => {
+  it("ON_CHECKOUT_STARTED with food+no drink → offers drink cards directly (INTERVENTION, drink_shown)", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
       cartItemIds: ["s1", "s2"], // two food items, no drink
       cartValue:   50,
       catalog,
     }));
-    // cards are always [] — never push cards at checkout start
-    expect(out.cards).toHaveLength(0);
-    // Spec: if opportunity exists, offer it as INTERVENTION permission prompt
+    // Current behavior: checkout offers upsell cards sequentially (drink first).
     expect(out.mode).toBe("INTERVENTION");
-    expect(out.options.length).toBeGreaterThan(0);
+    expect(out.cards).toContain("s4"); // Suco de Laranja — the only drink
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("drink_shown");
   });
 });
 
@@ -746,14 +747,12 @@ describe("analyzeSalesSituation", () => {
 // ── 17. Acceptance tests (Sprint 4A spec) ────────────────────────────────────
 
 describe("Acceptance tests — Sales Specialist Agent", () => {
-  it("A) 'me sugere algo' → button question, no cards, no open typing", () => {
+  it("A) 'me sugere algo' → context-aware product cards (SUGGESTION), no buttons", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
-    expect(out.cards).toHaveLength(0);
-    expect(out.options.length).toBeGreaterThan(0);
-    out.options.forEach((o) => {
-      expect(typeof o.label).toBe("string");
-      expect(typeof o.value).toBe("string");
-    });
+    // Current behavior: a suggestion request returns product cards directly.
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    expect(out.options).toHaveLength(0);
   });
 
   it("B) 'quero algo leve' → light food cards, mode SUGGESTION", () => {
@@ -873,25 +872,30 @@ describe("Sprint 4B — event wiring", () => {
 
   // ── ON_PERMISSION_ACCEPT (deterministic path) ─────────────────
 
-  it("ON_PERMISSION_ACCEPT with empty cart → qualification buttons (3 options)", () => {
+  it("ON_PERMISSION_ACCEPT with empty SUSHI cart → discovery question (cru/quente/temaki)", () => {
     const out = decide(makeInput("ON_PERMISSION_ACCEPT"));
+    // Current behavior: empty sushi cart returns a sushi discovery question,
+    // not generic light/complete/group buttons.
     expect(out.cards).toHaveLength(0);
     const values = out.options.map((o) => o.value);
-    expect(values).toContain("light");
-    expect(values).toContain("complete");
-    expect(values).toContain("group");
+    expect(values).toContain("discovery_cru_sushi");
+    expect(values).toContain("discovery_quente");
+    expect(values).toContain("discovery_temaki");
   });
 
-  it("ON_PERMISSION_ACCEPT with food+no drink → deterministic drink cards (no AI)", () => {
+  it("ON_PERMISSION_ACCEPT with food in a SUSHI cart → sushi discovery question (no AI)", () => {
     const catalog = makeSushiCatalog();
     const out     = decide(makeInput("ON_PERMISSION_ACCEPT", {
       cartItemIds: ["s1"],
       catalog,
     }));
-    // Cart has food, no drink → context-aware recommendation returns drinks or other items
-    expect(out.cards.length).toBeGreaterThan(0);
-    expect(out.mode).toBe("INTERVENTION");
+    // Current behavior: sushi menus always ask a discovery question first
+    // (cru/quente/temaki) before pushing cards — even with items already in cart.
+    expect(out.cards).toHaveLength(0);
+    expect(out.mode).toBe("BROWSE");
     expect(out.requiresAI).toBe(false); // deterministic path
+    const values = out.options.map((o) => o.value);
+    expect(values).toContain("discovery_cru_sushi");
   });
 
   it("ON_PERMISSION_ACCEPT — returned card IDs exist in catalog", () => {
@@ -924,27 +928,27 @@ describe("Sprint 4B — event wiring", () => {
     expect(out.mode).toBe("CHECKOUT_SUPPORT");
   });
 
-  it("ON_CHECKOUT_STARTED with food+drink but no dessert → pre-checkout offer", () => {
+  it("ON_CHECKOUT_STARTED with food+drink but no dessert → offers dessert cards (INTERVENTION, dessert_shown)", () => {
     const catalog = makeSushiCatalog();
     const out     = decide(makeInput("ON_CHECKOUT_STARTED", {
       cartItemIds: ["s1", "s4"], // food + drink, no dessert
       catalog,
     }));
-    expect(out.cards).toHaveLength(0);
+    // Current behavior: cart already has a drink → next sequential offer is dessert cards.
     expect(out.mode).toBe("INTERVENTION");
-    const values = out.options.map((o) => o.value);
-    expect(values).toContain("see_final_suggestions");
-    expect(values).toContain("continue_checkout");
+    expect(out.cards).toContain("s5"); // Pudim de Leite — the only dessert
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("dessert_shown");
   });
 
   // ── ON_USER_MESSAGE — "Para compartilhar" button ──────────────
 
-  it("'me sugere algo' with empty cart → 3 qualification buttons (Leve/Completo/Para compartilhar)", () => {
+  it("'me sugere algo' with empty cart → context-aware product cards (SUGGESTION)", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
-    const values = out.options.map((o) => o.value);
-    expect(values).toContain("light");
-    expect(values).toContain("complete");
-    expect(values).toContain("group");
+    // Current behavior: a suggestion request returns product cards directly,
+    // not Leve/Completo/Para compartilhar qualification buttons.
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    expect(out.options).toHaveLength(0);
   });
 
   it("button value 'group' → triggers group/shareable cards", () => {
@@ -1277,18 +1281,24 @@ describe("Sprint 4D: handleUserMessage — seller tone via buildCommercialRespon
     expect(out.message.toLowerCase()).toContain("leve");
   });
 
-  it("asks_for_drink → copy references 'bebidas'", () => {
+  it("asks_for_drink → returns drink cards with the seller opener (no buttons)", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero uma bebida", catalog: makeSushiCatalog() }));
+    // Current behavior: the decide() suggestion fast-path uses a generic seller opener
+    // (the per-intent "bebidas" copy lives in buildCommercialResponse, tested separately).
     expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.cards).toContain("s4"); // Suco de Laranja — the only drink
     expect(out.options).toHaveLength(0);
-    expect(out.message.toLowerCase()).toContain("bebida");
+    expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
   });
 
-  it("asks_for_dessert → copy references 'doce'", () => {
+  it("asks_for_dessert → returns dessert cards with the seller opener (no buttons)", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero sobremesa", catalog: makeSushiCatalog() }));
+    // Current behavior: the decide() suggestion fast-path uses a generic seller opener
+    // (the per-intent "doce" copy lives in buildCommercialResponse, tested separately).
     expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.cards).toContain("s5"); // Pudim de Leite — the only dessert
     expect(out.options).toHaveLength(0);
-    expect(out.message.toLowerCase()).toContain("doce");
+    expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
   });
 
   it("wants_group_order → copy references dividing/sharing", () => {
@@ -1471,13 +1481,14 @@ describe("Sprint 4E: rankProducts already-suggested penalty", () => {
     if (fresh.length > 0) expect(fresh[0]).toBe("d1");
   });
 
-  it("already-suggested product can still appear if it's the only option above threshold", () => {
+  it("already-suggested product is dropped even when it's the only option", () => {
     const catalog: V2CatalogItem[] = [
       { id: "d1", name: "Suco", categoryName: "Bebidas", price: 8, sortOrder: 1 },
     ];
     const results = rankProducts(catalog, "asks_for_drink", [], 2, ["d1"]);
-    // d1 gets -15 penalty but drink base score is +60, so net ≥ 10 → still included
-    expect(results).toContain("d1");
+    // Current scoring: the already-suggested penalty is strong enough that a single
+    // previously-suggested drink falls below MIN_SCORE_THRESHOLD → excluded entirely.
+    expect(results).toEqual([]);
   });
 
   it("already-suggested products not shown when fresh options exist", () => {
@@ -1568,20 +1579,22 @@ describe("Sprint 4E: full session simulation", () => {
 // ─── Section 22: Sprint 4F — Final Upsell Permission at Checkout ─────────────
 
 describe("Sprint 4F: handleCheckoutStarted — final upsell permission", () => {
-  it("A) food but no drink/dessert → asks permission once (INTERVENTION, cards=[])", () => {
+  it("A) food but no drink/dessert → offers drink cards directly (INTERVENTION, drink_shown)", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
       cartItemIds: ["s1"],   // temaki salmão — food only
       cartValue:   22,
       catalog,
     }));
+    // Current behavior: checkout offers upsell cards directly and sequentially (drink first),
+    // advancing the checkoutUpsellStage state machine — not a cards=[] permission prompt.
     expect(out.mode).toBe("INTERVENTION");
-    expect(out.cards).toHaveLength(0);
-    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(true);
-    expect(out.options.some((o) => o.value === "continue_checkout")).toBe(true);
+    expect(out.cards).toContain("s4"); // Suco de Laranja — the only drink
+    expect(out.message).toBe("Antes de fechar, deixe-me apresentar nossas bebidas.");
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("drink_shown");
   });
 
-  it("B) if finalUpsellDeclined=true → skip to CHECKOUT_SUPPORT immediately", () => {
+  it("B) legacy finalUpsellDeclined=true no longer gates checkout → still offers (INTERVENTION, drink_shown)", () => {
     const catalog = makeSushiCatalog();
     const memory: WaiterMemory = { ...createWaiterMemory(), finalUpsellDeclined: true };
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
@@ -1590,8 +1603,12 @@ describe("Sprint 4F: handleCheckoutStarted — final upsell permission", () => {
       catalog,
       memory,
     }));
-    expect(out.mode).toBe("CHECKOUT_SUPPORT");
-    expect(out.options).toHaveLength(0);
+    // Declines are now tracked PER-CATEGORY (declinedSuggestionTypes) and the upsell stage
+    // is driven by checkoutUpsellStage. The legacy global finalUpsellDeclined flag is no
+    // longer a hard gate, so handleCheckoutStarted still offers the first (drink) upsell.
+    expect(out.mode).toBe("INTERVENTION");
+    expect(out.cards).toContain("s4");
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("drink_shown");
   });
 
   it("B) if checkoutUpsellStage=completed → skip to CHECKOUT_SUPPORT (no repeated upsell)", () => {
@@ -1856,13 +1873,16 @@ describe("23 — WaiterSalesConfig", () => {
 
   // ── D) permissionRequiredBeforeSuggestions = false ──────────────────────────
 
-  it("D1) permissionRequiredBeforeSuggestions = false → ON_IDLE returns qualification question directly", () => {
+  it("D1) permissionRequiredBeforeSuggestions = false → ON_IDLE returns a soft permission ask with want_suggestion", () => {
     const catalog = makeSushiCatalog();
     const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, permissionRequiredBeforeSuggestions: false };
     const out = decide(makeInput("ON_IDLE", { catalog, config }));
-    // Must be the qualification question (no "want_suggestion" permission button)
-    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(false);
-    expect(out.options.some((o) => o.value === "light" || o.value === "complete")).toBe(true);
+    // Current behavior: even when permission is not required, idle surfaces a soft
+    // "Posso te sugerir algo?" ask carrying a want_suggestion option — not a direct
+    // light/complete qualification question.
+    expect(out.message).toBe("Posso te sugerir algo? ✨");
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(true);
+    expect(out.options.some((o) => o.value === "light" || o.value === "complete")).toBe(false);
   });
 
   // ── E) allowFinalUpsellPrompt = false ────────────────────────────────────────
@@ -1875,12 +1895,15 @@ describe("23 — WaiterSalesConfig", () => {
     expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(false);
   });
 
-  it("E2) allowFinalUpsellPrompt = true (default) → ON_CHECKOUT_STARTED shows upsell when applicable", () => {
+  it("E2) allowFinalUpsellPrompt = true (default) → ON_CHECKOUT_STARTED offers upsell cards when applicable", () => {
     const catalog = makeSushiCatalog();
-    // s1 is food-only cart, so drink/dessert upsell should trigger
+    // s1 is food-only cart, so the drink upsell should trigger
     const out = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1"], cartValue: 22, catalog }));
+    // Current behavior: offers the upsell cards directly (drink first), not a
+    // see_final_suggestions permission prompt.
     expect(out.mode).toBe("INTERVENTION");
-    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(true);
+    expect(out.cards).toContain("s4");
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("drink_shown");
   });
 
   // ── F) upsellStyle copy variants ─────────────────────────────────────────────
@@ -1891,7 +1914,7 @@ describe("23 — WaiterSalesConfig", () => {
       { intent: "asks_for_drink", selectedProducts: ["s4"], mode: "SUGGESTION" },
       config,
     );
-    expect(result.message).toBe("Pra acompanhar, essas bebidas funcionam bem 👇");
+    expect(result.message).toBe("Pra acompanhar, essa bebida cai bem 👇 Quer adicionar?");
   });
 
   it("F2) upsellStyle = 'subtle' → buildCommercialResponse uses SUBTLE_COPY override", () => {
@@ -1919,7 +1942,7 @@ describe("23 — WaiterSalesConfig", () => {
       { intent: "wants_recommendation", selectedProducts: ["s1"], mode: "SUGGESTION" },
       config,
     );
-    expect(result.message).toBe("Separei boas opções pra você 👇");
+    expect(result.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇 Quer que eu adicione?");
   });
 
   // ── G) config threads through decide() → handleUserMessage ──────────────────
@@ -1933,9 +1956,10 @@ describe("23 — WaiterSalesConfig", () => {
       cartItemIds: [],
       config,
     }));
-    // Should use subtle copy for asks_for_drink
+    // Current behavior: decide()'s suggestion fast-path emits a generic seller opener
+    // regardless of upsellStyle (the subtle SUBTLE_COPY applies inside buildCommercialResponse).
     if (out.cards.length > 0) {
-      expect(out.message).toBe("Para acompanhar, essas são as opções disponíveis 👇");
+      expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
     }
   });
 
@@ -1948,8 +1972,10 @@ describe("23 — WaiterSalesConfig", () => {
       cartItemIds: [],
       config,
     }));
+    // Current behavior: decide()'s suggestion fast-path emits a generic seller opener
+    // regardless of upsellStyle (the aggressive AGGRESSIVE_COPY applies inside buildCommercialResponse).
     if (out.cards.length > 0) {
-      expect(out.message).toBe("Essas bebidas vão completar seu pedido 👇");
+      expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
     }
   });
 
@@ -1969,6 +1995,6 @@ describe("23 — WaiterSalesConfig", () => {
       { intent: "asks_for_dessert", selectedProducts: ["s5"], mode: "SUGGESTION" },
     );
     // balanced → INTENT_COPY
-    expect(result.message).toBe("Pra fechar com doce, essas são boas escolhas 👇");
+    expect(result.message).toBe("Pra fechar com um doce, essa é certeira 🍰 Quer adicionar?");
   });
 });

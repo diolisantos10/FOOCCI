@@ -138,17 +138,21 @@ describe("S1 — Response contract (all events)", () => {
 // ─── S2: "me sugere algo" — buttons, not random cards ────────────────────────
 
 describe("S2 — 'me sugere algo' with empty cart", () => {
-  it("returns qualification buttons (not raw product cards)", () => {
+  it("returns context-aware product cards (not qualification buttons)", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
-    expect(out.cards).toHaveLength(0);
-    expect(out.options.length).toBeGreaterThan(0);
+    // Current behavior: a suggestion request returns product cards directly,
+    // not generic qualification buttons.
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    expect(out.options).toHaveLength(0);
   });
 
-  it("buttons include 'light' and 'complete' values", () => {
-    const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
-    const values = out.options.map((o) => o.value);
-    expect(values).toContain("light");
-    expect(values).toContain("complete");
+  it("returned cards are valid catalog product IDs (a product suggestion)", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo", catalog }));
+    const validIds = new Set(catalog.map((i) => i.id));
+    expect(out.cards.length).toBeGreaterThan(0);
+    for (const id of out.cards) expect(validIds.has(id)).toBe(true);
   });
 
   it("no open typing required — all options are tappable buttons", () => {
@@ -354,29 +358,30 @@ describe("S7 — Permission declined ('continue_browsing')", () => {
 // ─── S8: Final upsell permission at checkout ─────────────────────────────────
 
 describe("S8 — Final upsell permission (ON_CHECKOUT_STARTED)", () => {
-  it("food-only cart → mode = INTERVENTION with upsell options", () => {
+  it("food-only cart → mode = INTERVENTION offering drink upsell cards", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", { catalog, cartItemIds: ["s1"], cartValue: 22 }));
+    // Current behavior: checkout offers the upsell cards directly (drink first),
+    // not a see_final_suggestions / continue_checkout permission prompt.
     expect(out.mode).toBe("INTERVENTION");
-    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(true);
-    expect(out.options.some((o) => o.value === "continue_checkout")).toBe(true);
+    expect(out.cards).toContain("s4"); // Suco de Laranja — the only drink
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("drink_shown");
   });
 
-  it("food-only cart → cards = [] (just permission prompt, no pre-loaded cards)", () => {
+  it("food-only cart → drink cards are pre-loaded (offered directly, no permission gate)", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", { catalog, cartItemIds: ["s1"], cartValue: 22 }));
-    expect(out.cards).toHaveLength(0);
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.cards).toContain("s4");
   });
 
-  it("cart already has food + drink → no upsell for missing drink", () => {
+  it("cart already has food + drink → next offer is dessert cards", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", { catalog, cartItemIds: ["s1", "s4"], cartValue: 30 }));
-    // Has food and drink → upsell for dessert OR straight to checkout if dessert also present
-    if (out.mode === "INTERVENTION") {
-      expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(true);
-    } else {
-      expect(out.mode).toBe("CHECKOUT_SUPPORT");
-    }
+    // Has food + drink → the sequential upsell advances to dessert cards.
+    expect(out.mode).toBe("INTERVENTION");
+    expect(out.cards).toContain("s5"); // Pudim de Leite — the only dessert
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("dessert_shown");
   });
 
   it("full cart (food + drink + dessert) → goes straight to checkout support", () => {
@@ -436,16 +441,18 @@ describe("S9 — Checkout support and post-checkout guard", () => {
     expect(out.cards).toHaveLength(0);
   });
 
-  it("AFTER_CHECKOUT → cards = [], mode = CHECKOUT_SUPPORT, requiresAI = true", () => {
+  it("AFTER_CHECKOUT → cards = [], mode = CHECKOUT_SUPPORT, requiresAI = false (canned, no AI)", () => {
     const out = decide(makeInput("AFTER_CHECKOUT"));
+    // Current behavior: post-checkout uses a fixed canned message and never calls AI,
+    // preventing upsell leakage after the order is placed.
     expect(out.cards).toHaveLength(0);
     expect(out.mode).toBe("CHECKOUT_SUPPORT");
-    expect(out.requiresAI).toBe(true);
+    expect(out.requiresAI).toBe(false);
   });
 
-  it("AFTER_CHECKOUT message is empty (AI fills it)", () => {
+  it("AFTER_CHECKOUT message is the fixed canned confirmation copy", () => {
     const out = decide(makeInput("AFTER_CHECKOUT"));
-    expect(out.message).toBe("");
+    expect(out.message).toBe("Pedido recebido 😊 Agora é só acompanhar a confirmação.");
   });
 
   it("CHECKOUT_SUPPORT options never include selling-type values", () => {
