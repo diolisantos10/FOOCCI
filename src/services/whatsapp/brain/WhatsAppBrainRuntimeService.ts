@@ -30,6 +30,15 @@ export function isWhatsAppBrainEnabled(env: NodeJS.ProcessEnv = process.env): bo
   return env.WHATSAPP_BRAIN_ENABLED !== "false";
 }
 
+/**
+ * Product decision (pré-lançamento): o WhatsApp NÃO deve responder perguntas
+ * livres com o LLM — raciocina mal e deu respostas erradas a clientes reais
+ * (negou que há rodízio). Enquanto isso não for retomado, qualquer pergunta
+ * fora do menu é encaminhada ao recepcionista, que faz handoff para um humano
+ * em vez de gerar resposta livre. Reativar o Brain = voltar para `true`.
+ */
+const ALLOW_BRAIN_FREE_FORM: boolean = false;
+
 export interface BrainReplyOutcome {
   status: "REPLIED" | "HANDOFF" | "SKIPPED";
   reason?: string;
@@ -109,6 +118,15 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   if (isMenuInteraction) {
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return { status: "REPLIED", reason: "menu-anchor" };
+  }
+
+  // ── Free-form desligado: pergunta fora do menu NÃO vai pro LLM ──────────────
+  // O recepcionista trata de forma determinística (intents conhecidos por
+  // template; qualquer pergunta aberta → handoff para humano). Sem resposta
+  // livre inventada pelo Brain.
+  if (!ALLOW_BRAIN_FREE_FORM) {
+    await recep.WhatsAppReceptionistService.respond(conversationId);
+    return { status: "REPLIED", reason: "free-form disabled → receptionist" };
   }
 
   const { restaurantId } = conversation;
