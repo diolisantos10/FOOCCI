@@ -1,0 +1,130 @@
+// Secretário pessoal — banco próprio, isolado do CRM do restaurante.
+// Single-owner: tudo é escopo do dono (allow-list pelo número), sem multi-tenant.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Histórico da conversa (texto puro). É a memória de curto prazo do secretário.
+model Message {
+  id          String   @id @default(cuid())
+  role        String // "user" | "assistant"
+  content     String
+  waMessageId String?  @unique // wamid da Meta, para deduplicar entradas
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// Memória de longo prazo — fatos que o secretário deve lembrar entre conversas.
+model MemoryFact {
+  id        String   @id @default(cuid())
+  category  String   @default("geral") // pessoa, preferencia, projeto, rotina, contato...
+  key       String // identificador curto e estável do fato
+  value     String // o conteúdo do fato
+  salience  Int      @default(3) // 1..5 — quão importante / quão no topo deve ficar
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, key])
+  @@index([salience])
+}
+
+/// Lembretes e tarefas com horário.
+model Reminder {
+  id        String   @id @default(cuid())
+  text      String
+  dueAt     DateTime
+  status    String   @default("pending") // pending | sent | done | cancelled
+  createdAt DateTime @default(now())
+
+  @@index([status, dueAt])
+}
+
+/// Credenciais OAuth do Google (Calendar). `data` é o JSON de credenciais cifrado.
+model GoogleToken {
+  id        String   @id @default("owner")
+  data      String // JSON cifrado (AES-256-GCM) com access/refresh/expiry
+  updatedAt DateTime @updatedAt
+}
+
+/// Configurações simples chave/valor (estado do OAuth, data do último briefing, etc.).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Listas/coleções criadas sob demanda (compras, tarefas, projetos, ideias...).
+/// É a primitiva genérica que permite ao secretário "criar interfaces" a partir
+/// de pedidos em linguagem natural, sem precisar de código novo a cada demanda.
+model List {
+  id        String     @id @default(cuid())
+  name      String
+  kind      String     @default("checklist") // checklist | notes | board — dica de renderização
+  emoji     String? // ícone opcional para o painel
+  archived  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     ListItem[]
+
+  @@index([archived, updatedAt])
+}
+
+/// Item de uma lista (linha checável, com nota opcional).
+model ListItem {
+  id        String   @id @default(cuid())
+  listId    String
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  text      String
+  done      Boolean  @default(false)
+  note      String? // detalhe opcional
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listId])
+}
+
+/// Painéis dinâmicos que o secretário monta sob demanda (planejamento, KPIs,
+/// tabelas, cronogramas, gráficos). `blocks` é um JSON serializado com a
+/// estrutura visual; o painel web renderiza genericamente, sem código novo a
+/// cada demanda — o agente "desenha" a interface a partir de pedidos em texto.
+model Dashboard {
+  id        String   @id @default(cuid())
+  title     String
+  emoji     String?
+  blocks    String   @default("[]") // JSON serializado dos blocos
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([archived, updatedAt])
+}
+
+/// Estado de autenticação do WhatsApp (Baileys) — sessão do QR Code.
+/// Cada linha é um item da auth state (creds + chaves do protocolo Signal),
+/// serializado com BufferJSON. Permite reconectar após reinício sem reescanear.
+model WaAuth {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Observabilidade: custo/uso por chamada ao modelo.
+model AiLog {
+  id               String   @id @default(cuid())
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+}
