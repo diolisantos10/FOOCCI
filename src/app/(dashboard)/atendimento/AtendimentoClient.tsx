@@ -234,28 +234,28 @@ function getHandlerBadge(c: ConvSummary): HandlerBadge {
   // Permanent Staff/Supplier lock takes precedence over every other state —
   // it must never read as "IA ativa".
   if (c.aiLocked)
-    return { label: "IA bloqueada", cls: "bg-slate-200 text-slate-700 border-slate-300" };
+    return { label: "IA bloqueada", cls: "bg-[#F4F4F2] text-ink2" };
   if (c.status === "RESOLVED")
-    return { label: "Resolvida",  cls: "bg-[#F4F4F2]   text-muted  border-line2"  };
+    return { label: "Resolvida",  cls: "bg-[#F4F4F2] text-muted" };
   if (c.status === "OPEN" && c.unreadCount > 0)
-    return { label: "Aguardando", cls: "bg-red-100    text-red-700   border-red-200"   };
+    return { label: "Aguardando", cls: "bg-red-50 text-red-600" };
   if (!c.aiEnabled || c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU")
-    return { label: "Humano",     cls: "bg-green-100  text-green-700 border-green-200" };
-  return   { label: "IA ativa",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
+    return { label: "Humano",     cls: "bg-green-50 text-green-700" };
+  return   { label: "IA ativa",   cls: "bg-brand-50 text-brand-600" };
 }
 
 // Classification chip for non-customer conversations (Staff/Fornecedor/etc.).
 function getConvTypeBadge(c: ConvSummary): { label: string; cls: string } | null {
   const t = c.conversationType;
   if (!t || t === "CUSTOMER") return null;
-  return { label: CONV_TYPE_LABEL[t], cls: "bg-slate-100 text-slate-600 border-slate-200" };
+  return { label: CONV_TYPE_LABEL[t], cls: "bg-[#F4F4F2] text-ink2" };
 }
 
 // CRM_CAMPAIGN and CRM_AUTOMATION are handled dynamically in getCrmBadge()
 // so the badge reflects whether the customer has replied or not.
 const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
-  ORDER_SUPPORT: { label: "Pós-venda", cls: "bg-brand-100 text-brand-700 border-brand-200" },
-  HUMAN_SUPPORT: { label: "Suporte",   cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  ORDER_SUPPORT: { label: "Pós-venda", cls: "bg-brand-50 text-brand-600" },
+  HUMAN_SUPPORT: { label: "Suporte",   cls: "bg-amber-50 text-amber-700" },
 };
 
 const CRM_CONTEXT_BADGE: Record<string, string> = {
@@ -273,11 +273,11 @@ function getCrmBadge(c: ConvSummary): { label: string; cls: string } | null {
   // coupon, manual, …) that did not set a CRM contextType.
   if (!specific && !c.crmSent) return null;
   if (convHasCustomerReply(c)) {
-    return { label: "Resposta CRM", cls: "bg-amber-100 text-amber-700 border-amber-200" };
+    return { label: "Resposta CRM", cls: "bg-amber-50 text-amber-700" };
   }
   return {
     label: specific ?? "CRM enviado",
-    cls:   "bg-violet-100 text-violet-700 border-violet-200",
+    cls:   "bg-violet-50 text-violet-600",
   };
 }
 
@@ -338,7 +338,7 @@ function ScrollableChips({ children, className }: { children: ReactNode; classNa
           type="button"
           onClick={() => nudge(-1)}
           aria-label="Rolar esquerda"
-          className="absolute left-0 z-10 flex h-full items-center bg-gradient-to-r from-white via-white/80 to-transparent pl-0.5 pr-3 text-sm text-muted hover:text-ink2"
+          className="absolute left-0 z-10 flex h-full items-center bg-gradient-to-r from-paper via-paper/80 to-transparent pl-0.5 pr-3 text-sm text-muted hover:text-ink2"
         >
           ‹
         </button>
@@ -354,7 +354,7 @@ function ScrollableChips({ children, className }: { children: ReactNode; classNa
           type="button"
           onClick={() => nudge(1)}
           aria-label="Rolar direita"
-          className="absolute right-0 z-10 flex h-full items-center bg-gradient-to-l from-white via-white/80 to-transparent pr-0.5 pl-3 text-sm text-muted hover:text-ink2"
+          className="absolute right-0 z-10 flex h-full items-center bg-gradient-to-l from-paper via-paper/80 to-transparent pr-0.5 pl-3 text-sm text-muted hover:text-ink2"
         >
           ›
         </button>
@@ -1167,7 +1167,7 @@ export function AtendimentoClient({
                           ? "border-red-400 bg-red-50/40 hover:bg-red-50/70"
                           : priority === "attention"
                           ? "border-amber-400 hover:bg-amber-50/30"
-                          : "border-transparent hover:bg-[#FAFAF8]"
+                          : "border-transparent hover:bg-canvas"
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
@@ -1175,7 +1175,7 @@ export function AtendimentoClient({
                         <div
                           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                             isWaiting
-                              ? "bg-red-100 text-red-700"
+                              ? "bg-red-50 text-red-600"
                               : "bg-brand-50 text-brand-600"
                           }`}
                         >
@@ -1202,53 +1202,53 @@ export function AtendimentoClient({
                             }`} />
                             {/* Source badge */}
                             {isConvMultichannel ? (
-                              <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-px text-[9px] font-bold leading-none text-blue-700">
+                              <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-blue-600">
                                 📱📋 Multicanal
                               </span>
                             ) : conv.channel === "WHATSAPP" ? (
-                              <span className="rounded-full border border-green-200 bg-green-50 px-1.5 py-px text-[9px] font-bold leading-none text-green-700">
+                              <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-green-700">
                                 📱 WhatsApp
                               </span>
                             ) : conv.channel === "QR_AGENT" || conv.channel === "WEB_AGENT" ? (
-                              <span className="rounded-full border border-purple-200 bg-purple-50 px-1.5 py-px text-[9px] font-bold leading-none text-purple-700">
+                              <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-violet-600">
                                 📋 Cardápio
                               </span>
                             ) : conv.channel === "MANUAL" ? (
-                              <span className="rounded-full border border-line2 bg-[#F4F4F2] px-1.5 py-px text-[9px] font-bold leading-none text-ink2">
+                              <span className="rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[9px] font-bold leading-none text-ink2">
                                 ✍️ Manual
                               </span>
                             ) : conv.channel === "INSTAGRAM_DIRECT" || conv.channel === "INSTAGRAM_COMMENT" ? (
-                              <span className="rounded-full border border-pink-200 bg-pink-50 px-1.5 py-px text-[9px] font-bold leading-none text-pink-700">
+                              <span className="rounded-full bg-pink-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-pink-700">
                                 {conv.channel === "INSTAGRAM_COMMENT" ? "💬 IG comentário" : "📷 Instagram DM"}
                               </span>
                             ) : (
-                              <span className="rounded-full border border-line2 bg-[#F4F4F2] px-1.5 py-px text-[9px] font-bold leading-none text-muted">
+                              <span className="rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[9px] font-bold leading-none text-muted">
                                 {chanMeta.icon} {chanMeta.label}
                               </span>
                             )}
                             {/* Unread badge */}
                             {conv.unreadCount > 0 && (
-                              <span className="rounded-full bg-red-500 px-1.5 py-px text-[9px] font-bold text-white leading-none">
+                              <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white leading-none">
                                 {conv.unreadCount}
                               </span>
                             )}
                             {/* Handler badge */}
-                            <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${badge.cls}`}>
+                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${badge.cls}`}>
                               {badge.label}
                             </span>
                             {/* Context badge — CRM (dynamic) or other special contexts */}
                             {crmBadge ? (
-                              <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${crmBadge.cls}`}>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${crmBadge.cls}`}>
                                 {crmBadge.label}
                               </span>
                             ) : conv.contextType && CONTEXT_BADGE[conv.contextType] && (
-                              <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${CONTEXT_BADGE[conv.contextType]!.cls}`}>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${CONTEXT_BADGE[conv.contextType]!.cls}`}>
                                 {CONTEXT_BADGE[conv.contextType]!.label}
                               </span>
                             )}
                             {/* Conversation type badge — Staff / Fornecedor / etc. */}
                             {convTypeBadge && (
-                              <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${convTypeBadge.cls}`}>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${convTypeBadge.cls}`}>
                                 {convTypeBadge.label}
                               </span>
                             )}
@@ -1282,7 +1282,7 @@ export function AtendimentoClient({
       />
 
       {deleteConvOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
             <h3 className="text-base font-bold text-ink">Apagar conversa?</h3>
             <p className="mt-2 text-sm text-ink2">
@@ -1295,7 +1295,7 @@ export function AtendimentoClient({
               <button
                 onClick={() => { setDeleteConvOpen(false); setDeleteConvError(null); }}
                 disabled={deleteConvLoading}
-                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2.5 text-sm font-semibold text-ink2 hover:bg-canvas disabled:opacity-40 transition-colors"
               >
                 Cancelar
               </button>
@@ -1408,19 +1408,19 @@ function ActiveDraftPanel({ draft }: { draft: ActiveDraft }) {
   const label = FULFILLMENT_LABEL[draft.fulfillmentType] ?? draft.fulfillmentType;
 
   return (
-    <div className="mt-2 rounded-xl border-2 border-blue-300 bg-blue-50/40 overflow-hidden shadow-sm">
-      <div className="flex items-center gap-1.5 border-b border-blue-200 bg-blue-100/60 px-3 py-1.5">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
+    <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50/40 overflow-hidden shadow-sm">
+      <div className="flex items-center gap-1.5 border-b border-blue-100 bg-blue-50 px-3 py-1.5">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-blue-600">
           Rascunho IA
         </span>
-        <span className="ml-1 rounded-full bg-blue-200 px-2 py-px text-[10px] font-semibold text-blue-800">
+        <span className="ml-1 rounded-full bg-blue-100 px-2 py-px text-[10px] font-semibold text-blue-700">
           {label}
         </span>
-        <span className="ml-auto text-[10px] text-blue-500">em andamento</span>
+        <span className="ml-auto text-[10px] text-blue-400">em andamento</span>
       </div>
       <div className="px-3 py-2">
         {items.length === 0 ? (
-          <p className="text-xs text-blue-400 italic">Nenhum item adicionado ainda</p>
+          <p className="text-xs text-muted italic">Nenhum item adicionado ainda</p>
         ) : (
           <p className="truncate text-xs text-ink2">
             {items.map((i) => `${i.quantity}× ${i.menuItem?.name ?? "?"}`).join(" · ")}
@@ -1447,18 +1447,19 @@ interface StatusMeta {
   dot?:  string;
 }
 
+// Soft -50 badges mirroring the Pedidos board (OrdersClient STATUS_CONFIG).
 const STATUS_META: Record<string, StatusMeta> = {
-  PENDING:          { label: "Aguardando",        badge: "bg-amber-100  border-amber-200  text-amber-800"  },
-  AWAITING_PAYMENT: { label: "Aguard. pagamento", badge: "bg-yellow-100 border-yellow-200 text-yellow-800" },
-  CONFIRMED:        { label: "Confirmado",        badge: "bg-blue-100   border-blue-200   text-blue-800"   },
-  PREPARING:        { label: "Em preparo",        badge: "bg-brand-100 border-brand-200 text-brand-800" },
-  READY:            { label: "Pronto",            badge: "bg-teal-100   border-teal-200   text-teal-800"   },
-  OUT_FOR_DELIVERY: { label: "Em entrega",        badge: "bg-purple-100 border-purple-200 text-purple-800" },
+  PENDING:          { label: "Aguardando",        badge: "bg-amber-50 border-amber-100 text-amber-700"   },
+  AWAITING_PAYMENT: { label: "Aguard. pagamento", badge: "bg-yellow-50 border-yellow-100 text-yellow-700" },
+  CONFIRMED:        { label: "Confirmado",        badge: "bg-blue-50 border-blue-100 text-blue-600"      },
+  PREPARING:        { label: "Em preparo",        badge: "bg-brand-50 border-brand-100 text-brand-600"   },
+  READY:            { label: "Pronto",            badge: "bg-teal-50 border-teal-100 text-teal-700"      },
+  OUT_FOR_DELIVERY: { label: "Em entrega",        badge: "bg-violet-50 border-violet-100 text-violet-600" },
 };
 
 const DELAYED_META: StatusMeta = {
   label: "Atrasado",
-  badge: "bg-red-100 border-red-200 text-red-700",
+  badge: "bg-red-50 border-red-100 text-red-600",
   dot:   "bg-red-500",
 };
 
@@ -1555,7 +1556,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
     }`}>
       <div className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold border-b ${
         priority === "critical"
-          ? "bg-red-100 text-red-700 border-red-200"
+          ? "bg-red-50 text-red-700 border-red-100"
           : priority === "attention"
           ? "bg-amber-50 text-amber-700 border-amber-100"
           : "bg-green-50 text-green-700 border-green-100"
@@ -1570,7 +1571,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
         </span>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-line bg-[#FAFAF8] px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-line bg-canvas px-3 py-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
           Pedido ativo
         </span>
@@ -1616,12 +1617,12 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
       )}
 
       {!isTerminal && (
-        <div className="flex gap-1.5 flex-wrap border-t border-line bg-[#FAFAF8] px-3 py-2">
+        <div className="flex gap-1.5 flex-wrap border-t border-line bg-canvas px-3 py-2">
           {canConfirm && (
             <button
               onClick={() => applyAction("CONFIRMED", "confirm")}
               disabled={updating !== null}
-              className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-ink px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50 transition-colors"
             >
               {updating === "confirm" ? "…" : "Confirmar pedido"}
             </button>
@@ -1630,7 +1631,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
             <button
               onClick={() => applyAction("READY", "ready")}
               disabled={updating !== null}
-              className="rounded-lg bg-teal-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-teal-600 disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-ink px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50 transition-colors"
             >
               {updating === "ready" ? "…" : "Marcar como pronto"}
             </button>
@@ -1654,7 +1655,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
       )}
 
       {manualConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-5 shadow-xl">
             <h3 className="text-base font-bold text-ink">Confirmar pagamento manualmente?</h3>
             <p className="mt-1 text-xs text-muted">
@@ -1687,7 +1688,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
               <button
                 onClick={() => { setManualConfirmOpen(false); setManualConfirmChecked(false); setManualConfirmReason(""); setManualConfirmError(null); }}
                 disabled={manualConfirming}
-                className="flex-1 rounded-xl border border-line2 py-2 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-40 transition-colors"
+                className="flex-1 rounded-xl border border-line2 py-2 text-sm font-semibold text-ink2 hover:bg-canvas disabled:opacity-40 transition-colors"
               >
                 Voltar
               </button>
@@ -1707,7 +1708,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
 }
 // ── ThreadPanel component ─────────────────────────────────────────────────────
 
-function ThreadPanel({
+export function ThreadPanel({
   thread,
   actionLoading,
   onAction,
@@ -1814,7 +1815,7 @@ function ThreadPanel({
 
           <div className="hidden items-center gap-1.5 sm:flex">
             {isMultichannel ? (
-              <span className="flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-medium text-blue-700">
+              <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
                 <span>📱📋</span>
                 <span className="hidden md:inline">Multicanal</span>
               </span>
@@ -1824,11 +1825,11 @@ function ThreadPanel({
                 <span className="hidden md:inline">{channel.label}</span>
               </span>
             )}
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${badge.cls}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${badge.cls}`}>
               {badge.label}
             </span>
             {typeBadge && (
-              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${typeBadge.cls}`}>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${typeBadge.cls}`}>
                 {typeBadge.label}
               </span>
             )}
@@ -1844,7 +1845,7 @@ function ThreadPanel({
             onChange={(e) => onClassify(e.target.value as ConversationType)}
             disabled={actionLoading}
             title="Classificar conversa"
-            className="shrink-0 rounded-lg border border-line2 bg-paper px-2 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
+            className="shrink-0 rounded-lg border border-line2 bg-paper px-2 py-1.5 text-xs font-medium text-ink2 hover:bg-canvas disabled:opacity-50 transition-colors"
           >
             {CONV_TYPE_OPTIONS.map((o) => (
               <option key={o.id} value={o.id}>{o.label}</option>
@@ -1855,7 +1856,7 @@ function ThreadPanel({
               type="button"
               onClick={() => onClassify("CUSTOMER")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg bg-ink px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-black disabled:opacity-50 transition-colors"
             >
               Voltar a tratar como cliente (reativa IA)
             </button>
@@ -1876,7 +1877,7 @@ function ThreadPanel({
               type="button"
               onClick={() => onAIAction("release")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-600 hover:bg-brand-100 disabled:opacity-50 transition-colors"
             >
               Devolver para IA
             </button>
@@ -1886,7 +1887,7 @@ function ThreadPanel({
               type="button"
               onClick={() => onAction("resolve")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-muted hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-muted hover:bg-canvas disabled:opacity-50 transition-colors"
             >
               Resolver
             </button>
@@ -1896,7 +1897,7 @@ function ThreadPanel({
               type="button"
               onClick={() => onAction("reopen")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-canvas disabled:opacity-50 transition-colors"
             >
               Reabrir
             </button>
@@ -1905,7 +1906,7 @@ function ThreadPanel({
             <button
               type="button"
               onClick={() => { setOrderCreatedId(null); setManualOrderOpen(true); }}
-              className="shrink-0 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+              className="shrink-0 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
             >
               + Criar pedido
             </button>
@@ -1924,7 +1925,7 @@ function ThreadPanel({
 
         {/* Permanent AI lock warning */}
         {isLocked && (
-          <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600">
+          <div className="mt-2 flex items-start gap-2 rounded-lg bg-[#F4F4F2] border border-line px-3 py-2 text-xs text-ink2">
             <span>🔒</span>
             <span>
               Enquanto estiver marcada como <strong>{CONV_TYPE_LABEL[thread.conversationType ?? "OTHER_NON_CUSTOMER"]}</strong>,
@@ -1972,7 +1973,7 @@ function ThreadPanel({
       )}
 
       {/* ── Message thread ────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-[#FAFAF8] px-4 py-4">
+      <div className="flex-1 overflow-y-auto bg-canvas px-4 py-4">
         {thread.messages.length === 0 ? (
           <p className="text-center text-sm text-muted">Sem mensagens ainda.</p>
         ) : (
@@ -1992,21 +1993,21 @@ function ThreadPanel({
 
       {/* ── Send error ────────────────────────────────────────────────── */}
       {sendError && (
-        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
           {sendError}
         </div>
       )}
 
       {/* ── Send note (info) ──────────────────────────────────────────── */}
       {sendNote && (
-        <div className="shrink-0 border-t border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-700">
+        <div className="shrink-0 border-t border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-700">
           {sendNote}
         </div>
       )}
 
       {/* ── Instagram comment: reply is public on the post ───────────── */}
       {!isResolved && (isHumanHandling || isLocked) && isInstagramComment && (
-        <div className="shrink-0 border-t border-pink-200 bg-pink-50 px-4 py-2 text-xs text-pink-700">
+        <div className="shrink-0 border-t border-pink-100 bg-pink-50 px-4 py-2 text-xs text-pink-700">
           💬 Sua resposta será <strong>pública no post do Instagram</strong>, abaixo do comentário do cliente.
         </div>
       )}
@@ -2032,7 +2033,7 @@ function ThreadPanel({
 
           {/* Attachment preview */}
           {attachment && (
-            <div className="flex items-center gap-2 rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2">
+            <div className="flex items-center gap-2 rounded-xl border border-line2 bg-canvas px-3 py-2">
               {attachment.mediaType === "IMAGE" && attachment.previewUrl ? (
                 <img
                   src={attachment.previewUrl}
@@ -2070,7 +2071,7 @@ function ThreadPanel({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading || sending}
                 aria-label="Anexar arquivo"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line2 text-muted hover:bg-[#FAFAF8] hover:text-brand-500 disabled:opacity-40 transition-colors"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line2 text-muted hover:bg-canvas hover:text-brand-500 disabled:opacity-40 transition-colors"
               >
                 📎
               </button>
@@ -2098,7 +2099,7 @@ function ThreadPanel({
           </div>
         </form>
       ) : isResolved ? (
-        <div className="shrink-0 border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-xs text-muted">
+        <div className="shrink-0 border-t border-line2 bg-canvas px-4 py-3 text-center text-xs text-muted">
           Conversa resolvida.{" "}
           <button
             onClick={() => onAction("reopen")}
@@ -2109,7 +2110,7 @@ function ThreadPanel({
           para enviar mensagens.
         </div>
       ) : (
-        <div className="shrink-0 border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-xs text-muted">
+        <div className="shrink-0 border-t border-line2 bg-canvas px-4 py-3 text-center text-xs text-muted">
           Assuma o atendimento para enviar mensagens.
         </div>
       )}
@@ -2164,7 +2165,7 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 backdrop-blur-sm px-4">
       <div className="w-full max-w-lg rounded-2xl bg-paper shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
@@ -2249,7 +2250,7 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-line2 px-4 py-2 text-xs font-medium text-muted hover:bg-[#FAFAF8]"
+                className="rounded-lg border border-line2 px-4 py-2 text-xs font-medium text-muted hover:bg-canvas"
               >
                 Cancelar
               </button>
@@ -2284,7 +2285,7 @@ function SystemEventNote({ msg }: { msg: Message }) {
   return (
     <div className="flex items-center gap-2 py-1">
       <div className="h-px flex-1 bg-line2" />
-      <span className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+      <span className="shrink-0 rounded-full bg-amber-50 border border-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
         {label}
       </span>
       <div className="h-px flex-1 bg-line2" />
@@ -2343,17 +2344,17 @@ function MessageBubble({
     : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
   const senderBadgeCls = isOutbound
     ? (isCrmMsg
-        ? "bg-violet-50 border border-violet-200 text-violet-700"
+        ? "bg-violet-50 text-violet-600"
         : msg.senderType === "AI"
         ? (msgSource === "PEDIDO_TEXTO"
-            ? "bg-sky-50 border border-sky-200 text-sky-700"
-            : "bg-brand-50 border border-brand-200 text-brand-600")
+            ? "bg-sky-50 text-sky-700"
+            : "bg-brand-50 text-brand-600")
         : msg.senderType === "HUMAN_EXTERNAL"
-          ? "bg-teal-50 border border-teal-200 text-teal-700"
-          : "bg-ink border border-gray-600 text-white")
+          ? "bg-teal-50 text-teal-700"
+          : "bg-ink text-white")
     : (msg.senderType === "CUSTOMER_CARDAPIO"
-        ? "bg-purple-50 border border-purple-200 text-purple-700"
-        : "bg-green-50 border border-green-200 text-green-700");
+        ? "bg-violet-50 text-violet-600"
+        : "bg-green-50 text-green-700");
 
   // WhatsApp media arrives as an encrypted `.enc` URL the browser cannot open.
   // For those, point to the authenticated proxy which streams decrypted bytes.
@@ -2422,7 +2423,7 @@ function MessageBubble({
               </a>
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
-                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-[#FAFAF8] text-muted"
+                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-canvas text-muted"
               }`}>
                 <span>📷</span>
                 <span>Imagem recebida</span>
@@ -2452,7 +2453,7 @@ function MessageBubble({
               )
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
-                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-[#FAFAF8] text-muted"
+                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-canvas text-muted"
               }`}>
                 <span>🎵</span>
                 <span>Áudio recebido</span>
@@ -2478,7 +2479,7 @@ function MessageBubble({
               </a>
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
-                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-[#FAFAF8] text-muted"
+                isOutbound ? "border-brand-400/50 text-brand-200" : "border-line2 bg-canvas text-muted"
               }`}>
                 <span>📄</span>
                 <span className="truncate">{msg.content || "Arquivo recebido"}</span>
