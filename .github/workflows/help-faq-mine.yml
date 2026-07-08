@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Help FAQ Mine — weekly FAQ proposals from resolved support conversations
+#
+# Every Monday, mines the last 30 days of RESOLVED help threads (the ones the
+# Foocci team answered via the support inbox) and files generalizable Q&As as
+# PENDING change-requests in the Operational Manual. Nothing publishes
+# automatically — the team approves in /admin/manual-operacional → Solicitações.
+#
+# Required GitHub Secrets (the SAME ones used by the other crons — no new setup):
+#   FOOCCI_BASE_URL   Production URL, no trailing slash.
+#   CRON_SECRET       Must match the CRON_SECRET env var in Railway.
+#
+# Schedule: Mondays at 06:37 UTC = 03:37 America/Sao_Paulo (BRT).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Help FAQ Mine
+
+on:
+  schedule:
+    # Mondays 06:37 UTC = 03:37 Brasília
+    - cron: "37 6 * * 1"
+
+  workflow_dispatch: {}
+
+jobs:
+  mine-faq:
+    name: "Weekly FAQ mining"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: "POST /api/admin/support/mine-faq"
+        env:
+          BASE_URL: ${{ secrets.FOOCCI_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          URL="${BASE_URL%/}/api/admin/support/mine-faq"
+          echo "→ Endpoint: $URL"
+
+          set +e
+          curl --connect-timeout 20 --max-time 180 -sS \
+            -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+          echo "← HTTP $HTTP_STATUS (curl exit $CURL_EXIT)"
+          cat /tmp/response.json 2>/dev/null || echo "(no body)"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::curl failed with exit $CURL_EXIT"
+            exit "$CURL_EXIT"
+          fi
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo "::error::Endpoint returned $HTTP_STATUS"
+            exit 1
+          fi

@@ -1,4 +1,4 @@
-FOOCCI — Carteiro de Impressão (v0.2)
+FOOCCI — Carteiro de Impressão (v0.3)
 =====================================
 
 O QUE É
@@ -21,23 +21,26 @@ clique em "Mais informações" -> "Executar assim mesmo". É seguro (programa no
 
 PASSO 2 — PAREAR (só na primeira vez)
 -------------------------------------
-1. No FOOCCI, abra:  Integrações -> Impressão (Cozinhas).
-2. Lá vai aparecer um CÓDIGO DE PAREAMENTO (ex: K7M2QP4A).
+1. No FOOCCI, abra:  Configurações -> Impressoras.
+2. Lá vai aparecer um CÓDIGO DE PAREAMENTO (use o botão "Copiar código").
 3. Na tela do Carteiro, cole esse código e clique "Parear".
-4. Pronto: vai aparecer "Conectado". As impressoras do PC aparecem no FOOCCI.
+4. Pronto: o topo da tela mostra "Carteiro conectado" e as impressoras
+   do PC aparecem no FOOCCI.
 
 
 PASSO 3 — USAR
 --------------
-- No FOOCCI (Integrações -> Impressão), escolha qual impressora atende cada
-  estação (Caixa, Cozinha 1-5, Copa, Cupom) e salve.
-- Clique "Imprimir teste" em uma estação: a comanda sai sozinha na impressora.
-- Deixe o Carteiro aberto (ou minimizado) durante o expediente.
+- Em Configurações -> Impressoras, no cartão "1. Impressora de cada estação",
+  escolha qual impressora atende cada estação (Caixa, Cozinha, Copa, Cupom).
+- No cartão "2. Para onde vai cada categoria", diga em qual estação cada
+  categoria do cardápio imprime.
+- Clique no botão "🖨️ Testar" de uma estação: a comanda de teste sai sozinha.
+- Termine em "Salvar tudo" e deixe o Carteiro aberto durante o expediente.
 
 
 O QUE ME CONTAR
 ---------------
-- O pareamento funcionou? (apareceu "Conectado"?)
+- O pareamento funcionou? (apareceu "Carteiro conectado"?)
 - As impressoras apareceram na lista (no FOOCCI e no Carteiro)?
-- O "Imprimir teste" fez sair papel? Em qual impressora?
+- O "🖨️ Testar" fez sair papel? Em qual impressora?
 - Apareceu algum erro?

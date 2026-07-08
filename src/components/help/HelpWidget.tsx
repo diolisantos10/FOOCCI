@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   useNotifications,
   relTime,
@@ -43,12 +43,49 @@ interface ThreadInfo {
 }
 
 const SUGGESTIONS = [
-  "🚀 Primeiros passos — por onde começo?",
   "Como cadastro um produto no cardápio?",
   "Como conecto meu WhatsApp?",
   "Como crio uma promoção?",
   "Onde acompanho meus pedidos?",
 ];
+
+// Contextual guide per screen — first matching prefix wins (most specific first).
+const CONTEXT_GUIDES: Array<{ prefix: string; label: string; question: string }> = [
+  { prefix: "/settings/delivery", label: "Entrega", question: "Como configurar a área de entrega e as taxas?" },
+  { prefix: "/settings/payments", label: "Pagamentos", question: "Como configurar as formas de pagamento?" },
+  { prefix: "/settings/operation", label: "Horários", question: "Como definir o horário de funcionamento?" },
+  { prefix: "/settings/impressoras", label: "Impressoras", question: "Como configurar a impressão de comandas?" },
+  { prefix: "/settings/sons", label: "Sons e alertas", question: "Como configurar os sons e alertas?" },
+  { prefix: "/settings/policies", label: "Políticas", question: "Como definir termos e políticas da loja?" },
+  { prefix: "/settings/team", label: "Equipe", question: "Como adicionar membros da equipe?" },
+  { prefix: "/settings/store", label: "Loja", question: "Como preencher os dados da loja?" },
+  { prefix: "/settings", label: "Configurações", question: "Onde fica cada configuração?" },
+  { prefix: "/orders", label: "Pedidos", question: "Como acompanhar e gerenciar pedidos?" },
+  { prefix: "/atendimento", label: "Central de Conversas", question: "Como atender clientes na Central de Conversas?" },
+  { prefix: "/menu-enhancement", label: "Fotos do Cardápio", question: "Como melhorar as fotos do cardápio?" },
+  { prefix: "/menu", label: "Cardápio", question: "Como cadastro um produto no cardápio?" },
+  { prefix: "/agente-ia", label: "Agentes IA", question: "Como configurar os Agentes de IA?" },
+  { prefix: "/analytics", label: "Analytics", question: "Como entender meus números no Analytics?" },
+  { prefix: "/promotions", label: "Promoções", question: "Como criar uma promoção?" },
+  { prefix: "/crm", label: "CRM", question: "Como criar uma campanha no CRM?" },
+  { prefix: "/canais", label: "Canais", question: "Como criar links rastreáveis?" },
+  { prefix: "/marca", label: "Marca", question: "Como personalizar a marca (logo, nome e cores)?" },
+  { prefix: "/integracoes", label: "Integrações", question: "Quais integrações existem e como conectar?" },
+];
+
+// Onboarding trail — mirrors the "Primeiros passos" guide; checked state is per-browser.
+const ONBOARDING_STEPS: Array<{ id: string; label: string; question: string }> = [
+  { id: "marca", label: "Personalizar a marca", question: "Como personalizar a marca (logo, nome e cores)?" },
+  { id: "cardapio", label: "Montar o cardápio", question: "Como cadastro um produto no cardápio?" },
+  { id: "horario", label: "Definir os horários", question: "Como definir o horário de funcionamento?" },
+  { id: "entrega", label: "Configurar entrega/retirada", question: "Como configurar a área de entrega e as taxas?" },
+  { id: "pagamentos", label: "Formas de pagamento", question: "Como configurar as formas de pagamento?" },
+  { id: "whatsapp", label: "Conectar o WhatsApp", question: "Como conecto meu WhatsApp?" },
+  { id: "divulgar", label: "Divulgar o cardápio (QR/link)", question: "Como compartilhar o cardápio digital (QR Code e link)?" },
+  { id: "teste", label: "Fazer um pedido de teste", question: "Como acompanhar e gerenciar pedidos?" },
+];
+
+const ONBOARDING_KEY = "foocci_onboarding_v1";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -69,6 +106,35 @@ export function HelpWidget() {
   const [threadLoaded, setThreadLoaded] = useState(false);
   const [escalating, setEscalating] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  // Contextual guide for the screen the lojista is on right now.
+  const pathname = usePathname();
+  const contextGuide =
+    CONTEXT_GUIDES.find((c) => pathname?.startsWith(c.prefix)) ?? null;
+
+  // Onboarding checklist (per-browser).
+  const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ONBOARDING_KEY);
+      if (raw) setDoneSteps(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+  const toggleStep = useCallback((id: string) => {
+    setDoneSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(ONBOARDING_KEY, JSON.stringify([...next]));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -345,20 +411,36 @@ export function HelpWidget() {
 
             {sending && <TypingBubble />}
 
-            {/* Suggestions (only before the first question) */}
+            {/* Onboarding checklist + suggestions (only before the first question) */}
             {!hasUserMessages && !loadingThread && (
-              <div className="space-y-1.5 pt-1">
-                {SUGGESTIONS.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => sendMessage(q)}
-                    className="block w-full rounded-xl border border-line bg-paper px-3 py-2 text-left text-[12.5px] font-medium text-ink2 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
+              <>
+                <OnboardingChecklist
+                  done={doneSteps}
+                  onToggle={toggleStep}
+                  onAsk={(q) => sendMessage(q)}
+                />
+                <div className="space-y-1.5 pt-1">
+                  {contextGuide && (
+                    <button
+                      type="button"
+                      onClick={() => sendMessage(contextGuide.question)}
+                      className="block w-full rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-left text-[12.5px] font-semibold text-brand-700 transition-colors hover:bg-brand-100"
+                    >
+                      📍 Guia desta tela ({contextGuide.label}): {contextGuide.question}
+                    </button>
+                  )}
+                  {SUGGESTIONS.filter((q) => q !== contextGuide?.question).map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => sendMessage(q)}
+                      className="block w-full rounded-xl border border-line bg-paper px-3 py-2 text-left text-[12.5px] font-medium text-ink2 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
@@ -621,6 +703,75 @@ function NotificationsTab({
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function OnboardingChecklist({
+  done,
+  onToggle,
+  onAsk,
+}: {
+  done: Set<string>;
+  onToggle: (id: string) => void;
+  onAsk: (question: string) => void;
+}) {
+  const total = ONBOARDING_STEPS.length;
+  const completed = ONBOARDING_STEPS.filter((s) => done.has(s.id)).length;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-paper">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
+      >
+        <span className="text-[13px] font-semibold text-ink">
+          🚀 Primeiros passos{" "}
+          <span className={completed === total ? "text-green-600" : "text-muted"}>
+            ({completed}/{total})
+          </span>
+        </span>
+        <span className="text-[11px] text-muted">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <ul className="border-t border-line">
+          {ONBOARDING_STEPS.map((s) => {
+            const isDone = done.has(s.id);
+            return (
+              <li key={s.id} className="flex items-center gap-2 border-b border-line/50 px-3 py-1.5 last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => onToggle(s.id)}
+                  aria-label={isDone ? "Desmarcar etapa" : "Marcar etapa como feita"}
+                  className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
+                    isDone
+                      ? "border-green-500 bg-green-500 text-white"
+                      : "border-line2 bg-canvas text-transparent hover:border-brand-400"
+                  }`}
+                >
+                  ✓
+                </button>
+                <span
+                  className={`flex-1 text-[12px] leading-snug ${
+                    isDone ? "text-muted line-through" : "text-ink2"
+                  }`}
+                >
+                  {s.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onAsk(s.question)}
+                  className="shrink-0 text-[11px] font-semibold text-brand-500 hover:text-brand-600"
+                >
+                  como?
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

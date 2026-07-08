@@ -31,19 +31,26 @@
 11. **Branch órfã resolvida** — `eloquent-franklin` verificada 100% redundante
     (commit já reaplicado no runner como e88a46a). Apagar no GitHub UI.
 
-## 📋 A fazer (por prioridade)
-- **P5. FAQ automático do suporte** — minerar conversas escaladas resolvidas
-  e propor capítulos de FAQ (via change-request para aprovação).
+## ✅ Entregue (3ª leva)
+12. **P5 — FAQ automático do suporte** — `FaqMiner` + `POST /api/admin/support/mine-faq`
+    (auth admin OU cron) + botão "🧠 Gerar FAQ" na aba 📈 Perguntas + cron
+    semanal `.github/workflows/help-faq-mine.yml` (segundas 03:37 BRT).
+    Propostas entram como Solicitações PENDENTES no manual — nada publica sozinho.
+13. **P8 (v1) — Guia contextual** — o widget detecta a tela atual (usePathname)
+    e destaca "📍 Guia desta tela" nas sugestões.
+14. **P9 — Onboarding v2** — checklist interativo "🚀 Primeiros passos (n/8)"
+    no widget, com marcação persistida e botão "como?" por etapa.
+15. **P10 — Carteiro-Manual.txt** corrigido (navegação atual: Configurações →
+    Impressoras, botão "🖨️ Testar", "Salvar tudo").
+
+## 📋 A fazer
 - **P6. Resgate do conteúdo do banco** — rodar `GET /api/admin/manual/export`
   em produção e trazer pro código qualquer capítulo digitado à mão que valha.
+  (Precisa de acesso à produção — fora do alcance do ambiente de dev.)
 - **P7. Bíblia interna no assistente?** — decidir se os 14 capítulos internos
-  (Importar v0.1) também alimentam o chat. Decisão de produto pendente.
-- **P8. Tours contextuais (Fase 3 do widget)** — o widget percebe em que tela
-  o lojista está e oferece o guia daquela tela proativamente.
-- **P9. Onboarding v2** — checklist interativo no widget (marcar etapas feitas).
-- **P10. Corrigir Carteiro-Manual.txt** — o manual baixável do Carteiro cita a
-  navegação antiga ("Integrações → Impressão"); atualizar para
-  "Configurações → Impressoras" e o botão "🖨️ Testar".
+  (Importar v0.1) também alimentam o chat. Decisão de produto do Diego.
+- **P11. Tours contextuais v2** — sugestão proativa fora do estado vazio
+  (ex.: balão percebe a troca de tela mesmo com conversa em andamento).
 
 ## Notas
 - Escopo do robô noturno hoje: só os guias do lojista. Onboarding/treinamentos

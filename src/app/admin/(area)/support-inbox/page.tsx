@@ -340,6 +340,30 @@ interface MetricsData {
 function MetricsPanel() {
   const [data, setData] = useState<MetricsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mining, setMining] = useState(false);
+  const [mineMsg, setMineMsg] = useState<string | null>(null);
+
+  async function runFaqMiner() {
+    if (mining) return;
+    setMining(true);
+    setMineMsg(null);
+    try {
+      const res = await fetch("/api/admin/support/mine-faq", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      const d = json?.data as
+        | { threadsScanned: number; proposed: number; skippedDuplicates: number }
+        | undefined;
+      setMineMsg(
+        res.ok && d
+          ? `✓ ${d.threadsScanned} conversa(s) analisada(s) → ${d.proposed} FAQ(s) proposta(s) (${d.skippedDuplicates} duplicada(s)). Aprove em Manual → Solicitações.`
+          : "Falha ao gerar FAQ.",
+      );
+    } catch {
+      setMineMsg("Falha ao gerar FAQ.");
+    } finally {
+      setMining(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -379,6 +403,18 @@ function MetricsPanel() {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Sem boa resposta (gaps)</p>
           <p className={`mt-1 text-2xl font-extrabold ${data.gapTotal > 0 ? "text-amber-400" : "text-green-400"}`}>{data.gapTotal}</p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={runFaqMiner}
+          disabled={mining}
+          className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+        >
+          {mining ? "Gerando…" : "🧠 Gerar FAQ das conversas resolvidas"}
+        </button>
+        {mineMsg && <span className="text-xs text-gray-400">{mineMsg}</span>}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
