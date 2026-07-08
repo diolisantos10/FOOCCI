@@ -161,7 +161,9 @@ export default function MarketingSettingsPage() {
 
                 <Field
                   label="Distribuição do limite"
-                  hint="Como o orçamento diário é dividido entre as campanhas ativas."
+                  hint={budget.distributionMode === "MANUAL"
+                    ? "Manual: cada campanha usa o próprio limite diário configurado nela. Os limites globais continuam valendo."
+                    : "Como o orçamento diário é dividido entre as campanhas ativas."}
                 >
                   <select
                     value={budget.distributionMode}
@@ -170,7 +172,7 @@ export default function MarketingSettingsPage() {
                   >
                     <option value="EQUAL">Igualitária entre campanhas</option>
                     <option value="PRIORITY">Por prioridade</option>
-                    <option value="MANUAL">Manual</option>
+                    <option value="MANUAL">Manual (limite de cada campanha)</option>
                   </select>
                 </Field>
               </div>

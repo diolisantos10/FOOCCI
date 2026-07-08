@@ -85,6 +85,8 @@ export interface BudgetCampaignInput {
   alreadySentToday:  number;
   /** Upper bound of recipients still eligible to receive this campaign (after dedupe). */
   remainingAudience: number;
+  /** This campaign's own configured daily limit — its quota in MANUAL distribution mode. */
+  manualDailyQuota?: number;
 }
 
 export interface BudgetPlannerInput {
@@ -247,7 +249,17 @@ export class CRMWhatsAppBudgetPlanner {
 
     const mode: "EQUAL" | "PRIORITY" = input.config.distributionMode === "PRIORITY" ? "PRIORITY" : "EQUAL";
 
-    const dailyQuotas = computeDailyQuotas(config.globalDailyLimit, n, order);
+    // MANUAL mode: each campaign's own configured daily limit is its quota (the
+    // owner sets it per campaign), instead of an equal split of the global budget.
+    // Campaigns without a limit fall back to the equal share so a half-configured
+    // setup still behaves sanely. The global daily/cycle ceilings still apply.
+    const equalQuotas = computeDailyQuotas(config.globalDailyLimit, n, order);
+    const dailyQuotas = config.distributionMode === "MANUAL"
+      ? campaigns.map((c, i) =>
+          typeof c.manualDailyQuota === "number" && c.manualDailyQuota >= 0
+            ? c.manualDailyQuota
+            : (equalQuotas[i] ?? 0))
+      : equalQuotas;
 
     // Per-campaign capacity this cycle = what's left of the daily quota, bounded
     // by the remaining audience (no point allocating a slot nobody can receive).
@@ -287,6 +299,25 @@ export class CRMWhatsAppBudgetPlanner {
       perCampaign,
     };
   }
+}
+
+// ─── Cycle interval ────────────────────────────────────────────────────────────
+
+/**
+ * True when the CRM produced execution activity more recently than the minimum
+ * interval between cycles — the current run should wait for the next tick.
+ * Any execution row counts (sent/blocked/skipped): each one marks a cycle that
+ * actually did work, and spacing exists to protect the WhatsApp number.
+ */
+export function isCycleIntervalActive(
+  lastActivityAt: Date | string | null,
+  minMinutes: number,
+  now: Date = new Date(),
+): boolean {
+  if (!lastActivityAt || minMinutes <= 0) return false;
+  const t = new Date(lastActivityAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return now.getTime() - t < minMinutes * 60_000;
 }
 
 // ─── Circuit breaker (Evolution Web) ────────────────────────────────────────────

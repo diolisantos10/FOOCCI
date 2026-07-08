@@ -5,6 +5,7 @@ import {
   distributeCycle,
   inferCampaignPriority,
   describeBudgetAllocation,
+  isCycleIntervalActive,
   type BudgetCampaignInput,
 } from "../CRMWhatsAppBudgetPlanner";
 import { computeRecoverablePlan } from "../recoverableReprocessPlan";
@@ -227,5 +228,75 @@ describe("disabled budget", () => {
       campaigns:         [campaign("A")],
     });
     expect(plan.globalBlockReason).toBe("SAFETY_DISABLED");
+  });
+});
+
+describe("MANUAL distribution mode", () => {
+  it("uses each campaign's own daily limit as its quota", () => {
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config:            cfg({ globalDailyLimit: 50, globalCycleLimit: 5, distributionMode: "MANUAL" }),
+      globalSentToday:   0,
+      instanceConnected: true,
+      campaigns:         [
+        campaign("A", { manualDailyQuota: 30 }),
+        campaign("B", { manualDailyQuota: 2 }),
+      ],
+    });
+    const a = plan.perCampaign.find((p) => p.campaignId === "A")!;
+    const b = plan.perCampaign.find((p) => p.campaignId === "B")!;
+    expect(a.dailyQuota).toBe(30);
+    expect(b.dailyQuota).toBe(2);
+    // Cycle still capped at 5 total; B can take at most its quota (2).
+    expect(a.allocated + b.allocated).toBe(5);
+    expect(b.allocated).toBeLessThanOrEqual(2);
+  });
+
+  it("a campaign that exhausted its manual quota is skipped with the campaign-quota reason", () => {
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config:            cfg({ globalDailyLimit: 50, globalCycleLimit: 5, distributionMode: "MANUAL" }),
+      globalSentToday:   10,
+      instanceConnected: true,
+      campaigns:         [
+        campaign("A", { manualDailyQuota: 10, alreadySentToday: 10 }), // esgotada
+        campaign("B", { manualDailyQuota: 20 }),
+      ],
+    });
+    const a = plan.perCampaign.find((p) => p.campaignId === "A")!;
+    const b = plan.perCampaign.find((p) => p.campaignId === "B")!;
+    expect(a.allocated).toBe(0);
+    expect(a.reason).toBe("CAMPAIGN_DAILY_QUOTA_REACHED");
+    expect(b.allocated).toBe(5); // herda o ciclo inteiro
+  });
+
+  it("missing manual quota falls back to the equal share", () => {
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config:            cfg({ globalDailyLimit: 40, globalCycleLimit: 5, distributionMode: "MANUAL" }),
+      globalSentToday:   0,
+      instanceConnected: true,
+      campaigns:         [campaign("A"), campaign("B")], // sem manualDailyQuota
+    });
+    expect(plan.perCampaign.every((p) => p.dailyQuota === 20)).toBe(true);
+  });
+});
+
+describe("isCycleIntervalActive (min interval between cycles)", () => {
+  const now = new Date("2026-07-08T12:00:00Z");
+
+  it("active when last activity is more recent than the interval", () => {
+    expect(isCycleIntervalActive(new Date("2026-07-08T11:55:00Z"), 10, now)).toBe(true);
+  });
+
+  it("inactive when the interval has fully elapsed", () => {
+    expect(isCycleIntervalActive(new Date("2026-07-08T11:49:59Z"), 10, now)).toBe(false);
+  });
+
+  it("inactive with no prior activity or interval disabled", () => {
+    expect(isCycleIntervalActive(null, 10, now)).toBe(false);
+    expect(isCycleIntervalActive(new Date("2026-07-08T11:59:00Z"), 0, now)).toBe(false);
+  });
+
+  it("accepts ISO strings and rejects invalid dates", () => {
+    expect(isCycleIntervalActive("2026-07-08T11:59:00Z", 10, now)).toBe(true);
+    expect(isCycleIntervalActive("not-a-date", 10, now)).toBe(false);
   });
 });

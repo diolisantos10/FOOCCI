@@ -56,6 +56,7 @@ import {
   evaluateCircuitBreaker,
   inferCampaignPriority,
   describeBudgetAllocation,
+  isCycleIntervalActive,
   type BudgetCampaignInput,
   type BudgetBlockReason,
 } from "./CRMWhatsAppBudgetPlanner";
@@ -537,6 +538,26 @@ export class ScheduledCampaignRunnerService {
       const budget = safety.crmWhatsAppSafety;
 
       if (budget?.enabled && budget.providerMode === "EVOLUTION_WEB") {
+        // Minimum interval between cycles: if the CRM produced execution activity
+        // more recently than the configured spacing, this run waits for the next
+        // tick. Dry runs still preview normally.
+        if (!dryRun && budget.minMinutesBetweenCycles > 0) {
+          const lastActivity = await prisma.campaignExecution.findFirst({
+            where:   { restaurantId: rid },
+            orderBy: { createdAt: "desc" },
+            select:  { createdAt: true },
+          });
+          if (isCycleIntervalActive(lastActivity?.createdAt ?? null, budget.minMinutesBetweenCycles)) {
+            results.push(...group.map((c): CampaignBatchResult => ({
+              campaignId:   c.id,
+              campaignName: c.name,
+              eligible:     0, sent: 0, failed: 0, blocked: 0, skipped: 0,
+              reason:       `Aguardando intervalo mínimo entre ciclos (${budget.minMinutesBetweenCycles} min)`,
+              completed:    false,
+            })));
+            continue;
+          }
+        }
         results.push(...await this._runOrchestratedCycle(rid, group, budget, { dryRun }));
       } else {
         // Legacy parallel path — preserved exactly for restaurants with the budget off.
@@ -581,7 +602,7 @@ export class ScheduledCampaignRunnerService {
    */
   private static async _runOrchestratedCycle(
     restaurantId: string,
-    due: Array<{ id: string; name: string; templateId: string | null; targetSegment: string | null }>,
+    due: Array<{ id: string; name: string; templateId: string | null; targetSegment: string | null; scheduleConfig: unknown }>,
     budget: import("@/lib/crm-safety").CRMWhatsAppBudgetConfig,
     opts: { dryRun?: boolean },
   ): Promise<CampaignBatchResult[]> {
@@ -618,15 +639,21 @@ export class ScheduledCampaignRunnerService {
       }),
     );
 
-    let pending: BudgetCampaignInput[] = due.map((c) => ({
-      campaignId:        c.id,
-      campaignName:      c.name,
-      priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
-      alreadySentToday:  sentByCampaign.get(c.id) ?? 0,
-      // Real eligible audience is discovered during the send; redistribution of an
-      // empty campaign's slot is handled by re-planning each iteration.
-      remainingAudience: Number.MAX_SAFE_INTEGER,
-    }));
+    let pending: BudgetCampaignInput[] = due.map((c) => {
+      const cfg = c.scheduleConfig as RecurringScheduleConfig | null;
+      return {
+        campaignId:        c.id,
+        campaignName:      c.name,
+        priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
+        alreadySentToday:  sentByCampaign.get(c.id) ?? 0,
+        // Real eligible audience is discovered during the send; redistribution of an
+        // empty campaign's slot is handled by re-planning each iteration.
+        remainingAudience: Number.MAX_SAFE_INTEGER,
+        // MANUAL distribution mode uses the campaign's own daily limit as its quota
+        // (same clamp as runCampaignBatch applies).
+        manualDailyQuota:  Math.max(1, Math.min(cfg?.dailyLimit ?? 20, 200)),
+      };
+    });
 
     const resultsById = new Map<string, CampaignBatchResult>();
     let cycleSent = 0;
@@ -738,13 +765,17 @@ export class ScheduledCampaignRunnerService {
       ),
     ]);
 
-    const campaigns: BudgetCampaignInput[] = recurring.map((c, i) => ({
-      campaignId:        c.id,
-      campaignName:      c.name,
-      priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
-      alreadySentToday:  sentCounts[i] ?? 0,
-      remainingAudience: Number.MAX_SAFE_INTEGER,
-    }));
+    const campaigns: BudgetCampaignInput[] = recurring.map((c, i) => {
+      const cfg = c.scheduleConfig as RecurringScheduleConfig | null;
+      return {
+        campaignId:        c.id,
+        campaignName:      c.name,
+        priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
+        alreadySentToday:  sentCounts[i] ?? 0,
+        remainingAudience: Number.MAX_SAFE_INTEGER,
+        manualDailyQuota:  Math.max(1, Math.min(cfg?.dailyLimit ?? 20, 200)),
+      };
+    });
 
     const plan = CRMWhatsAppBudgetPlanner.plan({
       config: budget, globalSentToday, instanceConnected: true, campaigns,
