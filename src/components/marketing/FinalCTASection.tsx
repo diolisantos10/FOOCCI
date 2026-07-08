@@ -13,13 +13,15 @@ export function FinalCTASection() {
   return (
     <section aria-labelledby="fechamento-title" className="bg-gray-50 py-20 lg:py-24">
       <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
+        {/* Transparent cutout — the mascot floats free on the section bg, so the
+            solid version's off-white canvas would read as a faint box here. */}
         <Image
-          src="/brand/foocci/foocci-mascot.png"
+          src="/brand/foocci/foocci-mascot-cutout.png"
           alt=""
           aria-hidden
-          width={196}
-          height={321}
-          className="mx-auto mb-6 h-24 w-auto"
+          width={448}
+          height={852}
+          className="mx-auto mb-6 h-24 w-auto drop-shadow-sm"
         />
         <h2 id="fechamento-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
           Uma nova forma de vender, relacionar e fidelizar está chegando.

@@ -133,8 +133,8 @@ export function MascotPanel({
       <Image
         src="/brand/foocci/foocci-mascot.png"
         alt={alt}
-        width={196}
-        height={321}
+        width={503}
+        height={875}
         className={`relative ${imgClassName}`}
       />
     </div>
@@ -148,7 +148,7 @@ export function MascotAvatar({ className = "" }: { className?: string }) {
       aria-hidden
       className={`inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-900/[0.04] ${className}`}
     >
-      <Image src="/brand/foocci/foocci-mascot.png" alt="" width={196} height={321} className="h-12 w-auto" />
+      <Image src="/brand/foocci/foocci-mascot.png" alt="" width={503} height={875} className="h-12 w-auto" />
     </span>
   );
 }

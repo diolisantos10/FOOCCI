@@ -33,8 +33,8 @@ export function MascotHostScene({ className = "" }: { className?: string }) {
             <Image
               src="/brand/foocci/foocci-mascot-cutout.png"
               alt="Mascote do Foocci, anfitrião do restaurante"
-              width={196}
-              height={321}
+              width={448}
+              height={852}
               className="relative z-10 h-56 w-auto drop-shadow-[0_18px_24px_rgba(120,72,20,0.28)] sm:h-64"
             />
             <Image

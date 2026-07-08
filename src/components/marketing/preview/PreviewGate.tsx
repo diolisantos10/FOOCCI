@@ -50,7 +50,7 @@ export function PreviewGate({ configured, next = "/site" }: { configured: boolea
         {/* Mascot + wordmark */}
         <div className="mb-8 flex flex-col items-center">
           <span className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-50 ring-1 ring-gray-900/[0.03]">
-            <Image src="/brand/foocci/foocci-mascot.png" alt="" aria-hidden width={196} height={321} className="h-16 w-auto" />
+            <Image src="/brand/foocci/foocci-mascot.png" alt="" aria-hidden width={503} height={875} className="h-16 w-auto" />
           </span>
           <span className="flex items-center gap-2.5">
             <Image src="/brand/foocci/foocci-wordmark.png" alt="Foocci" width={200} height={50} priority className="h-7 w-auto" />
