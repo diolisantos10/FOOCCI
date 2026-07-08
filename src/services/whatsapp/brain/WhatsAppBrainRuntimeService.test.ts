@@ -73,15 +73,16 @@ describe("isWhatsAppBrainEnabled (the safety switch)", () => {
 });
 
 describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
-  it("reasons via the Brain and sends the Brain's reply (not a menu match)", async () => {
+  // Decisão de produto (pré-lançamento): free-form DESLIGADO. Pergunta fora do
+  // menu NUNCA vai pro LLM — é delegada ao recepcionista (que faz handoff p/
+  // humano). Regressão do caso real "Vocês tem rodízio?" respondido errado.
+  it("pergunta fora do menu → recepcionista; o LLM nunca é chamado", async () => {
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
-    expect(brain.reasonAsAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: "whatsapp", businessId: "rest_1" }),
-    );
-    expect(evoClient.sendTextMessage).toHaveBeenCalledWith(
-      expect.anything(), "5511999", "Aceitamos Pix, cartão e dinheiro. 😊\n\n0. menu",
-    );
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(brain.reasonAsAgent).not.toHaveBeenCalled();
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
     expect(out.status).toBe("REPLIED");
+    expect(out.reason).toContain("free-form disabled");
   });
 
   it("delegates menu interactions to the Receptionist — never free-form", async () => {
@@ -104,14 +105,16 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     expect(brain.reasonAsAgent).not.toHaveBeenCalled();
   });
 
-  it("escalates to a human when the Brain asks — but sends the reply first", async () => {
+  it("mesmo intent que o Brain escalaria vai direto ao recepcionista (LLM travado)", async () => {
     brain.reasonAsAgent.mockResolvedValue(
       brainOutcome({ shouldEscalate: true, escalationReason: "reclamação", idealResponse: "Vou te passar pra um atendente. 🤝" }),
     );
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
-    expect(evoClient.sendTextMessage).toHaveBeenCalled();
-    expect(handoff.markConversationNeedsHuman).toHaveBeenCalledWith("conv_1", "AI_ESCALATION");
-    expect(out.status).toBe("HANDOFF");
+    // Com o free-form desligado o fluxo nem chega no Brain: o recepcionista
+    // assume (e é ele quem decide o handoff via needsHandoff/UNKNOWN).
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(brain.reasonAsAgent).not.toHaveBeenCalled();
+    expect(out.status).toBe("REPLIED");
   });
 
   it("never touches a conversation a human took over", async () => {

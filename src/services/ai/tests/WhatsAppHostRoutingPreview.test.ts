@@ -98,9 +98,11 @@ describe("previewReceptionistResponse — endereço solto", () => {
 
 describe("previewReceptionistResponse — 'tem temaki?'", () => {
   const p = previewReceptionistResponse("tem temaki?", ctx());
-  it("não manda URL gigante como primeira resposta (SAFE_MENU)", () => {
+  // Free-form desligado (decisão de produto pré-lançamento): pergunta aberta de
+  // produto vai para atendimento humano — nunca resposta livre nem link bruto.
+  it("não manda URL gigante e escala para humano (HANDOFF)", () => {
     expect(p.containsRawLink).toBe(false);
-    expect(p.responseType).toBe("SAFE_MENU");
+    expect(p.responseType).toBe("HANDOFF");
   });
 });
 

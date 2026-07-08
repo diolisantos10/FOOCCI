@@ -6,6 +6,8 @@ const db = vi.hoisted(() => ({
   restaurant: { findUnique: vi.fn() },
   restaurantBrandConfig: { findUnique: vi.fn() },
   customer: { findMany: vi.fn(), findUnique: vi.fn() },
+  // Meta CRM lookup no _sendBatch — null = Meta desligado, caminho Evolution (o que a suíte cobre).
+  metaWhatsAppConfig: { findUnique: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
   message: { create: vi.fn() },
   cRMContactLedger: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
@@ -61,6 +63,7 @@ beforeEach(() => {
   db.restaurantBrandConfig.findUnique.mockResolvedValue({ googleReviewUrl: null });
   db.customer.findMany.mockResolvedValue([]); // none opted out
   db.customer.findUnique.mockResolvedValue({ id: "c1", name: "Ana" });
+  db.metaWhatsAppConfig.findUnique.mockResolvedValue(null); // Meta CRM off → Evolution
   db.conversation.findFirst.mockResolvedValue(null);
   db.conversation.create.mockResolvedValue({ id: "conv1" });
   db.message.create.mockResolvedValue({ id: "msg1" });
