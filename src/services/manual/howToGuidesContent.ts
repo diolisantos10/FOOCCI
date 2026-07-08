@@ -459,4 +459,222 @@ Provedores disponíveis:
 3. Em **Escolha a Página do Facebook**, selecione a Página ligada ao seu Instagram profissional e clique em **Conectar esta Página**.
 4. Pronto — as mensagens do Instagram Direct passam a aparecer na **Central de Conversas** com o selo **Instagram DM**.`,
   },
+  {
+    slug: "guia-primeiros-passos",
+    title: "Primeiros passos — do zero ao primeiro pedido",
+    area: "GENERAL",
+    description: "Trilha de onboarding: configurar tudo e receber o primeiro pedido.",
+    content: `# Primeiros passos — do zero ao primeiro pedido
+
+Bem-vindo ao Foocci! 🚀 Siga esta trilha na ordem — em cada etapa, você pode me perguntar "como faço?" que eu detalho o passo a passo.
+
+## 1. Deixe com a sua cara (Marca)
+**Marketing → Marca**: suba a logomarca (**Fazer upload**), preencha o **Nome da marca** e escolha as cores em **Identidade Visual**. Termine em **Salvar persona da marca**.
+
+## 2. Monte o cardápio
+**Vendas → Cardápio**: crie as categorias (**+ Nova categoria**) e os produtos (**+ Novo Produto** — nome, preço, foto). Variações e adicionais ficam dentro de **Editar item**.
+
+## 3. Defina quando você abre
+**Configurações → Operação**: marque os dias e horários em **Horário de funcionamento** e clique em **Salvar**.
+
+## 4. Configure entrega e retirada
+**Configurações → Delivery**: ligue **Delivery ativo** e/ou **Retirada no balcão ativa**, escolha como cobrar (**Taxa fixa**, **Por zonas**, **Por distância** ou **Manual**) e teste no **Simulador de entrega**.
+
+## 5. Escolha como receber
+**Configurações → Pagamentos**: ligue **Pix**, **Dinheiro**, **Cartão (maquininha)**. Para Pix automático no checkout, conecte o **Mercado Pago** em **Integrações** (Access Token).
+
+## 6. Conecte o WhatsApp
+**Integrações → WhatsApp**: clique em **Conectar WhatsApp** e escaneie o QR Code com o celular do restaurante. O agente de IA passa a atender por lá.
+
+## 7. Divulgue o cardápio
+**Vendas → Cardápio** (topo): baixe o **QR Code Salão** para as mesas e copie o link do **QR Code Delivery** para a bio do Instagram e o WhatsApp.
+
+## 8. Faça um pedido de teste
+Abra o link do delivery no seu celular, monte um pedido e finalize. Ele vai aparecer em **Vendas → Pedidos** — clique em **Confirmar** e avance o status até **Entregue**.
+
+Pronto: loja no ar. 🎉 Depois, explore **Agentes IA** (personalidade do atendimento), **Promoções** e **CRM** para vender mais.`,
+  },
+  {
+    slug: "guia-treinamento-dono",
+    title: "Treinamento do Dono — visão completa do Foocci",
+    area: "GENERAL",
+    description: "O que o dono precisa dominar: números, marca, IA e equipe.",
+    content: `# Treinamento do Dono — visão completa
+
+Como dono, você enxerga e controla tudo. Rotina sugerida:
+
+## Todo dia (5 min)
+- **Início**: confira **Saúde do negócio** (faturamento, pedidos, ticket médio) e o bloco **O que fazer agora**.
+- **Foocci em ação**: veja o que a IA vendeu (upsell), carrinhos recuperados e clientes quentes.
+
+## Toda semana (30 min)
+- **Analytics**: aba **Visão Geral** (diagnóstico do período) e **Produtos** (campeões e itens parados).
+- **Marketing → CRM**: crie/acompanhe campanhas (frios, mornos, aniversariantes).
+- **Marketing → Promoções**: avalie as promoções ativas em **📊 Métricas**.
+
+## Configurações que só você decide
+- **Marca** (identidade e tom da IA), **Agentes IA** (personalidade e estilo de venda), **Configurações → Equipe** (quem tem acesso: Dono, Gerente ou Atendente) e **Políticas**.
+
+## Poderes exclusivos do Dono/Gerente
+- **Pausar pedidos** (topo da tela) em emergências.
+- **+ Criar pedido** dentro de uma conversa.
+- Apagar conversas (só Dono).
+
+> Dica: pergunte no **Analytics → Analista** coisas como "Por que as vendas caíram?" — ele responde com os seus dados.`,
+  },
+  {
+    slug: "guia-treinamento-gerente",
+    title: "Treinamento do Gerente — operação do dia a dia",
+    area: "GENERAL",
+    description: "Rotina do gerente: pedidos, conversas, cardápio e emergências.",
+    content: `# Treinamento do Gerente — operação do dia a dia
+
+Seu papel é manter a operação girando. O essencial:
+
+## Abertura do turno
+1. **Início**: olhe **Operação agora** (aguardando, em preparo, prontos, em entrega) e alertas.
+2. Confirme que o horário e a entrega estão certos (**Configurações → Operação / Delivery**).
+
+## Durante o serviço
+- **Vendas → Pedidos**: avance cada pedido — **Confirmar → Preparar → Pronto → Despachar → Entregue**. Aba **Atrasados** é prioridade.
+- **Central de Conversas**: fique de olho no aviso **"🙋 aguardando atendimento humano"** — clique em **Ver pendentes**, **Assumir atendimento**, resolva e **Devolver para IA**.
+- Produto acabou? **Vendas → Cardápio** → desligue o toggle de disponibilidade do item (religue depois).
+
+## Emergências
+- Cozinha lotada? **Pausar pedidos** (topo) → escolha o motivo e o tempo → **Pausar agora**. Depois, **Reativar**.
+
+## Fechamento
+- **Pedidos**: nenhum pedido esquecido em aberto.
+- **Central de Conversas**: nenhuma conversa esperando humano.
+
+> Você também pode criar pedido manual (**+ Pedido manual** em Pedidos) e confirmar pagamento Pix manualmente quando o gerente/dono autorizar.`,
+  },
+  {
+    slug: "guia-treinamento-atendente",
+    title: "Treinamento do Atendente — atendimento e pedidos",
+    area: "WHATSAPP",
+    description: "O básico do atendente: conversas, assumir da IA e pedidos.",
+    content: `# Treinamento do Atendente — o essencial
+
+Seu dia a dia acontece em duas telas: **Central de Conversas** e **Pedidos**.
+
+## Atender um cliente (Central de Conversas)
+1. A IA atende sozinha a maior parte. Você entra quando aparece **"🙋 aguardando atendimento humano"** ou quando quiser intervir.
+2. Abra a conversa e clique em **Assumir atendimento** — a IA para e o campo de mensagem libera.
+3. Converse normalmente (**Enviar** ou Enter; 📎 anexa imagem/PDF).
+4. Terminou? **Devolver para IA** (ela reassume) ou **Resolver** (encerra o assunto).
+
+## Regras de ouro
+- Cliente esperando humano é prioridade máxima — o alerta fica vermelho quando passa do tempo.
+- Não invente informação de cardápio/preço: confira em **Vendas → Cardápio**.
+- Problema de pagamento, cancelamento ou reclamação séria: chame o gerente.
+
+## Pedidos
+- Em **Vendas → Pedidos**, acompanhe os status e avance quando a cozinha sinalizar: **Confirmar → Preparar → Pronto**.
+- Não force etapas que não são suas (despacho/entrega é com o gerente, se assim combinado).
+
+> Dúvida sobre qualquer tela? Pergunte aqui no chat de ajuda que eu te guio. 😉`,
+  },
+  {
+    slug: "guia-config-loja",
+    title: "Como preencher os dados da loja",
+    area: "GENERAL",
+    description: "Nome, dados fiscais, endereço, contatos e modalidades.",
+    content: `# Como preencher os dados da loja
+
+Vá em **Configurações → Loja**. É um formulário único com 6 seções — um só **Salvar** no final grava tudo.
+
+1. **Dados da loja** — o **Nome público do restaurante** (obrigatório), nome fantasia, razão social, descrição pública (aparece no cardápio) e tipo de cozinha. O **Slug (URL pública)** é fixo — não dá pra editar.
+2. **Dados fiscais** — CNPJ, regime tributário, inscrições e responsável legal (uso interno, não aparece pro cliente).
+3. **Endereço da loja** — digite o **CEP** e clique em **Buscar CEP** (preenche rua/bairro/cidade), complete o **Número**. ⚠️ Importante: é esse endereço que calcula o **frete por distância** — preencha tudo.
+4. **Contatos da loja** — telefones, WhatsApp (o principal vira o ícone do cardápio público) e e-mails.
+5. **Responsáveis** — contatos do proprietário e do gerente (interno).
+6. **Operação** — os toggles **Delivery ativo**, **Retirada ativa** e **Salão / QR ativo**, o **Tempo médio de preparo (min)** (mostrado ao cliente) e o fuso horário.
+
+Clique em **Salvar** e aguarde "Dados da loja salvos com sucesso."`,
+  },
+  {
+    slug: "guia-equipe",
+    title: "Como adicionar membros da equipe",
+    area: "GENERAL",
+    description: "Criar acessos para gerente e atendentes, com perfis.",
+    content: `# Como adicionar membros da equipe
+
+Vá em **Configurações → Equipe** (grupo Gestão).
+
+1. Clique em **+ Adicionar membro**.
+2. No cartão **Novo usuário**, preencha **Nome completo**, **E-mail** e **Senha** (mínimo 6 caracteres).
+3. Escolha o **Perfil**:
+   - **Funcionário — acesso básico** (atendente: conversas e pedidos)
+   - **Gerente — acesso à operação** (tudo do dia a dia + pausar pedidos)
+   - **Proprietário — acesso total**
+4. Clique em **Criar usuário**.
+
+A pessoa entra com o e-mail e a senha criados, no mesmo endereço do painel.
+
+> Por enquanto essa tela **lista e cria** usuários. Para alterar, desativar ou remover alguém, fale com a equipe Foocci pelo botão "Falar com a FOOD" aqui do chat.`,
+  },
+  {
+    slug: "guia-impressoras",
+    title: "Como configurar a impressão de comandas (Carteiro)",
+    area: "INTEGRATIONS",
+    description: "Instalar o Carteiro, parear e mandar comandas pra cozinha.",
+    content: `# Como configurar a impressão de comandas
+
+Vá em **Configurações → Impressoras**. A impressão automática usa o **Carteiro**, um programinha que roda no computador (Windows) do restaurante.
+
+## 1. Ativar o Carteiro (uma vez só)
+1. Clique em **⬇️ Baixar o programa** (tem também o **📄 Manual (passo a passo)**).
+2. Abra o arquivo com dois cliques. Se o Windows mostrar o aviso azul: **Mais informações → Executar assim mesmo**.
+3. Na telinha do Carteiro, cole o código da tela (**Copiar código**) e clique em **Parear**.
+
+Quando der certo, o topo mostra **"Carteiro conectado"** com as impressoras detectadas.
+
+## 2. Impressora de cada estação
+No cartão **"1. Impressora de cada estação"**, escolha a impressora de cada estação (Cozinha, Caixa, Copa…) e clique em **🖨️ Testar** para sair uma comanda de teste.
+
+## 3. Para onde vai cada categoria
+No cartão **"2. Para onde vai cada categoria"**, diga em qual estação cada categoria do cardápio imprime. Um prato pode sair em duas cozinhas — use **+ adicionar impressora**.
+
+## 4. Letras grandes (opcional)
+**"3. Letras grandes na cozinha"** imprime os itens em letra dupla, mais fácil de ler de longe.
+
+Termine em **Salvar tudo**.`,
+  },
+  {
+    slug: "guia-sons-alertas",
+    title: "Como configurar sons e alertas",
+    area: "GENERAL",
+    description: "Som de novo pedido e de atendimento humano, volume e temas.",
+    content: `# Como configurar sons e alertas
+
+Vá em **Configurações → Sons e alertas**. Regra de ouro: **mantenha a tela do painel aberta** no computador do restaurante — é ela que toca os alertas.
+
+1. **Sons do restaurante** — ligue **Ativar todos os sons**.
+2. **Volume** — ajuste no slider ou nos atalhos (**Baixo 50%** a **Máximo 400%**). Recomendado: **Alto (150%)** para ambiente de cozinha.
+3. **Som de novo pedido** — ligue o alerta e, se quiser, **Repetir até pedido ser aceito** (toca em loop até alguém aceitar).
+4. **Som de atendimento humano** — alerta quando um cliente pede pra falar com uma pessoa; também tem **Repetir até conversa ser vista**.
+5. **Tema sonoro** — **🔔 Padrão**, **🎵 Suave** ou **🚨 Urgente** (o Urgente é mais alto e insistente, ideal pra cozinha).
+6. Clique em **Salvar alterações**.
+
+> Apareceu **"🔇 Navegador bloqueou o áudio"**? Clique em **🔊 Desbloquear áudio neste dispositivo** — os navegadores exigem um clique antes de tocar som.`,
+  },
+  {
+    slug: "guia-politicas",
+    title: "Como definir termos e políticas da loja",
+    area: "SECURITY",
+    description: "Termos de uso, privacidade e política de cancelamento.",
+    content: `# Como definir termos e políticas da loja
+
+Vá em **Configurações → Políticas** (grupo Gestão), cartão **Documentos legais**.
+
+São três textos, cada um com até 5.000 caracteres:
+1. **Termos de uso** — as condições do seu restaurante.
+2. **Política de privacidade** — como você trata os dados dos clientes.
+3. **Política de cancelamento** — prazo para cancelar e regras de reembolso (evita conflito com cliente!).
+
+Escreva (ou cole) os textos e clique em **Salvar**.
+
+> Salvar já publica: os documentos aparecem no rodapé do cardápio web e são enviados ao cliente quando solicitado. Campo vazio = documento não exibido.`,
+  },
 ];

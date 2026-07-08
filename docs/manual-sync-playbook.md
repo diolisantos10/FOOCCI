@@ -75,6 +75,13 @@ que faz upsert por `slug` como `isPublished=true` + `agentVisibility=true`.
 | guia-horario-funcionamento | Configurações · Operação | `src/app/(dashboard)/settings/operation/**` |
 | guia-configuracoes | Configurações (visão geral) | `src/app/(dashboard)/settings/**` |
 | guia-pausar-pedidos | Pausar pedidos (topo) | `src/components/layout/TopBar.tsx` |
+| guia-primeiros-passos | Onboarding (trilha) | composição dos guias acima |
+| guia-treinamento-dono / -gerente / -atendente | Treinamentos por função | composição dos guias acima |
+| guia-config-loja | Configurações · Loja | `src/app/(dashboard)/settings/store/**` |
+| guia-equipe | Configurações · Equipe | `src/app/(dashboard)/settings/team/**` |
+| guia-impressoras | Configurações · Impressoras | `src/app/(dashboard)/settings/impressoras/**` |
+| guia-sons-alertas | Configurações · Sons e alertas | `src/app/(dashboard)/settings/sons/**` |
+| guia-politicas | Configurações · Políticas | `src/app/(dashboard)/settings/policies/**` |
 
 > Ao criar/renomear telas, adicione a linha correspondente aqui para o robô
 > saber mapear no dia seguinte.

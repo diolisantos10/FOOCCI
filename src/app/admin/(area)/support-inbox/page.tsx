@@ -70,6 +70,7 @@ export default function SupportInboxPage() {
   const [authorName, setAuthorName] = useState("Equipe Foocci");
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [view, setView] = useState<"inbox" | "metrics">("inbox");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // ── List ────────────────────────────────────────────────────────────────────
@@ -159,13 +160,38 @@ export default function SupportInboxPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-gray-800 px-6 py-4">
-        <h1 className="text-xl font-bold text-white">Suporte — Falar com a FOOD</h1>
-        <p className="mt-0.5 text-sm text-gray-400">
-          Conversas que os lojistas encaminharam pelo widget de ajuda.
-        </p>
+      <header className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+        <div>
+          <h1 className="text-xl font-bold text-white">Suporte — Falar com a FOOD</h1>
+          <p className="mt-0.5 text-sm text-gray-400">
+            Conversas que os lojistas encaminharam pelo widget de ajuda.
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-lg border border-gray-800 p-1">
+          <button
+            type="button"
+            onClick={() => setView("inbox")}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              view === "inbox" ? "bg-violet-900/50 text-violet-200" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            💬 Conversas
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("metrics")}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              view === "metrics" ? "bg-violet-900/50 text-violet-200" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            📈 Perguntas
+          </button>
+        </div>
       </header>
 
+      {view === "metrics" ? (
+        <MetricsPanel />
+      ) : (
       <div className="flex min-h-0 flex-1">
         {/* ── Thread list ─────────────────────────────────────────────────── */}
         <div className="flex w-80 shrink-0 flex-col border-r border-gray-800">
@@ -294,6 +320,100 @@ export default function SupportInboxPage() {
                 </div>
               </div>
             </>
+          )}
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}
+
+interface MetricsData {
+  since: string;
+  totalQuestions: number;
+  uniqueQuestions: number;
+  gapTotal: number;
+  topQuestions: Array<{ question: string; count: number }>;
+  gaps: Array<{ question: string; count: number }>;
+}
+
+function MetricsPanel() {
+  const [data, setData] = useState<MetricsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/support/metrics");
+        if (res.ok) {
+          const json = await res.json();
+          setData((json.data ?? null) as MetricsData | null);
+        }
+      } catch {
+        // keep null
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) {
+    return <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Carregando métricas…</div>;
+  }
+  if (!data) {
+    return <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Não foi possível carregar as métricas.</div>;
+  }
+
+  return (
+    <div className="flex-1 space-y-6 overflow-y-auto p-6">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Perguntas (30 dias)</p>
+          <p className="mt-1 text-2xl font-extrabold text-white">{data.totalQuestions}</p>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Perguntas únicas</p>
+          <p className="mt-1 text-2xl font-extrabold text-white">{data.uniqueQuestions}</p>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Sem boa resposta (gaps)</p>
+          <p className={`mt-1 text-2xl font-extrabold ${data.gapTotal > 0 ? "text-amber-400" : "text-green-400"}`}>{data.gapTotal}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl border border-gray-800 bg-gray-900">
+          <p className="border-b border-gray-800 px-4 py-2.5 text-sm font-bold text-white">Mais perguntadas</p>
+          {data.topQuestions.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-gray-500">Sem perguntas no período.</p>
+          ) : (
+            <ul className="divide-y divide-gray-800">
+              {data.topQuestions.map((q, i) => (
+                <li key={i} className="flex items-start justify-between gap-3 px-4 py-2.5">
+                  <span className="text-sm text-gray-300">{q.question}</span>
+                  <span className="shrink-0 rounded-full bg-gray-800 px-2 py-0.5 text-xs font-bold text-gray-300">{q.count}×</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-amber-900/50 bg-gray-900">
+          <div className="border-b border-gray-800 px-4 py-2.5">
+            <p className="text-sm font-bold text-amber-300">Sem boa resposta — vira guia novo</p>
+            <p className="text-[11px] text-gray-500">O assistente admitiu não saber. Cada item aqui é um capítulo a escrever.</p>
+          </div>
+          {data.gaps.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhum gap — o manual está dando conta. 🎉</p>
+          ) : (
+            <ul className="divide-y divide-gray-800">
+              {data.gaps.map((q, i) => (
+                <li key={i} className="flex items-start justify-between gap-3 px-4 py-2.5">
+                  <span className="text-sm text-gray-300">{q.question}</span>
+                  <span className="shrink-0 rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-bold text-amber-300">{q.count}×</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

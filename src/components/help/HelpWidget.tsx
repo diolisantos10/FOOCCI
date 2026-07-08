@@ -43,9 +43,10 @@ interface ThreadInfo {
 }
 
 const SUGGESTIONS = [
+  "🚀 Primeiros passos — por onde começo?",
   "Como cadastro um produto no cardápio?",
   "Como conecto meu WhatsApp?",
-  "Como crio uma promoção no CRM?",
+  "Como crio uma promoção?",
   "Onde acompanho meus pedidos?",
 ];
 

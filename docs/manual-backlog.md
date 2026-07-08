@@ -20,24 +20,30 @@
 - **B1. Segredo `ANTHROPIC_API_KEY` no GitHub** (Settings → Secrets → Actions).
   Sem ele o robô noturno acorda mas não roda a IA. É o único passo manual.
 
+## ✅ Entregue (2ª leva)
+7. **P1 — Guias das sub-telas de Configurações** — Loja, Equipe, Impressoras,
+   Sons e alertas, Políticas. Todas as telas agora têm guia (29 no total).
+8. **P2 (v1) — Onboarding** — guia "Primeiros passos — do zero ao primeiro
+   pedido" + sugestão 🚀 em destaque no widget. (v2 futura: checklist interativo.)
+9. **P3 — Treinamentos por função** — trilhas para Dono, Gerente e Atendente.
+10. **P4 (v1) — Métricas do assistente** — `GET /api/admin/support/metrics` +
+    aba "📈 Perguntas" no support-inbox (mais perguntadas + gaps sem resposta).
+11. **Branch órfã resolvida** — `eloquent-franklin` verificada 100% redundante
+    (commit já reaplicado no runner como e88a46a). Apagar no GitHub UI.
+
 ## 📋 A fazer (por prioridade)
-- **P1. Guias das sub-telas de Configurações** — Loja (dados/fiscal/endereço),
-  Equipe, Impressoras, Sons e alertas, Políticas. Fecha 100% das telas.
-- **P2. Onboarding do novo lojista** — trilha "do zero ao primeiro pedido":
-  checklist guiado (marca → cardápio → horário → entrega → pagamentos →
-  WhatsApp → pedido teste), integrado ao widget de ajuda.
-- **P3. Treinamentos por função** — trilhas para Dono, Gerente e Atendente
-  (o que cada papel precisa dominar, com os guias como blocos).
-- **P4. Métricas do assistente** — perguntas mais feitas e perguntas sem boa
-  resposta (gaps) → viram novos guias. Painel simples no admin.
 - **P5. FAQ automático do suporte** — minerar conversas escaladas resolvidas
   e propor capítulos de FAQ (via change-request para aprovação).
-- **P6. Resgate do conteúdo do banco** — rodar o export em produção e trazer
-  pro código qualquer capítulo digitado à mão que valha manter.
+- **P6. Resgate do conteúdo do banco** — rodar `GET /api/admin/manual/export`
+  em produção e trazer pro código qualquer capítulo digitado à mão que valha.
 - **P7. Bíblia interna no assistente?** — decidir se os 14 capítulos internos
   (Importar v0.1) também alimentam o chat. Decisão de produto pendente.
 - **P8. Tours contextuais (Fase 3 do widget)** — o widget percebe em que tela
   o lojista está e oferece o guia daquela tela proativamente.
+- **P9. Onboarding v2** — checklist interativo no widget (marcar etapas feitas).
+- **P10. Corrigir Carteiro-Manual.txt** — o manual baixável do Carteiro cita a
+  navegação antiga ("Integrações → Impressão"); atualizar para
+  "Configurações → Impressoras" e o botão "🖨️ Testar".
 
 ## Notas
 - Escopo do robô noturno hoje: só os guias do lojista. Onboarding/treinamentos
