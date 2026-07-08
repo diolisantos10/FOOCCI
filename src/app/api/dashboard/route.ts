@@ -203,6 +203,56 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    // ── Conversion by channel — the same identified→sale funnel, split by where
+    //    the customer entered (conversation channel). Two light list queries per
+    //    period + JS intersection, instead of 2 counts × N channels.
+    const [convRowsNow, convRowsPrev, orderCustNow, orderCustPrev] = await Promise.all([
+      prisma.conversation.findMany({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, customerId: { not: null }, customer: { isGuest: false } },
+        select: { channel: true, customerId: true },
+      }),
+      prisma.conversation.findMany({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd }, customerId: { not: null }, customer: { isGuest: false } },
+        select: { channel: true, customerId: true },
+      }),
+      prisma.order.findMany({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, status: { in: REVENUE_STATUS } },
+        select: { customerId: true },
+      }),
+      prisma.order.findMany({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd }, status: { in: REVENUE_STATUS } },
+        select: { customerId: true },
+      }),
+    ]);
+
+    const CHANNEL_GROUPS: Array<{ key: string; channels: string[] }> = [
+      { key: "whatsapp",  channels: ["WHATSAPP"] },
+      { key: "cardapio",  channels: ["WEB_AGENT"] },
+      { key: "qr",        channels: ["QR_AGENT"] },
+      { key: "instagram", channels: ["INSTAGRAM_DIRECT", "INSTAGRAM_COMMENT"] },
+    ];
+    const channelFunnel = (rows: Array<{ channel: string; customerId: string | null }>, buyers: Set<string>) =>
+      CHANNEL_GROUPS.map((g) => {
+        const identified = new Set(rows.filter((r) => r.customerId && g.channels.includes(r.channel)).map((r) => r.customerId as string));
+        let converted = 0;
+        for (const id of identified) if (buyers.has(id)) converted++;
+        return { key: g.key, identified: identified.size, converted };
+      });
+    const buyersNow    = new Set(orderCustNow.map((o) => o.customerId as string));
+    const buyersPrev   = new Set(orderCustPrev.map((o) => o.customerId as string));
+    const funnelNow    = channelFunnel(convRowsNow, buyersNow);
+    const funnelPrev   = channelFunnel(convRowsPrev, buyersPrev);
+    const conversionByChannel = funnelNow.map((n, i) => {
+      const p = funnelPrev[i]!;
+      return {
+        key:        n.key,
+        identified: n.identified,
+        converted:  n.converted,
+        rate:       n.identified > 0 ? Math.round((n.converted / n.identified) * 100) : null,
+        ratePrev:   p.identified > 0 ? Math.round((p.converted / p.identified) * 100) : null,
+      };
+    });
+
     // ── Period KPIs ────────────────────────────────────────────────────────────
     const revenuePeriod = periodOrders.reduce((s, o) => s + Number(o.total), 0);
     const ordersPeriod  = periodOrders.length;
@@ -317,6 +367,7 @@ export async function GET(req: NextRequest) {
       conversionRatePrev,
       conversionIdentified: convIdentifiedNow,
       conversionConverted:  convConvertedNow,
+      conversionByChannel,
 
       // Real-time
       openOrders,

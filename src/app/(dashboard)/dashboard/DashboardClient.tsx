@@ -18,6 +18,7 @@ interface DashboardData {
   avgTicketPrev: number; newCustomersPrev: number;
   conversionRate: number | null; conversionRatePrev: number | null;
   conversionIdentified: number; conversionConverted: number;
+  conversionByChannel?: Array<{ key: string; identified: number; converted: number; rate: number | null; ratePrev: number | null }>;
   openOrders: number; totalCustomers: number; newCustomersPeriod: number;
   pipeline: { pending: number; confirmed: number; preparing: number; ready: number; outForDelivery: number };
   delayedCount: number; pendingPaymentsCount: number;
@@ -275,6 +276,52 @@ export function ActionsNow({ actions }: { actions: CockpitAction[] }) {
   );
 }
 
+// ── Conversão por canal ────────────────────────────────────────────────────────
+
+const CONV_CHANNEL_META: Record<string, { label: string; icon: string }> = {
+  whatsapp:  { label: "WhatsApp",        icon: "💬" },
+  cardapio:  { label: "Cardápio (link)", icon: "🔗" },
+  qr:        { label: "QR na mesa",      icon: "📱" },
+  instagram: { label: "Instagram",       icon: "📷" },
+};
+
+/** Identified→sale funnel per entry channel — same rule as the conversion KPI. */
+function ConversionByChannel({ rows }: { rows: NonNullable<DashboardData["conversionByChannel"]> }) {
+  const active = rows.filter((r) => r.identified > 0);
+  return (
+    <Card className="p-5">
+      <SectionTitle meta="identificados → compraram">Conversão por canal</SectionTitle>
+      {active.length === 0 ? (
+        <EmptyState icon="🎯" title="Sem clientes identificados no período" />
+      ) : (
+        <div className="space-y-2.5">
+          {active.map((r) => {
+            const meta = CONV_CHANNEL_META[r.key] ?? { label: r.key, icon: "💬" };
+            return (
+              <div key={r.key} className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F4F4F2] text-[14px]">{meta.icon}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[13px] font-semibold text-ink">{meta.label}</span>
+                    <span className="shrink-0 text-[13px] font-bold text-ink2">{r.rate != null ? `${r.rate}%` : "—"}</span>
+                  </div>
+                  <div className="mt-1 h-[5px] overflow-hidden rounded-[3px] bg-[#F0F0EE]">
+                    <i className="block h-full rounded-[3px] bg-brand-500" style={{ width: `${Math.max(4, r.rate ?? 0)}%` }} />
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-muted">
+                    {fmtNum(r.converted)} de {fmtNum(r.identified)}
+                    {r.ratePrev != null && ` · antes ${r.ratePrev}%`}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Foocci em ação (brand proof + mascote) ─────────────────────────────────────
 
 function FoocciMetric({ label, value, sub, href }: { label: string; value: React.ReactNode; sub?: React.ReactNode; href?: string }) {
@@ -499,6 +546,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
                     so the RECOVERY action is dropped from "O que fazer agora". */}
                 {period === "today" && <ActionsNow actions={(cockpit?.recommendedActions ?? []).filter((a) => a.source !== "RECOVERY")} />}
                 <TopSellers products={data.topProducts} />
+                <ConversionByChannel rows={data.conversionByChannel ?? []} />
               </div>
             </div>
 
