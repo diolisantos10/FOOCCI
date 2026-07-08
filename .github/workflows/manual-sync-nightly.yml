@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Manual Sync Nightly — o "robô noturno" do manual do lojista
+#
+# Toda madrugada, uma sessão do Claude Code roda o raio-x das últimas ~26h na
+# branch de trabalho e reescreve APENAS os guias do lojista afetados pelas
+# mudanças de código (rótulos/botões reais da UI). Telas novas ganham guia
+# novo. O procedimento completo está versionado em docs/manual-sync-playbook.md
+# — este workflow só o executa.
+#
+# Ciclo completo (100% automático):
+#   1. 06:07 UTC (03:07 BRT) → Claude reescreve os guias e faz commit + push.
+#   2. O push dispara o deploy (Railway).
+#   3. No boot, scripts/start-production.sh chama /api/admin/manual/seed-howtos
+#      e os guias atualizados entram no banco — o assistente de ajuda responde
+#      com eles de manhã. Sem botão, sem passo manual.
+#
+# Required GitHub Secrets (Settings → Secrets and variables → Actions):
+#   ANTHROPIC_API_KEY  Chave da API Anthropic (console.anthropic.com) — NOVO,
+#                      usado apenas por este workflow.
+#
+# Sem mudanças relevantes → sem commit e sem deploy (o registro fica no log
+# desta execução no GitHub Actions).
+#
+# Schedule: diário às 06:07 UTC = 03:07 America/Sao_Paulo (BRT).
+# Teste manual: aba Actions → "Manual Sync Nightly" → Run workflow.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Manual Sync Nightly
+
+on:
+  schedule:
+    # Diário às 06:07 UTC = 03:07 Brasília (minuto 07 de propósito — evita o
+    # pico global de :00 nos runners do GitHub)
+    - cron: "7 6 * * *"
+
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync-manual:
+    name: "Raio-x noturno + reescrita dos guias"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout (branch de trabalho, com histórico)
+        uses: actions/checkout@v4
+        with:
+          ref: claude/remove-legacy-runner-q8iXa
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps + Prisma client (para o type-check do robô)
+        run: |
+          npm ci
+          npx prisma generate
+
+      - name: Git identity do robô
+        run: |
+          git config user.name "foocci-manual-bot"
+          git config user.email "manual-bot@users.noreply.github.com"
+
+      - name: Claude — executar o playbook do manual
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Você é o robô noturno do manual do Foocci (Manual Sync Nightly).
+
+            Leia docs/manual-sync-playbook.md e siga o procedimento à risca:
+
+            1. Raio-x: `git log --since="26 hours ago" --name-only --oneline` na
+               branch atual. Filtre apenas arquivos de telas do lojista conforme
+               o playbook (src/app/(dashboard)/**, src/components/layout/**).
+            2. Se NADA relevante mudou: não commite nada. Apenas termine
+               explicando no texto final o que analisou e por que não havia nada
+               a atualizar.
+            3. Se mudou: para cada guia afetado (use o mapa tela→guia do
+               playbook), LEIA o componente real da tela e reescreva o guia em
+               src/services/manual/howToGuidesContent.ts com os rótulos exatos
+               do JSX (tom simples de dono de restaurante, passo a passo).
+               Tela nova sem guia → crie um guia novo e adicione a linha no mapa
+               do playbook.
+            4. Acrescente uma entrada no topo de docs/manual-sync-log.md:
+               data, arquivos que dispararam, guias atualizados/criados.
+            5. Rode `npm run type-check` — precisa passar (exit 0).
+            6. Commite tudo com a mensagem:
+               `chore(manual): sync noturno <YYYY-MM-DD>` e faça
+               `git push origin claude/remove-legacy-runner-q8iXa`.
+               Se o push for rejeitado (non-fast-forward), faça
+               `git fetch origin claude/remove-legacy-runner-q8iXa && git rebase origin/claude/remove-legacy-runner-q8iXa`
+               e tente o push de novo (até 2 tentativas).
+
+            Regras: nunca invente botões/telas — só o que está no código; não
+            toque em nada fora de howToGuidesContent.ts, manual-sync-playbook.md
+            e manual-sync-log.md; não apague guias existentes.
+          claude_args: |
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(git *),Bash(npm run type-check),Bash(npx tsc *)"
