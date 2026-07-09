@@ -886,10 +886,23 @@ export function OverviewTab({
   const [localFrom, setLocalFrom] = useState(customFrom);
   const [localTo,   setLocalTo]   = useState(customTo);
 
-  // Use hardcoded defaults for display labels (actual thresholds enforced server-side)
-  const HOT_DAYS  = 30;
-  const WARM_DAYS = 60;
-  const LOST_DAYS = 120;
+  // Real segment thresholds so the KPI captions match the owner's configuration
+  // (Configurações → Segmentação), not fixed 30/60/120.
+  const [seg, setSeg] = useState({ hotMaxDays: 30, warmMaxDays: 60, lostMinDays: 120 });
+  useEffect(() => {
+    fetch("/api/settings/crm-segments")
+      .then((r) => r.json())
+      .then((j) => {
+        const d = j?.data;
+        if (d && typeof d.hotMaxDays === "number") {
+          setSeg({ hotMaxDays: d.hotMaxDays, warmMaxDays: d.warmMaxDays, lostMinDays: d.lostMinDays });
+        }
+      })
+      .catch(() => {});
+  }, []);
+  const HOT_DAYS  = seg.hotMaxDays;
+  const WARM_DAYS = seg.warmMaxDays;
+  const LOST_DAYS = seg.lostMinDays;
 
   // Temperature bar calculations
   const tempTotal = stats.ativoCustomers + stats.mornoCustomers + stats.frioCustomers;

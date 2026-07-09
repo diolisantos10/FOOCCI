@@ -5171,6 +5171,32 @@ function CrmConfiguracoes() {
         </div>
       )}
 
+      {/* Hub — todas as configurações do CRM a partir de um lugar */}
+      <div className="rounded-2xl border border-line bg-paper p-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-muted">Configurações do CRM</p>
+        <p className="mt-0.5 text-xs text-muted">Ajuste tudo a partir daqui.</p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            { href: "/settings/marketing", emoji: "💰", title: "Orçamento de envio", sub: "Limite diário, por ciclo, distribuição" },
+            { href: "/crm?tab=programa",   emoji: "🏆", title: "Níveis dos clientes", sub: "Bronze, Prata, Ouro, Diamante" },
+            { href: "/marca",              emoji: "⭐", title: "Links de avaliação",  sub: "Google e iFood" },
+          ].map((s) => (
+            <Link
+              key={s.href}
+              href={s.href}
+              className="flex items-start gap-2 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 transition-colors hover:bg-white"
+            >
+              <span className="text-lg leading-none">{s.emoji}</span>
+              <span>
+                <span className="block text-[12px] font-bold text-ink">{s.title}</span>
+                <span className="block text-[10px] text-muted">{s.sub}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] text-muted">Segmentação e segurança de envio ficam logo abaixo.</p>
+      </div>
+
       {/* A — Segurança de envio WhatsApp */}
       <CfgCard
         title="Segurança de envio WhatsApp"
