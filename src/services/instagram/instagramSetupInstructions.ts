@@ -74,5 +74,14 @@ export function buildInstagramSetupInstructions(baseUrl: string = INSTAGRAM_DEFA
     "4. Comentar em uma publicação com a conta TESTER",
     "5. Conferir em Atendimento (selos Instagram DM e Instagram comentário)",
     "6. Responder manualmente pela Central (modo Responder manualmente) — o comentário recebe uma resposta PÚBLICA no post",
+    "",
+    "5) MODO DE TESTE antes da aprovação do App Review (funciona hoje, sem esperar a Meta):",
+    "Enquanto o app está em desenvolvimento, o Instagram só conversa com contas que têm papel no app.",
+    "A. No painel da Meta: app → Funções do app → Funções → Adicionar pessoas → tipo 'Testador do Instagram'",
+    "   → adicionar o @ do Instagram do RESTAURANTE e também o @ pessoal de quem vai testar.",
+    "B. Em CADA Instagram convidado: Configurações → Site e apps → Convites de testador → Aceitar.",
+    "C. No Foocci: Integrações → Instagram → Conectar com Facebook (login que administra a Página do restaurante).",
+    "D. Testar: DM + comentário a partir da conta pessoal testadora → deve aparecer na Central.",
+    "Quando o App Review for aprovado e o app publicado, passa a valer para TODOS os clientes automaticamente.",
   ].join("\n");
 }
