@@ -97,12 +97,12 @@ export function ReadyMadeCampaignsSection() {
 
   return (
     <div>
-      <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-muted">Campanhas prontas</h3>
-      <p className="mb-3 text-xs text-muted">
+      <h3 className="mb-1 text-sm font-bold uppercase tracking-widest text-muted">Campanhas prontas</h3>
+      <p className="mb-4 text-sm text-muted">
         Já vêm configuradas para qualquer restaurante. É só ligar — e ajustar antes ou depois, se quiser.
       </p>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {items.map((c) => (
           <ReadyMadeCard
             key={c.id}
@@ -139,40 +139,40 @@ function ReadyMadeCard({
   onConfigure: () => void;
 }) {
   return (
-    <div className={`flex flex-col rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md ${c.active ? "border-emerald-200 bg-emerald-50/40" : "border-line bg-paper"}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2.5">
-          <span className="text-xl leading-none">{c.emoji}</span>
+    <div className={`flex flex-col rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md ${c.active ? "border-emerald-200 bg-emerald-50/40" : "border-line bg-paper"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="text-3xl leading-none">{c.emoji}</span>
           <div>
-            <p className="text-sm font-bold leading-tight text-ink">{c.name}</p>
-            <p className="mt-0.5 text-[11px] text-muted leading-snug">{c.tagline}</p>
+            <p className="text-lg font-bold leading-tight text-ink">{c.name}</p>
+            <p className="mt-1 text-sm text-muted leading-snug">{c.tagline}</p>
           </div>
         </div>
         <button
           onClick={onToggle}
           disabled={busy}
           aria-label={c.active ? "Desligar" : "Ligar"}
-          className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${c.active ? "bg-emerald-500" : "bg-gray-300"}`}
+          className={`shrink-0 relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${c.active ? "bg-emerald-500" : "bg-gray-300"}`}
         >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${c.active ? "translate-x-6" : "translate-x-1"}`} />
+          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${c.active ? "translate-x-6" : "translate-x-1"}`} />
         </button>
       </div>
 
-      <p className="mt-2 text-xs leading-relaxed text-ink2">{c.description}</p>
-      <p className="mt-1 text-[10px] text-muted"><span className="font-semibold">Objetivo:</span> {c.objective}</p>
+      <p className="mt-3 text-sm leading-relaxed text-ink2">{c.description}</p>
+      <p className="mt-1.5 text-xs text-muted"><span className="font-semibold">Objetivo:</span> {c.objective}</p>
 
       {/* When it fires */}
       {c.timing.summary && (
-        <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-[#F4F4F2] px-2.5 py-1.5 text-[10px] text-ink2">
-          <span>🕒</span><span>{c.timing.summary}</span>
+        <p className="mt-3 flex items-start gap-2 rounded-lg bg-[#F4F4F2] px-3 py-2 text-sm text-ink2">
+          <span className="text-base">🕒</span><span>{c.timing.summary}</span>
         </p>
       )}
 
-      <div className="mt-2 flex items-center gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+      <div className="mt-3 flex items-center gap-3">
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
           {c.active ? "Ligada" : "Desligada"}
         </span>
-        <button onClick={onConfigure} className="text-[11px] font-semibold text-brand-600 hover:text-brand-700">
+        <button onClick={onConfigure} className="text-sm font-semibold text-brand-600 hover:text-brand-700">
           Configurar
         </button>
       </div>
@@ -200,6 +200,7 @@ function ReadyMadeConfigModal({
   const [end, setEnd]           = useState(c.timeWindow.end);
   const [dailyLimit, setDaily]  = useState(c.dailyLimit);
   const [triggerDays, setTriggerDays] = useState(c.triggerDays ?? 2);
+  const [couponOpen, setCouponOpen] = useState(false);
   const [saved, setSaved]       = useState(false);
 
   const has = (k: Editable[number]) => c.editable.includes(k);
@@ -290,15 +291,15 @@ function ReadyMadeConfigModal({
 
           {has("message") && (
             <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">Escolha uma mensagem pronta</p>
-              <div className="space-y-1.5">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Escolha uma mensagem pronta</p>
+              <div className="space-y-2">
                 {c.messageVariants.map((v, i) => {
                   const selected = v === message;
                   return (
                     <button
                       key={i}
                       onClick={() => setMessage(v)}
-                      className={`w-full rounded-lg border px-3 py-2 text-left text-[12px] leading-snug transition-colors ${selected ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                      className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm leading-relaxed transition-colors ${selected ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
                     >
                       {v}
                     </button>
@@ -306,7 +307,7 @@ function ReadyMadeConfigModal({
                 })}
               </div>
 
-              <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted">Ou escreva a sua</p>
+              <p className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted">Ou escreva a sua</p>
               <textarea
                 rows={3}
                 value={message}
@@ -325,34 +326,58 @@ function ReadyMadeConfigModal({
 
           {has("coupon") && (
             <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">Cupom (opcional)</p>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Cupom (opcional)</p>
               {coupons.length === 0 ? (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   Nenhum cupom ativo. Crie cupons na aba <span className="font-semibold">Promoções</span> para escolher aqui.
                 </p>
               ) : (
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                <div className="rounded-xl border border-line">
+                  {/* Barra que expande/recolhe */}
                   <button
-                    onClick={() => setCoupon("")}
-                    className={`shrink-0 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${coupon === "" ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                    onClick={() => setCouponOpen((v) => !v)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
                   >
-                    Sem cupom
+                    <span className="text-sm text-ink">
+                      {coupon ? (
+                        <>Cupom: <span className="font-bold">{coupon.toUpperCase()}</span></>
+                      ) : (
+                        <span className="text-muted">Escolher cupom</span>
+                      )}
+                    </span>
+                    <svg className={`h-4 w-4 shrink-0 text-muted transition-transform ${couponOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                    </svg>
                   </button>
-                  {coupons.map((cp) => {
-                    const selected = coupon.toUpperCase() === cp.code;
-                    return (
+
+                  {couponOpen && (
+                    <div className="max-h-56 overflow-y-auto border-t border-line">
                       <button
-                        key={cp.code}
-                        onClick={() => setCoupon(cp.code)}
-                        className={`shrink-0 rounded-xl border px-3 py-2 text-left transition-colors ${selected ? "border-brand-400 bg-brand-50" : "border-line bg-white hover:bg-[#FAFAF8]"}`}
+                        onClick={() => { setCoupon(""); setCouponOpen(false); }}
+                        className={`flex w-full items-center px-3 py-2.5 text-left text-sm hover:bg-[#FAFAF8] ${coupon === "" ? "bg-brand-50 font-semibold text-ink" : "text-ink2"}`}
                       >
-                        <span className="block text-[11px] font-bold text-ink">{cp.code}</span>
-                        <span className="block text-[10px] text-muted">{cp.label}</span>
+                        Sem cupom
                       </button>
-                    );
-                  })}
+                      {coupons.map((cp) => {
+                        const selected = coupon.toUpperCase() === cp.code;
+                        return (
+                          <button
+                            key={cp.code}
+                            onClick={() => { setCoupon(cp.code); setCouponOpen(false); }}
+                            className={`flex w-full items-center justify-between gap-3 border-t border-line px-3 py-2.5 text-left hover:bg-[#FAFAF8] ${selected ? "bg-brand-50" : ""}`}
+                          >
+                            <span className="text-sm font-bold text-ink">{cp.code}</span>
+                            <span className="text-xs text-muted">{cp.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
+              <p className="mt-1.5 text-[11px] text-muted">
+                Se você escolher um cupom, deixe a mensagem avisando que o cliente ganhou um cupom.
+              </p>
             </div>
           )}
 
