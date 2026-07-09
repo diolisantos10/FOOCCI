@@ -496,8 +496,9 @@ function CloseToNextTierTable({ customers }: { customers: CloseToNextTierCustome
 function RecommendedActions() {
   const router = useRouter();
 
-  function goToAcoes(objective: string, segment: string) {
-    router.push(`/crm?tab=acoes&objective=${objective}&segment=${segment}`);
+  function goToAcoes(_objective: string, _segment: string) {
+    // The old "Ações" tab was removed; campaigns now live under the Campanhas tab.
+    router.push(`/crm?tab=campanhas`);
   }
 
   return (
@@ -725,7 +726,7 @@ export function ProgramaTab() {
       {/* 5. Ações recomendadas */}
       <Section
         title="Ações recomendadas por nível"
-        subtitle="Clique em uma ação para criar no CRM > Ações"
+        subtitle="Clique em uma ação para criar uma campanha"
       >
         <RecommendedActions />
       </Section>

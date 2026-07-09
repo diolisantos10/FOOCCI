@@ -4591,20 +4591,6 @@ function CustomersTab({
 
 // ── Avaliações Tab ────────────────────────────────────────────────────────────
 
-const MOCK_REVIEWS = [
-  { author: "Maria S.", stars: 5, text: "Comida incrível, entrega rápida! Voltarei com certeza.", date: "há 2 dias" },
-  { author: "João P.",  stars: 5, text: "Atendimento excelente e pedido chegou quente.",          date: "há 5 dias" },
-  { author: "Ana L.",   stars: 4, text: "Muito bom! Apenas a embalagem poderia ser melhor.",       date: "há 1 semana" },
-];
-
-function StarRating({ count }: { count: number }) {
-  return (
-    <span className="text-amber-400 text-base leading-none">
-      {"★".repeat(count)}{"☆".repeat(5 - count)}
-    </span>
-  );
-}
-
 function AvaliacoesTab({
   googleReviewUrl,
   ifoodReviewUrl,
@@ -4639,21 +4625,10 @@ function AvaliacoesTab({
               <Link href="/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
-          <div className="space-y-2 pt-1">
-            {MOCK_REVIEWS.map((r) => (
-              <div key={r.author} className="rounded-lg border border-line bg-[#FAFAF8] p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-semibold text-ink">{r.author}</p>
-                  <span className="text-[10px] text-muted">{r.date}</span>
-                </div>
-                <StarRating count={r.stars} />
-                <p className="mt-1 text-xs text-ink2">{r.text}</p>
-              </div>
-            ))}
-            <p className="text-[10px] text-muted pt-1">
-              * Avaliações de exemplo — integração real com a API do Google em breve.
-            </p>
-          </div>
+          <p className="text-[11px] text-muted pt-1">
+            A leitura automática das avaliações do Google ainda não está integrada.
+            Por aqui você configura o link e dispara os pedidos de avaliação para os clientes.
+          </p>
         </div>
 
         {/* iFood */}
@@ -4677,21 +4652,10 @@ function AvaliacoesTab({
               <Link href="/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
-          <div className="space-y-2 pt-1">
-            {MOCK_REVIEWS.map((r) => (
-              <div key={r.author} className="rounded-lg border border-line bg-[#FAFAF8] p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-semibold text-ink">{r.author}</p>
-                  <span className="text-[10px] text-muted">{r.date}</span>
-                </div>
-                <StarRating count={r.stars} />
-                <p className="mt-1 text-xs text-ink2">{r.text}</p>
-              </div>
-            ))}
-            <p className="text-[10px] text-muted pt-1">
-              * Avaliações de exemplo — integração real com a API do iFood em breve.
-            </p>
-          </div>
+          <p className="text-[11px] text-muted pt-1">
+            A leitura automática das avaliações do iFood ainda não está integrada.
+            Por aqui você configura o link e dispara os pedidos de avaliação para os clientes.
+          </p>
         </div>
       </div>
 
