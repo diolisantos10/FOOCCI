@@ -3,6 +3,7 @@ import {
   READY_MADE_CAMPAIGNS,
   getReadyMadeCampaign,
   getReadyMadeMessageVariants,
+  getReadyMadeTiming,
   buildReadyMadeCampaignPayload,
 } from "../readyMadeCampaigns";
 import { inferCampaignPriority } from "../CRMWhatsAppBudgetPlanner";
@@ -55,6 +56,12 @@ describe("ready-made campaign catalog", () => {
   it("each campaign's id maps to the priority the budget planner will infer", () => {
     for (const c of READY_MADE_CAMPAIGNS) {
       expect(inferCampaignPriority({ templateId: c.id, targetSegment: c.targetSegment })).toBe(c.priority);
+    }
+  });
+
+  it("every campaign has an owner-facing timing summary", () => {
+    for (const c of READY_MADE_CAMPAIGNS) {
+      expect(getReadyMadeTiming(c.id).summary.trim().length).toBeGreaterThan(10);
     }
   });
 

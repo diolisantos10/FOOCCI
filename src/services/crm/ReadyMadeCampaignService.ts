@@ -20,9 +20,11 @@ import {
   READY_MADE_CAMPAIGNS,
   getReadyMadeCampaign,
   getReadyMadeMessageVariants,
+  getReadyMadeTiming,
   buildReadyMadeCampaignPayload,
   type ReadyMadeCampaign,
   type ReadyMadeOverrides,
+  type ReadyMadeTiming,
 } from "./readyMadeCampaigns";
 
 /** Persisted on/off for non-campaign ready-made engines. */
@@ -70,6 +72,8 @@ export interface ReadyMadeCampaignState {
   suggestedCoupon?: string;
   /** Ready-to-use message options the owner can pick from. */
   messageVariants: string[];
+  /** When this campaign fires, in plain words. */
+  timing: ReadyMadeTiming;
   // Live state
   active:        boolean;
   status:        string | null;   // campaign status (RECURRING) or null (CART)
@@ -138,6 +142,7 @@ export class ReadyMadeCampaignService {
         description: rm.description, objective: rm.objective, engine: rm.engine,
         priority: rm.priority, editable: rm.editable, suggestedCoupon: rm.suggestedCoupon,
         messageVariants: getReadyMadeMessageVariants(rm.id),
+        timing: getReadyMadeTiming(rm.id),
       };
 
       if (rm.engine === "CART_RECOVERY") {

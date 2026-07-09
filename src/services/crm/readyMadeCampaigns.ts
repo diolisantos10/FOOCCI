@@ -270,6 +270,44 @@ export function getReadyMadeMessageVariants(id: string): string[] {
   return rm ? [rm.defaultMessage] : [];
 }
 
+/**
+ * Owner-facing "when does this fire" per campaign — the day/timing logic in plain
+ * words, so the manager understands the cadence of each follow-up. Honest to the
+ * real engine: segment-based timings come from Configurações → Segmentação; event
+ * ones use the windows below.
+ */
+export interface ReadyMadeTiming {
+  /** One-line "when" summary shown on the card. */
+  summary: string;
+  /** Whether the day threshold comes from the Segmentação settings (not the card). */
+  fromSegmentation: boolean;
+}
+
+export const READY_MADE_TIMING: Record<string, ReadyMadeTiming> = {
+  "pedido-avaliacao":    { summary: "Enviada a quem fez um pedido nos últimos 7 dias.",                 fromSegmentation: false },
+  "aniversariantes":     { summary: "Enviada no dia do aniversário do cliente.",                        fromSegmentation: false },
+  "segunda-compra":      { summary: "Enviada a quem fez só 1 pedido, para estimular o segundo.",        fromSegmentation: false },
+  "quente-esfriando":    { summary: "Enviada a quem pediu há ~23–30 dias (perto de esfriar).",          fromSegmentation: true },
+  "reativar-mornos":     { summary: "Enviada a quem está ~31–60 dias sem pedir.",                       fromSegmentation: true },
+  "recuperar-frios":     { summary: "Enviada a quem está 60+ dias sem pedir.",                          fromSegmentation: true },
+  "clientes-vip":        { summary: "Enviada periodicamente aos clientes Ouro e Diamante.",             fromSegmentation: false },
+  "carrinho-abandonado": { summary: "Enviada poucos minutos após o cliente abandonar um pedido.",       fromSegmentation: false },
+};
+
+export function getReadyMadeTiming(id: string): ReadyMadeTiming {
+  return READY_MADE_TIMING[id] ?? { summary: "", fromSegmentation: false };
+}
+
+/**
+ * How the cadence works, in one place — shown in the config screen so the manager
+ * knows how often a customer can be contacted regardless of the campaign.
+ */
+export const CADENCE_EXPLAINER =
+  "O robô de campanhas roda a cada ~15 minutos e envia no máximo 5 mensagens por vez (limite de segurança). " +
+  "Cada cliente recebe no máximo 1 mensagem de CRM a cada 24 horas, somando todas as campanhas. " +
+  "Um cliente só entra uma vez em cada campanha — quando muda de fase (ex.: de quente para morno), " +
+  "pode entrar na campanha daquela nova fase.";
+
 export interface ReadyMadeOverrides {
   message?:    string;
   couponCode?: string;
