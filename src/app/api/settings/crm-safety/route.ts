@@ -50,7 +50,10 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    return ok(config);
+    // Return the live consumed count too so the "saldo" display stays correct
+    // right after saving (used count is unaffected by saving the total).
+    const contactBudgetUsed = await getConsumedContactCount(ctx.restaurantId);
+    return ok({ ...config, contactBudgetUsed });
   } catch (err) {
     console.error("[PATCH /api/settings/crm-safety]", err);
     return serverError();

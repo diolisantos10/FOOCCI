@@ -5030,6 +5030,7 @@ const TIMEZONES_CRM = [
 // Default values mirror crm-safety.ts DEFAULT_SAFETY_CONFIG
 const DEFAULT_CFG = {
   dailyGlobalCap:        200,
+  contactBudgetTotal:    0,
   customerCooldownHours: 24,
   quietHoursEnabled:     true,
   quietHoursStart:       "21:00",
@@ -5288,6 +5289,58 @@ function CrmConfiguracoes() {
               : "."}
           </p>
         </div>
+      </CfgCard>
+
+      {/* A2 — Saldo de contatos (pré-pago) */}
+      <CfgCard
+        title="Saldo de Contatos (pré-pago)"
+        subtitle="Limite total de contatos únicos que o CRM pode abordar. Cada pessoa consome 1 do saldo — mesmo recebendo várias campanhas. É pré-pago: só aumenta quando você recarrega aqui. 0 = sem limite."
+      >
+        {(() => {
+          const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
+          const total = cfg.contactBudgetTotal || 0;
+          const on    = total > 0;
+          const remaining = on ? Math.max(0, total - used) : 0;
+          const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
+          const low   = on && remaining <= Math.max(1, Math.round(total * 0.1));
+          return (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <CfgField
+                label="Saldo total de contatos"
+                hint="Quantas pessoas diferentes o CRM pode abordar no total. Para recarregar, aumente este número."
+              >
+                <input
+                  type="number" min={0} max={1000000}
+                  value={cfg.contactBudgetTotal}
+                  onChange={(e) => set("contactBudgetTotal", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className={CFG_INPUT}
+                />
+              </CfgField>
+
+              <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                {on ? (
+                  <>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm text-muted">Saldo disponível</span>
+                      <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                        {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                      <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="mt-2 text-xs text-muted">{used} contatos já usados{low ? " · saldo baixo, considere recarregar." : "."}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted">
+                    Saldo desligado — sem limite de contatos. Já foram abordados <strong>{used}</strong> contatos.
+                    Defina um valor ao lado para ativar o controle de saldo.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </CfgCard>
 
       {/* B — Comportamento gradual (delay) */}
