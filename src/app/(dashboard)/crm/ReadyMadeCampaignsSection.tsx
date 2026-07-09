@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback } from "react";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { CADENCE_EXPLAINER } from "@/services/crm/readyMadeCampaigns";
 
-type Editable = Array<"message" | "schedule" | "dailyLimit" | "coupon">;
+type Editable = Array<"message" | "schedule" | "dailyLimit" | "coupon" | "triggerDays">;
 
 interface Timing { summary: string; fromSegmentation: boolean; }
 
@@ -29,6 +29,8 @@ interface ReadyMadeState {
   suggestedCoupon?: string;
   messageVariants: string[];
   timing: Timing;
+  triggerDays?: number;
+  triggerDaysLabel?: string;
   active: boolean;
   status: string | null;
   campaignId: string | null;
@@ -197,6 +199,7 @@ function ReadyMadeConfigModal({
   const [start, setStart]       = useState(c.timeWindow.start);
   const [end, setEnd]           = useState(c.timeWindow.end);
   const [dailyLimit, setDaily]  = useState(c.dailyLimit);
+  const [triggerDays, setTriggerDays] = useState(c.triggerDays ?? 2);
   const [saved, setSaved]       = useState(false);
 
   const has = (k: Editable[number]) => c.editable.includes(k);
@@ -204,10 +207,11 @@ function ReadyMadeConfigModal({
 
   async function save() {
     const ov: Record<string, unknown> = {};
-    if (has("message"))    ov.message    = message;
-    if (has("coupon"))     ov.couponCode = coupon.trim();
-    if (has("dailyLimit")) ov.dailyLimit = dailyLimit;
-    if (has("schedule"))   { ov.weekdays = weekdays; ov.timeWindow = { start, end }; }
+    if (has("message"))     ov.message     = message;
+    if (has("coupon"))      ov.couponCode  = coupon.trim();
+    if (has("dailyLimit"))  ov.dailyLimit  = dailyLimit;
+    if (has("triggerDays")) ov.triggerDays = triggerDays;
+    if (has("schedule"))    { ov.weekdays = weekdays; ov.timeWindow = { start, end }; }
     await onSave(ov);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -260,6 +264,23 @@ function ReadyMadeConfigModal({
             )}
             <p className="mt-2 text-[10px] leading-relaxed text-muted">{CADENCE_EXPLAINER}</p>
           </div>
+
+          {has("triggerDays") && (
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                {c.triggerDaysLabel ?? "Enviar quantos dias após o evento"}
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={0} max={90}
+                  value={triggerDays}
+                  onChange={(e) => setTriggerDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-24 rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none"
+                />
+                <span className="text-xs text-muted">dias</span>
+              </div>
+            </div>
+          )}
 
           {c.engine === "CART_RECOVERY" && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">

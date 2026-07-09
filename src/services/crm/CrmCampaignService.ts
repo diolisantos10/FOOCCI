@@ -105,7 +105,9 @@ const MAX_AUDIENCE = 500; // safety cap
 export async function resolveAudience(
   restaurantId: string,
   targetSegment: string,
-  templateId?: string
+  templateId?: string,
+  /** Event-based tuning: how many days after the event to target (review, 2nd purchase). */
+  opts?: { triggerDays?: number }
 ): Promise<AudienceCustomer[]> {
   // Resolve canonical segment — template IDs (e.g. "recuperar-frios") may arrive in targetSegment
   const rawSeg = (targetSegment ?? "").trim();
@@ -226,17 +228,26 @@ export async function resolveAudience(
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
 
-    case "PRIMEIRO_PEDIDO":
+    case "PRIMEIRO_PEDIDO": {
+      // 2nd-purchase nudge: customers with exactly one order, placed at least
+      // `triggerDays` ago (give them time before nudging). Default 3 days.
+      const days  = Math.max(0, opts?.triggerDays ?? 3);
+      const until = new Date(now.getTime() - days * 86_400_000);
       return serialize(await prisma.customer.findMany({
-        where: { ...baseWhere, totalOrders: 1 },
+        where: { ...baseWhere, totalOrders: 1, lastOrderAt: { lte: until } },
         orderBy: { lastOrderAt: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
+    }
 
     case "RECENTE_AVALIACAO": {
-      const cutoff = new Date(now.getTime() - 7 * 86_400_000);
+      // Review request: orders placed between `triggerDays` and triggerDays+14 days
+      // ago — i.e. a few days after delivery, not immediately. Default 2 days.
+      const days  = Math.max(0, opts?.triggerDays ?? 2);
+      const from  = new Date(now.getTime() - (days + 14) * 86_400_000);
+      const until = new Date(now.getTime() - days * 86_400_000);
       return serialize(await prisma.customer.findMany({
-        where: { ...baseWhere, lastOrderAt: { gte: cutoff } },
+        where: { ...baseWhere, lastOrderAt: { gte: from, lte: until } },
         orderBy: { lastOrderAt: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);

@@ -60,8 +60,12 @@ export interface ReadyMadeCampaign {
   /** Optional suggested coupon code the owner can attach. */
   suggestedCoupon?: string;
   schedule:      ReadyMadeSchedule;
+  /** Event-based campaigns: default number of days after the event to send (editable). */
+  triggerDays?:  number;
+  /** Label for the triggerDays field in the editor. */
+  triggerDaysLabel?: string;
   /** Which fields the inline editor exposes. */
-  editable:      Array<"message" | "schedule" | "dailyLimit" | "coupon">;
+  editable:      Array<"message" | "schedule" | "dailyLimit" | "coupon" | "triggerDays">;
 }
 
 const ALL_WEEK = [0, 1, 2, 3, 4, 5, 6];
@@ -81,7 +85,9 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 😊 Obrigado pelo seu pedido no {restaurante}! Se você curtiu, uma avaliação ajuda demais a gente — leva só 10 segundinhos: {link_avaliacao_google}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: { start: "12:00", end: "20:00" }, dailyLimit: 30 },
-    editable:    ["message", "schedule", "dailyLimit"],
+    triggerDays: 2,
+    triggerDaysLabel: "Enviar quantos dias após o pedido",
+    editable:    ["message", "triggerDays", "schedule", "dailyLimit"],
   },
   {
     id:          "aniversariantes",
@@ -112,7 +118,9 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 😄 Que bom ter você com a gente! Que tal repetir a dose? Seu próximo pedido no {restaurante} já tá te esperando: {link_cardapio}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
-    editable:    ["message", "schedule", "dailyLimit", "coupon"],
+    triggerDays: 3,
+    triggerDaysLabel: "Enviar quantos dias após o 1º pedido",
+    editable:    ["message", "triggerDays", "schedule", "dailyLimit", "coupon"],
   },
   {
     id:          "quente-esfriando",
@@ -309,11 +317,12 @@ export const CADENCE_EXPLAINER =
   "pode entrar na campanha daquela nova fase.";
 
 export interface ReadyMadeOverrides {
-  message?:    string;
-  couponCode?: string;
-  weekdays?:   number[];
-  timeWindow?: { start: string; end: string };
-  dailyLimit?: number;
+  message?:     string;
+  couponCode?:  string;
+  weekdays?:    number[];
+  timeWindow?:  { start: string; end: string };
+  dailyLimit?:  number;
+  triggerDays?: number;
 }
 
 export interface ReadyMadeCampaignPayload {
@@ -344,6 +353,7 @@ export function buildReadyMadeCampaignPayload(
     throw new Error(`Ready-made campaign "${rm.id}" uses the ${rm.engine} engine and is not created as a recurring campaign.`);
   }
   const coupon = (overrides.couponCode ?? rm.suggestedCoupon ?? "").trim();
+  const triggerDays = overrides.triggerDays ?? rm.triggerDays;
   return {
     name:            rm.name,
     templateId:      rm.id,
@@ -358,6 +368,7 @@ export function buildReadyMadeCampaignPayload(
       timeWindow: overrides.timeWindow ?? rm.schedule.timeWindow,
       dailyLimit: overrides.dailyLimit ?? rm.schedule.dailyLimit,
       priority:   rm.priority,
+      ...(typeof triggerDays === "number" ? { triggerDays } : {}),
       timezone,
     },
   };

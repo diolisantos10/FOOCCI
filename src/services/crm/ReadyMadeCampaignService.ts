@@ -74,6 +74,9 @@ export interface ReadyMadeCampaignState {
   messageVariants: string[];
   /** When this campaign fires, in plain words. */
   timing: ReadyMadeTiming;
+  /** Event-based "X days after" value + its label (undefined for non-event campaigns). */
+  triggerDays?: number;
+  triggerDaysLabel?: string;
   // Live state
   active:        boolean;
   status:        string | null;   // campaign status (RECURRING) or null (CART)
@@ -117,9 +120,10 @@ async function setConfig(restaurantId: string, patch: Partial<ReadyMadeConfig>):
 // ─── state ──────────────────────────────────────────────────────────────────────
 
 type RecurringCfg = {
-  weekdays?:   number[];
-  timeWindow?: { start: string; end: string };
-  dailyLimit?: number;
+  weekdays?:    number[];
+  timeWindow?:  { start: string; end: string };
+  dailyLimit?:  number;
+  triggerDays?: number;
 };
 
 export class ReadyMadeCampaignService {
@@ -143,19 +147,21 @@ export class ReadyMadeCampaignService {
         priority: rm.priority, editable: rm.editable, suggestedCoupon: rm.suggestedCoupon,
         messageVariants: getReadyMadeMessageVariants(rm.id),
         timing: getReadyMadeTiming(rm.id),
+        triggerDaysLabel: rm.triggerDaysLabel,
       };
 
       if (rm.engine === "CART_RECOVERY") {
         return {
           ...base,
-          active:     config.cartRecoveryEnabled,
-          status:     null,
-          campaignId: null,
-          message:    rm.defaultMessage,
-          couponCode: null,
-          weekdays:   rm.schedule.weekdays,
-          timeWindow: rm.schedule.timeWindow,
-          dailyLimit: rm.schedule.dailyLimit,
+          active:      config.cartRecoveryEnabled,
+          status:      null,
+          campaignId:  null,
+          message:     rm.defaultMessage,
+          couponCode:  null,
+          weekdays:    rm.schedule.weekdays,
+          timeWindow:  rm.schedule.timeWindow,
+          dailyLimit:  rm.schedule.dailyLimit,
+          triggerDays: rm.triggerDays,
         };
       }
 
@@ -168,9 +174,10 @@ export class ReadyMadeCampaignService {
         campaignId: row?.id ?? null,
         message:    row?.message ?? rm.defaultMessage,
         couponCode: row?.couponCode ?? rm.suggestedCoupon ?? null,
-        weekdays:   cfg?.weekdays   ?? rm.schedule.weekdays,
-        timeWindow: cfg?.timeWindow ?? rm.schedule.timeWindow,
-        dailyLimit: cfg?.dailyLimit ?? rm.schedule.dailyLimit,
+        weekdays:    cfg?.weekdays   ?? rm.schedule.weekdays,
+        timeWindow:  cfg?.timeWindow ?? rm.schedule.timeWindow,
+        dailyLimit:  cfg?.dailyLimit ?? rm.schedule.dailyLimit,
+        triggerDays: cfg?.triggerDays ?? rm.triggerDays,
       };
     });
   }

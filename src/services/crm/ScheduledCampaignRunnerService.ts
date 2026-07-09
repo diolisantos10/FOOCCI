@@ -68,6 +68,8 @@ export interface RecurringScheduleConfig {
   weekdays:       number[];                     // 0=Sunday … 6=Saturday
   timeWindow:     { start: string; end: string }; // "HH:MM"
   dailyLimit:     number;
+  /** Event-based campaigns: days after the event to target (review, 2nd purchase). */
+  triggerDays?:   number;
   endCondition:   "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   endDate?:       string | null;                // "YYYY-MM-DD"
   maxTotal?:      number | null;
@@ -370,7 +372,8 @@ export class ScheduledCampaignRunnerService {
     const allEligible = await resolveAudience(
       campaign.restaurantId,
       campaign.targetSegment ?? "",
-      campaign.templateId ?? undefined
+      campaign.templateId ?? undefined,
+      { triggerDays: cfg.triggerDays },
     );
 
     // Exclude customers already sent this campaign

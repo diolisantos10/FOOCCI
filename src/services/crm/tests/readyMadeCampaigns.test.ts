@@ -124,4 +124,20 @@ describe("buildReadyMadeCampaignPayload", () => {
     const rm = getReadyMadeCampaign("carrinho-abandonado")!;
     expect(() => buildReadyMadeCampaignPayload(rm)).toThrow(/CART_RECOVERY/);
   });
+
+  it("carries triggerDays for event campaigns (default + override)", () => {
+    const review = getReadyMadeCampaign("pedido-avaliacao")!;
+    expect(review.triggerDays).toBe(2);
+    expect(review.editable).toContain("triggerDays");
+    expect(buildReadyMadeCampaignPayload(review).scheduleConfig.triggerDays).toBe(2);
+    expect(buildReadyMadeCampaignPayload(review, { triggerDays: 5 }).scheduleConfig.triggerDays).toBe(5);
+
+    const second = getReadyMadeCampaign("segunda-compra")!;
+    expect(second.triggerDays).toBe(3);
+
+    // Segment/phase campaigns have no triggerDays.
+    const frio = getReadyMadeCampaign("recuperar-frios")!;
+    expect(frio.triggerDays).toBeUndefined();
+    expect(buildReadyMadeCampaignPayload(frio).scheduleConfig).not.toHaveProperty("triggerDays");
+  });
 });
