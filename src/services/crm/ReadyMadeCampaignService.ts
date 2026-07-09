@@ -19,6 +19,7 @@ import { CrmCampaignService } from "./CrmCampaignService";
 import {
   READY_MADE_CAMPAIGNS,
   getReadyMadeCampaign,
+  getReadyMadeMessageVariants,
   buildReadyMadeCampaignPayload,
   type ReadyMadeCampaign,
   type ReadyMadeOverrides,
@@ -67,6 +68,8 @@ export interface ReadyMadeCampaignState {
   priority:      ReadyMadeCampaign["priority"];
   editable:      ReadyMadeCampaign["editable"];
   suggestedCoupon?: string;
+  /** Ready-to-use message options the owner can pick from. */
+  messageVariants: string[];
   // Live state
   active:        boolean;
   status:        string | null;   // campaign status (RECURRING) or null (CART)
@@ -134,6 +137,7 @@ export class ReadyMadeCampaignService {
         id: rm.id, emoji: rm.emoji, name: rm.name, tagline: rm.tagline,
         description: rm.description, objective: rm.objective, engine: rm.engine,
         priority: rm.priority, editable: rm.editable, suggestedCoupon: rm.suggestedCoupon,
+        messageVariants: getReadyMadeMessageVariants(rm.id),
       };
 
       if (rm.engine === "CART_RECOVERY") {
@@ -174,7 +178,6 @@ export class ReadyMadeCampaignService {
   static async activate(
     restaurantId: string,
     id: string,
-    overrides: ReadyMadeOverrides = {},
   ): Promise<{ ok: true; campaignId: string | null } | { ok: false; error: string }> {
     const rm = getReadyMadeCampaign(id);
     if (!rm) return { ok: false, error: "Campanha pronta não encontrada." };
@@ -187,28 +190,20 @@ export class ReadyMadeCampaignService {
     // Retire the overlapping legacy automation so both engines never fire together.
     await disableOverlappingLegacyAutomation(restaurantId, rm.id);
 
-    const payload = buildReadyMadeCampaignPayload(rm, overrides);
-
+    // Turning ON is a status flip only — it never touches the content, so any edits
+    // the owner saved while it was off are preserved.
     const existing = await prisma.campaign.findFirst({
       where:   { restaurantId, templateId: rm.id },
       orderBy: { createdAt: "desc" },
-      select:  { id: true, status: true },
+      select:  { id: true },
     });
-
     if (existing) {
-      // Resume + apply any edits to the existing row (no duplicate campaigns).
-      await prisma.campaign.update({
-        where: { id: existing.id },
-        data:  {
-          status:         "ACTIVE" as never,
-          message:        payload.messageTemplate,
-          scheduleConfig: payload.scheduleConfig as object,
-          ...(payload.couponCode ? { couponCode: payload.couponCode } : {}),
-        },
-      });
+      await prisma.campaign.update({ where: { id: existing.id }, data: { status: "ACTIVE" as never } });
       return { ok: true, campaignId: existing.id };
     }
 
+    // First activation with no prior edits — create straight from the safe defaults.
+    const payload = buildReadyMadeCampaignPayload(rm);
     const result = await CrmCampaignService.create(restaurantId, {
       name:            payload.name,
       templateId:      payload.templateId,
@@ -247,8 +242,10 @@ export class ReadyMadeCampaignService {
   }
 
   /**
-   * Edit an activated ready-made campaign's content/schedule without changing its
-   * on/off state. Only meaningful for RECURRING campaigns that already exist.
+   * Edit a ready-made campaign's content/schedule WITHOUT turning it on. Works
+   * before activation: if no campaign row exists yet, a PAUSED one is created to
+   * hold the edits (the owner can configure everything, then flip it on when ready).
+   * The runner only ever acts on ACTIVE campaigns, so a PAUSED row sends nothing.
    */
   static async update(
     restaurantId: string,
@@ -259,18 +256,39 @@ export class ReadyMadeCampaignService {
     if (!rm) return { ok: false, error: "Campanha pronta não encontrada." };
     if (rm.engine !== "RECURRING") return { ok: false, error: "Esta campanha não é editável." };
 
+    const payload = buildReadyMadeCampaignPayload(rm, overrides);
+
     const existing = await prisma.campaign.findFirst({
       where:   { restaurantId, templateId: rm.id },
       orderBy: { createdAt: "desc" },
       select:  { id: true },
     });
-    if (!existing) return { ok: false, error: "Ative a campanha antes de editar." };
 
-    const payload = buildReadyMadeCampaignPayload(rm, overrides);
-    await prisma.campaign.update({
-      where: { id: existing.id },
-      data:  {
+    if (existing) {
+      // Edit in place — never changes the on/off (status) state.
+      await prisma.campaign.update({
+        where: { id: existing.id },
+        data:  {
+          message:        payload.messageTemplate,
+          scheduleConfig: payload.scheduleConfig as object,
+          ...(payload.couponCode ? { couponCode: payload.couponCode } : {}),
+        },
+      });
+      return { ok: true };
+    }
+
+    // No row yet — persist the edits as a PAUSED (off) campaign so they survive
+    // until the owner turns it on.
+    await prisma.campaign.create({
+      data: {
+        restaurantId,
+        name:           payload.name,
         message:        payload.messageTemplate,
+        objective:      payload.objective,
+        channel:        payload.channel,
+        targetSegment:  payload.targetSegment,
+        templateId:     payload.templateId,
+        status:         "PAUSED" as never,
         scheduleConfig: payload.scheduleConfig as object,
         ...(payload.couponCode ? { couponCode: payload.couponCode } : {}),
       },

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   READY_MADE_CAMPAIGNS,
   getReadyMadeCampaign,
+  getReadyMadeMessageVariants,
   buildReadyMadeCampaignPayload,
 } from "../readyMadeCampaigns";
 import { inferCampaignPriority } from "../CRMWhatsAppBudgetPlanner";
@@ -60,6 +61,20 @@ describe("ready-made campaign catalog", () => {
   it("getReadyMadeCampaign finds by id and returns null for unknown", () => {
     expect(getReadyMadeCampaign("aniversariantes")?.name).toBe("Aniversário");
     expect(getReadyMadeCampaign("nope")).toBeNull();
+  });
+
+  it("offers at least 5 ready-to-use message options per campaign, all rendering cleanly", () => {
+    for (const c of READY_MADE_CAMPAIGNS) {
+      const variants = getReadyMadeMessageVariants(c.id);
+      expect(variants.length).toBeGreaterThanOrEqual(5);
+      // First option mirrors the card default.
+      expect(variants[0]).toBe(c.defaultMessage);
+      for (const v of variants) {
+        const out = renderCrmMessage(v, customer, ctx);
+        expect(out).toContain("Diego");
+        expect(out).not.toMatch(/\{[a-z_]+\}/);
+      }
+    }
   });
 });
 

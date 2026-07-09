@@ -3,10 +3,10 @@
 /**
  * ReadyMadeCampaignsSection — the pre-built campaign catalog for the Campanhas tab.
  *
- * Shows the 8 ready-made campaigns as cards with a one-click on/off switch. Each
- * editable campaign can be opened to tweak message / coupon / schedule — the live
- * preview uses the same renderer that actually sends. Nothing sends from here;
- * turning a campaign on just enables it for the safe runner.
+ * 8 ready-made campaigns as cards with a one-click on/off switch. Each card explains
+ * what it does, can be edited BEFORE or after being turned on, offers 5 ready-to-use
+ * message options (plus free editing), and picks coupons from the Promoções tab.
+ * Nothing sends from here — turning one on just enables it for the safe runner.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -20,9 +20,11 @@ interface ReadyMadeState {
   name: string;
   tagline: string;
   description: string;
+  objective: string;
   engine: "RECURRING" | "CART_RECOVERY";
   editable: Editable;
   suggestedCoupon?: string;
+  messageVariants: string[];
   active: boolean;
   status: string | null;
   campaignId: string | null;
@@ -33,6 +35,8 @@ interface ReadyMadeState {
   dailyLimit: number;
 }
 
+interface CouponOption { code: string; name: string; label: string; }
+
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const PREVIEW_CUSTOMER = { name: "Diego", tier: "OURO", lastOrderAt: new Date(Date.now() - 3 * 86_400_000).toISOString() };
@@ -40,15 +44,19 @@ const PREVIEW_CTX = { restaurantName: "seu restaurante", pedidoUrl: "https://foo
 
 export function ReadyMadeCampaignsSection() {
   const [items, setItems]     = useState<ReadyMadeState[]>([]);
+  const [coupons, setCoupons] = useState<CouponOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
   const [openId, setOpenId]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res  = await fetch("/api/crm/ready-made");
-      const json = await res.json();
-      if (json?.data?.campaigns) setItems(json.data.campaigns as ReadyMadeState[]);
+      const [rmRes, cpRes] = await Promise.all([
+        fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null),
+        fetch("/api/crm/coupons").then((r) => r.json()).catch(() => null),
+      ]);
+      if (rmRes?.data?.campaigns) setItems(rmRes.data.campaigns as ReadyMadeState[]);
+      if (cpRes?.data?.coupons)   setCoupons(cpRes.data.coupons as CouponOption[]);
     } finally {
       setLoading(false);
     }
@@ -84,7 +92,7 @@ export function ReadyMadeCampaignsSection() {
     <div>
       <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-muted">Campanhas prontas</h3>
       <p className="mb-3 text-xs text-muted">
-        Já vêm configuradas para qualquer restaurante. É só ligar — e ajustar depois, se quiser.
+        Já vêm configuradas para qualquer restaurante. É só ligar — e ajustar antes ou depois, se quiser.
       </p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -92,6 +100,7 @@ export function ReadyMadeCampaignsSection() {
           <ReadyMadeCard
             key={c.id}
             c={c}
+            coupons={coupons}
             busy={busyId === c.id}
             open={openId === c.id}
             onToggle={() => void toggle(c)}
@@ -107,9 +116,10 @@ export function ReadyMadeCampaignsSection() {
 // ── Card ────────────────────────────────────────────────────────────────────────
 
 function ReadyMadeCard({
-  c, busy, open, onToggle, onOpen, onSave,
+  c, coupons, busy, open, onToggle, onOpen, onSave,
 }: {
   c: ReadyMadeState;
+  coupons: CouponOption[];
   busy: boolean;
   open: boolean;
   onToggle: () => void;
@@ -139,13 +149,17 @@ function ReadyMadeCard({
         </button>
       </div>
 
+      {/* What / why — quick explanation */}
+      <p className="mt-2 text-xs leading-relaxed text-ink2">{c.description}</p>
+      <p className="mt-1 text-[10px] text-muted"><span className="font-semibold">Objetivo:</span> {c.objective}</p>
+
       <div className="mt-2 flex items-center gap-2">
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
           {c.active ? "Ligada" : "Desligada"}
         </span>
-        {c.active && canEdit && (
+        {canEdit && (
           <button onClick={onOpen} className="text-[11px] font-semibold text-brand-600 hover:text-brand-700">
-            {open ? "Fechar" : "Editar"}
+            {open ? "Fechar" : c.active ? "Editar" : "Configurar mensagem"}
           </button>
         )}
         {c.engine === "CART_RECOVERY" && (
@@ -153,7 +167,7 @@ function ReadyMadeCard({
         )}
       </div>
 
-      {open && canEdit && <ReadyMadeEditor c={c} busy={busy} onSave={onSave} />}
+      {open && canEdit && <ReadyMadeEditor c={c} coupons={coupons} busy={busy} onSave={onSave} />}
     </div>
   );
 }
@@ -161,18 +175,19 @@ function ReadyMadeCard({
 // ── Inline editor ─────────────────────────────────────────────────────────────────
 
 function ReadyMadeEditor({
-  c, busy, onSave,
+  c, coupons, busy, onSave,
 }: {
   c: ReadyMadeState;
+  coupons: CouponOption[];
   busy: boolean;
   onSave: (overrides: Record<string, unknown>) => void;
 }) {
-  const [message, setMessage]     = useState(c.message);
-  const [coupon, setCoupon]       = useState(c.couponCode ?? "");
-  const [weekdays, setWeekdays]   = useState<number[]>(c.weekdays);
-  const [start, setStart]         = useState(c.timeWindow.start);
-  const [end, setEnd]             = useState(c.timeWindow.end);
-  const [dailyLimit, setDaily]    = useState(c.dailyLimit);
+  const [message, setMessage]   = useState(c.message);
+  const [coupon, setCoupon]     = useState(c.couponCode ?? "");
+  const [weekdays, setWeekdays] = useState<number[]>(c.weekdays);
+  const [start, setStart]       = useState(c.timeWindow.start);
+  const [end, setEnd]           = useState(c.timeWindow.end);
+  const [dailyLimit, setDaily]  = useState(c.dailyLimit);
 
   const has = (k: Editable[number]) => c.editable.includes(k);
   const toggleDay = (d: number) => setWeekdays((w) => (w.includes(d) ? w.filter((x) => x !== d) : [...w, d].sort()));
@@ -192,9 +207,29 @@ function ReadyMadeEditor({
     <div className="mt-3 space-y-3 border-t border-line pt-3">
       {has("message") && (
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted">Mensagem</label>
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Escolha uma mensagem pronta
+          </label>
+          <div className="space-y-1.5">
+            {c.messageVariants.map((v, i) => {
+              const selected = v === message;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setMessage(v)}
+                  className={`w-full rounded-lg border px-3 py-2 text-left text-[12px] leading-snug transition-colors ${selected ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                >
+                  {v}
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="mb-1 mt-3 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Ou escreva a sua
+          </label>
           <textarea
-            rows={4}
+            rows={3}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="w-full resize-none rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none"
@@ -211,13 +246,36 @@ function ReadyMadeEditor({
 
       {has("coupon") && (
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted">Cupom (opcional)</label>
-          <input
-            value={coupon}
-            onChange={(e) => setCoupon(e.target.value.toUpperCase())}
-            placeholder="Ex: VOLTEI10"
-            className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none"
-          />
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Cupom (opcional)
+          </label>
+          {coupons.length === 0 ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+              Nenhum cupom ativo. Crie cupons na aba <span className="font-semibold">Promoções</span> para escolher aqui.
+            </p>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setCoupon("")}
+                className={`shrink-0 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${coupon === "" ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+              >
+                Sem cupom
+              </button>
+              {coupons.map((cp) => {
+                const selected = coupon.toUpperCase() === cp.code;
+                return (
+                  <button
+                    key={cp.code}
+                    onClick={() => setCoupon(cp.code)}
+                    className={`shrink-0 rounded-xl border px-3 py-2 text-left transition-colors ${selected ? "border-brand-400 bg-brand-50" : "border-line bg-white hover:bg-[#FAFAF8]"}`}
+                  >
+                    <span className="block text-[11px] font-bold text-ink">{cp.code}</span>
+                    <span className="block text-[10px] text-muted">{cp.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -268,7 +326,7 @@ function ReadyMadeEditor({
         disabled={busy}
         className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
       >
-        {busy ? "Salvando…" : "Salvar alterações"}
+        {busy ? "Salvando…" : c.active ? "Salvar alterações" : "Salvar (a campanha continua desligada)"}
       </button>
     </div>
   );

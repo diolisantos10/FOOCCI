@@ -199,6 +199,77 @@ export function getReadyMadeCampaign(id: string): ReadyMadeCampaign | null {
   return READY_MADE_CAMPAIGNS.find((c) => c.id === id) ?? null;
 }
 
+/**
+ * Ready-to-use message options per campaign (≥5). The owner picks one and can edit
+ * it freely afterwards. The first entry mirrors the campaign's defaultMessage.
+ */
+export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
+  "pedido-avaliacao": [
+    "Oi, {nome}! 😊 Obrigado pelo seu pedido no {restaurante}! Se você curtiu, uma avaliação ajuda demais a gente — leva só 10 segundinhos: {link_avaliacao_google}",
+    "{nome}, seu pedido chegou certinho? 🙏 Se deu tudo certo, deixa uma estrelinha pra gente — significa muito: {link_avaliacao_google}",
+    "Oi, {nome}! Espero que tenha amado o pedido 😍 Uma avaliação rápida ajuda o {restaurante} a crescer. Bora? {link_avaliacao_google}",
+    "{nome}, sua opinião vale ouro! ⭐ Conta pra gente como foi seu pedido no {restaurante}: {link_avaliacao_google}",
+    "Oi, {nome}! Obrigado pela preferência 💛 Se puder avaliar seu pedido, a gente agradece de coração: {link_avaliacao_google}",
+  ],
+  "aniversariantes": [
+    "Feliz aniversário, {nome}! 🎉 O {restaurante} preparou um presente pra você comemorar com sabor. É só pedir hoje pelo cardápio: {link_cardapio}",
+    "{nome}, hoje é seu dia! 🎂 E dia de aniversário merece comida boa. O {restaurante} tem um mimo te esperando: {link_cardapio}",
+    "Parabéns, {nome}! 🥳 Que tal comemorar com aquele pedido especial? Preparamos um presente pra você: {link_cardapio}",
+    "Feliz aniversário, {nome}! 💛 O {restaurante} quer fazer parte do seu dia. Tem surpresa no seu próximo pedido: {link_cardapio}",
+    "{nome}, muitos anos de vida! 🎈 Comemore com a gente — tem um agrado especial esperando por você: {link_cardapio}",
+  ],
+  "segunda-compra": [
+    "Oi, {nome}! 😄 Que bom ter você com a gente! Que tal repetir a dose? Seu próximo pedido no {restaurante} já tá te esperando: {link_cardapio}",
+    "{nome}, gostou do primeiro pedido? 😋 Vem de novo — o {restaurante} tá te esperando: {link_cardapio}",
+    "Oi, {nome}! Você faz parte da família {restaurante} agora 🤗 Bora repetir? {link_cardapio}",
+    "{nome}, que tal matar a vontade de novo? 🍽️ Seu cardápio favorito tá aqui: {link_cardapio}",
+    "Oi, {nome}! A gente adorou te atender 💛 Quando bater a fome, é só chamar: {link_cardapio}",
+  ],
+  "quente-esfriando": [
+    "Oi, {nome}! 👋 Bateu vontade de algo gostoso? O {restaurante} tá com o cardápio no capricho hoje — dá uma olhada: {link_cardapio}",
+    "{nome}, que tal um agrado hoje? 😋 O {restaurante} tá pronto pra te atender: {link_cardapio}",
+    "Oi, {nome}! Faz uns dias que não te vemos 👀 Bora pedir aquela delícia? {link_cardapio}",
+    "{nome}, sua próxima refeição favorita tá a um clique 🍴 {link_cardapio}",
+    "Oi, {nome}! O {restaurante} preparou o cardápio pensando em você. Vem ver: {link_cardapio}",
+  ],
+  "reativar-mornos": [
+    "Oi, {nome}! 🌡️ Faz um tempinho que não te vemos por aqui. Tem novidade deliciosa no {restaurante} — quer ver o cardápio? {link_cardapio}",
+    "{nome}, saudade de você! 💛 O {restaurante} tem novidades esperando. Bora matar a vontade? {link_cardapio}",
+    "Oi, {nome}! Cadê você? 😊 Preparamos coisas boas no cardápio — dá uma espiada: {link_cardapio}",
+    "{nome}, que tal voltar a pedir com a gente? 🍽️ O {restaurante} tá te esperando: {link_cardapio}",
+    "Oi, {nome}! A gente lembrou de você 😄 Tem prato novo no {restaurante}. Vem ver: {link_cardapio}",
+  ],
+  "recuperar-frios": [
+    "Oi, {nome}! 😊 Sentimos sua falta! O {restaurante} preparou algo especial pra te receber de volta. Confira o cardápio: {link_cardapio}",
+    "{nome}, faz tempo que não te vemos 🥺 Volta pra gente? Tem uma condição especial te esperando: {link_cardapio}",
+    "Oi, {nome}! O {restaurante} está com saudade 💛 Preparamos um agrado pro seu retorno: {link_cardapio}",
+    "{nome}, que tal reviver aquele sabor? 😋 A gente separou algo especial pra você: {link_cardapio}",
+    "Oi, {nome}! Bora voltar a pedir? 🍽️ Tem novidade e um mimo esperando no {restaurante}: {link_cardapio}",
+  ],
+  "clientes-vip": [
+    "Oi, {nome}! ✨ Você é um cliente especial pro {restaurante}, e a gente quer retribuir. Preparamos um mimo exclusivo pra você: {link_cardapio}",
+    "{nome}, você é VIP aqui! 👑 Preparamos uma condição exclusiva pra você aproveitar: {link_cardapio}",
+    "Oi, {nome}! Clientes como você merecem o melhor 💎 Tem um agrado especial te esperando: {link_cardapio}",
+    "{nome}, obrigado por ser tão presente! 🙏 Um mimo exclusivo do {restaurante} pra você: {link_cardapio}",
+    "Oi, {nome}! Você faz diferença pra gente ✨ Aproveite essa condição especial de cliente VIP: {link_cardapio}",
+  ],
+  "carrinho-abandonado": [
+    "Oi, {nome}! 🛒 Vi que você começou um pedido no {restaurante} e não finalizou. Posso te ajudar a concluir? É só voltar aqui: {link_cardapio}",
+    "{nome}, seu pedido tá quase pronto! 🛒 Faltou só finalizar. Bora terminar? {link_cardapio}",
+    "Oi, {nome}! Esqueceu algo no carrinho? 😊 Seu pedido no {restaurante} tá te esperando: {link_cardapio}",
+    "{nome}, ficou com fome e parou no meio? 🍴 Retoma seu pedido rapidinho: {link_cardapio}",
+    "Oi, {nome}! Seu carrinho ainda tá aqui 🛒 Finaliza e já já tá na sua casa: {link_cardapio}",
+  ],
+};
+
+/** The message options for a campaign (always includes at least the default). */
+export function getReadyMadeMessageVariants(id: string): string[] {
+  const variants = READY_MADE_MESSAGE_VARIANTS[id];
+  if (variants && variants.length) return variants;
+  const rm = getReadyMadeCampaign(id);
+  return rm ? [rm.defaultMessage] : [];
+}
+
 export interface ReadyMadeOverrides {
   message?:    string;
   couponCode?: string;

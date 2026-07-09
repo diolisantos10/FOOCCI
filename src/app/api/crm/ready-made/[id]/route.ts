@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const overrides = body.overrides ?? {};
 
     if (body.action === "activate") {
-      const r = await ReadyMadeCampaignService.activate(ctx.restaurantId, params.id, overrides);
+      const r = await ReadyMadeCampaignService.activate(ctx.restaurantId, params.id);
       return r.ok ? ok(r) : badRequest(r.error);
     }
     if (body.action === "deactivate") {

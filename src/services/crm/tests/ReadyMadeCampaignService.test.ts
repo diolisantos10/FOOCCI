@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  campaign: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+  campaign: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
   restaurantCRMProfile: { findUnique: vi.fn(), upsert: vi.fn() },
   cRMAutomation: { updateMany: vi.fn() },
 }));
@@ -18,6 +18,7 @@ beforeEach(() => {
   db.restaurantCRMProfile.findUnique.mockResolvedValue({ readyMadeConfig: null });
   db.campaign.findFirst.mockResolvedValue(null);
   db.campaign.update.mockResolvedValue({});
+  db.campaign.create.mockResolvedValue({ id: "draft1" });
   db.restaurantCRMProfile.upsert.mockResolvedValue({});
   db.cRMAutomation.updateMany.mockResolvedValue({ count: 0 });
 });
@@ -78,15 +79,28 @@ describe("activate", () => {
     expect(payload.scheduleConfig.mode).toBe("RECURRING");
   });
 
-  it("resumes + updates an existing paused campaign instead of duplicating", async () => {
+  it("resumes an existing paused campaign (status flip only, preserves edits)", async () => {
     db.campaign.findFirst.mockResolvedValue({ id: "c9", status: "PAUSED" });
-    const r = await ReadyMadeCampaignService.activate("r1", "recuperar-frios", { message: "novo {nome}" });
+    const r = await ReadyMadeCampaignService.activate("r1", "recuperar-frios");
     expect(r.ok).toBe(true);
     expect(create).not.toHaveBeenCalled();
     expect(db.campaign.update).toHaveBeenCalledOnce();
     const data = db.campaign.update.mock.calls[0]![0].data;
     expect(data.status).toBe("ACTIVE");
-    expect(data.message).toBe("novo {nome}");
+    // Content is NOT touched by activation — no message/scheduleConfig clobber.
+    expect(data).not.toHaveProperty("message");
+    expect(data).not.toHaveProperty("scheduleConfig");
+  });
+
+  it("update creates a PAUSED campaign when editing before activation", async () => {
+    db.campaign.findFirst.mockResolvedValue(null); // nothing activated yet
+    const r = await ReadyMadeCampaignService.update("r1", "recuperar-frios", { message: "editado {nome}" });
+    expect(r.ok).toBe(true);
+    expect(db.campaign.create).toHaveBeenCalledOnce();
+    const data = db.campaign.create.mock.calls[0]![0].data;
+    expect(data.status).toBe("PAUSED");
+    expect(data.message).toBe("editado {nome}");
+    expect(data.templateId).toBe("recuperar-frios");
   });
 
   it("cart recovery activation flips the config flag, no campaign created", async () => {
@@ -132,10 +146,14 @@ describe("deactivate", () => {
 });
 
 describe("update", () => {
-  it("requires the campaign to be activated first", async () => {
-    db.campaign.findFirst.mockResolvedValue(null);
-    const r = await ReadyMadeCampaignService.update("r1", "clientes-vip", { message: "x" });
-    expect(r.ok).toBe(false);
+  it("edits an existing campaign in place without changing status", async () => {
+    db.campaign.findFirst.mockResolvedValue({ id: "c8" });
+    const r = await ReadyMadeCampaignService.update("r1", "clientes-vip", { message: "x {nome}" });
+    expect(r.ok).toBe(true);
+    expect(db.campaign.create).not.toHaveBeenCalled();
+    const data = db.campaign.update.mock.calls[0]![0].data;
+    expect(data.message).toBe("x {nome}");
+    expect(data).not.toHaveProperty("status");
   });
 
   it("rejects editing the cart-recovery engine", async () => {
