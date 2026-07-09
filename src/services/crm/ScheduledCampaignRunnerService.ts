@@ -442,7 +442,32 @@ export class ScheduledCampaignRunnerService {
       };
     }
 
-    const batch = newEligible.slice(0, batchCap);
+    // ── Prepaid contact-budget guard (unique contacts) ───────────────────────
+    // Balance counts DISTINCT contacts ever messaged. Contacts already counted
+    // (messaged by any campaign) are free — they never consume again. Only brand-
+    // new distinct contacts draw down the balance; when it hits 0, new contacts
+    // are blocked (already-counted ones keep flowing). 0 = off.
+    let budgetEligible = newEligible;
+    if (safety.contactBudgetTotal > 0) {
+      const globalConsumed = new Set(
+        (await prisma.campaignExecution.findMany({
+          where:    { restaurantId: campaign.restaurantId, status: { in: ["SENT", "DELIVERED", "READ"] } },
+          select:   { customerId: true },
+          distinct: ["customerId"],
+        })).map((e) => e.customerId),
+      );
+      const remainingBudget = Math.max(0, safety.contactBudgetTotal - globalConsumed.size);
+      const freeOnes  = newEligible.filter((c) => globalConsumed.has(c.id));
+      const brandNew  = newEligible.filter((c) => !globalConsumed.has(c.id)).slice(0, remainingBudget);
+      budgetEligible  = [...freeOnes, ...brandNew];
+      if (budgetEligible.length === 0) {
+        const reason = `Saldo de contatos esgotado (${globalConsumed.size}/${safety.contactBudgetTotal})`;
+        console.log(`[ScheduledCampaignRunner] ${campaign.name} blocked — ${reason}`);
+        return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: newEligible.length, reason, completed: false };
+      }
+    }
+
+    const batch = budgetEligible.slice(0, batchCap);
 
     if (dryRun) {
       return {

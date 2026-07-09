@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount } from "@/lib/crm-safety";
+import { getSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount, getConsumedContactCount } from "@/lib/crm-safety";
 import { resolveAudience } from "./CrmCampaignService";
 import {
   calculateCampaignSendAllocation,
@@ -28,6 +28,10 @@ export interface CapacityForecast {
     weeklyRemaining: number;   // -1 = off
     maxPerWeekPerCustomer: number;
     customerCooldownHours: number;
+    /** Prepaid unique-contacts budget. total=0 → off. remaining=-1 → unlimited. */
+    contactBudgetTotal: number;
+    contactBudgetUsed: number;
+    contactBudgetRemaining: number;
   };
   distributionPolicy: {
     /** What actually runs today. */
@@ -41,10 +45,11 @@ export interface CapacityForecast {
 }
 
 export async function getCapacityForecast(restaurantId: string): Promise<CapacityForecast> {
-  const [safety, dailyConsumed, weeklyConsumed, campaigns] = await Promise.all([
+  const [safety, dailyConsumed, weeklyConsumed, contactUsed, campaigns] = await Promise.all([
     getSafetyConfig(restaurantId),
     getTodayGlobalSendCount(restaurantId),
     getWeekGlobalSendCount(restaurantId),
+    getConsumedContactCount(restaurantId),
     prisma.campaign.findMany({
       where: {
         restaurantId,
@@ -100,6 +105,9 @@ export async function getCapacityForecast(restaurantId: string): Promise<Capacit
       weeklyRemaining: safety.weeklyGlobalCap === 0 ? -1 : Math.max(0, safety.weeklyGlobalCap - weeklyConsumed),
       maxPerWeekPerCustomer: safety.maxPerWeekPerCustomer,
       customerCooldownHours: safety.customerCooldownHours,
+      contactBudgetTotal:     safety.contactBudgetTotal,
+      contactBudgetUsed:      contactUsed,
+      contactBudgetRemaining: safety.contactBudgetTotal <= 0 ? -1 : Math.max(0, safety.contactBudgetTotal - contactUsed),
     },
     distributionPolicy: {
       activeRuntime: "FIRST_DUE_CONSUMES",

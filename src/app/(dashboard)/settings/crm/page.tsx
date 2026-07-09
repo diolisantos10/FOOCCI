@@ -109,7 +109,7 @@ function SegmentSection() {
 // ─── Capacity forecast (read-only) ───────────────────────────────────────────
 
 interface CapacityForecast {
-  budget: { dailyCap: number; dailyConsumed: number; dailyRemaining: number; weeklyCap: number; weeklyConsumed: number; weeklyRemaining: number; maxPerWeekPerCustomer: number };
+  budget: { dailyCap: number; dailyConsumed: number; dailyRemaining: number; weeklyCap: number; weeklyConsumed: number; weeklyRemaining: number; maxPerWeekPerCustomer: number; contactBudgetTotal: number; contactBudgetUsed: number; contactBudgetRemaining: number };
   activeCampaigns: number;
   allocation: {
     budgetToday: number; totalEligible: number; totalAllocatedToday: number; topConsumer: string | null; atRisk: string[];
@@ -155,6 +155,12 @@ function CapacityForecastBlock() {
         {b.weeklyCap > 0 && <Stat label="Enviados (semana)" value={String(b.weeklyConsumed)} />}
         <Stat label="Contatos/cliente/sem" value={b.maxPerWeekPerCustomer === 0 ? "sem limite" : String(b.maxPerWeekPerCustomer)} />
         <Stat label="Previsto hoje" value={String(a.totalAllocatedToday)} />
+        {b.contactBudgetTotal > 0 && (
+          <Stat
+            label="Saldo de contatos"
+            value={`${b.contactBudgetRemaining} de ${b.contactBudgetTotal}`}
+          />
+        )}
       </div>
 
       {a.atRisk.length > 0 && (

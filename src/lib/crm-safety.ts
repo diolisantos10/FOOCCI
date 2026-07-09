@@ -56,6 +56,12 @@ export interface CRMWhatsAppSafetyConfig {
   dailyGlobalCap: number;
   /** OPTIONAL restaurant-wide weekly cap (7-day rolling) across ALL campaigns + automations. 0 = off. */
   weeklyGlobalCap: number;
+  /**
+   * PREPAID total allowance of UNIQUE contacts the CRM may ever message.
+   * Counts distinct customers that have received at least one CRM send (lifetime).
+   * 0 = off / unlimited. "Recharge" = raise this number in Settings. Does not reset.
+   */
+  contactBudgetTotal: number;
   /** Minimum hours between any two CRM messages to the same customer. Default 24. */
   customerCooldownHours: number;
   /** Whether to enforce quiet hours (no automated sends). */
@@ -95,6 +101,7 @@ export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
 export const DEFAULT_SAFETY_CONFIG: Readonly<CRMWhatsAppSafetyConfig> = {
   dailyGlobalCap:        200,
   weeklyGlobalCap:       0, // off by default — opt-in via Settings
+  contactBudgetTotal:    0, // off by default — opt-in via Settings (prepaid unique-contacts balance)
 
   customerCooldownHours: 24,
   quietHoursEnabled:     true,
@@ -143,6 +150,7 @@ export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
     crmWhatsAppSafety:     parseBudgetConfig(r.crmWhatsAppSafety),
     dailyGlobalCap:        typeof r.dailyGlobalCap        === "number"  ? r.dailyGlobalCap        : d.dailyGlobalCap,
     weeklyGlobalCap:       typeof r.weeklyGlobalCap       === "number"  ? r.weeklyGlobalCap       : d.weeklyGlobalCap,
+    contactBudgetTotal:    typeof r.contactBudgetTotal    === "number"  ? r.contactBudgetTotal    : d.contactBudgetTotal,
     customerCooldownHours: typeof r.customerCooldownHours === "number"  ? r.customerCooldownHours : d.customerCooldownHours,
     quietHoursEnabled:     typeof r.quietHoursEnabled     === "boolean" ? r.quietHoursEnabled     : d.quietHoursEnabled,
     quietHoursStart:       typeof r.quietHoursStart       === "string"  ? r.quietHoursStart       : d.quietHoursStart,
@@ -164,6 +172,44 @@ export async function getSafetyConfig(restaurantId: string): Promise<CRMWhatsApp
     select: { whatsAppSafetyConfig: true },
   });
   return parseSafetyConfig(profile?.whatsAppSafetyConfig);
+}
+
+/**
+ * How many DISTINCT contacts the CRM has already messaged (lifetime), across all
+ * campaigns + automations. This is what the prepaid contact budget consumes.
+ */
+export async function getConsumedContactCount(restaurantId: string): Promise<number> {
+  const rows = await prisma.campaignExecution.findMany({
+    where:    { restaurantId, status: { in: ["SENT", "DELIVERED", "READ"] } },
+    select:   { customerId: true },
+    distinct: ["customerId"],
+  });
+  return rows.length;
+}
+
+export interface ContactBudgetStatus {
+  /** Prepaid total set by the owner. 0 = off/unlimited. */
+  total: number;
+  /** Distinct contacts already messaged (lifetime). */
+  used: number;
+  /** total - used, floored at 0. Infinity when the budget is off (total = 0). */
+  remaining: number;
+  /** Whether the prepaid budget is active (total > 0). */
+  enabled: boolean;
+}
+
+/**
+ * Live prepaid contact-budget status for the Settings tab and campaign config.
+ * `remaining` is the "saldo" shown to the user.
+ */
+export async function getContactBudgetStatus(restaurantId: string): Promise<ContactBudgetStatus> {
+  const cfg = await getSafetyConfig(restaurantId);
+  const total = Math.max(0, Math.floor(cfg.contactBudgetTotal || 0));
+  if (total <= 0) {
+    return { total: 0, used: await getConsumedContactCount(restaurantId), remaining: Infinity, enabled: false };
+  }
+  const used = await getConsumedContactCount(restaurantId);
+  return { total, used, remaining: Math.max(0, total - used), enabled: true };
 }
 
 /**
