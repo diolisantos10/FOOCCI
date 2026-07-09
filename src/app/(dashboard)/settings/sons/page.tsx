@@ -14,7 +14,7 @@ import {
   HANDOFF_ALERT_ASSET,
   writeSoundPref,
 } from "@/lib/sound-prefs";
-import { playAlertAudio, supportsVolumeBoost, MAX_VOLUME, effectiveAlertVolume } from "@/lib/sound-player";
+import { playAlertAudio } from "@/lib/sound-player";
 import type { AlertLoopDiagnostics } from "@/lib/alert-loop";
 
 // New-order alert uses the official Foocci order sound. The test button below
@@ -42,16 +42,6 @@ const DEFAULTS: SoundSettings = {
   soundTheme:                       "DEFAULT",
 };
 
-// >100% uses Web Audio gain boost (see sound-player.ts)
-const VOLUME_PRESETS: { label: string; value: number; hint?: string }[] = [
-  { label: "Baixo (50%)",       value: 50 },
-  { label: "Normal (100%)",     value: 100 },
-  { label: "Alto (150%)",       value: 150, hint: "Para restaurantes movimentados" },
-  { label: "Muito alto (200%)", value: 200, hint: "Para restaurantes barulhentos" },
-  { label: "Turbo (300%)",      value: 300, hint: "Cozinha muito barulhenta" },
-  { label: "Máximo (400%)",     value: 400, hint: "Cozinha muito barulhenta — pode distorcer um pouco" },
-];
-
 export default function SonsPage() {
   const [settings,     setSettings]     = useState<SoundSettings>(DEFAULTS);
   const [saved,        setSaved]        = useState<SoundSettings>(DEFAULTS);
@@ -63,10 +53,8 @@ export default function SonsPage() {
 
   const orderAudioRef   = useRef<HTMLAudioElement | null>(null);
   const handoffAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [boostOk, setBoostOk] = useState(true);
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
-  const volumeMax = boostOk ? MAX_VOLUME : 100;
 
   const [diag, setDiag] = useState<{
     orderLastPlayed:   string | null;
@@ -96,7 +84,6 @@ export default function SonsPage() {
   useEffect(() => {
     orderAudioRef.current   = new Audio(ORDER_WAV);
     handoffAudioRef.current = new Audio(HANDOFF_WAV);
-    setBoostOk(supportsVolumeBoost());
     refreshDiag();
 
     fetch("/api/settings/sounds")
@@ -157,7 +144,7 @@ export default function SonsPage() {
     const audio = orderAudioRef.current;
     if (!audio) return;
     try {
-      await playAlertAudio(audio, settings.soundVolume);
+      await playAlertAudio(audio, 100); // volume travado em 100%
       try { localStorage.setItem(SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
       setTestMsg("✓ Som de pedidos tocou com sucesso.");
       setAudioBlocked(false);
@@ -180,7 +167,7 @@ export default function SonsPage() {
     const audio = handoffAudioRef.current;
     if (!audio) return;
     try {
-      await playAlertAudio(audio, settings.soundVolume);
+      await playAlertAudio(audio, 100); // volume travado em 100%
       try { localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
       setTestMsg("✓ Som de atendimento tocou com sucesso.");
       setAudioBlocked(false);
@@ -285,69 +272,16 @@ export default function SonsPage() {
         </p>
       </PageCard>
 
-      {/* Volume */}
+      {/* Volume — fixo em 100%, sem controle no app (use o volume do aparelho) */}
       <PageCard>
         <SectionHeading
           title="Volume"
-          subtitle="O padrão é 100% — já toca alto e limpo. Para deixar mais alto ou mais baixo, use o controle de volume do próprio aparelho (celular ou computador)."
+          subtitle="O volume dos alertas é fixo em 100% — já toca alto e limpo. Para deixar mais alto ou mais baixo, use o controle de volume do próprio aparelho (celular ou computador)."
         />
-        {/* De-emphasized: the app volume defaults to 100% and the device volume is
-            the recommended way to adjust. The in-app control stays available for
-            noisy kitchens that need the digital boost, but tucked away. */}
-        <details className="rounded-xl border border-line2 bg-[#FAFAF8]">
-          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-ink2">
-            Ajustar o volume do app (opcional)
-          </summary>
-          <div className="space-y-4 px-4 pb-4">
-            {/* Slider */}
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-muted shrink-0 w-6">0%</span>
-              <input
-                type="range"
-                min={0}
-                max={volumeMax}
-                value={Math.min(settings.soundVolume, volumeMax)}
-                disabled={!settings.soundEnabled}
-                onChange={(e) => patch({ soundVolume: Number(e.target.value) })}
-                className="h-2 w-full cursor-pointer accent-brand-500 disabled:opacity-40"
-              />
-              <span className="w-12 shrink-0 text-right text-sm font-bold text-ink">
-                {settings.soundVolume}%
-              </span>
-            </div>
-
-            {/* Presets */}
-            <div className="flex flex-wrap gap-2">
-              {VOLUME_PRESETS.filter((p) => p.value <= volumeMax).map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  disabled={!settings.soundEnabled}
-                  onClick={() => patch({ soundVolume: p.value })}
-                  title={p.hint}
-                  className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
-                    settings.soundVolume === p.value
-                      ? "border-brand-400 bg-brand-50 text-brand-700"
-                      : "border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-xs text-muted">
-              O padrão <strong className="text-ink2">100%</strong> já toca alto. Prefira aumentar o
-              volume do próprio aparelho; os níveis acima de 100% reforçam o som digitalmente e podem
-              distorcer.
-            </p>
-            {!boostOk && (
-              <p className="text-xs text-amber-600">
-                Volume reforçado (acima de 100%) não disponível neste navegador.
-              </p>
-            )}
-          </div>
-        </details>
+        <div className="flex items-center gap-3 rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3">
+          <span className="text-lg" aria-hidden>🔊</span>
+          <p className="text-sm text-ink2">Volume fixo em <strong className="text-ink">100%</strong>.</p>
+        </div>
       </PageCard>
 
       {/* New order sound */}
@@ -468,11 +402,7 @@ export default function SonsPage() {
             {/* New-order alert loop */}
             <div className="space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted">Novo pedido (alerta)</p>
-              <div><span className="font-semibold text-ink2">volume salvo:</span> {settings.soundVolume}%</div>
-              <div>
-                <span className="font-semibold text-ink2">ganho efetivo ({settings.soundTheme}):</span>{" "}
-                {effectiveAlertVolume(settings.soundVolume, settings.soundTheme)}%
-              </div>
+              <div><span className="font-semibold text-ink2">volume:</span> 100% (fixo)</div>
               <div><span className="font-semibold text-ink2">arquivo de áudio:</span> {diag.orderLoop?.assetPath ?? ORDER_WAV}</div>
               <div>
                 <span className="font-semibold text-ink2">última tentativa:</span>{" "}

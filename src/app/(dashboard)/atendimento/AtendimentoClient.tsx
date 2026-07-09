@@ -417,7 +417,6 @@ export function AtendimentoClient({
   const handoffAudioRef      = useRef<HTMLAudioElement | null>(null);
   const handoffControllerRef = useRef<AlertLoopController | null>(null);
   const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => readSoundPref(HANDOFF_SOUND_PREF_KEY, true));
-  const handoffVolumeRef = useRef(100);
   const repeatHandoffRef = useRef(true);
 
   const [leftWidth,     setLeftWidth]     = useState<number>(320);
@@ -507,7 +506,7 @@ export function AtendimentoClient({
         if (!a) return;
         await playAlertAudio(a, vol);
       },
-      getVolume:       () => handoffVolumeRef.current,
+      getVolume:       () => 100, // volume travado em 100% (sem controle no app; use o volume do aparelho)
       isRepeatEnabled: () => repeatHandoffRef.current,
       assetPath:       HANDOFF_ALERT_ASSET,
       intervalMs:      9_000,    // repeat every 9 s (8–10 s window)
@@ -537,7 +536,6 @@ export function AtendimentoClient({
     void fetchRestaurantSoundSettings().then((s) => {
       if (!s) return;
       setHandoffSoundEnabled(s.soundEnabled && s.humanAttentionSoundEnabled);
-      handoffVolumeRef.current = s.soundVolume;
       repeatHandoffRef.current = s.repeatHumanAttentionUntilSeen;
     });
   }, []);

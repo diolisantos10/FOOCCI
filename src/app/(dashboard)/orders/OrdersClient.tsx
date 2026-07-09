@@ -16,7 +16,7 @@ import {
   SOUND_LAST_PLAYED_KEY,
   SOUND_LAST_ERROR_KEY,
 } from "@/lib/sound-prefs";
-import { playAlertAudio, installSilentUnlock, effectiveAlertVolume } from "@/lib/sound-player";
+import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
 import { AlertLoopController } from "@/lib/alert-loop";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
@@ -1608,7 +1608,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
   // localStorage mirror is just the instant fallback before the API responds.
   const [soundEnabled, setSoundEnabled] = useState(() => readSoundPref(SOUND_PREF_KEY, true));
-  const soundVolumeRef = useRef(100);
   const soundThemeRef = useRef<string>("DEFAULT");
   const repeatNewOrderRef = useRef(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -1679,7 +1678,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
           playBeep();
         }
       },
-      getVolume:       () => effectiveAlertVolume(soundVolumeRef.current, soundThemeRef.current),
+      getVolume:       () => 100, // volume travado em 100% (sem controle no app; use o volume do aparelho)
       isRepeatEnabled: () => repeatNewOrderRef.current || soundThemeRef.current === "URGENT",
       assetPath:       ALERT_WAV,
       intervalMs:      10_000,   // repeat every 10 s (8–12 s window)
@@ -1710,7 +1709,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     void fetchRestaurantSoundSettings().then((s) => {
       if (!s) return;
       setSoundEnabled(s.soundEnabled && s.newOrderSoundEnabled);
-      soundVolumeRef.current = s.soundVolume;
       soundThemeRef.current = s.soundTheme || "DEFAULT";
       repeatNewOrderRef.current = s.repeatNewOrderSoundUntilAccepted;
     });

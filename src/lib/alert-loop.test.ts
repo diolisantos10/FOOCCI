@@ -27,7 +27,7 @@ function makeController(opts?: {
     play,
     getVolume:       () => opts?.volume ?? 150,
     isRepeatEnabled: () => opts?.repeat ?? true,
-    assetPath:       "/sounds/foocci-order-alert-custom.mp4",
+    assetPath:       "/sounds/foocci-order-alert-custom.wav",
     intervalMs:      INTERVAL,
     maxDurationMs:   opts?.maxDurationMs ?? 180_000,
     onDiagnostics:   (d) => { diag = d; },
