@@ -1,26 +1,26 @@
-# FOOD MANAGER — Desenho V1 (Pontapé Inicial)
+# FOOCCI MANAGER — Desenho V1 (Pontapé Inicial)
 
-> Documento de kickoff do produto **Food Manager**, o administrador de restaurante da família FOOCCI.
+> Documento de kickoff do produto **FOOCCI Manager**, o administrador de restaurante da família FOOCCI.
 > Inspiração de esqueleto: **Saipos** (sistema brasileiro de gestão/POS para restaurantes).
 > Status: rascunho aprovado em conversa — serve de blueprint para o início do desenvolvimento.
 
 ---
 
-## 1. O que é o Food Manager
+## 1. O que é o FOOCCI Manager
 
-O **Food Manager** é um produto **independente** de gestão de restaurante (ERP/POS):
+O **FOOCCI Manager** é um produto **independente** de gestão de restaurante (ERP/POS):
 frente de caixa, gestor de pedidos, cozinha, mesas/comandas, estoque, financeiro e relatórios.
 
 Ele é **diferente do FOOCCI Vendas** (o CRM + agente de IA no WhatsApp que já existe neste
 repositório) e será **vendido separadamente**:
 
 - O cliente pode assinar **só o Vendas**;
-- **só o Food Manager**;
+- **só o FOOCCI Manager**;
 - ou **os dois** — e aí ganha a operação integrada de ponta a ponta.
 
 ## 2. Decisão de arquitetura: HUB DE CANAIS (não atrelado ao Vendas)
 
-**Decisão do dono (09/07/2026):** o Food Manager não pode nascer amarrado ao Vendas.
+**Decisão do dono (09/07/2026):** o FOOCCI Manager não pode nascer amarrado ao Vendas.
 Ele será preparado para receber pedidos de **qualquer canal** — iFood, 99Food, Keeta,
 cardápio digital, balcão, mesas — e o **FOOCCI Vendas é apenas mais um canal**, integrado
 pela mesma porta que os demais.
@@ -28,7 +28,7 @@ pela mesma porta que os demais.
 ```
                          ┌──────────────────────────┐
    FOOCCI Vendas ───────▶│                          │
-   iFood ───────────────▶│       FOOD MANAGER       │──▶ Cozinha (KDS / impressão)
+   iFood ───────────────▶│       FOOCCI MANAGER       │──▶ Cozinha (KDS / impressão)
    99Food ──────────────▶│    (hub da operação)     │──▶ Caixa / Financeiro
    Cardápio digital ────▶│                          │──▶ Estoque / Ficha técnica
    Balcão / Mesas ──────▶│   Gestor de Pedidos      │──▶ Relatórios
@@ -38,23 +38,23 @@ pela mesma porta que os demais.
 Consequências práticas:
 
 1. **Separado em todas as plataformas (decisão do dono, 09/07/2026).** Repositório
-   GitHub próprio (`diolisantos10/food-manager`), projeto **Railway próprio** (deploy
+   GitHub próprio (`diolisantos10/foocci-manager`), projeto **Railway próprio** (deploy
    independente) e **banco de dados próprio**. Nada de acessar o banco do Vendas
    diretamente.
 2. **Integração por API + webhooks, nunca por acoplamento.** O Vendas envia pedido ao
-   Food Manager exatamente como já envia ao Saipos hoje (`SaiposIntegrationService`):
+   FOOCCI Manager exatamente como já envia ao Saipos hoje (`SaiposIntegrationService`):
    `POST /orders` autenticado + webhooks de status na volta. Esse contrato já validado
-   em produção vira o **modelo da API pública** do Food Manager.
-3. **O Vendas continua funcionando sozinho** para quem não assina o Food Manager, e
+   em produção vira o **modelo da API pública** do FOOCCI Manager.
+3. **O Vendas continua funcionando sozinho** para quem não assina o FOOCCI Manager, e
    vice-versa.
 
 ### Contrato de integração (v0 — espelhado no padrão Saipos que já usamos)
 
 | Direção | Mecanismo | Conteúdo |
 |---|---|---|
-| Canal → Food Manager | `POST /api/v1/orders` (token por loja/canal) | Pedido completo: itens, complementos, cliente, endereço, pagamento, taxa de entrega |
-| Food Manager → Canal | Webhook | Status do pedido: `RECEBIDO → ACEITO → EM_PRODUCAO → PRONTO → SAIU_PARA_ENTREGA → CONCLUIDO / CANCELADO` |
-| Canal → Food Manager | `GET /api/v1/menu` (fase 2) | Sincronização de cardápio — Food Manager como fonte da verdade |
+| Canal → FOOCCI Manager | `POST /api/v1/orders` (token por loja/canal) | Pedido completo: itens, complementos, cliente, endereço, pagamento, taxa de entrega |
+| FOOCCI Manager → Canal | Webhook | Status do pedido: `RECEBIDO → ACEITO → EM_PRODUCAO → PRONTO → SAIU_PARA_ENTREGA → CONCLUIDO / CANCELADO` |
+| Canal → FOOCCI Manager | `GET /api/v1/menu` (fase 2) | Sincronização de cardápio — FOOCCI Manager como fonte da verdade |
 
 ## 3. Esqueleto de módulos (inspiração Saipos)
 
@@ -88,14 +88,14 @@ padrões já maduros — porém em app e banco próprios:
 |---|---|---|
 | **F0 — Fundação** | Repo novo, auth multi-restaurante, layout base, cadastros (restaurante, usuários/permissões) | |
 | **F1 — Cardápio + PDV balcão** | Cadastro de cardápio, venda no balcão, impressão de comanda | Primeiro valor vendável |
-| **F2 — Gestor de Pedidos + canal FOOCCI Vendas** | API pública de pedidos + webhooks; Vendas passa a enviar pedido pro Food Manager (mesmo padrão da integração Saipos atual) | Primeiro canal integrado |
+| **F2 — Gestor de Pedidos + canal FOOCCI Vendas** | API pública de pedidos + webhooks; Vendas passa a enviar pedido pro FOOCCI Manager (mesmo padrão da integração Saipos atual) | Primeiro canal integrado |
 | **F3 — Mesas & Comandas + KDS** | Operação de salão e painel de cozinha | |
 | **F4 — Estoque/Ficha técnica + Caixa/Financeiro** | CMV, baixa automática, fechamento de caixa | |
 | **F5 — Marketplaces + Fiscal** | iFood, 99Food, Keeta; NFC-e/SAT | Exige credenciamento nos parceiros |
 
 ## 6. Próximos passos
 
-1. Criar o repositório `food-manager` (aguardando OK do dono).
+1. Criar o repositório `foocci-manager` (aguardando OK do dono).
 2. F0: bootstrap do projeto (Next.js + Prisma + auth) no repo novo.
 3. Especificar em detalhe a API pública de pedidos (v1), usando o payload da integração
    Saipos do Vendas como ponto de partida.
@@ -103,4 +103,4 @@ padrões já maduros — porém em app e banco próprios:
 ---
 
 *Este documento vive no repositório do FOOCCI Vendas apenas como registro do kickoff;
-quando o repositório do Food Manager for criado, ele migra para lá.*
+quando o repositório do FOOCCI Manager for criado, ele migra para lá.*
