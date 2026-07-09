@@ -54,19 +54,13 @@ export async function GET(req: NextRequest) {
       return ok({ base64: null, code: null, connected: true });
     }
 
-    if (state === "close") {
-      try {
-        await EvolutionClient.restartInstance(cfg);
-      } catch (restartErr) {
-        console.warn(
-          "[GET /api/evolution/qr] restart failed:",
-          restartErr instanceof Error ? restartErr.message : restartErr
-        );
-      }
-      return ok({ base64: null, code: null, restarting: true });
-    }
-
-    // state === "connecting" → fetch QR
+    // NON-DESTRUCTIVE for both "close" and "connecting":
+    // GET /instance/connect re-initializes a closed instance and returns a fresh
+    // QR without deleting anything. We must NEVER delete/recreate here — managed
+    // Evolution providers (e.g. Whats Evolution) block POST /instance/create via
+    // the per-instance apiKey, so a delete+create would destroy the instance for
+    // good. Restart (PUT /instance/restart) is also unsupported there. connect is
+    // the only safe, portable path.
     const qr = await EvolutionClient.getQRCode(cfg);
 
     if (qr.base64) {

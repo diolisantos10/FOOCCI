@@ -161,77 +161,72 @@ function SimpleQRPanel({
     }
   };
 
-  // Primary QR flow: logout/delete/create → capture QR from create response directly.
-  // Never relies on GET /instance/connect as QR source (returns { count } in v2.2.3).
+  // Primary QR flow — NON-DESTRUCTIVE.
+  // Asks GET /api/evolution/qr, which fetches a QR via GET /instance/connect
+  // WITHOUT ever deleting/recreating the instance. Safe on managed Evolution
+  // providers (Whats Evolution etc.) that block instance creation via the
+  // per-instance apiKey — the old hard-reset path destroyed the instance there.
+  // While the instance warms up ({ generating }/{ restarting }) we poll the same
+  // endpoint until the QR image appears.
   const handleCreateQR = async () => {
     onStartConnect();
-    setQrState("creating");
+    setQrState("loading");
     setQrBase64(null);
     setQrPairingCode(null);
     setQrErrorMsg(null);
     setQrDiagnostic(null);
     stopPolling();
 
-    const res  = await fetch("/api/evolution/hard-reset", { method: "POST" });
-    const json = await res.json().catch(() => ({}));
-    const d    = (json?.data ?? json) as {
-      ok?: boolean;
-      success?: boolean;
-      qr_found?: boolean;
-      qr_base64?: string | null;
-      qr_text?: string | null;
-      qr_source?: string | null;
-      create_response_keys?: string[];
-      create_response_shape?: Record<string, string[]>;
-      qrcode_shape?: string[];
-      qrcode_is_count_only?: boolean;
-      alt_create_keys?: string[];
-      alt_create_shape?: Record<string, string[]>;
-      stage?: string;
-      poll_rounds?: Array<{
-        round: number;
-        endpoints: Array<{ method: string; path: string; httpStatus: number; keys: string[]; qrFound: boolean; isCountOnly: boolean; error?: string }>;
-        qrFound: boolean;
-      }>;
-      poll_rounds_count?: number;
-      recommendation?: string;
-      message?: string;
-      error?: string;
+    const ERROR_LABELS: Record<string, string> = {
+      not_configured:     "WhatsApp ainda não configurado neste restaurante. Preencha a configuração da plataforma (Avançado) e salve.",
+      instance_not_found: "A instância não existe mais no servidor. Recrie-a no painel do provedor e confira a API Key salva aqui.",
+      evolution_error:    "O servidor do WhatsApp respondeu com erro. Tente novamente em alguns segundos.",
     };
 
-    if (!res.ok || !d.success) {
-      setQrState("error");
-      setQrErrorMsg(d.error ?? "Erro ao recriar instância WhatsApp. Tente novamente.");
-      return;
+    const MAX_TRIES = 12; // ~24s of polling for a warming-up instance
+    for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+      const res  = await fetch("/api/evolution/qr");
+      const json = await res.json().catch(() => ({}));
+      const d    = (json?.data ?? json) as {
+        base64?: string | null;
+        code?: string | null;
+        pairingCode?: string | null;
+        connected?: boolean;
+        generating?: boolean;
+        restarting?: boolean;
+        error?: string;
+      };
+
+      if (d.connected) { setQrState("connected"); onConnected(); return; }
+
+      if (d.base64) {
+        setQrBase64(d.base64);
+        setQrPairingCode(null);
+        setQrState("shown");
+        intervalRef.current = setInterval(() => void checkConnection(), 5_000);
+        return;
+      }
+
+      if (d.pairingCode) {
+        setQrPairingCode(d.pairingCode);
+        setQrBase64(null);
+        setQrState("shown");
+        intervalRef.current = setInterval(() => void checkConnection(), 5_000);
+        return;
+      }
+
+      if (d.error) {
+        setQrState("error");
+        setQrErrorMsg(ERROR_LABELS[d.error] ?? "Não foi possível gerar o QR Code. Tente novamente.");
+        return;
+      }
+
+      // generating / restarting → wait and retry the same non-destructive endpoint
+      await new Promise((r) => setTimeout(r, 2_000));
     }
 
-    if (d.qr_found && d.qr_base64) {
-      setQrBase64(d.qr_base64);
-      setQrPairingCode(null);
-      setQrState("shown");
-      stopPolling();
-      intervalRef.current = setInterval(() => void checkConnection(), 10_000);
-    } else {
-      setQrBase64(null);
-      setQrState("error");
-      setQrDiagnostic({
-        stage:                d.stage,
-        create_response_keys: d.create_response_keys,
-        create_response_shape: d.create_response_shape,
-        qrcode_shape:          d.qrcode_shape,
-        qrcode_is_count_only:  d.qrcode_is_count_only,
-        poll_rounds_count:     d.poll_rounds_count,
-        all_count_only:        (d.poll_rounds ?? []).length > 0 &&
-          d.poll_rounds!.every((r) => r.endpoints.every((e) => e.isCountOnly || e.httpStatus !== 200)),
-        recommendation:        d.recommendation,
-        message:               d.message,
-      });
-      setQrErrorMsg(
-        d.qrcode_is_count_only
-          ? "A Evolution respondeu, mas retornou apenas um contador de QR ({ count }) — sem imagem ou código. Ver diagnóstico abaixo."
-          : d.message ?? "A instância foi recriada, mas nenhum QR foi encontrado. Ver diagnóstico abaixo."
-      );
-    }
+    setQrState("error");
+    setQrErrorMsg("O servidor está demorando para gerar o QR. Aguarde alguns segundos e toque em “Gerar novo QR Code”.");
   };
 
   const handleDisconnectClick = async () => {
