@@ -284,6 +284,41 @@ export default function ImpressorasPage() {
       {/* Status */}
       <StatusBanner agent={agent} />
 
+      {/* Guidance for the "folha grande (A4)" symptom. Browser printing obeys the
+          OS printer's paper size — if that is A4, the small comanda lands on a full
+          A4 sheet. The robust fix is the Carteiro (raw thermal, never A4). */}
+      <details className="rounded-2xl border border-amber-200 bg-amber-50 shadow-sm">
+        <summary className="cursor-pointer list-none px-6 py-4 text-sm font-semibold text-amber-800">
+          🖨️ Está saindo em folha grande (A4)? Veja como resolver
+        </summary>
+        <div className="space-y-3 border-t border-amber-200 px-6 py-5 text-sm text-amber-900">
+          <p>
+            Isso acontece quando a comanda é impressa <strong>pelo navegador</strong> e a
+            impressora está configurada no Windows com papel <strong>A4</strong> — aí a
+            comanda pequena cai no canto de uma folha grande e desperdiça papel.
+          </p>
+          <div>
+            <p className="font-semibold">Jeito recomendado (nunca sai A4):</p>
+            <p>
+              Use o <strong>Carteiro</strong> (aqui em cima). Ele imprime direto na bobina
+              térmica, sem passar pela janela de impressão do navegador.
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold">Se você imprime pelo botão “Imprimir” do navegador:</p>
+            <ol className="ml-4 list-decimal space-y-1">
+              <li>Windows → Impressoras → sua impressora térmica → <strong>Preferências</strong>.</li>
+              <li>Em “Tamanho do papel”, escolha a <strong>bobina / recibo (80&nbsp;mm)</strong> — não A4.</li>
+              <li>Deixe as <strong>margens em 0</strong>, salve e imprima de novo.</li>
+            </ol>
+          </div>
+          <p className="text-xs">
+            Sua bobina é de <strong>58&nbsp;mm</strong> (mais estreita) em vez de 80&nbsp;mm? Me avise o
+            modelo da impressora que eu ajusto o tamanho da comanda para 58&nbsp;mm.
+          </p>
+        </div>
+      </details>
+
       {/* Setup — prominent when not connected, collapsible when connected */}
       {agent?.online ? (
         <details className="rounded-2xl border border-line bg-paper shadow-sm">
