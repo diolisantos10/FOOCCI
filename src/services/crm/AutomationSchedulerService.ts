@@ -48,29 +48,19 @@ export class AutomationSchedulerService {
       where: { restaurantId, isEnabled: true },
     });
 
-    const results: AutomationRunResult[] = [];
-    const errors: string[] = [];
-    let totalSent = 0;
-    let totalFailed = 0;
-
-    for (const automation of automations) {
-      try {
-        const result = await AutomationSchedulerService.runSingleAutomation(
-          restaurantId,
-          automation,
-          dryRun
-        );
-        results.push(result);
-        totalSent += result.messagesSent;
-        totalFailed += result.messagesFailed;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Erro desconhecido";
-        errors.push(`[${automation.trigger}] ${msg}`);
-        console.error(`[AutomationScheduler] ${automation.trigger} failed:`, err);
-      }
+    // RETIRED: the legacy automation engine (birthday / post-order / reactivation)
+    // is replaced by the ready-made campaigns in the Campanhas tab, which run through
+    // the safe recurring runner + global budget. This engine no longer sends — it
+    // only reports what WOULD have run, so nothing double-sends. Any still-enabled
+    // legacy automation should be turned on as its ready-made equivalent instead.
+    if (automations.length > 0) {
+      console.warn(
+        `[AutomationScheduler] RETIRED engine — skipped ${automations.length} legacy automation(s) ` +
+        `for restaurant ${restaurantId} (${automations.map((a) => a.trigger).join(", ")}). ` +
+        `Use the ready-made campaigns instead.`,
+      );
     }
-
-    return { restaurantId, automationsRun: automations.length, totalSent, totalFailed, results, errors };
+    return { restaurantId, automationsRun: 0, totalSent: 0, totalFailed: 0, results: [], errors: [] };
   }
 
   /**
