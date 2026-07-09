@@ -86,6 +86,7 @@ export interface SendResult {
 
 const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "clientes-quentes":   "QUENTE",
+  "quente-esfriando":   "QUENTE_ESFRIANDO",
   "recuperar-frios":    "FRIO",
   "reativar-mornos":    "MORNO",
   "segunda-compra":     "PRIMEIRO_PEDIDO",
@@ -196,6 +197,27 @@ export async function resolveAudience(
         orderBy: { totalSpend: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
+
+    case "QUENTE_ESFRIANDO": {
+      // Proactive rescue: still QUENTE, but in the last ~week of the hot window —
+      // ordered between (hotMaxDays - COOLING) and hotMaxDays days ago, about to
+      // turn MORNO. Catch them before they drop a level.
+      const COOLING_WINDOW_DAYS = 7;
+      const coolingCutoff = new Date(
+        now.getTime() - Math.max(1, segCfg.hotMaxDays - COOLING_WINDOW_DAYS) * 86_400_000,
+      );
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          OR: [
+            { lastOrderAt:         { gte: cutoffs.hotCutoff, lte: coolingCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { gte: cutoffs.hotCutoff, lte: coolingCutoff } },
+          ],
+        },
+        orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+    }
 
     case "VIP":
       return serialize(await prisma.customer.findMany({

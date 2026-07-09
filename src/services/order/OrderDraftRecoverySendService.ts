@@ -42,6 +42,7 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
+import { parseReadyMadeConfig } from "@/services/crm/ReadyMadeCampaignService";
 import { ConversationStatus } from "@prisma/client";
 
 function maskPhone(phone: string): string {
@@ -226,6 +227,19 @@ export class OrderDraftRecoverySendService {
       };
     }
 
+    // ── Step 1b: honor the per-restaurant cart-recovery on/off switch ────────
+    // Cart recovery is a ready-made campaign; the owner can turn it off in the
+    // Campanhas tab. Default ON (readyMadeConfig absent → enabled) so existing
+    // restaurants keep the current behavior.
+    const cartDisabled = new Set(
+      (await prisma.restaurantCRMProfile.findMany({
+        where:  { restaurantId: { in: [...new Set(candidates.map((d) => d.restaurantId))] } },
+        select: { restaurantId: true, readyMadeConfig: true },
+      }))
+        .filter((p) => !parseReadyMadeConfig(p.readyMadeConfig).cartRecoveryEnabled)
+        .map((p) => p.restaurantId),
+    );
+
     // ── Step 2: batch-fetch customers who already got a recovery in last 24h ─
     // Check via drafts that have lastRecoveryAt set recently — avoids adding
     // a field to the Customer model.
@@ -281,6 +295,11 @@ export class OrderDraftRecoverySendService {
     for (const draft of candidates) {
       const customer = draft.customer;
       const key      = `${draft.restaurantId}:${draft.customerId}`;
+
+      // Cart recovery turned off for this restaurant (ready-made campaign off).
+      if (cartDisabled.has(draft.restaurantId)) {
+        continue;
+      }
 
       // Rule 4: real phone required (no guest identifiers)
       if (!customer.phone || isGuestIdentifier(customer.phone)) {

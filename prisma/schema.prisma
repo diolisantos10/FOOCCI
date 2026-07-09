@@ -1960,6 +1960,7 @@ model RestaurantCRMProfile {
   profileVersion       Int            @default(0) // bumped each time weights are recomputed
   whatsAppSafetyConfig Json? // CRMWhatsAppSafetyConfig — global sending safety rules
   segmentConfig        Json? // SegmentConfig — relationship segment day thresholds
+  readyMadeConfig      Json? // ReadyMadeConfig — on/off for non-campaign ready-made engines (cart recovery)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
