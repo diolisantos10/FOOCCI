@@ -1608,7 +1608,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
   // localStorage mirror is just the instant fallback before the API responds.
   const [soundEnabled, setSoundEnabled] = useState(() => readSoundPref(SOUND_PREF_KEY, true));
-  const soundVolumeRef = useRef(120);
+  const soundVolumeRef = useRef(100);
   const soundThemeRef = useRef<string>("DEFAULT");
   const repeatNewOrderRef = useRef(false);
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -1683,7 +1683,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       isRepeatEnabled: () => repeatNewOrderRef.current || soundThemeRef.current === "URGENT",
       assetPath:       ALERT_WAV,
       intervalMs:      10_000,   // repeat every 10 s (8–12 s window)
-      maxDurationMs:   180_000,  // safety cap: stop after 3 min
+      maxDurationMs:   0,        // no cap: ring until the order is accepted/rejected or the sound is turned off
       onDiagnostics: (d) => {
         try {
           localStorage.setItem(ORDER_ALERT_DIAG_KEY, JSON.stringify({ ...d, updatedAt: new Date().toISOString() }));

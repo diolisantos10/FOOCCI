@@ -139,6 +139,21 @@ describe("OrderAlertController", () => {
     expect(play).toHaveBeenCalledTimes(3);           // stays stopped
   });
 
+  it("maxDurationMs 0 — never stops on time (rings until handled)", async () => {
+    const { controller, play, getDiag } = makeController({ maxDurationMs: 0 });
+    controller.sync(["o1"]);                          // immediate (1)
+    // Well past the old 3-minute cap — the loop must keep firing.
+    await vi.advanceTimersByTimeAsync(INTERVAL * 60);  // 10 min of repeats
+    expect(play.mock.calls.length).toBeGreaterThan(30);
+    expect(getDiag()?.loopActive).toBe(true);
+    expect(getDiag()?.lastStopReason).not.toBe("MAX_DURATION");
+
+    controller.resolve("o1", "ACCEPTED");             // only an explicit action stops it
+    expect(getDiag()?.loopActive).toBe(false);
+    expect(getDiag()?.lastStopReason).toBe("ACCEPTED");
+    controller.dispose();
+  });
+
   it("does not overlap audio while a previous play is still in flight", async () => {
     const play = vi.fn(() => new Promise<void>(() => { /* never resolves */ }));
     const { controller } = makeController({ play });

@@ -53,7 +53,7 @@ type ConvStatus =
 
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT" | "INSTAGRAM_COMMENT";
 
-type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED" | "LOCKED";
+type StatusFilter  = "ALL" | "AI_OFF" | "WAITING" | "STAFF" | "CRM" | "RESOLVED";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
 interface ActiveOrderItem {
@@ -172,14 +172,12 @@ const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
-  { id: "ALL",         label: "Todas"         },
-  { id: "AI_ON",       label: "IA ativa"      },
-  { id: "AI_OFF",      label: "Humano"        },
-  { id: "WAITING",     label: "Aguardando"    },
-  { id: "RESOLVED",    label: "Resolvidas"    },
-  { id: "LOCKED",      label: "IA bloqueada"  },
-  { id: "CRM_SENT",    label: "CRM enviado"   },
-  { id: "CRM_REPLIED", label: "Resposta CRM"  },
+  { id: "ALL",         label: "Todas"      },
+  { id: "AI_OFF",      label: "Humano"     },
+  { id: "WAITING",     label: "Aguardando" },
+  { id: "STAFF",       label: "Staff"      },
+  { id: "CRM",         label: "CRM"        },
+  { id: "RESOLVED",    label: "Resolvidas" },
 ];
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
@@ -231,10 +229,14 @@ function convPriorityLevel(c: ConvSummary): PriorityLevel {
 type HandlerBadge = { label: string; cls: string };
 
 function getHandlerBadge(c: ConvSummary): HandlerBadge {
-  // Permanent Staff/Supplier lock takes precedence over every other state —
-  // it must never read as "IA ativa".
-  if (c.aiLocked)
-    return { label: "IA bloqueada", cls: "bg-[#F4F4F2] text-ink2" };
+  // Permanent non-customer classification (Staff/Fornecedor/…) takes precedence
+  // over every other state. The pill shows the classification itself (e.g.
+  // "Staff") — these conversations live in the Staff tab, out of the human queue.
+  if (c.aiLocked) {
+    const t = c.conversationType;
+    const label = t && t !== "CUSTOMER" ? CONV_TYPE_LABEL[t] : "Staff";
+    return { label, cls: "bg-[#F4F4F2] text-ink2" };
+  }
   if (c.status === "RESOLVED")
     return { label: "Resolvida",  cls: "bg-[#F4F4F2] text-muted" };
   if (c.status === "OPEN" && c.unreadCount > 0)
@@ -245,10 +247,11 @@ function getHandlerBadge(c: ConvSummary): HandlerBadge {
 }
 
 // Classification chip for non-customer conversations (Staff/Fornecedor/etc.).
-function getConvTypeBadge(c: ConvSummary): { label: string; cls: string } | null {
-  const t = c.conversationType;
-  if (!t || t === "CUSTOMER") return null;
-  return { label: CONV_TYPE_LABEL[t], cls: "bg-[#F4F4F2] text-ink2" };
+// The classification is now shown directly by the handler badge (getHandlerBadge)
+// for locked conversations, so this separate chip is suppressed to avoid a
+// duplicate pill. Kept as a no-op so existing call sites stay valid.
+function getConvTypeBadge(_c: ConvSummary): { label: string; cls: string } | null {
+  return null;
 }
 
 // CRM_CAMPAIGN and CRM_AUTOMATION are handled dynamically in getCrmBadge()
@@ -414,7 +417,7 @@ export function AtendimentoClient({
   const handoffAudioRef      = useRef<HTMLAudioElement | null>(null);
   const handoffControllerRef = useRef<AlertLoopController | null>(null);
   const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => readSoundPref(HANDOFF_SOUND_PREF_KEY, true));
-  const handoffVolumeRef = useRef(120);
+  const handoffVolumeRef = useRef(100);
   const repeatHandoffRef = useRef(true);
 
   const [leftWidth,     setLeftWidth]     = useState<number>(320);
@@ -427,12 +430,15 @@ export function AtendimentoClient({
     const params = new URLSearchParams({ limit: "100" });
     // Server-side status filter only for RESOLVED (reduces payload)
     if (statusFilter === "RESOLVED") params.set("status", "RESOLVED");
-    // CRM filters need server-side contextType filtering. CRM outbound-only
-    // conversations have lastMessageAt=null and are sorted/deduped to the bottom,
-    // so they fall outside the default loaded window — a purely client-side
-    // filter would find nothing. crm=1 returns CRM-origin conversations directly,
-    // independent of channel. The SENT vs REPLIED split stays client-side below.
-    if (statusFilter === "CRM_SENT" || statusFilter === "CRM_REPLIED") params.set("crm", "1");
+    // The unified CRM filter needs server-side contextType filtering. CRM
+    // outbound-only conversations have lastMessageAt=null and are sorted/deduped
+    // to the bottom, so they fall outside the default loaded window — a purely
+    // client-side filter would find nothing. crm=1 returns every CRM-origin
+    // conversation directly (sent or replied), independent of channel.
+    if (statusFilter === "CRM") params.set("crm", "1");
+    // The Staff tab filters server-side too, so classified conversations older
+    // than the default loaded window still appear.
+    if (statusFilter === "STAFF") params.set("staff", "1");
 
     try {
       // Use /api/chat/conversations: supports channel, all status values, aiEnabled
@@ -505,7 +511,7 @@ export function AtendimentoClient({
       isRepeatEnabled: () => repeatHandoffRef.current,
       assetPath:       HANDOFF_ALERT_ASSET,
       intervalMs:      9_000,    // repeat every 9 s (8–10 s window)
-      maxDurationMs:   300_000,  // backstop: stop a single alarm after 5 min
+      maxDurationMs:   0,        // no cap: ring until the operator sees it or turns the sound off
       onDiagnostics: (d) => {
         try {
           if (d.lastResult === "success" && d.lastAttemptAt) {
@@ -683,7 +689,9 @@ export function AtendimentoClient({
   // Count for the "Humano" filter chip — all human-handled conversations
   // (pending + already assumed). The pending-only alarm queue is pendingHumanIds.
   const humanHandoffCount = useMemo(
-    () => conversations.filter((c) => c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU").length,
+    () => conversations.filter(
+      (c) => (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU") && !c.aiLocked,
+    ).length,
     [conversations],
   );
 
@@ -710,35 +718,31 @@ export function AtendimentoClient({
     const isCrmOrigin = (c: ConvSummary) => c.crmSent === true;
 
     // Status filter (client-side for non-RESOLVED)
-    if (statusFilter === "CRM_SENT") {
-      // "CRM enviado" = EVERY conversation that received a CRM send, regardless of
-      // whether the customer ever replied. CRM sends reuse a customer's existing
-      // conversation, so requiring "no reply" hid every send to anyone who had
-      // ever messaged before — which made the tab look empty for established
-      // bases. The replied ones are still available under "Resposta CRM" below.
+    if (statusFilter === "CRM") {
+      // Unified CRM: every conversation touched by a CRM send — whether the
+      // customer replied or not. One tab for everyone impacted by the CRM.
       items = items.filter((c) => isCrmOrigin(c));
-    } else if (statusFilter === "CRM_REPLIED") {
-      // Show only CRM conversations where customer replied.
-      items = items.filter((c) => isCrmOrigin(c) && convHasCustomerReply(c));
-    } else if (statusFilter === "LOCKED") {
-      // Show only permanently AI-locked (staff/supplier/non-customer) conversations.
+    } else if (statusFilter === "STAFF") {
+      // Non-customer classifications (Staff/Fornecedor/Parceiro/Interno/…) are
+      // permanently AI-locked. They live here, OUT of the human queue, and only
+      // leave when the owner reclassifies them back to "Cliente".
       items = items.filter((c) => c.aiLocked === true);
     } else if (statusFilter !== "RESOLVED") {
-      // Default "Todas": hide CRM outbound-only — they don't need human attention.
+      // "Todas": hide CRM outbound-only — they don't need human attention.
       // Conversations where the customer replied (hasCustomerReplied=true OR any
       // loaded INBOUND message) remain visible even if the latest msg is outbound.
       if (statusFilter === "ALL") {
         items = items.filter((c) => !isCrmOrigin(c) || convHasCustomerReply(c));
       }
-      if (statusFilter === "AI_ON") {
-        // Locked conversations are never "IA ativa".
-        items = items.filter((c) => c.aiEnabled && !c.aiLocked && c.status !== "RESOLVED");
-      }
       if (statusFilter === "AI_OFF") {
-        items = items.filter((c) => !c.aiEnabled && c.status !== "RESOLVED");
+        // "Humano" = temporary human takeover only. Staff/locked are excluded so
+        // a classified conversation never bounces back into the human queue —
+        // it has its own "Staff" tab.
+        items = items.filter((c) => !c.aiEnabled && !c.aiLocked && c.status !== "RESOLVED");
       }
       if (statusFilter === "WAITING") {
-        items = items.filter((c) => c.unreadCount > 0 && c.status !== "RESOLVED");
+        // Waiting for a human — staff/locked never raise a human-attention alert.
+        items = items.filter((c) => c.unreadCount > 0 && !c.aiLocked && c.status !== "RESOLVED");
       }
     }
 
@@ -1128,8 +1132,10 @@ export function AtendimentoClient({
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted">
               <span className="text-2xl">💬</span>
               <p>
-                {statusFilter === "CRM_SENT" || statusFilter === "CRM_REPLIED"
+                {statusFilter === "CRM"
                   ? "Nenhuma mensagem de CRM encontrada neste filtro."
+                  : statusFilter === "STAFF"
+                  ? "Nenhuma conversa classificada como staff."
                   : "Nenhuma conversa encontrada."}
               </p>
             </div>

@@ -37,6 +37,10 @@ export interface ConversationListFilters {
   search?:  string | null;
   /** Any truthy value restricts results to CRM-origin conversations. */
   crm?:     string | null;
+  /** Any truthy value restricts results to non-customer (Staff/Fornecedor/…)
+   *  conversations — those permanently locked out of the AI. Server-side so the
+   *  Staff tab still finds classified conversations older than the loaded window. */
+  staff?:   string | null;
 }
 
 export function buildConversationWhere(
@@ -45,10 +49,17 @@ export function buildConversationWhere(
   /** Customers with ≥1 CRM send log (CampaignExecution/CRMActionLog), from the route. */
   crmRecipientCustomerIds?: string[],
 ): Prisma.ConversationWhereInput {
-  const { status, channel, search, crm } = filters;
+  const { status, channel, search, crm, staff } = filters;
 
   // Composable sub-filters live in AND so multiple OR groups never clash.
   const and: Prisma.ConversationWhereInput[] = [];
+
+  // Staff / non-customer tab: permanently AI-locked conversations. aiLocked is
+  // set only by a non-customer classification and cleared only by a manual
+  // reclassification back to "Cliente", so it is the canonical Staff-bucket flag.
+  if (staff) {
+    and.push({ aiLocked: true });
+  }
 
   if (crm) {
     const crmOr: Prisma.ConversationWhereInput[] = [

@@ -48,7 +48,9 @@ export interface AlertLoopControllerOptions {
   assetPath: string;
   /** Repeat interval in ms. Default 10_000. */
   intervalMs?: number;
-  /** Max time the loop may run before auto-stopping. Default 180_000 (3 min). */
+  /** Max time the loop may run before auto-stopping. Default 180_000 (3 min).
+   *  Pass 0 (or a negative number) to DISABLE the cap — the alert then keeps
+   *  ringing until the operator handles it or turns the sound off. */
   maxDurationMs?: number;
   /** Called whenever diagnostics change (attempt, result, stop). */
   onDiagnostics?: (d: AlertLoopDiagnostics) => void;
@@ -185,7 +187,10 @@ export class AlertLoopController {
   }
 
   private tick(): void {
-    if (this.loopStartedAt !== null &&
+    // A non-positive maxDurationMs disables the cap: the alarm rings until the
+    // operator handles the item (resolve) or turns the sound off (empty sync).
+    if (this.opts.maxDurationMs > 0 &&
+        this.loopStartedAt !== null &&
         this.opts.now() - this.loopStartedAt >= this.opts.maxDurationMs) {
       this.stop("MAX_DURATION");
       return;

@@ -113,6 +113,10 @@ export async function GET(req: NextRequest) {
     // OR whose customer has any CRM send log (CampaignExecution / CRMActionLog).
     // Channel-independent so it works without also selecting WhatsApp.
     const crm     = sp.get("crm")     ?? undefined;
+    // staff=1 restricts to non-customer (Staff/Fornecedor/…) conversations —
+    // permanently AI-locked — so the "Staff" tab finds them even when older than
+    // the default loaded window.
+    const staff   = sp.get("staff")   ?? undefined;
     const page    = Math.max(1, parseInt(sp.get("page")  ?? "1", 10));
     const limit   = Math.min(100, Math.max(1, parseInt(sp.get("limit") ?? "30", 10)));
     const skip    = (page - 1) * limit;
@@ -120,7 +124,7 @@ export async function GET(req: NextRequest) {
     // Canonical "has CRM sent" recipients — only needed when the CRM filter is active.
     const crmRecipientCustomerIds = crm ? await getCrmSentCustomerIds(ctx.restaurantId) : undefined;
 
-    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm }, crmRecipientCustomerIds);
+    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm, staff }, crmRecipientCustomerIds);
 
     // Fetch more rows than requested so deduplication leaves enough results.
     const fetchLimit = Math.min(limit * 4, 400);
