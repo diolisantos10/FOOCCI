@@ -60,7 +60,11 @@ export function inferCampaignPriority(campaign: {
   if (tid.includes("avaliacao") || seg.includes("avaliacao") || seg.includes("pedido-avaliacao") || obj === "POST_ORDER" || obj === "REVIEW") {
     return "POST_ORDER_REVIEW";
   }
-  if (seg.includes("frio") || seg.includes("morno") || seg.includes("sumido") || seg.includes("reativ") || obj === "REACTIVATION") {
+  if (
+    seg.includes("frio") || seg.includes("morno") || seg.includes("sumido") ||
+    seg.includes("reativ") || seg.includes("esfri") || tid.includes("esfri") ||
+    obj === "REACTIVATION"
+  ) {
     return "REACTIVATION_COLD";
   }
   return "GENERIC_PROMO";
