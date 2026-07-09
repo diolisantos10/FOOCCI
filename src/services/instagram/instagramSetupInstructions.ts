@@ -37,6 +37,17 @@ export const INSTAGRAM_REQUIRED_ENV = [
 /** Recommended (signature is only enforced when INSTAGRAM_APP_SECRET is set). */
 export const INSTAGRAM_RECOMMENDED_ENV = ["INSTAGRAM_APP_SECRET"] as const;
 
+/** Required for the DIRECT "Entrar com Instagram" login (Instagram Business Login — no Facebook). */
+export const INSTAGRAM_LOGIN_REQUIRED_ENV = [
+  "INSTAGRAM_APP_ID",      // Instagram app id from "Instagram → API setup with Instagram login"
+  "INSTAGRAM_APP_SECRET",  // Instagram app secret from the same page (falls back to META_APP_SECRET)
+  "FOOCCI_BASE_URL",       // or APP_URL
+  "ENCRYPTION_KEY",
+] as const;
+
+/** OAuth redirect the direct login uses — register it in the app's Instagram-login settings. */
+export const INSTAGRAM_LOGIN_REDIRECT_PATH = "/api/integrations/instagram/login/callback";
+
 export function instagramWebhookUrl(baseUrl: string = INSTAGRAM_DEFAULT_BASE_URL): string {
   return `${baseUrl.replace(/\/$/, "")}${INSTAGRAM_WEBHOOK_PATH}`;
 }
@@ -83,5 +94,17 @@ export function buildInstagramSetupInstructions(baseUrl: string = INSTAGRAM_DEFA
     "C. No Foocci: Integrações → Instagram → Conectar com Facebook (login que administra a Página do restaurante).",
     "D. Testar: DM + comentário a partir da conta pessoal testadora → deve aparecer na Central.",
     "Quando o App Review for aprovado e o app publicado, passa a valer para TODOS os clientes automaticamente.",
+    "",
+    "6) LOGIN DIRETO com Instagram (sem Facebook) — 'Entrar com Instagram':",
+    "Para clientes que NÃO têm Facebook/Página. Usa 'Instagram API with Instagram Login'.",
+    "A. No painel da Meta: produto Instagram → 'API setup with Instagram login'.",
+    "B. Variáveis no Railway:",
+    "   INSTAGRAM_APP_ID=        (o 'Instagram app ID' dessa página — DIFERENTE do App ID do Facebook)",
+    "   INSTAGRAM_APP_SECRET=    (o 'Instagram app secret' dessa página; se vazio, usa META_APP_SECRET)",
+    "C. Em 'Business login settings' → OAuth redirect URIs, adicionar:",
+    `   ${INSTAGRAM_DEFAULT_BASE_URL}${INSTAGRAM_LOGIN_REDIRECT_PATH}`,
+    "D. Requisito do cliente: conta Instagram Profissional (Comercial ou Criador) — grátis, sem Facebook.",
+    "E. Permissões (App Review): instagram_business_basic, instagram_business_manage_messages, instagram_business_manage_comments.",
+    "   Antes da aprovação, funciona só para contas com papel de Testador (mesmo esquema do item 5).",
   ].join("\n");
 }

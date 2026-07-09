@@ -36,6 +36,8 @@ interface ConfigView {
   instagramUsername: string | null;
   metaConnectAvailable: boolean;
   missingEnv: string[];
+  instagramLoginAvailable: boolean;
+  instagramLoginMissingEnv: string[];
   webhookUrl: string | null;
   lastWebhookAt: string | null;
   lastError: string | null;
@@ -70,7 +72,7 @@ function randomVerifyToken(): string {
   return "foocci-" + Array.from(a).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function isConnected(v: ConfigView | null): boolean {
-  return !!v && (v.connectedVia === "oauth" || v.tokenConfigured);
+  return !!v && (v.connectedVia === "oauth" || v.connectedVia === "instagram_login" || v.tokenConfigured);
 }
 
 const META_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> = {
@@ -80,6 +82,15 @@ const META_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> 
   no_pages: { kind: "err", text: "Nenhuma Página do Facebook foi encontrada na sua conta." },
   forbidden: { kind: "err", text: "Apenas o proprietário ou gerente pode conectar." },
   select_page: { kind: "info", text: "Conexão encontrada. Escolha a Página do Facebook conectada ao Instagram do restaurante." },
+};
+
+// Flash messages for the direct "Entrar com Instagram" flow (?ig=...).
+const IG_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> = {
+  connected: { kind: "ok", text: "Instagram conectado! As mensagens e os comentários vão aparecer na Central." },
+  error: { kind: "err", text: "Não foi possível concluir o login com o Instagram. Tente novamente." },
+  blocked_env: { kind: "err", text: "Login com Instagram indisponível no momento. Fale com o suporte Foocci." },
+  blocked_base_url: { kind: "err", text: "Login com Instagram indisponível no momento. Fale com o suporte Foocci." },
+  forbidden: { kind: "err", text: "Apenas o proprietário ou gerente pode conectar." },
 };
 
 export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
@@ -124,15 +135,19 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Read ?meta=... once on mount.
+  // Read ?meta=... / ?ig=... once on mount.
   useEffect(() => {
-    const flash = new URLSearchParams(window.location.search).get("meta");
-    if (!flash) return;
-    if (META_FLASH[flash]) setMsg(META_FLASH[flash]);
-    if (flash === "select_page") {
-      setFlow("select_page");
-      fetch("/api/integrations/meta/oauth/candidates").then((r) => r.json()).then((j) => setCandidates(j?.data?.candidates ?? [])).catch(() => {});
+    const q = new URLSearchParams(window.location.search);
+    const flash = q.get("meta");
+    if (flash) {
+      if (META_FLASH[flash]) setMsg(META_FLASH[flash]);
+      if (flash === "select_page") {
+        setFlow("select_page");
+        fetch("/api/integrations/meta/oauth/candidates").then((r) => r.json()).then((j) => setCandidates(j?.data?.candidates ?? [])).catch(() => {});
+      }
     }
+    const ig = q.get("ig");
+    if (ig && IG_FLASH[ig]) setMsg(IG_FLASH[ig]);
   }, []);
 
   async function save(patch: Record<string, unknown>, okText = "Configuração salva com segurança.") {
@@ -223,25 +238,44 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
         </section>
       )}
 
-      {/* ── Não conectado: Conectar com Facebook (caminho principal) ── */}
+      {/* ── Não conectado: Entrar com Instagram (principal) + Facebook (alternativa) ── */}
       {flow === "normal" && !connected && (
         <section className="rounded-xl border border-line2 bg-paper p-6 text-center">
-          <p className="text-sm text-ink2">Conecte sua conta da Meta para receber o Instagram Direct na Central.</p>
-          <a href="/api/integrations/meta/oauth/start"
-            className="mt-3 inline-block rounded-md bg-[#1877F2] px-5 py-2.5 font-semibold text-white hover:bg-[#166fe0]">
-            Conectar com Facebook
+          <p className="text-sm text-ink2">Conecte sua conta para receber o Instagram Direct e os comentários na Central.</p>
+
+          {/* Principal: login direto no Instagram — sem Facebook */}
+          <a href="/api/integrations/instagram/login/start"
+            className="mt-4 inline-block rounded-md bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] px-5 py-2.5 font-semibold text-white hover:opacity-90">
+            Entrar com Instagram
           </a>
-          <p className="mt-2 text-xs text-muted">Você será direcionado para a Meta para autorizar o Foocci.</p>
-          {view && !view.metaConnectAvailable && (
+          <p className="mx-auto mt-2 max-w-md text-xs text-muted">
+            Login direto na sua conta do Instagram — <b>não precisa de Facebook</b>. Sua conta precisa ser
+            Profissional (Comercial ou Criador), o que é grátis nas configurações do Instagram.
+          </p>
+          {view && !view.instagramLoginAvailable && (
             <div className="mx-auto mt-3 max-w-md rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">
-              <p>Conexão automática indisponível no momento. Fale com o suporte Foocci.</p>
+              <p>Login com Instagram indisponível no momento. Fale com o suporte Foocci.</p>
               {supportMode && (
                 <ul className="mt-1 list-disc pl-4 font-mono">
-                  {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
+                  {(view.instagramLoginMissingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
                 </ul>
               )}
             </div>
           )}
+
+          {/* Alternativa: Conectar com Facebook (para quem já tem Página ligada) */}
+          <div className="mt-5 border-t border-line pt-4">
+            <a href="/api/integrations/meta/oauth/start"
+              className="inline-block rounded-md border border-line2 bg-paper px-4 py-2 text-sm font-semibold text-ink2 hover:bg-canvas">
+              Conectar com Facebook
+            </a>
+            <p className="mt-1 text-xs text-muted">Alternativa: se seu Instagram já está ligado a uma Página do Facebook.</p>
+            {view && !view.metaConnectAvailable && supportMode && (
+              <ul className="mx-auto mt-2 max-w-md list-disc pl-4 text-left font-mono text-xs text-amber-700">
+                {(view.missingEnv ?? []).map((m) => <li key={m}>{m}</li>)}
+              </ul>
+            )}
+          </div>
         </section>
       )}
 
@@ -253,7 +287,11 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">{view?.paused ? "Pausado" : "Ativo"}</span>
           </div>
           <div className="mt-2 grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-2">
-            <p>Página: <b>{view?.facebookPageName ?? view?.facebookPageId ?? "—"}</b></p>
+            {view?.connectedVia === "instagram_login" ? (
+              <p>Conexão: <b>Login com Instagram</b></p>
+            ) : (
+              <p>Página: <b>{view?.facebookPageName ?? view?.facebookPageId ?? "—"}</b></p>
+            )}
             <p>Instagram: <b>{view?.instagramUsername ? "@" + view.instagramUsername : (view?.instagramBusinessAccountId ?? "—")}</b></p>
             <p>Modo: <b>{MODE_LABEL[view?.mode ?? "RECEIVE_ONLY"]}</b></p>
             <p>Último Direct recebido: <b>{fmtDate(view?.lastWebhookAt ?? null)}</b></p>

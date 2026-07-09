@@ -13,6 +13,7 @@ import { z } from "zod";
 import { getTenantContext } from "@/lib/tenant";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { getMetaEnvStatus } from "@/services/instagram/metaOAuth";
+import { getInstagramLoginEnvStatus } from "@/services/instagram/instagramLoginOAuth";
 import {
   getInstagramConfig,
   upsertInstagramConfig,
@@ -80,6 +81,9 @@ export async function GET(req: NextRequest) {
       instagramUsername: view?.instagramUsername ?? null,
       metaConnectAvailable: getMetaEnvStatus(req.nextUrl.origin).oauthReady,
       missingEnv: getMetaEnvStatus(req.nextUrl.origin).missing,
+      // Direct "Entrar com Instagram" (Instagram Business Login — no Facebook).
+      instagramLoginAvailable: getInstagramLoginEnvStatus(req.nextUrl.origin).ready,
+      instagramLoginMissingEnv: getInstagramLoginEnvStatus(req.nextUrl.origin).missing,
       webhookUrl: wbUrl,
       lastWebhookAt: view?.lastWebhookAt ?? null,
       lastError: view?.lastError ?? null,

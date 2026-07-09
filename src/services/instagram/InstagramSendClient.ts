@@ -12,7 +12,10 @@
 
 import type { InstagramSendResult } from "./types";
 
-const GRAPH_BASE = "https://graph.facebook.com/v21.0";
+/** Facebook-Login (Page access token) connections send via the Facebook Graph. */
+export const GRAPH_FACEBOOK_BASE = "https://graph.facebook.com/v21.0";
+/** Instagram-Login (IG user access token) connections send via the Instagram Graph. */
+export const GRAPH_INSTAGRAM_BASE = "https://graph.instagram.com/v21.0";
 
 function isTestEnv(): boolean {
   return process.env.NODE_ENV === "test" || process.env.VITEST === "true" || !!process.env.VITEST_WORKER_ID;
@@ -22,12 +25,15 @@ export interface SendTextInput {
   recipientId: string; // IGSID
   text: string;
   pageAccessToken: string | null;
+  /** Graph base — Instagram-Login connections pass GRAPH_INSTAGRAM_BASE. Defaults to Facebook. */
+  graphBase?: string;
   /** Force a dry-run (no HTTP) regardless of env. */
   dryRun?: boolean;
 }
 
 export async function sendInstagramText(input: SendTextInput): Promise<InstagramSendResult> {
   const dryRun = input.dryRun === true || isTestEnv();
+  const base = input.graphBase ?? GRAPH_FACEBOOK_BASE;
 
   if (!input.pageAccessToken) {
     return { ok: false, sent: false, dryRun: true, externalMessageId: null,
@@ -39,7 +45,7 @@ export async function sendInstagramText(input: SendTextInput): Promise<Instagram
   }
 
   try {
-    const res = await fetch(`${GRAPH_BASE}/me/messages?access_token=${encodeURIComponent(input.pageAccessToken)}`, {
+    const res = await fetch(`${base}/me/messages?access_token=${encodeURIComponent(input.pageAccessToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipient: { id: input.recipientId }, message: { text: input.text } }),
@@ -62,6 +68,8 @@ export interface ReplyCommentInput {
   commentId: string; // the IG comment id being replied to
   text: string;
   pageAccessToken: string | null;
+  /** Graph base — Instagram-Login connections pass GRAPH_INSTAGRAM_BASE. Defaults to Facebook. */
+  graphBase?: string;
   /** Force a dry-run (no HTTP) regardless of env. */
   dryRun?: boolean;
 }
@@ -74,6 +82,7 @@ export interface ReplyCommentInput {
  */
 export async function replyToInstagramComment(input: ReplyCommentInput): Promise<InstagramSendResult> {
   const dryRun = input.dryRun === true || isTestEnv();
+  const base = input.graphBase ?? GRAPH_FACEBOOK_BASE;
 
   if (!input.pageAccessToken) {
     return { ok: false, sent: false, dryRun: true, externalMessageId: null,
@@ -85,7 +94,7 @@ export async function replyToInstagramComment(input: ReplyCommentInput): Promise
   }
 
   try {
-    const res = await fetch(`${GRAPH_BASE}/${encodeURIComponent(input.commentId)}/replies?access_token=${encodeURIComponent(input.pageAccessToken)}`, {
+    const res = await fetch(`${base}/${encodeURIComponent(input.commentId)}/replies?access_token=${encodeURIComponent(input.pageAccessToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: input.text }),

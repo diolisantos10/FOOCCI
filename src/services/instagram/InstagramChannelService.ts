@@ -16,7 +16,7 @@ import {
   type InstagramConfigRow,
 } from "./InstagramConfigService";
 import { normalizeInstagramPayload, normalizeInstagramComments } from "./InstagramWebhookParser";
-import { sendInstagramText, replyToInstagramComment } from "./InstagramSendClient";
+import { sendInstagramText, replyToInstagramComment, GRAPH_INSTAGRAM_BASE } from "./InstagramSendClient";
 import type { NormalizedInstagramMessage, NormalizedInstagramComment, InstagramSendResult } from "./types";
 
 const IG: Channel = "INSTAGRAM_DIRECT";
@@ -371,7 +371,9 @@ export async function sendManualReply(
   }
 
   const token = decryptPageToken(config);
-  const send = await sendInstagramText({ recipientId: externalUserId, text, pageAccessToken: token, dryRun: opts.dryRun });
+  // Instagram-Login connections send via the IG Graph host; Facebook-Login uses the default.
+  const graphBase = config.metadata?.connectedVia === "instagram_login" ? GRAPH_INSTAGRAM_BASE : undefined;
+  const send = await sendInstagramText({ recipientId: externalUserId, text, pageAccessToken: token, graphBase, dryRun: opts.dryRun });
 
   // Persist outbound: stored as failed/pending when not really sent (central pattern).
   const now = new Date();
@@ -436,7 +438,9 @@ export async function sendCommentReply(
   }
 
   const token = decryptPageToken(config);
-  const send = await replyToInstagramComment({ commentId, text, pageAccessToken: token, dryRun: opts.dryRun });
+  // Instagram-Login connections reply via the IG Graph host; Facebook-Login uses the default.
+  const graphBase = config.metadata?.connectedVia === "instagram_login" ? GRAPH_INSTAGRAM_BASE : undefined;
+  const send = await replyToInstagramComment({ commentId, text, pageAccessToken: token, graphBase, dryRun: opts.dryRun });
 
   const now = new Date();
   const message = await prisma.message.create({
