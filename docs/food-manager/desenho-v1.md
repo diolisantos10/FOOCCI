@@ -37,9 +37,10 @@ pela mesma porta que os demais.
 
 Consequências práticas:
 
-1. **Repositório e banco próprios.** O Food Manager nasce em um repositório separado
-   (ex.: `diolisantos10/food-manager`), com banco de dados próprio. Nada de acessar o
-   banco do Vendas diretamente.
+1. **Separado em todas as plataformas (decisão do dono, 09/07/2026).** Repositório
+   GitHub próprio (`diolisantos10/food-manager`), projeto **Railway próprio** (deploy
+   independente) e **banco de dados próprio**. Nada de acessar o banco do Vendas
+   diretamente.
 2. **Integração por API + webhooks, nunca por acoplamento.** O Vendas envia pedido ao
    Food Manager exatamente como já envia ao Saipos hoje (`SaiposIntegrationService`):
    `POST /orders` autenticado + webhooks de status na volta. Esse contrato já validado
