@@ -32,6 +32,29 @@ export interface ReadyMadeConfig {
 
 const ACTIVE_STATUSES = ["ACTIVE", "SCHEDULED"];
 
+/**
+ * Ready-made campaigns replace the legacy CRMAutomation engine. When one is turned
+ * on, disable the overlapping legacy automation (if any) so a restaurant can never
+ * double-send the same relationship message from both engines. This is the safe
+ * migration path away from the hidden Automações runner.
+ */
+const LEGACY_AUTOMATION_FOR: Record<string, "BIRTHDAY" | "POST_ORDER" | "REACTIVATION"> = {
+  "aniversariantes":  "BIRTHDAY",
+  "pedido-avaliacao": "POST_ORDER",
+  "reativar-mornos":  "REACTIVATION",
+  "recuperar-frios":  "REACTIVATION",
+  "quente-esfriando": "REACTIVATION",
+};
+
+async function disableOverlappingLegacyAutomation(restaurantId: string, readyMadeId: string): Promise<void> {
+  const trigger = LEGACY_AUTOMATION_FOR[readyMadeId];
+  if (!trigger) return;
+  await prisma.cRMAutomation.updateMany({
+    where: { restaurantId, trigger: trigger as never, isEnabled: true },
+    data:  { isEnabled: false },
+  });
+}
+
 export interface ReadyMadeCampaignState {
   // Catalog (static)
   id:            string;
@@ -160,6 +183,9 @@ export class ReadyMadeCampaignService {
       await setConfig(restaurantId, { cartRecoveryEnabled: true });
       return { ok: true, campaignId: null };
     }
+
+    // Retire the overlapping legacy automation so both engines never fire together.
+    await disableOverlappingLegacyAutomation(restaurantId, rm.id);
 
     const payload = buildReadyMadeCampaignPayload(rm, overrides);
 

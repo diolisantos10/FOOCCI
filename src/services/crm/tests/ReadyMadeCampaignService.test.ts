@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const db = vi.hoisted(() => ({
   campaign: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   restaurantCRMProfile: { findUnique: vi.fn(), upsert: vi.fn() },
+  cRMAutomation: { updateMany: vi.fn() },
 }));
 const create = vi.hoisted(() => vi.fn(async () => ({ campaignId: "new-camp", totalAudience: 0, recipients: [] })));
 
@@ -18,6 +19,7 @@ beforeEach(() => {
   db.campaign.findFirst.mockResolvedValue(null);
   db.campaign.update.mockResolvedValue({});
   db.restaurantCRMProfile.upsert.mockResolvedValue({});
+  db.cRMAutomation.updateMany.mockResolvedValue({ count: 0 });
 });
 
 describe("parseReadyMadeConfig", () => {
@@ -97,6 +99,19 @@ describe("activate", () => {
   it("rejects an unknown id", async () => {
     const r = await ReadyMadeCampaignService.activate("r1", "inexistente");
     expect(r.ok).toBe(false);
+  });
+
+  it("disables the overlapping legacy automation to prevent double-send", async () => {
+    await ReadyMadeCampaignService.activate("r1", "aniversariantes");
+    expect(db.cRMAutomation.updateMany).toHaveBeenCalledOnce();
+    const call = db.cRMAutomation.updateMany.mock.calls[0]![0];
+    expect(call.where.trigger).toBe("BIRTHDAY");
+    expect(call.data.isEnabled).toBe(false);
+  });
+
+  it("cart recovery activation does not touch legacy automations", async () => {
+    await ReadyMadeCampaignService.activate("r1", "carrinho-abandonado");
+    expect(db.cRMAutomation.updateMany).not.toHaveBeenCalled();
   });
 });
 

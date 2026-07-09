@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
+import { ReadyMadeCampaignsSection } from "./ReadyMadeCampaignsSection";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
@@ -3586,9 +3587,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-ink">Campanhas de CRM</h2>
+          <h2 className="text-base font-bold text-ink">Campanhas</h2>
           <p className="mt-0.5 text-xs text-muted">
-            Envie agora, agende uma vez ou configure recorrência via WhatsApp.
+            Ligue uma campanha pronta ou crie a sua. Tudo via WhatsApp, com segurança de envio.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -3599,13 +3600,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Nova campanha
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
-          >
-            Novo modelo
+            Criar minha campanha
           </button>
         </div>
       </div>
@@ -3619,78 +3614,8 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         />
       )}
 
-      {/* ── Ações sugeridas ──────────────────────────────────────────────────── */}
-      <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted">
-          Templates de campanha
-        </h3>
-
-      {/* Action templates grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {visibleTemplates.map((tpl) => {
-          const rc  = READINESS_CONFIG[tpl.readiness];
-          const count = getAudienceCount(tpl.audienceKey);
-          const recommendedType = TEMPLATE_RECOMMENDED_TYPE[tpl.id] ?? "Única";
-          return (
-            <div
-              key={tpl.id}
-              className="flex flex-col rounded-2xl border border-line bg-paper p-4 shadow-sm hover:shadow-md transition-shadow"
-            >
-              {/* Icon + title + recommended type */}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">{tpl.emoji}</span>
-                  <p className="text-sm font-bold text-ink leading-tight">{tpl.title}</p>
-                </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[recommendedType]}`}>
-                  {recommendedType}
-                </span>
-              </div>
-
-              {/* Description */}
-              <p className="text-xs text-muted leading-relaxed flex-1 mb-3">{tpl.description}</p>
-
-              {/* Meta row */}
-              <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-semibold text-ink2">
-                  {tpl.targetLabel}
-                </span>
-                {count !== null && (
-                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">
-                    {count} clientes
-                  </span>
-                )}
-                <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${rc.bg} ${rc.text}`}>
-                  {rc.label}
-                </span>
-              </div>
-
-              {/* CTA */}
-              <button
-                onClick={() => setSelectedTemplate(tpl)}
-                className="w-full rounded-xl bg-ink py-2 text-xs font-bold text-white hover:bg-ink2 transition-colors"
-              >
-                Configurar campanha
-              </button>
-            </div>
-          );
-        })}
-      </div>{/* end templates grid */}
-
-      {ACTION_TEMPLATES.length > 6 && (
-        <div className="mt-3 text-center">
-          <button
-            onClick={() => setShowMoreTemplates((v) => !v)}
-            className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
-          >
-            {showMoreTemplates
-              ? "Ver menos modelos"
-              : `Ver mais modelos (${ACTION_TEMPLATES.length - 6} restantes)`}
-          </button>
-        </div>
-      )}
-
-      </div>{/* end Ações sugeridas section */}
+      {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
+      <ReadyMadeCampaignsSection />
 
       {/* ── Histórico de campanhas (collapsed by default) ────────────────────── */}
       {!loadingHistory && (
@@ -5959,9 +5884,6 @@ export function CRMClient({
       )}
       {tab === "conversoes" && (
         <ConversoesTab />
-      )}
-      {tab === "automacoes" && (
-        <AutomacoesTab />
       )}
       {tab === "customers" && (
         <CustomersTab
