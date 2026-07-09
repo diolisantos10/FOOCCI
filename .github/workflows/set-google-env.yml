@@ -4,15 +4,15 @@ name: Set Google OAuth env (one-off)
 # the deploy workflow already uses (RAILWAY_TOKEN / RAILWAY_PROJECT_ID GitHub
 # secrets). Values arrive as run inputs (never committed). Triggered on demand.
 
+# Reads the two Google credentials from GitHub Actions SECRETS (so the secret
+# never transits through any chat/API — GitHub's secret scanning blocks that by
+# design). Add these repo secrets once:
+#   GOOGLE_OAUTH_CLIENT_ID
+#   GOOGLE_OAUTH_CLIENT_SECRET
+# base_url is public and defaults to the canonical domain.
 on:
   workflow_dispatch:
     inputs:
-      client_id:
-        description: "GOOGLE_OAUTH_CLIENT_ID"
-        required: true
-      client_secret:
-        description: "GOOGLE_OAUTH_CLIENT_SECRET"
-        required: true
       base_url:
         description: "FOOCCI_BASE_URL"
         required: true
@@ -26,10 +26,16 @@ jobs:
     steps:
       - name: Validate required secrets
         run: |
-          if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
-            echo "::error::RAILWAY_TOKEN secret missing"; exit 1
+          MISSING=()
+          [ -z "${{ secrets.RAILWAY_TOKEN }}" ]              && MISSING+=("RAILWAY_TOKEN")
+          [ -z "${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}" ]     && MISSING+=("GOOGLE_OAUTH_CLIENT_ID")
+          [ -z "${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" ] && MISSING+=("GOOGLE_OAUTH_CLIENT_SECRET")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::Missing GitHub secrets: ${MISSING[*]}"
+            echo "  Add at: Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
           fi
-          echo "RAILWAY_TOKEN present."
+          echo "All required secrets present."
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
@@ -38,8 +44,8 @@ jobs:
         env:
           RAILWAY_TOKEN:      ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          CID:  ${{ inputs.client_id }}
-          CSEC: ${{ inputs.client_secret }}
+          CID:  ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          CSEC: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           BURL: ${{ inputs.base_url }}
         run: |
           echo "::add-mask::$CSEC"
