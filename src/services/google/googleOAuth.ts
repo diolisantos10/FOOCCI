@@ -19,7 +19,7 @@ import {
   GOOGLE_DATA_SCOPES, GOOGLE_OAUTH_STATE_TTL_MS,
 } from "./googleFlag";
 import {
-  getGoogleConfig, saveTokens, decryptRefreshToken, decryptAccessToken,
+  getGoogleConfig, saveTokens, decryptRefreshToken, decryptAccessToken, markRefreshRevoked,
 } from "./GoogleConfigService";
 import type { GoogleIntegrationConfig } from "@prisma/client";
 
@@ -148,8 +148,16 @@ async function refreshAccessToken(row: GoogleIntegrationConfig): Promise<string 
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
     });
-    const json = (await res.json().catch(() => ({}))) as GoogleTokenResponse;
-    if (!res.ok || !json.access_token) return null;
+    const json = (await res.json().catch(() => ({}))) as GoogleTokenResponse & { error?: string };
+    if (!res.ok || !json.access_token) {
+      // invalid_grant = refresh token revoked/expired → permanent. Flip to
+      // disconnected so the UI stops prompting reconnect against dead creds.
+      // Transient failures (5xx / network) keep the connection for a later retry.
+      if (json.error === "invalid_grant") {
+        await markRefreshRevoked(row.restaurantId).catch(() => {});
+      }
+      return null;
+    }
     await saveTokens(row.restaurantId, {
       accessToken:    json.access_token,
       tokenExpiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000) : null,

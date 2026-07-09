@@ -36,7 +36,7 @@ interface ReviewSummary {
   available: boolean;
   averageRating: number | null;
   totalReviewCount: number | null;
-  reviews: Array<{ reviewer: string; starRating: number | null; comment: string | null; createTime: string | null; reply: string | null }>;
+  reviews: Array<{ name: string | null; reviewer: string; starRating: number | null; comment: string | null; createTime: string | null; reply: string | null }>;
   reason?: string;
 }
 interface Ga4Snapshot {
@@ -445,14 +445,84 @@ function ReviewsBlock({ reviews }: { reviews: ReviewSummary }) {
       ) : (
         <div className="space-y-1.5">
           {reviews.reviews.slice(0, 8).map((r, i) => (
-            <div key={i} className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-ink2">{r.reviewer}</span>
-                {r.starRating != null && <span className="text-[11px] text-amber-500">{"★".repeat(r.starRating)}</span>}
-              </div>
-              {r.comment && <p className="mt-0.5 text-[11px] text-muted line-clamp-3">{r.comment}</p>}
-            </div>
+            <ReviewRow key={r.name ?? i} review={r} />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewRow({ review }: { review: ReviewSummary["reviews"][number] }) {
+  const [reply, setReply]   = useState<string | null>(review.reply);
+  const [open, setOpen]     = useState(false);
+  const [draft, setDraft]   = useState(review.reply ?? "");
+  const [busy, setBusy]     = useState(false);
+  const [err, setErr]       = useState<string | null>(null);
+  const canReply = !!review.name; // needs the review resource path
+
+  async function send() {
+    if (!review.name || !draft.trim()) return;
+    setBusy(true); setErr(null);
+    const { ok, error } = await api(
+      "/api/integrations/google/business/reviews", "POST",
+      { reviewName: review.name, comment: draft.trim() },
+    );
+    setBusy(false);
+    if (ok) { setReply(draft.trim()); setOpen(false); }
+    else setErr(error ?? "Não foi possível enviar a resposta.");
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-ink2">{review.reviewer}</span>
+        {review.starRating != null && <span className="text-[11px] text-amber-500">{"★".repeat(review.starRating)}</span>}
+      </div>
+      {review.comment && <p className="mt-0.5 text-[11px] text-muted line-clamp-3">{review.comment}</p>}
+
+      {reply && !open && (
+        <div className="mt-1.5 rounded-md border-l-2 border-brand-300 bg-white px-2 py-1">
+          <p className="text-[10px] font-semibold text-brand-600">Sua resposta</p>
+          <p className="text-[11px] text-ink2">{reply}</p>
+        </div>
+      )}
+
+      {canReply && !open && (
+        <button
+          type="button"
+          onClick={() => { setOpen(true); setDraft(reply ?? ""); }}
+          className="mt-1.5 text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {reply ? "Editar resposta" : "Responder"}
+        </button>
+      )}
+
+      {open && (
+        <div className="mt-1.5 space-y-1.5">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            maxLength={4096}
+            placeholder="Escreva uma resposta pública para este cliente…"
+            className="w-full rounded-md border border-line2 px-2 py-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-brand-400"
+          />
+          {err && <p className="text-[10px] text-red-600">{err}</p>}
+          <div className="flex items-center gap-2">
+            <button
+              type="button" onClick={send} disabled={busy || !draft.trim()}
+              className="rounded-md bg-brand-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              {busy ? "Enviando…" : "Publicar resposta"}
+            </button>
+            <button
+              type="button" onClick={() => { setOpen(false); setErr(null); }}
+              className="text-[11px] text-muted hover:text-ink2"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
     </div>

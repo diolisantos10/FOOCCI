@@ -131,6 +131,25 @@ export async function recordSync(restaurantId: string): Promise<void> {
   });
 }
 
+/**
+ * Refresh token permanently invalid (revoked at Google / expired). Flip the
+ * connection to disconnected and clear the dead tokens so the UI reflects
+ * reality (instead of prompting "reconnect" forever). Selections are kept so a
+ * reconnect restores context. Called from the token-refresh path on invalid_grant.
+ */
+export async function markRefreshRevoked(restaurantId: string): Promise<void> {
+  await prisma.googleIntegrationConfig.updateMany({
+    where: { restaurantId },
+    data: {
+      connected: false,
+      accessTokenEncrypted: null,
+      refreshTokenEncrypted: null,
+      tokenExpiresAt: null,
+      lastError: "Acesso do Google foi revogado ou expirou. Reconecte sua conta.",
+    },
+  });
+}
+
 /** Full disconnect: wipe tokens + selections. History (the row) is preserved. */
 export async function disconnectGoogle(restaurantId: string): Promise<void> {
   await prisma.googleIntegrationConfig.updateMany({

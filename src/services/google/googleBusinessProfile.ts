@@ -9,6 +9,9 @@
  * Reviews live on the legacy v4 surface which Google gates behind per-project
  * approval; calls degrade gracefully (returns `available: false`) when the
  * project is not yet allowlisted, so the UI never hard-fails.
+ *
+ * Writes: replyToReview() publishes/updates the owner reply to a review
+ *   PUT https://mybusiness.googleapis.com/v4/{review.name}/reply
  */
 
 const ACCOUNTS_URL  = "https://mybusinessaccountmanagement.googleapis.com/v1/accounts";
@@ -87,6 +90,7 @@ export interface ReviewSummary {
   averageRating: number | null;
   totalReviewCount: number | null;
   reviews: Array<{
+    name: string | null;        // "accounts/../locations/../reviews/.." — needed to reply
     reviewer: string;
     starRating: number | null;
     comment: string | null;
@@ -121,6 +125,7 @@ export async function fetchReviews(
     averageRating?: number;
     totalReviewCount?: number;
     reviews?: Array<{
+      name?: string;
       reviewer?: { displayName?: string };
       starRating?: string;
       comment?: string;
@@ -133,6 +138,7 @@ export async function fetchReviews(
     averageRating: data.averageRating ?? null,
     totalReviewCount: data.totalReviewCount ?? null,
     reviews: (data.reviews ?? []).map((r) => ({
+      name:      r.name ?? null,
       reviewer:  r.reviewer?.displayName ?? "Cliente",
       starRating: r.starRating ? (STAR_MAP[r.starRating] ?? null) : null,
       comment:   r.comment ?? null,
@@ -140,4 +146,31 @@ export async function fetchReviews(
       reply:     r.reviewReply?.comment ?? null,
     })),
   };
+}
+
+/**
+ * Reply to (or update the reply on) a Google review. Real v4 write:
+ *   PUT https://mybusiness.googleapis.com/v4/{review.name}/reply  body { comment }
+ * `reviewName` is the full resource path returned by fetchReviews (review.name).
+ * Degrades gracefully (never throws) — returns { ok:false, reason } on failure.
+ */
+export async function replyToReview(
+  accessToken: string,
+  reviewName: string,   // "accounts/123/locations/456/reviews/789"
+  comment: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const res = await fetch(`${LEGACY_V4}/${reviewName}/reply`, {
+    method:  "PUT",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body:    JSON.stringify({ comment }),
+  });
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: res.status === 403
+        ? "A API de avaliações do Google (v4) requer aprovação do projeto para responder."
+        : `Não foi possível enviar a resposta (HTTP ${res.status}).`,
+    };
+  }
+  return { ok: true };
 }
