@@ -2,12 +2,25 @@
 
 > **A tese:** o corpo muda, o cérebro fica. Este roadmap leva o Brain de
 > "cérebro de restaurante com nomes universais" a um **produto replicável** —
-> uma arquitetura de operação que abre qualquer empresa (restaurante hoje,
-> clínica de estética amanhã) trocando só adapters e dados, nunca o núcleo.
+> uma arquitetura de operação capaz de operar qualquer empresa trocando só
+> adapters e dados, nunca o núcleo.
 >
 > Criado em 2026-07-10 a partir de auditoria profunda do código (7 subsistemas,
 > 3 propostas de arquitetura independentes sintetizadas). Todo achado citado
 > aqui foi **verificado no código**, não em documentação.
+
+> ## ⚖️ DIRETRIZ DO CEO (2026-07-10) — leia antes de executar qualquer fase
+>
+> **O plano principal é o FOOCCI**: torná-lo o produto mais cobiçado do mercado
+> de restaurantes. **Universalidade é um PRINCÍPIO DE CONSTRUÇÃO, não uma fase
+> de execução**: tudo nasce com contratos genéricos, adapters e config-em-vez-
+> de-código (o olhar "isso será universalizado"), mas **NÃO haverá piloto de
+> segundo vertical tão cedo**. O exemplo da clínica de estética citado neste
+> documento é apenas ilustrativo — esse assunto só volta à mesa quando o FOOCCI
+> estiver faturando milhões. Até lá, a Fase 6 fica **ESTACIONADA** (vale como
+> guia de fronteiras arquiteturais, não como trabalho a puxar), e a prioridade
+> é a excelência do produto restaurante: raciocínio vivo impecável, loop de
+> aprendizado fechado, CRM inteligente, qualidade contínua.
 
 ---
 
