@@ -79,7 +79,7 @@ describe("activate", () => {
     expect(payload.scheduleConfig.mode).toBe("RECURRING");
   });
 
-  it("resumes an existing paused campaign (status flip only, preserves edits)", async () => {
+  it("resumes an existing paused campaign, resetting stale stats to start a fresh run", async () => {
     db.campaign.findFirst.mockResolvedValue({ id: "c9", status: "PAUSED" });
     const r = await ReadyMadeCampaignService.activate("r1", "recuperar-frios");
     expect(r.ok).toBe(true);
@@ -90,6 +90,16 @@ describe("activate", () => {
     // Content is NOT touched by activation — no message/scheduleConfig clobber.
     expect(data).not.toHaveProperty("message");
     expect(data).not.toHaveProperty("scheduleConfig");
+    // Reactivating from OFF must not show stats from a previous activation.
+    expect(data).toMatchObject({ totalSent: 0, totalFailed: 0, totalRevenue: 0 });
+  });
+
+  it("does not reset stats when the campaign was already ACTIVE (same-session status flip)", async () => {
+    db.campaign.findFirst.mockResolvedValue({ id: "c9", status: "ACTIVE" });
+    await ReadyMadeCampaignService.activate("r1", "recuperar-frios");
+    const data = db.campaign.update.mock.calls[0]![0].data;
+    expect(data).not.toHaveProperty("totalSent");
+    expect(data).not.toHaveProperty("totalRevenue");
   });
 
   it("update creates a PAUSED campaign when editing before activation", async () => {

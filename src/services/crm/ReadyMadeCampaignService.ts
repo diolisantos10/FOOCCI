@@ -209,10 +209,25 @@ export class ReadyMadeCampaignService {
     const existing = await prisma.campaign.findFirst({
       where:   { restaurantId, templateId: rm.id },
       orderBy: { createdAt: "desc" },
-      select:  { id: true },
+      select:  { id: true, status: true },
     });
     if (existing) {
-      await prisma.campaign.update({ where: { id: existing.id }, data: { status: "ACTIVE" as never } });
+      // Reactivating a campaign that was OFF (paused/cancelled/completed) starts a
+      // fresh run: the dashboard must show only what happens from now on, not stats
+      // left over from a previous activation. A same-session pause→resume never hits
+      // this (status is still ACTIVE/SCHEDULED), so it keeps counting normally.
+      const wasOff = !ACTIVE_STATUSES.includes(existing.status);
+      await prisma.campaign.update({
+        where: { id: existing.id },
+        data:  {
+          status: "ACTIVE" as never,
+          ...(wasOff ? {
+            totalSent: 0, totalFailed: 0, totalRead: 0,
+            totalResponded: 0, totalConverted: 0, totalRevenue: 0,
+            lastRunAt: null,
+          } : {}),
+        },
+      });
       return { ok: true, campaignId: existing.id };
     }
 
