@@ -1867,9 +1867,12 @@ model CustomerCoupon {
   customerId       String
   promotionId      String?              // legacy link; new card-defined coupons are self-contained
   couponCode       String               // short reference label (auto)
-  // Self-contained discount (card-defined). PERCENTAGE (value = %) or FIXED (value = R$).
-  discountType     String?              // "PERCENTAGE" | "FIXED"
+  // Self-contained reward (card-defined). PERCENTAGE (value = %), FIXED (value = R$),
+  // or CUSTOM (a physical gift; description holds the text, no auto-discount).
+  discountType     String?              // "PERCENTAGE" | "FIXED" | "CUSTOM"
   discountValue    Decimal?             @db.Decimal(10, 2)
+  description      String?              // CUSTOM reward text, e.g. "sobremesa grátis"
+  costEstimate     Decimal?             @db.Decimal(10, 2) // estimated R$ cost, for the monthly coupon budget
   status           CustomerCouponStatus @default(ACTIVE)
   grantedAt        DateTime             @default(now())
   expiresAt        DateTime?            // null = never expires

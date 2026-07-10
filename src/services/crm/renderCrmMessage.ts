@@ -34,13 +34,15 @@ export interface RenderContext {
   tiktokUrl?:      string | null;
   facebookUrl?:    string | null;
   youtubeUrl?:     string | null;
-  /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "R$ 10 de desconto". */
-  coupon?:         { type: "PERCENTAGE" | "FIXED"; value: number } | null;
+  /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "sobremesa grátis". */
+  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null } | null;
 }
 
 /** Owner-facing coupon phrasing for use inside a message ("20% de desconto"). */
 export function couponMessageLabel(coupon: RenderContext["coupon"]): string {
-  if (!coupon || !(coupon.value > 0)) return "";
+  if (!coupon) return "";
+  if (coupon.type === "CUSTOM") return coupon.description?.trim() || "";
+  if (!(coupon.value > 0)) return "";
   return coupon.type === "PERCENTAGE" ? `${coupon.value}% de desconto` : `R$ ${coupon.value} de desconto`;
 }
 

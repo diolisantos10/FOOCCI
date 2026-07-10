@@ -21,12 +21,28 @@ export function computeCouponExpiry(grantedAt: Date, validityDays?: number | nul
 
 /** Short reference label stored on the wallet entry (not typed by the customer). */
 export function couponRefCode(coupon: { type: CouponType; value: number }): string {
+  if (coupon.type === "CUSTOM") return "BRINDE";
   return coupon.type === "PERCENTAGE" ? `${coupon.value}OFF` : `R$${coupon.value}`;
+}
+
+/**
+ * Estimated R$ cost of a coupon, for the monthly coupon budget:
+ *   FIXED      → its R$ value
+ *   PERCENTAGE → average ticket × %
+ *   CUSTOM     → its declared estimated cost (value)
+ */
+export function estimateCouponCost(
+  coupon: { type: CouponType; value: number },
+  avgTicket: number,
+): number {
+  if (coupon.type === "FIXED" || coupon.type === "CUSTOM") return Math.max(0, coupon.value);
+  if (coupon.type === "PERCENTAGE") return Math.round((avgTicket * coupon.value) / 100 * 100) / 100;
+  return 0;
 }
 
 export type GrantResult =
   | { granted: true; couponId: string; expiresAt: Date }
-  | { granted: false; reason: "NO_COUPON" | "ALREADY_HAS" };
+  | { granted: false; reason: "NO_COUPON" | "ALREADY_HAS" | "BUDGET_EXCEEDED" };
 
 export class CustomerCouponService {
   /**
@@ -37,9 +53,12 @@ export class CustomerCouponService {
   static async grant(input: {
     restaurantId: string;
     customerId: string;
-    coupon: { type: CouponType; value: number };
+    coupon: { type: CouponType; value: number; description?: string | null };
     validityDays?: number | null;
     sourceCampaignId?: string | null;
+    /** Monthly R$ budget for coupons (0 = off) and the avg ticket for % cost. */
+    monthlyBudget?: number;
+    avgTicket?: number;
     now?: Date;
   }): Promise<GrantResult> {
     const now = input.now ?? new Date();
@@ -54,6 +73,13 @@ export class CustomerCouponService {
       if (existing) return { granted: false, reason: "ALREADY_HAS" };
     }
 
+    // Monthly money budget: don't credit a coupon that would blow the month's cap.
+    const cost = estimateCouponCost(input.coupon, input.avgTicket ?? 50);
+    if (input.monthlyBudget && input.monthlyBudget > 0) {
+      const spent = await this.monthlySpend(input.restaurantId, now);
+      if (spent + cost > input.monthlyBudget) return { granted: false, reason: "BUDGET_EXCEEDED" };
+    }
+
     const expiresAt = computeCouponExpiry(now, input.validityDays);
     const created = await prisma.customerCoupon.create({
       data: {
@@ -63,6 +89,8 @@ export class CustomerCouponService {
         couponCode:       couponRefCode(input.coupon),
         discountType:     input.coupon.type,
         discountValue:    input.coupon.value,
+        description:      input.coupon.description ?? null,
+        costEstimate:     cost,
         status:           "ACTIVE",
         grantedAt:        now,
         expiresAt,
@@ -71,6 +99,16 @@ export class CustomerCouponService {
       select: { id: true },
     });
     return { granted: true, couponId: created.id, expiresAt };
+  }
+
+  /** Total estimated R$ cost of coupons granted this calendar month. */
+  static async monthlySpend(restaurantId: string, now: Date = new Date()): Promise<number> {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const agg = await prisma.customerCoupon.aggregate({
+      where:  { restaurantId, grantedAt: { gte: monthStart } },
+      _sum:   { costEstimate: true },
+    });
+    return Number(agg._sum.costEstimate ?? 0);
   }
 
   /**

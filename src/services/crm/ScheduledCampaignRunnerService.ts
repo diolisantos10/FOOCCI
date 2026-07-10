@@ -72,7 +72,7 @@ export interface RecurringScheduleConfig {
   /** Event-based campaigns: days after the event to target (review, 2nd purchase). */
   triggerDays?:   number;
   /** Card-defined coupon granted to each recipient's wallet on send. */
-  coupon?:        { type: "PERCENTAGE" | "FIXED"; value: number; validityDays?: number } | null;
+  coupon?:        { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string; validityDays?: number } | null;
   endCondition:   "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   endDate?:       string | null;                // "YYYY-MM-DD"
   maxTotal?:      number | null;
@@ -1062,7 +1062,7 @@ export class ScheduledCampaignRunnerService {
     runOpts: {
       abortOnInstanceCollapse?: boolean;
       /** Card-defined coupon to credit to each customer's wallet on a successful send. */
-      coupon?: { type: "PERCENTAGE" | "FIXED"; value: number } | null;
+      coupon?: { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string } | null;
       /** Days the granted coupon stays valid. */
       couponValidityDays?: number | null;
     } = {},
@@ -1334,6 +1334,8 @@ export class ScheduledCampaignRunnerService {
             coupon:           runOpts.coupon,
             validityDays:     runOpts.couponValidityDays ?? null,
             sourceCampaignId: campaign.id,
+            monthlyBudget:    safety?.couponMonthlyBudget ?? 0,
+            avgTicket:        safety?.couponAvgTicket ?? 50,
           }).catch((e) => console.error(`[ReadyMade] coupon grant failed for ${customer.id}:`, e));
         }
       } catch (err) {

@@ -92,6 +92,15 @@ export interface CRMWhatsAppSafetyConfig {
    * either way — it is a cost limit, not an anti-ban rule.
    */
   manualOverride: boolean;
+  /**
+   * Monthly money budget (R$) for coupons the CRM auto-distributes. Each granted
+   * coupon draws down its estimated cost (FIXED = value; PERCENTAGE = avg ticket ×
+   * %; CUSTOM = its estimated cost). When the month's spend reaches this, coupons
+   * stop being credited (messages still send). 0 = no budget / unlimited.
+   */
+  couponMonthlyBudget: number;
+  /** Average order value used to estimate the cost of a percentage coupon. */
+  couponAvgTicket: number;
 }
 
 export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
@@ -123,6 +132,8 @@ export const DEFAULT_SAFETY_CONFIG: Readonly<CRMWhatsAppSafetyConfig> = {
   randomDelayMaxSec:     45,
   crmWhatsAppSafety:     DEFAULT_BUDGET_CONFIG,
   manualOverride:        false, // safe rules locked by default
+  couponMonthlyBudget:   0,     // off by default — opt-in via CRM Configurações
+  couponAvgTicket:       50,    // R$ — estimate for percentage-coupon cost
 };
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
@@ -171,6 +182,8 @@ export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
     randomDelayMinSec:     typeof r.randomDelayMinSec     === "number"  ? r.randomDelayMinSec     : d.randomDelayMinSec,
     randomDelayMaxSec:     typeof r.randomDelayMaxSec     === "number"  ? r.randomDelayMaxSec     : d.randomDelayMaxSec,
     manualOverride:        typeof r.manualOverride        === "boolean" ? r.manualOverride        : d.manualOverride,
+    couponMonthlyBudget:   typeof r.couponMonthlyBudget   === "number"  ? r.couponMonthlyBudget   : d.couponMonthlyBudget,
+    couponAvgTicket:       typeof r.couponAvgTicket       === "number" && r.couponAvgTicket > 0 ? r.couponAvgTicket : d.couponAvgTicket,
   };
 }
 

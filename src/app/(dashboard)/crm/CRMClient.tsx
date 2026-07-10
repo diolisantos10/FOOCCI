@@ -5043,6 +5043,8 @@ const DEFAULT_CFG = {
   randomDelayEnabled:    true,
   randomDelayMinSec:     5,
   randomDelayMaxSec:     45,
+  couponMonthlyBudget:   0,
+  couponAvgTicket:       50,
 };
 
 type SafetyCfg = typeof DEFAULT_CFG;
@@ -5113,6 +5115,7 @@ function CrmConfiguracoes() {
   const [error,   setError]   = useState<string | null>(null);
   const [cfg, setCfg]         = useState<SafetyCfg>({ ...DEFAULT_CFG });
   const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number }>({ ageDays: 0, safeDailyLimit: 20 });
+  const [couponSpent, setCouponSpent] = useState(0);
 
   useEffect(() => {
     fetch("/api/settings/crm-safety")
@@ -5121,6 +5124,7 @@ function CrmConfiguracoes() {
         if (data) {
           setCfg({ ...DEFAULT_CFG, ...data });
           if (data.warmup) setWarmup(data.warmup);
+          if (typeof data.couponSpentThisMonth === "number") setCouponSpent(data.couponSpentThisMonth);
         }
       })
       .catch(() => {})
@@ -5384,6 +5388,72 @@ function CrmConfiguracoes() {
                   <p className="text-sm text-muted">
                     Sem limite ativo. Já foram abordados <strong>{used}</strong> contatos.
                     Defina um valor ao lado para limitar.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </CfgCard>
+
+      {/* A3 — Orçamento de cupons (mensal, em R$) */}
+      <CfgCard
+        title="Orçamento de cupons (mensal)"
+        subtitle="Teto em dinheiro para os cupons que o CRM distribui automaticamente no mês. Cada cupom concedido desconta o custo estimado. Quando o orçamento acaba, a mensagem continua sendo enviada, mas sem o cupom. 0 = sem limite."
+      >
+        {(() => {
+          const budget = cfg.couponMonthlyBudget || 0;
+          const on     = budget > 0;
+          const spent  = couponSpent || 0;
+          const remaining = on ? Math.max(0, budget - spent) : 0;
+          const pct    = on ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+          const low    = on && remaining <= Math.max(1, Math.round(budget * 0.1));
+          const brl    = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
+          return (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-4">
+                <CfgField
+                  label="Orçamento mensal (R$)"
+                  hint="Quanto o CRM pode gastar em cupons por mês. Zera no início de cada mês."
+                >
+                  <input
+                    type="number" min={0} max={1000000}
+                    value={cfg.couponMonthlyBudget}
+                    onChange={(e) => set("couponMonthlyBudget", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    className={CFG_INPUT}
+                  />
+                </CfgField>
+                <CfgField
+                  label="Ticket médio (R$)"
+                  hint="Usado para estimar o custo dos cupons de porcentagem (ex.: 20% de um ticket médio de R$ 50 = R$ 10)."
+                >
+                  <input
+                    type="number" min={1} max={100000}
+                    value={cfg.couponAvgTicket}
+                    onChange={(e) => set("couponAvgTicket", Math.max(1, parseInt(e.target.value, 10) || 50))}
+                    className={CFG_INPUT}
+                  />
+                </CfgField>
+              </div>
+
+              <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                {on ? (
+                  <>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm text-muted">Disponível este mês</span>
+                      <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                        {brl(remaining)} <span className="text-sm font-normal text-muted">de {brl(budget)}</span>
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                      <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="mt-2 text-xs text-muted">{brl(spent)} já gastos em cupons este mês{low ? " · orçamento baixo." : "."}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted">
+                    Orçamento desligado — cupons são distribuídos sem limite de gasto. Já foram gastos <strong>{brl(spent)}</strong> este mês.
+                    Defina um valor ao lado para ativar o controle de gasto.
                   </p>
                 )}
               </div>

@@ -11,13 +11,14 @@ import {
   parseSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount, getConsumedContactCount,
   getNumberAgeDays, warmupDailyLimit, applyEffectiveSafety,
 } from "@/lib/crm-safety";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 
 export async function GET(req: NextRequest) {
   try {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays] = await Promise.all([
+    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays, couponSpentThisMonth] = await Promise.all([
       prisma.restaurantCRMProfile.findUnique({
         where:  { restaurantId: ctx.restaurantId },
         select: { whatsAppSafetyConfig: true },
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
       getWeekGlobalSendCount(ctx.restaurantId),
       getConsumedContactCount(ctx.restaurantId),
       getNumberAgeDays(ctx.restaurantId),
+      CustomerCouponService.monthlySpend(ctx.restaurantId),
     ]);
 
     const raw       = parseSafetyConfig(profile?.whatsAppSafetyConfig);
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
     // (locked). `warmup` explains the auto daily number.
     return ok({
       ...raw,
-      todaySent, weekSent, contactBudgetUsed,
+      todaySent, weekSent, contactBudgetUsed, couponSpentThisMonth,
       warmup:    { ageDays, safeDailyLimit: warmupDailyLimit(ageDays) },
       effective,
     });

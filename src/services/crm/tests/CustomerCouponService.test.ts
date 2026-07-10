@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  customerCoupon: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+  customerCoupon: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), aggregate: vi.fn() },
   order:          { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-import { CustomerCouponService, computeCouponExpiry, couponRefCode } from "../CustomerCouponService";
+import { CustomerCouponService, computeCouponExpiry, couponRefCode, estimateCouponCost } from "../CustomerCouponService";
 
 const NOW = new Date("2026-07-10T12:00:00Z");
 
@@ -14,6 +14,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.customerCoupon.findFirst.mockResolvedValue(null);
   db.customerCoupon.create.mockResolvedValue({ id: "cc1" });
+  db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 0 } });
 });
 
 describe("computeCouponExpiry", () => {
@@ -30,6 +31,23 @@ describe("couponRefCode", () => {
   it("labels percentage and fixed coupons", () => {
     expect(couponRefCode({ type: "PERCENTAGE", value: 20 })).toBe("20OFF");
     expect(couponRefCode({ type: "FIXED", value: 10 })).toBe("R$10");
+  });
+  it("labels a custom reward as BRINDE", () => {
+    expect(couponRefCode({ type: "CUSTOM", value: 12 })).toBe("BRINDE");
+  });
+});
+
+describe("estimateCouponCost", () => {
+  it("uses the R$ value for fixed and custom coupons", () => {
+    expect(estimateCouponCost({ type: "FIXED", value: 10 }, 50)).toBe(10);
+    expect(estimateCouponCost({ type: "CUSTOM", value: 8 }, 50)).toBe(8);
+  });
+  it("estimates percentage coupons from the average ticket", () => {
+    expect(estimateCouponCost({ type: "PERCENTAGE", value: 20 }, 50)).toBe(10);
+    expect(estimateCouponCost({ type: "PERCENTAGE", value: 15 }, 40)).toBe(6);
+  });
+  it("never returns a negative cost", () => {
+    expect(estimateCouponCost({ type: "FIXED", value: -5 }, 50)).toBe(0);
   });
 });
 
@@ -69,6 +87,59 @@ describe("CustomerCouponService.grant", () => {
     });
     expect(r).toEqual({ granted: false, reason: "ALREADY_HAS" });
     expect(db.customerCoupon.create).not.toHaveBeenCalled();
+  });
+
+  it("stores the estimated cost and custom reward description", async () => {
+    await CustomerCouponService.grant({
+      restaurantId: "r1", customerId: "c1",
+      coupon: { type: "CUSTOM", value: 8, description: "sobremesa grátis" }, avgTicket: 50, now: NOW,
+    });
+    const data = db.customerCoupon.create.mock.calls[0]![0].data;
+    expect(data.description).toBe("sobremesa grátis");
+    expect(data.costEstimate).toBe(8);
+  });
+
+  it("credits within the monthly budget, charging the estimated cost", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 40 } });
+    const r = await CustomerCouponService.grant({
+      restaurantId: "r1", customerId: "c1", coupon: { type: "FIXED", value: 10 },
+      monthlyBudget: 100, avgTicket: 50, now: NOW,
+    });
+    expect(r).toMatchObject({ granted: true });
+    expect(db.customerCoupon.create).toHaveBeenCalled();
+  });
+
+  it("stops granting once the coupon would exceed the monthly budget", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 95 } });
+    const r = await CustomerCouponService.grant({
+      restaurantId: "r1", customerId: "c1", coupon: { type: "FIXED", value: 10 },
+      monthlyBudget: 100, avgTicket: 50, now: NOW,
+    });
+    expect(r).toEqual({ granted: false, reason: "BUDGET_EXCEEDED" });
+    expect(db.customerCoupon.create).not.toHaveBeenCalled();
+  });
+
+  it("ignores the budget when it is 0 (off)", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 9999 } });
+    const r = await CustomerCouponService.grant({
+      restaurantId: "r1", customerId: "c1", coupon: { type: "FIXED", value: 10 }, monthlyBudget: 0, now: NOW,
+    });
+    expect(r).toMatchObject({ granted: true });
+  });
+});
+
+describe("CustomerCouponService.monthlySpend", () => {
+  it("sums the estimated cost of coupons granted since the month start", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 37.5 } });
+    const spent = await CustomerCouponService.monthlySpend("r1", NOW);
+    expect(spent).toBe(37.5);
+    const where = db.customerCoupon.aggregate.mock.calls[0]![0].where;
+    expect(where.restaurantId).toBe("r1");
+    expect(where.grantedAt.gte).toEqual(new Date(NOW.getFullYear(), NOW.getMonth(), 1));
+  });
+  it("returns 0 when nothing was granted", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: null } });
+    expect(await CustomerCouponService.monthlySpend("r1", NOW)).toBe(0);
   });
 });
 
