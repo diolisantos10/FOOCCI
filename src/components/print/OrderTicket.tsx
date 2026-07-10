@@ -1,5 +1,6 @@
 import { isGuestIdentifier } from "@/lib/guest";
 import { formatOrderNumber } from "@/lib/order-number";
+import { parseTicketAddons, type ParsedAddon } from "@/lib/ticket-addons";
 
 /**
  * Thermal receipt (80mm) in two faithful formats, modeled on what the restaurant
@@ -57,39 +58,8 @@ function fmtTime(date: Date, tz: string): string {
   }
 }
 
-// ── Addon parsing ─────────────────────────────────────────────────────────────
-
-interface ParsedAddon {
-  name: string;
-  price?: number;
-}
-
-function parseAddons(raw: unknown): ParsedAddon[] {
-  if (raw == null) return [];
-  try {
-    const arr: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!Array.isArray(arr)) return [];
-    const result: ParsedAddon[] = [];
-    for (const entry of arr) {
-      if (typeof entry !== "object" || entry === null) continue;
-      const e = entry as Record<string, unknown>;
-      const rawName =
-        e.name ?? e.label ?? e.desc_item_choice ?? e.description ?? e.desc ?? e.title;
-      if (typeof rawName !== "string" || !rawName.trim()) continue;
-      const rawPrice =
-        e.price ?? e.unitPrice ?? e.unit_price ??
-        e.aditional_price ?? e.additionalPrice ?? e.additional_price;
-      const price = rawPrice != null ? Number(rawPrice) : undefined;
-      result.push({
-        name: rawName.trim(),
-        price: price != null && !isNaN(price) && price !== 0 ? price : undefined,
-      });
-    }
-    return result;
-  } catch {
-    return [];
-  }
-}
+// Addon parsing lives in @/lib/ticket-addons (parseTicketAddons) — shared with the
+// ESC/POS renderer and unit-tested for the { options, extras } checkout shape.
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -137,11 +107,12 @@ interface OrderTicketOrder {
     zipCode:      string;
   } | null;
   items: Array<{
-    name:       string;
-    price:      unknown;
-    quantity:   number;
-    notes:      string | null;
-    addonsJson: unknown;
+    name:        string;
+    price:       unknown;
+    quantity:    number;
+    notes:       string | null;
+    variantName?: string | null;
+    addonsJson:  unknown;
   }>;
   payment: {
     method: string;
@@ -196,10 +167,11 @@ function Divider({ dashed }: { dashed?: boolean }) {
 
 // ── Item observations (addons + item note) ────────────────────────────────────
 
-function ItemObs({ addons, note, showPrices }: { addons: ParsedAddon[]; note: string | null; showPrices: boolean }) {
-  if (addons.length === 0 && !note) return null;
+function ItemObs({ variant, addons, note, showPrices }: { variant?: string | null; addons: ParsedAddon[]; note: string | null; showPrices: boolean }) {
+  if (!variant && addons.length === 0 && !note) return null;
   return (
     <div style={{ paddingLeft: "14px", marginTop: "2px" }}>
+      {variant && <div style={{ fontWeight: 700 }}>» {variant}</div>}
       {addons.map((a, i) => (
         <div
           key={i}
@@ -258,7 +230,7 @@ function KitchenContent({
 
       {/* Items — quantity prominent, NO prices */}
       {order.items.map((item, i) => {
-        const addons = parseAddons(item.addonsJson);
+        const addons = parseTicketAddons(item.addonsJson);
         return (
           <div
             key={i}
@@ -268,7 +240,7 @@ function KitchenContent({
               <span style={{ fontSize: "22px" }}>{item.quantity}</span>{"  "}
               {item.name}
             </div>
-            <ItemObs addons={addons} note={item.notes} showPrices={false} />
+            <ItemObs variant={item.variantName} addons={addons} note={item.notes} showPrices={false} />
           </div>
         );
       })}
@@ -394,7 +366,7 @@ function CashierContent({
       <Divider dashed />
 
       {order.items.map((item, i) => {
-        const addons   = parseAddons(item.addonsJson);
+        const addons   = parseTicketAddons(item.addonsJson);
         const lineTotal = Number(item.price) * item.quantity;
         return (
           <div
@@ -407,7 +379,7 @@ function CashierContent({
               </span>
               <span style={{ whiteSpace: "nowrap" }}>{money(lineTotal)}</span>
             </div>
-            <ItemObs addons={addons} note={item.notes} showPrices />
+            <ItemObs variant={item.variantName} addons={addons} note={item.notes} showPrices />
           </div>
         );
       })}

@@ -134,7 +134,8 @@ export class PrintQueueService {
         : null,
     };
     const allItems: TicketItem[] = order.items.map((it) => ({
-      name: it.name, price: it.price, quantity: it.quantity, notes: it.notes, addonsJson: it.addonsJson,
+      name: it.name, price: it.price, quantity: it.quantity, notes: it.notes,
+      variantName: it.variantName, addonsJson: it.addonsJson,
     }));
 
     const store = buildStoreInfo(
@@ -192,7 +193,7 @@ export class PrintQueueService {
 
       const stationItems: TicketItem[] = order.items
         .filter((it) => stationsForItem(it.categoryId).includes(station.key))
-        .map((it) => ({ name: it.name, price: it.price, quantity: it.quantity, notes: it.notes, addonsJson: it.addonsJson }));
+        .map((it) => ({ name: it.name, price: it.price, quantity: it.quantity, notes: it.notes, variantName: it.variantName, addonsJson: it.addonsJson }));
       if (stationItems.length === 0) continue;
 
       const body = renderKitchenTicketText({

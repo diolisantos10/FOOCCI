@@ -13,6 +13,7 @@
  */
 
 import { formatOrderNumber } from "@/lib/order-number";
+import { parseTicketAddons } from "@/lib/ticket-addons";
 
 export const TICKET_WIDTH = 48;
 
@@ -130,29 +131,9 @@ function fmtTime(date: Date, tz: string): string {
 }
 
 // ── Addons ────────────────────────────────────────────────────────────────────
-
-interface ParsedAddon { name: string; price?: number }
-
-export function parseAddons(raw: unknown): ParsedAddon[] {
-  if (raw == null) return [];
-  try {
-    const arr: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!Array.isArray(arr)) return [];
-    const out: ParsedAddon[] = [];
-    for (const entry of arr) {
-      if (typeof entry !== "object" || entry === null) continue;
-      const e = entry as Record<string, unknown>;
-      const rawName = e.name ?? e.label ?? e.desc_item_choice ?? e.description ?? e.desc ?? e.title;
-      if (typeof rawName !== "string" || !rawName.trim()) continue;
-      const rawPrice = e.price ?? e.unitPrice ?? e.unit_price ?? e.aditional_price ?? e.additionalPrice ?? e.additional_price;
-      const price = rawPrice != null ? Number(rawPrice) : undefined;
-      out.push({ name: rawName.trim(), price: price != null && !isNaN(price) && price !== 0 ? price : undefined });
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
+// Shared, unit-tested parser (handles the checkout { options, extras } object shape
+// that the old array-only parser silently dropped). Alias kept for existing callers.
+export const parseAddons = parseTicketAddons;
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -179,11 +160,12 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export interface TicketItem {
-  name:       string;
-  price:      unknown;
-  quantity:   number;
-  notes:      string | null;
-  addonsJson: unknown;
+  name:         string;
+  price:        unknown;
+  quantity:     number;
+  notes:        string | null;
+  variantName?: string | null;
+  addonsJson:   unknown;
 }
 
 export interface TicketOrder {
@@ -243,6 +225,7 @@ export function renderKitchenTicketText(args: {
 
   for (const it of items) {
     for (const ln of itemLines(it.quantity, it.name)) L.push(big(ln));
+    if (it.variantName) L.push(`    >> ${ascii(it.variantName)}`);
     for (const a of parseAddons(it.addonsJson)) L.push(`    >> ${ascii(a.name)}`);
     if (it.notes) for (const ln of obsLines(it.notes)) L.push(ln);
   }
@@ -309,6 +292,7 @@ export function renderCashierTicketText(args: {
   for (const it of items) {
     const lineTotal = money(Number(it.price) * it.quantity);
     for (const ln of itemLines(it.quantity, it.name, lineTotal)) L.push(ln);
+    if (it.variantName) L.push(`    >> ${ascii(it.variantName)}`);
     for (const a of parseAddons(it.addonsJson)) {
       L.push(a.price != null ? lr(`    + ${ascii(a.name)}`, money(a.price)) : `    + ${ascii(a.name)}`);
     }
