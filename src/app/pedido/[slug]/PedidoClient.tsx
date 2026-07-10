@@ -2417,9 +2417,14 @@ export function PedidoClient({
   const [appliedCoupon, setAppliedCoupon] = useState<{
     promotionId: string; couponCode: string; discountAmount: number;
     discountType: string; name: string;
+    /** Set when the applied discount comes from a wallet coupon (iFood-style). */
+    customerCouponId?: string;
   } | null>(null);
   const [couponError,   setCouponError]   = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  // Wallet coupons (earned via CRM campaigns), redeemable in the cart.
+  const [walletCoupons, setWalletCoupons] = useState<Array<{ id: string; label: string; discountType: string; discountValue: number; expiresAt: string | null }>>([]);
+  const [walletOpen,    setWalletOpen]    = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [pixCopyPaste,    setPixCopyPaste]    = useState<string | null>(null);
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
@@ -3643,7 +3648,8 @@ export function PedidoClient({
                 freeDeliveryAbove,
               )
             : undefined,
-          couponCode:      appliedCoupon?.couponCode || undefined,
+          couponCode:      appliedCoupon?.customerCouponId ? undefined : (appliedCoupon?.couponCode || undefined),
+          customerCouponId: appliedCoupon?.customerCouponId || undefined,
           trackingLinkId:  utm.tlid    || undefined,
           trafficSource:   utm.source  || undefined,
           trafficMedium:   utm.medium  || undefined,
@@ -3786,6 +3792,36 @@ export function PedidoClient({
       setCouponLoading(false);
     }
   }, [couponInput, cart, deliveryMethod, deliveryMode, resolvedDeliveryFee, slug, resolvedCustomerId]);
+
+  // Load the customer's wallet coupons (earned via CRM campaigns).
+  const loadWallet = useCallback(async () => {
+    if (!resolvedCustomerId) { setWalletCoupons([]); return; }
+    try {
+      const res = await fetch(`/api/pedido/${slug}/coupons?customerId=${encodeURIComponent(resolvedCustomerId)}`);
+      const j   = await res.json();
+      setWalletCoupons(Array.isArray(j?.coupons) ? j.coupons : []);
+    } catch { setWalletCoupons([]); }
+  }, [slug, resolvedCustomerId]);
+
+  // Apply a wallet coupon. discountAmount here is display-only — the server
+  // recomputes it authoritatively at finalize from the coupon in the DB.
+  const applyWalletCoupon = useCallback((w: { id: string; label: string; discountType: string; discountValue: number }) => {
+    const sub      = cart.reduce((s, i) => s + i.price * i.qty, 0);
+    const isManFee = deliveryMethod === "delivery" && deliveryMode === "manual";
+    const fee      = deliveryMethod === "delivery" && !isManFee
+      ? computeEffectiveFee(sub, resolvedDeliveryFee, freeDeliveryAbove)
+      : 0;
+    const discountAmount = w.discountType === "PERCENTAGE"
+      ? Math.round(Math.min((sub * w.discountValue) / 100, sub) * 100) / 100
+      : Math.round(Math.min(w.discountValue, sub + fee) * 100) / 100;
+    setCouponError(null);
+    setAppliedCoupon({
+      promotionId: "", couponCode: w.label, discountAmount,
+      discountType: w.discountType, name: w.label, customerCouponId: w.id,
+    });
+    setWalletOpen(false);
+    setCouponInput("");
+  }, [cart, deliveryMethod, deliveryMode, resolvedDeliveryFee, freeDeliveryAbove]);
 
   const handleBackToBrowse = useCallback(() => {
     // Return to browsing without wiping checkout data.
@@ -4391,25 +4427,63 @@ export function PedidoClient({
                 </div>
               </div>
             ) : (
-              <div className="flex gap-1.5">
-                <input
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleApplyCoupon(); } }}
-                  placeholder="Cupom de desconto"
-                  maxLength={30}
-                  style={{ fontSize: "16px" }}
-                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-gray-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleApplyCoupon()}
-                  disabled={couponLoading || !couponInput.trim()}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                >
-                  {couponLoading ? "…" : "Aplicar"}
-                </button>
+              <div className="space-y-1.5">
+                {/* Meus cupons (wallet earned via CRM campaigns) */}
+                {resolvedCustomerId && (
+                  <div className="rounded-lg border border-brand-200 bg-brand-50/40">
+                    <button
+                      type="button"
+                      onClick={() => { const nx = !walletOpen; setWalletOpen(nx); if (nx) void loadWallet(); }}
+                      className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-xs font-semibold text-brand-700"
+                    >
+                      <span>🎁 Meus cupons</span>
+                      <svg className={`h-3.5 w-3.5 transition-transform ${walletOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    {walletOpen && (
+                      <div className="max-h-44 overflow-y-auto border-t border-brand-100">
+                        {walletCoupons.length === 0 ? (
+                          <p className="px-2.5 py-2 text-[11px] text-gray-500">Você ainda não tem cupons. Eles chegam pelas mensagens do restaurante.</p>
+                        ) : walletCoupons.map((w) => (
+                          <button
+                            key={w.id}
+                            type="button"
+                            onClick={() => applyWalletCoupon(w)}
+                            className="flex w-full items-center justify-between gap-2 border-t border-brand-100 px-2.5 py-2 text-left first:border-t-0 hover:bg-white"
+                          >
+                            <span className="text-xs font-bold text-ink">{w.label}</span>
+                            <span className="text-[10px] text-gray-500">
+                              {w.expiresAt ? `vence ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "sem validade"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Código de cupom */}
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleApplyCoupon(); } }}
+                    placeholder="Cupom de desconto"
+                    maxLength={30}
+                    style={{ fontSize: "16px" }}
+                    className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleApplyCoupon()}
+                    disabled={couponLoading || !couponInput.trim()}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    {couponLoading ? "…" : "Aplicar"}
+                  </button>
+                </div>
               </div>
             )}
             {couponError && (
