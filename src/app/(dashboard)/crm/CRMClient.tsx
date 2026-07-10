@@ -5916,8 +5916,11 @@ export function CRMClient({
     setTab("campanhas");
   }
 
-  function handleSegmentClick(filter: "quente" | "morno" | "frio" | "novos") {
-    const crmFilter: CRMFilter = filter === "novos" ? "firstTime" : filter;
+  function handleSegmentClick(filter: "quente" | "morno" | "frio" | "novos" | "nao-compraram") {
+    const crmFilter: CRMFilter =
+      filter === "novos"         ? "firstTime"    :
+      filter === "nao-compraram" ? "neverOrdered" :
+      filter;
     setCustomerFilter(crmFilter);
     setTab("customers");
   }

@@ -442,7 +442,7 @@ export function KPICard({
   label: string;
   value: string | number;
   sub?: string;
-  accent?: "green" | "yellow" | "red" | "blue" | "brand" | "gray";
+  accent?: "green" | "yellow" | "red" | "blue" | "brand" | "gray" | "purple";
   loading?: boolean;
   onClick?: () => void;
   ctaLabel?: string;
@@ -456,6 +456,7 @@ export function KPICard({
     blue:   "text-blue-700",
     brand:  "text-brand-700",
     gray:   "text-ink2",
+    purple: "text-purple-700",
   }[accent ?? "brand"] ?? "text-brand-700";
 
   return (
@@ -857,7 +858,7 @@ export function OverviewTab({
   opportunitiesCount: number;
   actions?: CrmAction[];
   onNavigateToTab?: (tab: "campanhas" | "customers") => void;
-  onSegmentClick?: (filter: "quente" | "morno" | "frio" | "novos") => void;
+  onSegmentClick?: (filter: "quente" | "morno" | "frio" | "novos" | "nao-compraram") => void;
   loading: boolean;
   datePreset: DateFilterPreset;
   customFrom: string;
@@ -1008,6 +1009,15 @@ export function OverviewTab({
           loading={loading}
           onClick={onSegmentClick ? () => onSegmentClick("novos") : undefined}
           ctaLabel={onSegmentClick ? "Ver novos" : undefined}
+        />
+        <KPICard
+          label="Não compraram"
+          value={(stats.naoCompraramCustomers ?? 0).toLocaleString("pt-BR")}
+          sub="Cadastraram mas nunca pediram"
+          accent="purple"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("nao-compraram") : undefined}
+          ctaLabel={onSegmentClick ? "Ver e criar campanha" : undefined}
         />
       </div>
 

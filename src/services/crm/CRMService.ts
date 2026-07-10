@@ -139,6 +139,7 @@ export type OverviewStats = {
   mornoCustomers:         number; // lastOrderAt 31-60 days
   frioCustomers:          number; // lastOrderAt > 60 days
   perdidosCustomers:      number; // lastOrderAt ≥ lostMinDays days (default 120d) — subset of frioCustomers
+  naoCompraramCustomers:  number; // identified (has phone) but NEVER purchased — prime first-order campaign target
   newCustomers:           number; // created within selected date range
   segments: Array<{ tier: CustomerTier; count: number }>;
   deliveryOnlyCustomers:  number; // ordered only via delivery
@@ -580,6 +581,7 @@ export class CRMService {
       newCustomers,
       channelData,
       perdidoRows,
+      naoCompraramRows,
       contactRows,
     ] = await Promise.all([
       prisma.customer.count({ where: { restaurantId, isGuest: false } }),
@@ -625,6 +627,16 @@ export class CRMService {
           AND COALESCE("lastOrderAt", "importedLastOrderAt") IS NOT NULL
           AND COALESCE("lastOrderAt", "importedLastOrderAt") < ${lostCutoff}
       `,
+      // Identified-but-never-purchased AND reachable on WhatsApp (has a valid phone).
+      // The prime audience for a first-order conversion campaign.
+      prisma.$queryRaw<Array<{ cnt: bigint }>>`
+        SELECT COUNT(*)::bigint AS cnt
+        FROM customers
+        WHERE "restaurantId" = ${restaurantId}
+          AND "isGuest" = false
+          AND "crmContactable" = true
+          AND COALESCE("lastOrderAt", "importedLastOrderAt") IS NULL
+      `,
       // Contactability health across the whole non-guest base.
       prisma.$queryRaw<Array<{
         contactable:     bigint;
@@ -655,6 +667,7 @@ export class CRMService {
     const mornoCustomers = bucketNum("morno");
     const frioCustomers  = bucketNum("frio");
     const perdidosCustomers = perdidoRows[0] ? Number(perdidoRows[0].cnt) : 0;
+    const naoCompraramCustomers = naoCompraramRows[0] ? Number(naoCompraramRows[0].cnt) : 0;
 
     const tierNum = (bucket: string) => {
       const found = tierRows.find(r => r.bucket === bucket);
@@ -692,6 +705,7 @@ export class CRMService {
       mornoCustomers,
       frioCustomers,
       perdidosCustomers,
+      naoCompraramCustomers,
       newCustomers,
       segments: [
         { tier: "DIAMANTE" as CustomerTier, count: diamante },

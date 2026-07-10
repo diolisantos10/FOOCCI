@@ -87,6 +87,7 @@ export interface SendResult {
 const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "clientes-quentes":   "QUENTE",
   "quente-esfriando":   "QUENTE_ESFRIANDO",
+  "cadastro-sem-compra":"SEM_PEDIDOS",
   "recuperar-frios":    "FRIO",
   "reativar-mornos":    "MORNO",
   "segunda-compra":     "PRIMEIRO_PEDIDO",
@@ -225,6 +226,19 @@ export async function resolveAudience(
       return serialize(await prisma.customer.findMany({
         where: { ...baseWhere, tier: { in: ["OURO", "DIAMANTE"] } },
         orderBy: [{ tier: "asc" }, { totalSpend: "desc" }],
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+
+    case "SEM_PEDIDOS":
+      // Identified (contactable via baseWhere) but NEVER purchased — no native and
+      // no imported order history. Prime target for a first-order campaign.
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          totalOrders: 0,
+          OR: [{ importedOrderCount: null }, { importedOrderCount: 0 }],
+        },
+        orderBy: { createdAt: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
 

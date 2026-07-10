@@ -43,7 +43,7 @@ export default async function CRMPage({
   let actionCenterActions: CrmAction[]    = [];
   let overviewStats: OverviewStats = {
     totalCustomers: 0, ativoCustomers: 0, mornoCustomers: 0, frioCustomers: 0,
-    perdidosCustomers: 0,
+    perdidosCustomers: 0, naoCompraramCustomers: 0,
     newCustomers: 0, segments: [],
     deliveryOnlyCustomers: 0, dineInOnlyCustomers: 0, bothChannelsCustomers: 0,
     contactableCustomers: 0, withEmailCustomers: 0, uncontactableCustomers: 0,
