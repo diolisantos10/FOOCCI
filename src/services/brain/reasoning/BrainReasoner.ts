@@ -21,8 +21,9 @@ import type { AgentProfileDefinition } from "@/services/agents/types";
 import { selectEngine } from "../engines/AIEngineRouter";
 import type { AIEngineSelection } from "../engines/AIEngineTypes";
 import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
-import { restaurantKnowledgeAdapter } from "../knowledge/RestaurantKnowledgeAdapter";
+import { resolveKnowledgeAdapter } from "../knowledge/KnowledgeAdapterRegistry";
 import type { BusinessKnowledgeSnapshot } from "../knowledge/BusinessKnowledgeContract";
+import { listApprovedLearningsForBrain } from "../training/BrainTrainingContract";
 import type { BrainReasoningRequest, BrainReasoningResult, BrainCoherenceCheck } from "../core/BrainTypes";
 
 export type ReasoningMode = "LLM" | "FALLBACK";
@@ -61,24 +62,53 @@ function buildScopePrompt(profile: AgentProfileDefinition): string {
 }
 
 // ── Knowledge → truth block ─────────────────────────────────────────────────────
+// Serializes EVERY truthSources key — anything an adapter loads reaches the LLM.
+const TRUTH_LABELS: Record<string, string> = {
+  policies: "Identidade/política",
+  products: "Produtos",
+  prices: "Preços",
+  payments: "Pagamentos",
+  hours: "Horários/atendimento",
+  customers: "Clientes (agregado)",
+  orders: "Pedidos (agregado)",
+  materials: "Materiais",
+  conversations: "Conversas (agregado)",
+  evidence: "Evidências",
+};
+
 function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
-  const t = snap.truthSources;
   const parts: string[] = [];
-  if (t.policies) parts.push(`Identidade/política: ${JSON.stringify(t.policies)}`);
-  if (t.products) parts.push(`Produtos (resumo): ${JSON.stringify(t.products)}`);
-  if (t.prices) parts.push(`Preços (resumo): ${JSON.stringify(t.prices)}`);
-  if (t.payments) parts.push(`Pagamentos: ${JSON.stringify(t.payments)}`);
-  if (t.hours) parts.push(`Horários/entrega: ${JSON.stringify(t.hours)}`);
+  for (const [key, value] of Object.entries(snap.truthSources)) {
+    if (value === undefined || value === null) continue;
+    parts.push(`${TRUTH_LABELS[key] ?? key}: ${JSON.stringify(value)}`);
+  }
   parts.push(`CONTEXTO AUSENTE (NÃO inventar): ${snap.missingContext.join("; ") || "nenhum"}`);
   if (snap.safetyNotes.length) parts.push(`SEGURANÇA: ${snap.safetyNotes.join("; ")}`);
   return parts.join("\n");
 }
 
+// The Brain core knows no vertical: the adapter comes from the registry.
 async function loadKnowledge(req: BrainReasoningRequest): Promise<BusinessKnowledgeSnapshot> {
-  if (req.businessType === "RESTAURANT") {
-    return restaurantKnowledgeAdapter.getSnapshot(req.businessId).catch(() => emptySnapshot(req));
+  const adapter = resolveKnowledgeAdapter(req.businessType);
+  if (!adapter) return emptySnapshot(req);
+  return adapter.getSnapshot(req.businessId, { agentId: req.agentId }).catch(() => emptySnapshot(req));
+}
+
+// ── Approved learnings → the human-approved pool finally feeds reasoning ───────
+const MAX_LEARNINGS = 10;
+const MAX_LEARNING_CHARS = 220;
+
+async function approvedLearningsBlock(agentId: string): Promise<string> {
+  try {
+    const learnings = await listApprovedLearningsForBrain(agentId, MAX_LEARNINGS);
+    if (!learnings.length) return "";
+    const lines = learnings.map(
+      (l) => `- ${l.title}: ${l.trainingRule}`.slice(0, MAX_LEARNING_CHARS),
+    );
+    return `\n\nAPRENDIZADOS APROVADOS (regras extraídas de casos reais, aprovadas por humano):\n${lines.join("\n")}`;
+  } catch {
+    return ""; // best-effort: learnings never block reasoning
   }
-  return emptySnapshot(req);
 }
 
 function emptySnapshot(req: BrainReasoningRequest): BusinessKnowledgeSnapshot {
@@ -122,9 +152,17 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
   }
 
   try {
-    const systemPrompt = `${buildScopePrompt(profile)}\n\nBASE DE CONHECIMENTO (verdade):\n${knowledgeBlock(snapshot)}`;
+    const learningsBlock = await approvedLearningsBlock(req.agentId);
+    const systemPrompt =
+      `${buildScopePrompt(profile)}\n\nBASE DE CONHECIMENTO (verdade):\n${knowledgeBlock(snapshot)}${learningsBlock}`;
+    const historyBlock = req.sanitizedHistory?.length
+      ? `HISTÓRICO RECENTE (sanitizado, do mais antigo ao mais novo):\n${req.sanitizedHistory
+          .map((t) => `${t.role === "CUSTOMER" ? "Cliente" : "Agente"}: ${t.content}`)
+          .join("\n")}`
+      : "";
     const userContent = [
       req.contextHints?.length ? `PISTAS DE CONTEXTO: ${req.contextHints.join("; ")}` : "",
+      historyBlock,
       `MENSAGEM DO CLIENTE (sanitizada): "${req.sanitizedInput}"`,
       req.currentResponse ? `RESPOSTA ATUAL DO AGENTE (sanitizada): "${req.currentResponse}"` : "",
     ].filter(Boolean).join("\n");

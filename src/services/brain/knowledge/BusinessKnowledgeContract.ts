@@ -29,8 +29,14 @@ export interface BusinessKnowledgeSnapshot {
   safetyNotes: string[];
 }
 
+/** Optional context an adapter may use to scope the snapshot (never required). */
+export interface KnowledgeSnapshotOptions {
+  /** Which agent is asking — lets adapters scope agent-specific materials. */
+  agentId?: string;
+}
+
 /** Every business adapter (restaurant, agency, …) implements this. */
 export interface BusinessKnowledgeAdapter {
   businessType: BusinessType;
-  getSnapshot(businessId: string): Promise<BusinessKnowledgeSnapshot>;
+  getSnapshot(businessId: string, opts?: KnowledgeSnapshotOptions): Promise<BusinessKnowledgeSnapshot>;
 }

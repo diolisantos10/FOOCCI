@@ -15,6 +15,12 @@ export type BusinessType = "RESTAURANT" | "AGENCY" | "GENERIC";
 
 export type BrainSourceType = "REAL_CONVERSATION" | "SIMULATION" | "MANUAL_TEST" | "SYSTEM_EVENT";
 
+/** One sanitized turn of the recent conversation (never raw PII). */
+export interface SanitizedTurn {
+  role: "CUSTOMER" | "AGENT";
+  content: string;
+}
+
 export interface BrainReasoningRequest {
   businessId: string;
   businessType: BusinessType;
@@ -23,6 +29,8 @@ export interface BrainReasoningRequest {
   sourceType: BrainSourceType;
   /** ALWAYS sanitized — the Brain never receives raw PII. */
   sanitizedInput: string;
+  /** Recent conversation window (sanitized), oldest first. Optional — single-turn works as before. */
+  sanitizedHistory?: SanitizedTurn[];
   currentResponse?: string;
   contextHints?: string[];
 }

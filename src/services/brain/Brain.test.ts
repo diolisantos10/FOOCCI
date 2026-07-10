@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   restaurant: { findUnique: vi.fn() },
-  menuItem: { count: vi.fn() },
+  menuItem: { count: vi.fn(), findMany: vi.fn() },
+  businessHours: { findMany: vi.fn() },
+  promotion: { findMany: vi.fn() },
+  restaurantKnowledgeItem: { findMany: vi.fn() },
   agentLibrarySource: { count: vi.fn() },
   waiterResultEvidence: { count: vi.fn() },
 }));
@@ -30,6 +33,16 @@ beforeEach(() => {
     brandConfig: { tone: "friendly" },
   });
   db.menuItem.count.mockResolvedValue(42);
+  db.menuItem.findMany.mockResolvedValue([
+    { name: "Combo Salmão 20 peças", price: 59.9, priceDelivery: 62.9, priceDineIn: null, isAvailable: true, category: { name: "Combos" } },
+  ]);
+  db.businessHours.findMany.mockResolvedValue([
+    { dayOfWeek: 2, isOpen: true, openTime: "18:00", closeTime: "23:00", periodsJson: null },
+  ]);
+  db.promotion.findMany.mockResolvedValue([]);
+  db.restaurantKnowledgeItem.findMany.mockResolvedValue([
+    { category: "RODIZIO_INFO", title: "Tem rodízio?", answer: "Sim, todos os dias, R$ 89,90." },
+  ]);
   db.agentLibrarySource.count.mockResolvedValue(3);
   db.waiterResultEvidence.count.mockResolvedValue(7);
 });
@@ -101,11 +114,24 @@ describe("(5-6) AI Engine Router", () => {
 });
 
 describe("(7) Restaurant Knowledge Adapter", () => {
-  it("retorna snapshot agregado sem PII e com missingContext honesto", async () => {
+  it("retorna snapshot FACT-LEVEL sem PII e com missingContext honesto", async () => {
     const snap = await restaurantKnowledgeAdapter.getSnapshot("r1");
     expect(snap.businessType).toBe("RESTAURANT");
     expect(snap.truthSources.payments).toEqual({ pix: true, cartao: true, dinheiro: true, link: false });
-    expect(snap.truthSources.products).toEqual([{ menuItems: 42 }]);
+    // v2: fatos reais, não contagens — nomes, preços (incl. canal), resumo primeiro
+    expect(snap.truthSources.products?.[0]).toEqual({ totalItens: 42, listados: 1 });
+    expect(snap.truthSources.products?.[1]).toMatchObject({
+      nome: "Combo Salmão 20 peças",
+      preco: 59.9,
+      precoDelivery: 62.9,
+      categoria: "Combos",
+    });
+    // horários reais chegam ao snapshot
+    expect(snap.truthSources.hours).toMatchObject({ funcionamento: { ter: "18:00-23:00" }, delivery: true, retirada: true });
+    // o Q&A curado (ACTIVE) é verdade de primeira classe — o caso rodízio
+    expect(JSON.stringify(snap.truthSources.policies)).toMatch(/rod[íi]zio/i);
+    // cardápio parcial declarado honestamente (1 de 42)
+    expect(snap.missingContext.join(" ")).toMatch(/cardápio parcial/i);
     expect(snap.missingContext.join(" ")).toMatch(/Alelo|refei/i);
     // sem PII: nenhum telefone/email/nome de cliente no snapshot
     const json = JSON.stringify(snap);

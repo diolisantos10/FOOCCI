@@ -23,6 +23,9 @@ import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
+import type { SanitizedTurn } from "@/services/brain/core/BrainTypes";
+import { sanitizeText } from "@/services/simulation/simulationSanitizer";
+import { isWhatsAppBrainShadowMode } from "./WhatsAppBrainReasoningAdapter";
 import { resolveProviderId, WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 
 /** The Brain front door is ON for everyone by default; set WHATSAPP_BRAIN_ENABLED=false to disable. */
@@ -42,6 +45,53 @@ const ALLOW_BRAIN_FREE_FORM: boolean = false;
 export interface BrainReplyOutcome {
   status: "REPLIED" | "HANDOFF" | "SKIPPED";
   reason?: string;
+}
+
+// ── Conversation window: the Brain reasons over recent turns, not one sentence ──
+const WINDOW_TURNS = 8;
+const WINDOW_TURN_CHARS = 300;
+
+async function buildSanitizedWindow(conversationId: string): Promise<SanitizedTurn[]> {
+  const msgs = await prisma.message.findMany({
+    where: { conversationId, type: "TEXT" },
+    orderBy: { sentAt: "desc" },
+    take: WINDOW_TURNS,
+    select: { direction: true, content: true },
+  });
+  return msgs.reverse().map((m) => ({
+    role: m.direction === "INBOUND" ? ("CUSTOMER" as const) : ("AGENT" as const),
+    content: sanitizeText(m.content).slice(0, WINDOW_TURN_CHARS),
+  }));
+}
+
+// ── Shadow mode: o Brain raciocina em paralelo SÓ para log/evidência — nunca
+// responde o cliente. É o acúmulo de provas da escada de reativação do free-form
+// (grep "[BrainShadow]" nos logs do Railway).
+async function runShadowReasoning(conversationId: string, restaurantId: string, inboundText: string): Promise<void> {
+  if (!isWhatsAppBrainShadowMode() || !process.env.OPENAI_API_KEY) return;
+  const sanitizedHistory = await buildSanitizedWindow(conversationId).catch(() => [] as SanitizedTurn[]);
+  const outcome = await reasonAsAgent({
+    businessId: restaurantId,
+    businessType: "RESTAURANT",
+    agentId: "whatsapp",
+    agentRole: "WhatsApp",
+    sourceType: "REAL_CONVERSATION",
+    sanitizedInput: sanitizeText(inboundText),
+    sanitizedHistory,
+  });
+  console.log(
+    "[BrainShadow]",
+    JSON.stringify({
+      conversationId,
+      intent: outcome.result.primaryIntent,
+      mode: outcome.reasoningMode,
+      engine: `${outcome.engine.provider}:${outcome.engine.model}`,
+      confidence: outcome.result.confidence,
+      coherence: outcome.result.coherenceCheck.verdict,
+      wouldEscalate: outcome.result.shouldEscalate,
+      wouldReply: outcome.result.idealResponse.slice(0, 160),
+    }),
+  );
 }
 
 export const WhatsAppBrainRuntimeService = {
@@ -125,6 +175,10 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   // template; qualquer pergunta aberta → handoff para humano). Sem resposta
   // livre inventada pelo Brain.
   if (!ALLOW_BRAIN_FREE_FORM) {
+    // Sombra (fire-and-forget): nunca atrasa nem toca a resposta determinística.
+    void runShadowReasoning(conversationId, conversation.restaurantId, inboundText).catch((err) =>
+      console.error("[BrainShadow] failed:", err),
+    );
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return { status: "REPLIED", reason: "free-form disabled → receptionist" };
   }
@@ -132,14 +186,16 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const { restaurantId } = conversation;
 
   // Reason via the Brain (WhatsApp scope). Truth (menu/prices/payments/hours) is
-  // loaded inside the Brain from the knowledge snapshot — we only pass the message.
+  // loaded inside the Brain from the knowledge snapshot; the sanitized window
+  // gives it the recent conversation instead of a single sentence.
   const outcome = await reasonAsAgent({
     businessId: restaurantId,
     businessType: "RESTAURANT",
     agentId: "whatsapp",
     agentRole: "WhatsApp",
     sourceType: "REAL_CONVERSATION",
-    sanitizedInput: lastMessage.content.trim(),
+    sanitizedInput: sanitizeText(lastMessage.content.trim()),
+    sanitizedHistory: await buildSanitizedWindow(conversationId).catch(() => [] as SanitizedTurn[]),
   });
 
   const reply = outcome.result.idealResponse?.trim();

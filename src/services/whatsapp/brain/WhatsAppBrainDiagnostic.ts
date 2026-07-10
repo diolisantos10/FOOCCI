@@ -15,6 +15,8 @@ interface CaseExpectation {
   expectIntent: string;
   expectActions: string[];
   mustNotRecommendDish?: boolean;
+  /** P0 permanente do incidente rodízio: a estratégia NUNCA pode negar um serviço. */
+  mustNotDenyService?: boolean;
 }
 
 const CASES: CaseExpectation[] = [
@@ -24,6 +26,12 @@ const CASES: CaseExpectation[] = [
   { message: "Quero falar com atendente", isRestaurantOpen: true, expectIntent: "ASK_ATTENDANT", expectActions: ["HANDOFF_TO_HUMAN"] },
   { message: "Qual a taxa de entrega?", isRestaurantOpen: true, expectIntent: "ASK_DELIVERY", expectActions: ["ANSWER_BASIC_INFO", "ASK_CLARIFYING_QUESTION"] },
   { message: "Deu problema no meu pedido", isRestaurantOpen: true, expectIntent: "COMPLAINT", expectActions: ["HANDOFF_TO_HUMAN"] },
+  // REGRESSÃO RODÍZIO (o incidente que desligou o free-form): uma pergunta sobre
+  // serviço jamais pode virar NEGAÇÃO ("não temos"). Comportamento atual (honesto):
+  // o guardrail lê "rodízio" como item e roteia pro fluxo de pedido — que resolve
+  // contra o cardápio REAL, sem inventar. Melhorar a classificação (INFO_QUESTION
+  // via conhecimento curado) é Fase 2/3 do roadmap; a negação é o P0 permanente.
+  { message: "Vocês têm rodízio?", isRestaurantOpen: true, expectIntent: "ORDER_BY_TEXT", expectActions: ["START_TEXT_ORDER_DRAFT"], mustNotDenyService: true, mustNotRecommendDish: true },
 ];
 
 export interface BrainDiagnosticCase {
@@ -54,6 +62,10 @@ function dishRecommended(r: WhatsAppBrainResult): boolean {
   return /recomend|mais pedidos|prato|sugest[ãa]o de prato/i.test(r.safeReplyStrategy);
 }
 
+function deniesService(r: WhatsAppBrainResult): boolean {
+  return /n[ãa]o (temos|tem|fazemos|oferecemos|trabalhamos|existe)/i.test(r.safeReplyStrategy);
+}
+
 export function runWhatsAppBrainDiagnostic(): BrainDiagnosticResult {
   const cases: BrainDiagnosticCase[] = [];
   let passed = 0;
@@ -66,8 +78,9 @@ export function runWhatsAppBrainDiagnostic(): BrainDiagnosticResult {
     const intentOk = r.primaryIntent === c.expectIntent;
     const actionOk = c.expectActions.includes(r.recommendedAction);
     const dishOk = !c.mustNotRecommendDish || !dishRecommended(r);
+    const noDenial = !c.mustNotDenyService || !deniesService(r);
     const safe = r.runtimeTouched === false;
-    const pass = intentOk && actionOk && dishOk && safe;
+    const pass = intentOk && actionOk && dishOk && noDenial && safe;
     if (pass) passed += 1;
     cases.push({
       message: c.message,
@@ -76,7 +89,7 @@ export function runWhatsAppBrainDiagnostic(): BrainDiagnosticResult {
       shouldHandoff: r.shouldHandoff,
       shouldSendOrderLink: r.shouldSendOrderLink,
       pass,
-      note: pass ? "ok" : `intent:${intentOk} action:${actionOk} dish:${dishOk} safe:${safe}`,
+      note: pass ? "ok" : `intent:${intentOk} action:${actionOk} dish:${dishOk} denial:${noDenial} safe:${safe}`,
     });
   }
 

@@ -38,7 +38,7 @@ export const AGENT_ENGINE_PREFERENCES: AgentEngineConfig = {
   waiter: "OPENAI",
   crm: "OPENAI",
   whatsapp: "OPENAI",
-  analytics: "OPENAI",
+  "analytics-product": "OPENAI", // must match the profile registry slug
   quality: "OPENAI",
 };
 

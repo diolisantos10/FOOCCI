@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   conversation: { findUnique: vi.fn(), update: vi.fn() },
-  message: { findFirst: vi.fn(), create: vi.fn() },
+  message: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -30,7 +30,18 @@ const recep = vi.hoisted(() => ({
 }));
 vi.mock("@/services/ai/WhatsAppReceptionistService", () => recep);
 
+import { afterEach } from "vitest";
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "./WhatsAppBrainRuntimeService";
+
+const OLD_SHADOW = process.env.WHATSAPP_BRAIN_SHADOW_MODE;
+const OLD_KEY = process.env.OPENAI_API_KEY;
+
+afterEach(() => {
+  if (OLD_SHADOW === undefined) delete process.env.WHATSAPP_BRAIN_SHADOW_MODE;
+  else process.env.WHATSAPP_BRAIN_SHADOW_MODE = OLD_SHADOW;
+  if (OLD_KEY === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = OLD_KEY;
+});
 
 function brainOutcome(over: Record<string, unknown> = {}) {
   return {
@@ -48,6 +59,9 @@ function brainOutcome(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Shadow determinístico nos testes: OFF por padrão (o teste dedicado liga).
+  process.env.WHATSAPP_BRAIN_SHADOW_MODE = "false";
+  db.message.findMany.mockResolvedValue([]);
   db.conversation.findUnique.mockResolvedValue({
     id: "conv_1", restaurantId: "rest_1", status: "BOT", aiEnabled: true,
     customer: { id: "cust_1", phone: "5511999", name: "Ana" },
@@ -115,6 +129,24 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(brain.reasonAsAgent).not.toHaveBeenCalled();
     expect(out.status).toBe("REPLIED");
+  });
+
+  it("SHADOW: o Brain raciocina em paralelo (só log/evidência) sem responder o cliente", async () => {
+    process.env.WHATSAPP_BRAIN_SHADOW_MODE = "true";
+    process.env.OPENAI_API_KEY = "sk-test";
+    db.message.findMany.mockResolvedValue([
+      { direction: "INBOUND", content: "vocês têm rodízio?" },
+    ]);
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    // A resposta determinística sai na hora; a sombra corre por fora.
+    expect(out.status).toBe("REPLIED");
+    expect(out.reason).toContain("free-form disabled");
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    await vi.waitFor(() => expect(brain.reasonAsAgent).toHaveBeenCalledTimes(1));
+    const req = brain.reasonAsAgent.mock.calls[0][0];
+    expect(req.sanitizedHistory.length).toBeGreaterThan(0);
+    // Sombra NUNCA envia nada ao cliente.
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
   });
 
   it("never touches a conversation a human took over", async () => {

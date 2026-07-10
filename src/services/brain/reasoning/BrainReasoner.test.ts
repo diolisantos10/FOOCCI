@@ -3,7 +3,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 // Knowledge adapter reads (mocked DB)
 const db = vi.hoisted(() => ({
   restaurant: { findUnique: vi.fn() },
-  menuItem: { count: vi.fn() },
+  menuItem: { count: vi.fn(), findMany: vi.fn() },
+  businessHours: { findMany: vi.fn() },
+  promotion: { findMany: vi.fn() },
+  restaurantKnowledgeItem: { findMany: vi.fn() },
   agentLibrarySource: { count: vi.fn() },
   waiterResultEvidence: { count: vi.fn() },
 }));
@@ -35,6 +38,10 @@ beforeEach(() => {
     brandConfig: { tone: "friendly" },
   });
   db.menuItem.count.mockResolvedValue(42);
+  db.menuItem.findMany.mockResolvedValue([]);
+  db.businessHours.findMany.mockResolvedValue([]);
+  db.promotion.findMany.mockResolvedValue([]);
+  db.restaurantKnowledgeItem.findMany.mockResolvedValue([]);
   db.agentLibrarySource.count.mockResolvedValue(3);
   db.waiterResultEvidence.count.mockResolvedValue(7);
 });
@@ -101,6 +108,54 @@ describe("BrainReasoner — the single reasoning gateway", () => {
     expect(out.reasoningMode).toBe("LLM");
     expect(out.result.primaryIntent).toBe("RELATIONSHIP_FOLLOWUP");
     expect(out.result.runtimeTouched).toBe(false);
+  });
+
+  it("REGRESSÃO RODÍZIO: a verdade curada e o cardápio real chegam ao prompt do piloto", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    db.restaurantKnowledgeItem.findMany.mockResolvedValue([
+      { category: "RODIZIO_INFO", title: "Vocês têm rodízio?", answer: "Sim! Rodízio de sushi todos os dias, R$ 89,90 por pessoa." },
+    ]);
+    db.menuItem.findMany.mockResolvedValue([
+      { name: "Combo Salmão 20 peças", price: 59.9, priceDelivery: null, priceDineIn: null, isAvailable: true, category: { name: "Combos" } },
+    ]);
+    ai.create.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        primaryIntent: "RODIZIO_QUESTION",
+        idealResponse: "Temos sim! Rodízio todos os dias. 😊",
+        shouldEscalate: false,
+      }) } }],
+    });
+    const out = await reasonAsAgent({ ...baseReq, agentId: "whatsapp", agentRole: "WhatsApp", sanitizedInput: "vocês têm rodízio?" });
+    expect(out.reasoningMode).toBe("LLM");
+    const systemPrompt = ai.create.mock.calls[0][0].messages[0].content as string;
+    // O incidente que desligou o free-form: o modelo negou o rodízio porque a
+    // verdade nunca chegava ao prompt. Agora ela TEM que chegar.
+    expect(systemPrompt).toMatch(/rod[íi]zio/i);
+    expect(systemPrompt).toContain("89,90");
+    expect(systemPrompt).toContain("Combo Salmão 20 peças");
+  });
+
+  it("janela de conversa sanitizada entra no conteúdo do usuário quando fornecida", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    ai.create.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        primaryIntent: "FOLLOWUP",
+        idealResponse: "Claro, já te explico!",
+        shouldEscalate: false,
+      }) } }],
+    });
+    await reasonAsAgent({
+      ...baseReq,
+      sanitizedHistory: [
+        { role: "CUSTOMER", content: "vocês entregam no centro?" },
+        { role: "AGENT", content: "Entregamos sim!" },
+      ],
+      sanitizedInput: "e qual o valor da entrega?",
+    });
+    const userContent = ai.create.mock.calls[0][0].messages[1].content as string;
+    expect(userContent).toContain("HISTÓRICO RECENTE");
+    expect(userContent).toContain("vocês entregam no centro?");
+    expect(userContent).toContain("e qual o valor da entrega?");
   });
 
   it("reasons as the WhatsApp receptionist (real scope) — not as a menu matcher", async () => {

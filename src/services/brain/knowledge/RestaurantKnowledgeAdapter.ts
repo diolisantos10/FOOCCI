@@ -1,42 +1,108 @@
 /**
  * RestaurantKnowledgeAdapter — maps what Foocci ALREADY knows about a restaurant
- * into the generic BusinessKnowledgeSnapshot. Read-only, summary/count level —
- * no customer PII ever enters the snapshot (no names, phones, addresses).
+ * into the generic BusinessKnowledgeSnapshot. Read-only — no customer PII ever
+ * enters the snapshot (no names, phones, addresses).
  *
- * v1 covers: identity, payments, delivery/pickup, menu size, library materials,
- * approved evidence count, and the missing-context list (e.g. meal-voucher
- * benefits are NOT a configurable in the schema → agents must never claim them).
+ * v2 is FACT-LEVEL: real menu items with prices (incl. channel prices), real
+ * business hours, active promotions and the curated Q&A knowledge base
+ * (RestaurantKnowledgeItem ACTIVE) — not just counts. This is the truth the
+ * LLM reasons over; the count-only v1 snapshot is why the model once denied
+ * that rodízio existed. Everything is capped by a token budget and whatever
+ * is not loaded goes to missingContext so the agent never invents.
  */
 
 import { prisma } from "@/lib/prisma";
-import type { BusinessKnowledgeAdapter, BusinessKnowledgeSnapshot } from "./BusinessKnowledgeContract";
+import type {
+  BusinessKnowledgeAdapter,
+  BusinessKnowledgeSnapshot,
+  KnowledgeSnapshotOptions,
+} from "./BusinessKnowledgeContract";
+
+// Token budget caps — keep the snapshot prompt-sized.
+const MAX_MENU_ITEMS = 120;
+const MAX_KNOWLEDGE_ITEMS = 30;
+const MAX_PROMOTIONS = 10;
+const MAX_ANSWER_CHARS = 240;
+
+const DAY_NAMES = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"] as const;
+
+function money(v: unknown): number | undefined {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
   businessType: "RESTAURANT",
 
-  async getSnapshot(businessId: string): Promise<BusinessKnowledgeSnapshot> {
+  async getSnapshot(businessId: string, opts?: KnowledgeSnapshotOptions): Promise<BusinessKnowledgeSnapshot> {
+    const agentId = opts?.agentId ?? "waiter";
     const missingContext: string[] = [];
     const safetyNotes: string[] = [
       "Nunca inventar produto, preço, forma de pagamento ou promoção que não esteja cadastrado.",
       "Snapshot é agregado — nunca contém nome/telefone/endereço de cliente.",
     ];
 
-    const [restaurant, menuItemCount, materialCount, approvedEvidenceCount] = await Promise.all([
-      prisma.restaurant
-        .findUnique({
-          where: { id: businessId },
-          select: {
-            name: true,
-            paymentSettings: { select: { acceptPix: true, acceptCash: true, acceptCard: true, acceptLink: true } },
-            deliveryConfig: { select: { enabled: true, pickupEnabled: true } },
-            brandConfig: { select: { tone: true } },
-          },
-        })
-        .catch(() => null),
-      prisma.menuItem.count({ where: { category: { restaurantId: businessId } } }).catch(() => 0),
-      prisma.agentLibrarySource.count({ where: { agentSlug: "waiter" } }).catch(() => 0),
-      prisma.waiterResultEvidence.count({ where: { restaurantId: businessId, status: "APPROVED" } }).catch(() => 0),
-    ]);
+    const [restaurant, menuItemCount, menuItems, businessHours, promotions, knowledgeItems, materialCount, approvedEvidenceCount] =
+      await Promise.all([
+        prisma.restaurant
+          .findUnique({
+            where: { id: businessId },
+            select: {
+              name: true,
+              paymentSettings: { select: { acceptPix: true, acceptCash: true, acceptCard: true, acceptLink: true } },
+              deliveryConfig: { select: { enabled: true, pickupEnabled: true } },
+              brandConfig: { select: { tone: true } },
+            },
+          })
+          .catch(() => null),
+        prisma.menuItem.count({ where: { category: { restaurantId: businessId } } }).catch(() => 0),
+        prisma.menuItem
+          .findMany({
+            where: { category: { restaurantId: businessId }, isActive: true },
+            select: {
+              name: true,
+              price: true,
+              priceDelivery: true,
+              priceDineIn: true,
+              isAvailable: true,
+              category: { select: { name: true } },
+            },
+            orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+            take: MAX_MENU_ITEMS,
+          })
+          .catch(() => [] as Array<{
+            name: string;
+            price: unknown;
+            priceDelivery: unknown;
+            priceDineIn: unknown;
+            isAvailable: boolean;
+            category: { name: string } | null;
+          }>),
+        prisma.businessHours
+          .findMany({
+            where: { restaurantId: businessId },
+            select: { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true, periodsJson: true },
+            orderBy: { dayOfWeek: "asc" },
+          })
+          .catch(() => [] as Array<{ dayOfWeek: number; isOpen: boolean; openTime: string; closeTime: string; periodsJson: unknown }>),
+        prisma.promotion
+          .findMany({
+            where: { restaurantId: businessId, status: "ACTIVE" },
+            select: { name: true, description: true, type: true, discountValue: true, couponCode: true },
+            take: MAX_PROMOTIONS,
+          })
+          .catch(() => [] as Array<{ name: string; description: string | null; type: string; discountValue: unknown; couponCode: string | null }>),
+        prisma.restaurantKnowledgeItem
+          .findMany({
+            where: { restaurantId: businessId, status: "ACTIVE" },
+            select: { category: true, title: true, answer: true },
+            orderBy: { usageCount: "desc" },
+            take: MAX_KNOWLEDGE_ITEMS,
+          })
+          .catch(() => [] as Array<{ category: string; title: string; answer: string }>),
+        prisma.agentLibrarySource.count({ where: { agentSlug: agentId } }).catch(() => 0),
+        prisma.waiterResultEvidence.count({ where: { restaurantId: businessId, status: "APPROVED" } }).catch(() => 0),
+      ]);
 
     if (!restaurant) {
       return {
@@ -57,23 +123,77 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         }
       : undefined;
     if (!payments) missingContext.push("formas de pagamento");
-    // The schema has no meal-voucher (Alelo/VR/Sodexo) configuration at all.
-    missingContext.push("benefício refeição (Alelo/VR/Sodexo) — não cadastrado");
+    // The schema has no meal-voucher (Alelo/VR/Sodexo) configuration; only a curated
+    // PAYMENT_INFO knowledge item can answer it — otherwise the agent must not claim it.
+    const hasPaymentKnowledge = knowledgeItems.some((k) => k.category === "PAYMENT_INFO");
+    if (!hasPaymentKnowledge) missingContext.push("benefício refeição (Alelo/VR/Sodexo) — não cadastrado");
 
-    const hours = restaurant.deliveryConfig
-      ? { delivery: restaurant.deliveryConfig.enabled, retirada: restaurant.deliveryConfig.pickupEnabled }
+    // ── Products: real names + prices (channel prices when set) ────────────────
+    const items = menuItems.map((i) => ({
+      nome: i.name,
+      categoria: i.category?.name ?? "",
+      preco: money(i.price),
+      ...(i.priceDelivery != null ? { precoDelivery: money(i.priceDelivery) } : {}),
+      ...(i.priceDineIn != null ? { precoSalao: money(i.priceDineIn) } : {}),
+      ...(i.isAvailable ? {} : { indisponivel: true }),
+    }));
+    const products: unknown[] = [{ totalItens: menuItemCount, listados: items.length }, ...items];
+    if (menuItemCount > items.length) {
+      missingContext.push(`cardápio parcial no contexto (${items.length} de ${menuItemCount} itens) — confirmar antes de negar um item`);
+    }
+    if (items.length === 0) missingContext.push("cardápio");
+
+    // ── Hours: real weekly schedule + delivery/pickup flags ────────────────────
+    const funcionamento: Record<string, string> = {};
+    for (const h of businessHours) {
+      const day = DAY_NAMES[h.dayOfWeek] ?? String(h.dayOfWeek);
+      if (!h.isOpen) {
+        funcionamento[day] = "fechado";
+      } else if (Array.isArray(h.periodsJson) && h.periodsJson.length) {
+        funcionamento[day] = (h.periodsJson as Array<{ open?: string; close?: string }>)
+          .map((p) => `${p.open ?? "?"}-${p.close ?? "?"}`)
+          .join(", ");
+      } else {
+        funcionamento[day] = `${h.openTime}-${h.closeTime}`;
+      }
+    }
+    const hours = {
+      ...(businessHours.length ? { funcionamento } : {}),
+      delivery: restaurant.deliveryConfig?.enabled ?? false,
+      retirada: restaurant.deliveryConfig?.pickupEnabled ?? false,
+    };
+    if (!restaurant.deliveryConfig) missingContext.push("delivery/retirada");
+    if (!businessHours.length) missingContext.push("horários de funcionamento detalhados");
+
+    // ── Policies: identity + the curated, human-approved Q&A (highest-quality truth) ──
+    const policies: unknown[] = [
+      { tone: restaurant.brandConfig?.tone ?? "friendly", nome: restaurant.name },
+      ...knowledgeItems.map((k) => ({
+        categoria: k.category,
+        pergunta: k.title,
+        resposta: k.answer.slice(0, MAX_ANSWER_CHARS),
+      })),
+    ];
+
+    const prices = promotions.length
+      ? promotions.map((p) => ({
+          promocao: p.name,
+          ...(p.description ? { descricao: p.description.slice(0, MAX_ANSWER_CHARS) } : {}),
+          tipo: p.type,
+          valor: money(p.discountValue),
+          ...(p.couponCode ? { cupom: p.couponCode } : {}),
+        }))
       : undefined;
-    if (!hours) missingContext.push("delivery/retirada");
-    missingContext.push("horários de funcionamento detalhados");
 
     return {
       businessId,
       businessType: "RESTAURANT",
       truthSources: {
-        products: [{ menuItems: menuItemCount }],
+        products,
+        ...(prices ? { prices } : {}),
         payments,
         hours,
-        policies: [{ tone: restaurant.brandConfig?.tone ?? "friendly", nome: restaurant.name }],
+        policies,
         materials: [{ librarySources: materialCount }],
         evidence: [{ approved: approvedEvidenceCount }],
       },
