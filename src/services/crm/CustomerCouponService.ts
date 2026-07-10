@@ -62,7 +62,14 @@ export class CustomerCouponService {
     now?: Date;
   }): Promise<GrantResult> {
     const now = input.now ?? new Date();
-    if (!input.coupon || !(input.coupon.value > 0)) return { granted: false, reason: "NO_COUPON" };
+    // A CUSTOM reward is defined by its text ("sobremesa grátis"), not a value —
+    // its stored value is only a cost estimate and may legitimately be 0.
+    const hasCoupon = !!input.coupon && (
+      input.coupon.type === "CUSTOM"
+        ? !!input.coupon.description?.trim()
+        : input.coupon.value > 0
+    );
+    if (!hasCoupon) return { granted: false, reason: "NO_COUPON" };
 
     // One coupon per campaign per customer (reprocess-safe).
     if (input.sourceCampaignId) {
@@ -190,17 +197,28 @@ export class CustomerCouponService {
       orderBy: { grantedAt: "desc" },
       select: {
         id: true, couponCode: true, discountType: true, discountValue: true,
-        expiresAt: true, grantedAt: true,
+        description: true, expiresAt: true, grantedAt: true,
       },
     });
-    return rows.map((r) => ({
-      id:            r.id,
-      code:          r.couponCode,
-      discountType:  r.discountType,
-      discountValue: r.discountValue != null ? Number(r.discountValue) : 0,
-      label:         r.discountType === "PERCENTAGE" ? `${Number(r.discountValue)}% OFF` : `R$ ${Number(r.discountValue)} OFF`,
-      expiresAt:     r.expiresAt,
-      grantedAt:     r.grantedAt,
-    }));
+    return rows.map((r) => {
+      // CUSTOM = a manual reward (the discount is fulfilled by hand, not in the total).
+      const isCustom = r.discountType === "CUSTOM";
+      const label = isCustom
+        ? (r.description?.trim() || "Recompensa")
+        : r.discountType === "PERCENTAGE"
+        ? `${Number(r.discountValue)}% OFF`
+        : `R$ ${Number(r.discountValue)} OFF`;
+      return {
+        id:            r.id,
+        code:          r.couponCode,
+        discountType:  r.discountType,
+        discountValue: isCustom ? 0 : (r.discountValue != null ? Number(r.discountValue) : 0),
+        description:   r.description ?? null,
+        isReward:      isCustom,
+        label,
+        expiresAt:     r.expiresAt,
+        grantedAt:     r.grantedAt,
+      };
+    });
   }
 }

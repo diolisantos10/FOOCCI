@@ -346,17 +346,24 @@ function ReadyMadeConfigModal({
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Cupom de desconto (opcional)</p>
 
               {/* Tipo do benefício */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {([
                   { key: null,          label: "Sem cupom" },
                   { key: "PERCENTAGE",  label: "Porcentagem" },
                   { key: "FIXED",       label: "Valor em R$" },
+                  { key: "CUSTOM",      label: "Recompensa" },
                 ] as { key: CouponType | null; label: string }[]).map((opt) => {
                   const active = (coupon?.type ?? null) === opt.key;
                   return (
                     <button
                       key={opt.label}
-                      onClick={() => setCoupon(opt.key === null ? null : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1], validityDays: coupon?.validityDays })}
+                      onClick={() => setCoupon(
+                        opt.key === null
+                          ? null
+                          : opt.key === "CUSTOM"
+                          ? { type: "CUSTOM", value: coupon?.type === "CUSTOM" ? coupon.value : 0, description: coupon?.description ?? "", validityDays: coupon?.validityDays }
+                          : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1], validityDays: coupon?.validityDays }
+                      )}
                       className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${active ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
                     >
                       {opt.label}
@@ -365,8 +372,8 @@ function ReadyMadeConfigModal({
                 })}
               </div>
 
-              {/* Valores fixos */}
-              {coupon && (
+              {/* Valores fixos (porcentagem / R$) */}
+              {coupon && coupon.type !== "CUSTOM" && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(coupon.type === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS).map((v) => {
                     const active = coupon.value === v;
@@ -380,6 +387,34 @@ function ReadyMadeConfigModal({
                       </button>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Recompensa personalizada (brinde) */}
+              {coupon && coupon.type === "CUSTOM" && (
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">O que o cliente ganha</label>
+                    <input
+                      type="text" maxLength={80}
+                      placeholder="ex.: sobremesa grátis"
+                      value={coupon.description ?? ""}
+                      onChange={(e) => setCoupon({ ...coupon, description: e.target.value })}
+                      className="w-full rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Custo estimado (R$)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min={0} max={100000}
+                        value={coupon.value}
+                        onChange={(e) => setCoupon({ ...coupon, value: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                        className="w-28 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                      />
+                      <span className="text-xs text-muted">usado só para o orçamento de cupons (0 = não conta)</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -397,8 +432,11 @@ function ReadyMadeConfigModal({
                   </div>
                   <p className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     O cliente ganha <span className="font-bold">{couponLabel(coupon)}</span> na carteira ao receber a mensagem,
-                    válido por <span className="font-bold">{coupon.validityDays ?? 30} dias</span> — usável só em compras online.
-                    Use <code className="rounded bg-white/70 px-1">{"{cupom}"}</code> na mensagem para mostrar o valor automaticamente.
+                    válido por <span className="font-bold">{coupon.validityDays ?? 30} dias</span>
+                    {coupon.type === "CUSTOM"
+                      ? " — resgatado no pedido, entregue pelo restaurante (sem desconto automático)."
+                      : " — usável só em compras online."}
+                    {" "}Use <code className="rounded bg-white/70 px-1">{"{cupom}"}</code> na mensagem para mostrar o benefício automaticamente.
                   </p>
                 </div>
               )}

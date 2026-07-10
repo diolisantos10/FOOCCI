@@ -80,6 +80,27 @@ describe("CustomerCouponService.grant", () => {
     expect(db.customerCoupon.create).not.toHaveBeenCalled();
   });
 
+  it("grants a CUSTOM reward defined by its text even when the cost is 0", async () => {
+    const r = await CustomerCouponService.grant({
+      restaurantId: "r1", customerId: "c1",
+      coupon: { type: "CUSTOM", value: 0, description: "sobremesa grátis" }, now: NOW,
+    });
+    expect(r).toMatchObject({ granted: true });
+    const data = db.customerCoupon.create.mock.calls[0]![0].data;
+    expect(data.discountType).toBe("CUSTOM");
+    expect(data.description).toBe("sobremesa grátis");
+    expect(data.couponCode).toBe("BRINDE");
+    expect(data.costEstimate).toBe(0);
+  });
+
+  it("rejects a CUSTOM reward with no text", async () => {
+    const r = await CustomerCouponService.grant({
+      restaurantId: "r1", customerId: "c1", coupon: { type: "CUSTOM", value: 5, description: "  " }, now: NOW,
+    });
+    expect(r).toEqual({ granted: false, reason: "NO_COUPON" });
+    expect(db.customerCoupon.create).not.toHaveBeenCalled();
+  });
+
   it("does not grant the same campaign's coupon twice to a customer", async () => {
     db.customerCoupon.findFirst.mockResolvedValue({ id: "existing" });
     const r = await CustomerCouponService.grant({
@@ -201,11 +222,22 @@ describe("CustomerCouponService.restoreForOrder", () => {
 describe("CustomerCouponService.listActive", () => {
   it("shapes active coupons for the cart from the self-contained discount", async () => {
     db.customerCoupon.findMany.mockResolvedValue([
-      { id: "cc1", couponCode: "20OFF", discountType: "PERCENTAGE", discountValue: 20, expiresAt: new Date("2026-08-01"), grantedAt: NOW },
-      { id: "cc2", couponCode: "R$10", discountType: "FIXED", discountValue: 10, expiresAt: null, grantedAt: NOW },
+      { id: "cc1", couponCode: "20OFF", discountType: "PERCENTAGE", discountValue: 20, description: null, expiresAt: new Date("2026-08-01"), grantedAt: NOW },
+      { id: "cc2", couponCode: "R$10", discountType: "FIXED", discountValue: 10, description: null, expiresAt: null, grantedAt: NOW },
     ]);
     const list = await CustomerCouponService.listActive("r1", "c1", NOW);
-    expect(list[0]).toMatchObject({ code: "20OFF", discountType: "PERCENTAGE", discountValue: 20, label: "20% OFF" });
-    expect(list[1]).toMatchObject({ discountType: "FIXED", discountValue: 10, label: "R$ 10 OFF" });
+    expect(list[0]).toMatchObject({ code: "20OFF", discountType: "PERCENTAGE", discountValue: 20, label: "20% OFF", isReward: false });
+    expect(list[1]).toMatchObject({ discountType: "FIXED", discountValue: 10, label: "R$ 10 OFF", isReward: false });
+  });
+
+  it("shapes a CUSTOM reward as a manual brinde — no money discount", async () => {
+    db.customerCoupon.findMany.mockResolvedValue([
+      { id: "cc3", couponCode: "BRINDE", discountType: "CUSTOM", discountValue: 8, description: "sobremesa grátis", expiresAt: null, grantedAt: NOW },
+    ]);
+    const list = await CustomerCouponService.listActive("r1", "c1", NOW);
+    expect(list[0]).toMatchObject({
+      discountType: "CUSTOM", discountValue: 0, isReward: true,
+      description: "sobremesa grátis", label: "sobremesa grátis",
+    });
   });
 });

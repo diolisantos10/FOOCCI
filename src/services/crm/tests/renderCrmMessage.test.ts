@@ -122,6 +122,11 @@ describe("renderCrmMessage — coupon + social variables", () => {
     expect(withFixed).toBe("Ganhe R$ 10 de desconto!");
   });
 
+  it("{cupom} renders a CUSTOM reward's text", () => {
+    const r = renderCrmMessage("Você ganhou {cupom} 🎁", customer, { ...ctx, coupon: { type: "CUSTOM", value: 8, description: "sobremesa grátis" } });
+    expect(r).toBe("Você ganhou sobremesa grátis 🎁");
+  });
+
   it("{cupom} is empty when there is no coupon", () => {
     expect(renderCrmMessage("Ganhe {cupom}", customer, ctx)).toBe("Ganhe ");
   });

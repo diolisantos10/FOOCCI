@@ -450,9 +450,14 @@ export async function POST(
   if (customerCouponId?.trim() && incomingCustomerId && !isGuestIdentifier(phone)) {
     const wc = await CustomerCouponService.findRedeemable(restaurantId, incomingCustomerId, customerCouponId.trim());
     if (wc) {
+      // CUSTOM = a manual reward ("sobremesa grátis") — the stored value is only a
+      // cost estimate for the budget, never a money discount. Still redeemed (marked
+      // used) so the customer can't reuse it; the restaurant fulfils it by hand.
       discountAmount = wc.discountType === "PERCENTAGE"
         ? Math.min((subtotal * wc.discountValue) / 100, subtotal)
-        : Math.min(wc.discountValue, orderTotal);
+        : wc.discountType === "FIXED"
+        ? Math.min(wc.discountValue, orderTotal)
+        : 0;
       discountAmount = Math.round(discountAmount * 100) / 100;
       redeemedWalletCouponId = wc.id;
     } else {

@@ -2423,7 +2423,7 @@ export function PedidoClient({
   const [couponError,   setCouponError]   = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
   // Wallet coupons (earned via CRM campaigns), redeemable in the cart.
-  const [walletCoupons, setWalletCoupons] = useState<Array<{ id: string; label: string; discountType: string; discountValue: number; expiresAt: string | null }>>([]);
+  const [walletCoupons, setWalletCoupons] = useState<Array<{ id: string; label: string; discountType: string; discountValue: number; isReward?: boolean; expiresAt: string | null }>>([]);
   const [walletOpen,    setWalletOpen]    = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [pixCopyPaste,    setPixCopyPaste]    = useState<string | null>(null);
@@ -3805,13 +3805,17 @@ export function PedidoClient({
 
   // Apply a wallet coupon. discountAmount here is display-only — the server
   // recomputes it authoritatively at finalize from the coupon in the DB.
-  const applyWalletCoupon = useCallback((w: { id: string; label: string; discountType: string; discountValue: number }) => {
+  const applyWalletCoupon = useCallback((w: { id: string; label: string; discountType: string; discountValue: number; isReward?: boolean }) => {
     const sub      = cart.reduce((s, i) => s + i.price * i.qty, 0);
     const isManFee = deliveryMethod === "delivery" && deliveryMode === "manual";
     const fee      = deliveryMethod === "delivery" && !isManFee
       ? computeEffectiveFee(sub, resolvedDeliveryFee, freeDeliveryAbove)
       : 0;
-    const discountAmount = w.discountType === "PERCENTAGE"
+    // A CUSTOM reward ("sobremesa grátis") never discounts the total — it's fulfilled
+    // by the restaurant. It still occupies the coupon slot so it's marked used.
+    const discountAmount = w.isReward
+      ? 0
+      : w.discountType === "PERCENTAGE"
       ? Math.round(Math.min((sub * w.discountValue) / 100, sub) * 100) / 100
       : Math.round(Math.min(w.discountValue, sub + fee) * 100) / 100;
     setCouponError(null);
@@ -4412,10 +4416,12 @@ export function PedidoClient({
           <div className="py-1">
             {appliedCoupon ? (
               <div className="flex items-center justify-between rounded-lg bg-green-50 px-2.5 py-1.5 text-xs">
-                <span className="font-medium text-green-700">🏷 {appliedCoupon.couponCode}</span>
+                <span className="font-medium text-green-700">
+                  {appliedCoupon.discountType === "CUSTOM" ? "🎁" : "🏷"} {appliedCoupon.couponCode}
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-green-700">
-                    -{discount.toFixed(2).replace(".", ",")} R$
+                    {appliedCoupon.discountType === "CUSTOM" ? "resgatada no pedido" : `-${discount.toFixed(2).replace(".", ",")} R$`}
                   </span>
                   <button
                     type="button"
@@ -4452,8 +4458,11 @@ export function PedidoClient({
                             onClick={() => applyWalletCoupon(w)}
                             className="flex w-full items-center justify-between gap-2 border-t border-brand-100 px-2.5 py-2 text-left first:border-t-0 hover:bg-white"
                           >
-                            <span className="text-xs font-bold text-ink">{w.label}</span>
-                            <span className="text-[10px] text-gray-500">
+                            <span className="min-w-0">
+                              <span className="block truncate text-xs font-bold text-ink">{w.isReward ? `🎁 ${w.label}` : w.label}</span>
+                              {w.isReward && <span className="block text-[10px] text-gray-500">Recompensa — resgatada no pedido</span>}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-gray-500">
                               {w.expiresAt ? `vence ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "sem validade"}
                             </span>
                           </button>
