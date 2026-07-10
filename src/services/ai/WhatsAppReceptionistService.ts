@@ -724,9 +724,19 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext, message: string =
  * Product decision (pré-lançamento): o recepcionista de WhatsApp NÃO deve
  * responder perguntas livres com o LLM — ele raciocina mal e deu respostas
  * erradas (ex.: negou que há rodízio, contradizendo o próprio menu). Enquanto
- * isso não for retomado, qualquer mensagem fora do menu (intent UNKNOWN) é
- * encaminhada para um atendente humano em vez de gerar uma resposta livre.
- * Reativar = voltar para `true`.
+ * isso não for retomado, uma pergunta fora do menu (intent UNKNOWN) recebe o
+ * menu numerado / mensagem de boas-vindas (caminho determinístico, nunca o
+ * LLM livre) em vez de uma resposta gerada. Reativar o LLM = voltar
+ * ALLOW_FREE_FORM_REPLIES para `true`.
+ *
+ * BUG CORRIGIDO (2026-07-10): até aqui, UNKNOWN também forçava handoff para
+ * humano — ou seja, o alarme de "atendimento humano" tocava para QUALQUER
+ * mensagem que o classificador de palavras-chave não reconhecesse (ex.: "tem
+ * temaki?", "quanto tempo mais ou menos?"), mesmo sem o cliente pedir para
+ * falar com alguém. UNKNOWN agora cai no caminho seguro (menu/boas-vindas +
+ * registro de lacuna de conhecimento para o dono revisar depois) em vez de
+ * escalar. HUMAN_REQUEST, COMPLAINT e ORDER_STATUS continuam escalando
+ * sempre — são sinais explícitos, não "não entendi a frase".
  */
 const ALLOW_FREE_FORM_REPLIES: boolean = false;
 
@@ -736,9 +746,9 @@ function needsHandoff(intent: Intent, agentMode: string): boolean {
     intent === "HUMAN_REQUEST" ||
     intent === "COMPLAINT" ||
     intent === "ORDER_STATUS" ||
-    (agentMode === "HUMAN_ASSISTED" && intent === "UNKNOWN") ||
-    // Free-form desligado: toda pergunta fora do menu vai para humano.
-    (!ALLOW_FREE_FORM_REPLIES && intent === "UNKNOWN")
+    // Opt-in por restaurante: em modo HUMAN_ASSISTED, toda pergunta fora do
+    // menu vai para humano (configuração explícita, não o caso geral).
+    (agentMode === "HUMAN_ASSISTED" && intent === "UNKNOWN")
   );
 }
 

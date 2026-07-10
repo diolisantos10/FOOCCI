@@ -99,10 +99,43 @@ describe("previewReceptionistResponse — endereço solto", () => {
 describe("previewReceptionistResponse — 'tem temaki?'", () => {
   const p = previewReceptionistResponse("tem temaki?", ctx());
   // Free-form desligado (decisão de produto pré-lançamento): pergunta aberta de
-  // produto vai para atendimento humano — nunca resposta livre nem link bruto.
-  it("não manda URL gigante e escala para humano (HANDOFF)", () => {
+  // produto NUNCA vira resposta livre do LLM nem link bruto — mas também não
+  // deve escalar para humano sozinha (bug corrigido 2026-07-10: UNKNOWN
+  // tocava o alarme de atendimento humano sem o cliente pedir). Cai no menu
+  // seguro em vez de HANDOFF.
+  it("não manda URL gigante e não escala para humano — menu seguro (SAFE_MENU)", () => {
     expect(p.containsRawLink).toBe(false);
+    expect(p.responseType).toBe("SAFE_MENU");
+    expect(p.containsHandoff).toBe(false);
+  });
+});
+
+describe("REGRESSÃO 2026-07-10 — UNKNOWN não escala sozinho, sinais explícitos continuam escalando", () => {
+  // Relato real: a conversa virou HUMANO (e tocou o alarme) para uma pergunta
+  // comum de horário/entrega que o classificador de palavras-chave não
+  // reconheceu — o cliente nunca pediu para falar com alguém.
+  it("'Quanto tempo mais ou menos?' NÃO escala para humano (frase real do bug relatado)", () => {
+    const p = previewReceptionistResponse("Quanto tempo mais ou menos?", ctx());
+    expect(p.responseType).not.toBe("HANDOFF");
+    expect(p.containsHandoff).toBe(false);
+  });
+
+  it("HUMAN_REQUEST continua escalando sempre (sinal explícito)", () => {
+    const p = previewReceptionistResponse("quero falar com um atendente", ctx());
     expect(p.responseType).toBe("HANDOFF");
+    expect(p.containsHandoff).toBe(true);
+  });
+
+  it("COMPLAINT continua escalando sempre (sinal explícito)", () => {
+    const p = previewReceptionistResponse("veio errado meu pedido", ctx());
+    expect(p.responseType).toBe("HANDOFF");
+    expect(p.containsHandoff).toBe(true);
+  });
+
+  it("ORDER_STATUS continua escalando sempre (sinal explícito)", () => {
+    const p = previewReceptionistResponse("quanto tempo demora", ctx());
+    expect(p.responseType).toBe("HANDOFF");
+    expect(p.containsHandoff).toBe(true);
   });
 });
 
