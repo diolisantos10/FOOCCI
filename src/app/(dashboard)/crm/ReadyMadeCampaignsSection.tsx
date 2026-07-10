@@ -215,7 +215,8 @@ function ReadyMadeConfigModal({
     setTimeout(() => setSaved(false), 2500);
   }
 
-  const preview = renderCrmMessage(message, PREVIEW_CUSTOMER, PREVIEW_CTX);
+  // Coupon flows into the preview so {cupom} shows the real value live as it's picked.
+  const preview = renderCrmMessage(message, PREVIEW_CUSTOMER, { ...PREVIEW_CTX, coupon });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
@@ -397,7 +398,7 @@ function ReadyMadeConfigModal({
                   <p className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     O cliente ganha <span className="font-bold">{couponLabel(coupon)}</span> na carteira ao receber a mensagem,
                     válido por <span className="font-bold">{coupon.validityDays ?? 30} dias</span> — usável só em compras online.
-                    Deixe a mensagem avisando que ele ganhou o cupom.
+                    Use <code className="rounded bg-white/70 px-1">{"{cupom}"}</code> na mensagem para mostrar o valor automaticamente.
                   </p>
                 </div>
               )}

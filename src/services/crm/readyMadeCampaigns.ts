@@ -122,7 +122,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     targetSegment: "aniversariantes",
     priority:    "BIRTHDAY",
     defaultMessage:
-      "Feliz aniversário, {nome}! 🎉 O {restaurante} preparou um presente pra você comemorar com sabor. É só pedir hoje pelo cardápio: {link_cardapio}",
+      "Feliz aniversário, {nome}! 🎉 O {restaurante} preparou um presente pra você: {cupom}! 🎁 É só pedir hoje pelo cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 20 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: { start: "10:00", end: "18:00" }, dailyLimit: 20 },
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
@@ -155,7 +155,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     targetSegment: "cadastro-sem-compra",
     priority:    "GENERIC_PROMO",
     defaultMessage:
-      "Oi, {nome}! 👋 Vi que você chegou no {restaurante} mas ainda não fez seu primeiro pedido. Que tal experimentar hoje? É só acessar o cardápio: {link_cardapio}",
+      "Oi, {nome}! 👋 Vi que você chegou no {restaurante} mas ainda não fez seu primeiro pedido. Bora estrear com {cupom}? É só acessar o cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 10 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
@@ -258,7 +258,7 @@ export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
     "Oi, {nome}! Obrigado pela preferência 💛 Se puder avaliar seu pedido, a gente agradece de coração: {link_avaliacao_google}",
   ],
   "aniversariantes": [
-    "Feliz aniversário, {nome}! 🎉 O {restaurante} preparou um presente pra você comemorar com sabor. É só pedir hoje pelo cardápio: {link_cardapio}",
+    "Feliz aniversário, {nome}! 🎉 O {restaurante} preparou um presente pra você: {cupom}! 🎁 É só pedir hoje pelo cardápio: {link_cardapio}",
     "{nome}, hoje é seu dia! 🎂 E dia de aniversário merece comida boa. O {restaurante} tem um mimo te esperando: {link_cardapio}",
     "Parabéns, {nome}! 🥳 Que tal comemorar com aquele pedido especial? Preparamos um presente pra você: {link_cardapio}",
     "Feliz aniversário, {nome}! 💛 O {restaurante} quer fazer parte do seu dia. Tem surpresa no seu próximo pedido: {link_cardapio}",
@@ -272,7 +272,7 @@ export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
     "Oi, {nome}! A gente adorou te atender 💛 Quando bater a fome, é só chamar: {link_cardapio}",
   ],
   "cadastro-sem-compra": [
-    "Oi, {nome}! 👋 Vi que você chegou no {restaurante} mas ainda não fez seu primeiro pedido. Que tal experimentar hoje? É só acessar o cardápio: {link_cardapio}",
+    "Oi, {nome}! 👋 Vi que você chegou no {restaurante} mas ainda não fez seu primeiro pedido. Bora estrear com {cupom}? É só acessar o cardápio: {link_cardapio}",
     "{nome}, seja bem-vindo(a) ao {restaurante}! 😊 Preparamos tudo pra sua primeira experiência ser ótima. Bora pedir? {link_cardapio}",
     "Oi, {nome}! Que tal estrear no {restaurante} hoje? 🍽️ Dá uma olhada no cardápio, tem coisa boa esperando: {link_cardapio}",
     "{nome}, faltou só o primeiro pedido pra você provar o {restaurante}! 😋 Vem experimentar: {link_cardapio}",

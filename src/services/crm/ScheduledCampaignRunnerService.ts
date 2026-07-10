@@ -1090,7 +1090,7 @@ export class ScheduledCampaignRunnerService {
       }),
       prisma.restaurantBrandConfig.findUnique({
         where:  { restaurantId: campaign.restaurantId },
-        select: { googleReviewUrl: true, instagramUrl: true },
+        select: { googleReviewUrl: true, instagramUrl: true, tiktokUrl: true, facebookUrl: true, youtubeUrl: true },
       }),
     ]);
     const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
@@ -1099,6 +1099,10 @@ export class ScheduledCampaignRunnerService {
       pedidoUrl,
       googleReviewUrl: brandConfig?.googleReviewUrl ?? null,
       instagramUrl:    brandConfig?.instagramUrl    ?? null,
+      tiktokUrl:       brandConfig?.tiktokUrl       ?? null,
+      facebookUrl:     brandConfig?.facebookUrl     ?? null,
+      youtubeUrl:      brandConfig?.youtubeUrl      ?? null,
+      coupon:          runOpts.coupon ?? null,
     };
 
     // Pre-fetch opt-out status

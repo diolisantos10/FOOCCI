@@ -18,7 +18,7 @@
  * "days since last order" label. Safe to import on the client (preview).
  */
 
-import { buildInstagramUrl } from "@/lib/social";
+import { buildInstagramUrl, buildTikTokUrl, buildFacebookUrl, buildYouTubeUrl } from "@/lib/social";
 
 export interface RenderCustomer {
   name:         string;
@@ -31,6 +31,17 @@ export interface RenderContext {
   pedidoUrl:       string;
   googleReviewUrl?: string | null;
   instagramUrl?:   string | null;
+  tiktokUrl?:      string | null;
+  facebookUrl?:    string | null;
+  youtubeUrl?:     string | null;
+  /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "R$ 10 de desconto". */
+  coupon?:         { type: "PERCENTAGE" | "FIXED"; value: number } | null;
+}
+
+/** Owner-facing coupon phrasing for use inside a message ("20% de desconto"). */
+export function couponMessageLabel(coupon: RenderContext["coupon"]): string {
+  if (!coupon || !(coupon.value > 0)) return "";
+  return coupon.type === "PERCENTAGE" ? `${coupon.value}% de desconto` : `R$ ${coupon.value} de desconto`;
 }
 
 const TIER_LABELS: Record<string, string> = {
@@ -48,6 +59,10 @@ export const KNOWN_CRM_VARIABLES = [
   "link_cardapio",
   "link_avaliacao_google",
   "instagram",
+  "tiktok",
+  "facebook",
+  "youtube",
+  "cupom",
 ] as const;
 
 /**
@@ -81,8 +96,11 @@ function lastOrderLabel(dias: number | null): string {
 export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext): Record<string, string> {
   const firstName = (customer.name ?? "").trim().split(/\s+/)[0] || (customer.name ?? "");
   const dias = daysSince(customer.lastOrderAt);
-  // {instagram} always resolves to a full, clickable URL — never a bare @handle.
+  // Social variables always resolve to a full, clickable URL — never a bare @handle.
   const instagram = buildInstagramUrl(ctx.instagramUrl ?? null) ?? "";
+  const tiktok    = buildTikTokUrl(ctx.tiktokUrl ?? null) ?? "";
+  const facebook  = buildFacebookUrl(ctx.facebookUrl ?? null) ?? "";
+  const youtube   = buildYouTubeUrl(ctx.youtubeUrl ?? null) ?? "";
 
   return {
     nome:                  firstName,
@@ -94,6 +112,10 @@ export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext
     ultimo_pedido:         lastOrderLabel(dias),
     produto_favorito:      "nossos pratos", // V1 simplified
     instagram,
+    tiktok,
+    facebook,
+    youtube,
+    cupom:                 couponMessageLabel(ctx.coupon),
   };
 }
 

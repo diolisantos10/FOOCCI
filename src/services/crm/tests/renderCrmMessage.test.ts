@@ -47,9 +47,9 @@ describe("renderCrmMessage — variable syntax (Section 2)", () => {
   });
 
   it("unknown variables are left unchanged and reported", () => {
-    const out = renderCrmMessage("Oi {nome}, seu {cupom}!", customer, ctx);
-    expect(out).toBe("Oi Diego, seu {cupom}!");
-    expect(findUnknownCrmVariables(out)).toEqual(["cupom"]);
+    const out = renderCrmMessage("Oi {nome}, seu {codigo_secreto}!", customer, ctx);
+    expect(out).toBe("Oi Diego, seu {codigo_secreto}!");
+    expect(findUnknownCrmVariables(out)).toEqual(["codigo_secreto"]);
   });
 });
 
@@ -111,6 +111,28 @@ describe("personalizeMessage delegates to the canonical renderer", () => {
     );
     expect(out).toBe("Oi, Diego!");
     expect(out).not.toContain("{Diego}");
+  });
+});
+
+describe("renderCrmMessage — coupon + social variables", () => {
+  it("{cupom} renders the real coupon benefit and updates with the value", () => {
+    const withPct = renderCrmMessage("Ganhe {cupom}!", customer, { ...ctx, coupon: { type: "PERCENTAGE", value: 20 } });
+    expect(withPct).toBe("Ganhe 20% de desconto!");
+    const withFixed = renderCrmMessage("Ganhe {cupom}!", customer, { ...ctx, coupon: { type: "FIXED", value: 10 } });
+    expect(withFixed).toBe("Ganhe R$ 10 de desconto!");
+  });
+
+  it("{cupom} is empty when there is no coupon", () => {
+    expect(renderCrmMessage("Ganhe {cupom}", customer, ctx)).toBe("Ganhe ");
+  });
+
+  it("{tiktok} / {facebook} / {youtube} resolve to full clickable URLs from handles", () => {
+    const out = renderCrmMessage("IG {instagram} TT {tiktok} FB {facebook} YT {youtube}", customer, {
+      ...ctx, tiktokUrl: "@cazza", facebookUrl: "cazzapage", youtubeUrl: "@cazzatube",
+    });
+    expect(out).toContain("https://www.tiktok.com/@cazza");
+    expect(out).toContain("https://www.facebook.com/cazzapage");
+    expect(out).toContain("https://www.youtube.com/@cazzatube");
   });
 });
 

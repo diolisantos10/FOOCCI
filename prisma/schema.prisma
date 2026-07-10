@@ -1301,6 +1301,8 @@ model RestaurantBrandConfig {
   // ── Social links (shown in ordering header if filled) ──────
   instagramUrl String?
   tiktokUrl    String?
+  facebookUrl  String?
+  youtubeUrl   String?
 
   // ── Review links (shown in CRM Avaliações tab) ───────────────
   googleReviewUrl String?

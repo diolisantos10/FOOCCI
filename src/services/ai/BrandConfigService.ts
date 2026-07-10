@@ -30,6 +30,8 @@ export class BrandConfigService {
       brandSecondaryColor: input.brandSecondaryColor ?? null,
       instagramUrl: input.instagramUrl ?? null,
       tiktokUrl: input.tiktokUrl ?? null,
+      facebookUrl: input.facebookUrl ?? null,
+      youtubeUrl: input.youtubeUrl ?? null,
       googleReviewUrl: input.googleReviewUrl ?? null,
       ifoodReviewUrl: input.ifoodReviewUrl ?? null,
       brandPersona: input.brandPersona ?? undefined,
@@ -71,6 +73,8 @@ export class BrandConfigService {
     if (input.brandSecondaryColor !== undefined) data.brandSecondaryColor = input.brandSecondaryColor ?? null;
     if (input.instagramUrl      !== undefined) data.instagramUrl      = input.instagramUrl ?? null;
     if (input.tiktokUrl         !== undefined) data.tiktokUrl         = input.tiktokUrl ?? null;
+    if (input.facebookUrl       !== undefined) data.facebookUrl       = input.facebookUrl ?? null;
+    if (input.youtubeUrl        !== undefined) data.youtubeUrl        = input.youtubeUrl ?? null;
     if (input.googleReviewUrl   !== undefined) data.googleReviewUrl   = input.googleReviewUrl ?? null;
     if (input.ifoodReviewUrl    !== undefined) data.ifoodReviewUrl    = input.ifoodReviewUrl ?? null;
     if (input.waiterPrompt      !== undefined) data.waiterPrompt      = input.waiterPrompt ?? null;
@@ -136,6 +140,8 @@ export class BrandConfigService {
       brandSecondaryColor: null,
       instagramUrl: null,
       tiktokUrl: null,
+      facebookUrl: null,
+      youtubeUrl: null,
       googleReviewUrl: null,
       ifoodReviewUrl: null,
       brandPersona: null,

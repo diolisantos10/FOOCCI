@@ -142,6 +142,8 @@ export const upsertBrandConfigSchema = z.object({
   brandSecondaryColor: z.string().max(20).nullable().optional(),
   instagramUrl:        z.string().url().max(200).nullable().optional(),
   tiktokUrl:           z.string().url().max(200).nullable().optional(),
+  facebookUrl:         z.string().url().max(200).nullable().optional(),
+  youtubeUrl:          z.string().url().max(200).nullable().optional(),
   googleReviewUrl:     z.string().min(1).max(500).nullable().optional(),
   ifoodReviewUrl:      z.string().min(1).max(500).nullable().optional(),
 
@@ -174,6 +176,8 @@ export const DEFAULT_BRAND_CONFIG: UpsertBrandConfigInput = {
   brandSecondaryColor: null,
   instagramUrl: null,
   tiktokUrl: null,
+  facebookUrl: null,
+  youtubeUrl: null,
   waiterPrompt: null,
 };
 

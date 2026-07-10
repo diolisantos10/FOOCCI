@@ -35,3 +35,17 @@ export function buildTikTokUrl(value: string | null | undefined): string | null 
   if (value.startsWith("http")) return value;
   return `https://www.tiktok.com/@${value.replace(/^@/, "")}`;
 }
+
+/** Accept full Facebook URL or a page handle/username. */
+export function buildFacebookUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith("http")) return value;
+  return `https://www.facebook.com/${value.replace(/^@/, "")}`;
+}
+
+/** Accept full YouTube URL or a @handle/channel. */
+export function buildYouTubeUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith("http")) return value;
+  return `https://www.youtube.com/@${value.replace(/^@/, "")}`;
+}
