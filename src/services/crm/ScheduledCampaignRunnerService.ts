@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
+import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
@@ -1083,7 +1083,7 @@ export class ScheduledCampaignRunnerService {
     const evoConfig = cfgResult.ok ? cfgResult.data : null;
 
     // Load message personalization context
-    const [restaurant, brandConfig] = await Promise.all([
+    const [restaurant, brandConfig, agentCfg] = await Promise.all([
       prisma.restaurant.findUnique({
         where:  { id: campaign.restaurantId },
         select: { name: true, slug: true },
@@ -1092,8 +1092,17 @@ export class ScheduledCampaignRunnerService {
         where:  { restaurantId: campaign.restaurantId },
         select: { googleReviewUrl: true, instagramUrl: true, tiktokUrl: true, facebookUrl: true, youtubeUrl: true },
       }),
+      prisma.whatsAppAgentConfig.findUnique({
+        where:  { restaurantId: campaign.restaurantId },
+        select: { menuUrl: true },
+      }),
     ]);
-    const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
+    // Use the SAME menu link the WhatsApp agent sends: the owner-configured menu URL
+    // (what appears on the Cardápio page) wins; only fall back to the auto /pedido/{slug}
+    // link when none is set. /qr/ links are remapped to /pedido/ so identity survives.
+    const rawMenuUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+    const fixedMenuUrl = rawMenuUrl?.replace(/\/qr\/([^/?]+)/, "/pedido/$1") ?? rawMenuUrl;
+    const pedidoUrl = fixedMenuUrl ? sanitizeCustomerUrl(fixedMenuUrl) : getPublicSiteUrl();
     const msgCtx    = {
       restaurantName:  restaurant?.name ?? "nossa loja",
       pedidoUrl,

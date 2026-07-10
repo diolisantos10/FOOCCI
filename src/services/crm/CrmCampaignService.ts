@@ -18,7 +18,7 @@ import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWha
 import { sendMetaCrmMessage } from "./metaCrmSend";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
-import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
+import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
 import { markConversationCrmContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
@@ -357,7 +357,7 @@ export class CrmCampaignService {
     input: CreateCampaignInput
   ): Promise<{ campaignId: string; totalAudience: number; recipients: CampaignRecipientRow[] }> {
     // Load context data
-    const [restaurant, brandConfig] = await Promise.all([
+    const [restaurant, brandConfig, agentCfg] = await Promise.all([
       prisma.restaurant.findUnique({
         where: { id: restaurantId },
         select: { name: true, slug: true },
@@ -366,9 +366,17 @@ export class CrmCampaignService {
         where: { restaurantId },
         select: { googleReviewUrl: true, instagramUrl: true },
       }),
+      prisma.whatsAppAgentConfig.findUnique({
+        where: { restaurantId },
+        select: { menuUrl: true },
+      }),
     ]);
 
-    const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
+    // Same menu link the WhatsApp agent sends: owner-configured URL (Cardápio page) wins,
+    // fall back to the auto /pedido/{slug} link; /qr/ remapped to /pedido/.
+    const rawMenuUrl   = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+    const fixedMenuUrl = rawMenuUrl?.replace(/\/qr\/([^/?]+)/, "/pedido/$1") ?? rawMenuUrl;
+    const pedidoUrl    = fixedMenuUrl ? sanitizeCustomerUrl(fixedMenuUrl) : getPublicSiteUrl();
 
     const ctx: MessageContext = {
       restaurantName:  restaurant?.name ?? "nossa loja",
