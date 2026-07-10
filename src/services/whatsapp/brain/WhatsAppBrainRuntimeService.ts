@@ -94,6 +94,19 @@ async function runShadowReasoning(conversationId: string, restaurantId: string, 
       wouldReply: outcome.result.idealResponse.slice(0, 160),
     }),
   );
+  // Evidência persistida (best-effort): alimenta os gates da escada de promoção.
+  const { recordShadowOutcome } = await import("@/services/brain/runtime/BrainShadowEvidenceService");
+  await recordShadowOutcome({
+    restaurantId,
+    conversationId,
+    intent: outcome.result.primaryIntent,
+    reasoningMode: outcome.reasoningMode,
+    engine: `${outcome.engine.provider}:${outcome.engine.model}`,
+    confidence: outcome.result.confidence,
+    coherence: outcome.result.coherenceCheck.verdict,
+    wouldEscalate: outcome.result.shouldEscalate,
+    wouldReply: outcome.result.idealResponse,
+  });
 }
 
 export const WhatsAppBrainRuntimeService = {

@@ -4,6 +4,7 @@ const db = vi.hoisted(() => ({
   conversation: { findUnique: vi.fn(), update: vi.fn() },
   message: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
   brainFreeFormConfig: { findUnique: vi.fn() },
+  brainShadowLog: { create: vi.fn() },
   $transaction: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -72,6 +73,7 @@ beforeEach(() => {
   process.env.WHATSAPP_BRAIN_SHADOW_MODE = "false";
   db.message.findMany.mockResolvedValue([]);
   db.brainFreeFormConfig.findUnique.mockResolvedValue(null); // default: SHADOW_ONLY
+  db.brainShadowLog.create.mockResolvedValue({});
   messaging.resolveProviderId.mockResolvedValue("EVOLUTION");
   db.conversation.findUnique.mockResolvedValue({
     id: "conv_1", restaurantId: "rest_1", status: "BOT", aiEnabled: true,

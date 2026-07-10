@@ -46,12 +46,16 @@ export type { StructuredCallInput } from "./engines/EngineAdapter";
 export { callStructuredJson } from "./engines/OpenAIEngineAdapter";
 export { onEngineFailure } from "./engines/EngineFallbackPolicy";
 
-// runtime governance (Fase 3 — escada do raciocínio livre)
+// runtime governance (Fase 3 — escada do raciocínio livre + evidência de sombra)
 export * from "./runtime/BrainFreeFormConfigService";
 export * from "./runtime/freeFormGovernance";
+export * from "./runtime/BrainShadowEvidenceService";
 
 // director — approve→apply bridge (Fase 3)
 export { applyChangeRequest } from "./director/ChangeRequestApplier";
+
+// training — produtor automático de governança (Fase 5)
+export { autoFileGovernanceForLatestRun } from "./training/QualityGovernanceBridge";
 
 // knowledge
 export * from "./knowledge/BusinessKnowledgeContract";

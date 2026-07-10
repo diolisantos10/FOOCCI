@@ -24,6 +24,27 @@
 
 ---
 
+## 0. STATUS DE EXECUÇÃO (2026-07-10, fim do dia)
+
+| Fase | Status | Entrega |
+|---|---|---|
+| Fase 0 — Vitórias rápidas | ✅ ENTREGUE | CI real, registry, snapshot fact-level, janela de conversa, aprendizados vivos, shadow, caso rodízio, ESLint+teste arquitetural |
+| Fase 1 — Alicerce | ✅ ENTREGUE | BusinessType aberto, perfis DB-first, contratos no caminho |
+| Fase 2 — Verdade + memória | ✅ ENTREGUE | Crítico claim-vs-snapshot, retrieval por relevância, asOf/completude |
+| Fase 3 — Raciocínio vivo governado | ✅ CONSTRUÍDA (desligada) | Escada SHADOW→ALLOWLIST→WIDE, gates c/ evidência de sombra, Applier, rollback 30s, API admin. Produção segue SHADOW_ONLY até promoção humana |
+| Fase 4 — Multi-piloto | ✅ ENTREGUE | Claude+Gemini executáveis, roteamento persistido governado, 3 bypasses migrados (lista congelada 16→13) |
+| Fase 5 — Loop de aprendizado | 🟡 PARCIAL | Gate registry, evidência de sombra persistida, auto-file de CR em novo P0. Falta: consolidar 6 filas, avaliar candidato, LLM-judge online |
+| Fase 6 — Universalização provada | ⏸️ ESTACIONADA | Por diretriz do CEO — princípio de construção, não execução |
+
+**Como ligar o raciocínio vivo quando a evidência chegar:**
+`GET /api/admin/brain/free-form?restaurantId=…` mostra gates + estatística de
+sombra; `POST action:promote-allowlist` (exige ≥20 amostras LLM c/ coerência
+PASS ≥70%, golden set p0=0, verdade ≥0.6, confirm); depois `promote-wide`
+(≥100 amostras, PASS ≥85%, acknowledge + CR CRITICAL). `action:rollback` volta
+a SHADOW_ONLY em 30s.
+
+---
+
 ## 1. Diagnóstico honesto (o ponto de partida)
 
 O Brain já possui **todos os ativos arquiteturais difíceis**:

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const db = vi.hoisted(() => ({
   brainFreeFormConfig: { findUnique: vi.fn(), upsert: vi.fn() },
   brainChangeRequest: { create: vi.fn() },
+  brainShadowLog: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -30,7 +31,15 @@ beforeEach(() => {
     Promise.resolve({ id: "cr_test", status: "PENDING_APPROVAL", ...data }),
   );
   knowledge.getSnapshot.mockResolvedValue({ completenessScore: 1 }); // verdade completa
+  db.brainShadowLog.findMany.mockResolvedValue(shadowRows(120)); // evidência farta
 });
+
+/** n amostras de sombra LLM com a coerência dada. */
+function shadowRows(n: number, coherence = "PASS") {
+  return Array.from({ length: n }, () => ({
+    reasoningMode: "LLM", coherence, confidence: 0.9, wouldEscalate: false,
+  }));
+}
 
 describe("Free-form ladder — a escada governada do raciocínio vivo", () => {
   it("default sem config = SHADOW_ONLY: nunca responde ao vivo", async () => {
@@ -56,6 +65,20 @@ describe("Free-form ladder — a escada governada do raciocínio vivo", () => {
     const r = await promoteFreeFormToAllowlist({ restaurantId: "r1", phones: ["5511999"], confirm: PROMOTE_ALLOWLIST_CONFIRM });
     expect(r.success).toBe(false);
     expect(r.error).toMatch(/verdade incompleta/i);
+  });
+
+  it("evidência de sombra insuficiente BLOQUEIA a promoção (números, não achismo)", async () => {
+    db.brainShadowLog.findMany.mockResolvedValue(shadowRows(5)); // só 5 amostras
+    const r = await promoteFreeFormToAllowlist({ restaurantId: "r1", phones: ["5511999"], confirm: PROMOTE_ALLOWLIST_CONFIRM });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/evidência de sombra insuficiente/i);
+  });
+
+  it("coerência baixa na sombra também bloqueia, mesmo com muitas amostras", async () => {
+    db.brainShadowLog.findMany.mockResolvedValue([...shadowRows(15), ...shadowRows(15, "NEEDS_REVIEW")]); // 50% PASS
+    const r = await promoteFreeFormToAllowlist({ restaurantId: "r1", phones: ["5511999"], confirm: PROMOTE_ALLOWLIST_CONFIRM });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/evidência de sombra insuficiente/i);
   });
 
   it("SHADOW_ONLY → ALLOWLIST com gates PASS grava a config", async () => {

@@ -16,6 +16,7 @@
 import { runGateForBrain } from "../quality/BrainQualityGate";
 import { restaurantKnowledgeAdapter } from "../knowledge/RestaurantKnowledgeAdapter";
 import { createChangeRequest } from "../director/PersistentBrainDirectorService";
+import { getShadowStats } from "./BrainShadowEvidenceService";
 import { getFreeFormConfig, writeFreeFormConfig, type FreeFormMode } from "./BrainFreeFormConfigService";
 
 export const PROMOTE_ALLOWLIST_CONFIRM = "PROMOTE_BRAIN_FREEFORM_ALLOWLIST";
@@ -25,10 +26,19 @@ export const ROLLBACK_FREEFORM_CONFIRM = "ROLLBACK_BRAIN_FREEFORM";
 /** Piso de completude da verdade para o Brain poder falar ao vivo. */
 export const KNOWLEDGE_COMPLETENESS_FLOOR = 0.6;
 
+/** Evidência de sombra mínima por degrau — números auditáveis, não achismo. */
+export const SHADOW_EVIDENCE = {
+  ALLOWLIST: { minSamples: 20, minPassRate: 0.7 },
+  RESTAURANT_WIDE: { minSamples: 100, minPassRate: 0.85 },
+} as const;
+
 export interface FreeFormGates {
   diagnosticPass: boolean; // golden set hermético (incl. caso rodízio) p0=0
   knowledgeComplete: boolean; // completenessScore ≥ piso
   completenessScore: number;
+  shadowEvidence: boolean; // amostras + taxa de coerência PASS ≥ mínimos do degrau
+  shadowSamples: number;
+  shadowPassRate: number;
   allPass: boolean;
   notes: string[];
 }
@@ -43,7 +53,10 @@ export interface FreeFormTransitionResult {
   runtimeTouched: false;
 }
 
-export async function runFreeFormGates(restaurantId: string): Promise<FreeFormGates> {
+export async function runFreeFormGates(
+  restaurantId: string,
+  stage: keyof typeof SHADOW_EVIDENCE = "ALLOWLIST",
+): Promise<FreeFormGates> {
   const notes: string[] = [];
 
   const gate = await runGateForBrain("whatsapp");
@@ -59,7 +72,28 @@ export async function runFreeFormGates(restaurantId: string): Promise<FreeFormGa
     );
   }
 
-  return { diagnosticPass, knowledgeComplete, completenessScore, allPass: diagnosticPass && knowledgeComplete, notes };
+  // Evidência de sombra: o Brain só sobe de degrau com desempenho PROVADO em
+  // tráfego real (amostras suficientes + coerência PASS acima do mínimo).
+  const required = SHADOW_EVIDENCE[stage];
+  const stats = await getShadowStats(restaurantId);
+  const shadowEvidence = stats.llmSamples >= required.minSamples && stats.coherencePassRate >= required.minPassRate;
+  if (!shadowEvidence) {
+    notes.push(
+      `evidência de sombra insuficiente para ${stage} (amostras LLM ${stats.llmSamples}/${required.minSamples}, ` +
+        `coerência PASS ${(stats.coherencePassRate * 100).toFixed(0)}%/${required.minPassRate * 100}%) — deixe o shadow colher tráfego real`,
+    );
+  }
+
+  return {
+    diagnosticPass,
+    knowledgeComplete,
+    completenessScore,
+    shadowEvidence,
+    shadowSamples: stats.llmSamples,
+    shadowPassRate: stats.coherencePassRate,
+    allPass: diagnosticPass && knowledgeComplete && shadowEvidence,
+    notes,
+  };
 }
 
 /** SHADOW_ONLY → ALLOWLIST. Exige gates PASS, telefones e confirm exato. */
@@ -104,7 +138,7 @@ export async function promoteFreeFormToWide(input: {
   if (input.acknowledgeRealCustomers !== true) return fail("Falta acknowledgeRealCustomers: true — clientes REAIS receberão respostas do Brain.");
   if (current.mode !== "ALLOWLIST") return fail(`mode atual ${current.mode} — valide a ALLOWLIST antes de abrir para todo o restaurante.`);
 
-  const gates = await runFreeFormGates(input.restaurantId);
+  const gates = await runFreeFormGates(input.restaurantId, "RESTAURANT_WIDE");
   if (!gates.allPass) return fail(`Gates reprovados (não abrir): ${gates.notes.join("; ")}`, gates);
 
   // Trilha de governança (best-effort — nunca bloqueia, mas fica registrada).

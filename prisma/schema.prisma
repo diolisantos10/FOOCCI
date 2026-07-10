@@ -4068,3 +4068,24 @@ model BrainEngineRouting {
   @@index([agentId])
   @@map("brain_engine_routing")
 }
+
+model BrainShadowLog {
+  id             String @id @default(cuid())
+  restaurantId   String
+  conversationId String
+
+  intent        String
+  reasoningMode String // LLM | FALLBACK
+  engine        String // "OPENAI:gpt-4o-mini" etc. (sem segredos)
+  confidence    Float
+  coherence     String // PASS | FAIL | NEEDS_REVIEW
+  wouldEscalate Boolean
+
+  // Amostra curta da resposta que o Brain TERIA dado (sanitizada, nunca enviada)
+  wouldReply String
+
+  createdAt DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@map("brain_shadow_logs")
+}

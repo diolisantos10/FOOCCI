@@ -54,6 +54,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Fase 5: NOVO P0 arquiva um BrainChangeRequest automaticamente (PENDING_APPROVAL,
+  // decisão humana). Best-effort — nunca falha o cron.
+  const { autoFileGovernanceForLatestRun } = await import("@/services/brain/training/QualityGovernanceBridge");
+  const governance = await autoFileGovernanceForLatestRun();
+
   return NextResponse.json({
     ok: true,
     runId,
@@ -61,5 +66,6 @@ export async function POST(req: NextRequest) {
     counts: { bySeverity: result.countsBySeverity, byStatus: result.countsByStatus },
     durationMs: Math.max(0, result.finishedAt.getTime() - result.startedAt.getTime()),
     findingsCount: result.findings.length,
+    governanceAutoFiled: governance.filed,
   });
 }

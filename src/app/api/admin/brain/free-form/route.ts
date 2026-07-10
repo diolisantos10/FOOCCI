@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { getFreeFormConfig } from "@/services/brain/runtime/BrainFreeFormConfigService";
+import { getShadowStats, listRecentShadowSamples } from "@/services/brain/runtime/BrainShadowEvidenceService";
 import {
   promoteFreeFormToAllowlist,
   promoteFreeFormToWide,
@@ -38,8 +39,13 @@ export async function GET(req: NextRequest) {
   try {
     const restaurantId = req.nextUrl.searchParams.get("restaurantId");
     if (!restaurantId) return NextResponse.json({ ok: false, error: "restaurantId é obrigatório." }, { status: 400 });
-    const [config, gates] = await Promise.all([getFreeFormConfig(restaurantId), runFreeFormGates(restaurantId)]);
-    return NextResponse.json({ ok: true, config, gates, runtimeTouched: false });
+    const [config, gates, shadowStats, recentSamples] = await Promise.all([
+      getFreeFormConfig(restaurantId),
+      runFreeFormGates(restaurantId),
+      getShadowStats(restaurantId),
+      listRecentShadowSamples(restaurantId),
+    ]);
+    return NextResponse.json({ ok: true, config, gates, shadowStats, recentSamples, runtimeTouched: false });
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";
     return NextResponse.json({ ok: false, error: message }, { status: 200 });
