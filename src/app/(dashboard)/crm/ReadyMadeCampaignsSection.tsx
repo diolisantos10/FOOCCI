@@ -200,6 +200,7 @@ function ReadyMadeConfigModal({
   const [end, setEnd]           = useState(c.timeWindow.end);
   const [dailyLimit, setDaily]  = useState(c.dailyLimit);
   const [triggerDays, setTriggerDays] = useState(c.triggerDays ?? 2);
+  const [editDays, setEditDays] = useState(false);
   const [couponOpen, setCouponOpen] = useState(false);
   const [saved, setSaved]       = useState(false);
 
@@ -252,34 +253,53 @@ function ReadyMadeConfigModal({
 
         {/* Body */}
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <p className="text-xs leading-relaxed text-ink2">{c.description}</p>
+          <p className="text-sm leading-relaxed text-ink2">{c.description}</p>
 
           {/* Timing / cadence */}
-          <div className="rounded-xl border border-line bg-[#FAFAF8] p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted">Quando é enviada</p>
-            {c.timing.summary && <p className="mt-1 text-xs text-ink2">🕒 {c.timing.summary}</p>}
+          <div className="rounded-xl border border-line bg-[#FAFAF8] p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted">Quando é enviada</p>
+            {c.timing.summary && <p className="mt-1.5 text-base text-ink2">🕒 {c.timing.summary}</p>}
             {c.timing.fromSegmentation && (
-              <p className="mt-1 text-[10px] text-muted">
+              <p className="mt-1.5 text-xs text-muted">
                 Os dias que definem esta fase ficam em <span className="font-semibold">Configurações → Segmentação</span>.
               </p>
             )}
-            <p className="mt-2 text-[10px] leading-relaxed text-muted">{CADENCE_EXPLAINER}</p>
+            <p className="mt-2.5 text-xs leading-relaxed text-muted">{CADENCE_EXPLAINER}</p>
           </div>
 
           {has("triggerDays") && (
-            <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                {c.triggerDaysLabel ?? "Enviar quantos dias após o evento"}
-              </p>
-              <div className="flex items-center gap-2">
+            <div className="rounded-xl border border-line p-4">
+              <label className="flex cursor-pointer items-center gap-2">
                 <input
-                  type="number" min={0} max={90}
-                  value={triggerDays}
-                  onChange={(e) => setTriggerDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className="w-24 rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none"
+                  type="checkbox"
+                  checked={editDays}
+                  onChange={(e) => setEditDays(e.target.checked)}
+                  className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-400"
                 />
-                <span className="text-xs text-muted">dias</span>
-              </div>
+                <span className="text-sm text-ink">
+                  Enviar <span className="font-bold">{triggerDays} dias</span> após o evento
+                  <span className="ml-1 text-xs text-muted">— marque para alterar</span>
+                </span>
+              </label>
+              {editDays && (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                    {c.triggerDaysLabel ?? "Enviar quantos dias após o evento"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={0} max={90}
+                      value={triggerDays}
+                      onChange={(e) => setTriggerDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-24 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                    />
+                    <span className="text-sm text-muted">dias</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted">
+                    Dica: evite mandar cedo demais. Uma boa cadência é ~1 mensagem por semana por cliente.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

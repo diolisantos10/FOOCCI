@@ -133,7 +133,7 @@ describe("buildReadyMadeCampaignPayload", () => {
     expect(buildReadyMadeCampaignPayload(review, { triggerDays: 5 }).scheduleConfig.triggerDays).toBe(5);
 
     const second = getReadyMadeCampaign("segunda-compra")!;
-    expect(second.triggerDays).toBe(3);
+    expect(second.triggerDays).toBe(7);
 
     // Segment/phase campaigns have no triggerDays.
     const frio = getReadyMadeCampaign("recuperar-frios")!;

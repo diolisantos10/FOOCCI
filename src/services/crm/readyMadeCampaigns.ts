@@ -118,7 +118,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 😄 Que bom ter você com a gente! Que tal repetir a dose? Seu próximo pedido no {restaurante} já tá te esperando: {link_cardapio}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
-    triggerDays: 3,
+    triggerDays: 7, // ~1x/semana — não encher o cliente de CRM
     triggerDaysLabel: "Enviar quantos dias após o 1º pedido",
     editable:    ["message", "triggerDays", "schedule", "dailyLimit", "coupon"],
   },
@@ -294,7 +294,7 @@ export interface ReadyMadeTiming {
 export const READY_MADE_TIMING: Record<string, ReadyMadeTiming> = {
   "pedido-avaliacao":    { summary: "Enviada a quem fez um pedido nos últimos 7 dias.",                 fromSegmentation: false },
   "aniversariantes":     { summary: "Enviada no dia do aniversário do cliente.",                        fromSegmentation: false },
-  "segunda-compra":      { summary: "Enviada a quem fez só 1 pedido, para estimular o segundo.",        fromSegmentation: false },
+  "segunda-compra":      { summary: "Enviada ~7 dias após o 1º pedido, para estimular o segundo.",       fromSegmentation: false },
   "quente-esfriando":    { summary: "Enviada a quem pediu há ~23–30 dias (perto de esfriar).",          fromSegmentation: true },
   "reativar-mornos":     { summary: "Enviada a quem está ~31–60 dias sem pedir.",                       fromSegmentation: true },
   "recuperar-frios":     { summary: "Enviada a quem está 60+ dias sem pedir.",                          fromSegmentation: true },
