@@ -74,6 +74,56 @@ export class CustomerCouponService {
   }
 
   /**
+   * Fetch a single wallet coupon that is safe to redeem NOW — owned by this
+   * customer + restaurant, ACTIVE and not expired. Returns null otherwise.
+   * Used by the checkout server to authoritatively compute the discount.
+   */
+  static async findRedeemable(
+    restaurantId: string,
+    customerId: string,
+    couponId: string,
+    now: Date = new Date(),
+  ): Promise<{ id: string; discountType: CouponType; discountValue: number } | null> {
+    const row = await prisma.customerCoupon.findFirst({
+      where: {
+        id: couponId,
+        restaurantId,
+        customerId,
+        status: "ACTIVE",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      select: { id: true, discountType: true, discountValue: true },
+    });
+    if (!row || !row.discountType || row.discountValue == null) return null;
+    return { id: row.id, discountType: row.discountType as CouponType, discountValue: Number(row.discountValue) };
+  }
+
+  /**
+   * Flip a wallet coupon to USED. Idempotent + race-safe (only an ACTIVE row is
+   * consumed), so payment-webhook retries never double-consume. Returns true when
+   * this call is the one that consumed it.
+   */
+  static async markUsed(input: { couponId: string; customerId: string; orderId: string; now?: Date }): Promise<boolean> {
+    const res = await prisma.customerCoupon.updateMany({
+      where: { id: input.couponId, customerId: input.customerId, status: "ACTIVE" },
+      data:  { status: "USED", usedAt: input.now ?? new Date(), usedOrderId: input.orderId },
+    });
+    return res.count > 0;
+  }
+
+  /**
+   * Restore any coupons consumed by an order back to ACTIVE — called when the order
+   * is deleted/cancelled so the customer keeps the coupon.
+   */
+  static async restoreForOrder(orderId: string): Promise<number> {
+    const res = await prisma.customerCoupon.updateMany({
+      where: { usedOrderId: orderId, status: "USED" },
+      data:  { status: "ACTIVE", usedAt: null, usedOrderId: null },
+    });
+    return res.count;
+  }
+
+  /**
    * Active, non-expired coupons a customer can use right now (for the cart).
    * Shaped from the self-contained discount fields.
    */
