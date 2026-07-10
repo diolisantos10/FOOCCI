@@ -8,6 +8,7 @@ import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import {
   COUPON_PERCENT_OPTIONS, COUPON_FIXED_OPTIONS, couponLabel,
+  getReadyMadeCampaign, getReadyMadeMessageVariants, getReadyMadeTiming, CADENCE_EXPLAINER,
   type CouponType, type ReadyMadeCoupon,
 } from "@/services/crm/readyMadeCampaigns";
 import { ReadyMadeCampaignsSection } from "./ReadyMadeCampaignsSection";
@@ -1825,6 +1826,10 @@ type CampaignDebugResult = {
 
 const WEEKDAY_LABELS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+// Preview sample used by the unified manage modal (matches the old config modal).
+const MANAGE_PREVIEW_CUSTOMER = { name: "Diego", tier: "OURO", lastOrderAt: new Date(Date.now() - 3 * 86_400_000).toISOString() };
+const MANAGE_PREVIEW_CTX = { restaurantName: "seu restaurante", pedidoUrl: "https://foocci.com.br", googleReviewUrl: null, instagramUrl: null };
+
 // ── CampaignManageModal ───────────────────────────────────────────────────────
 // Tabbed management console: Visão Geral | Mensagem | Agendamento | Performance | Diagnóstico
 
@@ -1888,6 +1893,9 @@ function CampaignManageModal({
   const [savingCoupon,setSavingCoupon]= useState(false);
   const [couponSaved, setCouponSaved] = useState(false);
 
+  // Edit – trigger days ("X dias após o evento") for event-based ready-made campaigns
+  const [triggerDays, setTriggerDays] = useState<number>(2);
+
   useEffect(() => {
     setLoading(true);
     setError(false);
@@ -1912,6 +1920,7 @@ function CampaignManageModal({
           setEditLimit(cfg.dailyLimit ?? 20);
         }
         setCoupon(((cfg as unknown as { coupon?: ReadyMadeCoupon | null })?.coupon) ?? null);
+        setTriggerDays(((cfg as unknown as { triggerDays?: number })?.triggerDays) ?? 2);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -1954,6 +1963,15 @@ function CampaignManageModal({
   const convRate     = detail && detail.totalSent > 0
     ? ((detail.totalConverted / detail.totalSent) * 100).toFixed(1) : null;
 
+  // Ready-made catalog data (message options, timing, editable fields) for this
+  // campaign, so the ONE modal shows every config the old "Configurar" modal had.
+  const readyMade      = detail?.templateId ? getReadyMadeCampaign(detail.templateId) : null;
+  const rmVariants     = detail?.templateId ? getReadyMadeMessageVariants(detail.templateId) : [];
+  const rmTiming       = detail?.templateId ? getReadyMadeTiming(detail.templateId) : null;
+  const rmCanEditMsg   = !readyMade || readyMade.editable.includes("message");
+  const rmCanTrigger   = !!readyMade?.editable.includes("triggerDays");
+  const msgPreview     = renderCrmMessage(msgText, MANAGE_PREVIEW_CUSTOMER, { ...MANAGE_PREVIEW_CTX, coupon });
+
   async function handleSaveName() {
     if (!detail || !editName.trim() || editName.trim() === detail.name) return;
     setSavingName(true);
@@ -1991,7 +2009,11 @@ function CampaignManageModal({
     if (!detail || !isRecurring) return;
     setSavingSched(true);
     try {
-      const newCfg = { ...(cfg ?? {}), weekdays: editWd, timeWindow: { start: editStart, end: editEnd }, dailyLimit: editLimit };
+      const newCfg = {
+        ...(cfg ?? {}),
+        weekdays: editWd, timeWindow: { start: editStart, end: editEnd }, dailyLimit: editLimit,
+        ...(rmCanTrigger ? { triggerDays } : {}),
+      };
       const res = await fetch(`/api/crm/campaigns/${detail.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scheduleConfig: newCfg }),
@@ -2278,9 +2300,28 @@ function CampaignManageModal({
                         {detail.message}
                       </div>
                     </div>
-                    {canEdit ? (
+                    {canEdit && rmCanEditMsg ? (
                       <div>
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted">Editar mensagem</p>
+                        {rmVariants.length > 0 && (
+                          <div className="mb-4">
+                            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Escolha uma mensagem pronta</p>
+                            <div className="space-y-2">
+                              {rmVariants.map((v, i) => {
+                                const selected = v === msgText;
+                                return (
+                                  <button
+                                    key={i}
+                                    onClick={() => setMsgText(v)}
+                                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm leading-relaxed transition-colors ${selected ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                                  >
+                                    {v}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted">{rmVariants.length > 0 ? "Ou escreva a sua" : "Editar mensagem"}</p>
                         <p className="mb-2 text-xs text-muted">
                           Alterações valem para os próximos envios. Mensagens já enviadas não são afetadas.
                         </p>
@@ -2291,7 +2332,12 @@ function CampaignManageModal({
                           maxLength={4000}
                           className="w-full resize-y rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 text-sm text-ink placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
                         />
-                        <p className="mt-1 text-[10px] text-muted">Variáveis: {"{nome}"}, {"{restaurante}"}, {"{ultimo_pedido}"}, {"{nivel}"}</p>
+                        <p className="mt-1 text-[10px] text-muted">Variáveis: {"{nome}"}, {"{restaurante}"}, {"{link_cardapio}"}, {"{cupom}"}</p>
+                        {/* Prévia com variáveis resolvidas */}
+                        <div className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Prévia</p>
+                          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{msgPreview}</p>
+                        </div>
                         <div className="mt-3 flex items-center gap-3">
                           <button
                             onClick={handleSaveMessage}
@@ -2303,9 +2349,13 @@ function CampaignManageModal({
                           {msgSaved && <p className="text-xs font-semibold text-green-600">✓ Salvo com sucesso!</p>}
                         </div>
                       </div>
-                    ) : (
+                    ) : !canEdit ? (
                       <p className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-xs text-muted">
                         Campanha finalizada — a mensagem não pode ser editada.
+                      </p>
+                    ) : (
+                      <p className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                        A mensagem desta campanha é gerenciada pelo sistema.
                       </p>
                     )}
 
@@ -2405,6 +2455,32 @@ function CampaignManageModal({
                 {/* ── Agendamento (recurring only) ── */}
                 {activeTab === "schedule" && isRecurring && (
                   <div className="space-y-5">
+                    {rmTiming && (
+                      <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Quando é enviada</p>
+                        {rmTiming.summary && <p className="mt-1.5 text-sm text-ink2">🕒 {rmTiming.summary}</p>}
+                        {rmTiming.fromSegmentation && (
+                          <p className="mt-1.5 text-xs text-muted">Os dias que definem esta fase ficam em <span className="font-semibold">Configurações → Segmentação</span>.</p>
+                        )}
+                        <p className="mt-2.5 text-xs leading-relaxed text-muted">{CADENCE_EXPLAINER}</p>
+                      </div>
+                    )}
+
+                    {canEdit && rmCanTrigger && (
+                      <div className="rounded-2xl border border-line p-4">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Dias após o evento</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number" min={0} max={90}
+                            value={triggerDays}
+                            onChange={(e) => setTriggerDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                            className="w-24 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                          />
+                          <span className="text-sm text-muted">dias após o evento (salvo junto com o agendamento)</span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4 space-y-2 text-xs">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Configuração atual</p>
                       <div className="flex flex-wrap gap-1">
