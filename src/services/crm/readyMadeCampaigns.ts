@@ -239,6 +239,21 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     // with a system-managed message) — so this card only offers on/off for now.
     editable:    [],
   },
+  {
+    id:          "siga-redes",
+    emoji:       "📸",
+    name:        "Siga nas redes",
+    tagline:     "Convide os clientes a seguir suas redes sociais",
+    description: "Convida os clientes a seguir o restaurante nas redes sociais. Configure as redes na aba Marca — o link entra na mensagem automaticamente.",
+    objective:   "Aumentar seguidores e presença nas redes sociais",
+    engine:      "RECURRING",
+    targetSegment: "TODOS",
+    priority:    "GENERIC_PROMO",
+    defaultMessage:
+      "Oi, {nome}! 😊 Tá curtindo o {restaurante}? Então segue a gente no Instagram pra não perder novidade e promoção: {instagram}",
+    schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    editable:    ["message", "schedule", "dailyLimit"],
+  },
 ];
 
 export function getReadyMadeCampaign(id: string): ReadyMadeCampaign | null {
@@ -306,6 +321,13 @@ export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
     "{nome}, obrigado por ser tão presente! 🙏 Um mimo exclusivo do {restaurante} pra você: {link_cardapio}",
     "Oi, {nome}! Você faz diferença pra gente ✨ Aproveite essa condição especial de cliente VIP: {link_cardapio}",
   ],
+  "siga-redes": [
+    "Oi, {nome}! 😊 Tá curtindo o {restaurante}? Então segue a gente no Instagram pra não perder novidade e promoção: {instagram}",
+    "{nome}, a gente posta prato novo e promoção primeiro no Instagram 📸 Bora seguir? {instagram}",
+    "Oi, {nome}! Cola no nosso TikTok pra ver os bastidores do {restaurante} 🎬 {tiktok}",
+    "{nome}, segue a gente e fica por dentro de tudo! 📱 Instagram: {instagram} · TikTok: {tiktok}",
+    "Oi, {nome}! Curte nossa página no Facebook pra acompanhar as novidades do {restaurante}: {facebook}",
+  ],
   "carrinho-abandonado": [
     "Oi, {nome}! 🛒 Vi que você começou um pedido no {restaurante} e não finalizou. Posso te ajudar a concluir? É só voltar aqui: {link_cardapio}",
     "{nome}, seu pedido tá quase pronto! 🛒 Faltou só finalizar. Bora terminar? {link_cardapio}",
@@ -346,6 +368,7 @@ export const READY_MADE_TIMING: Record<string, ReadyMadeTiming> = {
   "recuperar-frios":     { summary: "Enviada a quem está 60+ dias sem pedir.",                          fromSegmentation: true },
   "clientes-vip":        { summary: "Enviada periodicamente aos clientes Ouro e Diamante.",             fromSegmentation: false },
   "carrinho-abandonado": { summary: "Enviada poucos minutos após o cliente abandonar um pedido.",       fromSegmentation: false },
+  "siga-redes":          { summary: "Enviada aos clientes, convidando a seguir suas redes sociais.",     fromSegmentation: false },
 };
 
 export function getReadyMadeTiming(id: string): ReadyMadeTiming {

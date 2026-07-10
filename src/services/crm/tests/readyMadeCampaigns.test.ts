@@ -18,10 +18,10 @@ const ctx = {
 const customer = { name: "Diego Santos", tier: "OURO", lastOrderAt: null };
 
 describe("ready-made campaign catalog", () => {
-  it("ships the 9 expected campaigns with unique ids", () => {
-    expect(READY_MADE_CAMPAIGNS).toHaveLength(9);
+  it("ships the 10 expected campaigns with unique ids", () => {
+    expect(READY_MADE_CAMPAIGNS).toHaveLength(10);
     const ids = READY_MADE_CAMPAIGNS.map((c) => c.id);
-    expect(new Set(ids).size).toBe(9);
+    expect(new Set(ids).size).toBe(10);
     expect(ids).toEqual([
       "pedido-avaliacao",
       "aniversariantes",
@@ -32,6 +32,7 @@ describe("ready-made campaign catalog", () => {
       "recuperar-frios",
       "clientes-vip",
       "carrinho-abandonado",
+      "siga-redes",
     ]);
   });
 
