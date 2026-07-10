@@ -13,10 +13,12 @@ export const ORDER_ALERT_DIAG_KEY        = "foocci_order_alert_diag";
 /** Single source of truth for the NEW ORDER alert asset (official Foocci sound).
  *  The Pedidos screen and the settings "Testar som de pedido" button both use
  *  this exact file through the same engine — keep them in sync here.
- *  It is the SAME sound as before, extracted losslessly from the original file to
- *  a clean audio-only WAV (the original was a 4K video container played via
- *  <audio>, which was fragile and heavy). Audio-only = instant, reliable playback. */
-export const ORDER_ALERT_ASSET           = "/sounds/foocci-order-alert-custom.wav";
+ *  v2 (2026-07-10): the restaurant's own improved recording, extracted losslessly
+ *  to a clean audio-only WAV (they sent it as MP3 + MP4-with-video; the MP3's
+ *  audio track was the higher-bitrate copy of the two, so it's the source).
+ *  New filename (not an in-place overwrite) so browsers never serve a stale
+ *  cached copy of the old sound under the same URL. */
+export const ORDER_ALERT_ASSET           = "/sounds/foocci-order-alert-v2.wav";
 /** Human-handoff (atendimento) alert asset — intentionally separate & unchanged. */
 export const HANDOFF_ALERT_ASSET         = "/sounds/foocci-handoff-alert.wav";
 
