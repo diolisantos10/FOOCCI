@@ -222,6 +222,9 @@ export class ReadyMadeCampaignService {
         data:  {
           status: "ACTIVE" as never,
           ...(wasOff ? {
+            // Fresh run: reset counters AND normalize the name to the catalog default
+            // so a stale custom name (e.g. an old "NIVER") becomes the ready-made name.
+            name: rm.name,
             totalSent: 0, totalFailed: 0, totalRead: 0,
             totalResponded: 0, totalConverted: 0, totalRevenue: 0,
             lastRunAt: null,

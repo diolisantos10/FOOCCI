@@ -3028,6 +3028,8 @@ function CampanhasAtivasSection({
   onAction,
   limit,
   onSeeAll,
+  restrictToIds,
+  cartRecoveryActive,
 }: {
   campaigns: CampaignHistoryRow[];
   onDetail: (id: string) => void;
@@ -3036,12 +3038,21 @@ function CampanhasAtivasSection({
   limit?: number;
   /** When set, render a "Ver todas" footer linking to the full CRM panel. */
   onSeeAll?: () => void;
+  /** When set, show ONLY these campaign ids (the currently-active ready-made ones),
+      so old/deleted manual campaigns never linger in this results panel. */
+  restrictToIds?: string[] | null;
+  /** Carrinho abandonado has no Campaign row — render it as a row when it's on. */
+  cartRecoveryActive?: boolean;
 }) {
-  const active = campaigns.filter((c) => ACTIVE_STATUSES.has(c.status));
-  if (active.length === 0) return null;
+  const allowed = restrictToIds ? new Set(restrictToIds) : null;
+  const active = campaigns.filter(
+    (c) => ACTIVE_STATUSES.has(c.status) && (!allowed || allowed.has(c.id))
+  );
+  if (active.length === 0 && !cartRecoveryActive) return null;
   const shown = limit != null
     ? [...active].sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue)).slice(0, limit)
     : active;
+  const count = active.length + (cartRecoveryActive ? 1 : 0);
 
   return (
     <div data-testid="campanhas-ativas-section">
@@ -3050,7 +3061,7 @@ function CampanhasAtivasSection({
           <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Campanhas ativas</h3>
           <p className="mt-0.5 text-xs text-muted">Campanhas em execução, agendadas ou recorrentes.</p>
         </div>
-        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{active.length}</span>
+        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{count}</span>
       </div>
       {/* 9 columns — fits 1280px+ without horizontal scroll.
           Respostas/Tx./Pedidos moved to the Gerenciar detail modal. */}
@@ -3070,6 +3081,26 @@ function CampanhasAtivasSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
+            {cartRecoveryActive && limit == null && (
+              <tr className="hover:bg-[#FAFAF8] transition-colors">
+                <td className="py-3 pl-4 pr-2">
+                  <span className="inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap bg-emerald-100 text-emerald-700">Ativa</span>
+                </td>
+                <td className="py-3 px-2 max-w-[160px]">
+                  <p className="font-semibold text-ink truncate">🛒 Carrinho abandonado</p>
+                  <p className="text-[10px] text-muted truncate">Recupera pedidos iniciados</p>
+                </td>
+                <td className="py-3 px-2 whitespace-nowrap">
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE["Recorrente"]}`}>Automática</span>
+                </td>
+                <td className="py-3 px-2 max-w-[100px]"><span className="text-ink2 truncate block text-[11px]">quem abandonou</span></td>
+                <td className="py-3 px-2 text-right text-muted">—</td>
+                <td className="py-3 px-2 text-right text-muted">—</td>
+                <td className="py-3 px-2 text-right text-muted">—</td>
+                <td className="py-3 px-2 text-[11px]"><p className="text-ink2 whitespace-nowrap">Após abandono</p><p className="text-muted whitespace-nowrap">automático</p></td>
+                <td className="py-3 pl-2 pr-4 text-right"><span className="text-[10px] text-muted">em Campanhas prontas</span></td>
+              </tr>
+            )}
             {shown.map((c) => {
               const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
               const cfg          = c.scheduleConfig as ScheduleCfg | null;
@@ -3510,6 +3541,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Carrinho abandonado (CART_RECOVERY) has no Campaign row — it's a config flag —
   // so it never appears in `campaigns`. Track it separately just to show it's active.
   const [cartRecoveryOn, setCartRecoveryOn] = useState(false);
+  // Ids of the campaigns actually turned on in "Campanhas prontas". The Ativas panel
+  // shows ONLY these, so old/deleted manual campaigns never linger there.
+  const [activeReadyMadeIds, setActiveReadyMadeIds] = useState<string[]>([]);
 
   function refreshCampaigns() {
     fetch("/api/crm/campaigns")
@@ -3528,9 +3562,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     fetch("/api/crm/ready-made")
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => {
-        const carrinho = (json?.data?.campaigns as Array<{ id: string; active: boolean }> | undefined)
-          ?.find((c) => c.id === "carrinho-abandonado");
-        setCartRecoveryOn(!!carrinho?.active);
+        const rm = (json?.data?.campaigns as Array<{ id: string; active: boolean; campaignId: string | null }> | undefined) ?? [];
+        setCartRecoveryOn(rm.some((c) => c.id === "carrinho-abandonado" && c.active));
+        setActiveReadyMadeIds(rm.filter((c) => c.active && c.campaignId).map((c) => c.campaignId as string));
       })
       .catch(() => {});
   }, []);
@@ -3619,20 +3653,13 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       </div>
 
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
-      {cartRecoveryOn && (
-        <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
-          <span className="text-lg leading-none">🛒</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-ink">Carrinho abandonado <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Ligada</span></p>
-            <p className="text-xs text-muted">Envia poucos minutos após o cliente abandonar um pedido. Configure em Campanhas prontas, abaixo.</p>
-          </div>
-        </div>
-      )}
       {!loadingHistory && (
         <CampanhasAtivasSection
           campaigns={campaigns}
           onDetail={(id) => setDetailId(id)}
           onAction={(id, action) => { void handleCampaignAction(id, action); }}
+          restrictToIds={activeReadyMadeIds}
+          cartRecoveryActive={cartRecoveryOn}
         />
       )}
 
