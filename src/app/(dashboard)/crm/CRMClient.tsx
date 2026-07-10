@@ -6,6 +6,10 @@ import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
+import {
+  COUPON_PERCENT_OPTIONS, COUPON_FIXED_OPTIONS, couponLabel,
+  type CouponType, type ReadyMadeCoupon,
+} from "@/services/crm/readyMadeCampaigns";
 import { ReadyMadeCampaignsSection } from "./ReadyMadeCampaignsSection";
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
@@ -1879,6 +1883,11 @@ function CampaignManageModal({
   const [savingSched, setSavingSched] = useState(false);
   const [schedSaved,  setSchedSaved]  = useState(false);
 
+  // Edit – coupon/reward (ported from the ready-made config so this is the ONE modal)
+  const [coupon,      setCoupon]      = useState<ReadyMadeCoupon | null>(null);
+  const [savingCoupon,setSavingCoupon]= useState(false);
+  const [couponSaved, setCouponSaved] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     setError(false);
@@ -1902,6 +1911,7 @@ function CampaignManageModal({
           setEditEnd(cfg.timeWindow?.end ?? "20:00");
           setEditLimit(cfg.dailyLimit ?? 20);
         }
+        setCoupon(((cfg as unknown as { coupon?: ReadyMadeCoupon | null })?.coupon) ?? null);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -1995,6 +2005,26 @@ function CampaignManageModal({
         setTimeout(() => setSchedSaved(false), 3000);
       }
     } finally { setSavingSched(false); }
+  }
+
+  async function handleSaveCoupon() {
+    if (!detail || !isRecurring) return;
+    setSavingCoupon(true);
+    try {
+      const newCfg = { ...(cfg ?? {}), coupon };
+      const res = await fetch(`/api/crm/campaigns/${detail.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduleConfig: newCfg }),
+      });
+      if (res.ok) {
+        const json = await res.json() as { data?: { scheduleConfig: unknown } };
+        const saved = json.data?.scheduleConfig ?? newCfg;
+        setDetail((p) => p ? { ...p, scheduleConfig: saved as Record<string, unknown> } : p);
+        setCouponSaved(true);
+        onCampaignUpdated?.(detail.id, { scheduleConfig: saved as Record<string, unknown> });
+        setTimeout(() => setCouponSaved(false), 3000);
+      }
+    } finally { setSavingCoupon(false); }
   }
 
   const TABS: { id: ManageTab; label: string; hidden?: boolean }[] = [
@@ -2277,6 +2307,97 @@ function CampaignManageModal({
                       <p className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-xs text-muted">
                         Campanha finalizada — a mensagem não pode ser editada.
                       </p>
+                    )}
+
+                    {/* ── Cupom / recompensa (só recorrentes) ── */}
+                    {canEdit && isRecurring && (
+                      <div className="border-t border-line pt-5">
+                        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">Cupom de desconto (opcional)</p>
+                        <div className="flex flex-wrap gap-2">
+                          {([
+                            { key: null,         label: "Sem cupom" },
+                            { key: "PERCENTAGE", label: "Porcentagem" },
+                            { key: "FIXED",      label: "Valor em R$" },
+                            { key: "CUSTOM",     label: "Recompensa" },
+                          ] as { key: CouponType | null; label: string }[]).map((opt) => {
+                            const activeOpt = (coupon?.type ?? null) === opt.key;
+                            return (
+                              <button
+                                key={opt.label}
+                                onClick={() => setCoupon(
+                                  opt.key === null
+                                    ? null
+                                    : opt.key === "CUSTOM"
+                                    ? { type: "CUSTOM", value: coupon?.type === "CUSTOM" ? coupon.value : 0, description: coupon?.description ?? "", validityDays: coupon?.validityDays }
+                                    : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1], validityDays: coupon?.validityDays }
+                                )}
+                                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${activeOpt ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                              >{opt.label}</button>
+                            );
+                          })}
+                        </div>
+
+                        {coupon && coupon.type !== "CUSTOM" && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {(coupon.type === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS).map((v) => (
+                              <button
+                                key={v}
+                                onClick={() => setCoupon({ type: coupon.type, value: v, validityDays: coupon.validityDays })}
+                                className={`rounded-xl border px-3.5 py-2 text-sm font-bold transition-colors ${coupon.value === v ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                              >{coupon.type === "PERCENTAGE" ? `${v}%` : `R$ ${v}`}</button>
+                            ))}
+                          </div>
+                        )}
+
+                        {coupon && coupon.type === "CUSTOM" && (
+                          <div className="mt-2 space-y-2">
+                            <input
+                              type="text" maxLength={80} placeholder="ex.: sobremesa grátis"
+                              value={coupon.description ?? ""}
+                              onChange={(e) => setCoupon({ ...coupon, description: e.target.value })}
+                              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number" min={0} max={100000}
+                                value={coupon.value}
+                                onChange={(e) => setCoupon({ ...coupon, value: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                                className="w-28 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                              />
+                              <span className="text-xs text-muted">custo estimado (R$), só p/ orçamento</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {coupon && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wide text-muted">Válido por</label>
+                            <input
+                              type="number" min={1} max={365}
+                              value={coupon.validityDays ?? 30}
+                              onChange={(e) => setCoupon({ ...coupon, validityDays: Math.max(1, parseInt(e.target.value, 10) || 30) })}
+                              className="w-20 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                            />
+                            <span className="text-sm text-muted">dias</span>
+                          </div>
+                        )}
+
+                        {coupon && (
+                          <p className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
+                            O cliente ganha <span className="font-bold">{couponLabel(coupon)}</span> na carteira.
+                            Use <code className="rounded bg-white/70 px-1">{"{cupom}"}</code> na mensagem para mostrar o benefício.
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex items-center gap-3">
+                          <button
+                            onClick={handleSaveCoupon}
+                            disabled={savingCoupon}
+                            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
+                          >{savingCoupon ? "Salvando…" : "Salvar cupom"}</button>
+                          {couponSaved && <p className="text-xs font-semibold text-green-600">✓ Salvo!</p>}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -3544,6 +3665,8 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Ids of the campaigns actually turned on in "Campanhas prontas". The Ativas panel
   // shows ONLY these, so old/deleted manual campaigns never linger there.
   const [activeReadyMadeIds, setActiveReadyMadeIds] = useState<string[]>([]);
+  // Bumped whenever a campaign changes, to refresh the ready-made cards + Ativas panel.
+  const [readyMadeReload, setReadyMadeReload] = useState(0);
 
   function refreshCampaigns() {
     fetch("/api/crm/campaigns")
@@ -3558,7 +3681,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .then((json) => setCampaigns(json.data ?? []))
       .catch(() => {})
       .finally(() => setLoadingHistory(false));
+  }, [readyMadeReload]);
 
+  useEffect(() => {
     fetch("/api/crm/ready-made")
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => {
@@ -3567,7 +3692,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         setActiveReadyMadeIds(rm.filter((c) => c.active && c.campaignId).map((c) => c.campaignId as string));
       })
       .catch(() => {});
-  }, []);
+  }, [readyMadeReload]);
 
   async function handleCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
     const res = await fetch(`/api/crm/campaigns/${id}`, {
@@ -3582,6 +3707,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           prev.map((c) => c.id === id ? { ...c, status: json.data!.status } : c)
         );
       }
+      // Pausing/resuming may change which ready-made campaigns are active — refresh
+      // the Ativas filter + cards so the panel reflects reality.
+      setReadyMadeReload((n) => n + 1);
     }
   }
 
@@ -3664,7 +3792,10 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       )}
 
       {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
-      <ReadyMadeCampaignsSection />
+      <ReadyMadeCampaignsSection
+        onManage={(campaignId) => setDetailId(campaignId)}
+        reloadSignal={readyMadeReload}
+      />
 
       {/* ── Histórico de campanhas (collapsed by default) ────────────────────── */}
       {!loadingHistory && (
@@ -3899,7 +4030,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {detailId && (
         <CampaignManageModal
           detailId={detailId}
-          onClose={() => setDetailId(null)}
+          onClose={() => { setDetailId(null); setReadyMadeReload((n) => n + 1); }}
           onCampaignAction={handleCampaignAction}
           onCampaignUpdated={handleCampaignFieldsUpdated}
         />

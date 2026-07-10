@@ -52,7 +52,12 @@ const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const PREVIEW_CUSTOMER = { name: "Diego", tier: "OURO", lastOrderAt: new Date(Date.now() - 3 * 86_400_000).toISOString() };
 const PREVIEW_CTX = { restaurantName: "seu restaurante", pedidoUrl: "https://foocci.com.br", googleReviewUrl: null, instagramUrl: null };
 
-export function ReadyMadeCampaignsSection() {
+export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
+  /** Open the full "Gerenciar" modal for a recurring campaign (unified interface). */
+  onManage?: (campaignId: string) => void;
+  /** Bump to force a reload (e.g. after the manage modal changed a campaign). */
+  reloadSignal?: number;
+} = {}) {
   const [items, setItems]     = useState<ReadyMadeState[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
@@ -67,7 +72,7 @@ export function ReadyMadeCampaignsSection() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, reloadSignal]);
 
   async function post(id: string, body: Record<string, unknown>) {
     setBusyId(id);
@@ -84,6 +89,32 @@ export function ReadyMadeCampaignsSection() {
   }
 
   const toggle = (c: ReadyMadeState) => post(c.id, { action: c.active ? "deactivate" : "activate" });
+
+  // "Configurar" opens the ONE unified "Gerenciar" modal for recurring campaigns.
+  // If no campaign row exists yet, create a PAUSED one to hold the config, then open it.
+  async function configure(c: ReadyMadeState) {
+    if (onManage && c.engine === "RECURRING") {
+      let campaignId = c.campaignId;
+      if (!campaignId) {
+        setBusyId(c.id);
+        try {
+          await fetch(`/api/crm/ready-made/${c.id}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "update", overrides: {} }),
+          });
+          const fresh = await fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null);
+          const rows = (fresh?.data?.campaigns as ReadyMadeState[] | undefined) ?? [];
+          if (rows.length) setItems(rows);
+          campaignId = rows.find((x) => x.id === c.id)?.campaignId ?? null;
+        } finally {
+          setBusyId(null);
+        }
+      }
+      if (campaignId) { onManage(campaignId); return; }
+    }
+    setOpenId(c.id); // fallback: simple config (cart recovery has no campaign row)
+  }
+
   const openItem = items.find((c) => c.id === openId) ?? null;
 
   if (loading) {
@@ -108,7 +139,7 @@ export function ReadyMadeCampaignsSection() {
             c={c}
             busy={busyId === c.id}
             onToggle={() => void toggle(c)}
-            onConfigure={() => setOpenId(c.id)}
+            onConfigure={() => void configure(c)}
           />
         ))}
       </div>
