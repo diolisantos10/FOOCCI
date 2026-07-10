@@ -93,6 +93,29 @@ export async function markConversationCrmContext(
 }
 
 /**
+ * Close the CRM cycle after a purchase: once a customer buys, their conversation
+ * must no longer carry the CRM "campaign/automation" tag — otherwise the next time
+ * they reach out organically, the chat would still look like a CRM conversation
+ * (wrong AI-greeting behavior, stale "Campanha enviada" badge, wrong agent).
+ *
+ * Resets CRM_CAMPAIGN / CRM_AUTOMATION contexts back to INBOUND so the next contact
+ * starts fresh. Leaves ORDER_SUPPORT / HUMAN_SUPPORT untouched. Best-effort.
+ */
+export async function clearCrmContextAfterPurchase(
+  restaurantId: string,
+  customerId: string,
+): Promise<void> {
+  await prisma.conversation.updateMany({
+    where: {
+      restaurantId,
+      customerId,
+      contextType: { in: [CONTEXT_TYPE.CRM_CAMPAIGN, CONTEXT_TYPE.CRM_AUTOMATION] },
+    },
+    data: { contextType: CONTEXT_TYPE.INBOUND, relatedCampaignId: null },
+  });
+}
+
+/**
  * When an inbound message arrives, check if the conversation was created by a
  * CRM send and, if so:
  *   1. Mark the most recent PENDING CampaignExecution for this conversation's

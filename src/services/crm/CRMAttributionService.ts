@@ -26,6 +26,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isCrmCountable } from "@/services/crm/crm-countable";
+import { clearCrmContextAfterPurchase } from "@/services/agents/AgentRoutingService";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const ATTRIBUTION_WINDOW_DAYS = 7;
@@ -122,6 +123,10 @@ export class CRMAttributionService {
             }),
           ]);
 
+          // Purchase closes the CRM cycle — untag the chat so the next organic
+          // contact starts fresh (not as a CRM conversation).
+          await clearCrmContextAfterPurchase(restaurantId, customerId).catch(() => {});
+
           console.info(
             `[CRMAttribution] coupon order:${orderId} campaign:${campaignId}` +
             ` customer:${customerId} R$${revenue.toFixed(2)}`
@@ -173,6 +178,8 @@ export class CRMAttributionService {
             orderId,
           },
         });
+
+        await clearCrmContextAfterPurchase(restaurantId, customerId).catch(() => {});
 
         const source = respondedLog ? "responded" : "any";
         console.info(
@@ -229,6 +236,8 @@ export class CRMAttributionService {
             },
           }),
         ]);
+
+        await clearCrmContextAfterPurchase(restaurantId, customerId).catch(() => {});
 
         console.info(
           `[CRMAttribution] campaign order:${orderId} exec:${targetExec.id}` +

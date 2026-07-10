@@ -6,6 +6,7 @@ const db = vi.hoisted(() => ({
   campaignExecution: { findFirst: vi.fn(), update: vi.fn() },
   campaign:          { update: vi.fn() },
   cRMActionLog:      { findFirst: vi.fn() },
+  conversation:      { updateMany: vi.fn() },
   $transaction:      vi.fn(async (arr: unknown) => (Array.isArray(arr) ? Promise.all(arr as Promise<unknown>[]) : undefined)),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -28,6 +29,7 @@ beforeEach(() => {
   db.campaignExecution.update.mockResolvedValue({});
   db.campaign.update.mockResolvedValue({});
   db.cRMActionLog.findFirst.mockResolvedValue(null);
+  db.conversation.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("CRMAttributionService — coupon path (Priority 0)", () => {
@@ -43,6 +45,10 @@ describe("CRMAttributionService — coupon path (Priority 0)", () => {
     expect(execUpd.data).toMatchObject({ converted: true, convertedOrderId: "o1" });
     // Coupon path wins — the CRMActionLog fallback is never queried.
     expect(db.cRMActionLog.findFirst).not.toHaveBeenCalled();
+    // Purchase closes the CRM cycle — the chat's CRM tag is reset to INBOUND.
+    const clear = db.conversation.updateMany.mock.calls[0]![0];
+    expect(clear.where).toMatchObject({ restaurantId: "r1", customerId: "c1" });
+    expect(clear.data).toMatchObject({ contextType: "INBOUND", relatedCampaignId: null });
   });
 
   it("still attributes when there is no matching execution (bumps campaign only)", async () => {
