@@ -112,6 +112,20 @@ export class CustomerCouponService {
   }
 
   /**
+   * Consume the wallet coupon attached to an order once its payment is approved
+   * (online / pay_now path). Reads the order's customerCouponId + customerId and
+   * marks it USED. Idempotent — safe to call from every payment webhook retry.
+   */
+  static async consumeForPaidOrder(orderId: string): Promise<boolean> {
+    const order = await prisma.order.findUnique({
+      where:  { id: orderId },
+      select: { customerCouponId: true, customerId: true },
+    });
+    if (!order?.customerCouponId || !order.customerId) return false;
+    return this.markUsed({ couponId: order.customerCouponId, customerId: order.customerId, orderId });
+  }
+
+  /**
    * Restore any coupons consumed by an order back to ACTIVE — called when the order
    * is deleted/cancelled so the customer keeps the coupon.
    */

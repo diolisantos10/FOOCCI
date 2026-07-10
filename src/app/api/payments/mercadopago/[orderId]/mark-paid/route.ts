@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 
 export async function PATCH(
   req: NextRequest,
@@ -61,6 +62,11 @@ export async function PATCH(
       });
     }
   }
+
+  // Wallet coupon (iFood-style) — consume on payment approval. Idempotent.
+  await CustomerCouponService.consumeForPaidOrder(orderId).catch((e) =>
+    console.error("[mp mark-paid] wallet coupon consume failed:", e),
+  );
 
   await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "mp_mark_paid");
 

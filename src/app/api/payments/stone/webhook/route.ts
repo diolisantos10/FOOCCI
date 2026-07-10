@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/stone";
 import { auditLog } from "@/lib/audit";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 
 export async function POST(req: NextRequest) {
@@ -121,6 +122,11 @@ export async function POST(req: NextRequest) {
       });
     }
   }
+
+  // Wallet coupon (iFood-style) — consume on payment approval. Idempotent.
+  await CustomerCouponService.consumeForPaidOrder(payment.orderId).catch((e) =>
+    console.error("[stone webhook] wallet coupon consume failed:", e),
+  );
 
   // Sync CRM metrics through the centralized service.
   // crmSyncedAt guards against double-counting on repeated webhooks.

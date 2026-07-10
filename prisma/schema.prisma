@@ -458,6 +458,7 @@ model Order {
   couponCode           String? // code entered by customer at checkout
   promotionId          String? // FK to Promotion that was applied (soft reference — no CASCADE)
   couponUsageCountedAt DateTime? // set once Promotion.usedCount has been incremented for this order
+  customerCouponId     String? // wallet coupon (CustomerCoupon) redeemed on this order — marked USED on payment
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 

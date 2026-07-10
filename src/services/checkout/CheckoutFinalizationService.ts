@@ -78,6 +78,8 @@ export interface CreateOrderInput {
   couponCode?:           string | null;
   promotionId?:          string | null;
   promoOneTimePerUser?:  boolean;
+  /** Wallet coupon (CustomerCoupon) redeemed on this order, if any. */
+  customerCouponId?:     string | null;
   idempotencyKey?:       string | null;
   source:                string;
   trackingLinkId?:       string | null;
@@ -178,6 +180,7 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Create
         couponCode:    input.couponCode ?? null,
         promotionId:   input.promotionId ?? null,
         couponUsageCountedAt: (input.promotionId && input.paymentMode !== "pay_now") ? new Date() : null,
+        customerCouponId: input.customerCouponId ?? null,
         deliveryAddressId,
         idempotencyKey:  input.idempotencyKey  ?? null,
         trackingLinkId:  input.trackingLinkId  ?? null,
@@ -211,6 +214,16 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Create
       await tx.promotion.update({
         where: { id: input.promotionId },
         data:  { usedCount: { increment: 1 } },
+      });
+    }
+
+    // Wallet coupon: consume now for offline payments (same timing as usedCount).
+    // pay_now is consumed on payment approval by the webhooks. Race-safe: only an
+    // ACTIVE row flips, so a returned-existing (idempotent) order can't double-consume.
+    if (input.customerCouponId && input.paymentMode !== "pay_now") {
+      await tx.customerCoupon.updateMany({
+        where: { id: input.customerCouponId, customerId: resolvedCustomerId, status: "ACTIVE" },
+        data:  { status: "USED", usedAt: new Date(), usedOrderId: order.id },
       });
     }
 

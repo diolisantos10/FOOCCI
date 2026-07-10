@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   customerCoupon: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+  order:          { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -98,6 +99,20 @@ describe("CustomerCouponService.markUsed", () => {
   it("is idempotent — a second call consumes nothing", async () => {
     db.customerCoupon.updateMany.mockResolvedValue({ count: 0 });
     expect(await CustomerCouponService.markUsed({ couponId: "cc1", customerId: "c1", orderId: "o1" })).toBe(false);
+  });
+});
+
+describe("CustomerCouponService.consumeForPaidOrder", () => {
+  it("marks the order's wallet coupon USED on payment approval", async () => {
+    db.order.findUnique.mockResolvedValue({ customerCouponId: "cc1", customerId: "c1" });
+    db.customerCoupon.updateMany.mockResolvedValue({ count: 1 });
+    expect(await CustomerCouponService.consumeForPaidOrder("o1")).toBe(true);
+    expect(db.customerCoupon.updateMany.mock.calls[0]![0].where).toMatchObject({ id: "cc1", customerId: "c1", status: "ACTIVE" });
+  });
+  it("no-ops when the order has no wallet coupon", async () => {
+    db.order.findUnique.mockResolvedValue({ customerCouponId: null, customerId: "c1" });
+    expect(await CustomerCouponService.consumeForPaidOrder("o1")).toBe(false);
+    expect(db.customerCoupon.updateMany).not.toHaveBeenCalled();
   });
 });
 

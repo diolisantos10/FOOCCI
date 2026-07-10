@@ -22,6 +22,7 @@
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 
 export class OrderDeleteService {
   static async deleteOrder(
@@ -58,6 +59,11 @@ export class OrderDeleteService {
         console.error("[OrderDeleteService] Failed to decrement promotion usedCount:", err)
       );
     }
+
+    // Return any wallet coupon consumed by this order back to the customer.
+    await CustomerCouponService.restoreForOrder(orderId).catch((err) =>
+      console.error("[OrderDeleteService] Failed to restore wallet coupon:", err)
+    );
 
     // Delete the order — OrderItems and Payment cascade automatically
     await prisma.order.delete({ where: { id: orderId } });

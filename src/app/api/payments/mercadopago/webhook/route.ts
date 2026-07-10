@@ -28,6 +28,7 @@ import { decrypt } from "@/lib/crypto";
 import { verifyMpWebhookSignature } from "@/lib/mercadopago";
 import { Decimal } from "@prisma/client/runtime/library";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
 
 const LOG = "[mp-webhook]";
@@ -114,6 +115,11 @@ export async function confirmMpPayment(
       });
     }
   }
+
+  // Wallet coupon (iFood-style) — consume on payment approval. Idempotent.
+  await CustomerCouponService.consumeForPaidOrder(order.id).catch((e) =>
+    console.error("[mp webhook] wallet coupon consume failed:", e),
+  );
 
   // crmSyncedAt in CustomerMetricsSyncService prevents double-counting.
   await CustomerMetricsSyncService.syncOrderToCustomerMetrics(order.id, "mp_webhook");

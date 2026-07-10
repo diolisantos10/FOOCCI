@@ -39,6 +39,7 @@ import { channelPrice } from "@/services/menu/MenuPricingService";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
 import { createOrderRecord } from "@/services/checkout/CheckoutFinalizationService";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ const bodySchema = z.object({
   customerId:       z.string().optional(), // pre-resolved customer ID from identify flow
   clientDeliveryFee: z.number().nonnegative().optional(),
   couponCode:       z.string().max(50).optional(),
+  customerCouponId: z.string().optional(), // wallet coupon (CustomerCoupon) chosen in the cart
   // UTM / channel attribution
   trackingLinkId:   z.string().optional(),
   trafficSource:    z.string().max(100).optional(),
@@ -190,7 +192,7 @@ export async function POST(
   const {
     cart, customerName, deliveryMethod, address,
     paymentMode, paymentMethodSub, customerPhone, customerId: incomingCustomerId,
-    clientDeliveryFee, couponCode,
+    clientDeliveryFee, couponCode, customerCouponId,
     trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
   } = parsed.data;
 
@@ -440,8 +442,23 @@ export async function POST(
   let resolvedPromoId:      string | null = null;
   let resolvedCouponCode:   string | null = null;
   let promoOneTimePerUser   = false;
+  let redeemedWalletCouponId: string | null = null;
 
-  if (couponCode?.trim()) {
+  // Wallet coupon (card-defined, iFood-style) — takes the single discount slot when
+  // provided. Requires an identified customer; validated fresh from the DB (owned,
+  // ACTIVE, unexpired). Mutually exclusive with a typed promo code.
+  if (customerCouponId?.trim() && incomingCustomerId && !isGuestIdentifier(phone)) {
+    const wc = await CustomerCouponService.findRedeemable(restaurantId, incomingCustomerId, customerCouponId.trim());
+    if (wc) {
+      discountAmount = wc.discountType === "PERCENTAGE"
+        ? Math.min((subtotal * wc.discountValue) / 100, subtotal)
+        : Math.min(wc.discountValue, orderTotal);
+      discountAmount = Math.round(discountAmount * 100) / 100;
+      redeemedWalletCouponId = wc.id;
+    } else {
+      console.info("[finalize] wallet coupon rejected (not redeemable)", { customerCouponId });
+    }
+  } else if (couponCode?.trim()) {
     const promo = await prisma.promotion.findFirst({
       where: {
         restaurantId,
@@ -530,6 +547,7 @@ export async function POST(
       couponCode:            resolvedCouponCode,
       promotionId:           resolvedPromoId,
       promoOneTimePerUser,
+      customerCouponId:      redeemedWalletCouponId,
       idempotencyKey:        ikey,
       source:                "pedido",
       trackingLinkId,
