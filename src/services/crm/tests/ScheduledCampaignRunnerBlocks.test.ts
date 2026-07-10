@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   campaignExecution: { findMany: vi.fn(), create: vi.fn(), count: vi.fn() },
   restaurant: { findUnique: vi.fn() },
   restaurantBrandConfig: { findUnique: vi.fn() },
+  whatsAppAgentConfig: { findUnique: vi.fn() },
   customer: { findMany: vi.fn(), findUnique: vi.fn() },
   // Meta CRM lookup no _sendBatch — null = Meta desligado, caminho Evolution (o que a suíte cobre).
   metaWhatsAppConfig: { findUnique: vi.fn() },
@@ -36,7 +37,7 @@ vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: evoClient }
 vi.mock("../CrmCampaignService", () => svc);
 vi.mock("@/lib/crm-safety", () => safety);
 vi.mock("@/services/crm/ContactSafetyService", () => contact);
-vi.mock("@/lib/public-url", () => ({ getPublicMenuUrl: () => "", getPublicSiteUrl: () => "" }));
+vi.mock("@/lib/public-url", () => ({ getPublicMenuUrl: () => "", getPublicSiteUrl: () => "", sanitizeCustomerUrl: (u: string) => u }));
 vi.mock("@/services/agents/AgentRoutingService", () => ({
   markConversationCrmContext: vi.fn(), buildConversationMetadataForCrmSend: vi.fn(() => ({})), CONTEXT_TYPE: {},
 }));
@@ -61,6 +62,7 @@ beforeEach(() => {
   db.campaignExecution.create.mockResolvedValue({ id: "e1" });
   db.restaurant.findUnique.mockResolvedValue({ name: "Sushi Cazza", slug: "sushicazza" });
   db.restaurantBrandConfig.findUnique.mockResolvedValue({ googleReviewUrl: null });
+  db.whatsAppAgentConfig.findUnique.mockResolvedValue(null);
   db.customer.findMany.mockResolvedValue([]); // none opted out
   db.customer.findUnique.mockResolvedValue({ id: "c1", name: "Ana" });
   db.metaWhatsAppConfig.findUnique.mockResolvedValue(null); // Meta CRM off → Evolution

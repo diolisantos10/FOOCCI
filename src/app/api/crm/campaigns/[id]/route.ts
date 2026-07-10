@@ -217,6 +217,7 @@ export async function PATCH(
       }
 
       let newStatus: string;
+      let resetStats = false;
       if (body.action === "pause") {
         if (!["ACTIVE", "SCHEDULED"].includes(currentStatus)) {
           return badRequest("Apenas campanhas ativas ou agendadas podem ser pausadas");
@@ -227,6 +228,9 @@ export async function PATCH(
           return badRequest("Apenas campanhas pausadas podem ser retomadas");
         }
         newStatus = "ACTIVE";
+        // Resuming a campaign that was paused starts a fresh run — the dashboard
+        // must show only what happens from now on, not stats from before the pause.
+        resetStats = true;
       } else {
         // cancel
         newStatus = "CANCELLED";
@@ -234,7 +238,14 @@ export async function PATCH(
 
       const updated = await prisma.campaign.update({
         where: { id: params.id },
-        data:  { status: newStatus as never },
+        data:  {
+          status: newStatus as never,
+          ...(resetStats ? {
+            totalSent: 0, totalFailed: 0, totalRead: 0,
+            totalResponded: 0, totalConverted: 0, totalRevenue: 0,
+            lastRunAt: null,
+          } : {}),
+        },
         select: { id: true, status: true },
       });
       return ok(updated);

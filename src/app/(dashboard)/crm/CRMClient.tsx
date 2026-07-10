@@ -3507,6 +3507,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Campaign history
   const [campaigns,       setCampaigns]       = useState<CampaignHistoryRow[]>([]);
   const [loadingHistory,  setLoadingHistory]  = useState(true);
+  // Carrinho abandonado (CART_RECOVERY) has no Campaign row — it's a config flag —
+  // so it never appears in `campaigns`. Track it separately just to show it's active.
+  const [cartRecoveryOn, setCartRecoveryOn] = useState(false);
 
   function refreshCampaigns() {
     fetch("/api/crm/campaigns")
@@ -3521,6 +3524,15 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .then((json) => setCampaigns(json.data ?? []))
       .catch(() => {})
       .finally(() => setLoadingHistory(false));
+
+    fetch("/api/crm/ready-made")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => {
+        const carrinho = (json?.data?.campaigns as Array<{ id: string; active: boolean }> | undefined)
+          ?.find((c) => c.id === "carrinho-abandonado");
+        setCartRecoveryOn(!!carrinho?.active);
+      })
+      .catch(() => {});
   }, []);
 
   async function handleCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
@@ -3607,6 +3619,15 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       </div>
 
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
+      {cartRecoveryOn && (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
+          <span className="text-lg leading-none">🛒</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-ink">Carrinho abandonado <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Ligada</span></p>
+            <p className="text-xs text-muted">Envia poucos minutos após o cliente abandonar um pedido. Configure em Campanhas prontas, abaixo.</p>
+          </div>
+        </div>
+      )}
       {!loadingHistory && (
         <CampanhasAtivasSection
           campaigns={campaigns}
