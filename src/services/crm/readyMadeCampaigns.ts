@@ -28,7 +28,12 @@ export type CouponType = "PERCENTAGE" | "FIXED";
 export interface ReadyMadeCoupon {
   type:  CouponType;
   value: number; // % for PERCENTAGE, R$ for FIXED
+  /** Days the coupon stays valid after being credited. Omitted → 30-day default. */
+  validityDays?: number;
 }
+
+/** Default coupon validity in days when the owner doesn't set one. */
+export const DEFAULT_COUPON_VALIDITY_DAYS = 30;
 
 /** Allowed coupon values, offered as fixed options in the card. */
 export const COUPON_PERCENT_OPTIONS = [5, 10, 20, 30, 40, 50] as const;

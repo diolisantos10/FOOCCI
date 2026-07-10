@@ -355,7 +355,7 @@ function ReadyMadeConfigModal({
                   return (
                     <button
                       key={opt.label}
-                      onClick={() => setCoupon(opt.key === null ? null : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1] })}
+                      onClick={() => setCoupon(opt.key === null ? null : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1], validityDays: coupon?.validityDays })}
                       className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${active ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
                     >
                       {opt.label}
@@ -372,7 +372,7 @@ function ReadyMadeConfigModal({
                     return (
                       <button
                         key={v}
-                        onClick={() => setCoupon({ type: coupon.type, value: v })}
+                        onClick={() => setCoupon({ type: coupon.type, value: v, validityDays: coupon.validityDays })}
                         className={`rounded-xl border px-3.5 py-2 text-sm font-bold transition-colors ${active ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
                       >
                         {coupon.type === "PERCENTAGE" ? `${v}%` : `R$ ${v}`}
@@ -383,10 +383,23 @@ function ReadyMadeConfigModal({
               )}
 
               {coupon && (
-                <p className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
-                  O cliente ganha <span className="font-bold">{couponLabel(coupon)}</span> na carteira ao receber a mensagem —
-                  usável só em compras online. Deixe a mensagem avisando que ele ganhou o cupom.
-                </p>
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Válido por</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={1} max={365}
+                      value={coupon.validityDays ?? 30}
+                      onChange={(e) => setCoupon({ ...coupon, validityDays: Math.max(1, parseInt(e.target.value, 10) || 30) })}
+                      className="w-24 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                    />
+                    <span className="text-sm text-muted">dias após ganhar</span>
+                  </div>
+                  <p className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
+                    O cliente ganha <span className="font-bold">{couponLabel(coupon)}</span> na carteira ao receber a mensagem,
+                    válido por <span className="font-bold">{coupon.validityDays ?? 30} dias</span> — usável só em compras online.
+                    Deixe a mensagem avisando que ele ganhou o cupom.
+                  </p>
+                </div>
               )}
             </div>
           )}

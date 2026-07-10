@@ -126,6 +126,12 @@ describe("buildReadyMadeCampaignPayload", () => {
     expect(p.scheduleConfig).not.toHaveProperty("coupon");
   });
 
+  it("carries the owner-set coupon validity into scheduleConfig", () => {
+    const rm = getReadyMadeCampaign("clientes-vip")!;
+    const p = buildReadyMadeCampaignPayload(rm, { coupon: { type: "PERCENTAGE", value: 10, validityDays: 7 } });
+    expect(p.scheduleConfig.coupon).toEqual({ type: "PERCENTAGE", value: 10, validityDays: 7 });
+  });
+
   it("refuses to build a recurring payload for the cart-recovery engine", () => {
     const rm = getReadyMadeCampaign("carrinho-abandonado")!;
     expect(() => buildReadyMadeCampaignPayload(rm)).toThrow(/CART_RECOVERY/);

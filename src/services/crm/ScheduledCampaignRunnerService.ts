@@ -72,7 +72,7 @@ export interface RecurringScheduleConfig {
   /** Event-based campaigns: days after the event to target (review, 2nd purchase). */
   triggerDays?:   number;
   /** Card-defined coupon granted to each recipient's wallet on send. */
-  coupon?:        { type: "PERCENTAGE" | "FIXED"; value: number } | null;
+  coupon?:        { type: "PERCENTAGE" | "FIXED"; value: number; validityDays?: number } | null;
   endCondition:   "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   endDate?:       string | null;                // "YYYY-MM-DD"
   maxTotal?:      number | null;
@@ -494,7 +494,7 @@ export class ScheduledCampaignRunnerService {
       allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride,
       campaignFamilyKey: familyKey || null,
       messageFingerprint: fingerprint || null,
-    }, { abortOnInstanceCollapse, coupon: cfg.coupon ?? null });
+    }, { abortOnInstanceCollapse, coupon: cfg.coupon ?? null, couponValidityDays: cfg.coupon?.validityDays ?? null });
 
     // Check end conditions
     const totalSentAfter      = (campaign.totalSent ?? 0) + sent;
@@ -1015,7 +1015,7 @@ export class ScheduledCampaignRunnerService {
       customers,
       safety,
       { allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride, campaignFamilyKey: campaign.campaignFamilyKey ?? null, messageFingerprint: fingerprint || null },
-      { abortOnInstanceCollapse: true, coupon: reproCoupon },
+      { abortOnInstanceCollapse: true, coupon: reproCoupon, couponValidityDays: reproCoupon?.validityDays ?? null },
     );
 
     // Per-recipient log = the NEW execution rows created during this run.
