@@ -16,7 +16,7 @@
  * (WhatsApp first) is the next phase.
  */
 
-import { getDefaultAgentProfileBySlug } from "@/services/agents/defaultAgentProfiles";
+import { getAgentProfile } from "@/services/agents/AgentProfileService";
 import type { AgentProfileDefinition } from "@/services/agents/types";
 import { selectEngine } from "../engines/AIEngineRouter";
 import type { AIEngineSelection } from "../engines/AIEngineTypes";
@@ -24,6 +24,7 @@ import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
 import { resolveKnowledgeAdapter } from "../knowledge/KnowledgeAdapterRegistry";
 import type { BusinessKnowledgeSnapshot } from "../knowledge/BusinessKnowledgeContract";
 import { listApprovedLearningsForBrain } from "../training/BrainTrainingContract";
+import { verifyAgainstSnapshot } from "./SnapshotCoherenceVerifier";
 import type { BrainReasoningRequest, BrainReasoningResult, BrainCoherenceCheck } from "../core/BrainTypes";
 
 export type ReasoningMode = "LLM" | "FALLBACK";
@@ -87,11 +88,15 @@ function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
   return parts.join("\n");
 }
 
-// The Brain core knows no vertical: the adapter comes from the registry.
+// The Brain core knows no vertical: the adapter comes from the registry. The
+// sanitized message goes along as queryHint so the adapter can pull the
+// knowledge RELEVANT to this exact question (retrieval), not just the top-N.
 async function loadKnowledge(req: BrainReasoningRequest): Promise<BusinessKnowledgeSnapshot> {
   const adapter = resolveKnowledgeAdapter(req.businessType);
   if (!adapter) return emptySnapshot(req);
-  return adapter.getSnapshot(req.businessId, { agentId: req.agentId }).catch(() => emptySnapshot(req));
+  return adapter
+    .getSnapshot(req.businessId, { agentId: req.agentId, queryHint: req.sanitizedInput })
+    .catch(() => emptySnapshot(req));
 }
 
 // ── Approved learnings → the human-approved pool finally feeds reasoning ───────
@@ -141,7 +146,9 @@ interface RawCore {
  * deterministic fallback that escalates and invents nothing.
  */
 export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainReasoningOutcome> {
-  const profile = getDefaultAgentProfileBySlug(req.agentId); // 1. SCOPE
+  // 1. SCOPE — DB-first (AGENT_PROFILE_DB_ENABLED) com o registry de código como
+  // piso que nunca lança: um negócio pode declarar/ajustar agentes sem deploy.
+  const profile = await getAgentProfile(req.agentId);
   const snapshot = await loadKnowledge(req);                 // 2. TRUTH
   const engine = selectEngine(req.agentId);                  // 3. PILOT
 
@@ -190,6 +197,8 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
         shouldEscalate: parsed.shouldEscalate === true,
         escalationReason: parsed.escalationReason,
         coherenceCheck: coherenceOf(snapshot, parsed),
+        knowledgeAsOf: snapshot.snapshotAsOf,
+        knowledgeCompleteness: snapshot.completenessScore,
         runtimeTouched: false,
       },
     };
@@ -223,23 +232,32 @@ function fallback(snap: BusinessKnowledgeSnapshot, reason: string): BrainReasoni
       verdict: "NEEDS_REVIEW",
       reason,
     },
+    knowledgeAsOf: snap.snapshotAsOf,
+    knowledgeCompleteness: snap.completenessScore,
     runtimeTouched: false,
   };
 }
 
-// Light generic coherence. Per-agent deep guardrails (e.g. payment→payment) are
-// layered on in the per-agent phase; here we guarantee the floor: a non-empty,
-// on-intent answer that doesn't claim missing context as fact.
+// Coherence floor: a non-empty, on-intent answer whose CLAIMS are verified
+// against the knowledge snapshot (invented prices / service denials → review).
+// Per-agent deep guardrails and the LLM critic layer on top in later phases.
 function coherenceOf(snap: BusinessKnowledgeSnapshot, core: RawCore): BrainCoherenceCheck {
   const answered = !!core.idealResponse && core.idealResponse.trim().length > 1;
   const hasIntent = !!core.primaryIntent;
+  const claims = verifyAgainstSnapshot(core.idealResponse ?? "", snap);
+
+  const pass = answered && hasIntent && !claims.needsReview;
+  const reasons: string[] = [];
+  if (!answered) reasons.push("resposta vazia ou sem intenção");
+  if (claims.needsReview) reasons.push(claims.reason);
+
   return {
     answersUserQuestion: answered,
     matchesIntent: hasIntent,
-    doesNotInventFacts: true,
+    doesNotInventFacts: claims.doesNotInventFacts,
     keepsBusinessObjective: true,
-    verdict: answered && hasIntent ? "PASS" : "NEEDS_REVIEW",
-    reason: answered ? "resposta direta dentro do escopo" : "resposta vazia ou sem intenção",
+    verdict: pass ? "PASS" : "NEEDS_REVIEW",
+    reason: pass ? "resposta direta, claims compatíveis com a base" : reasons.join("; "),
   };
 }
 

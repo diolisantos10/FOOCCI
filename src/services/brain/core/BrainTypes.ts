@@ -11,7 +11,12 @@
  * local types, but they must be expressible as this contract.
  */
 
-export type BusinessType = "RESTAURANT" | "AGENCY" | "GENERIC";
+/**
+ * OPEN vertical identity: the built-in literals keep autocomplete, but ANY
+ * string is valid — a new vertical (e.g. "BEAUTY_CLINIC") registers its
+ * knowledge adapter in the KnowledgeAdapterRegistry without editing the core.
+ */
+export type BusinessType = "RESTAURANT" | "AGENCY" | "GENERIC" | (string & {});
 
 export type BrainSourceType = "REAL_CONVERSATION" | "SIMULATION" | "MANUAL_TEST" | "SYSTEM_EVENT";
 
@@ -60,6 +65,10 @@ export interface BrainReasoningResult {
   shouldEscalate: boolean;
   escalationReason?: string;
   coherenceCheck: BrainCoherenceCheck;
+  /** Auditável: quando a verdade usada neste raciocínio foi montada. */
+  knowledgeAsOf?: string;
+  /** 0–1: completude da verdade usada (gate de promoção do free-form na Fase 3). */
+  knowledgeCompleteness?: number;
   /** Hard invariant: Brain reasoning NEVER touches the live runtime. */
   runtimeTouched: false;
 }

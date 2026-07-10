@@ -135,6 +135,42 @@ describe("BrainReasoner — the single reasoning gateway", () => {
     expect(systemPrompt).toContain("Combo Salmão 20 peças");
   });
 
+  it("CRÍTICO: preço inventado pelo piloto → coerência NEEDS_REVIEW (não passa batido)", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    db.menuItem.findMany.mockResolvedValue([
+      { name: "Combo Salmão 20 peças", price: 59.9, priceDelivery: null, priceDineIn: null, isAvailable: true, category: { name: "Combos" } },
+    ]);
+    ai.create.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        primaryIntent: "PRICE_QUESTION",
+        idealResponse: "O Combo Salmão sai por apenas R$ 39,90!", // preço NÃO existe na base
+        shouldEscalate: false,
+      }) } }],
+    });
+    const out = await reasonAsAgent(baseReq);
+    expect(out.result.coherenceCheck.doesNotInventFacts).toBe(false);
+    expect(out.result.coherenceCheck.verdict).toBe("NEEDS_REVIEW");
+    expect(out.result.coherenceCheck.reason).toMatch(/preço fora da base/i);
+  });
+
+  it("RETRIEVAL: com queryHint, o item de conhecimento relevante sobe mesmo com uso raro", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    // 31 itens: 30 populares irrelevantes + 1 raro sobre rodízio (ficaria fora do top-30)
+    const popular = Array.from({ length: 30 }, (_, i) => ({
+      category: "FAQ", title: `Pergunta popular ${i}`, answer: `Resposta ${i}`, questionPatterns: [`assunto${i}`],
+    }));
+    db.restaurantKnowledgeItem.findMany.mockResolvedValue([
+      ...popular,
+      { category: "RODIZIO_INFO", title: "Tem rodízio?", answer: "Sim! Todos os dias.", questionPatterns: ["rodízio", "rodizio"] },
+    ]);
+    ai.create.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ primaryIntent: "RODIZIO_QUESTION", idealResponse: "Temos sim!", shouldEscalate: false }) } }],
+    });
+    await reasonAsAgent({ ...baseReq, sanitizedInput: "vocês têm rodízio hoje?" });
+    const systemPrompt = ai.create.mock.calls[0][0].messages[0].content as string;
+    expect(systemPrompt).toMatch(/rod[íi]zio/i);
+  });
+
   it("janela de conversa sanitizada entra no conteúdo do usuário quando fornecida", async () => {
     process.env.OPENAI_API_KEY = "sk-test";
     ai.create.mockResolvedValue({

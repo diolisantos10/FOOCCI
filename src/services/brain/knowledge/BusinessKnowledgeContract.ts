@@ -27,12 +27,18 @@ export interface BusinessKnowledgeSnapshot {
   };
   missingContext: string[];
   safetyNotes: string[];
+  /** Quando esta verdade foi montada — auditável: "o que o Brain sabia quando respondeu". */
+  snapshotAsOf?: string;
+  /** 0–1: quanto da verdade essencial do negócio está presente (gate de promoção na Fase 3). */
+  completenessScore?: number;
 }
 
 /** Optional context an adapter may use to scope the snapshot (never required). */
 export interface KnowledgeSnapshotOptions {
   /** Which agent is asking — lets adapters scope agent-specific materials. */
   agentId?: string;
+  /** Sanitized customer message — lets adapters pull query-RELEVANT knowledge beyond the top-N. */
+  queryHint?: string;
 }
 
 /** Every business adapter (restaurant, agency, …) implements this. */

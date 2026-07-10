@@ -21,6 +21,7 @@ import type {
 // Token budget caps — keep the snapshot prompt-sized.
 const MAX_MENU_ITEMS = 120;
 const MAX_KNOWLEDGE_ITEMS = 30;
+const KNOWLEDGE_FETCH_POOL = 200; // fetched for query-relevance ranking
 const MAX_PROMOTIONS = 10;
 const MAX_ANSWER_CHARS = 240;
 
@@ -29,6 +30,43 @@ const DAY_NAMES = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"] as const;
 function money(v: unknown): number | undefined {
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
+}
+
+// ── Query-relevant retrieval (keyword v1; embeddings plug behind the same seam) ──
+interface KnowledgeRow {
+  category: string;
+  title: string;
+  answer: string;
+  questionPatterns: unknown;
+}
+
+function normalizeText(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function tokensOf(s: string): Set<string> {
+  return new Set(normalizeText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
+}
+
+/**
+ * Sem queryHint: top-N por uso (comportamento estável). Com queryHint: os itens
+ * que batem com a pergunta REAL do cliente sobem — mesmo os raramente usados.
+ * É isto que garante que "vocês têm rodízio?" encontra o RODIZIO_INFO curado.
+ */
+function selectRelevantKnowledge(rows: KnowledgeRow[], queryHint?: string): KnowledgeRow[] {
+  if (!queryHint) return rows.slice(0, MAX_KNOWLEDGE_ITEMS);
+  const query = tokensOf(queryHint);
+  if (!query.size) return rows.slice(0, MAX_KNOWLEDGE_ITEMS);
+
+  const scored = rows.map((row, order) => {
+    const patterns = Array.isArray(row.questionPatterns) ? (row.questionPatterns as string[]).join(" ") : "";
+    const haystack = tokensOf(`${row.title} ${patterns}`);
+    let score = 0;
+    for (const t of query) if (haystack.has(t)) score += 1;
+    return { row, order, score };
+  });
+  scored.sort((a, b) => b.score - a.score || a.order - b.order);
+  return scored.slice(0, MAX_KNOWLEDGE_ITEMS).map((s) => s.row);
 }
 
 export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
@@ -95,11 +133,11 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         prisma.restaurantKnowledgeItem
           .findMany({
             where: { restaurantId: businessId, status: "ACTIVE" },
-            select: { category: true, title: true, answer: true },
+            select: { category: true, title: true, answer: true, questionPatterns: true },
             orderBy: { usageCount: "desc" },
-            take: MAX_KNOWLEDGE_ITEMS,
+            take: KNOWLEDGE_FETCH_POOL,
           })
-          .catch(() => [] as Array<{ category: string; title: string; answer: string }>),
+          .catch(() => [] as KnowledgeRow[]),
         prisma.agentLibrarySource.count({ where: { agentSlug: agentId } }).catch(() => 0),
         prisma.waiterResultEvidence.count({ where: { restaurantId: businessId, status: "APPROVED" } }).catch(() => 0),
       ]);
@@ -111,6 +149,8 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         truthSources: {},
         missingContext: ["perfil do restaurante", "formas de pagamento", "cardápio", "delivery/retirada"],
         safetyNotes,
+        snapshotAsOf: new Date().toISOString(),
+        completenessScore: 0,
       };
     }
 
@@ -165,10 +205,12 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
     if (!restaurant.deliveryConfig) missingContext.push("delivery/retirada");
     if (!businessHours.length) missingContext.push("horários de funcionamento detalhados");
 
-    // ── Policies: identity + the curated, human-approved Q&A (highest-quality truth) ──
+    // ── Policies: identity + the curated, human-approved Q&A (highest-quality truth).
+    // Com queryHint, os itens relevantes à pergunta REAL sobem (retrieval v1).
+    const selectedKnowledge = selectRelevantKnowledge(knowledgeItems as KnowledgeRow[], opts?.queryHint);
     const policies: unknown[] = [
       { tone: restaurant.brandConfig?.tone ?? "friendly", nome: restaurant.name },
-      ...knowledgeItems.map((k) => ({
+      ...selectedKnowledge.map((k) => ({
         categoria: k.category,
         pergunta: k.title,
         resposta: k.answer.slice(0, MAX_ANSWER_CHARS),
@@ -185,6 +227,16 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         }))
       : undefined;
 
+    // ── Completeness: quanto da verdade essencial existe (gate de promoção futura) ──
+    const signals = [
+      Boolean(payments),
+      businessHours.length > 0,
+      items.length > 0,
+      knowledgeItems.length > 0,
+      Boolean(restaurant.deliveryConfig),
+    ];
+    const completenessScore = signals.filter(Boolean).length / signals.length;
+
     return {
       businessId,
       businessType: "RESTAURANT",
@@ -199,6 +251,8 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
       },
       missingContext,
       safetyNotes,
+      snapshotAsOf: new Date().toISOString(),
+      completenessScore,
     };
   },
 };

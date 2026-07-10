@@ -19,6 +19,7 @@ import type {
   BrainChangeRisk,
   BrainRuntimeImpact,
 } from "./BrainChangeRequest";
+import type { BusinessType } from "../core/BrainTypes";
 import { classifyChangeRisk, requiresQualityGate } from "./BrainGovernancePolicy";
 import {
   insertChangeRequest,
@@ -41,7 +42,8 @@ const NON_HUMAN_REVIEWERS = /^(agent|system|bot|ai)$/i;
 
 export interface CreateChangeRequestInput {
   businessId?: string | null;
-  businessType?: "RESTAURANT" | "AGENCY" | "GENERIC";
+  /** Open vertical identity — o tipo compartilhado do core, não uma re-declaração local. */
+  businessType?: BusinessType;
   requestedByType: BrainChangeRequester;
   requestedById?: string | null;
   target: BrainChangeTarget;
@@ -73,6 +75,8 @@ export async function createChangeRequest(input: CreateChangeRequestInput): Prom
   // NOBODY enters approved — least of all agents/systems.
   return insertChangeRequest({
     businessId: input.businessId ?? null,
+    // Default preservado enquanto o tenant-root é Restaurant; cai com a entidade
+    // Business (Fase 6 do roadmap), nunca antes — para não reescrever histórico.
     businessType: input.businessType ?? "RESTAURANT",
     requestedByType: input.requestedByType,
     requestedById: input.requestedById ?? null,
