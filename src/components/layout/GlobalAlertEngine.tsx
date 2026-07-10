@@ -14,6 +14,26 @@
  * the alarm. This component polls independently so a new PENDING order or an
  * unassumed HUMAN conversation rings from anywhere in the app.
  *
+ * SINGLE-LEADER ACROSS TABS: a restaurant commonly has SEVERAL Foocci tabs open
+ * at once (Pedidos, Atendimento, CRM, Início, …). Since this component mounts
+ * fresh in every one of them, without coordination EVERY open tab would poll
+ * and ring independently — a cacophony that sounds like "the alarm is playing
+ * on screens that aren't even in use". The Web Locks API elects exactly ONE
+ * open tab as the audio leader (whichever tab currently holds the named lock);
+ * only that tab ever calls audio.play(). The lock is released automatically
+ * the instant its tab closes/crashes (no manual heartbeat/timeout needed), so
+ * leadership fails over to another open tab immediately. Browsers without the
+ * Locks API (very old) fail OPEN — that single tab treats itself as leader
+ * rather than silencing the alarm entirely.
+ *
+ * CROSS-TAB HANDOFF ACCURACY: the handoff alarm's ack-aware ring-set ("Estou
+ * ciente" / "Silenciar atrasados") is only known to the tab that has
+ * AtendimentoClient mounted — but that might NOT be the leader tab. A
+ * BroadcastChannel relays the same attach/detach/ring-ids/resolved signals to
+ * every other open tab, so whichever tab is currently leader always rings (or
+ * stays silent) using the accurate, ack-aware set, regardless of which tab
+ * Atendimento happens to be open in.
+ *
  * Renders nothing. Two independent alarms:
  *   - ORDER  — polls PENDING orders every 8s. Simple, stateless: an order rings
  *     iff it is currently PENDING (and not a Pix/online payment still awaiting
@@ -22,11 +42,10 @@
  *     waiting, rather than staying silent about it.
  *   - HANDOFF — polls the BASE case (unassumed HUMAN conversations) + the
  *     overdue-escalation endpoint every 10s/60s. While AtendimentoClient is
- *     mounted, it hands over full control (including its "Estou ciente" /
- *     "Silenciar atrasados" acknowledgements) via a tiny attach/detach event
- *     bridge — see foocci:handoff-attach/detach/ring-ids below — so existing
- *     Atendimento behavior is preserved byte-for-byte while that page is open,
- *     and the background poll resumes the instant it's closed.
+ *     mounted (in ANY tab), it hands over full control (including its "Estou
+ *     ciente" / "Silenciar atrasados" acknowledgements) via the attach/detach
+ *     bridge, so existing Atendimento behavior is preserved byte-for-byte, and
+ *     the background poll resumes the instant it's closed everywhere.
  *
  * Both engines honor the SAME DB-backed settings (Configurações → Sons e
  * alertas) as before, refreshed on mount and live via the
@@ -49,9 +68,19 @@ import {
 import { pendingActionOrderIds, type AlertOrderLike } from "@/lib/order-alert";
 import { pendingHumanRequestIds, type HandoffConversationLike } from "@/lib/handoff-alert";
 
-const ORDER_POLL_MS  = 8_000;
-const HUMAN_POLL_MS  = 10_000;
+const ORDER_POLL_MS   = 8_000;
+const HUMAN_POLL_MS   = 10_000;
 const OVERDUE_POLL_MS = 60_000; // matches the existing Atendimento cadence
+
+const ALARM_LOCK_NAME    = "foocci-alarm-leader";
+const BRIDGE_CHANNEL_NAME = "foocci-alarm-bridge";
+
+type BridgeMessage =
+  | { type: "attach" }
+  | { type: "detach" }
+  | { type: "ring-ids"; ids: string[] }
+  | { type: "handoff-resolved"; id: string; reason: string }
+  | { type: "order-resolved"; id: string; reason: string };
 
 export function GlobalAlertEngine() {
   const orderAudioRef   = useRef<HTMLAudioElement | null>(null);
@@ -64,10 +93,14 @@ export function GlobalAlertEngine() {
   const handoffSoundEnabledRef   = useRef(true);
   const repeatHandoffRef         = useRef(true);
 
-  // Attach/detach bridge: while AtendimentoClient is mounted, it drives the
-  // handoff ring-set directly (preserving its ack/overdue nuance exactly);
-  // otherwise this engine's own base-case poll drives it.
+  // Attach/detach bridge: while AtendimentoClient is mounted (this tab or any
+  // other, via BroadcastChannel), it drives the handoff ring-set directly
+  // (preserving its ack/overdue nuance exactly); otherwise this engine's own
+  // base-case poll drives it.
   const handoffDrivenRef = useRef(false);
+
+  // Only the tab holding the Web Lock actually plays audio — see header doc.
+  const isLeaderRef = useRef(false);
 
   useEffect(() => {
     // ── Load settings, once + on every save from Configurações → Sons ────────
@@ -93,6 +126,22 @@ export function GlobalAlertEngine() {
     handoffAudio.preload = "auto";
     handoffAudioRef.current = handoffAudio;
     installSilentUnlock(() => [orderAudio, handoffAudio]);
+
+    // ── Single-leader election across tabs (Web Locks API — see header doc) ──
+    let releaseLeaderLock: () => void = () => {};
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    if (nav && "locks" in nav) {
+      nav.locks
+        .request(ALARM_LOCK_NAME, { mode: "exclusive" }, () =>
+          new Promise<void>((resolve) => {
+            isLeaderRef.current = true;
+            releaseLeaderLock = resolve;
+          }),
+        )
+        .catch(() => { /* lock request aborted (fast unmount) — harmless */ });
+    } else {
+      isLeaderRef.current = true; // no Locks API — fail open rather than silence everyone
+    }
 
     // ── ORDER alarm controller ────────────────────────────────────────────────
     const orderController = new AlertLoopController({
@@ -141,11 +190,16 @@ export function GlobalAlertEngine() {
       },
     });
 
+    // Only the leader tab's controller ever receives non-empty ids, so play()
+    // can never fire from a non-leader tab — see header doc.
+    const safeOrderSync   = (ids: string[]) => orderController.sync(isLeaderRef.current ? ids : []);
+    const safeHandoffSync = (ids: string[]) => handoffController.sync(isLeaderRef.current ? ids : []);
+
     // ── ORDER poll — independent, stateless (see header doc) ─────────────────
-    let orderTimer: ReturnType<typeof setInterval> | null = null;
     const pollOrders = () => {
+      if (!isLeaderRef.current) return; // non-leader tabs stay fully dormant
       if (!soundEnabledRef.current || !newOrderSoundEnabledRef.current) {
-        orderController.sync([]);
+        safeOrderSync([]);
         return;
       }
       fetch("/api/orders?status=PENDING&limit=50")
@@ -153,20 +207,20 @@ export function GlobalAlertEngine() {
         .then((res: { success?: boolean; data?: { data?: (AlertOrderLike & { id: string })[] } }) => {
           const rows = res?.data?.data;
           if (!Array.isArray(rows)) return;
-          orderController.sync(pendingActionOrderIds(rows));
+          safeOrderSync(pendingActionOrderIds(rows));
         })
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
     };
     pollOrders();
-    orderTimer = setInterval(pollOrders, ORDER_POLL_MS);
+    const orderTimer = setInterval(pollOrders, ORDER_POLL_MS);
 
     // ── HANDOFF poll — base case + overdue escalation, skipped while driven ──
-    let humanTimer: ReturnType<typeof setInterval> | null = null;
     let overdueIds: string[] = [];
     const pollHuman = () => {
-      if (handoffDrivenRef.current) return; // AtendimentoClient is driving directly
+      if (!isLeaderRef.current) return; // non-leader tabs stay fully dormant
+      if (handoffDrivenRef.current) return; // Atendimento (this tab or another) is driving directly
       if (!handoffSoundEnabledRef.current) {
-        handoffController.sync([]);
+        safeHandoffSync([]);
         return;
       }
       fetch("/api/chat/conversations?status=HUMAN&limit=50")
@@ -176,13 +230,12 @@ export function GlobalAlertEngine() {
           const raw = json?.data;
           const rows: HandoffConversationLike[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
           const pending = pendingHumanRequestIds(rows);
-          handoffController.sync([...new Set([...pending, ...overdueIds])]);
+          safeHandoffSync([...new Set([...pending, ...overdueIds])]);
         })
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
     };
-    let overdueTimer: ReturnType<typeof setInterval> | null = null;
     const pollOverdue = () => {
-      if (handoffDrivenRef.current) return;
+      if (!isLeaderRef.current || handoffDrivenRef.current) return;
       fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
         .then((r) => r.json())
         .then((d: { data?: { overdue?: { id: string }[] } }) => {
@@ -192,23 +245,48 @@ export function GlobalAlertEngine() {
     };
     pollHuman();
     pollOverdue();
-    humanTimer = setInterval(pollHuman, HUMAN_POLL_MS);
-    overdueTimer = setInterval(pollOverdue, OVERDUE_POLL_MS);
+    const humanTimer   = setInterval(pollHuman, HUMAN_POLL_MS);
+    const overdueTimer = setInterval(pollOverdue, OVERDUE_POLL_MS);
 
-    // ── Attach/detach bridge with AtendimentoClient (see header doc) ─────────
-    const onAttach = () => { handoffDrivenRef.current = true; };
-    const onDetach = () => { handoffDrivenRef.current = false; pollHuman(); pollOverdue(); };
+    // ── Cross-tab bridge (BroadcastChannel) ───────────────────────────────────
+    // Relays this tab's LOCAL attach/detach/ring-ids/resolved signals (below) to
+    // every other open tab, so the (possibly different) leader tab always has
+    // the accurate ring-set regardless of which tab Atendimento/Pedidos is open in.
+    const bridge = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(BRIDGE_CHANNEL_NAME) : null;
+    bridge?.addEventListener("message", (ev: MessageEvent<BridgeMessage>) => {
+      const msg = ev.data;
+      if (!msg || typeof msg !== "object") return;
+      switch (msg.type) {
+        case "attach":  handoffDrivenRef.current = true; break;
+        case "detach":  handoffDrivenRef.current = false; pollHuman(); pollOverdue(); break;
+        case "ring-ids": safeHandoffSync(msg.ids ?? []); break;
+        case "handoff-resolved": if (msg.id) handoffController.resolve(msg.id, msg.reason ?? "RESOLVED"); break;
+        case "order-resolved":   if (msg.id) orderController.resolve(msg.id, msg.reason ?? "RESOLVED"); break;
+      }
+    });
+
+    // ── Attach/detach bridge with AtendimentoClient/OrdersClient (LOCAL tab) ──
+    // Each local handler updates this tab's state AND relays to other tabs.
+    const onAttach = () => { handoffDrivenRef.current = true; bridge?.postMessage({ type: "attach" }); };
+    const onDetach = () => {
+      handoffDrivenRef.current = false;
+      pollHuman(); pollOverdue();
+      bridge?.postMessage({ type: "detach" });
+    };
     const onRingIds = (e: Event) => {
       const ids = (e as CustomEvent<{ ids: string[] }>).detail?.ids ?? [];
-      handoffController.sync(ids);
+      safeHandoffSync(ids);
+      bridge?.postMessage({ type: "ring-ids", ids });
     };
     const onHandoffResolved = (e: Event) => {
       const { id, reason } = (e as CustomEvent<{ id: string; reason: string }>).detail ?? {};
       if (id) handoffController.resolve(id, reason ?? "RESOLVED");
+      if (id) bridge?.postMessage({ type: "handoff-resolved", id, reason: reason ?? "RESOLVED" });
     };
     const onOrderResolved = (e: Event) => {
       const { id, reason } = (e as CustomEvent<{ id: string; reason: string }>).detail ?? {};
       if (id) orderController.resolve(id, reason ?? "RESOLVED");
+      if (id) bridge?.postMessage({ type: "order-resolved", id, reason: reason ?? "RESOLVED" });
     };
     window.addEventListener("foocci:handoff-attach", onAttach);
     window.addEventListener("foocci:handoff-detach", onDetach);
@@ -217,15 +295,17 @@ export function GlobalAlertEngine() {
     window.addEventListener("foocci:order-resolved", onOrderResolved);
 
     return () => {
-      if (orderTimer) clearInterval(orderTimer);
-      if (humanTimer) clearInterval(humanTimer);
-      if (overdueTimer) clearInterval(overdueTimer);
+      clearInterval(orderTimer);
+      clearInterval(humanTimer);
+      clearInterval(overdueTimer);
       window.removeEventListener("foocci:sound-settings-changed", loadSettings);
       window.removeEventListener("foocci:handoff-attach", onAttach);
       window.removeEventListener("foocci:handoff-detach", onDetach);
       window.removeEventListener("foocci:handoff-ring-ids", onRingIds);
       window.removeEventListener("foocci:handoff-resolved", onHandoffResolved);
       window.removeEventListener("foocci:order-resolved", onOrderResolved);
+      bridge?.close();
+      releaseLeaderLock();
       orderController.dispose();
       handoffController.dispose();
       orderAudio.pause(); orderAudio.src = "";
