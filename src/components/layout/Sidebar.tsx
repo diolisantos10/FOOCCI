@@ -50,7 +50,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Marketing",
     items: [
-      { href: "/promotions", label: "Promoções", icon: "🎁" },
+      // Promoções foi desplugada da navegação — os cupons agora são definidos
+      // dentro de cada campanha (CRM → Campanhas). A página segue existindo por URL.
       { href: "/crm",        label: "CRM",       icon: "📊" },
       { href: "/canais",     label: "Canais",    icon: "🔗" },
       { href: "/marca",      label: "Marca",     icon: "🎨" },

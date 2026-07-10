@@ -11,11 +11,12 @@ import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
 
-type Tab = "overview" | "campanhas" | "conversoes" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
+type Tab = "overview" | "campanhas" | "cupons" | "conversoes" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
 
 const TAB_PARAM_MAP: Record<string, Tab> = {
   "visao-geral":   "overview",
   "campanhas":     "campanhas",
+  "cupons":        "cupons",
   "conversoes":    "conversoes",
   "automacoes":    "automacoes",
   "clientes":      "customers",

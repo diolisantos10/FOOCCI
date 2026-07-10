@@ -7,6 +7,7 @@ import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/se
 import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { ReadyMadeCampaignsSection } from "./ReadyMadeCampaignsSection";
+import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
@@ -5654,11 +5655,12 @@ function SegmentacaoConfig() {
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "campanhas" | "conversoes" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
+type Tab = "overview" | "campanhas" | "cupons" | "conversoes" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
 
 const TAB_PARAM_MAP: Record<string, Tab> = {
   "visao-geral":   "overview",
   "campanhas":     "campanhas",
+  "cupons":        "cupons",
   "conversoes":    "conversoes",
   "automacoes":    "automacoes",
   "clientes":      "customers",
@@ -5669,6 +5671,7 @@ const TAB_PARAM_MAP: Record<string, Tab> = {
 const TAB_URL_MAP: Record<Tab, string> = {
   overview:       "visao-geral",
   campanhas:      "campanhas",
+  cupons:         "cupons",
   conversoes:     "conversoes",
   automacoes:     "automacoes",
   customers:      "clientes",
@@ -5846,6 +5849,7 @@ export function CRMClient({
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",      label: "Visão Geral" },
     { id: "campanhas",     label: "Campanhas" },
+    { id: "cupons",        label: "Cupons" },
     { id: "conversoes",    label: "Conversões" },
     { id: "customers",     label: "Clientes" },
     { id: "programa",      label: "Programa de Relacionamento" },
@@ -5924,6 +5928,9 @@ export function CRMClient({
       )}
       {tab === "campanhas" && (
         <CampanhasTab stats={currentStats} />
+      )}
+      {tab === "cupons" && (
+        <CuponsTab />
       )}
       {tab === "conversoes" && (
         <ConversoesTab />
