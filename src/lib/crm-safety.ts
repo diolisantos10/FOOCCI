@@ -84,6 +84,14 @@ export interface CRMWhatsAppSafetyConfig {
   randomDelayMaxSec: number;
   /** Global WhatsApp sending budget + orchestration (daily/cycle limits, distribution, circuit breaker). */
   crmWhatsAppSafety: CRMWhatsAppBudgetConfig;
+  /**
+   * When FALSE (default) the anti-ban rules are LOCKED to safe values and the daily
+   * limit follows the warmup ramp — the owner cannot raise them. When TRUE the owner
+   * has explicitly taken manual control and the stored values are enforced as-is
+   * (they accept the ban risk). Only the prepaid contact budget stays owner-set
+   * either way — it is a cost limit, not an anti-ban rule.
+   */
+  manualOverride: boolean;
 }
 
 export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
@@ -114,6 +122,7 @@ export const DEFAULT_SAFETY_CONFIG: Readonly<CRMWhatsAppSafetyConfig> = {
   randomDelayMinSec:     5,
   randomDelayMaxSec:     45,
   crmWhatsAppSafety:     DEFAULT_BUDGET_CONFIG,
+  manualOverride:        false, // safe rules locked by default
 };
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
@@ -161,12 +170,97 @@ export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
     randomDelayEnabled:    typeof r.randomDelayEnabled    === "boolean" ? r.randomDelayEnabled    : d.randomDelayEnabled,
     randomDelayMinSec:     typeof r.randomDelayMinSec     === "number"  ? r.randomDelayMinSec     : d.randomDelayMinSec,
     randomDelayMaxSec:     typeof r.randomDelayMaxSec     === "number"  ? r.randomDelayMaxSec     : d.randomDelayMaxSec,
+    manualOverride:        typeof r.manualOverride        === "boolean" ? r.manualOverride        : d.manualOverride,
+  };
+}
+
+// ─── Safe locked rules + warmup ramp ────────────────────────────────────────
+// Safe-by-default: with manualOverride OFF the anti-ban rules below are FIXED and
+// the daily limit follows the number's warmup age. The owner can only change them
+// by turning manual override ON (taking responsibility for the ban risk).
+
+/** Warmup steps: safe max CRM messages/day by WhatsApp number age (days connected). */
+export const WARMUP_RAMP: ReadonlyArray<{ maxAgeDays: number; dailyLimit: number }> = [
+  { maxAgeDays: 3,        dailyLimit: 20  },
+  { maxAgeDays: 7,        dailyLimit: 40  },
+  { maxAgeDays: 14,       dailyLimit: 80  },
+  { maxAgeDays: 30,       dailyLimit: 150 },
+  { maxAgeDays: Infinity, dailyLimit: 250 },
+];
+
+export function warmupDailyLimit(ageDays: number): number {
+  for (const step of WARMUP_RAMP) if (ageDays <= step.maxAgeDays) return step.dailyLimit;
+  return 250;
+}
+
+/** WhatsApp number age in days, from when its Evolution config was created. */
+export async function getNumberAgeDays(restaurantId: string): Promise<number> {
+  const cfg = await prisma.evolutionConfig.findUnique({
+    where:  { restaurantId },
+    select: { createdAt: true },
+  });
+  if (!cfg?.createdAt) return 0;
+  return Math.max(0, Math.floor((Date.now() - cfg.createdAt.getTime()) / 86_400_000));
+}
+
+/**
+ * Build the EFFECTIVE (enforced) safety config from the raw stored config + number age.
+ * manualOverride ON → stored values as-is. OFF → safe locked rules + warmup daily limit.
+ * The prepaid contact budget + timezone are always kept from the owner's config.
+ */
+export function applyEffectiveSafety(raw: CRMWhatsAppSafetyConfig, ageDays: number): CRMWhatsAppSafetyConfig {
+  if (raw.manualOverride) return raw;
+  const safeDaily = warmupDailyLimit(ageDays);
+  return {
+    ...raw,
+    manualOverride:        false,
+    dailyGlobalCap:        safeDaily,
+    weeklyGlobalCap:       0,
+    customerCooldownHours: 24,
+    quietHoursEnabled:     true,
+    quietHoursStart:       "21:00",
+    quietHoursEnd:         "08:00",
+    sendOnWeekends:        true,
+    maxPerWeekPerCustomer: 5,
+    randomDelayEnabled:    true,
+    randomDelayMinSec:     5,
+    randomDelayMaxSec:     45,
+    crmWhatsAppSafety: {
+      ...raw.crmWhatsAppSafety,
+      enabled:                        true,
+      globalDailyLimit:               safeDaily,
+      globalCycleLimit:               5,
+      minMinutesBetweenCycles:        10,
+      stopOnInstanceDisconnected:     true,
+      pauseOnFailureRatePercent:      50,
+      maxConsecutiveProviderFailures: 3,
+    },
   };
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 
+/**
+ * EFFECTIVE safety config used by ALL enforcement (runner, planner, capacity, etc.).
+ * Safe-by-default: locked rules + warmup daily limit unless the owner turned manual
+ * override ON. This is the single choke point that keeps the number protected.
+ */
 export async function getSafetyConfig(restaurantId: string): Promise<CRMWhatsAppSafetyConfig> {
+  const [profile, ageDays] = await Promise.all([
+    prisma.restaurantCRMProfile.findUnique({
+      where:  { restaurantId },
+      select: { whatsAppSafetyConfig: true },
+    }),
+    getNumberAgeDays(restaurantId),
+  ]);
+  return applyEffectiveSafety(parseSafetyConfig(profile?.whatsAppSafetyConfig), ageDays);
+}
+
+/**
+ * RAW stored config (owner's manual values + override toggle state) — for the
+ * Settings UI. Never use this for enforcement; use getSafetyConfig instead.
+ */
+export async function getRawSafetyConfig(restaurantId: string): Promise<CRMWhatsAppSafetyConfig> {
   const profile = await prisma.restaurantCRMProfile.findUnique({
     where:  { restaurantId },
     select: { whatsAppSafetyConfig: true },

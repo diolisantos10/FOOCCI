@@ -44,10 +44,15 @@ export default function MarketingSettingsPage() {
   const [error,   setError]   = useState<string | null>(null);
 
   const [cfg, setCfg] = useState<CRMWhatsAppSafetyConfig>({ ...DEFAULT_SAFETY_CONFIG });
+  const [warmup, setWarmup] = useState<{ ageDays: number; safeDailyLimit: number }>({ ageDays: 0, safeDailyLimit: 20 });
 
   useEffect(() => {
     apiFetch("/api/settings/crm-safety").then(({ ok, data }) => {
-      if (ok && data) setCfg(data as CRMWhatsAppSafetyConfig);
+      if (ok && data) {
+        setCfg(data as CRMWhatsAppSafetyConfig);
+        const w = (data as { warmup?: { ageDays: number; safeDailyLimit: number } }).warmup;
+        if (w) setWarmup(w);
+      }
     }).finally(() => setLoading(false));
   }, []);
 
@@ -99,6 +104,53 @@ export default function MarketingSettingsPage() {
       </div>
 
       <Feedback success={success} error={error} onDismiss={() => { setSuccess(null); setError(null); }} />
+
+      {/* ── Controle das regras de segurança (travado por padrão) ── */}
+      <PageCard>
+        <SectionHeading title="Regras de Segurança" />
+        <p className="mt-1 text-sm text-muted">
+          Por padrão, as regras que protegem o número (limite diário, horários, intervalos)
+          ficam <strong>travadas em valores seguros</strong> e o sistema ajusta o limite diário
+          sozinho conforme o número amadurece. Só ligue o controle manual se quiser enviar mais —
+          <strong> você passa a ser responsável pelo risco de bloqueio</strong>.
+        </p>
+
+        <div className="mt-4">
+          <Toggle
+            label="Assumir controle manual (eu me responsabilizo)"
+            desc="Destrava todos os limites abaixo para você definir os valores. Desligue para voltar ao modo seguro."
+            checked={cfg.manualOverride}
+            onChange={(v) => set("manualOverride", v)}
+          />
+        </div>
+
+        {!cfg.manualOverride ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-semibold text-emerald-800">🔒 Modo seguro ativo</span>
+              <span className="text-lg font-bold text-emerald-700">
+                {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia</span>
+              </span>
+            </div>
+            <p className="mt-1.5 text-xs text-emerald-800/80">
+              Limite diário seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de idade).
+              Sobe automaticamente: 20 → 40 → 80 → 150 → 250/dia conforme o número amadurece (até 30 dias).
+              Cooldown 24 h · máx. 5/cliente por semana · horário quieto 21h–8h · delay 5–45 s — tudo fixo e travado.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5">
+            <p className="text-sm font-semibold text-amber-800">⚠️ Controle manual ativo</p>
+            <p className="mt-1 text-xs text-amber-800/80">
+              Os limites abaixo estão sob sua responsabilidade. Valores altos num número novo
+              aumentam muito o risco de bloqueio do WhatsApp — o que derruba a operação. Desligue
+              o controle manual para voltar aos valores seguros.
+            </p>
+          </div>
+        )}
+      </PageCard>
+
+      {cfg.manualOverride && (<>
 
       {/* ── Orçamento global de envio (modo seguro WhatsApp Web) ── */}
       <PageCard>
@@ -263,6 +315,8 @@ export default function MarketingSettingsPage() {
         </div>
       </PageCard>
 
+      </>)}
+
       {/* ── Saldo de contatos (pré-pago) ── */}
       <PageCard>
         <SectionHeading title="Saldo de Contatos (pré-pago)" />
@@ -323,6 +377,8 @@ export default function MarketingSettingsPage() {
           );
         })()}
       </PageCard>
+
+      {cfg.manualOverride && (<>
 
       {/* ── Horário quieto ── */}
       <PageCard>
@@ -427,6 +483,8 @@ export default function MarketingSettingsPage() {
           )}
         </div>
       </PageCard>
+
+      </>)}
 
       {/* ── Proteções fixas ── */}
       <PageCard>

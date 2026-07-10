@@ -5032,6 +5032,7 @@ const TIMEZONES_CRM = [
 const DEFAULT_CFG = {
   dailyGlobalCap:        200,
   contactBudgetTotal:    0,
+  manualOverride:        false,
   customerCooldownHours: 24,
   quietHoursEnabled:     true,
   quietHoursStart:       "21:00",
@@ -5111,11 +5112,17 @@ function CrmConfiguracoes() {
   const [success, setSuccess] = useState<string | null>(null);
   const [error,   setError]   = useState<string | null>(null);
   const [cfg, setCfg]         = useState<SafetyCfg>({ ...DEFAULT_CFG });
+  const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number }>({ ageDays: 0, safeDailyLimit: 20 });
 
   useEffect(() => {
     fetch("/api/settings/crm-safety")
       .then((r) => r.json())
-      .then(({ data }) => { if (data) setCfg({ ...DEFAULT_CFG, ...data }); })
+      .then(({ data }) => {
+        if (data) {
+          setCfg({ ...DEFAULT_CFG, ...data });
+          if (data.warmup) setWarmup(data.warmup);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -5198,6 +5205,45 @@ function CrmConfiguracoes() {
         </div>
         <p className="mt-2 text-[10px] text-muted">Segmentação e segurança de envio ficam logo abaixo.</p>
       </div>
+
+      {/* Controle das regras de segurança (travado por padrão) */}
+      <CfgCard
+        title="Regras de Segurança"
+        subtitle="Por padrão as regras que protegem o número ficam travadas em valores seguros, e o limite diário sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — você assume o risco de bloqueio."
+      >
+        <CfgToggle
+          label="Assumir controle manual (eu me responsabilizo)"
+          desc="Destrava os limites de segurança para você definir os valores. Desligue para voltar ao modo seguro."
+          checked={cfg.manualOverride}
+          onChange={(v) => set("manualOverride", v)}
+        />
+
+        {!cfg.manualOverride ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-semibold text-emerald-800">🔒 Modo seguro ativo</span>
+              <span className="text-lg font-bold text-emerald-700">
+                {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia</span>
+              </span>
+            </div>
+            <p className="mt-1.5 text-xs text-emerald-800/80">
+              Limite diário seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"}).
+              Sobe sozinho: 20 → 40 → 80 → 150 → 250/dia conforme amadurece. Cooldown 24 h · máx. 5/cliente por semana ·
+              horário quieto 21h–8h · delay 5–45 s — fixos e travados.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5">
+            <p className="text-sm font-semibold text-amber-800">⚠️ Controle manual ativo</p>
+            <p className="mt-1 text-xs text-amber-800/80">
+              Os limites abaixo estão sob sua responsabilidade. Volume alto num número novo aumenta muito o
+              risco de bloqueio do WhatsApp. Desligue para voltar ao seguro.
+            </p>
+          </div>
+        )}
+      </CfgCard>
+
+      {cfg.manualOverride && (<>
 
       {/* A — Segurança de envio WhatsApp */}
       <CfgCard
@@ -5292,6 +5338,8 @@ function CrmConfiguracoes() {
         </div>
       </CfgCard>
 
+      </>)}
+
       {/* A2 — Saldo de contatos (pré-pago) */}
       <CfgCard
         title="Saldo de Contatos (pré-pago)"
@@ -5344,7 +5392,8 @@ function CrmConfiguracoes() {
         })()}
       </CfgCard>
 
-      {/* B — Comportamento gradual (delay) */}
+      {cfg.manualOverride && (
+      /* B — Comportamento gradual (delay) */
       <CfgCard
         title="Comportamento Gradual"
         subtitle="Delay aleatório entre envios para reduzir o risco de bloqueio de número."
@@ -5378,6 +5427,7 @@ function CrmConfiguracoes() {
           )}
         </div>
       </CfgCard>
+      )}
 
       {/* C — Palavras de descadastro */}
       <CfgCard

@@ -7,14 +7,17 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
-import { parseSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount, getConsumedContactCount } from "@/lib/crm-safety";
+import {
+  parseSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount, getConsumedContactCount,
+  getNumberAgeDays, warmupDailyLimit, applyEffectiveSafety,
+} from "@/lib/crm-safety";
 
 export async function GET(req: NextRequest) {
   try {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const [profile, todaySent, weekSent, contactBudgetUsed] = await Promise.all([
+    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays] = await Promise.all([
       prisma.restaurantCRMProfile.findUnique({
         where:  { restaurantId: ctx.restaurantId },
         select: { whatsAppSafetyConfig: true },
@@ -22,9 +25,19 @@ export async function GET(req: NextRequest) {
       getTodayGlobalSendCount(ctx.restaurantId),
       getWeekGlobalSendCount(ctx.restaurantId),
       getConsumedContactCount(ctx.restaurantId),
+      getNumberAgeDays(ctx.restaurantId),
     ]);
 
-    return ok({ ...parseSafetyConfig(profile?.whatsAppSafetyConfig), todaySent, weekSent, contactBudgetUsed });
+    const raw       = parseSafetyConfig(profile?.whatsAppSafetyConfig);
+    const effective = applyEffectiveSafety(raw, ageDays);
+    // The UI binds the form to `raw`; when manualOverride is OFF it shows `effective`
+    // (locked). `warmup` explains the auto daily number.
+    return ok({
+      ...raw,
+      todaySent, weekSent, contactBudgetUsed,
+      warmup:    { ageDays, safeDailyLimit: warmupDailyLimit(ageDays) },
+      effective,
+    });
   } catch (err) {
     console.error("[GET /api/settings/crm-safety]", err);
     return serverError();
