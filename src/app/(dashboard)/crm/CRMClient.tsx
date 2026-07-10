@@ -3793,6 +3793,23 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     setCampaigns((prev) => prev.map((c) => c.id === id ? { ...c, ...updates } : c));
   }
 
+  const [resettingMetrics, setResettingMetrics] = useState(false);
+  async function handleResetMetrics() {
+    if (!confirm("Limpar as métricas (enviados, falhas, receita) de TODAS as campanhas e começar a contar do zero?\n\nIsso não reenvia mensagens nem apaga clientes — só zera os números do painel.")) return;
+    setResettingMetrics(true);
+    try {
+      const res = await fetch("/api/crm/campaigns/reset-metrics", { method: "POST" });
+      if (res.ok) {
+        setCampaigns((prev) => prev.map((c) => ({
+          ...c, totalSent: 0, totalFailed: 0, totalResponded: 0, totalConverted: 0, totalRevenue: 0,
+        })));
+        setReadyMadeReload((n) => n + 1);
+      }
+    } finally {
+      setResettingMetrics(false);
+    }
+  }
+
   useEffect(() => {
     fetch("/api/crm/custom-actions")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -3844,6 +3861,14 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            onClick={handleResetMetrics}
+            disabled={resettingMetrics}
+            className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-muted hover:bg-[#FAFAF8] hover:text-ink2 transition-colors disabled:opacity-50"
+            title="Zera enviados, falhas e receita de todas as campanhas para começar a contar do zero. Não reenvia mensagens."
+          >
+            {resettingMetrics ? "Limpando…" : "🧹 Limpar métricas"}
+          </button>
           <button
             onClick={() => setSelectedTemplate(BLANK_CAMPAIGN_TEMPLATE)}
             className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
