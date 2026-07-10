@@ -317,13 +317,13 @@ export default function MarketingSettingsPage() {
 
       </>)}
 
-      {/* ── Saldo de contatos (pré-pago) ── */}
+      {/* ── Limite de contatos ── */}
       <PageCard>
-        <SectionHeading title="Saldo de Contatos (pré-pago)" />
+        <SectionHeading title="Limite de Contatos" />
         <p className="mt-1 text-sm text-muted">
-          Limite total de <strong>contatos únicos</strong> que o CRM pode abordar. Cada pessoa
-          consome 1 do saldo — mesmo recebendo várias campanhas. É pré-pago: só aumenta quando
-          você recarrega aqui. Use 0 para desligar (sem limite).
+          Máximo de <strong>contatos únicos</strong> que o CRM pode abordar. Cada pessoa conta 1 vez,
+          mesmo recebendo várias campanhas. Use 0 para sem limite. <span className="text-muted/80">(O
+          crédito em R$ do seu plano fica na Whats Evolution — aqui é só o limite de pessoas.)</span>
         </p>
 
         {(() => {
@@ -336,8 +336,8 @@ export default function MarketingSettingsPage() {
           return (
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
               <Field
-                label="Saldo total de contatos"
-                hint="Quantas pessoas diferentes o CRM pode abordar no total. Para recarregar, aumente este número."
+                label="Limite total de contatos"
+                hint="Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
               >
                 <input
                   type="number"
@@ -353,7 +353,7 @@ export default function MarketingSettingsPage() {
                 {on ? (
                   <>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-sm text-muted">Saldo disponível</span>
+                      <span className="text-sm text-muted">Contatos restantes</span>
                       <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
                         {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
                       </span>
@@ -364,12 +364,12 @@ export default function MarketingSettingsPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-xs text-muted">{used} contatos já usados{low ? " · saldo baixo, considere recarregar." : "."}</p>
+                    <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
                   </>
                 ) : (
                   <p className="text-sm text-muted">
-                    Saldo desligado — sem limite de contatos. Já foram abordados <strong>{used}</strong> contatos.
-                    Defina um valor ao lado para ativar o controle de saldo.
+                    Sem limite ativo. Já foram abordados <strong>{used}</strong> contatos.
+                    Defina um valor ao lado para limitar.
                   </p>
                 )}
               </div>

@@ -5340,10 +5340,10 @@ function CrmConfiguracoes() {
 
       </>)}
 
-      {/* A2 — Saldo de contatos (pré-pago) */}
+      {/* A2 — Limite de contatos */}
       <CfgCard
-        title="Saldo de Contatos (pré-pago)"
-        subtitle="Limite total de contatos únicos que o CRM pode abordar. Cada pessoa consome 1 do saldo — mesmo recebendo várias campanhas. É pré-pago: só aumenta quando você recarrega aqui. 0 = sem limite."
+        title="Limite de Contatos"
+        subtitle="Máximo de contatos únicos que o CRM pode abordar. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. 0 = sem limite. (O crédito em R$ do seu plano fica na Whats Evolution — aqui é só o limite de pessoas.)"
       >
         {(() => {
           const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
@@ -5355,8 +5355,8 @@ function CrmConfiguracoes() {
           return (
             <div className="grid gap-5 sm:grid-cols-2">
               <CfgField
-                label="Saldo total de contatos"
-                hint="Quantas pessoas diferentes o CRM pode abordar no total. Para recarregar, aumente este número."
+                label="Limite total de contatos"
+                hint="Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
               >
                 <input
                   type="number" min={0} max={1000000}
@@ -5370,7 +5370,7 @@ function CrmConfiguracoes() {
                 {on ? (
                   <>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-sm text-muted">Saldo disponível</span>
+                      <span className="text-sm text-muted">Contatos restantes</span>
                       <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
                         {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
                       </span>
@@ -5378,12 +5378,12 @@ function CrmConfiguracoes() {
                     <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
                       <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="mt-2 text-xs text-muted">{used} contatos já usados{low ? " · saldo baixo, considere recarregar." : "."}</p>
+                    <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
                   </>
                 ) : (
                   <p className="text-sm text-muted">
-                    Saldo desligado — sem limite de contatos. Já foram abordados <strong>{used}</strong> contatos.
-                    Defina um valor ao lado para ativar o controle de saldo.
+                    Sem limite ativo. Já foram abordados <strong>{used}</strong> contatos.
+                    Defina um valor ao lado para limitar.
                   </p>
                 )}
               </div>
