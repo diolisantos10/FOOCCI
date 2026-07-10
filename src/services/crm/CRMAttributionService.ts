@@ -8,6 +8,8 @@
  * persists conversion attribution to both the matched record AND campaign aggregates.
  *
  * Attribution priority (highest to lowest):
+ *   0. Order used a CRM-granted wallet coupon → attribute to that coupon's campaign
+ *      (a redeemed coupon is a CRM win on its own; no time window needed).
  *   1. CRMActionLog where responded=true AND converted=false (AI sent + customer replied)
  *   2. CRMActionLog where converted=false  (AI sent, no reply required)
  *   3. CampaignExecution where status=READ AND converted=false (bulk campaign, customer replied)
@@ -68,12 +70,13 @@ export class CRMAttributionService {
       const order = await prisma.order.findUnique({
         where: { id: orderId },
         select: {
-          id:           true,
-          customerId:   true,
-          restaurantId: true,
-          status:       true,
-          total:        true,
-          createdAt:    true,
+          id:               true,
+          customerId:       true,
+          restaurantId:     true,
+          status:           true,
+          total:            true,
+          createdAt:        true,
+          customerCouponId: true,
           payment:  { select: { paymentMode: true, status: true } },
           customer: { select: { isGuest: true } },
         },
@@ -90,6 +93,50 @@ export class CRMAttributionService {
       const revDecimal  = new Decimal(revenue);
       const windowStart = new Date(order.createdAt.getTime() - ATTRIBUTION_WINDOW_DAYS * 86_400_000);
       const now         = new Date();
+
+      // ── Priority 0: CRM coupon used ───────────────────────────────────────
+      // The strongest signal: the customer redeemed a coupon this campaign granted.
+      // A used coupon (within its validity) is a CRM win on its own — no 7-day
+      // window needed. We also close the campaign's send window for this customer
+      // so a later organic order can't be double-counted to the same campaign.
+      if (order.customerCouponId) {
+        const wallet = await prisma.customerCoupon.findUnique({
+          where:  { id: order.customerCouponId },
+          select: { sourceCampaignId: true },
+        });
+        if (wallet?.sourceCampaignId) {
+          const campaignId = wallet.sourceCampaignId;
+          const exec = await prisma.campaignExecution.findFirst({
+            where:   { restaurantId, customerId, campaignId, converted: false },
+            orderBy: { sentAt: "desc" },
+            select:  { id: true },
+          });
+          await prisma.$transaction([
+            ...(exec ? [prisma.campaignExecution.update({
+              where: { id: exec.id },
+              data:  { converted: true, convertedAt: now, revenue: revDecimal, convertedOrderId: orderId },
+            })] : []),
+            prisma.campaign.update({
+              where: { id: campaignId },
+              data:  { totalConverted: { increment: 1 }, totalRevenue: { increment: revDecimal } },
+            }),
+          ]);
+
+          console.info(
+            `[CRMAttribution] coupon order:${orderId} campaign:${campaignId}` +
+            ` customer:${customerId} R$${revenue.toFixed(2)}`
+          );
+
+          return {
+            result:              "attributed_campaign",
+            orderId,
+            customerId,
+            campaignExecutionId: exec?.id ?? "",
+            campaignId,
+            revenue,
+          };
+        }
+      }
 
       // ── Priority 1 & 2: CRMActionLog ──────────────────────────────────────
 
