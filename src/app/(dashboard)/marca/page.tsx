@@ -103,6 +103,10 @@ interface MarcaForm {
   brandSecondaryColor: string;
   googleReviewUrl: string;
   ifoodReviewUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+  facebookUrl: string;
+  youtubeUrl: string;
 }
 
 const FORM_DEFAULTS: MarcaForm = {
@@ -131,6 +135,10 @@ const FORM_DEFAULTS: MarcaForm = {
   brandSecondaryColor: "#8b5cf6",
   googleReviewUrl: "",
   ifoodReviewUrl: "",
+  instagramUrl: "",
+  tiktokUrl: "",
+  facebookUrl: "",
+  youtubeUrl: "",
 };
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -280,6 +288,89 @@ function MultiChips({
   );
 }
 
+// ── Redes sociais (seletor dobrável) ─────────────────────────────────────────
+
+const SOCIAL_NETWORKS = [
+  { key: "instagramUrl", label: "Instagram", emoji: "📸", placeholder: "https://instagram.com/seurestaurante" },
+  { key: "tiktokUrl",    label: "TikTok",    emoji: "🎬", placeholder: "https://tiktok.com/@seurestaurante" },
+  { key: "facebookUrl",  label: "Facebook",  emoji: "👍", placeholder: "https://facebook.com/suapagina" },
+  { key: "youtubeUrl",   label: "YouTube",   emoji: "▶️", placeholder: "https://youtube.com/@seucanal" },
+] as const;
+type SocialKey = (typeof SOCIAL_NETWORKS)[number]["key"];
+
+function SocialLinksSection({
+  values, onChange,
+}: {
+  values: Record<SocialKey, string>;
+  onChange: (key: SocialKey, value: string) => void;
+}) {
+  const [active, setActive] = useState<Set<SocialKey>>(
+    () => new Set(SOCIAL_NETWORKS.filter((n) => values[n.key]?.trim()).map((n) => n.key)),
+  );
+  const [addOpen, setAddOpen] = useState(false);
+  const available = SOCIAL_NETWORKS.filter((n) => !active.has(n.key));
+
+  return (
+    <PageCard>
+      <h2 className="text-base font-semibold text-ink">📱 Redes Sociais</h2>
+      <p className="mt-0.5 mb-4 text-sm text-muted">
+        Escolha as redes que o restaurante tem e cole o endereço. Elas entram nas campanhas de CRM automaticamente.
+      </p>
+
+      <div className="space-y-3">
+        {SOCIAL_NETWORKS.filter((n) => active.has(n.key)).map((n) => (
+          <div key={n.key} className="rounded-xl border border-line p-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">{n.emoji} {n.label}</span>
+              <button
+                type="button"
+                onClick={() => { onChange(n.key, ""); setActive((p) => { const s = new Set(p); s.delete(n.key); return s; }); }}
+                className="text-xs text-gray-400 hover:text-red-500"
+              >
+                remover
+              </button>
+            </div>
+            <input
+              type="url"
+              value={values[n.key]}
+              onChange={(e) => onChange(n.key, e.target.value)}
+              placeholder={n.placeholder}
+              className={INPUT}
+            />
+          </div>
+        ))}
+        {active.size === 0 && <p className="text-xs text-muted">Nenhuma rede adicionada ainda.</p>}
+      </div>
+
+      {available.length > 0 && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setAddOpen((v) => !v)}
+            className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          >
+            ➕ Adicionar rede social
+          </button>
+          {addOpen && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {available.map((n) => (
+                <button
+                  key={n.key}
+                  type="button"
+                  onClick={() => { setActive((p) => new Set(p).add(n.key)); setAddOpen(false); }}
+                  className="rounded-xl border border-line bg-white px-3 py-2 text-sm hover:bg-[#FAFAF8]"
+                >
+                  {n.emoji} {n.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </PageCard>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MarcaPage() {
@@ -324,6 +415,10 @@ export default function MarcaPage() {
           brandSecondaryColor:   data.brandSecondaryColor ?? "#8b5cf6",
           googleReviewUrl:       data.googleReviewUrl ?? "",
           ifoodReviewUrl:        data.ifoodReviewUrl ?? "",
+          instagramUrl:          data.instagramUrl ?? "",
+          tiktokUrl:             data.tiktokUrl ?? "",
+          facebookUrl:           data.facebookUrl ?? "",
+          youtubeUrl:            data.youtubeUrl ?? "",
         });
       }
     }).finally(() => setLoading(false));
@@ -411,6 +506,10 @@ export default function MarcaPage() {
       brandSecondaryColor: form.brandSecondaryColor || null,
       googleReviewUrl:    form.googleReviewUrl || null,
       ifoodReviewUrl:     form.ifoodReviewUrl || null,
+      instagramUrl:       form.instagramUrl || null,
+      tiktokUrl:          form.tiktokUrl || null,
+      facebookUrl:        form.facebookUrl || null,
+      youtubeUrl:         form.youtubeUrl || null,
       brandPersona,
     });
 
@@ -792,6 +891,12 @@ export default function MarcaPage() {
           </Field>
         </div>
       </PageCard>
+
+      {/* ── Redes Sociais ─────────────────────────────────────────── */}
+      <SocialLinksSection
+        values={{ instagramUrl: form.instagramUrl, tiktokUrl: form.tiktokUrl, facebookUrl: form.facebookUrl, youtubeUrl: form.youtubeUrl }}
+        onChange={(k, v) => set(k)(v)}
+      />
 
       {/* ── 10. Links de Avaliação ───────────────────────────────── */}
       <PageCard>
