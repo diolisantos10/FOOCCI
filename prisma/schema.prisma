@@ -4009,3 +4009,62 @@ model MetaOAuthState {
   @@index([expiresAt])
   @@map("meta_oauth_states")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FOOCCI BRAIN — runtime governance (Fase 3-4 do roadmap universal)
+//  Standalone (sem FK, como as tabelas de Quality Control): configuram COMO o
+//  Brain opera, nunca executam nada sozinhas. Escrita governada:
+//  BrainEngineRouting só via ChangeRequestApplier; BrainFreeFormConfig só via
+//  freeFormGovernance (escada shadow → allowlist → wide, com gates e rollback).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model BrainFreeFormConfig {
+  id           String @id @default(cuid())
+  restaurantId String @unique
+
+  // SHADOW_ONLY (default: Brain só observa/loga) | ALLOWLIST | RESTAURANT_WIDE
+  mode String @default("SHADOW_ONLY")
+
+  // E.164 phone strings; matched format-tolerantly at runtime.
+  allowlistedPhones Json @default("[]")
+
+  paused Boolean @default(false)
+
+  // Piso de confiança para responder ao vivo (abaixo → recepcionista).
+  minConfidence Float @default(0.6)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brain_freeform_configs")
+}
+
+model BrainEngineRouting {
+  id String @id @default(cuid())
+
+  // null = default global (vale para todos os negócios)
+  businessId String?
+
+  agentId String
+
+  // CLASSIFY | REASON | JUDGE | GENERATE — por natureza da tarefa
+  taskProfile String @default("REASON")
+
+  // OPENAI | CLAUDE | GEMINI
+  provider String
+  model    String?
+
+  enabled Boolean @default(true)
+
+  // Trilha: qual BrainChangeRequest aprovado aplicou esta linha
+  appliedFromChangeRequestId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, agentId, taskProfile])
+  @@index([agentId])
+  @@map("brain_engine_routing")
+}

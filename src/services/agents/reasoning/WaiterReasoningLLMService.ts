@@ -1,8 +1,10 @@
 /**
  * WaiterReasoningLLMService — the real LLM reasoning call (structured JSON output).
  *
- * Uses the project's OpenAI client (gpt-4o-mini, response_format json_object). The
- * model acts as a restaurant-service + consultative-sales + agent-safety expert.
+ * Routed through the Brain's engine dispatcher (selectEngineRouted +
+ * callStructuredJson) — trocar o piloto do waiter é config governada, não
+ * caça a código. The model acts as a restaurant-service + consultative-sales +
+ * agent-safety expert.
  * It MUST answer the customer's actual question (payment→payment), never change
  * the subject, and never invent facts when context is missing.
  *
@@ -10,7 +12,8 @@
  * (WaiterReasoningService) then falls back to the deterministic reasoning.
  */
 
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import type { AgentReasoningContext, AgentReasoningIntent, AgentReasoningInput } from "./AgentReasoningTypes";
 
 export interface LLMReasoningCore {
@@ -70,18 +73,9 @@ export async function reasonWithLLM(
     input.waiterResponse ? `\nRESPOSTA ATUAL DO WAITER (sanitizada): "${input.waiterResponse}"` : "",
   ].join("\n");
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    temperature: 0.2,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userContent },
-    ],
-  });
-
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw) throw new Error("LLM sem conteúdo");
+  const selection = await selectEngineRouted("waiter", { taskProfile: "REASON" });
+  if (selection.provider === "MOCK") throw new Error("nenhum piloto de IA configurado");
+  const raw = await callStructuredJson({ selection, systemPrompt: SYSTEM_PROMPT, userContent, temperature: 0.2 });
   const parsed = JSON.parse(raw) as Partial<LLMReasoningCore>;
   if (!parsed.primaryIntent || !parsed.idealResponse || !parsed.trainingRule) {
     throw new Error("LLM JSON incompleto");

@@ -363,9 +363,12 @@ describe("M — no WhatsApp message is sent", () => {
     expect(serviceSrc).not.toMatch(/messages\/sendText|\/message\/send/i);
   });
 
-  it("openai usage is read-only generation (chat.completions), no send side-effects", () => {
-    // Only chat.completions.create is allowed; no campaign/whatsapp create.
-    expect(serviceSrc).toContain("openai.chat.completions.create");
+  it("LLM usage is read-only generation via the Brain engine router, no send side-effects", () => {
+    // Fase 4 (Regra de Ouro): a geração passa pelo portão do Brain
+    // (selectEngineRouted + callStructuredJson), nunca por um client direto.
+    expect(serviceSrc).toContain("callStructuredJson");
+    expect(serviceSrc).toContain("selectEngineRouted");
+    expect(serviceSrc).not.toContain("openai.chat.completions.create");
   });
 });
 

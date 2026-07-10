@@ -26,6 +26,7 @@ import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
 import type { SanitizedTurn } from "@/services/brain/core/BrainTypes";
 import { sanitizeText } from "@/services/simulation/simulationSanitizer";
 import { isWhatsAppBrainShadowMode } from "./WhatsAppBrainReasoningAdapter";
+import { resolveFreeFormAccess } from "@/services/brain/runtime/BrainFreeFormConfigService";
 import { resolveProviderId, WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 
 /** The Brain front door is ON for everyone by default; set WHATSAPP_BRAIN_ENABLED=false to disable. */
@@ -34,13 +35,14 @@ export function isWhatsAppBrainEnabled(env: NodeJS.ProcessEnv = process.env): bo
 }
 
 /**
- * Product decision (pré-lançamento): o WhatsApp NÃO deve responder perguntas
- * livres com o LLM — raciocina mal e deu respostas erradas a clientes reais
- * (negou que há rodízio). Enquanto isso não for retomado, qualquer pergunta
- * fora do menu é encaminhada ao recepcionista, que faz handoff para um humano
- * em vez de gerar resposta livre. Reativar o Brain = voltar para `true`.
+ * Free-form agora é CONFIG GOVERNADA por restaurante (BrainFreeFormConfig),
+ * não mais um const hardcoded. Escada: SHADOW_ONLY (default = comportamento
+ * atual: recepcionista responde, Brain observa) → ALLOWLIST → RESTAURANT_WIDE.
+ * Promoção exige gates (golden set com o caso rodízio p0=0 + completude da
+ * verdade) via freeFormGovernance; rollback de 30s volta a SHADOW_ONLY.
+ * No caminho vivo, o crítico claim-vs-snapshot + piso de confiança seguram
+ * cada mensagem individualmente.
  */
-const ALLOW_BRAIN_FREE_FORM: boolean = false;
 
 export interface BrainReplyOutcome {
   status: "REPLIED" | "HANDOFF" | "SKIPPED";
@@ -174,13 +176,16 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   // O recepcionista trata de forma determinística (intents conhecidos por
   // template; qualquer pergunta aberta → handoff para humano). Sem resposta
   // livre inventada pelo Brain.
-  if (!ALLOW_BRAIN_FREE_FORM) {
+  // ── Escada governada: só responde AO VIVO se a config do restaurante permitir
+  // este telefone (SHADOW_ONLY/pausado/fora da allowlist → recepcionista).
+  const freeForm = await resolveFreeFormAccess(conversation.restaurantId, resolvedPhone);
+  if (!freeForm.allowed) {
     // Sombra (fire-and-forget): nunca atrasa nem toca a resposta determinística.
     void runShadowReasoning(conversationId, conversation.restaurantId, inboundText).catch((err) =>
       console.error("[BrainShadow] failed:", err),
     );
     await recep.WhatsAppReceptionistService.respond(conversationId);
-    return { status: "REPLIED", reason: "free-form disabled → receptionist" };
+    return { status: "REPLIED", reason: `free-form disabled (${freeForm.reason}) → receptionist` };
   }
 
   const { restaurantId } = conversation;
@@ -200,6 +205,21 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
 
   const reply = outcome.result.idealResponse?.trim();
   if (!reply) return { status: "SKIPPED", reason: "brain produced no reply" };
+
+  // ── Portão do crítico, POR MENSAGEM: raciocínio de verdade (LLM), coerente
+  // com a base (claim-vs-snapshot PASS) e confiante o bastante — senão o
+  // recepcionista determinístico assume. É o que impede um novo caso rodízio.
+  const criticOk =
+    outcome.reasoningMode === "LLM" &&
+    outcome.result.coherenceCheck.verdict === "PASS" &&
+    outcome.result.confidence >= freeForm.minConfidence;
+  if (!criticOk) {
+    await recep.WhatsAppReceptionistService.respond(conversationId);
+    return {
+      status: "REPLIED",
+      reason: `critic gate (${outcome.reasoningMode}/${outcome.result.coherenceCheck.verdict}/conf ${outcome.result.confidence.toFixed(2)}) → receptionist`,
+    };
+  }
 
   // Keep the menu within reach on every free-form answer (skip on handoff).
   const anchoredReply =

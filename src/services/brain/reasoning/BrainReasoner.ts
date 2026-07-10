@@ -18,7 +18,7 @@
 
 import { getAgentProfile } from "@/services/agents/AgentProfileService";
 import type { AgentProfileDefinition } from "@/services/agents/types";
-import { selectEngine } from "../engines/AIEngineRouter";
+import { selectEngineRouted } from "../engines/AIEngineRouter";
 import type { AIEngineSelection } from "../engines/AIEngineTypes";
 import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
 import { resolveKnowledgeAdapter } from "../knowledge/KnowledgeAdapterRegistry";
@@ -149,8 +149,8 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
   // 1. SCOPE — DB-first (AGENT_PROFILE_DB_ENABLED) com o registry de código como
   // piso que nunca lança: um negócio pode declarar/ajustar agentes sem deploy.
   const profile = await getAgentProfile(req.agentId);
-  const snapshot = await loadKnowledge(req);                 // 2. TRUTH
-  const engine = selectEngine(req.agentId);                  // 3. PILOT
+  const snapshot = await loadKnowledge(req);                             // 2. TRUTH
+  const engine = await selectEngineRouted(req.agentId, { businessId: req.businessId }); // 3. PILOT
 
   // No declared scope or no real pilot → safe deterministic fallback.
   if (!profile || engine.provider === "MOCK") {

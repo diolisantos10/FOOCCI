@@ -1,8 +1,13 @@
 {
-  "extends": ["next/core-web-vitals"],
+  "extends": [
+    "next/core-web-vitals"
+  ],
   "overrides": [
     {
-      "files": ["src/**/*.ts", "src/**/*.tsx"],
+      "files": [
+        "src/**/*.ts",
+        "src/**/*.tsx"
+      ],
       "excludedFiles": [
         "src/lib/openai.ts",
         "src/services/brain/engines/**",
@@ -11,15 +16,12 @@
         "src/services/agent-training/AgentTrainingImprovementService.ts",
         "src/services/agentLibrary/AgentLibraryService.ts",
         "src/services/agentLibrary/deepExtraction/realChunkExtractor.ts",
-        "src/services/agents/reasoning/WaiterReasoningLLMService.ts",
         "src/services/ai/AIOrderService.ts",
         "src/services/ai/AISimulatorService.ts",
         "src/services/ai/AITools.ts",
         "src/services/ai/ChatSimService.ts",
         "src/services/ai/PromptBuilderService.ts",
         "src/services/ai/WhatsAppReceptionistService.ts",
-        "src/services/analytics/AnalyticsAgentService.ts",
-        "src/services/crm/MessageVariationService.ts",
         "src/services/help/FaqMiner.ts",
         "src/services/help/helpAssistant.ts",
         "src/services/imageEnhancement/providers/openai.ts"

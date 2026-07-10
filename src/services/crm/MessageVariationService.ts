@@ -28,7 +28,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import {
   CustomerIntelligenceSnapshotService,
   buildCustomerIntelligenceContext,
@@ -583,17 +584,14 @@ export class MessageVariationService {
 
     if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "not-configured") {
       try {
-        const completion = await openai.chat.completions.create({
-          model: brandConfig ? "gpt-4o-mini" : "gpt-4o-mini",
-          messages: [
-            { role: "system", content: buildSystemPrompt(tone, couponCode) },
-            { role: "user", content: buildUserPrompt(intent, snapshot, couponCode, previousMessages, maxVariants) },
-          ],
-          max_tokens: 500,
+        const selection = await selectEngineRouted("crm", { taskProfile: "GENERATE" });
+        const raw = await callStructuredJson({
+          selection,
+          systemPrompt: buildSystemPrompt(tone, couponCode),
+          userContent: buildUserPrompt(intent, snapshot, couponCode, previousMessages, maxVariants),
           temperature: 0.7,
-          response_format: { type: "json_object" },
+          maxTokens: 500,
         });
-        const raw = completion.choices[0]?.message?.content ?? "";
         const parsed = JSON.parse(raw) as { variants?: unknown };
         if (Array.isArray(parsed.variants)) {
           candidates = parsed.variants.filter((v): v is string => typeof v === "string" && v.trim().length > 0);

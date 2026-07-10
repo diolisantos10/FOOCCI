@@ -3,9 +3,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const db = vi.hoisted(() => ({
   conversation: { findUnique: vi.fn(), update: vi.fn() },
   message: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
+  brainFreeFormConfig: { findUnique: vi.fn() },
   $transaction: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
+
+const messaging = vi.hoisted(() => ({
+  resolveProviderId: vi.fn(),
+  WhatsAppMessagingService: { sendConversationReply: vi.fn() },
+}));
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => messaging);
 
 const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn() }));
 vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: evoClient }));
@@ -50,6 +57,8 @@ function brainOutcome(over: Record<string, unknown> = {}) {
     result: {
       primaryIntent: "PAYMENT_QUESTION",
       idealResponse: "Aceitamos Pix, cartão e dinheiro. 😊",
+      confidence: 0.9,
+      coherenceCheck: { verdict: "PASS", answersUserQuestion: true, matchesIntent: true, doesNotInventFacts: true, keepsBusinessObjective: true, reason: "" },
       shouldEscalate: false,
       runtimeTouched: false,
       ...over,
@@ -62,6 +71,8 @@ beforeEach(() => {
   // Shadow determinístico nos testes: OFF por padrão (o teste dedicado liga).
   process.env.WHATSAPP_BRAIN_SHADOW_MODE = "false";
   db.message.findMany.mockResolvedValue([]);
+  db.brainFreeFormConfig.findUnique.mockResolvedValue(null); // default: SHADOW_ONLY
+  messaging.resolveProviderId.mockResolvedValue("EVOLUTION");
   db.conversation.findUnique.mockResolvedValue({
     id: "conv_1", restaurantId: "rest_1", status: "BOT", aiEnabled: true,
     customer: { id: "cust_1", phone: "5511999", name: "Ana" },
@@ -129,6 +140,52 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(brain.reasonAsAgent).not.toHaveBeenCalled();
     expect(out.status).toBe("REPLIED");
+  });
+
+  it("VIVO (allowlist): telefone liberado + crítico PASS → o Brain responde o cliente", async () => {
+    db.brainFreeFormConfig.findUnique.mockResolvedValue({
+      restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5511999"], paused: false, minConfidence: 0.6, notes: null,
+    });
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(brain.reasonAsAgent).toHaveBeenCalledTimes(1);
+    // Janela de conversa vai junto no raciocínio vivo
+    expect(brain.reasonAsAgent.mock.calls[0][0]).toHaveProperty("sanitizedHistory");
+    expect(evoClient.sendTextMessage).toHaveBeenCalledTimes(1);
+    expect(out.status).toBe("REPLIED");
+    expect(recep.WhatsAppReceptionistService.respond).not.toHaveBeenCalled();
+  });
+
+  it("VIVO (crítico reprova): coerência NEEDS_REVIEW → recepcionista assume, nada é enviado pelo Brain", async () => {
+    db.brainFreeFormConfig.findUnique.mockResolvedValue({
+      restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5511999"], paused: false, minConfidence: 0.6, notes: null,
+    });
+    brain.reasonAsAgent.mockResolvedValue(
+      brainOutcome({ coherenceCheck: { verdict: "NEEDS_REVIEW", answersUserQuestion: true, matchesIntent: true, doesNotInventFacts: false, keepsBusinessObjective: true, reason: "preço fora da base" } }),
+    );
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(out.reason).toContain("critic gate");
+  });
+
+  it("VIVO (confiança baixa): abaixo do piso → recepcionista assume", async () => {
+    db.brainFreeFormConfig.findUnique.mockResolvedValue({
+      restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5511999"], paused: false, minConfidence: 0.6, notes: null,
+    });
+    brain.reasonAsAgent.mockResolvedValue(brainOutcome({ confidence: 0.3 }));
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(out.reason).toContain("critic gate");
+  });
+
+  it("VIVO (fora da allowlist): mesmo com modo ALLOWLIST, telefone de fora fica no shadow", async () => {
+    db.brainFreeFormConfig.findUnique.mockResolvedValue({
+      restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5599000"], paused: false, minConfidence: 0.6, notes: null,
+    });
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(out.reason).toContain("free-form disabled");
   });
 
   it("SHADOW: o Brain raciocina em paralelo (só log/evidência) sem responder o cliente", async () => {

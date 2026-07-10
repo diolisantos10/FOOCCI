@@ -15,7 +15,8 @@
  *  - LLM falls back to deterministic template if OpenAI fails.
  */
 
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import { prisma } from "@/lib/prisma";
 import { AnalyticsService }                    from "./AnalyticsService";
 import { AnalyticsDiagnosisService }            from "./AnalyticsDiagnosisService";
@@ -596,17 +597,17 @@ async function formatWithLLM(
       limitacoes:         structuredData.limitations,
     });
 
-    const completion = await openai.chat.completions.create({
-      model:       "gpt-4o-mini",
-      temperature: 0.3,
-      max_tokens:  400,
-      messages: [
-        { role: "system", content: AGENT_SYSTEM_PROMPT },
-        { role: "user",   content: userContent },
-      ],
-    });
-
-    const text = completion.choices[0]?.message?.content?.trim();
+    const selection = await selectEngineRouted("analytics-product", { taskProfile: "GENERATE" });
+    const text = (
+      await callStructuredJson({
+        selection,
+        systemPrompt: AGENT_SYSTEM_PROMPT,
+        userContent,
+        temperature: 0.3,
+        maxTokens: 400,
+        responseFormat: "text",
+      })
+    ).trim();
     return text && text.length > 20 ? text : fallback;
   } catch (err) {
     console.error("[AnalyticsAgentService] LLM formatting failed — using template", err);

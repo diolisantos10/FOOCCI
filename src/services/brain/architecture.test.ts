@@ -22,21 +22,20 @@ const ALLOWED = new Set<string>([
   "services/brain/engines/OpenAIEngineAdapter.ts",
 ]);
 
-/** Dívida pré-lei, CONGELADA. Remover itens = progresso; adicionar = proibido. */
+/** Dívida pré-lei, CONGELADA. Remover itens = progresso; adicionar = proibido.
+ *  Já migrados para o AIEngineRouter (Fase 4): WaiterReasoningLLMService,
+ *  MessageVariationService, AnalyticsAgentService. */
 const FROZEN_EXCEPTIONS = new Set<string>([
   "services/agent-training/AgentTrainingEvaluatorService.ts",
   "services/agent-training/AgentTrainingImprovementService.ts",
   "services/agentLibrary/AgentLibraryService.ts",
   "services/agentLibrary/deepExtraction/realChunkExtractor.ts",
-  "services/agents/reasoning/WaiterReasoningLLMService.ts",
   "services/ai/AIOrderService.ts",
   "services/ai/AISimulatorService.ts",
   "services/ai/AITools.ts",
   "services/ai/ChatSimService.ts",
   "services/ai/PromptBuilderService.ts",
   "services/ai/WhatsAppReceptionistService.ts",
-  "services/analytics/AnalyticsAgentService.ts",
-  "services/crm/MessageVariationService.ts",
   "services/help/FaqMiner.ts",
   "services/help/helpAssistant.ts",
   "services/imageEnhancement/providers/openai.ts",

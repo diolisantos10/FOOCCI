@@ -35,8 +35,23 @@ export { classifyChangeRisk, requiresQualityGate, requiresHumanApproval } from "
 
 // engines
 export * from "./engines/AIEngineTypes";
-export { selectEngine, configuredProviders, AGENT_ENGINE_PREFERENCES } from "./engines/AIEngineRouter";
+export {
+  selectEngine,
+  selectEngineRouted,
+  configuredProviders,
+  AGENT_ENGINE_PREFERENCES,
+  type EngineTaskProfile,
+} from "./engines/AIEngineRouter";
+export type { StructuredCallInput } from "./engines/EngineAdapter";
+export { callStructuredJson } from "./engines/OpenAIEngineAdapter";
 export { onEngineFailure } from "./engines/EngineFallbackPolicy";
+
+// runtime governance (Fase 3 — escada do raciocínio livre)
+export * from "./runtime/BrainFreeFormConfigService";
+export * from "./runtime/freeFormGovernance";
+
+// director — approve→apply bridge (Fase 3)
+export { applyChangeRequest } from "./director/ChangeRequestApplier";
 
 // knowledge
 export * from "./knowledge/BusinessKnowledgeContract";
