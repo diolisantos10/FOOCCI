@@ -41,6 +41,7 @@ import {
   type CRMWhatsAppSafetyConfig,
 } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
+import { CustomerCouponService } from "./CustomerCouponService";
 import { readDedupePolicy, readOverridePolicy } from "./crmDedupePolicy";
 import { generateMessageFingerprint } from "./messageFingerprint";
 import { getImpactedByConcept, getImpactedByMessage, recordLedger } from "./CRMContactLedgerService";
@@ -297,7 +298,7 @@ export class ScheduledCampaignRunnerService {
       select: {
         id: true, restaurantId: true, name: true, status: true,
         targetSegment: true, templateId: true, message: true, objective: true, audienceConfig: true,
-        scheduleConfig: true, totalSent: true,
+        scheduleConfig: true, totalSent: true, couponCode: true,
         campaignFamilyKey: true, messageFingerprint: true, dedupePolicy: true,
       },
     });
@@ -879,7 +880,7 @@ export class ScheduledCampaignRunnerService {
       select: {
         id: true, restaurantId: true, name: true, status: true,
         message: true, templateId: true, targetSegment: true, objective: true, audienceConfig: true,
-        scheduleConfig: true, campaignFamilyKey: true, messageFingerprint: true,
+        scheduleConfig: true, campaignFamilyKey: true, messageFingerprint: true, couponCode: true,
         executions: {
           orderBy: { createdAt: "asc" },
           select: { id: true, customerId: true, customerName: true, customerPhone: true, status: true, failedReason: true, errorMessage: true },
@@ -1007,7 +1008,7 @@ export class ScheduledCampaignRunnerService {
     const startedAt = new Date();
 
     const send = await this._sendBatch(
-      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig, couponCode: campaign.couponCode },
       customers,
       safety,
       { allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride, campaignFamilyKey: campaign.campaignFamilyKey ?? null, messageFingerprint: fingerprint || null },
@@ -1050,7 +1051,7 @@ export class ScheduledCampaignRunnerService {
     campaign: {
       id: string; restaurantId: string; name: string; status: string;
       message: string; templateId: string | null; targetSegment: string | null;
-      objective: string | null; audienceConfig: unknown;
+      objective: string | null; audienceConfig: unknown; couponCode?: string | null;
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
@@ -1309,6 +1310,18 @@ export class ScheduledCampaignRunnerService {
         });
 
         sent++;
+
+        // Coupon wallet: if this campaign grants a coupon, credit it to the
+        // customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
+        // never break a successful send.
+        if (campaign.couponCode) {
+          await CustomerCouponService.grant({
+            restaurantId:     campaign.restaurantId,
+            customerId:       customer.id,
+            couponCode:       campaign.couponCode,
+            sourceCampaignId: campaign.id,
+          }).catch((e) => console.error(`[ReadyMade] coupon grant failed for ${customer.id}:`, e));
+        }
       } catch (err) {
         // A real provider/Evolution failure (e.g. HTTP 400 invalid number).
         const isEvoErr = err instanceof EvolutionApiError;

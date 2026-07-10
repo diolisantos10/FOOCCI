@@ -80,6 +80,7 @@ model Restaurant {
   storeProfile           StoreProfile?
   integrationConfigs     IntegrationConfig[]
   promotions             Promotion[]
+  customerCoupons        CustomerCoupon[]
   crmAutomations         CRMAutomation[]
   crmCustomActions       CRMCustomAction[]
   crmActionLogs          CRMActionLog[]
@@ -190,6 +191,7 @@ model Customer {
   preferences    CustomerPreference?
   segmentMembers CustomerSegmentMembership[]
   dataSignals    CustomerDataSignal[]
+  coupons        CustomerCoupon[]
 
   @@unique([phone, restaurantId])
   @@index([restaurantId])
@@ -1822,6 +1824,9 @@ model Promotion {
 
   // Coupon
   couponCode String?
+  // When granted to a customer's wallet, the coupon stays valid this many days from
+  // the grant. Null = fall back to endsAt, else a 30-day default.
+  couponValidityDays Int?
 
   // Banner (type=BANNER only)
   bannerImageUrl String?
@@ -1845,9 +1850,42 @@ model Promotion {
   updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  walletEntries CustomerCoupon[]
 
   @@index([restaurantId])
   @@map("promotions")
+}
+
+// A coupon a specific customer has earned — their personal wallet (iFood-style).
+// Granted by CRM campaigns; redeemed in the cart. Accumulates over time.
+model CustomerCoupon {
+  id               String               @id @default(cuid())
+  restaurantId     String
+  customerId       String
+  promotionId      String
+  couponCode       String               // denormalized for fast cart lookup
+  status           CustomerCouponStatus @default(ACTIVE)
+  grantedAt        DateTime             @default(now())
+  expiresAt        DateTime?            // null = never expires
+  sourceCampaignId String?              // which campaign credited it
+  usedAt           DateTime?
+  usedOrderId      String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  promotion  Promotion  @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, status])
+  @@index([restaurantId])
+  @@map("customer_coupons")
+}
+
+enum CustomerCouponStatus {
+  ACTIVE
+  USED
+  EXPIRED
 }
 
 // ═══════════════════════════════════════════
