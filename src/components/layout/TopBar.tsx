@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useSidebar } from "./SidebarContext";
-import { useNotifications } from "@/components/help/useNotifications";
-import { openHelpWidget } from "@/components/help/events";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -36,10 +34,6 @@ function fmtLocalHM(iso: string): string {
 export function TopBar({ title }: TopBarProps) {
   const { toggle: toggleSidebar, restaurant } = useSidebar();
   const { data: session } = useSession();
-
-  // Notifications — shared with the Help widget (the full feed lives there now).
-  // The bell is kept as a subtle indicator that opens the widget's Avisos tab.
-  const { unreadCount, hasCritical } = useNotifications();
 
   // ── Emergency pause state ────────────────────────────────────────────────────
   const [isPaused, setIsPaused]         = useState(false);
@@ -179,25 +173,6 @@ export function TopBar({ title }: TopBarProps) {
             </button>
           )
         )}
-
-        {/* ── Notifications — opens the Help widget's Avisos tab ────────── */}
-        <button
-          type="button"
-          onClick={() => openHelpWidget("avisos")}
-          aria-label="Notificações"
-          className="relative flex h-8 w-8 items-center justify-center rounded-lg text-base text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-        >
-          🔔
-          {unreadCount > 0 && (
-            <span
-              className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white ${
-                hasCritical ? "bg-red-500" : "bg-orange-400"
-              }`}
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </button>
 
         {/* ── Account: partner restaurant + logged-in user ─────────────── */}
         <div className="mx-1 hidden h-6 w-px bg-[#E5E5E5] sm:block" />

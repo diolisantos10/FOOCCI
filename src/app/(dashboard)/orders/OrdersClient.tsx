@@ -7,52 +7,8 @@ import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
 import { EmptyState, ConfirmDialog } from "@/components/ui";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
-import {
-  SOUND_PREF_KEY,
-  readSoundPref,
-  fetchRestaurantSoundSettings,
-  ORDER_ALERT_DIAG_KEY,
-  ORDER_ALERT_ASSET,
-  SOUND_LAST_PLAYED_KEY,
-  SOUND_LAST_ERROR_KEY,
-} from "@/lib/sound-prefs";
-import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
-import { AlertLoopController } from "@/lib/alert-loop";
-
-// ─── Sound alert ──────────────────────────────────────────────────────────────
-// Official Foocci order sound. The new-order alert and the settings test button
-// play THIS exact file through the same gain-aware engine (playAlertAudio), and
-// Web Audio gain (>100%) drives it louder for noisy kitchens.
-const ALERT_WAV      = ORDER_ALERT_ASSET;
-
-// Oscillator fallback — used when WAV file is unavailable or AudioContext is not suspended
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.4);
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(1100, ctx.currentTime + 0.5);
-    gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.5);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
-    osc2.start(ctx.currentTime + 0.5);
-    osc2.stop(ctx.currentTime + 0.9);
-  } catch {
-    // silent fail — browser may block AudioContext without user gesture
-  }
-}
+import { SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
+import { isPaymentPendingOrder } from "@/lib/order-alert";
 
 // Display name for the active manager/POS integration shown in order detail.
 // When Saipos is active this is "Saipos". Replace here (or derive from order data)
@@ -460,14 +416,6 @@ function isDelayed(order: MockOrder): boolean {
   return minutesSince(order.createdAt) > DELAY_THRESHOLD;
 }
 
-function isPaymentPendingOrder(order: MockOrder): boolean {
-  if (order.status === "AWAITING_PAYMENT") return true;
-  if (
-    order.paymentProviderName === "mercadopago" &&
-    (order.paymentStatus === "LINK_SENT" || order.paymentStatus === "PENDING")
-  ) return true;
-  return false;
-}
 
 // ─── Customer context helpers ─────────────────────────────────
 
@@ -1608,10 +1556,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
   // localStorage mirror is just the instant fallback before the API responds.
   const [soundEnabled, setSoundEnabled] = useState(() => readSoundPref(SOUND_PREF_KEY, true));
-  const soundThemeRef = useRef<string>("DEFAULT");
-  const repeatNewOrderRef = useRef(false);
-  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
-  const alertControllerRef = useRef<AlertLoopController | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
   const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string } | null>(null);
@@ -1655,62 +1599,14 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
 
   const modalOrder = modalQueue[0] ?? null;
 
-  // Initialise the WAV audio element + alert controller once on mount.
-  useEffect(() => {
-    const audio = new Audio(ALERT_WAV);
-    audio.preload = "auto";
-    audio.volume  = 1.0;
-    alertAudioRef.current = audio;
-    // First user interaction silently unlocks browser autoplay — no UI required
-    installSilentUnlock(() => [audio]);
-
-    const controller = new AlertLoopController({
-      // Every new-order play goes through the shared gain-aware engine.
-      play: async (vol) => {
-        const a = alertAudioRef.current;
-        if (!a) { playBeep(); return; }
-        try {
-          await playAlertAudio(a, vol);
-        } catch (err) {
-          // Autoplay block: re-throw so it's recorded; silent unlock fixes it on
-          // the next user gesture. Any other failure → oscillator fallback beep.
-          if (err instanceof DOMException && err.name === "NotAllowedError") throw err;
-          playBeep();
-        }
-      },
-      getVolume:       () => 100, // volume travado em 100% (sem controle no app; use o volume do aparelho)
-      isRepeatEnabled: () => repeatNewOrderRef.current || soundThemeRef.current === "URGENT",
-      assetPath:       ALERT_WAV,
-      intervalMs:      10_000,   // repeat every 10 s (8–12 s window)
-      maxDurationMs:   0,        // no cap: ring until the order is accepted/rejected or the sound is turned off
-      onDiagnostics: (d) => {
-        try {
-          localStorage.setItem(ORDER_ALERT_DIAG_KEY, JSON.stringify({ ...d, updatedAt: new Date().toISOString() }));
-          if (d.lastResult === "success" && d.lastAttemptAt) {
-            localStorage.setItem(SOUND_LAST_PLAYED_KEY, new Date(d.lastAttemptAt).toISOString());
-          } else if (d.lastResult === "error" && d.lastError) {
-            localStorage.setItem(SOUND_LAST_ERROR_KEY, `${new Date().toISOString()}: ${d.lastError}`);
-          }
-        } catch { /* storage unavailable */ }
-      },
-    });
-    alertControllerRef.current = controller;
-
-    return () => {
-      controller.dispose();           // stop reason → PAGE_UNMOUNT, clears loop
-      alertControllerRef.current = null;
-      audio.pause();
-      audio.src = "";
-    };
-  }, []);
-
-  // Load DB-backed sound settings (Configurações → Sons e alertas) — source of truth
+  // The new-order ALARM SOUND is owned by <GlobalAlertEngine/> (mounted once in
+  // the dashboard shell — see src/components/layout/GlobalAlertEngine.tsx) so it
+  // rings from any screen, not only while this page is open. This component only
+  // tracks `soundEnabled` for the visual "🔊 Novo pedido aguardando aceite" banner.
   useEffect(() => {
     void fetchRestaurantSoundSettings().then((s) => {
       if (!s) return;
       setSoundEnabled(s.soundEnabled && s.newOrderSoundEnabled);
-      soundThemeRef.current = s.soundTheme || "DEFAULT";
-      repeatNewOrderRef.current = s.repeatNewOrderSoundUntilAccepted;
     });
   }, []);
 
@@ -1732,13 +1628,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   }, [orders, modalQueue]);
 
   const hasPendingOrders = actionableAlertIds.length > 0;
-
-  // Feed the controller the live set. It fires once immediately on a new order,
-  // repeats every 10 s while any remain (when repeat/URGENT is on), and stops on
-  // accept/reject/seen/max-duration/unmount — one shared loop, no overlap.
-  useEffect(() => {
-    alertControllerRef.current?.sync(soundEnabled ? actionableAlertIds : []);
-  }, [actionableAlertIds, soundEnabled]);
 
   const fetchOrders = useCallback(() => {
     fetch("/api/orders?limit=100")
@@ -1914,7 +1803,9 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: nextStatus } : o))
       );
       if (autoPrintOnAccept) triggerAutoPrint(modalOrder.id);
-      alertControllerRef.current?.resolve(modalOrder.id, "ACCEPTED");
+      // Instant-stop the global alarm (see GlobalAlertEngine) — its own poll
+      // would also stop it within ~8s, this just makes it immediate.
+      window.dispatchEvent(new CustomEvent("foocci:order-resolved", { detail: { id: modalOrder.id, reason: "ACCEPTED" } }));
       setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalAccepting(false);
@@ -1930,7 +1821,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CANCELLED" as OrderStatus } : o))
       );
       if (selectedId === modalOrder.id) setSelectedId(null);
-      alertControllerRef.current?.resolve(modalOrder.id, "REJECTED");
+      window.dispatchEvent(new CustomEvent("foocci:order-resolved", { detail: { id: modalOrder.id, reason: "REJECTED" } }));
       setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalRejecting(false);

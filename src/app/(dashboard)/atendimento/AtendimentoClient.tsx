@@ -10,16 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
-import {
-  HANDOFF_SOUND_PREF_KEY,
-  readSoundPref,
-  fetchRestaurantSoundSettings,
-  HANDOFF_ALERT_ASSET,
-  HANDOFF_SOUND_LAST_PLAYED_KEY,
-  HANDOFF_SOUND_LAST_ERROR_KEY,
-} from "@/lib/sound-prefs";
-import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
-import { AlertLoopController } from "@/lib/alert-loop";
+import { HANDOFF_SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
 import { pendingHumanRequestIds } from "@/lib/handoff-alert";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
@@ -411,13 +402,14 @@ export function AtendimentoClient({
   const [uploading,     setUploading]     = useState(false);
 
   // ── Human-attention alarm sound ───────────────────────────────────────────
-  // Repeats until an operator assumes/resolves the conversation. Config lives
-  // ONLY in Configurações → Sons e alertas (DB-backed); the localStorage mirror
-  // is just the instant fallback before the API responds. No sound UI here.
-  const handoffAudioRef      = useRef<HTMLAudioElement | null>(null);
-  const handoffControllerRef = useRef<AlertLoopController | null>(null);
+  // The actual ALARM (Audio element + repeat controller) is owned by
+  // <GlobalAlertEngine/> (mounted once in the dashboard shell) so it rings from
+  // any screen, not only while this page is open. This component keeps its full
+  // ack/overdue logic unchanged and hands the resulting ring-set to the global
+  // engine via a small attach/detach event bridge (see the effects below) —
+  // "Estou ciente" and "Silenciar atrasados" keep working exactly as before
+  // while this page is open. Config lives in Configurações → Sons e alertas.
   const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(() => readSoundPref(HANDOFF_SOUND_PREF_KEY, true));
-  const repeatHandoffRef = useRef(true);
 
   const [leftWidth,     setLeftWidth]     = useState<number>(320);
   const [isDesktop,     setIsDesktop]     = useState<boolean>(false);
@@ -491,44 +483,11 @@ export function AtendimentoClient({
     try { localStorage.setItem("atendimento-left-width", String(leftWidth)); } catch { /* ignore */ }
   }, [leftWidth, isDesktop]);
 
-  // ── Human-attention alarm: audio element + repeat controller ──────────────
+  // Tell <GlobalAlertEngine/> this page is driving the handoff alarm directly
+  // (so its own background poll steps aside), and hand back control on unmount.
   useEffect(() => {
-    const audio = new Audio(HANDOFF_ALERT_ASSET);
-    audio.preload = "auto";
-    handoffAudioRef.current = audio;
-    // First user interaction silently unlocks browser autoplay — no UI required
-    installSilentUnlock(() => [audio]);
-
-    const controller = new AlertLoopController({
-      // Uses the existing atendimento sound + saved volume/gain (no theme).
-      play: async (vol) => {
-        const a = handoffAudioRef.current;
-        if (!a) return;
-        await playAlertAudio(a, vol);
-      },
-      getVolume:       () => 100, // volume travado em 100% (sem controle no app; use o volume do aparelho)
-      isRepeatEnabled: () => repeatHandoffRef.current,
-      assetPath:       HANDOFF_ALERT_ASSET,
-      intervalMs:      9_000,    // repeat every 9 s (8–10 s window)
-      maxDurationMs:   0,        // no cap: ring until the operator sees it or turns the sound off
-      onDiagnostics: (d) => {
-        try {
-          if (d.lastResult === "success" && d.lastAttemptAt) {
-            localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date(d.lastAttemptAt).toISOString());
-          } else if (d.lastResult === "error" && d.lastError) {
-            localStorage.setItem(HANDOFF_SOUND_LAST_ERROR_KEY, `${new Date().toISOString()}: ${d.lastError}`);
-          }
-        } catch { /* storage unavailable */ }
-      },
-    });
-    handoffControllerRef.current = controller;
-
-    return () => {
-      controller.dispose();           // stop reason → PAGE_UNMOUNT, clears loop
-      handoffControllerRef.current = null;
-      audio.pause();
-      audio.src = "";
-    };
+    window.dispatchEvent(new Event("foocci:handoff-attach"));
+    return () => { window.dispatchEvent(new Event("foocci:handoff-detach")); };
   }, []);
 
   // Load DB-backed sound settings (Configurações → Sons e alertas) — source of truth
@@ -536,7 +495,6 @@ export function AtendimentoClient({
     void fetchRestaurantSoundSettings().then((s) => {
       if (!s) return;
       setHandoffSoundEnabled(s.soundEnabled && s.humanAttentionSoundEnabled);
-      repeatHandoffRef.current = s.repeatHumanAttentionUntilSeen;
     });
   }, []);
 
@@ -607,7 +565,7 @@ export function AtendimentoClient({
   );
 
   useEffect(() => {
-    handoffControllerRef.current?.sync(handoffSoundEnabled ? soundIds : []);
+    window.dispatchEvent(new CustomEvent("foocci:handoff-ring-ids", { detail: { ids: handoffSoundEnabled ? soundIds : [] } }));
   }, [soundIds, handoffSoundEnabled]);
 
   const acknowledgePendingHuman = useCallback(() => {
@@ -787,7 +745,7 @@ export function AtendimentoClient({
         }),
       });
       // Resolving the conversation is a clear operator action → silence its alarm.
-      if (action === "resolve") handoffControllerRef.current?.resolve(selectedId, "RESOLVED");
+      if (action === "resolve") window.dispatchEvent(new CustomEvent("foocci:handoff-resolved", { detail: { id: selectedId, reason: "RESOLVED" } }));
       await Promise.all([fetchThread(selectedId), fetchList()]);
     } finally {
       setActionLoading(false);
@@ -802,7 +760,7 @@ export function AtendimentoClient({
         method: "POST",
       });
       // "Assumir atendimento" (takeover) acknowledges the request → silence its alarm.
-      if (action === "takeover") handoffControllerRef.current?.resolve(selectedId, "ASSUMED");
+      if (action === "takeover") window.dispatchEvent(new CustomEvent("foocci:handoff-resolved", { detail: { id: selectedId, reason: "ASSUMED" } }));
       await Promise.all([fetchThread(selectedId), fetchList()]);
     } finally {
       setActionLoading(false);

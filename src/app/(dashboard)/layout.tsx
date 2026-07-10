@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SidebarProvider } from "@/components/layout/SidebarContext";
 import { HelpWidget } from "@/components/help/HelpWidget";
+import { GlobalAlertEngine } from "@/components/layout/GlobalAlertEngine";
 
 export default async function DashboardLayout({
   children,
@@ -59,6 +60,7 @@ export default async function DashboardLayout({
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
         <HelpWidget />
+        <GlobalAlertEngine />
       </div>
     </SidebarProvider>
   );

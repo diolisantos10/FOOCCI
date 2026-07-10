@@ -125,6 +125,9 @@ export default function SonsPage() {
         // Mirror to localStorage so operational screens (OrdersClient, AtendimentoClient) pick up immediately
         writeSoundPref(SOUND_PREF_KEY,        persisted.soundEnabled && persisted.newOrderSoundEnabled);
         writeSoundPref(HANDOFF_SOUND_PREF_KEY, persisted.soundEnabled && persisted.humanAttentionSoundEnabled);
+        // Tell the global alarm engine (GlobalAlertEngine, mounted app-wide) to
+        // reload settings immediately — no page reload needed for a save to take effect.
+        window.dispatchEvent(new Event("foocci:sound-settings-changed"));
         showFeedback(true, "Configurações de som salvas.");
       } else {
         showFeedback(false, "Erro ao salvar. Tente novamente.");
@@ -259,7 +262,7 @@ export default function SonsPage() {
       <PageCard>
         <SectionHeading
           title="Sons do restaurante"
-          subtitle="Para o som funcionar, mantenha esta tela aberta no computador do restaurante e permita áudio no navegador."
+          subtitle="Os alertas tocam em qualquer tela do Foocci — Pedidos, Atendimento, Dashboard, etc. Basta manter o Foocci aberto em alguma aba do navegador e permitir áudio."
         />
         <Toggle
           label="Ativar todos os sons"
@@ -438,9 +441,10 @@ export default function SonsPage() {
         <SectionHeading title="Sobre o áudio no navegador" />
         <p className="text-sm text-ink2">
           Navegadores modernos bloqueiam o áudio automático até o usuário interagir com a página.
-          Se os sons pararem de funcionar após recarregar, use os botões <strong>Testar</strong>{" "}
-          acima para reautorizar. Esta é a única tela que controla os sons — as telas de Pedidos
-          e Atendimento apenas tocam os alertas conforme configurado aqui.
+          Se os sons pararem de funcionar após recarregar, clique em qualquer lugar do Foocci uma vez
+          (ou use os botões <strong>Testar</strong> acima) para reautorizar. Esta tela controla as
+          configurações — os alertas tocam sozinhos em qualquer tela do Foocci que estiver aberta,
+          não precisa estar em Pedidos ou Atendimento.
         </p>
       </PageCard>
     </div>
