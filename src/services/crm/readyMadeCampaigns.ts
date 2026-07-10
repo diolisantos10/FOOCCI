@@ -23,6 +23,23 @@
 /** Which engine actually delivers this ready-made campaign. */
 export type ReadyMadeEngine = "RECURRING" | "CART_RECOVERY";
 
+/** A coupon defined directly in a campaign card (no separate Promoções area). */
+export type CouponType = "PERCENTAGE" | "FIXED";
+export interface ReadyMadeCoupon {
+  type:  CouponType;
+  value: number; // % for PERCENTAGE, R$ for FIXED
+}
+
+/** Allowed coupon values, offered as fixed options in the card. */
+export const COUPON_PERCENT_OPTIONS = [5, 10, 20, 30, 40, 50] as const;
+export const COUPON_FIXED_OPTIONS   = [10, 20, 30, 40, 50] as const;
+
+/** Owner-facing label for a coupon, e.g. "20% OFF" / "R$ 10 OFF". */
+export function couponLabel(c: ReadyMadeCoupon | null | undefined): string {
+  if (!c) return "Sem cupom";
+  return c.type === "PERCENTAGE" ? `${c.value}% OFF` : `R$ ${c.value} OFF`;
+}
+
 /** Budget priority bucket (must match CRMWhatsAppBudgetPlanner.inferCampaignPriority). */
 export type ReadyMadePriority =
   | "BIRTHDAY"
@@ -57,8 +74,8 @@ export interface ReadyMadeCampaign {
   priority:      ReadyMadePriority;
   /** Default WhatsApp message (owner-editable). Uses {nome}, {restaurante}, links. */
   defaultMessage: string;
-  /** Optional suggested coupon code the owner can attach. */
-  suggestedCoupon?: string;
+  /** Default coupon the campaign grants (owner can change or remove in the card). */
+  defaultCoupon?: ReadyMadeCoupon;
   schedule:      ReadyMadeSchedule;
   /** Event-based campaigns: default number of days after the event to send (editable). */
   triggerDays?:  number;
@@ -101,7 +118,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     priority:    "BIRTHDAY",
     defaultMessage:
       "Feliz aniversário, {nome}! 🎉 O {restaurante} preparou um presente pra você comemorar com sabor. É só pedir hoje pelo cardápio: {link_cardapio}",
-    suggestedCoupon: "NIVER15",
+    defaultCoupon: { type: "PERCENTAGE", value: 20 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: { start: "10:00", end: "18:00" }, dailyLimit: 20 },
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
@@ -164,7 +181,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     priority:    "REACTIVATION_COLD",
     defaultMessage:
       "Oi, {nome}! 😊 Sentimos sua falta! O {restaurante} preparou algo especial pra te receber de volta. Confira o cardápio: {link_cardapio}",
-    suggestedCoupon: "VOLTEI10",
+    defaultCoupon: { type: "PERCENTAGE", value: 10 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
@@ -180,7 +197,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     priority:    "GENERIC_PROMO",
     defaultMessage:
       "Oi, {nome}! ✨ Você é um cliente especial pro {restaurante}, e a gente quer retribuir. Preparamos um mimo exclusivo pra você: {link_cardapio}",
-    suggestedCoupon: "VIP15",
+    defaultCoupon: { type: "PERCENTAGE", value: 20 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 20 },
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
@@ -318,7 +335,8 @@ export const CADENCE_EXPLAINER =
 
 export interface ReadyMadeOverrides {
   message?:     string;
-  couponCode?:  string;
+  /** null clears the coupon; undefined keeps the default. */
+  coupon?:      ReadyMadeCoupon | null;
   weekdays?:    number[];
   timeWindow?:  { start: string; end: string };
   dailyLimit?:  number;
@@ -332,7 +350,6 @@ export interface ReadyMadeCampaignPayload {
   messageTemplate: string;
   objective:       string;
   channel:         "WHATSAPP";
-  couponCode?:     string;
   scheduleConfig:  Record<string, unknown>;
 }
 
@@ -352,7 +369,8 @@ export function buildReadyMadeCampaignPayload(
   if (rm.engine !== "RECURRING") {
     throw new Error(`Ready-made campaign "${rm.id}" uses the ${rm.engine} engine and is not created as a recurring campaign.`);
   }
-  const coupon = (overrides.couponCode ?? rm.suggestedCoupon ?? "").trim();
+  // Coupon: explicit override wins (including null = remove); else the default.
+  const coupon = overrides.coupon !== undefined ? overrides.coupon : (rm.defaultCoupon ?? null);
   const triggerDays = overrides.triggerDays ?? rm.triggerDays;
   return {
     name:            rm.name,
@@ -361,9 +379,9 @@ export function buildReadyMadeCampaignPayload(
     messageTemplate: (overrides.message ?? rm.defaultMessage).trim(),
     objective:       rm.objective,
     channel:         "WHATSAPP",
-    ...(coupon ? { couponCode: coupon } : {}),
     scheduleConfig: {
       mode:       "RECURRING",
+      ...(coupon ? { coupon } : {}),
       weekdays:   overrides.weekdays   ?? rm.schedule.weekdays,
       timeWindow: overrides.timeWindow ?? rm.schedule.timeWindow,
       dailyLimit: overrides.dailyLimit ?? rm.schedule.dailyLimit,

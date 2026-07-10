@@ -23,6 +23,7 @@ import {
   getReadyMadeTiming,
   buildReadyMadeCampaignPayload,
   type ReadyMadeCampaign,
+  type ReadyMadeCoupon,
   type ReadyMadeOverrides,
   type ReadyMadeTiming,
 } from "./readyMadeCampaigns";
@@ -69,7 +70,6 @@ export interface ReadyMadeCampaignState {
   engine:        ReadyMadeCampaign["engine"];
   priority:      ReadyMadeCampaign["priority"];
   editable:      ReadyMadeCampaign["editable"];
-  suggestedCoupon?: string;
   /** Ready-to-use message options the owner can pick from. */
   messageVariants: string[];
   /** When this campaign fires, in plain words. */
@@ -83,7 +83,7 @@ export interface ReadyMadeCampaignState {
   campaignId:    string | null;
   // Effective content (edited values when activated, else catalog defaults)
   message:       string;
-  couponCode:    string | null;
+  coupon:        ReadyMadeCoupon | null;
   weekdays:      number[];
   timeWindow:    { start: string; end: string };
   dailyLimit:    number;
@@ -124,6 +124,7 @@ type RecurringCfg = {
   timeWindow?:  { start: string; end: string };
   dailyLimit?:  number;
   triggerDays?: number;
+  coupon?:      ReadyMadeCoupon | null;
 };
 
 export class ReadyMadeCampaignService {
@@ -133,7 +134,7 @@ export class ReadyMadeCampaignService {
     const rows = await prisma.campaign.findMany({
       where:   { restaurantId, templateId: { in: READY_MADE_CAMPAIGNS.map((c) => c.id) } },
       orderBy: { createdAt: "desc" },
-      select:  { id: true, templateId: true, status: true, message: true, couponCode: true, scheduleConfig: true },
+      select:  { id: true, templateId: true, status: true, message: true, scheduleConfig: true },
     });
     const byTemplate = new Map<string, (typeof rows)[number]>();
     for (const r of rows) if (r.templateId && !byTemplate.has(r.templateId)) byTemplate.set(r.templateId, r);
@@ -144,7 +145,7 @@ export class ReadyMadeCampaignService {
       const base = {
         id: rm.id, emoji: rm.emoji, name: rm.name, tagline: rm.tagline,
         description: rm.description, objective: rm.objective, engine: rm.engine,
-        priority: rm.priority, editable: rm.editable, suggestedCoupon: rm.suggestedCoupon,
+        priority: rm.priority, editable: rm.editable,
         messageVariants: getReadyMadeMessageVariants(rm.id),
         timing: getReadyMadeTiming(rm.id),
         triggerDaysLabel: rm.triggerDaysLabel,
@@ -157,7 +158,7 @@ export class ReadyMadeCampaignService {
           status:      null,
           campaignId:  null,
           message:     rm.defaultMessage,
-          couponCode:  null,
+          coupon:      null,
           weekdays:    rm.schedule.weekdays,
           timeWindow:  rm.schedule.timeWindow,
           dailyLimit:  rm.schedule.dailyLimit,
@@ -173,7 +174,8 @@ export class ReadyMadeCampaignService {
         status:     row?.status ?? null,
         campaignId: row?.id ?? null,
         message:    row?.message ?? rm.defaultMessage,
-        couponCode: row?.couponCode ?? rm.suggestedCoupon ?? null,
+        // When activated, the coupon lives in scheduleConfig; else the catalog default.
+        coupon:      row ? (cfg?.coupon ?? null) : (rm.defaultCoupon ?? null),
         weekdays:    cfg?.weekdays   ?? rm.schedule.weekdays,
         timeWindow:  cfg?.timeWindow ?? rm.schedule.timeWindow,
         dailyLimit:  cfg?.dailyLimit ?? rm.schedule.dailyLimit,
@@ -224,7 +226,6 @@ export class ReadyMadeCampaignService {
       objective:       payload.objective,
       channel:         payload.channel,
       scheduleConfig:  payload.scheduleConfig,
-      couponCode:      payload.couponCode,
     });
     return { ok: true, campaignId: result.campaignId };
   }
@@ -283,7 +284,6 @@ export class ReadyMadeCampaignService {
         data:  {
           message:        payload.messageTemplate,
           scheduleConfig: payload.scheduleConfig as object,
-          ...(payload.couponCode ? { couponCode: payload.couponCode } : {}),
         },
       });
       return { ok: true };
@@ -302,7 +302,6 @@ export class ReadyMadeCampaignService {
         templateId:     payload.templateId,
         status:         "PAUSED" as never,
         scheduleConfig: payload.scheduleConfig as object,
-        ...(payload.couponCode ? { couponCode: payload.couponCode } : {}),
       },
     });
     return { ok: true };

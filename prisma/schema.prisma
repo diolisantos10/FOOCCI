@@ -1862,8 +1862,11 @@ model CustomerCoupon {
   id               String               @id @default(cuid())
   restaurantId     String
   customerId       String
-  promotionId      String
-  couponCode       String               // denormalized for fast cart lookup
+  promotionId      String?              // legacy link; new card-defined coupons are self-contained
+  couponCode       String               // short reference label (auto)
+  // Self-contained discount (card-defined). PERCENTAGE (value = %) or FIXED (value = R$).
+  discountType     String?              // "PERCENTAGE" | "FIXED"
+  discountValue    Decimal?             @db.Decimal(10, 2)
   status           CustomerCouponStatus @default(ACTIVE)
   grantedAt        DateTime             @default(now())
   expiresAt        DateTime?            // null = never expires
@@ -1874,7 +1877,7 @@ model CustomerCoupon {
   updatedAt        DateTime             @updatedAt
 
   customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  promotion  Promotion  @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  promotion  Promotion? @relation(fields: [promotionId], references: [id], onDelete: SetNull)
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([customerId, status])

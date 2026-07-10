@@ -92,7 +92,7 @@ describe("buildReadyMadeCampaignPayload", () => {
     expect(p.templateId).toBe("recuperar-frios");
     expect(p.targetSegment).toBe("recuperar-frios");
     expect(p.channel).toBe("WHATSAPP");
-    expect(p.couponCode).toBe("VOLTEI10"); // suggested coupon applied
+    expect(p.scheduleConfig.coupon).toEqual({ type: "PERCENTAGE", value: 10 }); // default coupon
     expect(p.scheduleConfig.mode).toBe("RECURRING");
     expect(p.scheduleConfig.priority).toBe("REACTIVATION_COLD");
     expect(p.scheduleConfig).not.toHaveProperty("endCondition"); // stays ACTIVE
@@ -102,22 +102,28 @@ describe("buildReadyMadeCampaignPayload", () => {
     const rm = getReadyMadeCampaign("clientes-vip")!;
     const p = buildReadyMadeCampaignPayload(rm, {
       message:    "Oi {nome}, mimo VIP!",
-      couponCode: "MEUVIP",
+      coupon:     { type: "FIXED", value: 20 },
       dailyLimit: 7,
       weekdays:   [1, 2, 3, 4, 5],
       timeWindow: { start: "18:00", end: "21:00" },
     });
     expect(p.messageTemplate).toBe("Oi {nome}, mimo VIP!");
-    expect(p.couponCode).toBe("MEUVIP");
+    expect(p.scheduleConfig.coupon).toEqual({ type: "FIXED", value: 20 });
     expect(p.scheduleConfig.dailyLimit).toBe(7);
     expect(p.scheduleConfig.weekdays).toEqual([1, 2, 3, 4, 5]);
     expect(p.scheduleConfig.timeWindow).toEqual({ start: "18:00", end: "21:00" });
   });
 
-  it("omits couponCode when there is neither a suggestion nor an override", () => {
+  it("has no coupon when there is no default and no override", () => {
     const rm = getReadyMadeCampaign("quente-esfriando")!;
     const p = buildReadyMadeCampaignPayload(rm);
-    expect(p).not.toHaveProperty("couponCode");
+    expect(p.scheduleConfig).not.toHaveProperty("coupon");
+  });
+
+  it("an explicit null override removes the default coupon", () => {
+    const rm = getReadyMadeCampaign("recuperar-frios")!;
+    const p = buildReadyMadeCampaignPayload(rm, { coupon: null });
+    expect(p.scheduleConfig).not.toHaveProperty("coupon");
   });
 
   it("refuses to build a recurring payload for the cart-recovery engine", () => {

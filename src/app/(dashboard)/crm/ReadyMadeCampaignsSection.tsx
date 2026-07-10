@@ -11,7 +11,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
-import { CADENCE_EXPLAINER } from "@/services/crm/readyMadeCampaigns";
+import {
+  CADENCE_EXPLAINER,
+  COUPON_PERCENT_OPTIONS,
+  COUPON_FIXED_OPTIONS,
+  couponLabel,
+  type CouponType,
+  type ReadyMadeCoupon,
+} from "@/services/crm/readyMadeCampaigns";
 
 type Editable = Array<"message" | "schedule" | "dailyLimit" | "coupon" | "triggerDays">;
 
@@ -26,7 +33,6 @@ interface ReadyMadeState {
   objective: string;
   engine: "RECURRING" | "CART_RECOVERY";
   editable: Editable;
-  suggestedCoupon?: string;
   messageVariants: string[];
   timing: Timing;
   triggerDays?: number;
@@ -35,13 +41,11 @@ interface ReadyMadeState {
   status: string | null;
   campaignId: string | null;
   message: string;
-  couponCode: string | null;
+  coupon: ReadyMadeCoupon | null;
   weekdays: number[];
   timeWindow: { start: string; end: string };
   dailyLimit: number;
 }
-
-interface CouponOption { code: string; name: string; label: string; }
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -50,19 +54,14 @@ const PREVIEW_CTX = { restaurantName: "seu restaurante", pedidoUrl: "https://foo
 
 export function ReadyMadeCampaignsSection() {
   const [items, setItems]     = useState<ReadyMadeState[]>([]);
-  const [coupons, setCoupons] = useState<CouponOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
   const [openId, setOpenId]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [rmRes, cpRes] = await Promise.all([
-        fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null),
-        fetch("/api/crm/coupons").then((r) => r.json()).catch(() => null),
-      ]);
+      const rmRes = await fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null);
       if (rmRes?.data?.campaigns) setItems(rmRes.data.campaigns as ReadyMadeState[]);
-      if (cpRes?.data?.coupons)   setCoupons(cpRes.data.coupons as CouponOption[]);
     } finally {
       setLoading(false);
     }
@@ -117,7 +116,6 @@ export function ReadyMadeCampaignsSection() {
       {openItem && (
         <ReadyMadeConfigModal
           c={openItem}
-          coupons={coupons}
           busy={busyId === openItem.id}
           onClose={() => setOpenId(null)}
           onToggle={() => void toggle(openItem)}
@@ -183,10 +181,9 @@ function ReadyMadeCard({
 // ── Config modal ──────────────────────────────────────────────────────────────────
 
 function ReadyMadeConfigModal({
-  c, coupons, busy, onClose, onToggle, onSave,
+  c, busy, onClose, onToggle, onSave,
 }: {
   c: ReadyMadeState;
-  coupons: CouponOption[];
   busy: boolean;
   onClose: () => void;
   onToggle: () => void;
@@ -194,14 +191,13 @@ function ReadyMadeConfigModal({
 }) {
   const canEdit = c.editable.length > 0;
   const [message, setMessage]   = useState(c.message);
-  const [coupon, setCoupon]     = useState(c.couponCode ?? "");
+  const [coupon, setCoupon]     = useState<ReadyMadeCoupon | null>(c.coupon);
   const [weekdays, setWeekdays] = useState<number[]>(c.weekdays);
   const [start, setStart]       = useState(c.timeWindow.start);
   const [end, setEnd]           = useState(c.timeWindow.end);
   const [dailyLimit, setDaily]  = useState(c.dailyLimit);
   const [triggerDays, setTriggerDays] = useState(c.triggerDays ?? 2);
   const [editDays, setEditDays] = useState(false);
-  const [couponOpen, setCouponOpen] = useState(false);
   const [saved, setSaved]       = useState(false);
 
   const has = (k: Editable[number]) => c.editable.includes(k);
@@ -210,7 +206,7 @@ function ReadyMadeConfigModal({
   async function save() {
     const ov: Record<string, unknown> = {};
     if (has("message"))     ov.message     = message;
-    if (has("coupon"))      ov.couponCode  = coupon.trim();
+    if (has("coupon"))      ov.coupon      = coupon;
     if (has("dailyLimit"))  ov.dailyLimit  = dailyLimit;
     if (has("triggerDays")) ov.triggerDays = triggerDays;
     if (has("schedule"))    { ov.weekdays = weekdays; ov.timeWindow = { start, end }; }
@@ -346,58 +342,52 @@ function ReadyMadeConfigModal({
 
           {has("coupon") && (
             <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Cupom (opcional)</p>
-              {coupons.length === 0 ? (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Nenhum cupom ativo. Crie cupons na aba <span className="font-semibold">Promoções</span> para escolher aqui.
-                </p>
-              ) : (
-                <div className="rounded-xl border border-line">
-                  {/* Barra que expande/recolhe */}
-                  <button
-                    onClick={() => setCouponOpen((v) => !v)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-                  >
-                    <span className="text-sm text-ink">
-                      {coupon ? (
-                        <>Cupom: <span className="font-bold">{coupon.toUpperCase()}</span></>
-                      ) : (
-                        <span className="text-muted">Escolher cupom</span>
-                      )}
-                    </span>
-                    <svg className={`h-4 w-4 shrink-0 text-muted transition-transform ${couponOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Cupom de desconto (opcional)</p>
 
-                  {couponOpen && (
-                    <div className="max-h-56 overflow-y-auto border-t border-line">
+              {/* Tipo do benefício */}
+              <div className="flex gap-2">
+                {([
+                  { key: null,          label: "Sem cupom" },
+                  { key: "PERCENTAGE",  label: "Porcentagem" },
+                  { key: "FIXED",       label: "Valor em R$" },
+                ] as { key: CouponType | null; label: string }[]).map((opt) => {
+                  const active = (coupon?.type ?? null) === opt.key;
+                  return (
+                    <button
+                      key={opt.label}
+                      onClick={() => setCoupon(opt.key === null ? null : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1] })}
+                      className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${active ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Valores fixos */}
+              {coupon && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(coupon.type === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS).map((v) => {
+                    const active = coupon.value === v;
+                    return (
                       <button
-                        onClick={() => { setCoupon(""); setCouponOpen(false); }}
-                        className={`flex w-full items-center px-3 py-2.5 text-left text-sm hover:bg-[#FAFAF8] ${coupon === "" ? "bg-brand-50 font-semibold text-ink" : "text-ink2"}`}
+                        key={v}
+                        onClick={() => setCoupon({ type: coupon.type, value: v })}
+                        className={`rounded-xl border px-3.5 py-2 text-sm font-bold transition-colors ${active ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
                       >
-                        Sem cupom
+                        {coupon.type === "PERCENTAGE" ? `${v}%` : `R$ ${v}`}
                       </button>
-                      {coupons.map((cp) => {
-                        const selected = coupon.toUpperCase() === cp.code;
-                        return (
-                          <button
-                            key={cp.code}
-                            onClick={() => { setCoupon(cp.code); setCouponOpen(false); }}
-                            className={`flex w-full items-center justify-between gap-3 border-t border-line px-3 py-2.5 text-left hover:bg-[#FAFAF8] ${selected ? "bg-brand-50" : ""}`}
-                          >
-                            <span className="text-sm font-bold text-ink">{cp.code}</span>
-                            <span className="text-xs text-muted">{cp.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               )}
-              <p className="mt-1.5 text-[11px] text-muted">
-                Se você escolher um cupom, deixe a mensagem avisando que o cliente ganhou um cupom.
-              </p>
+
+              {coupon && (
+                <p className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
+                  O cliente ganha <span className="font-bold">{couponLabel(coupon)}</span> na carteira ao receber a mensagem —
+                  usável só em compras online. Deixe a mensagem avisando que ele ganhou o cupom.
+                </p>
+              )}
             </div>
           )}
 

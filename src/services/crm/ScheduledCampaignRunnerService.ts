@@ -71,6 +71,8 @@ export interface RecurringScheduleConfig {
   dailyLimit:     number;
   /** Event-based campaigns: days after the event to target (review, 2nd purchase). */
   triggerDays?:   number;
+  /** Card-defined coupon granted to each recipient's wallet on send. */
+  coupon?:        { type: "PERCENTAGE" | "FIXED"; value: number } | null;
   endCondition:   "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   endDate?:       string | null;                // "YYYY-MM-DD"
   maxTotal?:      number | null;
@@ -492,7 +494,7 @@ export class ScheduledCampaignRunnerService {
       allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride,
       campaignFamilyKey: familyKey || null,
       messageFingerprint: fingerprint || null,
-    }, { abortOnInstanceCollapse });
+    }, { abortOnInstanceCollapse, coupon: cfg.coupon ?? null });
 
     // Check end conditions
     const totalSentAfter      = (campaign.totalSent ?? 0) + sent;
@@ -1007,12 +1009,13 @@ export class ScheduledCampaignRunnerService {
     const fingerprint = campaign.messageFingerprint || generateMessageFingerprint(campaign.message);
     const startedAt = new Date();
 
+    const reproCoupon = (campaign.scheduleConfig as RecurringScheduleConfig | null)?.coupon ?? null;
     const send = await this._sendBatch(
-      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig, couponCode: campaign.couponCode },
+      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig },
       customers,
       safety,
       { allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride, campaignFamilyKey: campaign.campaignFamilyKey ?? null, messageFingerprint: fingerprint || null },
-      { abortOnInstanceCollapse: true },
+      { abortOnInstanceCollapse: true, coupon: reproCoupon },
     );
 
     // Per-recipient log = the NEW execution rows created during this run.
@@ -1051,12 +1054,18 @@ export class ScheduledCampaignRunnerService {
     campaign: {
       id: string; restaurantId: string; name: string; status: string;
       message: string; templateId: string | null; targetSegment: string | null;
-      objective: string | null; audienceConfig: unknown; couponCode?: string | null;
+      objective: string | null; audienceConfig: unknown;
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
     governance?: { allowWeeklyCapOverride: boolean; campaignFamilyKey: string | null; messageFingerprint: string | null },
-    runOpts: { abortOnInstanceCollapse?: boolean } = {},
+    runOpts: {
+      abortOnInstanceCollapse?: boolean;
+      /** Card-defined coupon to credit to each customer's wallet on a successful send. */
+      coupon?: { type: "PERCENTAGE" | "FIXED"; value: number } | null;
+      /** Days the granted coupon stays valid. */
+      couponValidityDays?: number | null;
+    } = {},
   ): Promise<{ sent: number; failed: number; blocked: number; skipped: number; aborted: boolean }> {
     // Check if Meta CRM is enabled
     const metaCfgRow = await prisma.metaWhatsAppConfig.findUnique({
@@ -1311,14 +1320,15 @@ export class ScheduledCampaignRunnerService {
 
         sent++;
 
-        // Coupon wallet: if this campaign grants a coupon, credit it to the
-        // customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
+        // Coupon wallet: if this campaign grants a card-defined coupon, credit it to
+        // the customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
         // never break a successful send.
-        if (campaign.couponCode) {
+        if (runOpts.coupon) {
           await CustomerCouponService.grant({
             restaurantId:     campaign.restaurantId,
             customerId:       customer.id,
-            couponCode:       campaign.couponCode,
+            coupon:           runOpts.coupon,
+            validityDays:     runOpts.couponValidityDays ?? null,
             sourceCampaignId: campaign.id,
           }).catch((e) => console.error(`[ReadyMade] coupon grant failed for ${customer.id}:`, e));
         }

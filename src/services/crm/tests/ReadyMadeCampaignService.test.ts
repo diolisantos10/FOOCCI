@@ -48,7 +48,7 @@ describe("getStates", () => {
   it("reflects an active recurring campaign and its edited content", async () => {
     db.campaign.findMany.mockResolvedValue([
       { id: "c1", templateId: "recuperar-frios", status: "ACTIVE", message: "Texto editado {nome}",
-        couponCode: "VOLTA20", scheduleConfig: { mode: "RECURRING", dailyLimit: 8, weekdays: [1,2], timeWindow: { start: "18:00", end: "21:00" } } },
+        scheduleConfig: { mode: "RECURRING", dailyLimit: 8, weekdays: [1,2], timeWindow: { start: "18:00", end: "21:00" }, coupon: { type: "FIXED", value: 20 } } },
     ]);
     const states = await ReadyMadeCampaignService.getStates("r1");
     const frio = states.find((s) => s.id === "recuperar-frios")!;
@@ -56,13 +56,13 @@ describe("getStates", () => {
     expect(frio.status).toBe("ACTIVE");
     expect(frio.campaignId).toBe("c1");
     expect(frio.message).toBe("Texto editado {nome}");
-    expect(frio.couponCode).toBe("VOLTA20");
+    expect(frio.coupon).toEqual({ type: "FIXED", value: 20 });
     expect(frio.dailyLimit).toBe(8);
   });
 
   it("a PAUSED campaign reads as inactive", async () => {
     db.campaign.findMany.mockResolvedValue([
-      { id: "c2", templateId: "clientes-vip", status: "PAUSED", message: "x", couponCode: null, scheduleConfig: null },
+      { id: "c2", templateId: "clientes-vip", status: "PAUSED", message: "x", scheduleConfig: null },
     ]);
     const states = await ReadyMadeCampaignService.getStates("r1");
     expect(states.find((s) => s.id === "clientes-vip")!.active).toBe(false);
