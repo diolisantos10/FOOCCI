@@ -50,6 +50,7 @@ export { onEngineFailure } from "./engines/EngineFallbackPolicy";
 export * from "./runtime/BrainFreeFormConfigService";
 export * from "./runtime/freeFormGovernance";
 export * from "./runtime/BrainShadowEvidenceService";
+export { replayShadowFromHistory } from "./runtime/ShadowReplayService";
 
 // director — approve→apply bridge (Fase 3)
 export { applyChangeRequest } from "./director/ChangeRequestApplier";
