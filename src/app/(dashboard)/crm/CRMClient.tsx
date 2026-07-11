@@ -163,6 +163,21 @@ type CampaignHistoryRow = {
   failureBreakdown?: Record<string, number> | null;
 };
 
+type ActivityRow = {
+  id:            string;
+  campaignId:    string | null;
+  campaignName:  string;
+  customerName:  string | null;
+  customerPhone: string | null;
+  messageText:   string | null;
+  status:        string;
+  kind:          string;
+  badge:         string;
+  at:            string;
+  converted:     boolean;
+  revenue:       number | null;
+};
+
 type CampaignExecutionRow = {
   id:               string;
   customerId:       string;
@@ -3931,6 +3946,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .then((json) => setCampaigns(json.data ?? []))
       .catch(() => {})
       .finally(() => setLoadingHistory(false));
+    // Live send log (updates as the recurring campaigns fire).
+    fetch("/api/crm/activity")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setActivity(json.data?.activity ?? []))
+      .catch(() => {});
   }, [readyMadeReload]);
 
   useEffect(() => {
@@ -4061,6 +4081,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
   const [showMoreTemplates, setShowMoreTemplates] = useState(false);
   const [showHistory,       setShowHistory]       = useState(false);
+  const [activity,          setActivity]          = useState<ActivityRow[]>([]);
 
   const visibleTemplates = showMoreTemplates ? ACTION_TEMPLATES : ACTION_TEMPLATES.slice(0, 6);
   const historyRows = campaigns.filter((c) => HISTORY_STATUSES.has(c.status));
@@ -4129,21 +4150,53 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
-            Ver histórico
-            {historyRows.length > 0 && (
+            Ver histórico geral
+            {activity.length > 0 && (
               <span className="rounded-full bg-[#F4F4F2] px-2 py-0.5 text-[10px] font-bold text-ink2">
-                {historyRows.length}
+                {activity.length}
               </span>
             )}
           </button>
 
           {showHistory && (
-            <div className="mt-3">
-              {historyRows.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-line py-6 text-center text-xs text-muted">
-                  Nenhuma campanha concluída ainda.
-                </div>
-              ) : (
+            <div className="mt-3 space-y-4">
+              {/* Histórico geral de envios — log ao vivo com data e hora */}
+              <div>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Envios recentes (ao vivo)</p>
+                {activity.length === 0 ? (
+                  <div className="rounded-2xl border-2 border-dashed border-line py-6 text-center text-xs text-muted">
+                    Nenhum envio registrado ainda. Assim que uma campanha disparar, aparece aqui.
+                  </div>
+                ) : (
+                  <div className="max-h-96 space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-paper p-2 shadow-sm">
+                    {activity.map((a) => {
+                      const tone = a.kind === "SENT" ? { bg: "bg-green-50", text: "text-green-700" }
+                        : a.kind === "BLOCKED" ? { bg: "bg-amber-50", text: "text-amber-700" }
+                        : a.kind === "FAILED" ? { bg: "bg-red-50", text: "text-red-600" }
+                        : { bg: "bg-[#F4F4F2]", text: "text-ink2" };
+                      const when = new Date(a.at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+                      return (
+                        <div key={a.id} className="flex items-center gap-3 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-ink">{a.campaignName}</p>
+                            <p className="truncate text-[10px] text-muted">{a.customerName ?? "Cliente"} · {a.customerPhone ?? "—"}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}>{a.badge}</span>
+                            <p className="mt-0.5 text-[10px] text-muted whitespace-nowrap">🕒 {when}</p>
+                            {a.converted && a.revenue != null && (
+                              <p className="text-[10px] font-semibold text-green-600">R$ {a.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Campanhas encerradas / rascunhos */}
+              {historyRows.length === 0 ? null : (
                 <div className="space-y-2">
                   {historyRows.map((c) => {
                     const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
