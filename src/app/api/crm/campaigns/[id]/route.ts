@@ -168,7 +168,7 @@ export async function PATCH(
     }
 
     const body = await req.json() as {
-      action?:          "pause" | "resume" | "cancel" | "reactivate";
+      action?:          "pause" | "resume" | "cancel" | "reactivate" | "clear-metrics";
       name?:            string;
       message?:         string;
       targetSegment?:   string;
@@ -178,9 +178,23 @@ export async function PATCH(
       scheduleConfig?:  Record<string, unknown> | null;
     };
 
-    // ── lifecycle actions (pause / resume / cancel / reactivate) ──
+    // ── lifecycle actions (pause / resume / cancel / reactivate / clear-metrics) ──
     if (body.action) {
       const currentStatus = campaign.status as string;
+
+      // clear-metrics: zero THIS campaign's counters and delete its failed/blocked
+      // log rows (keep successful sends for dedup). Lets the owner wipe the old
+      // failure numbers straight from the campaign screen, without touching others.
+      if (body.action === "clear-metrics") {
+        await prisma.campaign.update({
+          where: { id: params.id },
+          data:  { totalSent: 0, totalFailed: 0, totalRead: 0, totalResponded: 0, totalConverted: 0, totalRevenue: 0 },
+        });
+        await prisma.campaignExecution.deleteMany({
+          where: { campaignId: params.id, status: { notIn: ["SENT", "DELIVERED", "READ"] as never[] } },
+        }).catch(() => {});
+        return ok({ id: params.id, status: currentStatus });
+      }
 
       // reactivate: restore a COMPLETED recurring campaign back to ACTIVE.
       // Needed to recover campaigns stuck COMPLETED by the premature-exhaustion bug.

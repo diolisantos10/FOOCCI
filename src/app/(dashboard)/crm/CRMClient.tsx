@@ -1961,6 +1961,23 @@ function CampaignManageModal({
       .catch(() => {});
   }, [detailId]);
 
+  const [clearingMetrics, setClearingMetrics] = useState(false);
+  async function handleClearMetrics() {
+    if (!detail) return;
+    if (!confirm("Zerar os números (enviados, falhas, receita) e apagar o histórico de falhas desta campanha?\n\nMantém os envios bem-sucedidos e não reenvia mensagens.")) return;
+    setClearingMetrics(true);
+    try {
+      const res = await fetch(`/api/crm/campaigns/${detail.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear-metrics" }),
+      });
+      if (res.ok) {
+        reloadDetail();
+        onCampaignUpdated?.(detail.id, { totalSent: 0, totalFailed: 0, totalResponded: 0, totalConverted: 0, totalRevenue: 0 });
+      }
+    } finally { setClearingMetrics(false); }
+  }
+
   const sc           = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" }) : null;
   const cfg          = detail?.scheduleConfig as ScheduleCfg | null | undefined;
   const isRecurring  = cfg?.mode === "RECURRING";
@@ -2559,6 +2576,17 @@ function CampaignManageModal({
                 {/* ── Performance ── */}
                 {activeTab === "performance" && (
                   <div className="space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2">
+                      <p className="text-[11px] text-muted">📨 As mensagens enviadas aparecem na lista <strong>&quot;Mensagens enviadas&quot;</strong> logo abaixo (com data, hora e texto).</p>
+                      <button
+                        onClick={handleClearMetrics}
+                        disabled={clearingMetrics}
+                        className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                        title="Zera os números e apaga o histórico de falhas só desta campanha."
+                      >
+                        {clearingMetrics ? "Limpando…" : "🧹 Limpar falhas desta campanha"}
+                      </button>
+                    </div>
                     {(() => {
                       const perf = detail.performance;
                       const cycle = detail.currentCyclePerformance;
