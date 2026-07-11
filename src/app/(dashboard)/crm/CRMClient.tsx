@@ -5544,7 +5544,7 @@ function CrmConfiguracoes() {
         <p className="mt-0.5 text-xs text-muted">Ajuste tudo a partir daqui.</p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
-            { href: "/settings/marketing", emoji: "💰", title: "Orçamento de envio", sub: "Limite diário, por ciclo, distribuição" },
+            { href: "/settings/marketing", emoji: "💬", title: "Configuração do WhatsApp", sub: "Limites e regras de envio de mensagens" },
             { href: "/crm?tab=programa",   emoji: "🏆", title: "Níveis dos clientes", sub: "Bronze, Prata, Ouro, Diamante" },
             { href: "/marca",              emoji: "⭐", title: "Links de avaliação",  sub: "Google e iFood" },
           ].map((s) => (
@@ -5714,13 +5714,16 @@ function CrmConfiguracoes() {
             <div className="grid gap-5 sm:grid-cols-2">
               <CfgField
                 label="Limite total de contatos"
-                hint="Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
+                hint={cfg.manualOverride
+                  ? "Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
+                  : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” lá em cima para editar."}
               >
                 <input
                   type="number" min={0} max={1000000}
                   value={cfg.contactBudgetTotal}
+                  disabled={!cfg.manualOverride}
                   onChange={(e) => set("contactBudgetTotal", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className={CFG_INPUT}
+                  className={`${CFG_INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
                 />
               </CfgField>
 

@@ -337,15 +337,18 @@ export default function MarketingSettingsPage() {
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
               <Field
                 label="Limite total de contatos"
-                hint="Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
+                hint={cfg.manualOverride
+                  ? "Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
+                  : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” para editar."}
               >
                 <input
                   type="number"
                   min={0}
                   max={1000000}
                   value={numStr(total)}
+                  disabled={!cfg.manualOverride}
                   onChange={(e) => set("contactBudgetTotal", parseNum(e.target.value, 0))}
-                  className={INPUT}
+                  className={`${INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
                 />
               </Field>
 
