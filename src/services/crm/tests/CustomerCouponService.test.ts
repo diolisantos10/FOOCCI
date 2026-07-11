@@ -162,6 +162,27 @@ describe("CustomerCouponService.monthlySpend", () => {
     db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: null } });
     expect(await CustomerCouponService.monthlySpend("r1", NOW)).toBe(0);
   });
+  it("excludes expired-unused coupons from the committed amount (reserve returns)", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 10 } });
+    await CustomerCouponService.monthlySpend("r1", NOW);
+    const where = db.customerCoupon.aggregate.mock.calls[0]![0].where;
+    // Only USED, or ACTIVE-and-not-expired, count against the budget.
+    expect(where.OR).toEqual([
+      { status: "USED" },
+      { status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: NOW } }] },
+    ]);
+  });
+});
+
+describe("CustomerCouponService.monthlyUsedStats", () => {
+  it("counts only coupons actually redeemed this month (real spend)", async () => {
+    db.customerCoupon.aggregate.mockResolvedValue({ _sum: { costEstimate: 24 }, _count: { id: 3 } });
+    const r = await CustomerCouponService.monthlyUsedStats("r1", NOW);
+    expect(r).toEqual({ count: 3, spend: 24 });
+    const where = db.customerCoupon.aggregate.mock.calls[0]![0].where;
+    expect(where).toMatchObject({ restaurantId: "r1", status: "USED" });
+    expect(where.usedAt.gte).toEqual(new Date(NOW.getFullYear(), NOW.getMonth(), 1));
+  });
 });
 
 describe("CustomerCouponService.findRedeemable", () => {

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays, couponSpentThisMonth] = await Promise.all([
+    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays, couponSpentThisMonth, couponUsedThisMonth] = await Promise.all([
       prisma.restaurantCRMProfile.findUnique({
         where:  { restaurantId: ctx.restaurantId },
         select: { whatsAppSafetyConfig: true },
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       getConsumedContactCount(ctx.restaurantId),
       getNumberAgeDays(ctx.restaurantId),
       CustomerCouponService.monthlySpend(ctx.restaurantId),
+      CustomerCouponService.monthlyUsedStats(ctx.restaurantId),
     ]);
 
     const raw       = parseSafetyConfig(profile?.whatsAppSafetyConfig);
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
     return ok({
       ...raw,
       todaySent, weekSent, contactBudgetUsed, couponSpentThisMonth,
+      couponUsedCount: couponUsedThisMonth.count, couponUsedSpend: couponUsedThisMonth.spend,
       warmup:    { ageDays, safeDailyLimit: warmupDailyLimit(ageDays) },
       effective,
     });

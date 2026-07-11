@@ -5492,7 +5492,9 @@ function CrmConfiguracoes() {
   const [error,   setError]   = useState<string | null>(null);
   const [cfg, setCfg]         = useState<SafetyCfg>({ ...DEFAULT_CFG });
   const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number }>({ ageDays: 0, safeDailyLimit: 20 });
-  const [couponSpent, setCouponSpent] = useState(0);
+  const [couponSpent, setCouponSpent] = useState(0);       // comprometido (distribuído, não expirado)
+  const [couponUsedSpend, setCouponUsedSpend] = useState(0); // gasto real (cupons usados)
+  const [couponUsedCount, setCouponUsedCount] = useState(0); // qtd de cupons usados
 
   useEffect(() => {
     fetch("/api/settings/crm-safety")
@@ -5502,6 +5504,8 @@ function CrmConfiguracoes() {
           setCfg({ ...DEFAULT_CFG, ...data });
           if (data.warmup) setWarmup(data.warmup);
           if (typeof data.couponSpentThisMonth === "number") setCouponSpent(data.couponSpentThisMonth);
+          if (typeof data.couponUsedSpend === "number") setCouponUsedSpend(data.couponUsedSpend);
+          if (typeof data.couponUsedCount === "number") setCouponUsedCount(data.couponUsedCount);
         }
       })
       .catch(() => {})
@@ -5790,50 +5794,54 @@ function CrmConfiguracoes() {
       {/* A3 — Orçamento de cupons (mensal, em R$) */}
       <CfgCard
         title="Orçamento de cupons (mensal)"
-        subtitle="Teto em dinheiro para os cupons que o CRM distribui automaticamente no mês. Cada cupom concedido desconta o custo estimado. Quando o orçamento acaba, a mensagem continua sendo enviada, mas sem o cupom. 0 = sem limite."
+        subtitle="Teto em dinheiro para os cupons que o CRM distribui no mês. IMPORTANTE: distribuir um cupom só RESERVA o valor — o gasto de verdade acontece quando o cliente USA o cupom numa compra. Cupom que expira sem uso volta pro orçamento. 0 = sem limite."
       >
         {(() => {
           const budget = cfg.couponMonthlyBudget || 0;
           const on     = budget > 0;
-          const spent  = couponSpent || 0;
-          const remaining = on ? Math.max(0, budget - spent) : 0;
-          const pct    = on ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+          const committed = couponSpent || 0;   // distribuído e ainda válido (reserva)
+          const used   = couponUsedSpend || 0;  // gasto real (usado em compra)
+          const remaining = on ? Math.max(0, budget - committed) : 0;
+          const pct    = on ? Math.min(100, Math.round((committed / budget) * 100)) : 0;
           const low    = on && remaining <= Math.max(1, Math.round(budget * 0.1));
           const brl    = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
           return (
             <div className="space-y-5">
               {/* Painel de números */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">💰 Gasto de verdade</p>
+                  <p className="mt-1 text-xl font-bold text-emerald-700">{brl(used)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted">{couponUsedCount} cupom{couponUsedCount === 1 ? "" : "s"} usado{couponUsedCount === 1 ? "" : "s"} em compras</p>
+                </div>
                 <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Orçamento mensal</p>
-                  <p className="mt-1 text-xl font-bold text-ink">{on ? brl(budget) : "Sem limite"}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Distribuído (reservado)</p>
+                  <p className="mt-1 text-xl font-bold text-ink">{brl(committed)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted">cupons entregues, ainda não usados</p>
                 </div>
                 <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Disponível este mês</p>
                   <p className={`mt-1 text-xl font-bold ${!on ? "text-ink" : low ? "text-amber-600" : "text-emerald-600"}`}>
-                    {on ? brl(remaining) : "—"}
+                    {on ? brl(remaining) : "Sem limite"}
                   </p>
                   {on && <p className="mt-0.5 text-[11px] text-muted">de {brl(budget)}</p>}
                 </div>
-                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Gasto este mês</p>
-                  <p className="mt-1 text-xl font-bold text-ink">{brl(spent)}</p>
-                </div>
               </div>
 
-              {/* Barra de progresso */}
+              {/* Barra de progresso (reserva vs orçamento) */}
               {on ? (
                 <div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
                     <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                   </div>
                   <p className="mt-1.5 text-xs text-muted">
-                    {brl(spent)} de {brl(budget)} usados ({pct}%){low ? " · orçamento baixo, avalie aumentar." : "."}
+                    {brl(committed)} reservados de {brl(budget)} ({pct}%) · {brl(used)} gastos de verdade
+                    {low ? " · orçamento baixo, avalie aumentar." : "."}
                   </p>
                 </div>
               ) : (
                 <p className="text-xs text-muted">
-                  Orçamento desligado — cupons são distribuídos sem limite de gasto. Já foram gastos <strong>{brl(spent)}</strong> este mês.
+                  Orçamento desligado — cupons são distribuídos sem limite. Gasto real este mês: <strong>{brl(used)}</strong> ({couponUsedCount} usados).
                   Defina um valor abaixo para ativar o controle.
                 </p>
               )}

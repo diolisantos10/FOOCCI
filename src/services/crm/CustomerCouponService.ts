@@ -108,14 +108,41 @@ export class CustomerCouponService {
     return { granted: true, couponId: created.id, expiresAt };
   }
 
-  /** Total estimated R$ cost of coupons granted this calendar month. */
+  /**
+   * Amount COMMITTED against the monthly budget: coupons granted this month that
+   * were either USED or are still ACTIVE and not yet expired. An ACTIVE coupon that
+   * expired unused is NOT committed — its reserve returns to the budget ("volta pro
+   * valor"). Used by the grant enforcement + the "disponível" display.
+   */
   static async monthlySpend(restaurantId: string, now: Date = new Date()): Promise<number> {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const agg = await prisma.customerCoupon.aggregate({
-      where:  { restaurantId, grantedAt: { gte: monthStart } },
-      _sum:   { costEstimate: true },
+      where: {
+        restaurantId,
+        grantedAt: { gte: monthStart },
+        OR: [
+          { status: "USED" },
+          { status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        ],
+      },
+      _sum: { costEstimate: true },
     });
     return Number(agg._sum.costEstimate ?? 0);
+  }
+
+  /**
+   * ACTUAL spend this month = coupons REDEEMED in a purchase (status USED, usedAt in
+   * this month). This is the real CRM investment — a coupon only costs money when the
+   * customer actually uses it. Returns the count of redemptions + the R$ spent.
+   */
+  static async monthlyUsedStats(restaurantId: string, now: Date = new Date()): Promise<{ count: number; spend: number }> {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const agg = await prisma.customerCoupon.aggregate({
+      where:  { restaurantId, status: "USED", usedAt: { gte: monthStart } },
+      _sum:   { costEstimate: true },
+      _count: { id: true },
+    });
+    return { count: agg._count.id, spend: Number(agg._sum.costEstimate ?? 0) };
   }
 
   /**
