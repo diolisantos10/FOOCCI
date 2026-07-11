@@ -3376,11 +3376,11 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold">Nome</th>
               <th className="py-2.5 px-2 font-semibold">Tipo</th>
               <th className="py-2.5 px-2 font-semibold">Público</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
               <th className="py-2.5 px-2 font-semibold text-right" title="Cupons concedidos pela campanha que foram resgatados">Cupons usados</th>
               <th className="py-2.5 px-2 font-semibold text-right" title="Cupons usados ÷ cupons enviados">Conversão</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
-              <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold">Agenda</th>
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
             </tr>
@@ -3489,6 +3489,13 @@ function CampanhasAtivasSection({
                     </span>
                   </td>
 
+                  {/* Receita — coluna mais importante, vem primeiro */}
+                  <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
+                    {Number(c.totalRevenue) > 0
+                      ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                      : <span className="text-muted font-normal">—</span>}
+                  </td>
+
                   {/* Enviados */}
                   <td className="py-3 px-2 text-right tabular-nums text-blue-700">
                     {c.totalSent > 0 ? c.totalSent : "—"}
@@ -3527,13 +3534,6 @@ function CampanhasAtivasSection({
                     ) : (
                       <span className="text-muted">—</span>
                     )}
-                  </td>
-
-                  {/* Receita */}
-                  <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
-                    {Number(c.totalRevenue) > 0
-                      ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                      : <span className="text-muted font-normal">—</span>}
                   </td>
 
                   {/* Agenda: time window on line 1, cadence on line 2 */}
