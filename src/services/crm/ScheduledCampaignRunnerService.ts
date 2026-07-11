@@ -1152,6 +1152,12 @@ export class ScheduledCampaignRunnerService {
     let skipped     = 0; // recipient-data skips (no/invalid phone) — never failures
     let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
     let aborted     = false; // set when a hard instance collapse stops the batch early
+    // Circuit breaker: if the WhatsApp session is unhealthy, Evolution rejects EVERY
+    // send (HTTP 500, or a 400 wrapping "Connection Closed"). Without this we hammer
+    // the whole audience and rack up hundreds of failures. After N consecutive
+    // instance/provider failures we stop the batch — a reconnect is needed, not more tries.
+    let consecutiveInstanceFailures = 0;
+    const INSTANCE_COLLAPSE_THRESHOLD = 5;
 
     for (const customer of customers) {
       // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
@@ -1347,6 +1353,7 @@ export class ScheduledCampaignRunnerService {
         });
 
         sent++;
+        consecutiveInstanceFailures = 0; // a success proves the session is alive
 
         // Coupon wallet: if this campaign grants a card-defined coupon, credit it to
         // the customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
@@ -1384,9 +1391,29 @@ export class ScheduledCampaignRunnerService {
         });
         failed++;
 
-        // Manual reprocess only: if the Evolution instance has hard-collapsed
-        // mid-batch, stop remaining sends and return a partial result instead of
-        // hammering a dead session. The cron path passes no flag → unchanged.
+        // Is this an INSTANCE/session failure (vs a genuine per-number bad request)?
+        // A session-wrapped 400, a 500, a timeout or a disconnect all mean the
+        // WhatsApp session is unhealthy — retrying the next recipient will fail too.
+        const cls = classifyExecution({ status: "FAILED", failedReason: errMsg, errorMessage: errorCode });
+        const isInstanceFailure =
+          cls.category === "EVOLUTION_INSTANCE_DISCONNECTED" ||
+          cls.category === "FAILED_PROVIDER" ||
+          cls.category === "FAILED_TIMEOUT" ||
+          cls.category === "EVOLUTION_AUTH_ERROR";
+        consecutiveInstanceFailures = isInstanceFailure ? consecutiveInstanceFailures + 1 : 0;
+
+        // Circuit breaker (all paths, incl. cron): once the session is clearly
+        // collapsed, stop the batch instead of hammering the whole audience and
+        // racking up hundreds of identical failures. A reconnect is what's needed.
+        if (consecutiveInstanceFailures >= INSTANCE_COLLAPSE_THRESHOLD) {
+          console.warn(`[CampaignRunner] instance collapse — aborting batch after ${consecutiveInstanceFailures} consecutive failures`, {
+            campaignId: campaign.id, lastError: errorCode,
+          });
+          aborted = true;
+          break;
+        }
+
+        // Manual reprocess: also verify liveness explicitly and stop early.
         if (runOpts.abortOnInstanceCollapse) {
           const liveStatus = evoConfig ? await EvolutionClient.getInstanceStatus(evoConfig).catch(() => null) : null;
           if (!liveStatus || liveStatus.state !== "open") { aborted = true; break; }
