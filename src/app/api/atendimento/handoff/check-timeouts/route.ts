@@ -56,10 +56,11 @@ export async function POST(req: NextRequest) {
         },
       },
       select: {
-        id:            true,
-        customerName:  true,
-        lastMessageAt: true,
-        customer:      { select: { name: true } },
+        id:                true,
+        customerName:      true,
+        lastMessageAt:     true,
+        handoffAlarmAckAt: true,
+        customer:          { select: { name: true } },
         messages: {
           orderBy: { sentAt: "desc" },
           take:    1,
@@ -72,11 +73,12 @@ export async function POST(req: NextRequest) {
 
     const overdue = selectOverdueHandoffs(
       candidates.map((c) => ({
-        id:             c.id,
-        customerName:   c.customerName ?? c.customer?.name ?? null,
-        lastMessageAt:  c.lastMessageAt,
-        lastDirection:  c.messages[0]?.direction ?? null,
-        lastSenderType: c.messages[0]?.senderType ?? null,
+        id:                c.id,
+        customerName:      c.customerName ?? c.customer?.name ?? null,
+        lastMessageAt:     c.lastMessageAt,
+        lastDirection:     c.messages[0]?.direction ?? null,
+        lastSenderType:    c.messages[0]?.senderType ?? null,
+        handoffAlarmAckAt: c.handoffAlarmAckAt,
       })),
       now,
       thresholdMs,

@@ -77,6 +77,9 @@ async function fetchRows(
       customerName:      true,
       customerPhone:     true,
       lastMessageAt:     true,
+      // Drives the app-wide alarm's "already acknowledged → stay silent" rule
+      // (GlobalAlertEngine base poll + AtendimentoClient pending selector).
+      handoffAlarmAckAt: true,
       unreadCount:       true,
       createdAt:         true,
       contextType:       true,

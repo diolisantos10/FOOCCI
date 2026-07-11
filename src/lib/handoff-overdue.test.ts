@@ -94,4 +94,22 @@ describe("selectOverdueHandoffs", () => {
       { id: "a", customer: "Ana", waitingMinutes: 12 },
     ]);
   });
+
+  it("G — an acknowledged handoff (ack ≥ last message) stays silent", () => {
+    const r = selectOverdueHandoffs(
+      [cand({ lastMessageAt: minsAgo(20), handoffAlarmAckAt: minsAgo(19) })], // acked after the wait began
+      now,
+      THRESHOLD,
+    );
+    expect(r).toEqual([]);
+  });
+
+  it("H — a NEWER customer message (after the ack) re-arms the overdue alert", () => {
+    const r = selectOverdueHandoffs(
+      [cand({ id: "re", lastMessageAt: minsAgo(12), handoffAlarmAckAt: minsAgo(30) })], // customer messaged again post-ack
+      now,
+      THRESHOLD,
+    );
+    expect(r.map((o) => o.id)).toEqual(["re"]);
+  });
 });

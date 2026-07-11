@@ -25,6 +25,10 @@ export interface OverdueCandidate {
   lastDirection: string | null;
   /** senderType of the most recent message: CUSTOMER | AI | HUMAN | SYSTEM. */
   lastSenderType: string | null;
+  /** When the operator acknowledged this alarm ("Estou ciente"/"Silenciar").
+   *  An ack at or after the customer's last message silences the overdue alert;
+   *  a NEWER customer message (lastMessageAt > ack) re-arms it. */
+  handoffAlarmAckAt?: Date | null;
 }
 
 export interface OverdueHandoff {
@@ -65,6 +69,9 @@ export function selectOverdueHandoffs(
   for (const c of candidates) {
     if (!c.lastMessageAt) continue;
     if (!isAwaitingHumanReply(c)) continue;
+    // Operator acknowledged this alarm and no newer customer message has arrived
+    // since → stay silent. A later customer message (lastMessageAt > ack) re-arms.
+    if (c.handoffAlarmAckAt && c.handoffAlarmAckAt.getTime() >= c.lastMessageAt.getTime()) continue;
     const elapsed = now.getTime() - c.lastMessageAt.getTime();
     if (elapsed < thresholdMs) continue;
     out.push({

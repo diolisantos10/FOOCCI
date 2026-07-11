@@ -94,6 +94,9 @@ interface ConvSummary {
   customerName:        string | null;
   customerPhone:       string | null;
   contextType:         string | null;
+  /** Server-persisted "Estou ciente" acknowledgement — silences the alarm
+   *  app-wide/cross-device until a fresh escalation clears it. */
+  handoffAlarmAckAt?:  string | null;
   hasCustomerReplied?: boolean;
   /** True when the conversation received any CRM outbound (contextType OR send log). */
   crmSent?:            boolean;
@@ -569,8 +572,21 @@ export function AtendimentoClient({
   }, [soundIds, handoffSoundEnabled]);
 
   const acknowledgePendingHuman = useCallback(() => {
+    // Instant local silence for snappy UX…
     setAcknowledgedHumanIds(new Set(pendingHumanIds));
-  }, [pendingHumanIds]);
+    // …plus a DURABLE server-side acknowledgement so the app-wide alarm stays
+    // silent for these conversations on EVERY page and EVERY device (not just
+    // this tab). Fire-and-forget; the next list refresh reflects it.
+    if (pendingHumanIds.length > 0) {
+      void fetch("/api/atendimento/handoff/acknowledge", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ ids: pendingHumanIds }),
+      })
+        .then(() => fetchList())
+        .catch(() => { /* local ack already silenced this tab; next poll retries */ });
+    }
+  }, [pendingHumanIds, fetchList]);
 
   const viewFirstPendingHuman = useCallback(() => {
     if (pendingHumanIds[0]) setSelectedId(pendingHumanIds[0]);
@@ -1033,7 +1049,19 @@ export function AtendimentoClient({
               </button>
               <button
                 type="button"
-                onClick={() => setAcknowledgedOverdueIds(new Set(overdueHandoffs.map((o) => o.id)))}
+                onClick={() => {
+                  const ids = overdueHandoffs.map((o) => o.id);
+                  setAcknowledgedOverdueIds(new Set(ids)); // instant local silence
+                  // Durable server-side ack so the overdue alarm stays silent
+                  // app-wide/cross-device until the customer messages again.
+                  if (ids.length > 0) {
+                    void fetch("/api/atendimento/handoff/acknowledge", {
+                      method:  "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body:    JSON.stringify({ ids }),
+                    }).catch(() => { /* local ack already silenced this tab */ });
+                  }
+                }}
                 disabled={alarmingOverdueIds.length === 0}
                 title="Silencia o som deste alerta sem resolver as conversas nem reativar a IA"
                 className="rounded-lg border border-red-300 bg-paper px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"

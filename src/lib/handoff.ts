@@ -35,7 +35,10 @@ export async function markConversationNeedsHuman(
   await prisma.$transaction([
     prisma.conversation.update({
       where: { id: conversationId },
-      data:  { status: ConversationStatus.HUMAN, aiEnabled: false },
+      // Clear any prior "Estou ciente" acknowledgement: this is a fresh human
+      // request, so the app-wide alarm must ring again even if an earlier
+      // handoff on this conversation had been acknowledged and silenced.
+      data:  { status: ConversationStatus.HUMAN, aiEnabled: false, handoffAlarmAckAt: null },
     }),
     prisma.message.create({
       data: {

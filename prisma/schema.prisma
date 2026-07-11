@@ -648,6 +648,12 @@ model Conversation {
   contextType       String? // INBOUND | CRM_CAMPAIGN | CRM_AUTOMATION | ORDER_SUPPORT | HUMAN_SUPPORT
   relatedCampaignId String? // denormalized Campaign.id — no FK; avoids cascade complexity
   resolvedAt        DateTime?
+  // Set when an operator hits "Estou ciente" / "Silenciar" on the human-attention
+  // alarm. Persists the acknowledgement server-side so the app-wide GlobalAlertEngine
+  // stops ringing for this conversation from EVERY page and EVERY device — not just
+  // the tab where Atendimento happens to be open. Cleared on a fresh escalation
+  // (markConversationNeedsHuman) so a genuinely new human request rings again.
+  handoffAlarmAckAt DateTime?
   lastMessageAt     DateTime? // updated on every new message; used for inbox sort
   unreadCount       Int                @default(0) // denormalized; reset when agent marks read
   createdAt         DateTime           @default(now())

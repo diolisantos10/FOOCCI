@@ -47,6 +47,23 @@ describe("pendingHumanRequestIds", () => {
     expect(ids).toEqual(["customer"]);
   });
 
+  it("excludes acknowledged conversations ('Estou ciente' persisted server-side)", () => {
+    const ids = pendingHumanRequestIds([
+      { id: "acked",   status: "HUMAN", handoffAlarmAckAt: "2026-07-11T12:00:00.000Z" }, // silenced app-wide
+      { id: "unacked", status: "HUMAN", handoffAlarmAckAt: null },                        // still ringing
+      { id: "fresh",   status: "HUMAN" },                                                 // undefined = never acked
+    ]);
+    expect(ids).toEqual(["unacked", "fresh"]);
+  });
+
+  it("an acknowledged conversation rings again once re-escalated clears its ack", () => {
+    // markConversationNeedsHuman nulls handoffAlarmAckAt on a fresh escalation.
+    const before = pendingHumanRequestIds([{ id: "c1", status: "HUMAN", handoffAlarmAckAt: new Date() }]);
+    const after  = pendingHumanRequestIds([{ id: "c1", status: "HUMAN", handoffAlarmAckAt: null }]);
+    expect(before).toEqual([]);
+    expect(after).toEqual(["c1"]);
+  });
+
   it("returns [] for no conversations", () => {
     expect(pendingHumanRequestIds([])).toEqual([]);
   });
