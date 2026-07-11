@@ -28,10 +28,14 @@ import {
   type ReadyMadeTiming,
 } from "./readyMadeCampaigns";
 
-/** Persisted on/off for non-campaign ready-made engines. */
+/** Persisted on/off + content for non-campaign ready-made engines. */
 export interface ReadyMadeConfig {
   /** Cart recovery is ON unless explicitly disabled (preserves legacy behavior). */
   cartRecoveryEnabled: boolean;
+  /** Owner-customized cart-recovery message (falls back to the catalog default). */
+  cartRecoveryMessage?: string | null;
+  /** Optional reward granted to the customer's wallet on a cart-recovery send. */
+  cartRecoveryCoupon?: ReadyMadeCoupon | null;
 }
 
 const ACTIVE_STATUSES = ["ACTIVE", "SCHEDULED"];
@@ -96,6 +100,10 @@ export function parseReadyMadeConfig(raw: unknown): ReadyMadeConfig {
   const r = raw as Record<string, unknown>;
   return {
     cartRecoveryEnabled: typeof r.cartRecoveryEnabled === "boolean" ? r.cartRecoveryEnabled : true,
+    cartRecoveryMessage: typeof r.cartRecoveryMessage === "string" ? r.cartRecoveryMessage : null,
+    cartRecoveryCoupon:  (r.cartRecoveryCoupon && typeof r.cartRecoveryCoupon === "object")
+      ? (r.cartRecoveryCoupon as ReadyMadeCoupon)
+      : null,
   };
 }
 
@@ -157,8 +165,8 @@ export class ReadyMadeCampaignService {
           active:      config.cartRecoveryEnabled,
           status:      null,
           campaignId:  null,
-          message:     rm.defaultMessage,
-          coupon:      null,
+          message:     config.cartRecoveryMessage?.trim() || rm.defaultMessage,
+          coupon:      config.cartRecoveryCoupon ?? null,
           weekdays:    rm.schedule.weekdays,
           timeWindow:  rm.schedule.timeWindow,
           dailyLimit:  rm.schedule.dailyLimit,
@@ -293,6 +301,15 @@ export class ReadyMadeCampaignService {
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     const rm = getReadyMadeCampaign(id);
     if (!rm) return { ok: false, error: "Campanha pronta não encontrada." };
+
+    // Cart recovery has no Campaign row — its message + reward live in the config.
+    if (rm.engine === "CART_RECOVERY") {
+      await setConfig(restaurantId, {
+        ...(overrides.message !== undefined ? { cartRecoveryMessage: overrides.message } : {}),
+        ...(overrides.coupon  !== undefined ? { cartRecoveryCoupon:  overrides.coupon  } : {}),
+      });
+      return { ok: true };
+    }
     if (rm.engine !== "RECURRING") return { ok: false, error: "Esta campanha não é editável." };
 
     const payload = buildReadyMadeCampaignPayload(rm, overrides);
