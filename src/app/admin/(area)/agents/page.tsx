@@ -8,6 +8,7 @@
  */
 
 import { getAdminAgentProfiles } from "@/services/agents/AgentProfileService";
+import { stripToneForFicha } from "@/services/agents/fichaVisibility";
 import { AgentsDashboard } from "./AgentsDashboard";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminAgentsPage() {
   let agents;
   try {
-    agents = await getAdminAgentProfiles();
+    agents = (await getAdminAgentProfiles()).map(stripToneForFicha);
   } catch {
     return (
       <div className="min-h-full bg-white px-8 py-6">

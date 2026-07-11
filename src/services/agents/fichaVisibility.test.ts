@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isToneSection, technicalExtendedEntries, TONE_EXTENDED_SECTIONS } from "./fichaVisibility";
+import { isToneSection, technicalExtendedEntries, stripToneForFicha, TONE_EXTENDED_SECTIONS } from "./fichaVisibility";
 import { DEFAULT_AGENT_PROFILES } from "./defaultAgentProfiles";
 
 const WAITER = DEFAULT_AGENT_PROFILES.find((p) => p.slug === "waiter")!;
@@ -57,6 +57,20 @@ describe("fichaVisibility — a ficha esconde tom, mantém o técnico", () => {
     expect(wr).not.toContain("Gatilho de desejo");
     const cr = CRM.businessRules.join(" ");
     expect(cr).not.toContain("PROMOÇÃO IMPERDÍVEL");
+  });
+
+  it("stripToneForFicha remove o tom do payload no servidor (não vaza p/ view-source)", () => {
+    const stripped = stripToneForFicha(WAITER);
+    const blob = JSON.stringify(stripped.extendedSections);
+    expect(blob).not.toContain("Gatilho de desejo");
+    expect(blob).not.toContain("salesPrinciples");
+    expect(blob).toContain("menuReadingRules"); // técnico permanece
+    // não muta o original
+    expect(JSON.stringify(WAITER.extendedSections)).toContain("salesPrinciples");
+  });
+
+  it("stripToneForFicha é seguro sem extendedSections", () => {
+    expect(stripToneForFicha({ slug: "x" }).extendedSections).toBeUndefined();
   });
 
   it("TONE_EXTENDED_SECTIONS cobre os ofensores apontados na auditoria", () => {

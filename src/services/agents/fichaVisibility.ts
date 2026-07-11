@@ -38,3 +38,16 @@ export function technicalExtendedEntries(
 ): Array<[string, unknown]> {
   return Object.entries(sections ?? {}).filter(([key]) => !isToneSection(key));
 }
+
+/**
+ * Remove as seções de tom de `extendedSections` NO SERVIDOR, antes de o perfil
+ * cruzar para o cliente. Assim o tom não vaza nem para o view-source / flight
+ * data — a ficha só carrega o que é técnico. A constituição de código segue
+ * intacta (verdade de runtime); isto é só a projeção de exibição.
+ */
+export function stripToneForFicha<T extends { extendedSections?: Record<string, unknown> }>(
+  agent: T,
+): T {
+  if (!agent.extendedSections) return agent;
+  return { ...agent, extendedSections: Object.fromEntries(technicalExtendedEntries(agent.extendedSections)) };
+}

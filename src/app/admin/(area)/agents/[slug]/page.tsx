@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminAgentProfile } from "@/services/agents/AgentProfileService";
+import { stripToneForFicha } from "@/services/agents/fichaVisibility";
 import { AgentDashboard, AgentStatusRow } from "../_components";
 import { TechSheet } from "./TechSheet";
 
@@ -25,7 +26,9 @@ export default async function AgentDetailPage({ params }: PageProps) {
 
   let agent;
   try {
-    agent = await getAdminAgentProfile(slug);
+    const loaded = await getAdminAgentProfile(slug);
+    // Tira o tom no servidor: o cliente/view-source só recebe o técnico.
+    agent = loaded ? stripToneForFicha(loaded) : loaded;
   } catch {
     return (
       <div className="min-h-full bg-white px-8 py-6">
