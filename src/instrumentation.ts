@@ -2,19 +2,17 @@
  * Next.js Instrumentation Hook
  *
  * Runs once when the Node.js server process starts.
- * Starts background schedulers: AutoSimulatorScheduler, CartRecoveryScheduler
- * and ScheduledCampaignScheduler.
+ * Starts background schedulers: CartRecoveryScheduler e ScheduledCampaignScheduler.
  * Also auto-syncs Evolution webhook URLs so WhatsApp recovers automatically
  * after every deploy without manual intervention.
+ *
+ * Faxina: o AutoSimulatorScheduler (tick de 60s) foi DESLIGADO — gravava
+ * telemetria que nenhum produto lê (painel em rota não-navegável). O serviço e
+ * a rota /ai-simulator permanecem no código, só não rodam no boot.
  */
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { AutoSimulatorScheduler } = await import(
-      "./services/ai/AutoSimulatorScheduler"
-    );
-    AutoSimulatorScheduler.start();
-
     const { CartRecoveryScheduler } = await import(
       "./services/order/CartRecoveryScheduler"
     );

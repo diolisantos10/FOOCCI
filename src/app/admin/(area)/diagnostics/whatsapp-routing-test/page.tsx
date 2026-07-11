@@ -10,6 +10,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { CentralWhatsAppTabs } from "../../CentralWhatsAppTabs";
 
 // ── Response shapes (mirror WhatsAppRoutingTestService) ───────────────────────
 
@@ -152,6 +153,7 @@ export default function WhatsAppRoutingTestPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 text-gray-200">
+      <CentralWhatsAppTabs />
       <h1 className="text-xl font-bold text-white">WhatsApp Routing Test Lab</h1>
       <p className="mt-1 text-sm text-gray-400">
         Simule eventos WhatsApp/Evolution sem enviar mensagens reais. Nenhuma chamada

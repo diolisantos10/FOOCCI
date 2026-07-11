@@ -49,12 +49,13 @@ export function AdminSidebar() {
       ],
     },
     {
+      // Faxina: as telas de WhatsApp viraram ABAS da Central (barra no topo de
+      // cada página) — a sidebar entra no hub (Cockpit) e o resto é aba. QA
+      // Recovery é fluxo de negócio, fica separado.
       title: "Central WhatsApp",
       items: [
-        { href: "/admin/diagnostics/whatsapp-text-ordering",   label: "Pedido por Texto", icon: "🧾" },
-        { href: "/admin/agents/whatsapp",                      label: "Cockpit",          icon: "🎛️" },
-        { href: "/admin/diagnostics/whatsapp-routing-test",    label: "Roteamento",       icon: "🧬" },
-        { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",      icon: "🧪" },
+        { href: "/admin/agents/whatsapp",              label: "Central WhatsApp", icon: "🎛️" },
+        { href: "/admin/diagnostics/cart-recovery-qa", label: "QA Recovery",      icon: "🧪" },
       ],
     },
     {

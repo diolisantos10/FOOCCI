@@ -10,6 +10,7 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
+import { CentralWhatsAppTabs } from "../../CentralWhatsAppTabs";
 import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
 import { buildWaOrderingReport, deriveMatchStatus, type WaOrderingReportResult } from "@/lib/admin/waOrderingReport";
 import { buildScenarioRunnerReport } from "@/lib/admin/waScenarioReport";
@@ -391,6 +392,7 @@ export default function WaTextOrderingPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8 text-gray-900">
+      <CentralWhatsAppTabs />
       {/* A. Header */}
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">

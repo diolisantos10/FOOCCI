@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import { CentralWhatsAppTabs } from "../../CentralWhatsAppTabs";
 import {
   translateAction,
   buildCockpitChecklist,
@@ -84,6 +85,7 @@ export default function WhatsAppCockpitPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 text-gray-100">
+      <CentralWhatsAppTabs />
       <h1 className="text-2xl font-bold">WhatsApp · Pedido por Texto — Cockpit</h1>
       <p className="mt-1 text-sm text-gray-400">
         Esta tela é a validação principal do anotador de pedido: roda a conversa inteira num cardápio
