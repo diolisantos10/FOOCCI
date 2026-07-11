@@ -93,7 +93,7 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
   // "Configurar" opens the ONE unified "Gerenciar" modal for recurring campaigns.
   // If no campaign row exists yet, create a PAUSED one to hold the config, then open it.
   async function configure(c: ReadyMadeState) {
-    if (onManage && c.engine === "RECURRING") {
+    if (onManage && (c.engine === "RECURRING" || c.engine === "CART_RECOVERY")) {
       let campaignId = c.campaignId;
       if (!campaignId) {
         setBusyId(c.id);

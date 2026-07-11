@@ -434,21 +434,20 @@ export interface ReadyMadeCampaignPayload {
 }
 
 /**
- * Builds the POST /api/crm/campaigns payload for a RECURRING ready-made campaign,
- * applying any owner overrides on top of the safe defaults. Recurring campaigns
- * omit endCondition on purpose so they stay ACTIVE and re-evaluate each cycle.
+ * Builds the POST /api/crm/campaigns payload for a ready-made campaign, applying
+ * any owner overrides on top of the safe defaults. Recurring campaigns omit
+ * endCondition on purpose so they stay ACTIVE and re-evaluate each cycle.
  *
- * Throws for the CART_RECOVERY engine — that one is toggled through the cart
- * recovery config, not created as a recurring campaign.
+ * CART_RECOVERY campaigns also get a Campaign row (so they share the same manage
+ * modal + Ativas row as everyone else), but with mode "CART_RECOVERY" — the
+ * recurring runner skips that mode; the cart-recovery engine reads its message +
+ * reward from this row instead.
  */
 export function buildReadyMadeCampaignPayload(
   rm: ReadyMadeCampaign,
   overrides: ReadyMadeOverrides = {},
   timezone = "America/Sao_Paulo",
 ): ReadyMadeCampaignPayload {
-  if (rm.engine !== "RECURRING") {
-    throw new Error(`Ready-made campaign "${rm.id}" uses the ${rm.engine} engine and is not created as a recurring campaign.`);
-  }
   // Coupon: explicit override wins (including null = remove); else the default.
   const coupon = overrides.coupon !== undefined ? overrides.coupon : (rm.defaultCoupon ?? null);
   const triggerDays = overrides.triggerDays ?? rm.triggerDays;
@@ -460,7 +459,7 @@ export function buildReadyMadeCampaignPayload(
     objective:       rm.objective,
     channel:         "WHATSAPP",
     scheduleConfig: {
-      mode:       "RECURRING",
+      mode:       rm.engine === "CART_RECOVERY" ? "CART_RECOVERY" : "RECURRING",
       ...(coupon ? { coupon } : {}),
       weekdays:   overrides.weekdays   ?? rm.schedule.weekdays,
       timeWindow: overrides.timeWindow ?? rm.schedule.timeWindow,

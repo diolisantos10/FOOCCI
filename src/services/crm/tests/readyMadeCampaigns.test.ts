@@ -135,9 +135,11 @@ describe("buildReadyMadeCampaignPayload", () => {
     expect(p.scheduleConfig.coupon).toEqual({ type: "PERCENTAGE", value: 10, validityDays: 7 });
   });
 
-  it("refuses to build a recurring payload for the cart-recovery engine", () => {
+  it("builds a CART_RECOVERY payload for cart recovery (unified with the others)", () => {
     const rm = getReadyMadeCampaign("carrinho-abandonado")!;
-    expect(() => buildReadyMadeCampaignPayload(rm)).toThrow(/CART_RECOVERY/);
+    const p = buildReadyMadeCampaignPayload(rm);
+    expect(p.templateId).toBe("carrinho-abandonado");
+    expect(p.scheduleConfig.mode).toBe("CART_RECOVERY");
   });
 
   it("carries triggerDays for event campaigns (default + override)", () => {

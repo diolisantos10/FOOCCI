@@ -159,14 +159,20 @@ export class ReadyMadeCampaignService {
         triggerDaysLabel: rm.triggerDaysLabel,
       };
 
+      const row = byTemplate.get(rm.id);
+
       if (rm.engine === "CART_RECOVERY") {
+        // Cart recovery now gets a real Campaign row too (so it opens the SAME
+        // manage modal). When a row exists it's the source of truth; otherwise it
+        // stays ON by default (legacy flag) so existing restaurants keep working.
+        const cartCfg = (row?.scheduleConfig as RecurringCfg | null) ?? null;
         return {
           ...base,
-          active:      config.cartRecoveryEnabled,
-          status:      null,
-          campaignId:  null,
-          message:     config.cartRecoveryMessage?.trim() || rm.defaultMessage,
-          coupon:      config.cartRecoveryCoupon ?? null,
+          active:      row ? ACTIVE_STATUSES.includes(row.status) : config.cartRecoveryEnabled,
+          status:      row?.status ?? null,
+          campaignId:  row?.id ?? null,
+          message:     row?.message ?? config.cartRecoveryMessage?.trim() ?? rm.defaultMessage,
+          coupon:      row ? (cartCfg?.coupon ?? null) : (config.cartRecoveryCoupon ?? null),
           weekdays:    rm.schedule.weekdays,
           timeWindow:  rm.schedule.timeWindow,
           dailyLimit:  rm.schedule.dailyLimit,
@@ -174,7 +180,6 @@ export class ReadyMadeCampaignService {
         };
       }
 
-      const row = byTemplate.get(rm.id);
       const cfg = (row?.scheduleConfig as RecurringCfg | null) ?? null;
       return {
         ...base,
@@ -205,8 +210,14 @@ export class ReadyMadeCampaignService {
     if (!rm) return { ok: false, error: "Campanha pronta não encontrada." };
 
     if (rm.engine === "CART_RECOVERY") {
+      // Keep the legacy flag in sync (send-engine fallback when no row exists) and,
+      // if a Campaign row was created via Configurar, resume it too.
       await setConfig(restaurantId, { cartRecoveryEnabled: true });
-      return { ok: true, campaignId: null };
+      const row = await prisma.campaign.findFirst({
+        where: { restaurantId, templateId: rm.id }, orderBy: { createdAt: "desc" }, select: { id: true },
+      });
+      if (row) await prisma.campaign.update({ where: { id: row.id }, data: { status: "ACTIVE" as never } });
+      return { ok: true, campaignId: row?.id ?? null };
     }
 
     // Retire the overlapping legacy automation so both engines never fire together.
@@ -274,6 +285,11 @@ export class ReadyMadeCampaignService {
 
     if (rm.engine === "CART_RECOVERY") {
       await setConfig(restaurantId, { cartRecoveryEnabled: false });
+      const row = await prisma.campaign.findFirst({
+        where: { restaurantId, templateId: rm.id, status: { in: ACTIVE_STATUSES as never[] } },
+        orderBy: { createdAt: "desc" }, select: { id: true },
+      });
+      if (row) await prisma.campaign.update({ where: { id: row.id }, data: { status: "PAUSED" as never } });
       return { ok: true };
     }
 
@@ -302,16 +318,6 @@ export class ReadyMadeCampaignService {
     const rm = getReadyMadeCampaign(id);
     if (!rm) return { ok: false, error: "Campanha pronta não encontrada." };
 
-    // Cart recovery has no Campaign row — its message + reward live in the config.
-    if (rm.engine === "CART_RECOVERY") {
-      await setConfig(restaurantId, {
-        ...(overrides.message !== undefined ? { cartRecoveryMessage: overrides.message } : {}),
-        ...(overrides.coupon  !== undefined ? { cartRecoveryCoupon:  overrides.coupon  } : {}),
-      });
-      return { ok: true };
-    }
-    if (rm.engine !== "RECURRING") return { ok: false, error: "Esta campanha não é editável." };
-
     const payload = buildReadyMadeCampaignPayload(rm, overrides);
 
     const existing = await prisma.campaign.findFirst({
@@ -332,8 +338,9 @@ export class ReadyMadeCampaignService {
       return { ok: true };
     }
 
-    // No row yet — persist the edits as a PAUSED (off) campaign so they survive
-    // until the owner turns it on.
+    // No row yet — persist the edits. Recurring campaigns start PAUSED (off until the
+    // owner turns them on); cart recovery is ON by default, so its first row is ACTIVE.
+    const initialStatus = rm.engine === "CART_RECOVERY" ? "ACTIVE" : "PAUSED";
     await prisma.campaign.create({
       data: {
         restaurantId,
@@ -343,7 +350,7 @@ export class ReadyMadeCampaignService {
         channel:        payload.channel,
         targetSegment:  payload.targetSegment,
         templateId:     payload.templateId,
-        status:         "PAUSED" as never,
+        status:         initialStatus as never,
         scheduleConfig: payload.scheduleConfig as object,
       },
     });

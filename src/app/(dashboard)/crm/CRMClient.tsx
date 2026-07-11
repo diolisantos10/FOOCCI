@@ -2005,7 +2005,8 @@ function CampaignManageModal({
   const sc           = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" }) : null;
   const cfg          = detail?.scheduleConfig as ScheduleCfg | null | undefined;
   const isRecurring  = cfg?.mode === "RECURRING";
-  const isControllable = isRecurring && detail && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(detail.status);
+  const isCartRecovery = cfg?.mode === "CART_RECOVERY";
+  const isControllable = (isRecurring || isCartRecovery) && detail && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(detail.status);
   const isTerminal   = ["SENT", "COMPLETED", "CANCELLED"].includes(detail?.status ?? "");
   const canEdit      = !isTerminal;
 
@@ -2081,7 +2082,7 @@ function CampaignManageModal({
   }
 
   async function handleSaveCoupon() {
-    if (!detail || !isRecurring) return;
+    if (!detail || (!isRecurring && !isCartRecovery)) return;
     setSavingCoupon(true);
     try {
       const newCfg = { ...(cfg ?? {}), coupon };
@@ -2424,8 +2425,8 @@ function CampaignManageModal({
                       </p>
                     )}
 
-                    {/* ── Cupom / recompensa (só recorrentes) ── */}
-                    {canEdit && isRecurring && (
+                    {/* ── Cupom / recompensa (recorrentes + carrinho) ── */}
+                    {canEdit && (isRecurring || isCartRecovery) && (
                       <div className="border-t border-line pt-5">
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">Cupom de desconto (opcional)</p>
                         <div className="flex flex-wrap gap-2">
@@ -3952,7 +3953,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         const cart = rm.find((c) => c.id === "carrinho-abandonado") ?? null;
         setCartRecoveryItem(cart);
         setCartRecoveryOn(!!cart?.active);
-        setActiveReadyMadeIds(rm.filter((c) => c.active && c.campaignId).map((c) => c.campaignId as string));
+        // Carrinho is shown as its own dedicated row, so exclude it here to avoid a
+        // duplicate row once it has a Campaign record.
+        setActiveReadyMadeIds(
+          rm.filter((c) => c.active && c.campaignId && c.id !== "carrinho-abandonado").map((c) => c.campaignId as string),
+        );
       })
       .catch(() => {});
   }, [readyMadeReload]);
@@ -3980,6 +3985,29 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     } finally {
       setCartBusy(false);
     }
+  }
+
+  // Open the SAME tabbed "Gerenciar" modal the other campaigns use. Carrinho gets a
+  // real Campaign row on first manage (so the modal has a campaignId to drive it).
+  async function handleCartManage() {
+    let campaignId = cartRecoveryItem?.campaignId ?? null;
+    if (!campaignId) {
+      setCartBusy(true);
+      try {
+        await fetch("/api/crm/ready-made/carrinho-abandonado", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update", overrides: {} }),
+        });
+        const fresh = await fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null);
+        const rows = (fresh?.data?.campaigns as ReadyMadeState[] | undefined) ?? [];
+        const cart = rows.find((c) => c.id === "carrinho-abandonado") ?? null;
+        setCartRecoveryItem(cart);
+        campaignId = cart?.campaignId ?? null;
+      } finally {
+        setCartBusy(false);
+      }
+    }
+    if (campaignId) openManage(campaignId, "message");
   }
 
   // Save cart recovery config (message + reward) — feeds the modern config modal.
@@ -4117,7 +4145,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           restrictToIds={activeReadyMadeIds}
           cartRecoveryActive={cartRecoveryOn}
           couponCounts={couponCounts}
-          onCartRecoveryManage={() => setCartConfigOpen(true)}
+          onCartRecoveryManage={() => { void handleCartManage(); }}
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
       )}

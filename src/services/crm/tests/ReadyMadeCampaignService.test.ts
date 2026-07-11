@@ -167,15 +167,18 @@ describe("update", () => {
     expect(data).not.toHaveProperty("status");
   });
 
-  it("saves the cart-recovery message + reward into the config (no campaign row)", async () => {
-    db.restaurantCRMProfile.findUnique.mockResolvedValue({ readyMadeConfig: { cartRecoveryEnabled: true } });
+  it("creates an ACTIVE Campaign row for cart recovery (unified with the others)", async () => {
+    db.campaign.findFirst.mockResolvedValue(null); // no row yet
     const r = await ReadyMadeCampaignService.update("r1", "carrinho-abandonado", {
       message: "Volta finalizar 🛒 {cupom}", coupon: { type: "FIXED", value: 10 },
     });
     expect(r.ok).toBe(true);
-    expect(db.campaign.create).not.toHaveBeenCalled();
-    const saved = db.restaurantCRMProfile.upsert.mock.calls[0]![0].create.readyMadeConfig;
-    expect(saved.cartRecoveryMessage).toBe("Volta finalizar 🛒 {cupom}");
-    expect(saved.cartRecoveryCoupon).toEqual({ type: "FIXED", value: 10 });
+    // Cart recovery is ON by default, so its first row is ACTIVE (not PAUSED).
+    const data = db.campaign.create.mock.calls[0]![0].data;
+    expect(data.templateId).toBe("carrinho-abandonado");
+    expect(data.status).toBe("ACTIVE");
+    expect(data.message).toBe("Volta finalizar 🛒 {cupom}");
+    expect(data.scheduleConfig.mode).toBe("CART_RECOVERY");
+    expect(data.scheduleConfig.coupon).toEqual({ type: "FIXED", value: 10 });
   });
 });

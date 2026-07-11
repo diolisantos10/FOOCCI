@@ -235,15 +235,32 @@ export class OrderDraftRecoverySendService {
     // Cart recovery is a ready-made campaign; the owner can turn it off in the
     // Campanhas tab. Default ON (readyMadeConfig absent → enabled) so existing
     // restaurants keep the current behavior.
+    const candidateRestaurantIds = [...new Set(candidates.map((d) => d.restaurantId))];
     const profiles = await prisma.restaurantCRMProfile.findMany({
-      where:  { restaurantId: { in: [...new Set(candidates.map((d) => d.restaurantId))] } },
+      where:  { restaurantId: { in: candidateRestaurantIds } },
       select: { restaurantId: true, readyMadeConfig: true, whatsAppSafetyConfig: true },
     });
     // Per-restaurant cart-recovery config (message + reward) and safety (coupon budget).
     const cartCfgByRestaurant = new Map(profiles.map((p) => [p.restaurantId, parseReadyMadeConfig(p.readyMadeConfig)]));
     const safetyByRestaurant  = new Map(profiles.map((p) => [p.restaurantId, parseSafetyConfig(p.whatsAppSafetyConfig)]));
+
+    // Cart recovery now also has a real Campaign row (templateId carrinho-abandonado).
+    // When one exists it's the source of truth for on/off + message + reward; otherwise
+    // we fall back to the legacy readyMadeConfig flag (default ON).
+    const cartRows = await prisma.campaign.findMany({
+      where:  { restaurantId: { in: candidateRestaurantIds }, templateId: "carrinho-abandonado" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, restaurantId: true, status: true, message: true, scheduleConfig: true },
+    });
+    const cartRowByRestaurant = new Map<string, (typeof cartRows)[number]>();
+    for (const r of cartRows) if (!cartRowByRestaurant.has(r.restaurantId)) cartRowByRestaurant.set(r.restaurantId, r);
+
     const cartDisabled = new Set(
-      [...cartCfgByRestaurant].filter(([, c]) => !c.cartRecoveryEnabled).map(([id]) => id),
+      candidateRestaurantIds.filter((rid) => {
+        const row = cartRowByRestaurant.get(rid);
+        if (row) return !["ACTIVE", "SCHEDULED"].includes(row.status); // row is source of truth
+        return !(cartCfgByRestaurant.get(rid)?.cartRecoveryEnabled ?? true); // legacy flag
+      }),
     );
 
     // ── Step 2: batch-fetch customers who already got a recovery in last 24h ─
@@ -400,16 +417,22 @@ export class OrderDraftRecoverySendService {
         });
 
         const shortRecoveryUrl = buildShortRecoveryUrl(recoveryCode);
-        // Owner-customized message + reward (from the Campanhas → Carrinho config).
-        // For cart recovery, {link_cardapio} resolves to the resume link so the exact
-        // cart is restored; {cupom} shows the configured reward.
+        // Owner-customized message + reward. Prefer the Campaign row (edited in the
+        // manage modal); fall back to the legacy readyMadeConfig. For cart recovery
+        // {link_cardapio} resolves to the resume link so the exact cart is restored;
+        // {cupom} shows the configured reward.
+        const cartRow    = cartRowByRestaurant.get(draft.restaurantId);
         const cartCfg    = cartCfgByRestaurant.get(draft.restaurantId);
-        const customMsg  = cartCfg?.cartRecoveryMessage?.trim();
+        const rowCoupon  = (cartRow?.scheduleConfig as { coupon?: unknown } | null)?.coupon as
+          | { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null }
+          | null | undefined;
+        const cartCoupon = rowCoupon ?? cartCfg?.cartRecoveryCoupon ?? null;
+        const customMsg  = cartRow?.message?.trim() || cartCfg?.cartRecoveryMessage?.trim();
         const message    = customMsg
           ? renderCrmMessage(customMsg, { name: customer.name ?? "" }, {
               restaurantName: draft.restaurant.name ?? "nossa loja",
               pedidoUrl:      shortRecoveryUrl,
-              coupon:         cartCfg?.cartRecoveryCoupon ?? null,
+              coupon:         cartCoupon,
             })
           : buildRecoveryMessage(customer.name, shortRecoveryUrl);
 
@@ -437,13 +460,14 @@ export class OrderDraftRecoverySendService {
 
         // Credit the configured reward to the customer's wallet (best-effort — never
         // blocks the recovery send). Respects the monthly coupon budget.
-        if (cartCfg?.cartRecoveryCoupon) {
+        if (cartCoupon) {
           const safety = safetyByRestaurant.get(draft.restaurantId);
           await CustomerCouponService.grant({
             restaurantId: draft.restaurantId,
             customerId:   draft.customerId,
-            coupon:       cartCfg.cartRecoveryCoupon,
-            validityDays: cartCfg.cartRecoveryCoupon.validityDays ?? null,
+            coupon:       cartCoupon,
+            validityDays: (cartCoupon as { validityDays?: number }).validityDays ?? null,
+            sourceCampaignId: cartRow?.id ?? null,
             monthlyBudget: safety?.couponMonthlyBudget ?? 0,
             avgTicket:     safety?.couponAvgTicket ?? 50,
           }).catch((e) => console.warn(`[OrderDraftRecoverySendService] coupon grant failed`, {
