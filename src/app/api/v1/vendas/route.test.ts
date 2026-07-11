@@ -31,15 +31,22 @@ describe("GET /api/v1/vendas", () => {
     expect(res.status).toBe(401);
   });
 
+  it("403 when the key lacks the sales:read scope", async () => {
+    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scopes: ["customers:read"] });
+    const res = await GET(req("Bearer fck_ok"));
+    expect(res.status).toBe(403);
+    expect(db.order.findMany).not.toHaveBeenCalled();
+  });
+
   it("400 for a malformed `desde`", async () => {
-    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scope: "sales:read" });
+    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scopes: ["sales:read"] });
     const res = await GET(req("Bearer fck_ok", "https://x/api/v1/vendas?desde=11-07-2026"));
     expect(res.status).toBe(400);
     expect(db.order.findMany).not.toHaveBeenCalled();
   });
 
   it("maps orders to the documented shape and scopes the query to the key's restaurant", async () => {
-    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scope: "sales:read" });
+    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scopes: ["sales:read"] });
     db.order.findMany.mockResolvedValue([
       { id: "o1", orderNumber: 10231, total: "125.90", type: "DELIVERY",
         createdAt: new Date("2026-07-11T18:22:04.000Z"), items: [{ quantity: 2 }, { quantity: 1 }] },
@@ -65,7 +72,7 @@ describe("GET /api/v1/vendas", () => {
   });
 
   it("defaults to a 30-day window when `desde` is omitted", async () => {
-    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scope: "sales:read" });
+    svc.resolveApiKey.mockResolvedValue({ restaurantId: "r1", keyId: "k1", scopes: ["sales:read"] });
     db.order.findMany.mockResolvedValue([]);
     const res = await GET(req("Bearer fck_ok"));
     expect(res.status).toBe(200);

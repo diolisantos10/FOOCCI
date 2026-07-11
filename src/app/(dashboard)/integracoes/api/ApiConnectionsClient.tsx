@@ -12,12 +12,13 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { API_SCOPES, API_SCOPE_META } from "@/lib/api-scopes";
 
 interface ApiKeyView {
   id: string;
   name: string | null;
   tokenPrefix: string;
-  scope: string;
+  scopes: string[];
   lastUsedAt: string | null;
   createdAt: string;
 }
@@ -67,7 +68,17 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
   const [keys, setKeys]         = useState<ApiKeyView[]>([]);
   const [loading, setLoading]   = useState(true);
   const [name, setName]         = useState("");
+  // What the new key may pull. Vendas on by default; Clientes (PII) off by default.
+  const [scopes, setScopes]     = useState<Set<string>>(new Set(["sales:read"]));
   const [generating, setGen]    = useState(false);
+
+  const toggleScope = (s: string) =>
+    setScopes((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s); else next.add(s);
+      if (next.size === 0) next.add("sales:read"); // never a zero-permission key
+      return next;
+    });
   const [freshToken, setFresh]  = useState<string | null>(null); // shown ONCE
   const [error, setError]       = useState<string | null>(null);
   const [showFormat, setFormat] = useState(false);
@@ -96,7 +107,7 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
       const res = await fetch("/api/settings/api-keys", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name: name.trim() || undefined }),
+        body:    JSON.stringify({ name: name.trim() || undefined, scopes: Array.from(scopes) }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -171,28 +182,70 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
         )}
 
         {isOwner ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-ink2">
-                Pra que é esta chave? <span className="font-normal text-muted">(opcional)</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex.: Foocci Manager"
-                maxLength={60}
-                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
-              />
+          <div className="space-y-4">
+            {/* What this key may access — least privilege, per key */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-ink2">O que esta chave pode acessar?</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {API_SCOPES.map((s) => {
+                  const meta = API_SCOPE_META[s];
+                  const checked = scopes.has(s);
+                  return (
+                    <label
+                      key={s}
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition ${
+                        checked ? "border-brand-300 bg-brand-50" : "border-line2 bg-paper hover:bg-[#FAFAF8]"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleScope(s)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-line2 accent-brand-600"
+                      />
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                          {meta.label}
+                          {meta.pii && (
+                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                              dado pessoal
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted">{meta.description}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted">
+                A chave só alcança o que estiver marcado. Dê o mínimo necessário para cada sistema.
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={generate}
-              disabled={generating}
-              className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
-            >
-              {generating ? "Gerando…" : "Gerar chave de conexão"}
-            </button>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-ink2">
+                  Pra que é esta chave? <span className="font-normal text-muted">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex.: Foocci Manager"
+                  maxLength={60}
+                  className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={generate}
+                disabled={generating}
+                className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+              >
+                {generating ? "Gerando…" : "Gerar chave de conexão"}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-sm text-muted">
@@ -222,6 +275,15 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
                       {" · "}
                       {k.lastUsedAt ? `último uso ${formatDate(k.lastUsedAt)}` : "nunca usada"}
                     </p>
+                    {k.scopes.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {k.scopes.map((s) => (
+                          <span key={s} className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                            {API_SCOPE_META[s as keyof typeof API_SCOPE_META]?.label ?? s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {isOwner && (
                     <button
@@ -249,7 +311,8 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
           </span>
         </div>
         <p className="mb-3 text-xs text-muted">
-          Cole este endereço no outro sistema, junto com a chave acima.
+          Cole este endereço no outro sistema, junto com a chave acima. Este é o de vendas —
+          os demais aparecem em <strong>Ver formato dos dados</strong>.
         </p>
         <div className="flex items-center gap-2">
           <code className="min-w-0 flex-1 break-all rounded-lg bg-[#FAFAF8] px-3 py-2 font-mono text-xs text-ink ring-1 ring-line2">
@@ -257,6 +320,11 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
           </code>
           <CopyButton value={endpoint} label="Copiar endereço" />
         </div>
+        <p className="mt-2 text-[11px] text-muted">
+          Também disponível conforme as permissões da chave:{" "}
+          <code className="font-mono">/clientes</code> · <code className="font-mono">/produtos</code> ·{" "}
+          <code className="font-mono">/financeiro</code>
+        </p>
 
         {/* Bloco C — Formato dos dados (recolhível) */}
         <button
@@ -267,18 +335,38 @@ export function ApiConnectionsClient({ userRole }: { userRole: string }) {
           {showFormat ? "Ocultar formato dos dados" : "Ver formato dos dados"} {showFormat ? "▲" : "▼"}
         </button>
         {showFormat && (
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 space-y-3">
             <p className="text-[11px] text-muted">
-              O sistema externo chama <code className="font-mono">GET {endpoint}?desde=AAAA-MM-DD</code> com o
-              cabeçalho <code className="font-mono">Authorization: Bearer SUA_CHAVE</code> e recebe:
+              Todas as chamadas usam o cabeçalho{" "}
+              <code className="font-mono">Authorization: Bearer SUA_CHAVE</code>. Cada endereço
+              exige a permissão correspondente — a chave só responde no que você marcou.
             </p>
+
+            {/* Endpoint catalogue */}
+            <div className="space-y-1.5">
+              {[
+                { path: "/vendas",     perm: "Vendas",     q: "?desde=AAAA-MM-DD" },
+                { path: "/clientes",   perm: "Clientes",   q: "?desde=AAAA-MM-DD" },
+                { path: "/produtos",   perm: "Produtos",   q: "" },
+                { path: "/financeiro", perm: "Financeiro", q: "?desde=AAAA-MM-DD" },
+              ].map((e) => (
+                <div key={e.path} className="flex flex-wrap items-center gap-2 rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-1.5">
+                  <code className="font-mono text-[11px] text-ink">GET /api/v1{e.path}{e.q}</code>
+                  <span className="ml-auto rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                    permissão: {e.perm}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-muted">Exemplo da resposta de <strong>vendas</strong>:</p>
             <div className="overflow-x-auto rounded-xl border border-line2 bg-[#0f172a] p-3">
               <pre className="font-mono text-[11px] leading-relaxed text-[#e2e8f0]">{EXAMPLE_JSON}</pre>
             </div>
             <p className="text-[11px] text-muted">
-              <strong>valor</strong> = total da venda em reais · <strong>data</strong> = data/hora ·
-              <strong> canal</strong> = Delivery / Retirada / Salão · <strong>vendas</strong> = 1 por pedido ·
-              <strong> itens</strong> = quantidade de itens. Uma venda = os mesmos pedidos que contam no seu Faturamento.
+              <strong>valor</strong> = total em reais · <strong>data</strong> = data/hora ·
+              <strong> canal</strong> = Delivery / Retirada / Salão · <strong>itens</strong> = quantidade.
+              Uma venda = os mesmos pedidos que contam no seu Faturamento.
             </p>
           </div>
         )}

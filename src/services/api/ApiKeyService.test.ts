@@ -28,24 +28,27 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("createApiKey", () => {
   it("returns the plaintext token once and persists ONLY the hash", async () => {
-    db.apiKey.create.mockImplementation(({ data, select }: any) => ({
-      id: "k1", name: data.name, tokenPrefix: data.tokenPrefix, scope: "sales:read",
-      lastUsedAt: null, createdAt: new Date(), ...(select ? {} : {}),
+    db.apiKey.create.mockImplementation(({ data }: any) => ({
+      id: "k1", name: data.name, tokenPrefix: data.tokenPrefix, scope: data.scope,
+      lastUsedAt: null, createdAt: new Date(),
     }));
-    const res = await createApiKey(REST, "Foocci Manager", "u1");
+    const res = await createApiKey(REST, "Foocci Manager", ["customers:read", "sales:read"], "u1");
     expect(res.token).toMatch(/^fck_/);
+    expect(res.scopes).toEqual(["sales:read", "customers:read"]); // canonical order, parsed back
     const stored = db.apiKey.create.mock.calls[0][0].data;
     // The plaintext is never in the stored row; the hash is, and it matches.
     expect(stored.tokenHash).toBe(hashApiKey(res.token));
     expect(JSON.stringify(stored)).not.toContain(res.token);
     expect(stored.restaurantId).toBe(REST);
     expect(stored.name).toBe("Foocci Manager");
+    expect(stored.scope).toBe("sales:read,customers:read"); // canonical, comma-joined
   });
 
-  it("normalizes an empty apelido to null", async () => {
+  it("normalizes an empty apelido to null and empty scopes to the safe default", async () => {
     db.apiKey.create.mockResolvedValue({ id: "k1", name: null, tokenPrefix: "fck_x", scope: "sales:read", lastUsedAt: null, createdAt: new Date() });
-    await createApiKey(REST, "   ", null);
+    await createApiKey(REST, "   ", [], null);
     expect(db.apiKey.create.mock.calls[0][0].data.name).toBeNull();
+    expect(db.apiKey.create.mock.calls[0][0].data.scope).toBe("sales:read"); // never zero scopes
   });
 });
 
@@ -74,10 +77,10 @@ describe("revokeApiKey", () => {
 
 describe("resolveApiKey", () => {
   it("resolves a valid key to its restaurant and bumps lastUsedAt when stale", async () => {
-    db.apiKey.findFirst.mockResolvedValue({ id: "k1", restaurantId: REST, scope: "sales:read", lastUsedAt: null });
+    db.apiKey.findFirst.mockResolvedValue({ id: "k1", restaurantId: REST, scope: "sales:read,products:read", lastUsedAt: null });
     db.apiKey.update.mockResolvedValue({});
     const r = await resolveApiKey("fck_validtokenvalidtoken");
-    expect(r).toEqual({ restaurantId: REST, keyId: "k1", scope: "sales:read" });
+    expect(r).toEqual({ restaurantId: REST, keyId: "k1", scopes: ["sales:read", "products:read"] });
     // looked up by hash of the presented token, revoked keys excluded
     expect(db.apiKey.findFirst.mock.calls[0][0].where).toEqual({
       tokenHash: hashApiKey("fck_validtokenvalidtoken"), revokedAt: null,

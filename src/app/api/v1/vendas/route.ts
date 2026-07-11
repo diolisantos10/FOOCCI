@@ -30,8 +30,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OrderStatus, OrderType } from "@prisma/client";
-import { bearerToken } from "@/lib/api-key";
-import { resolveApiKey } from "@/services/api/ApiKeyService";
+import { requireApiScope, jsonError, jsonOk, resolveDesde, V1_MAX_ROWS } from "@/lib/api-v1";
 
 export const dynamic = "force-dynamic";
 
@@ -52,51 +51,19 @@ const CHANNEL_LABEL: Record<OrderType, string> = {
   [OrderType.DINE_IN]:  "Salão",
 };
 
-const DEFAULT_WINDOW_DAYS = 30;
-const MAX_ROWS = 1000; // cap per call; caller paginates by advancing `desde`
-
-function jsonError(status: number, error: string) {
-  return NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-/**
- * Parse ?desde=YYYY-MM-DD (or a full ISO 8601 timestamp) → Date, or null if
- * absent/invalid. STRICT on purpose: ambiguous, locale-dependent forms like
- * "11-07-2026" (is that Jul 11 or Nov 7?) are rejected rather than silently
- * mis-parsed by the lenient Date constructor.
- */
-function parseDesde(raw: string | null): Date | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  // Bare date → start of that day, UTC.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const d = new Date(`${trimmed}T00:00:00.000Z`);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  // Full ISO 8601 timestamp (must begin YYYY-MM-DDThh:mm…).
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) {
-    const d = new Date(trimmed);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  return null;
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const key = await resolveApiKey(bearerToken(req.headers.get("authorization")));
-    if (!key) return jsonError(401, "Chave de conexão inválida ou revogada.");
+    const auth = await requireApiScope(req, "sales:read");
+    if (auth instanceof NextResponse) return auth;
 
-    const rawDesde = req.nextUrl.searchParams.get("desde");
-    if (rawDesde && !parseDesde(rawDesde)) {
-      return jsonError(400, "Parâmetro 'desde' inválido. Use o formato AAAA-MM-DD.");
-    }
-    const desde =
-      parseDesde(rawDesde) ?? new Date(Date.now() - DEFAULT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const window = resolveDesde(req);
+    if (window instanceof NextResponse) return window;
+    const { desde } = window;
 
     const orders = await prisma.order.findMany({
-      where:   { restaurantId: key.restaurantId, status: { in: REVENUE_STATUS }, createdAt: { gte: desde } },
+      where:   { restaurantId: auth.restaurantId, status: { in: REVENUE_STATUS }, createdAt: { gte: desde } },
       orderBy: { createdAt: "asc" },
-      take:    MAX_ROWS + 1, // fetch one extra to detect truncation
+      take:    V1_MAX_ROWS + 1, // fetch one extra to detect truncation
       select: {
         id:          true,
         orderNumber: true,
@@ -107,8 +74,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const truncated = orders.length > MAX_ROWS;
-    const page = truncated ? orders.slice(0, MAX_ROWS) : orders;
+    const truncated = orders.length > V1_MAX_ROWS;
+    const page = truncated ? orders.slice(0, V1_MAX_ROWS) : orders;
 
     const data = page.map((o) => ({
       id:     o.orderNumber != null ? `PED-${o.orderNumber}` : o.id,
@@ -119,13 +86,10 @@ export async function GET(req: NextRequest) {
       itens:  o.items.reduce((n, it) => n + it.quantity, 0),
     }));
 
-    return NextResponse.json(
-      {
-        data,
-        meta: { desde: desde.toISOString(), count: data.length, limit: MAX_ROWS, truncated },
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return jsonOk({
+      data,
+      meta: { desde: desde.toISOString(), count: data.length, limit: V1_MAX_ROWS, truncated },
+    });
   } catch (err) {
     console.error("[GET /api/v1/vendas]", err);
     return jsonError(500, "Erro interno ao consultar vendas.");

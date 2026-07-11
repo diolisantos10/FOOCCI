@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { generateApiKey, hashApiKey, looksLikeApiKey } from "@/lib/api-key";
+import { parseScopes, serializeScopes, type ApiScope } from "@/lib/api-scopes";
 
 /** How often we bother writing lastUsedAt — avoids a DB write on every single
  *  call while still giving the user a meaningful "último uso" signal. */
@@ -18,7 +19,8 @@ export interface ApiKeyView {
   id: string;
   name: string | null;
   tokenPrefix: string;
-  scope: string;
+  /** Parsed permission list (e.g. ["sales:read","customers:read"]). */
+  scopes: ApiScope[];
   lastUsedAt: Date | null;
   createdAt: Date;
 }
@@ -35,28 +37,32 @@ export async function listApiKeys(restaurantId: string): Promise<ApiKeyView[]> {
     orderBy: { createdAt: "desc" },
     select:  { id: true, name: true, tokenPrefix: true, scope: true, lastUsedAt: true, createdAt: true },
   });
-  return rows;
+  return rows.map(({ scope, ...r }) => ({ ...r, scopes: parseScopes(scope) }));
 }
 
-/** Mint a new key. Returns the plaintext token exactly once. */
+/** Mint a new key with the chosen scopes. Returns the plaintext token once. */
 export async function createApiKey(
   restaurantId: string,
   name: string | null,
+  scopes: unknown,
   createdByUserId: string | null,
 ): Promise<CreatedApiKey> {
   const { token, tokenHash, tokenPrefix } = generateApiKey();
   const trimmed = name?.trim() || null;
+  const scope = serializeScopes(scopes); // validated, deduped, defaults to sales:read
   const row = await prisma.apiKey.create({
     data: {
       restaurantId,
       name: trimmed ? trimmed.slice(0, 60) : null,
       tokenHash,
       tokenPrefix,
+      scope,
       createdByUserId,
     },
     select: { id: true, name: true, tokenPrefix: true, scope: true, lastUsedAt: true, createdAt: true },
   });
-  return { ...row, token };
+  const { scope: stored, ...rest } = row;
+  return { ...rest, scopes: parseScopes(stored), token };
 }
 
 /**
@@ -74,13 +80,14 @@ export async function revokeApiKey(restaurantId: string, id: string): Promise<bo
 export interface ResolvedApiKey {
   restaurantId: string;
   keyId: string;
-  scope: string;
+  /** Parsed permission list this key was granted. */
+  scopes: ApiScope[];
 }
 
 /**
- * Resolve a presented Bearer token to its restaurant, or null if it is invalid
- * or revoked. Bumps lastUsedAt (throttled). This is the sole auth path for the
- * public sales API — fail closed (return null) on anything unexpected.
+ * Resolve a presented Bearer token to its restaurant + scopes, or null if it is
+ * invalid or revoked. Bumps lastUsedAt (throttled). This is the sole auth path
+ * for the public API — fail closed (return null) on anything unexpected.
  */
 export async function resolveApiKey(token: string | null | undefined): Promise<ResolvedApiKey | null> {
   if (!looksLikeApiKey(token)) return null;
@@ -98,7 +105,7 @@ export async function resolveApiKey(token: string | null | undefined): Promise<R
         .update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })
         .catch(() => undefined);
     }
-    return { restaurantId: key.restaurantId, keyId: key.id, scope: key.scope };
+    return { restaurantId: key.restaurantId, keyId: key.id, scopes: parseScopes(key.scope) };
   } catch {
     return null;
   }

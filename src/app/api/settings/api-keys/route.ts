@@ -15,7 +15,10 @@ import { ok, created, badRequest, unauthorized, forbidden, serverError } from "@
 import { listApiKeys, createApiKey } from "@/services/api/ApiKeyService";
 
 const createSchema = z.object({
-  name: z.string().trim().max(60).optional(),
+  name:   z.string().trim().max(60).optional(),
+  // Which data sets this key may pull. Validated/normalized in serializeScopes
+  // (unknown entries dropped; empty → safe default of sales-only).
+  scopes: z.array(z.string()).max(20).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest) {
     const parsed = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return badRequest("Apelido inválido.");
 
-    const key = await createApiKey(ctx.restaurantId, parsed.data.name ?? null, ctx.userId);
+    const key = await createApiKey(ctx.restaurantId, parsed.data.name ?? null, parsed.data.scopes, ctx.userId);
     return created({ key }); // key.token present ONCE here
   } catch (err) {
     console.error("[POST /api/settings/api-keys]", err);
