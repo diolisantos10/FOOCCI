@@ -231,6 +231,14 @@ export class ReadyMadeCampaignService {
           } : {}),
         },
       });
+      if (wasOff) {
+        // The panel recomputes "Falhas" live from execution rows, so zeroing the
+        // counter isn't enough — delete the old failed/blocked log rows too. Keep
+        // the successful sends (SENT/DELIVERED/READ) so send-dedup stays intact.
+        await prisma.campaignExecution.deleteMany({
+          where: { campaignId: existing.id, status: { notIn: ["SENT", "DELIVERED", "READ"] as never[] } },
+        }).catch(() => {});
+      }
       return { ok: true, campaignId: existing.id };
     }
 

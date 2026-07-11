@@ -248,6 +248,13 @@ export async function PATCH(
         },
         select: { id: true, status: true },
       });
+      if (resetStats) {
+        // The panel recomputes "Falhas" live from execution rows — delete the old
+        // failed/blocked rows too (keep successful sends so send-dedup stays intact).
+        await prisma.campaignExecution.deleteMany({
+          where: { campaignId: params.id, status: { notIn: ["SENT", "DELIVERED", "READ"] as never[] } },
+        }).catch(() => {});
+      }
       return ok(updated);
     }
 

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   campaign: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
+  campaignExecution: { deleteMany: vi.fn(async () => ({ count: 0 })) },
   restaurantCRMProfile: { findUnique: vi.fn(), upsert: vi.fn() },
   cRMAutomation: { updateMany: vi.fn() },
 }));
