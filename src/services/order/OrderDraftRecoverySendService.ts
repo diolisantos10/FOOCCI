@@ -43,6 +43,9 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { parseReadyMadeConfig } from "@/services/crm/ReadyMadeCampaignService";
+import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
+import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
+import { parseSafetyConfig } from "@/lib/crm-safety";
 import { ConversationStatus } from "@prisma/client";
 
 function maskPhone(phone: string): string {
@@ -208,6 +211,7 @@ export class OrderDraftRecoverySendService {
         restaurant: {
           select: {
             slug: true,
+            name: true,
           },
         },
       },
@@ -231,13 +235,15 @@ export class OrderDraftRecoverySendService {
     // Cart recovery is a ready-made campaign; the owner can turn it off in the
     // Campanhas tab. Default ON (readyMadeConfig absent → enabled) so existing
     // restaurants keep the current behavior.
+    const profiles = await prisma.restaurantCRMProfile.findMany({
+      where:  { restaurantId: { in: [...new Set(candidates.map((d) => d.restaurantId))] } },
+      select: { restaurantId: true, readyMadeConfig: true, whatsAppSafetyConfig: true },
+    });
+    // Per-restaurant cart-recovery config (message + reward) and safety (coupon budget).
+    const cartCfgByRestaurant = new Map(profiles.map((p) => [p.restaurantId, parseReadyMadeConfig(p.readyMadeConfig)]));
+    const safetyByRestaurant  = new Map(profiles.map((p) => [p.restaurantId, parseSafetyConfig(p.whatsAppSafetyConfig)]));
     const cartDisabled = new Set(
-      (await prisma.restaurantCRMProfile.findMany({
-        where:  { restaurantId: { in: [...new Set(candidates.map((d) => d.restaurantId))] } },
-        select: { restaurantId: true, readyMadeConfig: true },
-      }))
-        .filter((p) => !parseReadyMadeConfig(p.readyMadeConfig).cartRecoveryEnabled)
-        .map((p) => p.restaurantId),
+      [...cartCfgByRestaurant].filter(([, c]) => !c.cartRecoveryEnabled).map(([id]) => id),
     );
 
     // ── Step 2: batch-fetch customers who already got a recovery in last 24h ─
@@ -394,7 +400,18 @@ export class OrderDraftRecoverySendService {
         });
 
         const shortRecoveryUrl = buildShortRecoveryUrl(recoveryCode);
-        const message          = buildRecoveryMessage(customer.name, shortRecoveryUrl);
+        // Owner-customized message + reward (from the Campanhas → Carrinho config).
+        // For cart recovery, {link_cardapio} resolves to the resume link so the exact
+        // cart is restored; {cupom} shows the configured reward.
+        const cartCfg    = cartCfgByRestaurant.get(draft.restaurantId);
+        const customMsg  = cartCfg?.cartRecoveryMessage?.trim();
+        const message    = customMsg
+          ? renderCrmMessage(customMsg, { name: customer.name ?? "" }, {
+              restaurantName: draft.restaurant.name ?? "nossa loja",
+              pedidoUrl:      shortRecoveryUrl,
+              coupon:         cartCfg?.cartRecoveryCoupon ?? null,
+            })
+          : buildRecoveryMessage(customer.name, shortRecoveryUrl);
 
         console.info(`[OrderDraftRecoverySendService] sending recovery`, {
           draftId:      draft.id,
@@ -417,6 +434,22 @@ export class OrderDraftRecoverySendService {
         });
 
         dailyLimitSet.add(draft.customerId); // guard remaining iterations
+
+        // Credit the configured reward to the customer's wallet (best-effort — never
+        // blocks the recovery send). Respects the monthly coupon budget.
+        if (cartCfg?.cartRecoveryCoupon) {
+          const safety = safetyByRestaurant.get(draft.restaurantId);
+          await CustomerCouponService.grant({
+            restaurantId: draft.restaurantId,
+            customerId:   draft.customerId,
+            coupon:       cartCfg.cartRecoveryCoupon,
+            validityDays: cartCfg.cartRecoveryCoupon.validityDays ?? null,
+            monthlyBudget: safety?.couponMonthlyBudget ?? 0,
+            avgTicket:     safety?.couponAvgTicket ?? 50,
+          }).catch((e) => console.warn(`[OrderDraftRecoverySendService] coupon grant failed`, {
+            draftId: draft.id, error: e instanceof Error ? e.message : String(e),
+          }));
+        }
 
         // Log outbound message to conversation so Atendimento shows it and
         // so that a customer reply triggers human handoff (contextType guard).

@@ -3359,6 +3359,12 @@ function CampanhasAtivasSection({
                     {c.objective && (
                       <p className="text-[10px] text-muted truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
                     )}
+                    {(() => {
+                      const reward = couponLabel((cfg as { coupon?: ReadyMadeCoupon | null } | null)?.coupon ?? null);
+                      return reward
+                        ? <p className="mt-0.5 truncate text-[10px] font-semibold text-emerald-600">🎁 {reward}</p>
+                        : <p className="mt-0.5 text-[10px] text-muted/70">sem recompensa</p>;
+                    })()}
                   </td>
 
                   {/* Tipo */}

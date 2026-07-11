@@ -333,7 +333,9 @@ function ReadyMadeConfigModal({
 
           {c.engine === "CART_RECOVERY" && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-              A mensagem do carrinho é gerenciada pelo sistema. Aqui você só liga ou desliga a campanha.
+              Dispara automaticamente poucos minutos após o cliente abandonar o pedido. Você pode
+              personalizar a mensagem e oferecer uma recompensa abaixo. Em <code className="rounded bg-white/70 px-1">{"{link_cardapio}"}</code> o
+              cliente volta direto pro carrinho que ele montou.
             </p>
           )}
 

@@ -253,10 +253,11 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     priority:    "CART_ABANDONED",
     defaultMessage:
       "Oi, {nome}! 🛒 Vi que você começou um pedido no {restaurante} e não finalizou. Posso te ajudar a concluir? É só voltar aqui: {link_cardapio}",
+    defaultCoupon: undefined,
     schedule:    { weekdays: ALL_WEEK, timeWindow: { start: "11:00", end: "22:00" }, dailyLimit: 30 },
-    // Cart recovery runs on its own event engine (fires minutes after abandonment
-    // with a system-managed message) — so this card only offers on/off for now.
-    editable:    [],
+    // Cart recovery fires minutes after abandonment on its own event engine, but the
+    // owner can still customize WHAT it sends: the message and an optional reward.
+    editable:    ["message", "coupon"],
   },
   {
     id:          "siga-redes",

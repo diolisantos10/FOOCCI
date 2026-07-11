@@ -167,8 +167,15 @@ describe("update", () => {
     expect(data).not.toHaveProperty("status");
   });
 
-  it("rejects editing the cart-recovery engine", async () => {
-    const r = await ReadyMadeCampaignService.update("r1", "carrinho-abandonado", { message: "x" });
-    expect(r.ok).toBe(false);
+  it("saves the cart-recovery message + reward into the config (no campaign row)", async () => {
+    db.restaurantCRMProfile.findUnique.mockResolvedValue({ readyMadeConfig: { cartRecoveryEnabled: true } });
+    const r = await ReadyMadeCampaignService.update("r1", "carrinho-abandonado", {
+      message: "Volta finalizar 🛒 {cupom}", coupon: { type: "FIXED", value: 10 },
+    });
+    expect(r.ok).toBe(true);
+    expect(db.campaign.create).not.toHaveBeenCalled();
+    const saved = db.restaurantCRMProfile.upsert.mock.calls[0]![0].create.readyMadeConfig;
+    expect(saved.cartRecoveryMessage).toBe("Volta finalizar 🛒 {cupom}");
+    expect(saved.cartRecoveryCoupon).toEqual({ type: "FIXED", value: 10 });
   });
 });
