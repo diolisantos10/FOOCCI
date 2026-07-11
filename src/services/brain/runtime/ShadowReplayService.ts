@@ -89,10 +89,19 @@ export async function replayShadowFromHistory(opts: ShadowReplayOptions = {}): P
   const dryRun = opts.dryRun === true;
 
   // Conversas com pelo menos uma mensagem de cliente (INBOUND TEXT) na janela.
+  //
+  // O pool de candidatos é DESACOPLADO de maxSamples de propósito: maxSamples é
+  // teto de GASTO por chamada (quantas replayar), não de VARREDURA. Se o take
+  // seguisse maxSamples, lotes pequenos só enxergariam sempre as MESMAS primeiras
+  // conversas e a idempotência travaria o resto do corpus para trás. Ordenando de
+  // forma determinística e varrendo um pool amplo, cada chamada processa o
+  // PRÓXIMO lote ainda-não-replayado e o backfill avança até esgotar.
+  const CANDIDATE_POOL = 20000;
   const convs = await prisma.conversation.findMany({
     where: { messages: { some: { direction: "INBOUND", type: "TEXT", sentAt: { gte: since, lt: until } } } },
     select: { id: true, restaurantId: true },
-    take: maxSamples * 2, // folga porque muitas serão filtradas como interação de menu
+    orderBy: { createdAt: "asc" },
+    take: Math.min(CANDIDATE_POOL, Math.max(maxSamples * 2, 2000)),
   });
 
   const result: ShadowReplayResult = {
