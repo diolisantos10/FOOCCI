@@ -2237,18 +2237,32 @@ function CampaignManageModal({
                       )}
                     </div>
 
-                    {/* Failure breakdown */}
+                    {/* Failure breakdown — grouped by the CLASSIFIED reason (clean,
+                        owner-friendly) instead of the raw provider JSON. */}
                     {detail.totalFailed > 0 && (() => {
                       const map: Record<string, number> = {};
+                      const catCount: Record<string, number> = {};
                       for (const ex of detail.executions) {
                         if (ex.status !== "FAILED") continue;
-                        const r = ex.failedReason ?? "BLOCKED";
-                        map[r] = (map[r] ?? 0) + 1;
+                        const badge = ex.classification?.badge ?? ex.failedReason ?? "Falha";
+                        map[badge] = (map[badge] ?? 0) + 1;
+                        const cat = ex.classification?.category ?? "";
+                        catCount[cat] = (catCount[cat] ?? 0) + 1;
                       }
                       const entries = Object.entries(map).sort(([, a], [, b]) => b - a);
+                      // Owner-facing interpretation of the dominant failure type.
+                      const numberProblems = (catCount["EVOLUTION_BAD_REQUEST"] ?? 0) + (catCount["BLOCKED_INVALID_PHONE"] ?? 0);
+                      const infraProblems  = (catCount["EVOLUTION_INSTANCE_DISCONNECTED"] ?? 0) + (catCount["FAILED_PROVIDER"] ?? 0) + (catCount["FAILED_TIMEOUT"] ?? 0);
+                      const authProblems   = catCount["EVOLUTION_AUTH_ERROR"] ?? 0;
+                      const verdict = authProblems > numberProblems && authProblems > infraProblems
+                        ? "🔑 Erro de autenticação da Evolution — verifique a chave/API da integração."
+                        : numberProblems >= infraProblems
+                        ? "📵 A maioria são números que não existem no WhatsApp (base antiga). Não há o que corrigir — esses números são inalcançáveis; os válidos recebem normalmente."
+                        : "⚠️ A maioria são erros temporários da Evolution/conexão. O robô agora para o lote quando isso acontece e tenta de novo no próximo ciclo.";
                       return (
                         <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Diagnóstico de falhas</p>
+                          <p className="rounded-lg bg-paper/70 px-3 py-2 text-xs text-ink2">{verdict}</p>
                           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                             {entries.map(([reason, count]) => (
                               <div key={reason} className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2 border border-red-100">
