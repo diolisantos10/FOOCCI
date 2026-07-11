@@ -29,11 +29,6 @@ interface Proposal {
   reviewerNotes: string | null; createdAt: string;
 }
 
-interface BrainVersion {
-  id: string; agentType: string; versionLabel: string; status: string;
-  createdAt: string; activatedAt: string | null;
-}
-
 interface DashboardData {
   activeRun: TrainingRun | null; runsToday: number; totalScenarios: number;
   passCount: number; warnCount: number; failCount: number;
@@ -838,51 +833,6 @@ function MelhoriasTab() {
             </div>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function VersoesSandboxTab() {
-  const [versions, setVersions] = useState<BrainVersion[]>([]);
-
-  useEffect(() => {
-    void fetch("/api/admin/training/brain-versions")
-      .then((r) => r.json())
-      .then((d) => setVersions(d ?? []));
-  }, []);
-
-  return (
-    <div className="p-6 space-y-4">
-      {/* Production lock notice */}
-      <div className="rounded-xl border border-red-700/40 bg-red-900/10 px-4 py-3 space-y-1">
-        <p className="text-xs font-semibold text-red-400">🔒 Produção bloqueada — nenhuma ativação automática</p>
-        <p className="text-xs text-red-500">Versões SANDBOX nunca são ativadas automaticamente. Para promover uma versão a produção, é necessária ativação manual explícita fora desta tela. Versões ATIVAS nunca são alteradas pelo ciclo de treinamento.</p>
-      </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-700">
-        <table className="w-full text-sm">
-          <thead className="border-b border-gray-700 bg-gray-800/80">
-            <tr>
-              {["Versão", "Agente", "Status", "Criado", "Ativado"].map((h) => (
-                <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {versions.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500 text-sm">Nenhuma versão criada ainda. Versões sandbox aparecem aqui quando propostas são aprovadas para sandbox.</td></tr>
-            )}
-            {versions.map((v) => (
-              <tr key={v.id} className={`border-b border-gray-800 ${v.status === "ACTIVE" ? "bg-green-900/10" : ""}`}>
-                <td className="px-3 py-2 text-gray-300 font-mono text-xs">{v.versionLabel}</td>
-                <td className="px-3 py-2 text-gray-400 text-xs">{v.agentType}</td>
-                <td className="px-3 py-2">{statusBadge(v.status)}</td>
-                <td className="px-3 py-2 text-gray-500 text-xs">{fmtDate(v.createdAt)}</td>
-                <td className="px-3 py-2 text-gray-500 text-xs">{fmtDate(v.activatedAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -1852,7 +1802,6 @@ function ConfiguracoesTab() {
           ["useRealConversationMining", "Capturar falhas reais automaticamente"],
           ["autoDiagnoseOnFailure",     "Gerar diagnóstico automático para WARN/FAIL"],
           ["autoCreateProposals",       "Criar proposta automática para falhas recorrentes"],
-          ["autoRunArenaOnCapture",     "Rodar Arena automática com casos reais"],
         ] as [keyof TrainingConfig, string][]).map(([key, label]) => (
           <label key={key} className="flex items-center justify-between cursor-pointer">
             <span className="text-sm text-gray-300">{label}</span>
@@ -1871,8 +1820,6 @@ function ConfiguracoesTab() {
         {([
           ["enableContinuousTraining", "Treinamento contínuo ativo"],
           ["useAiGeneratedScenarios",  "Usar cenários gerados por IA"],
-          ["autoApplySandbox",         "Auto-aplicar no sandbox (⚠ desativado por padrão)"],
-          ["nightlyBatchEnabled",      "Batch noturno automático"],
         ] as [keyof TrainingConfig, string][]).map(([key, label]) => (
           <label key={key} className="flex items-center justify-between cursor-pointer">
             <span className="text-sm text-gray-300">{label}</span>
@@ -1886,42 +1833,13 @@ function ConfiguracoesTab() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Máx. cenários/hora</label>
-          <input
-            type="number" min={1} max={100} value={config.maxScenariosPerHour}
-            onChange={(e) => setConfig((c) => c ? { ...c, maxScenariosPerHour: parseInt(e.target.value, 10) || 20 } : c)}
-            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Score mínimo aceitável</label>
-          <input
-            type="number" min={0} max={1} step={0.05} value={config.minimumScoreThreshold}
-            onChange={(e) => setConfig((c) => c ? { ...c, minimumScoreThreshold: parseFloat(e.target.value) || 0.6 } : c)}
-            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
-          />
-        </div>
-      </div>
-
       <div>
-        <label className="text-xs text-gray-500 block mb-1">Batch pequeno a cada X horas (vazio = não agendado)</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="number" min={1} max={168}
-            value={config.smallBatchEveryHours ?? ""}
-            placeholder="—"
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setConfig((c) => c ? { ...c, smallBatchEveryHours: isNaN(v) ? null : v } : c);
-            }}
-            className="w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
-          />
-          {!config.smallBatchEveryHours && (
-            <span className="text-xs text-gray-600">Não agendado · Endpoint: POST /api/admin/training/runs</span>
-          )}
-        </div>
+        <label className="text-xs text-gray-500 block mb-1">Máx. cenários/hora</label>
+        <input
+          type="number" min={1} max={100} value={config.maxScenariosPerHour}
+          onChange={(e) => setConfig((c) => c ? { ...c, maxScenariosPerHour: parseInt(e.target.value, 10) || 20 } : c)}
+          className="w-40 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
+        />
       </div>
 
       <button onClick={save} disabled={saving}
@@ -2246,7 +2164,7 @@ function FormaturaTab() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "visao-geral" | "caixa-unica" | "arena" | "casos" | "melhorias" | "formatura" | "versoes" | "validacao" | "configuracoes";
+type Tab = "visao-geral" | "caixa-unica" | "arena" | "casos" | "melhorias" | "formatura" | "validacao" | "configuracoes";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "visao-geral",     label: "Visão Geral" },
@@ -2255,7 +2173,6 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "casos",           label: "Casos" },
   { id: "melhorias",       label: "Melhorias para Aprovar" },
   { id: "formatura",       label: "🎓 Formatura" },
-  { id: "versoes",         label: "Versões" },
   { id: "validacao",       label: "Validação" },
   { id: "configuracoes",   label: "Configurações" },
 ];
@@ -2418,7 +2335,6 @@ export default function AgentTrainingPage() {
         {tab === "casos"         && <CasosTab onSelectScenario={(id) => setSelectedScenario(id)} />}
         {tab === "melhorias"     && <MelhoriasTab />}
         {tab === "formatura"     && <FormaturaTab />}
-        {tab === "versoes"       && <VersoesSandboxTab />}
         {tab === "validacao"     && <ValidateCycleTab />}
         {tab === "configuracoes" && <ConfiguracoesTab />}
       </div>
