@@ -343,16 +343,36 @@ function isExampleArray(value: unknown): value is AgentExample[] {
   );
 }
 
+/**
+ * Seções de TOM/COMPORTAMENTO (princípios de venda, sondagem com frases,
+ * upsell, fechamento, tom de mensagem, exemplos bom/ruim). NÃO aparecem na
+ * ficha técnica interna: comportamento é definido pelo dono do restaurante na
+ * configuração, não aqui. Continuam vivas na constituição de código (verdade de
+ * runtime) — só não poluem a ficha.
+ */
+const TONE_SECTIONS = new Set([
+  "salesPrinciples",
+  "consultativeProbingRules",
+  "upsellRules",
+  "closingRules",
+  "messageToneRules",
+  "personalizationRules",
+  "reviewRequestRules",
+  "relationshipPrinciples",
+  "examples",
+]);
+
 function ExtendedSections({ sections }: { sections?: Record<string, unknown> }) {
-  if (!sections || Object.keys(sections).length === 0) return null;
+  const technical = Object.entries(sections ?? {}).filter(([key]) => !TONE_SECTIONS.has(key));
+  if (technical.length === 0) return null;
 
   return (
     <div className="space-y-4">
       <h2 className="text-sm font-bold uppercase tracking-wide text-gray-900">
-        Seções específicas do agente
+        Seções específicas do agente <span className="font-normal normal-case text-gray-400">(técnicas)</span>
       </h2>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {Object.entries(sections).map(([key, value]) => {
+        {technical.map(([key, value]) => {
           const label = EXTENDED_LABELS[key] ?? key;
 
           if (isExampleArray(value)) {
