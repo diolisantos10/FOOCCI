@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { QualityTabs } from "../QualityTabs";
 import { AUDITOR_META_LIST } from "@/services/quality/registryMeta";
 import {
   statusLabel,
@@ -224,6 +225,7 @@ export default function QualityControlPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6">
+      <QualityTabs />
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>

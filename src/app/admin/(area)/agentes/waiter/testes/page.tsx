@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { QualityTabs } from "../../../QualityTabs";
 import { getScenarioGroups, type ScenarioGroup } from "@/services/ai/waiter/testing/waiterScenarios";
 import type { EvalReport, ScenarioResult } from "@/services/ai/waiter/testing/waiterEvaluator";
 
@@ -336,6 +337,7 @@ export default function WaiterTestesPage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      <QualityTabs />
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-white">Waiter Test Center</h1>

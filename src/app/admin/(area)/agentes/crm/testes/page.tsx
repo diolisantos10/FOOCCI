@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { QualityTabs } from "../../../QualityTabs";
 import {
   getCrmScenarioGroups,
   type CrmScenarioGroup,
@@ -252,6 +253,7 @@ export default function CrmTestesPage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      <QualityTabs />
       <div className="mb-6">
         <h1 className="text-xl font-bold text-white">CRM Test Center 🧠</h1>
         <p className="text-sm text-gray-400 mt-1">
