@@ -9,8 +9,14 @@ import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import {
   COUPON_PERCENT_OPTIONS, COUPON_FIXED_OPTIONS, couponLabel,
   getReadyMadeCampaign, getReadyMadeMessageVariants, getReadyMadeTiming, CADENCE_EXPLAINER,
+  READY_MADE_CAMPAIGNS,
   type CouponType, type ReadyMadeCoupon,
 } from "@/services/crm/readyMadeCampaigns";
+
+// Ids of the "fixed" ready-made campaigns — used to badge a row as Fixa vs Personalizada.
+const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
+const isFixedCampaign = (templateId: string | null | undefined): boolean =>
+  !!templateId && READY_MADE_ID_SET.has(templateId);
 import { ReadyMadeCampaignsSection } from "./ReadyMadeCampaignsSection";
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
@@ -138,6 +144,7 @@ type CampaignHistoryRow = {
   name:           string;
   objective:      string | null;
   targetSegment:  string | null;
+  templateId:     string | null;
   channel:        string;
   status:         string;
   totalAudience:  number;
@@ -1840,13 +1847,16 @@ function CampaignManageModal({
   onClose,
   onCampaignAction,
   onCampaignUpdated,
+  initialTab,
 }: {
   detailId: string;
   onClose: () => void;
+  /** Tab to open on. "Configurar" opens on Mensagem so edits are immediately visible. */
+  initialTab?: ManageTab;
   onCampaignAction: (id: string, action: "pause" | "resume" | "cancel") => Promise<void>;
   onCampaignUpdated?: (id: string, updates: Partial<CampaignHistoryRow>) => void;
 }) {
-  const [activeTab,    setActiveTab]    = useState<ManageTab>("overview");
+  const [activeTab,    setActiveTab]    = useState<ManageTab>(initialTab ?? "overview");
   const [detail,       setDetail]       = useState<CampaignDetail | null>(null);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(false);
@@ -1903,7 +1913,7 @@ function CampaignManageModal({
     setMsgSaved(false);
     setSchedSaved(false);
     setNameSaved(false);
-    setActiveTab("overview");
+    setActiveTab(initialTab ?? "overview");
 
     fetch(`/api/crm/campaigns/${detailId}`)
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -3253,9 +3263,14 @@ function CampanhasAtivasSection({
   cartRecoveryActive?: boolean;
 }) {
   const allowed = restrictToIds ? new Set(restrictToIds) : null;
-  const active = campaigns.filter(
-    (c) => ACTIVE_STATUSES.has(c.status) && (!allowed || allowed.has(c.id))
-  );
+  // Show every active custom campaign, plus the currently-active FIXED (ready-made)
+  // ones — this keeps stale ready-made duplicates out while never hiding a campaign
+  // the owner created themselves.
+  const active = campaigns.filter((c) => {
+    if (!ACTIVE_STATUSES.has(c.status)) return false;
+    if (!isFixedCampaign(c.templateId)) return true;      // custom → always show
+    return !allowed || allowed.has(c.id);                  // fixed → only the live row
+  });
   if (active.length === 0 && !cartRecoveryActive) return null;
   const shown = limit != null
     ? [...active].sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue)).slice(0, limit)
@@ -3290,12 +3305,15 @@ function CampanhasAtivasSection({
           </thead>
           <tbody className="divide-y divide-line">
             {cartRecoveryActive && limit == null && (
-              <tr className="hover:bg-[#FAFAF8] transition-colors">
+              <tr className="bg-sky-50/40 hover:bg-sky-50/70 transition-colors">
                 <td className="py-3 pl-4 pr-2">
                   <span className="inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap bg-emerald-100 text-emerald-700">Ativa</span>
                 </td>
-                <td className="py-3 px-2 max-w-[160px]">
-                  <p className="font-semibold text-ink truncate">🛒 Carrinho abandonado</p>
+                <td className="py-3 px-2 max-w-[170px]">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-semibold text-ink truncate">🛒 Carrinho abandonado</p>
+                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-sky-700">Fixa</span>
+                  </div>
                   <p className="text-[10px] text-muted truncate">Recupera pedidos iniciados</p>
                 </td>
                 <td className="py-3 px-2 whitespace-nowrap">
@@ -3319,9 +3337,10 @@ function CampanhasAtivasSection({
               const failTitle    = c.totalFailed > 0 && c.failureBreakdown && Object.keys(c.failureBreakdown).length > 0
                 ? failureTitleText(c.failureBreakdown, isRecurring)
                 : undefined;
+              const fixed        = isFixedCampaign(c.templateId);
 
               return (
-                <tr key={c.id} className="hover:bg-[#FAFAF8] transition-colors">
+                <tr key={c.id} className={`transition-colors ${fixed ? "bg-sky-50/40 hover:bg-sky-50/70" : "bg-amber-50/30 hover:bg-amber-50/60"}`}>
                   {/* Status */}
                   <td className="py-3 pl-4 pr-2">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${sc.bg} ${sc.text}`}>
@@ -3330,8 +3349,13 @@ function CampanhasAtivasSection({
                   </td>
 
                   {/* Nome */}
-                  <td className="py-3 px-2 max-w-[160px]">
-                    <p className="font-semibold text-ink truncate">{c.name}</p>
+                  <td className="py-3 px-2 max-w-[170px]">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-ink truncate">{c.name}</p>
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${fixed ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>
+                        {fixed ? "Fixa" : "Personalizada"}
+                      </span>
+                    </div>
                     {c.objective && (
                       <p className="text-[10px] text-muted truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
                     )}
@@ -3742,6 +3766,10 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
   // Campaign detail drawer
   const [detailId, setDetailId] = useState<string | null>(null);
+  // Which tab the manage modal opens on: "Configurar" → Mensagem (editable),
+  // "Gerenciar" → Visão Geral.
+  const [manageInitialTab, setManageInitialTab] = useState<ManageTab>("overview");
+  const openManage = (id: string, tab: ManageTab = "overview") => { setManageInitialTab(tab); setDetailId(id); };
 
   // Campaign history
   const [campaigns,       setCampaigns]       = useState<CampaignHistoryRow[]>([]);
@@ -3896,7 +3924,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {!loadingHistory && (
         <CampanhasAtivasSection
           campaigns={campaigns}
-          onDetail={(id) => setDetailId(id)}
+          onDetail={(id) => openManage(id, "overview")}
           onAction={(id, action) => { void handleCampaignAction(id, action); }}
           restrictToIds={activeReadyMadeIds}
           cartRecoveryActive={cartRecoveryOn}
@@ -3905,7 +3933,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
       {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
       <ReadyMadeCampaignsSection
-        onManage={(campaignId) => setDetailId(campaignId)}
+        onManage={(campaignId) => openManage(campaignId, "message")}
         reloadSignal={readyMadeReload}
       />
 
@@ -3966,7 +3994,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                               {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
                             </span>
                             <button
-                              onClick={() => setDetailId(c.id)}
+                              onClick={() => openManage(c.id, "overview")}
                               className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
                             >
                               Ver detalhes
@@ -4142,6 +4170,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {detailId && (
         <CampaignManageModal
           detailId={detailId}
+          initialTab={manageInitialTab}
           onClose={() => { setDetailId(null); setReadyMadeReload((n) => n + 1); }}
           onCampaignAction={handleCampaignAction}
           onCampaignUpdated={handleCampaignFieldsUpdated}

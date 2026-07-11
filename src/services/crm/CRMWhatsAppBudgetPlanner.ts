@@ -63,6 +63,7 @@ export function inferCampaignPriority(campaign: {
   if (
     seg.includes("frio") || seg.includes("morno") || seg.includes("sumido") ||
     seg.includes("reativ") || seg.includes("esfri") || tid.includes("esfri") ||
+    seg.includes("perdid") || tid.includes("perdid") ||
     obj === "REACTIVATION"
   ) {
     return "REACTIVATION_COLD";
