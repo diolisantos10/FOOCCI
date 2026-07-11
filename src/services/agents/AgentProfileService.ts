@@ -208,6 +208,80 @@ export async function buildAgentSystemContext(
   }
 }
 
+// ── Admin write (Ficha Técnica) ─────────────────────────────────────────────────
+
+/**
+ * Editable subset of an agent profile — the "Ficha Técnica" fields. Admin-only.
+ * Deliberately excludes `safetyRules` (immutable floor mirrored from code),
+ * `promptInstructions` and all governance/lifecycle fields.
+ */
+export type AgentProfilePatch = Partial<
+  Pick<
+    AgentProfileDefinition,
+    | "name"
+    | "title"
+    | "description"
+    | "mission"
+    | "objectives"
+    | "responsibilities"
+    | "skills"
+    | "allowedActions"
+    | "forbiddenActions"
+    | "tools"
+    | "knowledgeAreas"
+    | "interfaceContext"
+    | "businessRules"
+    | "escalationRules"
+    | "outputRules"
+    | "evaluationCriteria"
+  >
+>;
+
+/**
+ * Upsert the Ficha Técnica of one agent (admin-only write path).
+ *
+ * Merge strategy: existing DB row (if any) → else the code-defined default,
+ * then the patch on top. Fields not present in the patch are preserved, so a
+ * partial save never wipes other sections. Writes ALWAYS go to the DB
+ * (independent of AGENT_PROFILE_DB_ENABLED — that flag gates reads/runtime,
+ * not the admin mirror). Returns null when the slug is unknown (no row AND no
+ * code default). Never touches runtime: `isRuntimeEnabled` is preserved as-is.
+ */
+export async function updateAgentProfile(
+  slug: string,
+  patch: AgentProfilePatch,
+  updatedBy?: string,
+): Promise<AdminAgentProfileView | null> {
+  const row = await prisma.agentProfile.findUnique({ where: { slug } });
+  const base = row ? rowToDefinition(row) : getDefaultAgentProfileBySlug(slug);
+  if (!base) return null;
+
+  // Drop undefined entries so a sparse patch never overwrites with undefined.
+  const cleaned = Object.fromEntries(
+    Object.entries(patch).filter(([, v]) => v !== undefined),
+  ) as AgentProfilePatch;
+
+  const merged: AgentProfileDefinition = {
+    ...base,
+    ...cleaned,
+    slug, // never editable
+    source: "MANUAL",
+  };
+
+  const data = { ...definitionToRow(merged), updatedBy: updatedBy?.trim() || null };
+  const saved = await prisma.agentProfile.upsert({
+    where: { slug },
+    create: data,
+    update: data,
+  });
+
+  return {
+    ...rowToDefinition(saved),
+    updatedAt: saved.updatedAt.toISOString(),
+    origin: "db",
+  };
+}
+
 // ── Seed (safe, idempotent, additive) ───────────────────────────────────────────
 
 /**

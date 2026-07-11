@@ -40,6 +40,8 @@ export interface UnifiedInboxItem {
   riskLevel?: string;
   createdAt: Date;
   conversationId?: string;
+  /** Raw agent identifier of the source row (agentSlug/agentType), when it has one. */
+  agentSlug?: string;
 }
 
 export interface UnifiedInbox {
@@ -133,6 +135,7 @@ async function fetchBrainChangeRequests(limit: number): Promise<SourceResult> {
 
 const SUGGESTION_SELECT = {
   id: true,
+  agentSlug: true,
   title: true,
   situationSummary: true,
   riskLevel: true,
@@ -156,6 +159,7 @@ async function fetchWhatsAppLearnings(limit: number): Promise<SourceResult> {
     items: rows.map((r) => ({
       source: "WHATSAPP_LEARNING" as const,
       id: r.id,
+      agentSlug: r.agentSlug,
       title: r.title,
       summary: r.situationSummary,
       riskLevel: r.riskLevel,
@@ -181,6 +185,7 @@ async function fetchWaiterTrainingSuggestions(limit: number): Promise<SourceResu
     items: rows.map((r) => ({
       source: "WAITER_TRAINING" as const,
       id: r.id,
+      agentSlug: r.agentSlug,
       title: r.title,
       summary: r.situationSummary,
       riskLevel: r.riskLevel,
@@ -197,7 +202,7 @@ async function fetchImprovementProposals(limit: number): Promise<SourceResult> {
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
-      select: { id: true, title: true, problemSummary: true, riskLevel: true, createdAt: true },
+      select: { id: true, agentType: true, title: true, problemSummary: true, riskLevel: true, createdAt: true },
     }),
     prisma.agentImprovementProposal.count({ where }),
   ]);
@@ -206,6 +211,7 @@ async function fetchImprovementProposals(limit: number): Promise<SourceResult> {
     items: rows.map((r) => ({
       source: "AGENT_IMPROVEMENT_PROPOSAL" as const,
       id: r.id,
+      agentSlug: r.agentType,
       title: r.title,
       summary: r.problemSummary,
       riskLevel: r.riskLevel,
@@ -221,7 +227,7 @@ async function fetchSimulationExamples(limit: number): Promise<SourceResult> {
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
-      select: { id: true, intent: true, summary: true, sourceType: true, sourceId: true, createdAt: true },
+      select: { id: true, agentSlug: true, intent: true, summary: true, sourceType: true, sourceId: true, createdAt: true },
     }),
     prisma.agentSimulationExample.count({ where }),
   ]);
@@ -230,6 +236,7 @@ async function fetchSimulationExamples(limit: number): Promise<SourceResult> {
     items: rows.map((r) => ({
       source: "SIMULATION_EXAMPLE" as const,
       id: r.id,
+      agentSlug: r.agentSlug,
       title: r.intent,
       summary: r.summary,
       createdAt: r.createdAt,
@@ -246,7 +253,7 @@ async function fetchSimulationOpportunities(limit: number): Promise<SourceResult
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
-      select: { id: true, title: true, summary: true, severity: true, createdAt: true },
+      select: { id: true, agentSlug: true, title: true, summary: true, severity: true, createdAt: true },
     }),
     prisma.agentSimulationOpportunity.count({ where }),
   ]);
@@ -255,6 +262,7 @@ async function fetchSimulationOpportunities(limit: number): Promise<SourceResult
     items: rows.map((r) => ({
       source: "SIMULATION_OPPORTUNITY" as const,
       id: r.id,
+      agentSlug: r.agentSlug,
       title: r.title,
       summary: r.summary,
       riskLevel: String(r.severity),

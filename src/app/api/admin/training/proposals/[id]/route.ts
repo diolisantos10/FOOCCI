@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import type { ProposalStatus } from "@/services/agent-training/types";
+import { recordProposalLearningOnApproval } from "@/services/agent-training/approvalInbox";
 
 const ALLOWED_STATUS_TRANSITIONS: Array<ProposalStatus | "RESOLVED_MANUALLY"> = [
   "APPROVED",
@@ -66,6 +67,15 @@ export async function PATCH(
     include: { brainVersions: { orderBy: { createdAt: "desc" }, take: 1 } },
   });
 
+  // Approving must generate something ALIVE: service-behavior rules become an
+  // APPROVED learning in the canonical pool (consumed by the agents' prompt);
+  // code-like patches are flagged backlogDev (dev to-do) and skipped.
+  // Best-effort — the status update above never rolls back because of this.
+  let learning: { learningId: string | null; backlogDev: boolean } | null = null;
+  if (newStatus === "APPROVED") {
+    learning = await recordProposalLearningOnApproval(proposal, "admin");
+  }
+
   // When approving for sandbox: create a candidate brain version linked to this proposal.
   // Does NOT apply to production — status is SANDBOX until explicit production promotion.
   let sandboxVersion = null;
@@ -84,5 +94,10 @@ export async function PATCH(
     });
   }
 
-  return NextResponse.json({ ...proposal, sandboxVersion });
+  return NextResponse.json({
+    ...proposal,
+    sandboxVersion,
+    approvedLearningId: learning?.learningId ?? null,
+    backlogDev: learning?.backlogDev ?? false,
+  });
 }

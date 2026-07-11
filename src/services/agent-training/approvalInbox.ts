@@ -116,6 +116,112 @@ function makeItem(p: Omit<ApprovalItem, "id" | "agentLabel">): ApprovalItem {
   return { ...p, id: `${p.source}:${p.rawId}`, agentLabel: AGENT_LABELS[p.agentKey] };
 }
 
+// ── Approval → living learning ─────────────────────────────────────────────────
+//
+// Approving a service-behavior rule must produce something ALIVE: a row in the
+// canonical approved-learning pool (WaiterTrainingSuggestion APPROVED), which the
+// agents already consume via the "APRENDIZADOS APROVADOS" prompt block. Items
+// whose text is a CODE patch (files/functions) are a dev to-do, not a service
+// rule — those are flagged backlogDev and never become a learning.
+
+/** Simple code-vs-service-rule heuristic: mentions of files/functions/code. */
+const CODE_PATCH_RE = /\.tsx?\b|\bfun[cç][ãa]o\b|\bfunction\b|\bhandle\w*\b|\bc[óo]digo\b|\bsrc\//i;
+export function isCodePatchText(text: string | null | undefined): boolean {
+  return !!text && CODE_PATCH_RE.test(text);
+}
+
+export interface LearningOutcome {
+  learningId: string | null;
+  backlogDev: boolean;
+}
+
+/**
+ * Records the approved learning for an AgentImprovementProposal that was just
+ * APPROVED by a human. Code-like patches are flagged backlogDev (persisted as a
+ * reviewerNotes marker — the table has no metadata column) and skipped.
+ * Best-effort: any failure only logs; the approval itself never breaks.
+ */
+export async function recordProposalLearningOnApproval(
+  proposal: {
+    id: string;
+    agentType: string | null;
+    title: string;
+    proposedPatchText: string | null;
+    riskLevel?: string | null;
+    reviewerNotes?: string | null;
+  },
+  reviewer = "admin",
+): Promise<LearningOutcome> {
+  const text = clean(proposal.proposedPatchText);
+  if (!text) return { learningId: null, backlogDev: false };
+
+  if (isCodePatchText(text)) {
+    await prisma.agentImprovementProposal
+      .update({
+        where: { id: proposal.id },
+        data: {
+          reviewerNotes:
+            `${clean(proposal.reviewerNotes) ?? ""}\n[backlogDev:true] Patch menciona código/arquivos — é to-do de dev, não vira learning de atendimento.`.trim(),
+        },
+      })
+      .catch((err) => console.error("[approvalInbox] backlogDev flag failed", err));
+    return { learningId: null, backlogDev: true };
+  }
+
+  try {
+    const { insertApprovedLearning } = await import("@/services/waiterTraining/WaiterTrainingSuggestionStore");
+    const row = await insertApprovedLearning({
+      agentSlug: normalizeAgent(proposal.agentType) === "waiter" ? "waiter" : "whatsapp",
+      title: proposal.title,
+      trainingRule: text,
+      sourceType: "SIMULATION",
+      riskLevel: normalizeRisk(proposal.riskLevel),
+      sourceId: `improvement:${proposal.id}`, // dedupe on re-approval
+      approvedBy: reviewer,
+    });
+    return { learningId: row.id, backlogDev: false };
+  } catch (err) {
+    console.error("[approvalInbox] recordProposalLearningOnApproval failed", err);
+    return { learningId: null, backlogDev: false };
+  }
+}
+
+/**
+ * Records the approved learning for an AgentSimulationOpportunity (waiter arena)
+ * that was just APPROVED. Same code-vs-rule heuristic; best-effort.
+ */
+export async function recordOpportunityLearningOnApproval(
+  opportunity: {
+    id: string;
+    agentSlug: string | null;
+    title: string;
+    recommendation: string | null;
+    severity?: string | null;
+  },
+  reviewer = "admin",
+): Promise<LearningOutcome> {
+  const text = clean(opportunity.recommendation);
+  if (!text) return { learningId: null, backlogDev: false };
+  if (isCodePatchText(text)) return { learningId: null, backlogDev: true };
+
+  try {
+    const { insertApprovedLearning } = await import("@/services/waiterTraining/WaiterTrainingSuggestionStore");
+    const row = await insertApprovedLearning({
+      agentSlug: normalizeAgent(opportunity.agentSlug) === "whatsapp" ? "whatsapp" : "waiter",
+      title: opportunity.title,
+      trainingRule: text,
+      sourceType: "SIMULATION",
+      riskLevel: normalizeRisk(opportunity.severity),
+      sourceId: `opportunity:${opportunity.id}`, // dedupe on re-approval
+      approvedBy: reviewer,
+    });
+    return { learningId: row.id, backlogDev: false };
+  } catch (err) {
+    console.error("[approvalInbox] recordOpportunityLearningOnApproval failed", err);
+    return { learningId: null, backlogDev: false };
+  }
+}
+
 // ── Source registry ─────────────────────────────────────────────────────────────
 
 interface InboxSource {
@@ -151,10 +257,12 @@ const improvementSource: InboxSource = {
     );
   },
   async decide(rawId, decision, reviewer) {
-    await prisma.agentImprovementProposal.update({
+    const row = await prisma.agentImprovementProposal.update({
       where: { id: rawId },
       data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", approvedBy: reviewer, approvedAt: new Date() },
     });
+    // Approving a service rule creates a living learning in the canonical pool.
+    if (decision === "APPROVE") await recordProposalLearningOnApproval(row, reviewer);
   },
 };
 
@@ -185,10 +293,12 @@ const opportunitySource: InboxSource = {
     );
   },
   async decide(rawId, decision, reviewer) {
-    await prisma.agentSimulationOpportunity.update({
+    const row = await prisma.agentSimulationOpportunity.update({
       where: { id: rawId },
       data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", reviewedBy: reviewer, reviewedAt: new Date() },
     });
+    // Approving a service rule creates a living learning in the canonical pool.
+    if (decision === "APPROVE") await recordOpportunityLearningOnApproval({ ...row, agentSlug: row.agentSlug, severity: String(row.severity) }, reviewer);
   },
 };
 

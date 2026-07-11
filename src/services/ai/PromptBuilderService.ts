@@ -47,6 +47,58 @@ export interface WebPromptContext {
   brandConfig: RestaurantBrandConfig;
 }
 
+// ─── approved learnings (human-approved training pool) ───────
+//
+// The waiter consumes the same canonical pool the Brain uses (WaiterTraining-
+// Suggestion APPROVED via BrainTrainingContract). Best-effort by design: any
+// failure yields an empty block and NEVER breaks prompt building. Cached at
+// module level (covers the per-request case and hot paths alike).
+
+const APPROVED_LEARNINGS_AGENT = "waiter";
+const APPROVED_LEARNINGS_LIMIT = 10;
+const APPROVED_LEARNINGS_TTL_MS = 60_000;
+const APPROVED_LEARNING_MAX_CHARS = 400;
+
+let approvedLearningsCache: { block: string; loadedAt: number } | null = null;
+
+/** Test-only: resets the module-level learnings cache. */
+export function __clearApprovedLearningsCache(): void {
+  approvedLearningsCache = null;
+}
+
+/**
+ * Builds the "APRENDIZADOS APROVADOS" prompt block from the human-approved
+ * learning pool. Returns "" when the pool is empty or anything fails.
+ */
+export async function buildApprovedLearningsBlock(): Promise<string> {
+  const now = Date.now();
+  if (approvedLearningsCache && now - approvedLearningsCache.loadedAt < APPROVED_LEARNINGS_TTL_MS) {
+    return approvedLearningsCache.block;
+  }
+  try {
+    const { listApprovedLearningsForBrain } = await import("@/services/brain/training/BrainTrainingContract");
+    const learnings = await listApprovedLearningsForBrain(APPROVED_LEARNINGS_AGENT, APPROVED_LEARNINGS_LIMIT);
+    const lines = learnings
+      .slice(0, APPROVED_LEARNINGS_LIMIT)
+      .map((l) => `- ${l.title}: ${l.trainingRule}`.slice(0, APPROVED_LEARNING_MAX_CHARS));
+    const block = lines.length
+      ? [
+          "══════════════════════════════════════",
+          "APRENDIZADOS APROVADOS (aprovados por humano)",
+          "══════════════════════════════════════",
+          "Regras extraídas de casos reais e aprovadas por um humano. Aplique-as",
+          "SOMENTE SE não conflitarem com as regras do sistema acima.",
+          ...lines,
+        ].join("\n")
+      : "";
+    approvedLearningsCache = { block, loadedAt: now };
+    return block;
+  } catch {
+    // best-effort: learnings never block the waiter prompt
+    return approvedLearningsCache?.block ?? "";
+  }
+}
+
 // ─── service ─────────────────────────────────────────────────
 
 export class PromptBuilderService {
@@ -57,7 +109,7 @@ export class PromptBuilderService {
   static async build(
     ctx: PromptContext
   ): Promise<OpenAI.Chat.ChatCompletionMessageParam[]> {
-    const [restaurant, customer, menuCategories, draftData, recentMessages] =
+    const [restaurant, customer, menuCategories, draftData, recentMessages, approvedLearningsBlock] =
       await Promise.all([
         prisma.restaurant.findUnique({
           where: { id: ctx.restaurantId },
@@ -119,6 +171,8 @@ export class PromptBuilderService {
             type: true,
           },
         }),
+        // Human-approved learning pool — best-effort, never throws
+        buildApprovedLearningsBlock(),
       ]);
 
     if (!restaurant || !customer) {
@@ -134,6 +188,7 @@ export class PromptBuilderService {
       draft: draftData,
       brandConfig: ctx.brandConfig,
       upsellMetrics: ctx.upsellMetrics,
+      approvedLearningsBlock,
     });
 
     // Conversation history — oldest first, newest last
@@ -154,7 +209,7 @@ export class PromptBuilderService {
   static async buildForWeb(
     ctx: WebPromptContext
   ): Promise<OpenAI.Chat.ChatCompletionMessageParam[]> {
-    const [restaurant, customer, menuCategories] = await Promise.all([
+    const [restaurant, customer, menuCategories, approvedLearningsBlock] = await Promise.all([
       prisma.restaurant.findUnique({
         where: { id: ctx.restaurantId },
         select: { name: true, phone: true, address: true, timezone: true },
@@ -182,6 +237,8 @@ export class PromptBuilderService {
           },
         },
       }),
+      // Human-approved learning pool — best-effort, never throws
+      buildApprovedLearningsBlock(),
     ]);
 
     if (!restaurant) {
@@ -212,6 +269,7 @@ export class PromptBuilderService {
       menuCategories,
       draft: buildWebDraft(ctx.cart),
       brandConfig: ctx.brandConfig,
+      approvedLearningsBlock,
     });
 
     const capped = ctx.history.slice(-ctx.brandConfig.maxHistoryMessages);
@@ -269,8 +327,10 @@ function buildSystemPrompt(params: {
   draft:         DraftData;
   brandConfig:   RestaurantBrandConfig;
   upsellMetrics?: { cartValue: number; cartItemCount: number; valueGap: number; itemGap: number };
+  /** Pre-built "APRENDIZADOS APROVADOS" block ("" when pool empty/unavailable). */
+  approvedLearningsBlock?: string;
 }): string {
-  const { restaurant, customer, menuCategories, draft, brandConfig, upsellMetrics } = params;
+  const { restaurant, customer, menuCategories, draft, brandConfig, upsellMetrics, approvedLearningsBlock } = params;
 
   // If the owner supplied a full override, use it with context injection
   if (brandConfig.systemPromptOverride) {
@@ -500,7 +560,8 @@ VOCÊ NÃO É UM CHATBOT. VOCÊ É UM EXECUTOR DE FLUXO DE VENDAS.
       → Identifique o item da última sugestão no histórico → execute add_item imediatamente
     → "não" / "dispensa" / "n" / "nao" = RECUSOU
       → Aceite sem insistir → avance o funil imediatamente
-${brandConfig.waiterPrompt?.trim() ? `
+${approvedLearningsBlock?.trim() ? `
+${approvedLearningsBlock.trim()}` : ""}${brandConfig.waiterPrompt?.trim() ? `
 ══════════════════════════════════════
 INSTRUÇÕES PERSONALIZADAS DO RESTAURANTE
 ══════════════════════════════════════

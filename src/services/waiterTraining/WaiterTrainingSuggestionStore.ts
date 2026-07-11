@@ -138,6 +138,51 @@ export async function reviewSuggestion(id: string, status: SuggestionStatus, rev
   });
 }
 
+/**
+ * Inserts a learning DIRECTLY as APPROVED in the canonical pool. Only for flows
+ * where a HUMAN already approved the underlying item (approved BrainChangeRequest
+ * being applied, approved proposal/opportunity from the training inbox) — the
+ * human decision happened upstream, this just materializes it as a reusable
+ * learning. Never called by agents/system on their own.
+ */
+export async function insertApprovedLearning(params: {
+  agentSlug: string;
+  title: string;
+  trainingRule: string;
+  sourceType?: SuggestionSourceType;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH";
+  restaurantId?: string | null;
+  /** Dedupe key — e.g. "cr:<id>" / "improvement:<id>" (unique agentSlug+sourceType+sourceId). */
+  sourceId?: string | null;
+  suggestedActionType?: string;
+  approvedBy?: string | null;
+}) {
+  const trainingRule = params.trainingRule.trim();
+  if (!trainingRule) throw new Error("insertApprovedLearning: trainingRule vazio.");
+  const title = params.title.trim() || trainingRule.slice(0, 120);
+  return prisma.waiterTrainingSuggestion.create({
+    data: {
+      agentSlug: params.agentSlug,
+      restaurantId: params.restaurantId ?? null,
+      sourceType: params.sourceType ?? "RESULT_EVIDENCE",
+      sourceId: params.sourceId ?? null,
+      status: "APPROVED",
+      title,
+      situationSummary: title,
+      customerIntent: "N/A — regra aprovada diretamente por humano",
+      whatHappened: "Aprovação humana direta (fila de aprovação / change request) — sem transcript de origem.",
+      problemDetected: title,
+      idealResponse: trainingRule,
+      trainingRule,
+      expectedImpact: "Agente passa a seguir a regra aprovada no atendimento.",
+      suggestedActionType: params.suggestedActionType ?? "RESPONSE_PATTERN",
+      riskLevel: params.riskLevel ?? "LOW",
+      reviewedAt: new Date(),
+      reviewedBy: params.approvedBy ?? "admin",
+    },
+  });
+}
+
 /** The "approved learning" pool — reusable downstream (technique/version/simulator). */
 export async function listApprovedLearnings(agentSlug = AGENT, limit = 100) {
   return prisma.waiterTrainingSuggestion.findMany({

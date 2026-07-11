@@ -7,7 +7,11 @@
  * advisory), executando somente escritas de CONFIG governada:
  *
  *  • AI_ENGINE_ROUTING → upsert em brain_engine_routing (troca de piloto);
- *  • AGENT_POLICY com proposedChange.freeForm → modo do raciocínio livre.
+ *  • AGENT_POLICY com proposedChange.freeForm → modo do raciocínio livre;
+ *  • TRAINING_RULE → grava um learning APROVADO no pool canônico
+ *    (WaiterTrainingSuggestionStore) — o CR já foi aprovado por humano, então
+ *    materializar o aprendizado É a aplicação. O runtime só o consome pelos
+ *    caminhos governados existentes (bloco "APRENDIZADOS APROVADOS").
  *
  * Nunca envia mensagem, nunca cria pedido/Pix, nunca toca prompt/runtime —
  * config-only, com trilha via markApplied.
@@ -47,6 +51,18 @@ interface FreeFormChange {
   restaurantId?: string;
   mode?: string;
 }
+
+interface TrainingRuleChange {
+  agentId?: string;
+  title?: string;
+  trainingRule?: string;
+  sourceType?: string;
+  riskLevel?: string;
+  restaurantId?: string | null;
+}
+
+const LEARNING_SOURCE_TYPES = new Set(["REAL_CONVERSATION", "SIMULATION", "LIBRARY", "RESULT_EVIDENCE"]);
+const LEARNING_RISK_LEVELS = new Set(["LOW", "MEDIUM", "HIGH"]);
 
 export async function applyChangeRequest(input: { id: string; appliedBy: string }): Promise<ApplyResult> {
   const fail = (error: string, extra: Partial<ApplyResult> = {}): ApplyResult =>
@@ -127,8 +143,39 @@ export async function applyChangeRequest(input: { id: string; appliedBy: string 
     };
   }
 
+  if (request.target === "TRAINING_RULE") {
+    const change = proposed as TrainingRuleChange;
+    const agentSlug = change.agentId?.trim() || "whatsapp";
+    const trainingRule = (change.trainingRule?.trim() || request.rationale?.trim()) ?? "";
+    if (!trainingRule) {
+      return fail("TRAINING_RULE precisa de proposedChange.trainingRule ou rationale no CR.", { gate: gateInfo, target: request.target });
+    }
+    const sourceType = change.sourceType?.toUpperCase().trim() ?? "RESULT_EVIDENCE";
+    if (!LEARNING_SOURCE_TYPES.has(sourceType)) return fail(`sourceType inválido: ${sourceType}.`, { gate: gateInfo, target: request.target });
+    const riskLevel = (change.riskLevel ?? request.riskLevel ?? "LOW").toUpperCase().trim();
+
+    // Store canônico dos aprendizados aprovados — import dinâmico para não puxar
+    // a cadeia de reasoning do garçom em quem só usa os outros executores.
+    const { insertApprovedLearning } = await import("@/services/waiterTraining/WaiterTrainingSuggestionStore");
+    const learning = await insertApprovedLearning({
+      agentSlug,
+      title: change.title?.trim() || request.summary,
+      trainingRule,
+      sourceType: sourceType as "REAL_CONVERSATION" | "SIMULATION" | "LIBRARY" | "RESULT_EVIDENCE",
+      riskLevel: (LEARNING_RISK_LEVELS.has(riskLevel) ? riskLevel : "HIGH") as "LOW" | "MEDIUM" | "HIGH", // CRITICAL colapsa em HIGH
+      restaurantId: change.restaurantId ?? request.businessId ?? null,
+      sourceId: `cr:${request.id}`, // dedupe — reaplicar o mesmo CR não duplica o learning
+      approvedBy: input.appliedBy,
+    });
+    await markApplied(request.id, input.appliedBy);
+    return {
+      success: true, changeRequestId: request.id, target: request.target, gate: gateInfo,
+      applied: { agentSlug, learningId: learning.id, trainingRule }, error: null, runtimeTouched: false,
+    };
+  }
+
   return fail(
-    `Target ${request.target} ainda não tem executor — alvo aplicável hoje: AI_ENGINE_ROUTING, AGENT_POLICY(freeForm).`,
+    `Target ${request.target} ainda não tem executor — alvo aplicável hoje: AI_ENGINE_ROUTING, AGENT_POLICY(freeForm), TRAINING_RULE.`,
     { gate: gateInfo, target: request.target },
   );
 }

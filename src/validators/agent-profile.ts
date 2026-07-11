@@ -86,7 +86,36 @@ export const restaurantAgentOverrideSchema = z.object({
   isEnabled: z.boolean().optional(),
 });
 
+/**
+ * Ficha Técnica (admin) — partial PATCH of the master profile. Master-only
+ * fields (forbiddenActions) SÃO editáveis aqui porque a rota é admin-only.
+ * `safetyRules` fica de fora de propósito: é o piso imutável espelhado do
+ * código. Governança (status/visibility/runtime/version) também não entra.
+ */
+export const agentProfilePatchSchema = agentProfileSchema
+  .pick({
+    name: true,
+    title: true,
+    description: true,
+    mission: true,
+    objectives: true,
+    responsibilities: true,
+    skills: true,
+    allowedActions: true,
+    forbiddenActions: true,
+    tools: true,
+    knowledgeAreas: true,
+    interfaceContext: true,
+    businessRules: true,
+    escalationRules: true,
+    outputRules: true,
+    evaluationCriteria: true,
+  })
+  .partial()
+  .strict();
+
 export type AgentProfileInput = z.infer<typeof agentProfileSchema>;
+export type AgentProfilePatchInput = z.infer<typeof agentProfilePatchSchema>;
 export type RestaurantAgentOverrideInput = z.infer<
   typeof restaurantAgentOverrideSchema
 >;

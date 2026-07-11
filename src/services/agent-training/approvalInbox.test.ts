@@ -7,13 +7,31 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-import { listInbox, decideInbox, normalizeAgent, normalizeRisk } from "./approvalInbox";
+const store = vi.hoisted(() => ({ insertApprovedLearning: vi.fn() }));
+vi.mock("@/services/waiterTraining/WaiterTrainingSuggestionStore", () => store);
+
+import {
+  listInbox,
+  decideInbox,
+  normalizeAgent,
+  normalizeRisk,
+  isCodePatchText,
+  recordProposalLearningOnApproval,
+} from "./approvalInbox";
 
 beforeEach(() => {
   vi.clearAllMocks();
   db.agentImprovementProposal.findMany.mockResolvedValue([]);
   db.agentSimulationOpportunity.findMany.mockResolvedValue([]);
   db.waiterTrainingSuggestion.findMany.mockResolvedValue([]);
+  db.agentImprovementProposal.update.mockResolvedValue({
+    id: "p1", agentType: "WHATSAPP_ORDERING", title: "Prop", proposedPatchText: null, riskLevel: "LOW", reviewerNotes: null,
+  });
+  db.agentSimulationOpportunity.update.mockResolvedValue({
+    id: "o1", agentSlug: "waiter", title: "Opp", recommendation: null, severity: "INFO",
+  });
+  db.waiterTrainingSuggestion.update.mockResolvedValue({});
+  store.insertApprovedLearning.mockResolvedValue({ id: "learn_1" });
 });
 
 describe("normalizeAgent — one canonical key for the many identifiers", () => {

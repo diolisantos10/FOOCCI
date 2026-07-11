@@ -12,6 +12,9 @@ vi.mock("./BrainDirectorRepository", () => repo);
 const director = vi.hoisted(() => ({ markApplied: vi.fn() }));
 vi.mock("./PersistentBrainDirectorService", () => director);
 
+const store = vi.hoisted(() => ({ insertApprovedLearning: vi.fn() }));
+vi.mock("@/services/waiterTraining/WaiterTrainingSuggestionStore", () => store);
+
 import { applyChangeRequest } from "./ChangeRequestApplier";
 
 function approvedCR(over: Record<string, unknown> = {}) {
@@ -34,6 +37,7 @@ beforeEach(() => {
   db.brainEngineRouting.update.mockResolvedValue({});
   db.brainFreeFormConfig.findUnique.mockResolvedValue(null);
   db.brainFreeFormConfig.upsert.mockResolvedValue({});
+  store.insertApprovedLearning.mockResolvedValue({ id: "learn_1" });
 });
 
 describe("ChangeRequestApplier — aprovar passou a APLICAR (com gate no apply)", () => {
@@ -89,5 +93,67 @@ describe("ChangeRequestApplier — aprovar passou a APLICAR (com gate no apply)"
     const r = await applyChangeRequest({ id: "cr_1", appliedBy: "diego" });
     expect(r.success).toBe(false);
     expect(r.error).toMatch(/não tem executor/);
+  });
+
+  it("TRAINING_RULE aplicado: grava learning APROVADO no pool canônico + markApplied", async () => {
+    repo.findChangeRequest.mockResolvedValue(
+      approvedCR({
+        target: "TRAINING_RULE",
+        summary: "Oferecer bebida após o prato",
+        rationale: "Casos reais mostram queda de ticket sem a oferta.",
+        riskLevel: "MEDIUM",
+        businessId: null,
+        proposedChange: { agentId: "waiter", title: "Oferta de bebida", trainingRule: "Sempre ofereça 1 bebida após o prato principal." },
+      }),
+    );
+    const r = await applyChangeRequest({ id: "cr_1", appliedBy: "diego" });
+    expect(r.success).toBe(true);
+    expect(store.insertApprovedLearning).toHaveBeenCalledTimes(1);
+    expect(store.insertApprovedLearning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentSlug: "waiter",
+        title: "Oferta de bebida",
+        trainingRule: "Sempre ofereça 1 bebida após o prato principal.",
+        sourceType: "RESULT_EVIDENCE",
+        riskLevel: "MEDIUM",
+        sourceId: "cr:cr_1", // reaplicar o mesmo CR não duplica o learning
+        approvedBy: "diego",
+      }),
+    );
+    expect(director.markApplied).toHaveBeenCalledWith("cr_1", "diego");
+    expect(r.applied).toMatchObject({ agentSlug: "waiter", learningId: "learn_1" });
+  });
+
+  it("TRAINING_RULE sem trainingRule usa rationale/summary e default whatsapp; CRITICAL colapsa em HIGH", async () => {
+    repo.findChangeRequest.mockResolvedValue(
+      approvedCR({
+        target: "TRAINING_RULE",
+        summary: "Regra de fechamento",
+        rationale: "Confirmar o pedido imediatamente após sinal de fechamento.",
+        riskLevel: "CRITICAL",
+        proposedChange: {},
+      }),
+    );
+    const r = await applyChangeRequest({ id: "cr_1", appliedBy: "diego" });
+    expect(r.success).toBe(true);
+    expect(store.insertApprovedLearning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentSlug: "whatsapp",
+        title: "Regra de fechamento",
+        trainingRule: "Confirmar o pedido imediatamente após sinal de fechamento.",
+        riskLevel: "HIGH",
+      }),
+    );
+  });
+
+  it("TRAINING_RULE sem trainingRule E sem rationale é recusado — nada gravado", async () => {
+    repo.findChangeRequest.mockResolvedValue(
+      approvedCR({ target: "TRAINING_RULE", summary: "s", rationale: "   ", proposedChange: {} }),
+    );
+    const r = await applyChangeRequest({ id: "cr_1", appliedBy: "diego" });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/trainingRule|rationale/);
+    expect(store.insertApprovedLearning).not.toHaveBeenCalled();
+    expect(director.markApplied).not.toHaveBeenCalled();
   });
 });

@@ -17,27 +17,57 @@ export function AdminSidebar() {
     router.replace("/admin/login");
   }
 
-  const navItems = [
-    { href: "/admin/restaurants",                          label: "Restaurantes", icon: "🏪" },
-    { href: "/admin/quality",                              label: "Controle de Qualidade", icon: "🛡️" },
-    { href: "/admin/agents",                               label: "Agentes",      icon: "🤖" },
-    { href: "/admin/build-os",                             label: "Build OS",     icon: "🛠️" },
-    { href: "/admin/preflight",                            label: "Pré-piloto",   icon: "✅" },
-    { href: "/admin/manual-operacional",                   label: "Manual",       icon: "📖" },
-    { href: "/admin/support-inbox",                        label: "Suporte",      icon: "💬" },
-    { href: "/admin/branding-book",                        label: "Branding Book", icon: "🎨" },
-    { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",  icon: "🔍" },
-    { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",  icon: "🧪" },
-    { href: "/admin/diagnostics/whatsapp-pedido-identity", label: "WA Identity",   icon: "🔗" },
-    { href: "/admin/diagnostics/whatsapp-routing-test",    label: "WA Routing Lab", icon: "🧬" },
-    { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes", icon: "🧠" },
-    { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",    icon: "📞" },
-    { href: "/admin/agentes/analytics/testes",             label: "Analytics Testes", icon: "📊" },
-    { href: "/admin/diagnostics/whatsapp-text-ordering", label: "WA Pedido Texto", icon: "🧾" },
-    { href: "/admin/agents/whatsapp",                    label: "WA Cockpit",      icon: "🎛️" },
-    { href: "/admin/agentes/training",                  label: "Treinamento IA",  icon: "🧠" },
-    { href: "/admin/brain",                             label: "Brain",           icon: "⚡" },
-    { href: "/admin/brain/free-form",                   label: "Escada do Brain", icon: "🪜" },
+  // Grupos com título. Nenhum link foi removido — apenas reorganizado.
+  // Os itens de teste WhatsApp/labs ficam agrupados em TESTES por ora (faxina é outra fase).
+  const navGroups: Array<{
+    title: string;
+    items: Array<{ href: string; label: string; icon: string }>;
+  }> = [
+    {
+      title: "🧠 Inteligência",
+      items: [
+        { href: "/admin/agents",           label: "Agentes",         icon: "🤖" },
+        { href: "/admin/agentes/training", label: "Treinamento IA",  icon: "🧠" },
+        { href: "/admin/quality",          label: "Qualidade",       icon: "🛡️" },
+        { href: "/admin/brain",            label: "Brain",           icon: "⚡" },
+        { href: "/admin/brain/free-form",  label: "Escada do Brain", icon: "🪜" },
+      ],
+    },
+    {
+      title: "Operação",
+      items: [
+        { href: "/admin/restaurants",        label: "Restaurantes", icon: "🏪" },
+        { href: "/admin/preflight",          label: "Pré-piloto",   icon: "✅" },
+        { href: "/admin/manual-operacional", label: "Manual",       icon: "📖" },
+        { href: "/admin/support-inbox",      label: "Suporte",      icon: "💬" },
+      ],
+    },
+    {
+      title: "Crescimento",
+      items: [
+        { href: "/admin/branding-book", label: "Branding Book", icon: "🎨" },
+      ],
+    },
+    {
+      title: "Testes & Diagnóstico",
+      items: [
+        { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes",    icon: "🧠" },
+        { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",       icon: "📞" },
+        { href: "/admin/agentes/analytics/testes",             label: "Analytics Testes", icon: "📊" },
+        { href: "/admin/agents/whatsapp",                      label: "WA Cockpit",       icon: "🎛️" },
+        { href: "/admin/diagnostics/whatsapp-pedido-identity", label: "WA Identity",      icon: "🔗" },
+        { href: "/admin/diagnostics/whatsapp-routing-test",    label: "WA Routing Lab",   icon: "🧬" },
+        { href: "/admin/diagnostics/whatsapp-text-ordering",   label: "WA Pedido Texto",  icon: "🧾" },
+        { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",      icon: "🧪" },
+        { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",      icon: "🔍" },
+      ],
+    },
+    {
+      title: "Sistema",
+      items: [
+        { href: "/admin/build-os", label: "Build OS", icon: "🛠️" },
+      ],
+    },
   ];
 
   return (
@@ -52,29 +82,33 @@ export function AdminSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
-          Plataforma
-        </p>
-        <ul className="space-y-0.5">
-          {navItems.map((item) => {
-            const active = pathname.startsWith(item.href);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-violet-900/50 text-violet-200"
-                      : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-                  }`}
-                >
-                  <span className="text-[15px] leading-none">{item.icon}</span>
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        {navGroups.map((group, gi) => (
+          <div key={group.title} className={gi > 0 ? "mt-4" : undefined}>
+            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+              {group.title}
+            </p>
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = pathname.startsWith(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+                        active
+                          ? "bg-violet-900/50 text-violet-200"
+                          : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                      }`}
+                    >
+                      <span className="text-[15px] leading-none">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}
