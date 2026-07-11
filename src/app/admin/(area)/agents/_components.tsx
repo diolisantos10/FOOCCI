@@ -14,6 +14,7 @@ import type {
   AgentStatus,
   AgentVisibility,
 } from "@/services/agents/types";
+import { technicalExtendedEntries } from "@/services/agents/fichaVisibility";
 import { WaiterRoom } from "./WaiterRoom";
 
 // ── Label maps (internal/master tone, plain Portuguese) ─────────────────────────
@@ -343,27 +344,10 @@ function isExampleArray(value: unknown): value is AgentExample[] {
   );
 }
 
-/**
- * Seções de TOM/COMPORTAMENTO (princípios de venda, sondagem com frases,
- * upsell, fechamento, tom de mensagem, exemplos bom/ruim). NÃO aparecem na
- * ficha técnica interna: comportamento é definido pelo dono do restaurante na
- * configuração, não aqui. Continuam vivas na constituição de código (verdade de
- * runtime) — só não poluem a ficha.
- */
-const TONE_SECTIONS = new Set([
-  "salesPrinciples",
-  "consultativeProbingRules",
-  "upsellRules",
-  "closingRules",
-  "messageToneRules",
-  "personalizationRules",
-  "reviewRequestRules",
-  "relationshipPrinciples",
-  "examples",
-]);
-
 function ExtendedSections({ sections }: { sections?: Record<string, unknown> }) {
-  const technical = Object.entries(sections ?? {}).filter(([key]) => !TONE_SECTIONS.has(key));
+  // Só as seções TÉCNICAS aparecem na ficha — tom/comportamento fica de fora
+  // (regra compartilhada com os testes em fichaVisibility).
+  const technical = technicalExtendedEntries(sections);
   if (technical.length === 0) return null;
 
   return (
