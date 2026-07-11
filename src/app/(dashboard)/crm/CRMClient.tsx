@@ -3366,10 +3366,10 @@ function CampanhasAtivasSection({
         </div>
         <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{count}</span>
       </div>
-      {/* Compact per-campaign metrics: Conversão / Cupons enviados / Cupons usados
-          come from real backend data (execution totals + the coupon wallet). */}
-      <div className="overflow-x-auto rounded-2xl border border-line bg-paper shadow-sm">
-        <table className="w-full min-w-[1040px] text-left text-xs">
+      {/* Columns: Enviados · Cupons usados · Conversão (usados÷enviados) · Falhas ·
+          Receita — all from real backend data (execution totals + the coupon wallet). */}
+      <div className="rounded-2xl border border-line bg-paper shadow-sm">
+        <table className="w-full text-left text-xs">
           <thead className="border-b border-line bg-[#FAFAF8]">
             <tr className="text-[10px] uppercase tracking-wide text-muted">
               <th className="py-2.5 pl-4 pr-2 font-semibold">Status</th>
@@ -3377,11 +3377,10 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold">Tipo</th>
               <th className="py-2.5 px-2 font-semibold">Público</th>
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons concedidos pela campanha que foram resgatados">Cupons usados</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons usados ÷ cupons enviados">Conversão</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
               <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
-              <th className="py-2.5 px-2 font-semibold text-right" title="Pedidos atribuídos após a mensagem ÷ enviados">Conversão</th>
-              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons que a campanha concedeu à carteira dos clientes">Cupons env.</th>
-              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons concedidos pela campanha que foram resgatados">Cupons usados</th>
               <th className="py-2.5 px-2 font-semibold">Agenda</th>
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
             </tr>
@@ -3405,11 +3404,10 @@ function CampanhasAtivasSection({
                   <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE["Recorrente"]}`}>Automática</span>
                 </td>
                 <td className="py-3 px-2 max-w-[100px]"><span className="text-ink2 truncate block text-[11px]">quem abandonou</span></td>
+                {/* Enviados · Cupons usados · Conversão · Falhas · Receita — cart recovery
+                    grants without a Campaign row, so these aren't per-campaign attributable. */}
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                {/* Conversão / Cupons — cart recovery grants without a Campaign row,
-                    so its coupons aren't per-campaign attributable. */}
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
@@ -3496,6 +3494,26 @@ function CampanhasAtivasSection({
                     {c.totalSent > 0 ? c.totalSent : "—"}
                   </td>
 
+                  {/* Cupons usados — resgatados pelos clientes */}
+                  <td className="py-3 px-2 text-right tabular-nums">
+                    {(() => {
+                      const used = couponCounts?.[c.id]?.used ?? 0;
+                      return used > 0 ? <span className="font-semibold text-green-700">{used}</span> : <span className="text-muted">—</span>;
+                    })()}
+                  </td>
+
+                  {/* Conversão de cupom — usados ÷ enviados */}
+                  <td className="py-3 px-2 text-right tabular-nums" title="Cupons usados ÷ cupons enviados">
+                    {(() => {
+                      const cc = couponCounts?.[c.id];
+                      const s = cc?.sent ?? 0;
+                      const u = cc?.used ?? 0;
+                      return s > 0
+                        ? <span className="font-semibold text-emerald-700">{Math.round((u / s) * 100)}%</span>
+                        : <span className="text-muted">—</span>;
+                    })()}
+                  </td>
+
                   {/* Falhas — hover title shows breakdown; click "Gerenciar" for full detail */}
                   <td className="py-3 px-2 text-right" title={failTitle}>
                     {c.totalFailed > 0 ? (
@@ -3516,33 +3534,6 @@ function CampanhasAtivasSection({
                     {Number(c.totalRevenue) > 0
                       ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                       : <span className="text-muted font-normal">—</span>}
-                  </td>
-
-                  {/* Conversão — pedidos atribuídos ÷ enviados (números reais do backend) */}
-                  <td className="py-3 px-2 text-right tabular-nums">
-                    {c.totalSent > 0 ? (
-                      <span className="font-semibold text-emerald-700">
-                        {Math.round((c.totalConverted / c.totalSent) * 100)}%
-                      </span>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-
-                  {/* Cupons enviados — concedidos à carteira pela campanha */}
-                  <td className="py-3 px-2 text-right tabular-nums">
-                    {(() => {
-                      const sent = couponCounts?.[c.id]?.sent ?? 0;
-                      return sent > 0 ? <span className="text-ink2">{sent}</span> : <span className="text-muted">—</span>;
-                    })()}
-                  </td>
-
-                  {/* Cupons usados — resgatados */}
-                  <td className="py-3 px-2 text-right tabular-nums">
-                    {(() => {
-                      const used = couponCounts?.[c.id]?.used ?? 0;
-                      return used > 0 ? <span className="font-semibold text-green-700">{used}</span> : <span className="text-muted">—</span>;
-                    })()}
                   </td>
 
                   {/* Agenda: time window on line 1, cadence on line 2 */}
