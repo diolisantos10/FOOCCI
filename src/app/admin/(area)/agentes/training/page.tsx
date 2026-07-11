@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { CycleValidationReport } from "@/app/api/admin/training/validate-cycle/route";
 import { EXTERNAL_ARENAS } from "@/services/agent-training/arenas";
 import { UnifiedInboxTab } from "./UnifiedInboxTab";
+import { BrainFreeFormPanel } from "../../brain/free-form/BrainFreeFormPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2223,9 +2224,29 @@ function RunDetailView({ runId, onBack }: { runId: string; onBack: () => void })
   );
 }
 
+// ── Formatura (Fase D): o boletim de sombra + as provas (gates) + a formatura
+// (escada de promoção). Reaproveita o painel canônico da Escada do Brain — a
+// "escola" agora mostra a cerimônia inteira, não só a aula. ────────────────────
+function FormaturaTab() {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-violet-800/40 bg-violet-950/20 p-4">
+        <h3 className="text-sm font-bold text-violet-200">🎓 Formatura — do treino ao atendimento ao vivo</h3>
+        <p className="mt-1 text-xs text-gray-400">
+          Aqui o agente &quot;se forma&quot;: o <b>boletim</b> mostra como ele se sai em sombra (raciocina em paralelo
+          em toda conversa real, sem responder), as <b>provas</b> são os gates (coerência ≥ 70%, verdade completa,
+          diagnóstico P0=0) e a <b>formatura</b> é a promoção governada — SHADOW → time (allowlist) → clientes.
+          Nada aqui responde cliente sem sua decisão explícita; rollback de 30s sempre disponível.
+        </p>
+      </div>
+      <BrainFreeFormPanel />
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "visao-geral" | "caixa-unica" | "arena" | "casos" | "melhorias" | "versoes" | "validacao" | "configuracoes";
+type Tab = "visao-geral" | "caixa-unica" | "arena" | "casos" | "melhorias" | "formatura" | "versoes" | "validacao" | "configuracoes";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "visao-geral",     label: "Visão Geral" },
@@ -2233,6 +2254,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "arena",           label: "Arena" },
   { id: "casos",           label: "Casos" },
   { id: "melhorias",       label: "Melhorias para Aprovar" },
+  { id: "formatura",       label: "🎓 Formatura" },
   { id: "versoes",         label: "Versões" },
   { id: "validacao",       label: "Validação" },
   { id: "configuracoes",   label: "Configurações" },
@@ -2395,6 +2417,7 @@ export default function AgentTrainingPage() {
         {tab === "arena"         && <ArenaTab />}
         {tab === "casos"         && <CasosTab onSelectScenario={(id) => setSelectedScenario(id)} />}
         {tab === "melhorias"     && <MelhoriasTab />}
+        {tab === "formatura"     && <FormaturaTab />}
         {tab === "versoes"       && <VersoesSandboxTab />}
         {tab === "validacao"     && <ValidateCycleTab />}
         {tab === "configuracoes" && <ConfiguracoesTab />}

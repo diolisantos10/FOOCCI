@@ -49,17 +49,12 @@ export function AdminSidebar() {
       ],
     },
     {
-      title: "Testes & Diagnóstico",
+      title: "Central WhatsApp",
       items: [
-        { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes",    icon: "🧠" },
-        { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",       icon: "📞" },
-        { href: "/admin/agentes/analytics/testes",             label: "Analytics Testes", icon: "📊" },
-        { href: "/admin/agents/whatsapp",                      label: "WA Cockpit",       icon: "🎛️" },
-        { href: "/admin/diagnostics/whatsapp-pedido-identity", label: "WA Identity",      icon: "🔗" },
-        { href: "/admin/diagnostics/whatsapp-routing-test",    label: "WA Routing Lab",   icon: "🧬" },
-        { href: "/admin/diagnostics/whatsapp-text-ordering",   label: "WA Pedido Texto",  icon: "🧾" },
+        { href: "/admin/diagnostics/whatsapp-text-ordering",   label: "Pedido por Texto", icon: "🧾" },
+        { href: "/admin/agents/whatsapp",                      label: "Cockpit",          icon: "🎛️" },
+        { href: "/admin/diagnostics/whatsapp-routing-test",    label: "Roteamento",       icon: "🧬" },
         { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",      icon: "🧪" },
-        { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",      icon: "🔍" },
       ],
     },
     {
