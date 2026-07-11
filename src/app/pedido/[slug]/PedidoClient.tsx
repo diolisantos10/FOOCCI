@@ -434,15 +434,14 @@ function formatTime(d: Date) {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-// TODO: reativar Pedir de novo após validação visual e UX dedicada.
-// Standby: the "Pedir de novo" feature (virtual category + repeat banner +
-// repeat-order fetch) is disabled in the public UI for the operational launch.
-// The backend service/route/tests stay intact — only the UI is gated off here.
-const REPEAT_ORDER_UI_ENABLED = false;
+// "Comprar novamente" — categoria virtual com os últimos itens do cliente,
+// logo após "Mais vendidos". Só aparece quando há histórico real (ver
+// repeatCategory.ts). Reativada a pedido do lojista.
+const REPEAT_ORDER_UI_ENABLED = true;
 
 function categoryEmoji(name: string): string {
   const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (n.includes("pedir de novo") || n.includes("pedir novamente")) return "🔁";
+  if (n.includes("comprar novamente") || n.includes("pedir de novo") || n.includes("pedir novamente")) return "🔁";
   if (n.includes("pizza"))                          return "🍕";
   if (n.includes("bebida") || n.includes("drink"))  return "🥤";
   if (n.includes("sobremesa") || n.includes("doce")) return "🍰";
@@ -1664,10 +1663,13 @@ function CustomerIdentityStrip({
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [coupons, setCoupons] = useState<WalletCoupon[]>([]);
   const [loading, setLoading] = useState(false);
+  const [addrOpen, setAddrOpen] = useState(false); // "ver todos os endereços"
   const loadedRef = useRef(false);
 
+  // Eager load once identified: lets the collapsed bar show a live hint (cupons)
+  // and opens the panel instantly.
   useEffect(() => {
-    if (!open || loadedRef.current || !customerId) return;
+    if (loadedRef.current || !customerId) return;
     loadedRef.current = true;
     setLoading(true);
     Promise.all([
@@ -1677,63 +1679,55 @@ function CustomerIdentityStrip({
       if (p?.profile) setProfile(p.profile as CustomerProfile);
       if (Array.isArray(c?.coupons)) setCoupons(c.coupons as WalletCoupon[]);
     }).finally(() => setLoading(false));
-  }, [open, customerId, slug]);
+  }, [customerId, slug]);
 
   if (!name && !displayPhone) return null;
-  const greeting = name ? `Olá, ${name}` : "Cliente identificado";
-  const canExpand = Boolean(customerId);
+  const canExpand   = Boolean(customerId);
   const displayName = profile?.name || name || "Cliente";
+  const firstName   = (name || displayName).split(/\s+/)[0] || "Cliente";
+  const defaultAddr = profile?.addresses.find((a) => a.isDefault) ?? profile?.addresses[0] ?? null;
+  const otherAddrs  = profile ? profile.addresses.filter((a) => a.id !== defaultAddr?.id) : [];
+  const couponHint  = coupons.length > 0
+    ? `🎟️ ${coupons.length} ${coupons.length === 1 ? "cupom disponível" : "cupons disponíveis"}`
+    : "Meus dados, endereços e cupons";
 
   return (
-    <div className="shrink-0 border-b border-gray-100 bg-white/80">
-      {/* Slim bar */}
-      <div className="flex items-center justify-between gap-2 px-4 py-1.5">
+    <div className="shrink-0 border-b border-gray-100 bg-white">
+      {/* Faixa do cliente — avatar + saudação + dica (cupons). Sutil, destaca sem ofuscar. */}
+      <div className="flex items-stretch gap-2 bg-gradient-to-r from-brand-50/80 via-white to-white px-3 py-2">
         <button
           type="button"
           onClick={() => canExpand && setOpen((v) => !v)}
           disabled={!canExpand}
-          className="flex min-w-0 items-center gap-1.5 text-left disabled:cursor-default"
           aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default"
         >
-          <span className="min-w-0 truncate text-xs text-gray-600">
-            {greeting}{displayPhone ? ` · ${displayPhone}` : ""}
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xs font-bold text-white shadow-sm">
+            {customerInitials(displayName)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-bold text-ink">Olá, {firstName} 👋</span>
+            <span className="block truncate text-[11px] font-medium text-brand-700/80">{couponHint}</span>
           </span>
           {canExpand && (
-            <svg className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className={`h-4 w-4 shrink-0 text-brand-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
             </svg>
           )}
         </button>
         <button
           onClick={onReset}
-          className="shrink-0 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-700"
+          className="shrink-0 self-center rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
         >
           Trocar
         </button>
       </div>
 
-      {/* Área do cliente (unrolls) — header + abas + conteúdo */}
+      {/* Área do cliente (desenrola) — abas + conteúdo de ALTURA FIXA */}
       {open && (
-        <div className="border-t border-gray-100 bg-gradient-to-b from-white to-gray-50/70">
-          {/* Header: avatar + nome + telefone */}
-          <div className="flex items-center gap-3 px-4 pb-2 pt-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-base font-bold text-white shadow-sm">
-              {customerInitials(displayName)}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-ink">{displayName}</p>
-              {(displayPhone || profile?.phone) && (
-                <p className="truncate text-xs text-gray-500">{displayPhone || profile?.phone}</p>
-              )}
-            </div>
-            {/* Classificação (reservado — Ouro/Prata… quando existir) */}
-            <span className="ml-auto shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-400">
-              Cliente
-            </span>
-          </div>
-
+        <div className="border-t border-gray-100 bg-white">
           {/* Abas */}
-          <div className="flex gap-1 px-3">
+          <div className="flex gap-1 px-3 pt-1">
             {CUSTOMER_TABS.map((t) => {
               const activeTab = tab === t.id;
               return (
@@ -1754,8 +1748,8 @@ function CustomerIdentityStrip({
             })}
           </div>
 
-          {/* Conteúdo da aba */}
-          <div className="max-h-[48vh] overflow-y-auto border-t border-gray-100 px-4 py-3">
+          {/* Conteúdo — altura FIXA (h-[280px]) pra a área não pular ao trocar de aba */}
+          <div className="h-[280px] overflow-y-auto border-t border-gray-100 bg-gray-50/50 px-4 py-3">
             {loading && !profile ? (
               <div className="flex items-center gap-2 py-3 text-xs text-gray-500">
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
@@ -1781,27 +1775,60 @@ function CustomerIdentityStrip({
                         <span className="min-w-0 truncate font-semibold text-ink">{profile.email}</span>
                       </div>
                     )}
+                    <div className="flex justify-between gap-2 px-3.5 py-2.5">
+                      <span className="text-gray-400">Nível</span>
+                      <span className="text-[11px] font-medium text-gray-400">Em breve</span>
+                    </div>
                   </div>
                 </section>
 
-                {/* Meus endereços */}
+                {/* Meus endereços — padrão em destaque + lista expansível */}
                 <section>
                   <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
-                  {profile && profile.addresses.length > 0 ? (
-                    <ul className="space-y-2">
-                      {profile.addresses.map((a) => (
-                        <li key={a.id} className="rounded-2xl border border-gray-100 bg-white px-3.5 py-2.5 text-xs shadow-sm">
-                          <div className="flex items-center gap-1.5">
-                            <span aria-hidden className="text-sm">📍</span>
-                            {a.label && <span className="font-bold text-ink">{a.label}</span>}
-                            {a.isDefault && (
-                              <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-700">Padrão</span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 pl-6 text-gray-600">{formatProfileAddress(a)}</p>
-                        </li>
-                      ))}
-                    </ul>
+                  {defaultAddr ? (
+                    <>
+                      {/* Endereço padrão em destaque */}
+                      <div className="rounded-2xl border border-brand-200 bg-brand-50/60 px-3.5 py-2.5 text-xs shadow-sm">
+                        <div className="flex items-center gap-1.5">
+                          <span aria-hidden className="text-sm">📍</span>
+                          {defaultAddr.label && <span className="font-bold text-ink">{defaultAddr.label}</span>}
+                          <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Padrão</span>
+                        </div>
+                        <p className="mt-0.5 pl-6 text-gray-600">{formatProfileAddress(defaultAddr)}</p>
+                      </div>
+
+                      {/* Todos os endereços (expansível) — só se houver outros */}
+                      {otherAddrs.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAddrOpen((v) => !v)}
+                            className="mt-2 flex w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-white px-3.5 py-2 text-[11px] font-semibold text-gray-500 shadow-sm hover:bg-gray-50"
+                          >
+                            <span>Ver todos os endereços ({profile!.addresses.length})</span>
+                            <svg className={`h-3.5 w-3.5 shrink-0 transition-transform ${addrOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                            </svg>
+                          </button>
+                          {addrOpen && (
+                            <ul className="mt-1.5 space-y-1.5">
+                              {otherAddrs.map((a) => (
+                                <li key={a.id} className="rounded-xl border border-gray-100 bg-white px-3.5 py-2 text-xs shadow-sm">
+                                  <div className="flex items-center gap-1.5">
+                                    <span aria-hidden className="text-sm">📍</span>
+                                    {a.label && <span className="font-semibold text-ink">{a.label}</span>}
+                                  </div>
+                                  <p className="mt-0.5 pl-6 text-gray-600">{formatProfileAddress(a)}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      )}
+                      <p className="mt-2 text-[10px] text-gray-400">
+                        Para adicionar ou editar um endereço, é só informar no checkout.
+                      </p>
+                    </>
                   ) : (
                     <p className="rounded-2xl border border-dashed border-gray-200 px-3.5 py-3 text-center text-[11px] text-gray-400">
                       Nenhum endereço salvo ainda — você informa no checkout.
@@ -1834,7 +1861,7 @@ function CustomerIdentityStrip({
                     ))}
                   </ul>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center">
+                  <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center">
                     <p className="text-2xl">🎁</p>
                     <p className="mt-1 text-xs font-semibold text-gray-500">Você ainda não tem cupons</p>
                     <p className="mt-0.5 text-[11px] text-gray-400">Eles chegam pelas mensagens do restaurante.</p>
@@ -4602,9 +4629,11 @@ export function PedidoClient({
               </div>
             ) : (
               <div className="space-y-1.5">
-                {/* Meus cupons (wallet earned via CRM campaigns) */}
+                {/* Meus cupons (wallet earned via CRM campaigns). O dropdown é um
+                    OVERLAY (absolute): abre pra baixo POR CIMA do conteúdo, sem
+                    empurrar o resto do layout do resumo. */}
                 {resolvedCustomerId && (
-                  <div className="rounded-lg border border-brand-200 bg-brand-50/40">
+                  <div className="relative rounded-lg border border-brand-200 bg-brand-50/40">
                     <button
                       type="button"
                       onClick={() => { const nx = !walletOpen; setWalletOpen(nx); if (nx) void loadWallet(); }}
@@ -4616,26 +4645,35 @@ export function PedidoClient({
                       </svg>
                     </button>
                     {walletOpen && (
-                      <div className="max-h-44 overflow-y-auto border-t border-brand-100">
-                        {walletCoupons.length === 0 ? (
-                          <p className="px-2.5 py-2 text-[11px] text-gray-500">Você ainda não tem cupons. Eles chegam pelas mensagens do restaurante.</p>
-                        ) : walletCoupons.map((w) => (
-                          <button
-                            key={w.id}
-                            type="button"
-                            onClick={() => applyWalletCoupon(w)}
-                            className="flex w-full items-center justify-between gap-2 border-t border-brand-100 px-2.5 py-2 text-left first:border-t-0 hover:bg-white"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate text-xs font-bold text-ink">{w.isReward ? `🎁 ${w.label}` : w.label}</span>
-                              {w.isReward && <span className="block text-[10px] text-gray-500">Recompensa — resgatada no pedido</span>}
-                            </span>
-                            <span className="shrink-0 text-[10px] text-gray-500">
-                              {w.expiresAt ? `vence ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "sem validade"}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        {/* clique fora fecha o overlay */}
+                        <button
+                          type="button"
+                          aria-label="Fechar cupons"
+                          onClick={() => setWalletOpen(false)}
+                          className="fixed inset-0 z-20 cursor-default"
+                        />
+                        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-brand-200 bg-white shadow-xl">
+                          {walletCoupons.length === 0 ? (
+                            <p className="px-2.5 py-2 text-[11px] text-gray-500">Você ainda não tem cupons. Eles chegam pelas mensagens do restaurante.</p>
+                          ) : walletCoupons.map((w) => (
+                            <button
+                              key={w.id}
+                              type="button"
+                              onClick={() => applyWalletCoupon(w)}
+                              className="flex w-full items-center justify-between gap-2 border-t border-brand-100 px-2.5 py-2 text-left first:border-t-0 hover:bg-brand-50/60"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-bold text-ink">{w.isReward ? `🎁 ${w.label}` : w.label}</span>
+                                {w.isReward && <span className="block text-[10px] text-gray-500">Recompensa — resgatada no pedido</span>}
+                              </span>
+                              <span className="shrink-0 text-[10px] text-gray-500">
+                                {w.expiresAt ? `vence ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "sem validade"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

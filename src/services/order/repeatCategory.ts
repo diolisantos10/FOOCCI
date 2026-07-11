@@ -8,7 +8,13 @@
  */
 
 export const REPEAT_CATEGORY_ID = "repeat-order";
-export const REPEAT_CATEGORY_NAME = "Pedir de novo";
+export const REPEAT_CATEGORY_NAME = "Comprar novamente";
+
+/** Only the last N repeatable items are shown (most recent first). */
+export const REPEAT_MAX_ITEMS = 10;
+
+/** A "best sellers"-style category, after which "Comprar novamente" is inserted. */
+const BEST_SELLER_RE = /mais\s*(vendid|pedid)|populares|destaques|^\s*top\b/i;
 
 interface HasId { id: string }
 
@@ -26,8 +32,10 @@ export function shouldShowRepeatCategory<T extends HasId>(repeatItems: readonly 
 }
 
 /**
- * Returns the categories to render: when there is repeatable history, prepends
- * the virtual "Pedir de novo" category; otherwise returns the menu unchanged.
+ * Returns the categories to render: when there is repeatable history, inserts the
+ * virtual "Comprar novamente" category (last N items) right AFTER a best-sellers
+ * category if one exists, otherwise at the very top. Returns the menu unchanged
+ * when there is no history.
  */
 export function buildDisplayCategories<C extends VirtualCategory<T>, T extends HasId>(
   categories: readonly C[],
@@ -39,7 +47,10 @@ export function buildDisplayCategories<C extends VirtualCategory<T>, T extends H
     name: REPEAT_CATEGORY_NAME,
     description: null,
     imageUrl: null,
-    items: [...repeatItems],
+    items: repeatItems.slice(0, REPEAT_MAX_ITEMS),
   };
-  return [virtual, ...categories];
+  const result: Array<C | VirtualCategory<T>> = [...categories];
+  const bestIdx = result.findIndex((c) => BEST_SELLER_RE.test(c.name));
+  result.splice(bestIdx >= 0 ? bestIdx + 1 : 0, 0, virtual);
+  return result;
 }
