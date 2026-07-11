@@ -1111,6 +1111,15 @@ function ActionConfigDrawer({
             </div>
           )}
 
+          {/* Aviso de risco — campanhas para clientes frios (sem pedido há +60 dias) */}
+          {(template.audienceKey === "frioCustomers" || (isCustom && customAudienceId === "recuperar-frios")) && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs leading-relaxed text-amber-800">
+                ⚠️ Clientes frios (sem pedido há +60 dias) têm maior risco de bloqueio — mantenha o volume baixo.
+              </p>
+            </div>
+          )}
+
           {/* Customer preview list — only when computed and has eligible customers */}
           {(template.hasAudienceQuery || (isCustom && !!customAudienceId)) && audience?.computed && (audience.eligibleCount ?? audience.count) > 0 && (
             <div>
@@ -5542,11 +5551,10 @@ function CrmConfiguracoes() {
       <div className="rounded-2xl border border-line bg-paper p-4">
         <p className="text-xs font-bold uppercase tracking-widest text-muted">Configurações do CRM</p>
         <p className="mt-0.5 text-xs text-muted">Ajuste tudo a partir daqui.</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {[
             { href: "/settings/marketing", emoji: "💬", title: "Configuração do WhatsApp", sub: "Limites e regras de envio de mensagens" },
             { href: "/crm?tab=programa",   emoji: "🏆", title: "Níveis dos clientes", sub: "Bronze, Prata, Ouro, Diamante" },
-            { href: "/marca",              emoji: "⭐", title: "Links de avaliação",  sub: "Google e iFood" },
           ].map((s) => (
             <Link
               key={s.href}
@@ -5561,17 +5569,18 @@ function CrmConfiguracoes() {
             </Link>
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-muted">Segmentação e segurança de envio ficam logo abaixo.</p>
+        <p className="mt-2 text-[10px] text-muted">As regras de segurança de envio ficam logo abaixo. A classificação dos clientes fica na aba Clientes.</p>
       </div>
 
-      {/* Controle das regras de segurança (travado por padrão) */}
+      {/* Regras de Segurança — controle manual + limite de contatos + proteções */}
       <CfgCard
         title="Regras de Segurança"
-        subtitle="Por padrão as regras que protegem o número ficam travadas em valores seguros, e o limite diário sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — você assume o risco de bloqueio."
+        subtitle="Protegem o seu número de WhatsApp contra bloqueio. No modo seguro o limite de mensagens do dia sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — aí o risco fica com você."
       >
+        {/* (a) Controle manual + modo seguro */}
         <CfgToggle
           label="Assumir controle manual (eu me responsabilizo)"
-          desc="Destrava os limites de segurança para você definir os valores. Desligue para voltar ao modo seguro."
+          desc="Destrava os limites para você escolher os valores. Desligue para voltar ao modo seguro."
           checked={cfg.manualOverride}
           onChange={(v) => set("manualOverride", v)}
         />
@@ -5585,20 +5594,86 @@ function CrmConfiguracoes() {
               </span>
             </div>
             <p className="mt-1.5 text-xs text-emerald-800/80">
-              Limite diário seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"}).
-              Sobe sozinho: 20 → 40 → 80 → 150 → 250/dia conforme amadurece. Cooldown 24 h · máx. 5/cliente por semana ·
-              horário quieto 21h–8h · delay 5–45 s — fixos e travados.
+              Esse é o limite seguro de mensagens para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
+              Ele sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
             </p>
           </div>
         ) : (
           <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5">
             <p className="text-sm font-semibold text-amber-800">⚠️ Controle manual ativo</p>
             <p className="mt-1 text-xs text-amber-800/80">
-              Os limites abaixo estão sob sua responsabilidade. Volume alto num número novo aumenta muito o
-              risco de bloqueio do WhatsApp. Desligue para voltar ao seguro.
+              Os limites agora estão sob a sua responsabilidade. Enviar muito de um número novo aumenta bastante o
+              risco de bloqueio do WhatsApp. Desligue para voltar ao modo seguro.
             </p>
           </div>
         )}
+
+        {/* (b) Limite de contatos */}
+        <div className="mt-5 border-t border-line pt-5">
+          <p className="text-sm font-semibold text-ink">Limite de contatos</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Quantas pessoas diferentes o CRM pode abordar no total. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. 0 = sem limite.
+          </p>
+          {(() => {
+            const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
+            const total = cfg.contactBudgetTotal || 0;
+            const on    = total > 0;
+            const remaining = on ? Math.max(0, total - used) : 0;
+            const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
+            const low   = on && remaining <= Math.max(1, Math.round(total * 0.1));
+            return (
+              <div className="mt-3 grid gap-5 sm:grid-cols-2">
+                <CfgField
+                  label="Máximo de pessoas"
+                  hint={cfg.manualOverride
+                    ? "Aumente este número para permitir que o CRM aborde mais pessoas."
+                    : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” lá em cima para editar."}
+                >
+                  <input
+                    type="number" min={0} max={1000000}
+                    value={cfg.contactBudgetTotal}
+                    disabled={!cfg.manualOverride}
+                    onChange={(e) => set("contactBudgetTotal", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    className={`${CFG_INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
+                  />
+                </CfgField>
+
+                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                  {on ? (
+                    <>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm text-muted">Contatos restantes</span>
+                        <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                          {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted">
+                      Sem limite ativo. Já foram abordados <strong>{used}</strong> contatos.
+                      Defina um valor ao lado para limitar.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* (c) Proteções permanentes — rodapé discreto */}
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Proteções sempre ativas</p>
+          <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-muted">
+            <li>• Quem pediu para sair (opt-out) nunca mais recebe.</li>
+            <li>• Sem telefone válido, ninguém recebe.</li>
+            <li>• A mesma campanha não chega duas vezes para a mesma pessoa.</li>
+            <li>• Quem já recebeu algo hoje espera o intervalo — só o aniversário passa na frente.</li>
+          </ul>
+        </div>
       </CfgCard>
 
       {cfg.manualOverride && (<>
@@ -5698,61 +5773,6 @@ function CrmConfiguracoes() {
 
       </>)}
 
-      {/* A2 — Limite de contatos */}
-      <CfgCard
-        title="Limite de Contatos"
-        subtitle="Máximo de contatos únicos que o CRM pode abordar. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. 0 = sem limite. (O crédito em R$ do seu plano fica na Whats Evolution — aqui é só o limite de pessoas.)"
-      >
-        {(() => {
-          const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
-          const total = cfg.contactBudgetTotal || 0;
-          const on    = total > 0;
-          const remaining = on ? Math.max(0, total - used) : 0;
-          const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
-          const low   = on && remaining <= Math.max(1, Math.round(total * 0.1));
-          return (
-            <div className="grid gap-5 sm:grid-cols-2">
-              <CfgField
-                label="Limite total de contatos"
-                hint={cfg.manualOverride
-                  ? "Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
-                  : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” lá em cima para editar."}
-              >
-                <input
-                  type="number" min={0} max={1000000}
-                  value={cfg.contactBudgetTotal}
-                  disabled={!cfg.manualOverride}
-                  onChange={(e) => set("contactBudgetTotal", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className={`${CFG_INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
-                />
-              </CfgField>
-
-              <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
-                {on ? (
-                  <>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-sm text-muted">Contatos restantes</span>
-                      <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
-                        {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                      <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted">
-                    Sem limite ativo. Já foram abordados <strong>{used}</strong> contatos.
-                    Defina um valor ao lado para limitar.
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-      </CfgCard>
-
       {/* A3 — Orçamento de cupons (mensal, em R$) */}
       <CfgCard
         title="Orçamento de cupons (mensal)"
@@ -5767,11 +5787,48 @@ function CrmConfiguracoes() {
           const low    = on && remaining <= Math.max(1, Math.round(budget * 0.1));
           const brl    = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
           return (
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Painel de números */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Orçamento mensal</p>
+                  <p className="mt-1 text-xl font-bold text-ink">{on ? brl(budget) : "Sem limite"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Disponível este mês</p>
+                  <p className={`mt-1 text-xl font-bold ${!on ? "text-ink" : low ? "text-amber-600" : "text-emerald-600"}`}>
+                    {on ? brl(remaining) : "—"}
+                  </p>
+                  {on && <p className="mt-0.5 text-[11px] text-muted">de {brl(budget)}</p>}
+                </div>
+                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Gasto este mês</p>
+                  <p className="mt-1 text-xl font-bold text-ink">{brl(spent)}</p>
+                </div>
+              </div>
+
+              {/* Barra de progresso */}
+              {on ? (
+                <div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted">
+                    {brl(spent)} de {brl(budget)} usados ({pct}%){low ? " · orçamento baixo, avalie aumentar." : "."}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted">
+                  Orçamento desligado — cupons são distribuídos sem limite de gasto. Já foram gastos <strong>{brl(spent)}</strong> este mês.
+                  Defina um valor abaixo para ativar o controle.
+                </p>
+              )}
+
+              {/* Campos editáveis */}
+              <div className="grid gap-5 border-t border-line pt-5 sm:grid-cols-2">
                 <CfgField
                   label="Orçamento mensal (R$)"
-                  hint="Quanto o CRM pode gastar em cupons por mês. Zera no início de cada mês."
+                  hint="Quanto o CRM pode gastar em cupons por mês. Zera no início de cada mês. 0 = sem limite."
                 >
                   <input
                     type="number" min={0} max={1000000}
@@ -5782,7 +5839,7 @@ function CrmConfiguracoes() {
                 </CfgField>
                 <CfgField
                   label="Ticket médio (R$)"
-                  hint="Usado para estimar o custo dos cupons de porcentagem (ex.: 20% de um ticket médio de R$ 50 = R$ 10)."
+                  hint="Valor médio de um pedido. Serve para estimar quanto custa um cupom de porcentagem (ex.: cupom de 20% num pedido médio de R$ 50 custa ~R$ 10)."
                 >
                   <input
                     type="number" min={1} max={100000}
@@ -5791,28 +5848,6 @@ function CrmConfiguracoes() {
                     className={CFG_INPUT}
                   />
                 </CfgField>
-              </div>
-
-              <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
-                {on ? (
-                  <>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-sm text-muted">Disponível este mês</span>
-                      <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
-                        {brl(remaining)} <span className="text-sm font-normal text-muted">de {brl(budget)}</span>
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                      <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <p className="mt-2 text-xs text-muted">{brl(spent)} já gastos em cupons este mês{low ? " · orçamento baixo." : "."}</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted">
-                    Orçamento desligado — cupons são distribuídos sem limite de gasto. Já foram gastos <strong>{brl(spent)}</strong> este mês.
-                    Defina um valor ao lado para ativar o controle de gasto.
-                  </p>
-                )}
               </div>
             </div>
           );
@@ -5872,61 +5907,6 @@ function CrmConfiguracoes() {
         </p>
       </CfgCard>
 
-      {/* D — Campanhas */}
-      <CfgCard
-        title="Campanhas"
-        subtitle="Comportamento padrão das campanhas manuais."
-      >
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-semibold">⚠️ Campanhas para clientes frios</p>
-          <p className="mt-1 text-xs text-amber-700">
-            Campanhas enviadas a clientes que não interagem há mais de 60 dias têm maior risco de bloqueio.
-            Use o cap diário acima para limitar o volume. Recomendamos no máximo 20 mensagens por dia para campanhas de reativação.
-          </p>
-        </div>
-        <p className="mt-3 text-xs text-muted">
-          O cap diário configurado em &quot;Segurança de Envio&quot; se aplica a todos os envios manuais.
-          Campanhas recorrentes usam a configuração de limite definida em cada campanha.
-        </p>
-      </CfgCard>
-
-      {/* E — Campanhas recorrentes */}
-      <CfgCard
-        title="Campanhas recorrentes"
-        subtitle="Campanhas que rodam automaticamente (reativação, aniversário, pós-pedido) também respeitam o horário quieto e o cap diário."
-      >
-        <ul className="space-y-2.5">
-          {[
-            { icon: "🔄", text: "Recuperação de frios/mornos: envia para clientes sem pedido há X dias, no ritmo definido na campanha" },
-            { icon: "🎂", text: "Aniversário: envia no dia do aniversário do cliente. Não entra na régua de cooldown — é enviada mesmo que o cliente tenha recebido outra campanha recentemente. Opt-out e segurança do WhatsApp continuam sendo respeitados." },
-            { icon: "⭐", text: "Pós-pedido / avaliação: envia depois da compra, no intervalo configurado na campanha" },
-            { icon: "🛡️", text: "Todas as campanhas recorrentes respeitam o cooldown por cliente e o cap diário global" },
-          ].map((item) => (
-            <li key={item.text} className="flex items-start gap-2.5 text-sm text-ink2">
-              <span className="shrink-0">{item.icon}</span>
-              <span>{item.text}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs text-muted">
-          Para criar ou ajustar uma campanha que roda automaticamente, abra a aba <strong>Campanhas</strong> e
-          escolha o tipo <strong>Recorrente</strong>.
-        </p>
-      </CfgCard>
-
-      {/* F — Avaliações */}
-      <CfgCard
-        title="Avaliações"
-        subtitle="Links de avaliação usados em templates de campanha e automações pós-pedido."
-      >
-        <p className="text-sm text-muted">
-          Configure os links de avaliação na aba{" "}
-          <span className="font-medium text-ink2">Avaliações</span>{" "}
-          ou em{" "}
-          <Link href="/settings/store" className="text-brand-600 hover:underline">Configurações → Loja</Link>.
-        </p>
-      </CfgCard>
-
       {/* G — IA de mensagens (futuro) */}
       <div className="rounded-2xl border border-dashed border-line2 p-5">
         <div className="flex items-start gap-3">
@@ -5943,23 +5923,6 @@ function CrmConfiguracoes() {
         </div>
       </div>
 
-      {/* Proteções permanentes */}
-      <CfgCard title="Proteções Permanentes">
-        <ul className="space-y-2.5">
-          {[
-            { icon: "🚫", text: "Clientes com opt-out são sempre excluídos de qualquer envio CRM" },
-            { icon: "📵", text: "Clientes sem telefone válido nunca recebem mensagens" },
-            { icon: "🔄", text: "Deduplicação: mesmo cliente não recebe a mesma campanha duas vezes" },
-            { icon: "⏱️", text: "Cooldown cruzado: cliente que recebeu qualquer campanha hoje aguarda cooldown (exceto mensagens de aniversário)" },
-          ].map((item) => (
-            <li key={item.text} className="flex items-start gap-2.5 text-sm text-ink2">
-              <span className="shrink-0 text-base">{item.icon}</span>
-              <span>{item.text}</span>
-            </li>
-          ))}
-        </ul>
-      </CfgCard>
-
       {/* Save */}
       <div className="flex justify-end pt-2">
         <button
@@ -5968,162 +5931,6 @@ function CrmConfiguracoes() {
           className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
         >
           {saving ? "Salvando…" : "Salvar configurações"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function SegmentacaoConfig() {
-  const DEFAULT_SEG = { hotMaxDays: 30, warmMaxDays: 60, lostMinDays: 120 };
-  const [loading,   setLoading]   = useState(true);
-  const [saving,    setSaving]    = useState(false);
-  const [success,   setSuccess]   = useState<string | null>(null);
-  const [segError,  setSegError]  = useState<string | null>(null);
-  const [seg, setSeg] = useState(DEFAULT_SEG);
-
-  useEffect(() => {
-    fetch("/api/settings/crm-segments")
-      .then((r) => r.json())
-      .then(({ data }) => { if (data) setSeg({ ...DEFAULT_SEG, ...data }); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function setField(key: keyof typeof DEFAULT_SEG, raw: string) {
-    const val = Math.max(1, parseInt(raw, 10) || 1);
-    setSeg((prev) => ({ ...prev, [key]: val }));
-  }
-
-  const validationError =
-    seg.hotMaxDays  >= seg.warmMaxDays ? "'Cliente quente' deve ser menor que 'Cliente morno'."
-    : seg.warmMaxDays >= seg.lostMinDays ? "'Cliente morno' deve ser menor que 'Cliente perdido'."
-    : null;
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (validationError) return;
-    setSaving(true);
-    setSuccess(null);
-    setSegError(null);
-    try {
-      const res = await fetch("/api/settings/crm-segments", {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(seg),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        if (json.data) setSeg({ ...DEFAULT_SEG, ...json.data });
-        setSuccess("Segmentação salva com sucesso.");
-      } else {
-        setSegError("Erro ao salvar. Tente novamente.");
-      }
-    } catch {
-      setSegError("Falha de rede. Tente novamente.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 py-4 text-sm text-muted">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
-        Carregando segmentação…
-      </div>
-    );
-  }
-
-  const frio     = seg.warmMaxDays + 1;
-  const perdido  = seg.lostMinDays;
-
-  return (
-    <form onSubmit={handleSave} className="max-w-2xl space-y-5 mt-8 border-t border-line pt-8">
-      <div>
-        <h2 className="text-base font-semibold text-ink">Segmentação de relacionamento</h2>
-        <p className="mt-1 text-xs text-muted">
-          Define os limiares de dias sem pedido que classificam cada segmento. Afeta o agrupamento de clientes no painel e as campanhas de reativação.
-        </p>
-      </div>
-
-      {success && (
-        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-          <span>✓</span> {success}
-        </div>
-      )}
-      {(segError || validationError) && (
-        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <span>{segError ?? validationError}</span>
-          <button type="button" className="ml-2 text-xs underline opacity-70 hover:opacity-100" onClick={() => { setSegError(null); }}>fechar</button>
-        </div>
-      )}
-
-      <CfgCard
-        title="Limiares de segmento"
-        subtitle="Número máximo de dias sem pedido para cada classificação."
-      >
-        <div className="grid gap-5 sm:grid-cols-3">
-          <CfgField
-            label="Cliente quente (dias)"
-            hint={`Pediu nos últimos ${seg.hotMaxDays} dias → QUENTE`}
-          >
-            <input
-              type="number" min={1} max={364}
-              value={seg.hotMaxDays}
-              onChange={(e) => setField("hotMaxDays", e.target.value)}
-              className={CFG_INPUT}
-            />
-          </CfgField>
-
-          <CfgField
-            label="Cliente morno (dias)"
-            hint={`${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias → MORNO`}
-          >
-            <input
-              type="number" min={1} max={364}
-              value={seg.warmMaxDays}
-              onChange={(e) => setField("warmMaxDays", e.target.value)}
-              className={CFG_INPUT}
-            />
-          </CfgField>
-
-          <CfgField
-            label="Cliente perdido (dias)"
-            hint={`${perdido}+ dias sem pedido → PERDIDO`}
-          >
-            <input
-              type="number" min={1} max={1000}
-              value={seg.lostMinDays}
-              onChange={(e) => setField("lostMinDays", e.target.value)}
-              className={CFG_INPUT}
-            />
-          </CfgField>
-        </div>
-
-        {/* Derived labels preview */}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            { label: "Quente",  desc: `0–${seg.hotMaxDays} dias`,          color: "bg-green-100 text-green-700" },
-            { label: "Morno",   desc: `${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias`, color: "bg-yellow-100 text-yellow-700" },
-            { label: "Frio",    desc: `${frio}–${seg.lostMinDays - 1} dias`, color: "bg-blue-100 text-blue-700" },
-            { label: "Perdido", desc: `${perdido}+ dias`,                   color: "bg-red-100 text-red-700" },
-          ].map((s) => (
-            <span key={s.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${s.color}`}>
-              {s.label}
-              <span className="font-normal opacity-75">{s.desc}</span>
-            </span>
-          ))}
-        </div>
-      </CfgCard>
-
-      <div className="flex justify-end pt-2">
-        <button
-          type="submit"
-          disabled={saving || !!validationError}
-          className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
-        >
-          {saving ? "Salvando…" : "Salvar segmentação"}
         </button>
       </div>
     </form>
@@ -6440,7 +6247,6 @@ export function CRMClient({
       {tab === "configuracoes" && (
         <div>
           <CrmConfiguracoes />
-          <SegmentacaoConfig />
         </div>
       )}
       <ImportModal

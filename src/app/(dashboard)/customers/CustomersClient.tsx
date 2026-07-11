@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NewCustomerButton } from "./NewCustomerButton";
@@ -64,6 +64,157 @@ function buildUrl(p: {
   if (p.filter && p.filter !== "all") q.set("filter", p.filter);
   const s = q.toString();
   return s ? `?${s}` : "?";
+}
+
+const SEG_INPUT =
+  "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
+
+function ClassificacaoClientes() {
+  const DEFAULT_SEG = { hotMaxDays: 30, warmMaxDays: 60, lostMinDays: 120 };
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [success,  setSuccess]  = useState<string | null>(null);
+  const [segError, setSegError] = useState<string | null>(null);
+  const [seg, setSeg] = useState(DEFAULT_SEG);
+
+  useEffect(() => {
+    fetch("/api/settings/crm-segments")
+      .then((r) => r.json())
+      .then(({ data }) => { if (data) setSeg({ ...DEFAULT_SEG, ...data }); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function setField(key: keyof typeof DEFAULT_SEG, raw: string) {
+    const val = Math.max(1, parseInt(raw, 10) || 1);
+    setSeg((prev) => ({ ...prev, [key]: val }));
+  }
+
+  const validationError =
+    seg.hotMaxDays  >= seg.warmMaxDays ? "'Cliente quente' deve ser menor que 'Cliente morno'."
+    : seg.warmMaxDays >= seg.lostMinDays ? "'Cliente morno' deve ser menor que 'Cliente perdido'."
+    : null;
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (validationError) return;
+    setSaving(true);
+    setSuccess(null);
+    setSegError(null);
+    try {
+      const res = await fetch("/api/settings/crm-segments", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(seg),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.data) setSeg({ ...DEFAULT_SEG, ...json.data });
+        setSuccess("Classificação salva com sucesso.");
+      } else {
+        setSegError("Erro ao salvar. Tente novamente.");
+      }
+    } catch {
+      setSegError("Falha de rede. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const frio    = seg.warmMaxDays + 1;
+  const perdido = seg.lostMinDays;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-line bg-paper p-6 shadow-sm">
+      <div className="mb-4">
+        <h2 className="text-base font-semibold text-ink">Classificação dos clientes</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          Define quantos dias sem pedido separam cada tipo de cliente. Afeta o agrupamento nos filtros acima e as campanhas de reativação.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-muted">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
+          Carregando classificação…
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-5">
+          {success && (
+            <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+              <span>✓</span> {success}
+            </div>
+          )}
+          {(segError || validationError) && (
+            <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <span>{segError ?? validationError}</span>
+              <button type="button" className="ml-2 text-xs underline opacity-70 hover:opacity-100" onClick={() => { setSegError(null); }}>fechar</button>
+            </div>
+          )}
+
+          <div className="grid gap-5 sm:grid-cols-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink2">Cliente quente (dias)</label>
+              <input
+                type="number" min={1} max={364}
+                value={seg.hotMaxDays}
+                onChange={(e) => setField("hotMaxDays", e.target.value)}
+                className={SEG_INPUT}
+              />
+              <p className="mt-1 text-xs text-muted">Pediu nos últimos {seg.hotMaxDays} dias → QUENTE</p>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink2">Cliente morno (dias)</label>
+              <input
+                type="number" min={1} max={364}
+                value={seg.warmMaxDays}
+                onChange={(e) => setField("warmMaxDays", e.target.value)}
+                className={SEG_INPUT}
+              />
+              <p className="mt-1 text-xs text-muted">{seg.hotMaxDays + 1}–{seg.warmMaxDays} dias → MORNO</p>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink2">Cliente perdido (dias)</label>
+              <input
+                type="number" min={1} max={1000}
+                value={seg.lostMinDays}
+                onChange={(e) => setField("lostMinDays", e.target.value)}
+                className={SEG_INPUT}
+              />
+              <p className="mt-1 text-xs text-muted">{perdido}+ dias sem pedido → PERDIDO</p>
+            </div>
+          </div>
+
+          {/* Prévia das faixas */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: "Quente",  desc: `0–${seg.hotMaxDays} dias`,                    color: "bg-green-100 text-green-700" },
+              { label: "Morno",   desc: `${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias`, color: "bg-yellow-100 text-yellow-700" },
+              { label: "Frio",    desc: `${frio}–${seg.lostMinDays - 1} dias`,         color: "bg-blue-100 text-blue-700" },
+              { label: "Perdido", desc: `${perdido}+ dias`,                            color: "bg-red-100 text-red-700" },
+            ].map((s) => (
+              <span key={s.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${s.color}`}>
+                {s.label}
+                <span className="font-normal opacity-75">{s.desc}</span>
+              </span>
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving || !!validationError}
+              className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+            >
+              {saving ? "Salvando…" : "Salvar classificação"}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
 }
 
 export default function CustomersClient({
@@ -398,6 +549,9 @@ export default function CustomersClient({
           </div>
         </div>
       )}
+
+      {/* Classificação dos clientes (limiares de segmento) */}
+      <ClassificacaoClientes />
 
       {/* ── Edit modal ────────────────────────────────────────────────────── */}
       {editTarget && (
