@@ -5608,13 +5608,31 @@ function CrmConfiguracoes() {
             <div className="flex items-baseline justify-between">
               <span className="text-sm font-semibold text-emerald-800">🔒 Modo seguro ativo</span>
               <span className="text-lg font-bold text-emerald-700">
-                {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia</span>
+                {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia hoje</span>
               </span>
             </div>
             <p className="mt-1.5 text-xs text-emerald-800/80">
-              Esse é o limite seguro de mensagens para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
-              Ele sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
+              Limite seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
+              Sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
             </p>
+            {/* Valores fixos do modo seguro — congelados, só pra visualização. Ligue o
+                controle manual para editar qualquer um deles. */}
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-emerald-200/70 pt-3 sm:grid-cols-3">
+              {[
+                { l: "Limite diário", v: `${warmup.safeDailyLimit}/dia` },
+                { l: "Intervalo por cliente", v: "24 h" },
+                { l: "Máx. por cliente/semana", v: "5" },
+                { l: "Horário sem envio", v: "21h–8h" },
+                { l: "Delay entre envios", v: "5–45 s" },
+                { l: "Fim de semana", v: "permitido" },
+              ].map((m) => (
+                <div key={m.l} className="rounded-lg bg-white/70 px-2.5 py-1.5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-emerald-700/70">{m.l}</p>
+                  <p className="text-sm font-bold text-emerald-800">{m.v}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-emerald-800/70">🔒 Congelados no modo seguro. Ligue “Assumir controle manual” para editar.</p>
           </div>
         ) : (
           <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5">
