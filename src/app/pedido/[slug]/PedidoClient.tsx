@@ -1632,6 +1632,20 @@ function formatProfileAddress(a: CustomerProfile["addresses"][number]): string {
   return [line1, rest].filter(Boolean).join(" — ");
 }
 
+/** Up to two uppercase initials from a name, for the avatar. */
+function customerInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
+  return letters || "?";
+}
+
+// Tabs of the customer area. Add entries here as new sections appear (pedidos,
+// favoritos, endereços dedicados, …) — the UI renders them automatically.
+const CUSTOMER_TABS: Array<{ id: "info" | "coupons"; label: string; emoji: string }> = [
+  { id: "info",    label: "Informações", emoji: "👤" },
+  { id: "coupons", label: "Meus cupons", emoji: "🎟️" },
+];
+
 function CustomerIdentityStrip({
   slug,
   customerId,
@@ -1646,6 +1660,7 @@ function CustomerIdentityStrip({
   onReset: () => void;
 }) {
   const [open, setOpen]       = useState(false);
+  const [tab, setTab]         = useState<"info" | "coupons">("info");
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [coupons, setCoupons] = useState<WalletCoupon[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1667,6 +1682,7 @@ function CustomerIdentityStrip({
   if (!name && !displayPhone) return null;
   const greeting = name ? `Olá, ${name}` : "Cliente identificado";
   const canExpand = Boolean(customerId);
+  const displayName = profile?.name || name || "Cliente";
 
   return (
     <div className="shrink-0 border-b border-gray-100 bg-white/80">
@@ -1696,81 +1712,137 @@ function CustomerIdentityStrip({
         </button>
       </div>
 
-      {/* Área do cliente (unrolls) */}
+      {/* Área do cliente (unrolls) — header + abas + conteúdo */}
       {open && (
-        <div className="max-h-[55vh] overflow-y-auto border-t border-gray-100 bg-gray-50/60 px-4 py-3">
-          {loading && !profile ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-              Carregando seus dados…
+        <div className="border-t border-gray-100 bg-gradient-to-b from-white to-gray-50/70">
+          {/* Header: avatar + nome + telefone */}
+          <div className="flex items-center gap-3 px-4 pb-2 pt-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-base font-bold text-white shadow-sm">
+              {customerInitials(displayName)}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Meus dados */}
-              <section>
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus dados</p>
-                <div className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700 space-y-0.5">
-                  <p><span className="text-gray-400">Nome:</span> <span className="font-medium">{profile?.name || name || "—"}</span></p>
-                  <p><span className="text-gray-400">Telefone:</span> <span className="font-medium">{displayPhone || profile?.phone || "—"}</span></p>
-                  {profile?.email && <p><span className="text-gray-400">E-mail:</span> <span className="font-medium">{profile.email}</span></p>}
-                </div>
-              </section>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-ink">{displayName}</p>
+              {(displayPhone || profile?.phone) && (
+                <p className="truncate text-xs text-gray-500">{displayPhone || profile?.phone}</p>
+              )}
+            </div>
+            {/* Classificação (reservado — Ouro/Prata… quando existir) */}
+            <span className="ml-auto shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-400">
+              Cliente
+            </span>
+          </div>
 
-              {/* Meus endereços */}
-              <section>
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
-                {profile && profile.addresses.length > 0 ? (
-                  <ul className="space-y-1.5">
-                    {profile.addresses.map((a) => (
-                      <li key={a.id} className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
-                        <div className="flex items-center gap-1.5">
-                          {a.label && <span className="font-semibold text-ink">{a.label}</span>}
-                          {a.isDefault && <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-700">Padrão</span>}
-                        </div>
-                        <p className="mt-0.5 text-gray-600">{formatProfileAddress(a)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[11px] text-gray-400">
-                    Nenhum endereço salvo ainda — você informa no checkout.
-                  </p>
-                )}
-              </section>
+          {/* Abas */}
+          <div className="flex gap-1 px-3">
+            {CUSTOMER_TABS.map((t) => {
+              const activeTab = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${activeTab ? "text-brand-700" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  <span aria-hidden>{t.emoji}</span>
+                  {t.label}
+                  {t.id === "coupons" && coupons.length > 0 && (
+                    <span className="rounded-full bg-brand-100 px-1.5 text-[9px] font-bold text-brand-700">{coupons.length}</span>
+                  )}
+                  {activeTab && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-600" />}
+                </button>
+              );
+            })}
+          </div>
 
-              {/* Meus cupons */}
+          {/* Conteúdo da aba */}
+          <div className="max-h-[48vh] overflow-y-auto border-t border-gray-100 px-4 py-3">
+            {loading && !profile ? (
+              <div className="flex items-center gap-2 py-3 text-xs text-gray-500">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+                Carregando seus dados…
+              </div>
+            ) : tab === "info" ? (
+              <div className="space-y-3">
+                {/* Meus dados */}
+                <section>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus dados</p>
+                  <div className="divide-y divide-gray-100 rounded-2xl border border-gray-100 bg-white text-xs shadow-sm">
+                    <div className="flex justify-between gap-2 px-3.5 py-2.5">
+                      <span className="text-gray-400">Nome</span>
+                      <span className="min-w-0 truncate font-semibold text-ink">{profile?.name || name || "—"}</span>
+                    </div>
+                    <div className="flex justify-between gap-2 px-3.5 py-2.5">
+                      <span className="text-gray-400">Telefone</span>
+                      <span className="min-w-0 truncate font-semibold text-ink">{displayPhone || profile?.phone || "—"}</span>
+                    </div>
+                    {profile?.email && (
+                      <div className="flex justify-between gap-2 px-3.5 py-2.5">
+                        <span className="text-gray-400">E-mail</span>
+                        <span className="min-w-0 truncate font-semibold text-ink">{profile.email}</span>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Meus endereços */}
+                <section>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
+                  {profile && profile.addresses.length > 0 ? (
+                    <ul className="space-y-2">
+                      {profile.addresses.map((a) => (
+                        <li key={a.id} className="rounded-2xl border border-gray-100 bg-white px-3.5 py-2.5 text-xs shadow-sm">
+                          <div className="flex items-center gap-1.5">
+                            <span aria-hidden className="text-sm">📍</span>
+                            {a.label && <span className="font-bold text-ink">{a.label}</span>}
+                            {a.isDefault && (
+                              <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-700">Padrão</span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 pl-6 text-gray-600">{formatProfileAddress(a)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-gray-200 px-3.5 py-3 text-center text-[11px] text-gray-400">
+                      Nenhum endereço salvo ainda — você informa no checkout.
+                    </p>
+                  )}
+                </section>
+              </div>
+            ) : (
+              /* Aba: Meus cupons */
               <section>
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus cupons</p>
                 {coupons.length > 0 ? (
-                  <ul className="space-y-1.5">
+                  <ul className="space-y-2">
                     {coupons.map((w) => (
-                      <li key={w.id} className="flex items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/50 px-3 py-2 text-xs">
-                        <span className="min-w-0">
-                          <span className="block truncate font-bold text-ink">{w.isReward ? `🎁 ${w.label}` : `🏷 ${w.label}`}</span>
-                          {w.isReward && <span className="block text-[10px] text-gray-500">Recompensa — resgatada no pedido</span>}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-gray-500">
-                          {w.expiresAt ? `vence ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "sem validade"}
-                        </span>
+                      <li key={w.id} className="overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-sm">
+                        <div className="flex items-stretch">
+                          <div className="flex w-14 shrink-0 items-center justify-center bg-gradient-to-br from-brand-500 to-brand-600 text-2xl">
+                            {w.isReward ? "🎁" : "🏷️"}
+                          </div>
+                          <div className="min-w-0 flex-1 px-3.5 py-2.5">
+                            <p className="truncate text-sm font-bold text-ink">{w.label}</p>
+                            <p className="text-[11px] text-gray-500">
+                              {w.isReward ? "Recompensa — resgatada no pedido" : "Desconto no seu pedido"}
+                            </p>
+                            <p className="mt-0.5 text-[10px] font-medium text-gray-400">
+                              {w.expiresAt ? `Válido até ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "Sem validade"}
+                            </p>
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[11px] text-gray-400">
-                    Você ainda não tem cupons. Eles chegam pelas mensagens do restaurante.
-                  </p>
+                  <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center">
+                    <p className="text-2xl">🎁</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Você ainda não tem cupons</p>
+                    <p className="mt-0.5 text-[11px] text-gray-400">Eles chegam pelas mensagens do restaurante.</p>
+                  </div>
                 )}
               </section>
-
-              {/* Classificação — reservado para quando existir (Ouro/Prata…) */}
-              <section>
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Sua classificação</p>
-                <p className="rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[11px] text-gray-400">
-                  Em breve — seu nível de cliente aparecerá aqui.
-                </p>
-              </section>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>
