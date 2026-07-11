@@ -2768,14 +2768,14 @@ function CampaignManageModal({
 
                     <div>
                       <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted">
-                        Clientes contactados ({detail.executions.length})
+                        Mensagens enviadas ({detail.executions.length})
                       </p>
                       {detail.executions.length === 0 ? (
                         <div className="rounded-2xl border-2 border-dashed border-line py-8 text-center text-xs text-muted">
                           {isRecurring ? "Nenhum envio registrado ainda. Aguardando próximo ciclo." : "Nenhum destinatário registrado."}
                         </div>
                       ) : (
-                        <div className="space-y-1.5 max-h-72 overflow-y-auto rounded-xl border border-line p-2">
+                        <div className="space-y-1.5 max-h-96 overflow-y-auto rounded-xl border border-line p-2">
                           {detail.executions.map((ex) => {
                             // Prefer the server classification so a safety block reads
                             // "Bloqueado", an invalid number reads "Telefone inválido",
@@ -2787,19 +2787,30 @@ function CampaignManageModal({
                               : kind === "FAILED" ? { bg: "bg-red-50", text: "text-red-600" }
                               : (EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" });
                             const reasonColor = kind === "BLOCKED" ? "text-amber-600" : "text-red-500";
+                            const sentLabel = ex.sentAt
+                              ? new Date(ex.sentAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })
+                              : null;
                             return (
-                              <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-line bg-paper px-3 py-2 shadow-sm">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-ink truncate">{ex.customerName ?? "Cliente"}</p>
-                                  <p className="text-[10px] text-muted truncate">{ex.customerPhone ?? "—"}</p>
-                                  {ex.failedReason && <p className={`text-[10px] truncate ${reasonColor}`}>{ex.failedReason}</p>}
+                              <div key={ex.id} className="rounded-xl border border-line bg-paper px-3 py-2 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-ink truncate">{ex.customerName ?? "Cliente"}</p>
+                                    <p className="text-[10px] text-muted truncate">{ex.customerPhone ?? "—"}</p>
+                                  </div>
+                                  <div className="shrink-0 flex flex-col items-end gap-0.5">
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}>{badge}</span>
+                                    {sentLabel && <span className="text-[10px] text-muted whitespace-nowrap">🕒 {sentLabel}</span>}
+                                    {ex.converted && ex.revenue != null && (
+                                      <span className="text-[10px] font-semibold text-green-600">R$ {Number(ex.revenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="shrink-0 flex flex-col items-end gap-0.5">
-                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}>{badge}</span>
-                                  {ex.converted && ex.revenue != null && (
-                                    <span className="text-[10px] font-semibold text-green-600">R$ {Number(ex.revenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
-                                  )}
-                                </div>
+                                {ex.messageText && (
+                                  <p className="mt-1.5 rounded-lg bg-[#FAFAF8] px-2.5 py-1.5 text-[11px] leading-relaxed text-ink2 whitespace-pre-wrap break-words">
+                                    {ex.messageText}
+                                  </p>
+                                )}
+                                {ex.failedReason && <p className={`mt-1 text-[10px] ${reasonColor}`}>⚠ {ex.failedReason}</p>}
                               </div>
                             );
                           })}
@@ -3795,7 +3806,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
   const [resettingMetrics, setResettingMetrics] = useState(false);
   async function handleResetMetrics() {
-    if (!confirm("Limpar as métricas (enviados, falhas, receita) de TODAS as campanhas e começar a contar do zero?\n\nIsso não reenvia mensagens nem apaga clientes — só zera os números do painel.")) return;
+    if (!confirm("Limpar as métricas (enviados, falhas, receita) de TODAS as campanhas e apagar o histórico de falhas antigas?\n\nComeça a contar do zero. Não reenvia mensagens nem apaga clientes — os envios bem-sucedidos são mantidos.")) return;
     setResettingMetrics(true);
     try {
       const res = await fetch("/api/crm/campaigns/reset-metrics", { method: "POST" });
