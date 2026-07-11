@@ -1424,6 +1424,29 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
             )}
           </div>
 
+          {/* Conexões externas (API) — first-class feature card, links to its
+              own page. Not part of the status-fetched INTEGRATIONS grid. */}
+          <Link
+            href="/integracoes/api"
+            className="mb-3 flex items-center gap-4 rounded-2xl border border-brand-200 bg-brand-50/60 p-5 shadow-sm transition-all hover:shadow-md hover:border-brand-300"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-xl text-white shadow-sm">
+              🔌
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-ink">Conexões externas (API)</span>
+                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
+                  Novo
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted">
+                Gere uma chave e outros sistemas (ex.: Foocci Manager) recebem suas vendas sozinhos.
+              </p>
+            </div>
+            <span className="shrink-0 text-brand-600">›</span>
+          </Link>
+
           {/* Cards */}
           {loading ? (
             <div className="space-y-3">

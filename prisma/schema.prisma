@@ -106,8 +106,42 @@ model Restaurant {
   printAgent             PrintAgent?
   printJobs              PrintJob[]
   googleIntegrationConfig GoogleIntegrationConfig?
+  apiKeys                ApiKey[]
 
   @@map("restaurants")
+}
+
+// ═══════════════════════════════════════════
+//  EXTERNAL API ACCESS (Integrações → Conexões externas)
+// ═══════════════════════════════════════════
+//
+// A read-only Bearer key the lojista generates so external systems (first
+// consumer: Foocci Manager, the finance module) can pull this restaurant's
+// sales from GET /api/v1/vendas. Security model:
+//   • The plaintext token is shown to the user ONCE at creation; only its
+//     SHA-256 hash is stored here — a DB leak never exposes a usable token.
+//   • Scoped to a single restaurant (the token itself resolves the tenant, so
+//     the external caller never sends a restaurant id).
+//   • Revocable (revokedAt) — a revoked key stops authenticating immediately.
+//   • tokenPrefix is a short, non-secret fragment ("fck_ab12…") shown in the
+//     list so the user can tell keys apart without ever re-revealing the secret.
+model ApiKey {
+  id              String    @id @default(cuid())
+  restaurantId    String
+  name            String? // friendly label, e.g. "Foocci Manager"
+  tokenHash       String    @unique // SHA-256 hex of the plaintext token
+  tokenPrefix     String // non-secret display fragment, e.g. "fck_ab12cd34"
+  scope           String    @default("sales:read") // read-only today; room to grow
+  lastUsedAt      DateTime? // updated (throttled) on each authenticated call
+  createdByUserId String?
+  revokedAt       DateTime? // non-null → key no longer authenticates
+  createdAt       DateTime  @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([tokenHash])
+  @@map("api_keys")
 }
 
 enum Plan {
