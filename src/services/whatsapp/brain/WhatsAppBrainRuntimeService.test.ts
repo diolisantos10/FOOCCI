@@ -27,6 +27,9 @@ vi.mock("@/lib/handoff", () => handoff);
 const brain = vi.hoisted(() => ({ reasonAsAgent: vi.fn() }));
 vi.mock("@/services/brain/reasoning/BrainReasoner", () => brain);
 
+const critic = vi.hoisted(() => ({ judgeReply: vi.fn() }));
+vi.mock("@/services/brain/reasoning/BrainCoherenceCritic", () => critic);
+
 // The Brain front door delegates menu interactions to the Receptionist (dynamically
 // imported). Mock the module — its real pure helpers are covered by the Receptionist's
 // own suite; here we drive detectIntent and stub respond to test the wiring.
@@ -87,6 +90,7 @@ beforeEach(() => {
   evoClient.sendTextMessage.mockResolvedValue({ key: { id: "ext_1" } });
   handoff.markConversationNeedsHuman.mockResolvedValue(true);
   brain.reasonAsAgent.mockResolvedValue(brainOutcome());
+  critic.judgeReply.mockResolvedValue({ approved: true, mode: "JUDGED", reason: "coerente" });
   recep.detectIntent.mockReturnValue("UNKNOWN");
   recep.WhatsAppReceptionistService.respond.mockResolvedValue({ status: "REPLIED" });
 });
@@ -188,6 +192,17 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(out.reason).toContain("free-form disabled");
+  });
+
+  it("VIVO (judge reprova): fail-closed → recepcionista assume, nada é enviado", async () => {
+    db.brainFreeFormConfig.findUnique.mockResolvedValue({
+      restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5511999"], paused: false, minConfidence: 0.6, notes: null,
+    });
+    critic.judgeReply.mockResolvedValue({ approved: false, mode: "JUDGED", reason: "afirma promoção que não existe" });
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
+    expect(out.reason).toContain("judge gate");
   });
 
   it("SHADOW: o Brain raciocina em paralelo (só log/evidência) sem responder o cliente", async () => {

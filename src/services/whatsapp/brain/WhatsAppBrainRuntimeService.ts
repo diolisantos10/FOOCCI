@@ -53,6 +53,17 @@ export interface BrainReplyOutcome {
 const WINDOW_TURNS = 8;
 const WINDOW_TURN_CHARS = 300;
 
+// Memória durável do cliente (comportamental, sem PII) — best-effort.
+async function loadCustomerMemory(restaurantId: string, customerId?: string | null): Promise<string> {
+  if (!customerId) return "";
+  try {
+    const { buildCustomerMemory } = await import("@/services/brain/memory/CustomerMemoryService");
+    return (await buildCustomerMemory(restaurantId, customerId)).summary;
+  } catch {
+    return "";
+  }
+}
+
 async function buildSanitizedWindow(conversationId: string): Promise<SanitizedTurn[]> {
   const msgs = await prisma.message.findMany({
     where: { conversationId, type: "TEXT" },
@@ -69,9 +80,15 @@ async function buildSanitizedWindow(conversationId: string): Promise<SanitizedTu
 // ── Shadow mode: o Brain raciocina em paralelo SÓ para log/evidência — nunca
 // responde o cliente. É o acúmulo de provas da escada de reativação do free-form
 // (grep "[BrainShadow]" nos logs do Railway).
-async function runShadowReasoning(conversationId: string, restaurantId: string, inboundText: string): Promise<void> {
+async function runShadowReasoning(
+  conversationId: string,
+  restaurantId: string,
+  inboundText: string,
+  customerId?: string | null,
+): Promise<void> {
   if (!isWhatsAppBrainShadowMode() || !process.env.OPENAI_API_KEY) return;
   const sanitizedHistory = await buildSanitizedWindow(conversationId).catch(() => [] as SanitizedTurn[]);
+  const customerMemory = await loadCustomerMemory(restaurantId, customerId);
   const outcome = await reasonAsAgent({
     businessId: restaurantId,
     businessType: "RESTAURANT",
@@ -80,6 +97,7 @@ async function runShadowReasoning(conversationId: string, restaurantId: string, 
     sourceType: "REAL_CONVERSATION",
     sanitizedInput: sanitizeText(inboundText),
     sanitizedHistory,
+    ...(customerMemory ? { customerMemory } : {}),
   });
   console.log(
     "[BrainShadow]",
@@ -194,8 +212,8 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const freeForm = await resolveFreeFormAccess(conversation.restaurantId, resolvedPhone);
   if (!freeForm.allowed) {
     // Sombra (fire-and-forget): nunca atrasa nem toca a resposta determinística.
-    void runShadowReasoning(conversationId, conversation.restaurantId, inboundText).catch((err) =>
-      console.error("[BrainShadow] failed:", err),
+    void runShadowReasoning(conversationId, conversation.restaurantId, inboundText, conversation.customer?.id).catch(
+      (err) => console.error("[BrainShadow] failed:", err),
     );
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return { status: "REPLIED", reason: `free-form disabled (${freeForm.reason}) → receptionist` };
@@ -214,6 +232,7 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     sourceType: "REAL_CONVERSATION",
     sanitizedInput: sanitizeText(lastMessage.content.trim()),
     sanitizedHistory: await buildSanitizedWindow(conversationId).catch(() => [] as SanitizedTurn[]),
+    ...(await loadCustomerMemory(restaurantId, conversation.customer?.id).then((m) => (m ? { customerMemory: m } : {}))),
   });
 
   const reply = outcome.result.idealResponse?.trim();
@@ -232,6 +251,21 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
       status: "REPLIED",
       reason: `critic gate (${outcome.reasoningMode}/${outcome.result.coherenceCheck.verdict}/conf ${outcome.result.confidence.toFixed(2)}) → receptionist`,
     };
+  }
+
+  // ── Segundo crítico (LLM-judge, perfil JUDGE): reprovação explícita → recepcionista.
+  // Indisponibilidade do judge NÃO bloqueia (o piso determinístico já passou).
+  const { judgeReply } = await import("@/services/brain/reasoning/BrainCoherenceCritic");
+  const verdict = await judgeReply({
+    agentId: "whatsapp",
+    businessId: restaurantId,
+    customerMessage: sanitizeText(lastMessage.content.trim()),
+    candidateReply: reply,
+    snapshot: outcome.snapshot ?? { truthSources: {}, missingContext: [] },
+  });
+  if (!verdict.approved) {
+    await recep.WhatsAppReceptionistService.respond(conversationId);
+    return { status: "REPLIED", reason: `judge gate (${verdict.reason}) → receptionist` };
   }
 
   // Keep the menu within reach on every free-form answer (skip on handoff).

@@ -61,7 +61,11 @@ export { autoFileGovernanceForLatestRun } from "./training/QualityGovernanceBrid
 export * from "./knowledge/BusinessKnowledgeContract";
 export { restaurantKnowledgeAdapter } from "./knowledge/RestaurantKnowledgeAdapter";
 
+// memory (Cognição 8→9 — memória durável de cliente, sem PII)
+export * from "./memory/CustomerMemoryService";
+
 // reasoning (generic contract born in the Waiter, canonical here)
+export { judgeReply, type CriticVerdict } from "./reasoning/BrainCoherenceCritic";
 export * from "./reasoning/AgentReasoningContract";
 export { detectGuardrailIntent, isPaymentIntent } from "./reasoning/IntentGuardrails";
 export { validateCoherence } from "./reasoning/CoherenceValidator";

@@ -34,6 +34,8 @@ export interface BrainReasoningOutcome {
   /** Which AI pilot actually thought this turn (provenance, no secrets). */
   engine: AIEngineSelection;
   reasoningMode: ReasoningMode;
+  /** A verdade usada neste turno — permite críticos externos (LLM-judge) sem re-consulta. */
+  snapshot: Pick<BusinessKnowledgeSnapshot, "truthSources" | "missingContext">;
 }
 
 // ── Scope → system prompt ───────────────────────────────────────────────────────
@@ -155,7 +157,7 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
   // No declared scope or no real pilot → safe deterministic fallback.
   if (!profile || engine.provider === "MOCK") {
     const why = !profile ? `agente "${req.agentId}" sem perfil declarado` : "nenhuma IA-piloto configurada";
-    return { engine, reasoningMode: "FALLBACK", result: fallback(snapshot, why) };
+    return { engine, reasoningMode: "FALLBACK", snapshot: pickTruth(snapshot), result: fallback(snapshot, why) };
   }
 
   try {
@@ -169,6 +171,7 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
       : "";
     const userContent = [
       req.contextHints?.length ? `PISTAS DE CONTEXTO: ${req.contextHints.join("; ")}` : "",
+      req.customerMemory ? `MEMÓRIA DO CLIENTE (comportamental, sem dados pessoais): ${req.customerMemory}` : "",
       historyBlock,
       `MENSAGEM DO CLIENTE (sanitizada): "${req.sanitizedInput}"`,
       req.currentResponse ? `RESPOSTA ATUAL DO AGENTE (sanitizada): "${req.currentResponse}"` : "",
@@ -181,6 +184,7 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
     return {
       engine,
       reasoningMode: "LLM",
+      snapshot: pickTruth(snapshot),
       result: {
         primaryIntent: parsed.primaryIntent,
         secondaryIntents: Array.isArray(parsed.secondaryIntents) ? parsed.secondaryIntents : [],
@@ -204,8 +208,12 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
     };
   } catch (err) {
     const why = err instanceof Error ? err.message.slice(0, 80) : "erro no motor de IA";
-    return { engine, reasoningMode: "FALLBACK", result: fallback(snapshot, why) };
+    return { engine, reasoningMode: "FALLBACK", snapshot: pickTruth(snapshot), result: fallback(snapshot, why) };
   }
+}
+
+function pickTruth(snap: BusinessKnowledgeSnapshot): Pick<BusinessKnowledgeSnapshot, "truthSources" | "missingContext"> {
+  return { truthSources: snap.truthSources, missingContext: snap.missingContext };
 }
 
 function fallback(snap: BusinessKnowledgeSnapshot, reason: string): BrainReasoningResult {

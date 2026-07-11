@@ -151,6 +151,12 @@ export async function activateVersion(versionId: string, opts: { activatedBy?: s
   }
 
   const scope = scopeWhere(version.agentSlug, version.restaurantId ?? null);
+  // Guarda a versão ativa anterior para o auto-rollback pós-ativação.
+  const previousActive = await prisma.waiterRuntimeVersion.findFirst({
+    where: { ...scope, isActive: true, NOT: { id: versionId } },
+    select: { id: true },
+  });
+  const previousActiveId = previousActive?.id ?? null;
   await prisma.$transaction([
     // Demote the current active version(s) in the same scope.
     prisma.waiterRuntimeVersion.updateMany({
@@ -169,7 +175,38 @@ export async function activateVersion(versionId: string, opts: { activatedBy?: s
     }),
   ]);
 
-  return { ok: true, versionId, gate, reason: "Versão ativada com Quality gate aprovado." };
+  // ── Verificação PÓS-ativação com auto-rollback (Fase 5 do roadmap do Brain):
+  // o gate pré-ativação audita o runtime ANTERIOR; este segundo gate audita o
+  // runtime já com a versão nova ativa. Se nascer um P0, reverte na hora —
+  // a ativação deixa de ser uma aposta all-or-nothing.
+  const postGate = await runWaiterQualityGate();
+  await prisma.waiterRuntimeVersion.update({
+    where: { id: versionId },
+    data: { qualityStatus: postGate.passed ? "PASS" : "FAIL", lastQualityRunAt: new Date(postGate.ranAt) },
+  }).catch(() => undefined);
+
+  if (!postGate.passed) {
+    await prisma.$transaction([
+      prisma.waiterRuntimeVersion.update({
+        where: { id: versionId },
+        data: { status: "ARCHIVED", isActive: false, rolledBackAt: new Date() },
+      }),
+      ...(previousActiveId
+        ? [prisma.waiterRuntimeVersion.update({
+            where: { id: previousActiveId },
+            data: { status: "ACTIVE", isActive: true, rolledBackAt: null },
+          })]
+        : []),
+    ]);
+    return {
+      ok: false,
+      versionId,
+      gate: postGate,
+      reason: `AUTO-ROLLBACK: gate pós-ativação reprovou (${postGate.reason}) — versão anterior restaurada.`,
+    };
+  }
+
+  return { ok: true, versionId, gate: postGate, reason: "Versão ativada; gates pré e pós-ativação aprovados." };
 }
 
 /**

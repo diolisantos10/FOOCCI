@@ -36,6 +36,8 @@ export interface BrainReasoningRequest {
   sanitizedInput: string;
   /** Recent conversation window (sanitized), oldest first. Optional — single-turn works as before. */
   sanitizedHistory?: SanitizedTurn[];
+  /** Memória durável do cliente (comportamental, sem PII) — ex.: favoritos, recência. */
+  customerMemory?: string;
   currentResponse?: string;
   contextHints?: string[];
 }
