@@ -36,6 +36,8 @@ export function AdminSidebar() {
     { href: "/admin/diagnostics/whatsapp-text-ordering", label: "WA Pedido Texto", icon: "🧾" },
     { href: "/admin/agents/whatsapp",                    label: "WA Cockpit",      icon: "🎛️" },
     { href: "/admin/agentes/training",                  label: "Treinamento IA",  icon: "🧠" },
+    { href: "/admin/brain",                             label: "Brain",           icon: "⚡" },
+    { href: "/admin/brain/free-form",                   label: "Escada do Brain", icon: "🪜" },
   ];
 
   return (
