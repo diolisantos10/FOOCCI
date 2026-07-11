@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { pendingHumanRequestIds } from "@/lib/handoff-alert";
+import { pendingHumanRequestIds, HANDOFF_ALARM_MAX_AGE_MS } from "@/lib/handoff-alert";
 
 describe("pendingHumanRequestIds", () => {
   it("A — includes conversations waiting for a human (status HUMAN)", () => {
@@ -62,6 +62,43 @@ describe("pendingHumanRequestIds", () => {
     const after  = pendingHumanRequestIds([{ id: "c1", status: "HUMAN", handoffAlarmAckAt: null }]);
     expect(before).toEqual([]);
     expect(after).toEqual(["c1"]);
+  });
+
+  it("no maxAgeMs → age is ignored (original behaviour, rings regardless of how old)", () => {
+    const ancient = new Date("2000-01-01T00:00:00.000Z");
+    const ids = pendingHumanRequestIds([{ id: "c1", status: "HUMAN", lastMessageAt: ancient }]);
+    expect(ids).toEqual(["c1"]);
+  });
+
+  it("auto-silences a STALE handoff (customer silent past maxAgeMs) — sound stops by itself", () => {
+    const now = Date.parse("2026-07-11T15:00:00.000Z");
+    const fresh = new Date(now - 5 * 60_000);                         // 5 min ago → still rings
+    const stale = new Date(now - (HANDOFF_ALARM_MAX_AGE_MS + 60_000)); // just past the window → silent
+    const ids = pendingHumanRequestIds(
+      [
+        { id: "fresh", status: "HUMAN", lastMessageAt: fresh },
+        { id: "stale", status: "HUMAN", lastMessageAt: stale },
+      ],
+      { now, maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS },
+    );
+    expect(ids).toEqual(["fresh"]);
+  });
+
+  it("a NEW customer message re-arms a previously-stale handoff (fresh lastMessageAt)", () => {
+    const now = Date.parse("2026-07-11T15:00:00.000Z");
+    const ids = pendingHumanRequestIds(
+      [{ id: "c1", status: "HUMAN", lastMessageAt: new Date(now - 30_000) }], // messaged 30s ago
+      { now, maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS },
+    );
+    expect(ids).toEqual(["c1"]);
+  });
+
+  it("missing lastMessageAt under a cap still rings (never silences an unknown-age request)", () => {
+    const ids = pendingHumanRequestIds(
+      [{ id: "c1", status: "HUMAN" }],
+      { now: Date.now(), maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS },
+    );
+    expect(ids).toEqual(["c1"]);
   });
 
   it("returns [] for no conversations", () => {

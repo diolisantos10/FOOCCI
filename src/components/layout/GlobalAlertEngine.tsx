@@ -65,7 +65,7 @@
  * "foocci:sound-settings-changed" event the settings page dispatches on save.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertLoopController } from "@/lib/alert-loop";
 import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
 import {
@@ -79,7 +79,11 @@ import {
   fetchRestaurantSoundSettings,
 } from "@/lib/sound-prefs";
 import { pendingActionOrderIds, type AlertOrderLike } from "@/lib/order-alert";
-import { pendingHumanRequestIds, type HandoffConversationLike } from "@/lib/handoff-alert";
+import {
+  pendingHumanRequestIds,
+  HANDOFF_ALARM_MAX_AGE_MS,
+  type HandoffConversationLike,
+} from "@/lib/handoff-alert";
 
 const ORDER_POLL_MS   = 8_000;
 const HUMAN_POLL_MS   = 10_000;
@@ -143,6 +147,27 @@ export function GlobalAlertEngine() {
   // Only the DEVICE holding the server-side lease actually plays audio (in
   // addition to being the local tab leader above) — see header doc.
   const isServerLeaderRef = useRef(false);
+
+  // Drives the app-wide "🔇 Silenciar alarme" button: how many handoff
+  // conversations are currently SOUNDING on this (leader) tab. > 0 → show the
+  // button, so the operator can stop the noise from ANY page with one tap.
+  const [ringHandoffCount, setRingHandoffCount] = useState(0);
+  const handoffControllerRef = useRef<AlertLoopController | null>(null);
+  // After a manual silence, hold the alarm quiet for a beat so the next poll
+  // (which may fire before the server ack commits) can't briefly re-ring.
+  const suppressRingUntilRef = useRef(0);
+
+  /** One-tap "silence the human-attention alarm everywhere". Optimistically goes
+   *  quiet on this device, then persists the acknowledgement server-side so the
+   *  alarm stays silent on every page and every device (acknowledge-all). */
+  const silenceAllHandoffs = () => {
+    suppressRingUntilRef.current = Date.now() + 12_000;
+    setRingHandoffCount(0);
+    handoffControllerRef.current?.sync([]); // instant local silence
+    void fetch("/api/atendimento/handoff/acknowledge-all", { method: "POST" }).catch(() => {
+      /* the DB ack is best-effort; the local silence above already stopped this device */
+    });
+  };
 
   useEffect(() => {
     // ── Load settings, once + on every save from Configurações → Sons ────────
@@ -231,13 +256,19 @@ export function GlobalAlertEngine() {
         } catch { /* storage unavailable */ }
       },
     });
+    handoffControllerRef.current = handoffController; // let the silence button reach it
 
     // Only the tab that is BOTH the local (Web Lock) leader AND the current
     // server-lease holder ever receives non-empty ids, so play() can never
     // fire from a non-leader tab OR a non-leader device — see header doc.
     const isLeader = () => isLeaderRef.current && isServerLeaderRef.current;
     const safeOrderSync   = (ids: string[]) => orderController.sync(isLeader() ? ids : []);
-    const safeHandoffSync = (ids: string[]) => handoffController.sync(isLeader() ? ids : []);
+    const safeHandoffSync = (ids: string[]) => {
+      const suppressed = Date.now() < suppressRingUntilRef.current;
+      const eff = isLeader() && !suppressed ? ids : [];
+      setRingHandoffCount(eff.length); // drives the "🔇 Silenciar alarme" button
+      handoffController.sync(eff);
+    };
 
     // ── Cross-device lease heartbeat — only the local tab leader attempts it ──
     const deviceId = getOrCreateDeviceId();
@@ -291,7 +322,10 @@ export function GlobalAlertEngine() {
           if (handoffDrivenRef.current) return; // a race with attach — defer to the page
           const raw = json?.data;
           const rows: HandoffConversationLike[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
-          const pending = pendingHumanRequestIds(rows);
+          // maxAgeMs stops the SOUND for handoffs whose customer has been silent
+          // for hours (the "apita e não para" stale-escalation case) — they stay
+          // visible in the inbox, they just go quiet on their own.
+          const pending = pendingHumanRequestIds(rows, { maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS });
           safeHandoffSync([...new Set([...pending, ...overdueIds])]);
         })
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
@@ -300,8 +334,14 @@ export function GlobalAlertEngine() {
       if (!isLeaderRef.current || handoffDrivenRef.current) return;
       fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
         .then((r) => r.json())
-        .then((d: { data?: { overdue?: { id: string }[] } }) => {
-          overdueIds = (d?.data?.overdue ?? []).map((o) => o.id);
+        .then((d: { data?: { overdue?: { id: string; waitingMinutes?: number }[] } }) => {
+          // Same stale-silence window as the base alarm: an overdue conversation
+          // whose customer has been silent past it stops SOUNDING (it still shows
+          // in Atendimento's "⏰ atrasados" banner — sound-only, nothing hidden).
+          const maxMinutes = HANDOFF_ALARM_MAX_AGE_MS / 60_000;
+          overdueIds = (d?.data?.overdue ?? [])
+            .filter((o) => (o.waitingMinutes ?? 0) <= maxMinutes)
+            .map((o) => o.id);
         })
         .catch(() => {});
     };
@@ -389,5 +429,19 @@ export function GlobalAlertEngine() {
     };
   }, []);
 
-  return null;
+  // Visible ONLY while the human-attention alarm is actually sounding on this
+  // (leader) tab — a from-anywhere kill switch so the operator never has to hunt
+  // for the conversation to stop the noise. One tap silences every page/device.
+  if (ringHandoffCount <= 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={silenceAllHandoffs}
+      title="Silenciar o alarme de atendimento humano em todas as telas e aparelhos"
+      className="fixed bottom-24 right-4 z-[70] flex items-center gap-2 rounded-full bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-xl ring-2 ring-white transition hover:bg-red-700 active:scale-95"
+    >
+      <span aria-hidden>🔇</span>
+      Silenciar alarme{ringHandoffCount > 1 ? ` (${ringHandoffCount})` : ""}
+    </button>
+  );
 }

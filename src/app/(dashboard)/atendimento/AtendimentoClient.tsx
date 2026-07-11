@@ -11,7 +11,7 @@ import {
 } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { HANDOFF_SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
-import { pendingHumanRequestIds } from "@/lib/handoff-alert";
+import { pendingHumanRequestIds, HANDOFF_ALARM_MAX_AGE_MS } from "@/lib/handoff-alert";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
@@ -503,8 +503,12 @@ export function AtendimentoClient({
 
   // Conversations waiting for a human (status === "HUMAN", not Staff/equipe),
   // unassumed. This is the visible pending queue AND the base of the alarm.
+  // maxAgeMs mirrors the app-wide engine: a handoff whose customer has been
+  // silent for hours stops SOUNDING on its own (it stays listed below — the
+  // conversation is not hidden, only quieted). This is what keeps the alarm
+  // from "apitando e não parando" for old/stale escalations.
   const pendingHumanIds = useMemo(
-    () => pendingHumanRequestIds(conversations),
+    () => pendingHumanRequestIds(conversations, { maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS }),
     [conversations],
   );
 
@@ -556,9 +560,15 @@ export function AtendimentoClient({
     });
   }, [overdueIds]);
 
+  // Sound only for overdue handoffs still within the stale window — an item the
+  // customer abandoned hours ago keeps showing in the "⏰ atrasados" banner but
+  // stops making noise on its own (matches the app-wide engine).
+  const overdueSoundMaxMinutes = HANDOFF_ALARM_MAX_AGE_MS / 60_000;
   const alarmingOverdueIds = useMemo(
-    () => overdueIds.filter((id) => !acknowledgedOverdueIds.has(id)),
-    [overdueIds, acknowledgedOverdueIds],
+    () => overdueHandoffs
+      .filter((o) => o.waitingMinutes <= overdueSoundMaxMinutes && !acknowledgedOverdueIds.has(o.id))
+      .map((o) => o.id),
+    [overdueHandoffs, acknowledgedOverdueIds, overdueSoundMaxMinutes],
   );
 
   // The alarm sound rings for pending (unacked) ∪ overdue (unacked), deduped.
