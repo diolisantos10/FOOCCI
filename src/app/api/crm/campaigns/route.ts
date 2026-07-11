@@ -88,9 +88,18 @@ export async function GET(req: NextRequest) {
     const summaries: Record<string, ReturnType<typeof summarizeFromReasonCounts>> = {};
 
     if (allIds.length > 0) {
+      // Only count RECENT failures/blocks (last 48h). Recurring campaigns run every
+      // ~15 min forever, so a lifetime cumulative count is meaningless and alarming
+      // (e.g. "718 falhas" from weeks ago). The owner cares about "is it failing now".
+      // The full history is still available per-campaign in Gerenciar → Performance.
+      const failuresSince = new Date(Date.now() - 48 * 60 * 60 * 1000);
       const groups = await prisma.campaignExecution.groupBy({
         by:    ["campaignId", "status", "failedReason", "errorMessage"],
-        where: { campaignId: { in: allIds }, status: { in: ["FAILED", "BLOCKED"] as never[] } },
+        where: {
+          campaignId: { in: allIds },
+          status:     { in: ["FAILED", "BLOCKED"] as never[] },
+          createdAt:  { gte: failuresSince },
+        },
         _count: { id: true },
       });
       const byCampaign: Record<string, Array<{ status: string; failedReason?: string | null; errorMessage?: string | null; count: number }>> = {};
