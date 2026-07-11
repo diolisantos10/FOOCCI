@@ -17,7 +17,7 @@ import {
 const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
 const isFixedCampaign = (templateId: string | null | undefined): boolean =>
   !!templateId && READY_MADE_ID_SET.has(templateId);
-import { ReadyMadeCampaignsSection } from "./ReadyMadeCampaignsSection";
+import { ReadyMadeCampaignsSection, ReadyMadeConfigModal, type ReadyMadeState } from "./ReadyMadeCampaignsSection";
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
@@ -3299,6 +3299,9 @@ function CampanhasAtivasSection({
   onSeeAll,
   restrictToIds,
   cartRecoveryActive,
+  couponCounts,
+  onCartRecoveryManage,
+  onCartRecoveryToggle,
 }: {
   campaigns: CampaignHistoryRow[];
   onDetail: (id: string) => void;
@@ -3310,8 +3313,15 @@ function CampanhasAtivasSection({
   /** When set, show ONLY these campaign ids (the currently-active ready-made ones),
       so old/deleted manual campaigns never linger in this results panel. */
   restrictToIds?: string[] | null;
-  /** Carrinho abandonado has no Campaign row — render it as a row when it's on. */
+  /** Carrinho abandonado has no Campaign row — render it as a row when defined.
+      undefined → don't render the row (dashboard overview); boolean → on/off state. */
   cartRecoveryActive?: boolean;
+  /** Per-campaign coupon counts (campaignId → { sent, used }) from the wallet. */
+  couponCounts?: Record<string, { sent: number; used: number }>;
+  /** Open the cart-recovery config modal (same as "Gerenciar" for real campaigns). */
+  onCartRecoveryManage?: () => void;
+  /** Toggle cart recovery on/off (same as "Pausar"/"Ativar" for real campaigns). */
+  onCartRecoveryToggle?: () => void;
 }) {
   const allowed = restrictToIds ? new Set(restrictToIds) : null;
   // Show every active custom campaign, plus the currently-active FIXED (ready-made)
@@ -3322,11 +3332,15 @@ function CampanhasAtivasSection({
     if (!isFixedCampaign(c.templateId)) return true;      // custom → always show
     return !allowed || allowed.has(c.id);                  // fixed → only the live row
   });
-  if (active.length === 0 && !cartRecoveryActive) return null;
+  // Cart recovery is a permanent fixed campaign — render its row whenever the parent
+  // provides its state (both ON and OFF), so it has the same Gerenciar + Pausar/Ativar
+  // controls as every other campaign. Hidden on the limited dashboard overview.
+  const showCartRow = cartRecoveryActive !== undefined && limit == null;
+  if (active.length === 0 && !showCartRow) return null;
   const shown = limit != null
     ? [...active].sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue)).slice(0, limit)
     : active;
-  const count = active.length + (cartRecoveryActive ? 1 : 0);
+  const count = active.length + (showCartRow ? 1 : 0);
 
   return (
     <div data-testid="campanhas-ativas-section">
@@ -3337,10 +3351,10 @@ function CampanhasAtivasSection({
         </div>
         <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{count}</span>
       </div>
-      {/* 9 columns — fits 1280px+ without horizontal scroll.
-          Respostas/Tx./Pedidos moved to the Gerenciar detail modal. */}
+      {/* Compact per-campaign metrics: Conversão / Cupons enviados / Cupons usados
+          come from real backend data (execution totals + the coupon wallet). */}
       <div className="overflow-x-auto rounded-2xl border border-line bg-paper shadow-sm">
-        <table className="w-full min-w-[860px] text-left text-xs">
+        <table className="w-full min-w-[1040px] text-left text-xs">
           <thead className="border-b border-line bg-[#FAFAF8]">
             <tr className="text-[10px] uppercase tracking-wide text-muted">
               <th className="py-2.5 pl-4 pr-2 font-semibold">Status</th>
@@ -3350,15 +3364,20 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
               <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Pedidos atribuídos após a mensagem ÷ enviados">Conversão</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons que a campanha concedeu à carteira dos clientes">Cupons env.</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons concedidos pela campanha que foram resgatados">Cupons usados</th>
               <th className="py-2.5 px-2 font-semibold">Agenda</th>
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {cartRecoveryActive && limit == null && (
+            {showCartRow && (
               <tr className="bg-sky-50/40 hover:bg-sky-50/70 transition-colors">
                 <td className="py-3 pl-4 pr-2">
-                  <span className="inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap bg-emerald-100 text-emerald-700">Ativa</span>
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${cartRecoveryActive ? "bg-emerald-100 text-emerald-700" : "bg-[#F4F4F2] text-muted"}`}>
+                    {cartRecoveryActive ? "Ativa" : "Pausada"}
+                  </span>
                 </td>
                 <td className="py-3 px-2 max-w-[170px]">
                   <div className="flex items-center gap-1.5">
@@ -3374,8 +3393,33 @@ function CampanhasAtivasSection({
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
+                {/* Conversão / Cupons — cart recovery grants without a Campaign row,
+                    so its coupons aren't per-campaign attributable. */}
+                <td className="py-3 px-2 text-right text-muted">—</td>
+                <td className="py-3 px-2 text-right text-muted">—</td>
+                <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-[11px]"><p className="text-ink2 whitespace-nowrap">Após abandono</p><p className="text-muted whitespace-nowrap">automático</p></td>
-                <td className="py-3 pl-2 pr-4 text-right"><span className="text-[10px] text-muted">em Campanhas prontas</span></td>
+                <td className="py-3 pl-2 pr-4">
+                  <div className="flex items-center gap-1 justify-end">
+                    <button
+                      onClick={() => onCartRecoveryManage?.()}
+                      className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+                    >
+                      Gerenciar
+                    </button>
+                    {cartRecoveryActive ? (
+                      <button
+                        onClick={() => onCartRecoveryToggle?.()}
+                        className="rounded-lg bg-[#F4F4F2] px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
+                      >Pausar</button>
+                    ) : (
+                      <button
+                        onClick={() => onCartRecoveryToggle?.()}
+                        className="rounded-lg bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                      >Ativar</button>
+                    )}
+                  </div>
+                </td>
               </tr>
             )}
             {shown.map((c) => {
@@ -3457,6 +3501,33 @@ function CampanhasAtivasSection({
                     {Number(c.totalRevenue) > 0
                       ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                       : <span className="text-muted font-normal">—</span>}
+                  </td>
+
+                  {/* Conversão — pedidos atribuídos ÷ enviados (números reais do backend) */}
+                  <td className="py-3 px-2 text-right tabular-nums">
+                    {c.totalSent > 0 ? (
+                      <span className="font-semibold text-emerald-700">
+                        {Math.round((c.totalConverted / c.totalSent) * 100)}%
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+
+                  {/* Cupons enviados — concedidos à carteira pela campanha */}
+                  <td className="py-3 px-2 text-right tabular-nums">
+                    {(() => {
+                      const sent = couponCounts?.[c.id]?.sent ?? 0;
+                      return sent > 0 ? <span className="text-ink2">{sent}</span> : <span className="text-muted">—</span>;
+                    })()}
+                  </td>
+
+                  {/* Cupons usados — resgatados */}
+                  <td className="py-3 px-2 text-right tabular-nums">
+                    {(() => {
+                      const used = couponCounts?.[c.id]?.used ?? 0;
+                      return used > 0 ? <span className="font-semibold text-green-700">{used}</span> : <span className="text-muted">—</span>;
+                    })()}
                   </td>
 
                   {/* Agenda: time window on line 1, cadence on line 2 */}
@@ -3834,6 +3905,13 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Carrinho abandonado (CART_RECOVERY) has no Campaign row — it's a config flag —
   // so it never appears in `campaigns`. Track it separately just to show it's active.
   const [cartRecoveryOn, setCartRecoveryOn] = useState(false);
+  // Full ready-made state for carrinho-abandonado, so its "Gerenciar" opens the SAME
+  // modern config modal the other campaigns use (message + reward + on/off).
+  const [cartRecoveryItem, setCartRecoveryItem] = useState<ReadyMadeState | null>(null);
+  const [cartConfigOpen, setCartConfigOpen] = useState(false);
+  const [cartBusy, setCartBusy] = useState(false);
+  // Per-campaign coupon counts (campaignId → { sent, used }) for the Ativas table.
+  const [couponCounts, setCouponCounts] = useState<Record<string, { sent: number; used: number }>>({});
   // Ids of the campaigns actually turned on in "Campanhas prontas". The Ativas panel
   // shows ONLY these, so old/deleted manual campaigns never linger there.
   const [activeReadyMadeIds, setActiveReadyMadeIds] = useState<string[]>([]);
@@ -3859,12 +3937,53 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     fetch("/api/crm/ready-made")
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => {
-        const rm = (json?.data?.campaigns as Array<{ id: string; active: boolean; campaignId: string | null }> | undefined) ?? [];
-        setCartRecoveryOn(rm.some((c) => c.id === "carrinho-abandonado" && c.active));
+        const rm = (json?.data?.campaigns as ReadyMadeState[] | undefined) ?? [];
+        const cart = rm.find((c) => c.id === "carrinho-abandonado") ?? null;
+        setCartRecoveryItem(cart);
+        setCartRecoveryOn(!!cart?.active);
         setActiveReadyMadeIds(rm.filter((c) => c.active && c.campaignId).map((c) => c.campaignId as string));
       })
       .catch(() => {});
   }, [readyMadeReload]);
+
+  // Per-campaign coupon counts for the Ativas table (Cupons enviados / usados).
+  useEffect(() => {
+    fetch("/api/crm/campaign-coupon-summary")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setCouponCounts(json.data ?? {}))
+      .catch(() => {});
+  }, [readyMadeReload]);
+
+  // Toggle cart recovery on/off — the same control the other campaigns' Pausar/Ativar
+  // give, wired to the readyMadeConfig.cartRecoveryEnabled flag.
+  async function handleCartRecoveryToggle() {
+    if (cartBusy) return;
+    setCartBusy(true);
+    const turnOn = !cartRecoveryOn;
+    try {
+      await fetch("/api/crm/ready-made/carrinho-abandonado", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: turnOn ? "activate" : "deactivate" }),
+      });
+      setReadyMadeReload((n) => n + 1);
+    } finally {
+      setCartBusy(false);
+    }
+  }
+
+  // Save cart recovery config (message + reward) — feeds the modern config modal.
+  async function handleCartRecoverySave(overrides: Record<string, unknown>) {
+    setCartBusy(true);
+    try {
+      await fetch("/api/crm/ready-made/carrinho-abandonado", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", overrides }),
+      });
+      setReadyMadeReload((n) => n + 1);
+    } finally {
+      setCartBusy(false);
+    }
+  }
 
   async function handleCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
     const res = await fetch(`/api/crm/campaigns/${id}`, {
@@ -3985,6 +4104,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onAction={(id, action) => { void handleCampaignAction(id, action); }}
           restrictToIds={activeReadyMadeIds}
           cartRecoveryActive={cartRecoveryOn}
+          couponCounts={couponCounts}
+          onCartRecoveryManage={() => setCartConfigOpen(true)}
+          onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
       )}
 
@@ -4231,6 +4353,18 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onClose={() => { setDetailId(null); setReadyMadeReload((n) => n + 1); }}
           onCampaignAction={handleCampaignAction}
           onCampaignUpdated={handleCampaignFieldsUpdated}
+        />
+      )}
+
+      {/* Cart recovery config — the SAME modern modal the other campaigns use,
+          opened from the "Gerenciar" button in the Ativas table. */}
+      {cartConfigOpen && cartRecoveryItem && (
+        <ReadyMadeConfigModal
+          c={cartRecoveryItem}
+          busy={cartBusy}
+          onClose={() => setCartConfigOpen(false)}
+          onToggle={() => { void handleCartRecoveryToggle(); }}
+          onSave={handleCartRecoverySave}
         />
       )}
 

@@ -248,4 +248,30 @@ export class CustomerCouponService {
       };
     });
   }
+
+  /**
+   * Per-campaign coupon counts for the restaurant, keyed by the campaign that
+   * granted them (CustomerCoupon.sourceCampaignId):
+   *   sent = coupons granted by the campaign (any status — ACTIVE/USED/EXPIRED)
+   *   used = coupons redeemed (status USED)
+   * One grouped query, tenant-scoped. Coupons with no sourceCampaignId (e.g. cart
+   * recovery, which grants without a Campaign row) are not attributable and excluded.
+   */
+  static async countByCampaign(restaurantId: string): Promise<Record<string, { sent: number; used: number }>> {
+    const grouped = await prisma.customerCoupon.groupBy({
+      by:      ["sourceCampaignId", "status"],
+      where:   { restaurantId, sourceCampaignId: { not: null } },
+      _count:  { _all: true },
+    });
+    const map: Record<string, { sent: number; used: number }> = {};
+    for (const g of grouped) {
+      const id = g.sourceCampaignId;
+      if (!id) continue;
+      const entry = (map[id] ??= { sent: 0, used: 0 });
+      const n = g._count._all;
+      entry.sent += n;
+      if (g.status === "USED") entry.used += n;
+    }
+    return map;
+  }
 }

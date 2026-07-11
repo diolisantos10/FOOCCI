@@ -24,7 +24,7 @@ type Editable = Array<"message" | "schedule" | "dailyLimit" | "coupon" | "trigge
 
 interface Timing { summary: string; fromSegmentation: boolean; }
 
-interface ReadyMadeState {
+export interface ReadyMadeState {
   id: string;
   emoji: string;
   name: string;
@@ -211,7 +211,7 @@ function ReadyMadeCard({
 
 // ── Config modal ──────────────────────────────────────────────────────────────────
 
-function ReadyMadeConfigModal({
+export function ReadyMadeConfigModal({
   c, busy, onClose, onToggle, onSave,
 }: {
   c: ReadyMadeState;
@@ -249,53 +249,69 @@ function ReadyMadeConfigModal({
   // Coupon flows into the preview so {cupom} shows the real value live as it's picked.
   const preview = renderCrmMessage(message, PREVIEW_CUSTOMER, { ...PREVIEW_CTX, coupon });
 
+  // Modern config modal — same chrome as the "Gerenciar campanha" modal used by every
+  // other campaign (backdrop + blur, rounded-3xl card, sticky header with eyebrow +
+  // status pill + Pausar/Ativar, sticky footer with Salvar).
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div
-        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-xl sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
-          <div className="flex items-start gap-2.5">
-            <span className="text-2xl leading-none">{c.emoji}</span>
-            <div>
-              <p className="text-base font-bold text-ink">{c.name}</p>
-              <p className="mt-0.5 text-xs text-muted">{c.tagline}</p>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal card */}
+      <div className="relative min-h-full flex items-start justify-center p-0 sm:p-4 sm:py-6">
+        <div className="relative w-full bg-paper shadow-2xl sm:rounded-3xl sm:max-w-2xl overflow-hidden">
+
+          {/* ── Sticky header ── */}
+          <div className="sticky top-0 z-10 border-b border-line bg-paper">
+            <div className="flex items-center justify-between px-5 py-4 sm:px-8">
+              <div className="flex min-w-0 items-start gap-3 pr-4">
+                <span className="text-2xl leading-none">{c.emoji}</span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Configurar campanha</p>
+                  <h2 className="mt-0.5 text-base font-bold text-ink truncate">{c.name}</h2>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`hidden sm:inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${c.active ? "bg-emerald-100 text-emerald-700" : "bg-[#F4F4F2] text-muted"}`}>
+                  {c.active ? "Ligada" : "Desligada"}
+                </span>
+                {c.active ? (
+                  <button
+                    onClick={onToggle}
+                    disabled={busy}
+                    className="rounded-xl bg-yellow-50 px-3 py-1.5 text-xs font-semibold text-yellow-700 hover:bg-yellow-100 transition-colors disabled:opacity-50"
+                  >Pausar</button>
+                ) : (
+                  <button
+                    onClick={onToggle}
+                    disabled={busy}
+                    className="rounded-xl bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+                  >Ativar</button>
+                )}
+                <button onClick={onClose} aria-label="Fechar" className="rounded-xl p-2 text-muted hover:bg-[#F4F4F2] transition-colors">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onToggle}
-              disabled={busy}
-              aria-label={c.active ? "Desligar" : "Ligar"}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${c.active ? "bg-emerald-500" : "bg-gray-300"}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${c.active ? "translate-x-6" : "translate-x-1"}`} />
-            </button>
-            <button onClick={onClose} aria-label="Fechar" className="text-gray-400 hover:text-gray-600">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </div>
 
-        {/* Body */}
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <p className="text-sm leading-relaxed text-ink2">{c.description}</p>
+          {/* ── Body ── */}
+          <div className="space-y-5 px-5 py-6 sm:px-8 sm:py-8">
+            <p className="text-sm leading-relaxed text-ink2">{c.description}</p>
 
-          {/* Timing / cadence */}
-          <div className="rounded-xl border border-line bg-[#FAFAF8] p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted">Quando é enviada</p>
-            {c.timing.summary && <p className="mt-1.5 text-base text-ink2">🕒 {c.timing.summary}</p>}
-            {c.timing.fromSegmentation && (
-              <p className="mt-1.5 text-xs text-muted">
-                Os dias que definem esta fase ficam em <span className="font-semibold">Configurações → Segmentação</span>.
-              </p>
-            )}
-            <p className="mt-2.5 text-xs leading-relaxed text-muted">{CADENCE_EXPLAINER}</p>
-          </div>
+            {/* Timing / cadence */}
+            <div className="rounded-xl border border-line bg-[#FAFAF8] p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted">Quando é enviada</p>
+              {c.timing.summary && <p className="mt-1.5 text-base text-ink2">🕒 {c.timing.summary}</p>}
+              {c.timing.fromSegmentation && (
+                <p className="mt-1.5 text-xs text-muted">
+                  Os dias que definem esta fase ficam em <span className="font-semibold">Configurações → Segmentação</span>.
+                </p>
+              )}
+              <p className="mt-2.5 text-xs leading-relaxed text-muted">{CADENCE_EXPLAINER}</p>
+            </div>
 
-          {has("triggerDays") && (
+            {has("triggerDays") && (
             <div className="rounded-xl border border-line p-4">
               <label className="flex cursor-pointer items-center gap-2">
                 <input
@@ -516,28 +532,29 @@ function ReadyMadeConfigModal({
               />
               <span className="ml-2 text-[10px] text-muted">o limite global de segurança ainda vale</span>
             </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
-          <span className="text-[11px] text-muted">
-            {c.active ? "Campanha ligada." : "Campanha desligada — pode configurar mesmo assim."}
-            {saved && <span className="ml-1 font-semibold text-emerald-600">✓ Salvo</span>}
-          </span>
-          {canEdit ? (
-            <button
-              onClick={() => void save()}
-              disabled={busy}
-              className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {busy ? "Salvando…" : "Salvar"}
-            </button>
-          ) : (
-            <button onClick={onClose} className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700">
-              Fechar
-            </button>
-          )}
+          {/* ── Sticky footer ── */}
+          <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-line bg-paper px-5 py-3 sm:px-8">
+            <span className="text-[11px] text-muted">
+              {c.active ? "Campanha ligada." : "Campanha desligada — pode configurar mesmo assim."}
+              {saved && <span className="ml-1 font-semibold text-emerald-600">✓ Salvo</span>}
+            </span>
+            {canEdit ? (
+              <button
+                onClick={() => void save()}
+                disabled={busy}
+                className="rounded-xl bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {busy ? "Salvando…" : "Salvar"}
+              </button>
+            ) : (
+              <button onClick={onClose} className="rounded-xl bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700">
+                Fechar
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
