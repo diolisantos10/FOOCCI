@@ -7,7 +7,8 @@
  * orchestrator can retry / mark the chunk FAILED without crashing.
  */
 
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import { parseExtractedTechniques } from "../agentLibraryHelpers";
 import type { ChunkExtractor } from "./DeepExtractionService";
 
@@ -29,24 +30,20 @@ const SYSTEM = [
 ].join(" ");
 
 export const realChunkExtractor: ChunkExtractor = async (input) => {
-  if (!process.env.OPENAI_API_KEY) {
+  // Piloto roteado pelo Brain — MOCK significa nenhum provider configurado.
+  const selection = await selectEngineRouted("waiter", { taskProfile: "GENERATE" });
+  if (selection.provider === "MOCK") {
     throw new Error("OPENAI_API_KEY não configurada — extração profunda indisponível.");
   }
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+  const raw = await callStructuredJson({
+    selection,
+    systemPrompt: SYSTEM,
+    userContent:
+      `Agente: ${input.agentSlug}\nFonte: ${input.sourceTitle}\n` +
+      `Categoria: ${input.category ?? "(sem categoria)"}\n` +
+      `Parte ${input.chunkIndex + 1} de ${input.totalChunks}\n\nTRECHO:\n${input.text}`,
     temperature: 0.3,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM },
-      {
-        role: "user",
-        content:
-          `Agente: ${input.agentSlug}\nFonte: ${input.sourceTitle}\n` +
-          `Categoria: ${input.category ?? "(sem categoria)"}\n` +
-          `Parte ${input.chunkIndex + 1} de ${input.totalChunks}\n\nTRECHO:\n${input.text}`,
-      },
-    ],
+    responseFormat: "json",
   });
-  const raw = completion.choices[0]?.message?.content ?? "";
   return parseExtractedTechniques(raw);
 };

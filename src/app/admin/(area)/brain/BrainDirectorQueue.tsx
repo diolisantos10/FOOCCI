@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 const BASE = "/api/admin/brain/change-requests";
+/** localStorage key do nome do revisor humano (identidade real nas decisões). */
+const REVIEWER_STORAGE_KEY = "foocci.brain.reviewerName";
 
 interface RequestRow {
   id: string; requestedByType: string; target: string; summary: string; rationale: string;
@@ -47,6 +49,23 @@ const statusTone = (s: string) => (s === "APPROVED" || s === "APPLIED" ? "green"
 export function BrainDirectorQueue() {
   const [data, setData] = useState<QueueData | null>(null);
   const [msg, setMsg] = useState("");
+  const [reviewer, setReviewer] = useState("");
+  const [appliedBy, setAppliedBy] = useState("");
+  const [applying, setApplying] = useState<string | null>(null);
+  const [applyMsg, setApplyMsg] = useState("");
+
+  // Identidade real do revisor — persistida em localStorage entre visitas.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(REVIEWER_STORAGE_KEY);
+      if (saved) setReviewer(saved);
+    } catch { /* localStorage indisponível — segue sem persistência */ }
+  }, []);
+
+  const onReviewerChange = useCallback((value: string) => {
+    setReviewer(value);
+    try { window.localStorage.setItem(REVIEWER_STORAGE_KEY, value); } catch { /* non-fatal */ }
+  }, []);
 
   const load = useCallback(async () => {
     const res = await fetch(BASE).then((r) => r.json()).catch(() => ({ ok: false }));
@@ -57,15 +76,37 @@ export function BrainDirectorQueue() {
   useEffect(() => { void load(); }, [load]);
 
   const decide = useCallback(async (id: string, action: string) => {
+    const name = reviewer.trim();
+    if (!name) {
+      setMsg("Informe seu nome antes de decidir — cada decisão registra quem foi o revisor humano.");
+      return;
+    }
+    setMsg("");
     const res = await fetch(`${BASE}/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, reviewedBy: "admin" }),
+      body: JSON.stringify({ action, reviewedBy: name }),
     }).then((r) => r.json()).catch(() => ({ ok: false }));
     if (!res.ok) setMsg(res.error ?? "Falha.");
     await load();
-  }, [load]);
+  }, [reviewer, load]);
+
+  const apply = useCallback(async (id: string) => {
+    const name = appliedBy.trim();
+    if (!name) { setApplyMsg("Informe seu nome antes de aplicar — só um humano identificado pode aplicar."); return; }
+    setApplying(id);
+    setApplyMsg("");
+    const res = await fetch(`${BASE}/${id}/apply`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appliedBy: name }),
+    }).then((r) => r.json()).catch(() => ({ ok: false, error: "Falha de rede." }));
+    if (res.ok) setApplyMsg(`✅ Change request aplicado por ${name} (config-only — runtime intocado).`);
+    else setApplyMsg(`⛔ ${res.error ?? res.result?.error ?? "Falha ao aplicar."}`);
+    setApplying(null);
+    await load();
+  }, [appliedBy, load]);
 
   const pending = data?.latestRequests.filter((r) => r.status === "PENDING_APPROVAL") ?? [];
+  const approved = data?.latestRequests.filter((r) => r.status === "APPROVED") ?? [];
   const decided = data?.latestRequests.filter((r) => r.status !== "PENDING_APPROVAL").slice(0, 6) ?? [];
 
   return (
@@ -90,6 +131,18 @@ export function BrainDirectorQueue() {
           ))}
         </div>
       )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label className="text-[11px] font-semibold text-gray-500" htmlFor="bdq-reviewed-by">Revisor</label>
+        <input
+          id="bdq-reviewed-by"
+          type="text"
+          value={reviewer}
+          onChange={(e) => onReviewerChange(e.target.value)}
+          placeholder="Seu nome"
+          className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-800"
+        />
+        <span className="text-[10px] text-gray-400">Cada decisão registra o revisor humano — nomes genéricos (admin/bot) são recusados.</span>
+      </div>
       {msg && <p className="mt-2 text-[11px] text-red-600">{msg}</p>}
 
       <div className="mt-3 space-y-2">
@@ -116,6 +169,44 @@ export function BrainDirectorQueue() {
           </div>
         ))}
       </div>
+
+      {approved.length > 0 && (
+        <div className="mt-3 rounded-lg border border-green-200 bg-green-50/40 p-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">✅ Aprovadas — prontas para aplicar</h3>
+          <p className="mt-1 text-[11px] text-gray-600">
+            Aplicar executa <strong>só config governada</strong> (roteamento de motor / escada do free-form), com Quality Gate
+            obrigatório no apply quando exigido. Identifique-se — vazio é recusado.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label className="text-[11px] font-semibold text-gray-500" htmlFor="bdq-applied-by">Aplicado por</label>
+            <input
+              id="bdq-applied-by"
+              type="text"
+              value={appliedBy}
+              onChange={(e) => setAppliedBy(e.target.value)}
+              placeholder="Seu nome"
+              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-800"
+            />
+          </div>
+          {applyMsg && <p className="mt-1.5 text-[11px] text-gray-700">{applyMsg}</p>}
+          <div className="mt-2 space-y-1.5">
+            {approved.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-2 rounded border border-green-100 bg-white px-2 py-1.5 text-[11px]">
+                <span className="font-bold text-gray-900">{r.summary}</span>
+                <Pill tone="blue">{TARGET_LABELS[r.target] ?? r.target}</Pill>
+                <Pill tone={riskTone(r.riskLevel)}>Risco: {RISK_LABELS[r.riskLevel] ?? r.riskLevel}</Pill>
+                {r.requiresQualityGate && <Pill tone="violet">Gate no apply</Pill>}
+                {r.reviewedBy && <span className="text-gray-400">aprovada por {r.reviewedBy}</span>}
+                <button type="button" onClick={() => void apply(r.id)}
+                  disabled={applying !== null || !appliedBy.trim()}
+                  className="ml-auto rounded border border-green-300 px-2 py-0.5 text-[11px] font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50">
+                  {applying === r.id ? "Aplicando…" : "Aplicar"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {decided.length > 0 && (
         <details className="mt-3">

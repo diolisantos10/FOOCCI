@@ -17,6 +17,7 @@ import type {
   BusinessKnowledgeSnapshot,
   KnowledgeSnapshotOptions,
 } from "./BusinessKnowledgeContract";
+import { rankByEmbedding } from "./KnowledgeEmbeddingService";
 
 // Token budget caps — keep the snapshot prompt-sized.
 const MAX_MENU_ITEMS = 120;
@@ -32,12 +33,15 @@ function money(v: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-// ── Query-relevant retrieval (keyword v1; embeddings plug behind the same seam) ──
+// ── Query-relevant retrieval (embeddings v2 quando há OPENAI_API_KEY; keyword v1 como fallback) ──
 interface KnowledgeRow {
+  id?: string;
   category: string;
   title: string;
   answer: string;
   questionPatterns: unknown;
+  embedding?: unknown; // number[] persistido (Json) ou null
+  embeddingModel?: string | null;
 }
 
 function normalizeText(s: string): string {
@@ -67,6 +71,20 @@ function selectRelevantKnowledge(rows: KnowledgeRow[], queryHint?: string): Know
   });
   scored.sort((a, b) => b.score - a.score || a.order - b.order);
   return scored.slice(0, MAX_KNOWLEDGE_ITEMS).map((s) => s.row);
+}
+
+/**
+ * Retrieval v2: com queryHint E OPENAI_API_KEY, tenta similaridade de embedding
+ * (backfill lazy dos vetores). null/vazio (erro de API, mock ausente em teste,
+ * chave inválida) → cai no keyword acima EXATAMENTE como antes. Sem queryHint
+ * ou sem chave: nem tenta — comportamento atual intacto.
+ */
+async function selectKnowledgeForQuery(rows: KnowledgeRow[], queryHint?: string): Promise<KnowledgeRow[]> {
+  if (queryHint && process.env.OPENAI_API_KEY && rows.length) {
+    const ranked = await rankByEmbedding(queryHint, rows).catch(() => null);
+    if (ranked && ranked.length) return ranked.slice(0, MAX_KNOWLEDGE_ITEMS);
+  }
+  return selectRelevantKnowledge(rows, queryHint);
 }
 
 export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
@@ -133,7 +151,7 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         prisma.restaurantKnowledgeItem
           .findMany({
             where: { restaurantId: businessId, status: "ACTIVE" },
-            select: { category: true, title: true, answer: true, questionPatterns: true },
+            select: { id: true, category: true, title: true, answer: true, questionPatterns: true, embedding: true, embeddingModel: true },
             orderBy: { usageCount: "desc" },
             take: KNOWLEDGE_FETCH_POOL,
           })
@@ -206,8 +224,9 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
     if (!businessHours.length) missingContext.push("horários de funcionamento detalhados");
 
     // ── Policies: identity + the curated, human-approved Q&A (highest-quality truth).
-    // Com queryHint, os itens relevantes à pergunta REAL sobem (retrieval v1).
-    const selectedKnowledge = selectRelevantKnowledge(knowledgeItems as KnowledgeRow[], opts?.queryHint);
+    // Com queryHint, os itens relevantes à pergunta REAL sobem (embeddings quando
+    // configurados; keyword como fallback determinístico).
+    const selectedKnowledge = await selectKnowledgeForQuery(knowledgeItems as KnowledgeRow[], opts?.queryHint);
     const policies: unknown[] = [
       { tone: restaurant.brandConfig?.tone ?? "friendly", nome: restaurant.name },
       ...selectedKnowledge.map((k) => ({

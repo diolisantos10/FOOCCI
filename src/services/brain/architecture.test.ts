@@ -24,19 +24,19 @@ const ALLOWED = new Set<string>([
 
 /** Dívida pré-lei, CONGELADA. Remover itens = progresso; adicionar = proibido.
  *  Já migrados para o AIEngineRouter (Fase 4): WaiterReasoningLLMService,
- *  MessageVariationService, AnalyticsAgentService. */
+ *  MessageVariationService, AnalyticsAgentService, FaqMiner, AgentLibraryService,
+ *  realChunkExtractor, AgentTrainingEvaluatorService, AgentTrainingImprovementService. */
 const FROZEN_EXCEPTIONS = new Set<string>([
-  "services/agent-training/AgentTrainingEvaluatorService.ts",
-  "services/agent-training/AgentTrainingImprovementService.ts",
-  "services/agentLibrary/AgentLibraryService.ts",
-  "services/agentLibrary/deepExtraction/realChunkExtractor.ts",
   "services/ai/AIOrderService.ts",
   "services/ai/AISimulatorService.ts",
   "services/ai/AITools.ts",
   "services/ai/ChatSimService.ts",
   "services/ai/PromptBuilderService.ts",
   "services/ai/WhatsAppReceptionistService.ts",
-  "services/help/FaqMiner.ts",
+  // Exceção consciente (não é dívida de raciocínio): embeddings não passam pelo chat dispatcher
+  "services/brain/knowledge/KnowledgeEmbeddingService.ts",
+  // helpAssistant usa histórico multi-turn (mais de 2 mensagens) — o dispatcher
+  // callStructuredJson só suporta system+user; migrar exige evoluir o contrato.
   "services/help/helpAssistant.ts",
   "services/imageEnhancement/providers/openai.ts",
 ]);

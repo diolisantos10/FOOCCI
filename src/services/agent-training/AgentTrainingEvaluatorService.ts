@@ -7,7 +7,8 @@
  * SAFETY: evaluation is read-only — it never triggers any side effects.
  */
 
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import { prisma } from "@/lib/prisma";
 import type { EvaluationScores, TranscriptTurn } from "./types";
 
@@ -93,17 +94,18 @@ export async function evaluateScenario(opts: {
     recommendation:   string | null;
   }>;
   try {
-    const response = await openai.chat.completions.create({
-      model:           EVALUATOR_MODEL,
-      messages:        [
-        { role: "system", content: EVALUATION_SYSTEM_PROMPT },
-        { role: "user",   content: userMessage },
-      ],
-      temperature:     0.1,
-      max_tokens:      600,
-      response_format: { type: "json_object" },
+    const routed = await selectEngineRouted("quality", { taskProfile: "JUDGE" });
+    // Preserva o modelo do avaliador (gpt-4o) no piloto OpenAI — o judge foi
+    // calibrado nesse modelo; trocar é decisão governada, não efeito colateral.
+    const selection = routed.provider === "OPENAI" ? { ...routed, model: EVALUATOR_MODEL } : routed;
+    const raw = await callStructuredJson({
+      selection,
+      systemPrompt:   EVALUATION_SYSTEM_PROMPT,
+      userContent:    userMessage,
+      temperature:    0.1,
+      maxTokens:      600,
+      responseFormat: "json",
     });
-    const raw = response.choices[0]?.message?.content ?? "{}";
     // Strip markdown fences defensively (belt + suspenders alongside json_object)
     const clean = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
     parsed = JSON.parse(clean);

@@ -13,7 +13,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import {
   clampText,
   parseExtractedTechniques,
@@ -239,7 +240,9 @@ export class AgentLibraryService {
       await AgentLibraryService.setRawText(sourceId, text);
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    // Piloto roteado pelo Brain — MOCK significa nenhum provider configurado.
+    const selection = await selectEngineRouted("waiter", { taskProfile: "GENERATE" });
+    if (selection.provider === "MOCK") {
       throw new Error("Extração por IA indisponível (OPENAI_API_KEY não configurada). Adicione técnicas manualmente.");
     }
 
@@ -250,32 +253,22 @@ export class AgentLibraryService {
 
     try {
       const clamped = clampText(text);
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+      const raw = await callStructuredJson({
+        selection,
+        systemPrompt:
+          "Você é um curador de formação técnica para agentes de IA de restaurantes (Foocci). " +
+          "A partir das NOTAS fornecidas, extraia de 3 a 6 técnicas APLICÁVEIS, em português. " +
+          "Produza SOMENTE sínteses operacionais — NUNCA reproduza trechos longos da obra. " +
+          "Responda em JSON: { \"techniques\": [ { \"techniqueName\", \"category\", \"purpose\", " +
+          "\"principle\", \"application\", \"usageRule\", \"qualityTest\", \"goodExample\", " +
+          "\"badExample\", \"confidence\" } ] }. " +
+          "confidence é um número de 0 a 1. application deve descrever como o agente usa a técnica dentro do Foocci.",
+        userContent:
+          `Agente: ${source.agentSlug}\nFonte: ${source.title}\n` +
+          `Categoria: ${source.category ?? "(sem categoria)"}\n\nNOTAS:\n${clamped}`,
         temperature: 0.3,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "Você é um curador de formação técnica para agentes de IA de restaurantes (Foocci). " +
-              "A partir das NOTAS fornecidas, extraia de 3 a 6 técnicas APLICÁVEIS, em português. " +
-              "Produza SOMENTE sínteses operacionais — NUNCA reproduza trechos longos da obra. " +
-              "Responda em JSON: { \"techniques\": [ { \"techniqueName\", \"category\", \"purpose\", " +
-              "\"principle\", \"application\", \"usageRule\", \"qualityTest\", \"goodExample\", " +
-              "\"badExample\", \"confidence\" } ] }. " +
-              "confidence é um número de 0 a 1. application deve descrever como o agente usa a técnica dentro do Foocci.",
-          },
-          {
-            role: "user",
-            content:
-              `Agente: ${source.agentSlug}\nFonte: ${source.title}\n` +
-              `Categoria: ${source.category ?? "(sem categoria)"}\n\nNOTAS:\n${clamped}`,
-          },
-        ],
+        responseFormat: "json",
       });
-
-      const raw = completion.choices[0]?.message?.content ?? "";
       const techniques = parseExtractedTechniques(raw);
 
       if (techniques.length === 0) {

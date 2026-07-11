@@ -16,6 +16,9 @@ export const dynamic = "force-dynamic";
 
 const ACTIONS: Record<string, ReviewAction> = { approve: "APPROVED", reject: "REJECTED", backlog: "BACKLOG" };
 
+/** Identidade real: nomes genéricos/não-humanos não valem como revisor. */
+const GENERIC_REVIEWERS = /^(admin|agent|system|bot|ai)$/i;
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!process.env.ADMIN_SECRET) {
     return NextResponse.json({ ok: false, error: "Endpoint disabled — ADMIN_SECRET not configured." }, { status: 403 });
@@ -29,10 +32,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!action) {
       return NextResponse.json({ ok: false, error: "action deve ser approve, reject ou backlog." }, { status: 400 });
     }
+    const reviewedBy = body.reviewedBy?.trim() ?? "";
+    if (!reviewedBy || GENERIC_REVIEWERS.test(reviewedBy)) {
+      return NextResponse.json(
+        { ok: false, error: "Informe seu nome real em reviewedBy — identificadores genéricos (admin/agent/system/bot/ai) não são aceitos." },
+        { status: 400 },
+      );
+    }
     const request = await reviewChangeRequest({
       id: params.id,
       action,
-      reviewedBy: body.reviewedBy ?? "admin",
+      reviewedBy,
       decisionReason: body.decisionReason ?? null,
     });
     return NextResponse.json({ ok: true, request, runtimeTouched: false });

@@ -9,7 +9,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 
 interface FaqEntry {
   question: string;
@@ -63,24 +64,19 @@ export async function mineFaqFromSupport(days = 30): Promise<FaqMineResult> {
 
   let faqs: FaqEntry[] = [];
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const selection = await selectEngineRouted("whatsapp", { taskProfile: "GENERATE" });
+    const raw = await callStructuredJson({
+      selection,
+      systemPrompt: [
+        "Você extrai FAQs de conversas de suporte do Foocci (plataforma para restaurantes).",
+        'Responda APENAS JSON no formato {"faqs":[{"question":"...","answer":"..."}]}.',
+        "Regras: só inclua dúvidas GENERALIZÁVEIS (úteis para qualquer restaurante); reescreva a resposta da equipe em tom simples e direto, em PT-BR; NUNCA inclua nomes, telefones ou dados de um restaurante específico; se nada for generalizável, retorne {\"faqs\":[]}.",
+      ].join("\n"),
+      userContent: transcripts,
       temperature: 0.2,
-      max_tokens: 1500,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: [
-            "Você extrai FAQs de conversas de suporte do Foocci (plataforma para restaurantes).",
-            'Responda APENAS JSON no formato {"faqs":[{"question":"...","answer":"..."}]}.',
-            "Regras: só inclua dúvidas GENERALIZÁVEIS (úteis para qualquer restaurante); reescreva a resposta da equipe em tom simples e direto, em PT-BR; NUNCA inclua nomes, telefones ou dados de um restaurante específico; se nada for generalizável, retorne {\"faqs\":[]}.",
-          ].join("\n"),
-        },
-        { role: "user", content: transcripts },
-      ],
+      maxTokens: 1500,
+      responseFormat: "json",
     });
-    const raw = completion.choices[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(raw) as { faqs?: FaqEntry[] };
     faqs = (parsed.faqs ?? []).filter(
       (f) => f?.question?.trim() && f?.answer?.trim(),

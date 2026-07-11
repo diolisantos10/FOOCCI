@@ -61,6 +61,7 @@ import {
   type BudgetCampaignInput,
   type BudgetBlockReason,
 } from "./CRMWhatsAppBudgetPlanner";
+import { SendTimingIntelligenceService } from "./SendTimingIntelligenceService";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -312,6 +313,38 @@ export class ScheduledCampaignRunnerService {
     if (!this.isCampaignDueNow(campaign)) {
       return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason: "Not due now", completed: false };
     }
+
+    // ── Learned send timing (ADDITIVE — OFF by default) ─────────────────────
+    // Single decision point: when CRM_LEARNED_TIMING_ENABLED === "true" AND the
+    // restaurant has enough conversion history (bestSendHours ≠ null), the batch
+    // is deferred to the best-performing hour WITHIN the merchant-configured
+    // window (already validated by isCampaignDueNow above — we never leave it).
+    // Once the local time reaches that hour, sending proceeds exactly as before.
+    // Flag OFF (default), insufficient data, or any lookup error → the block is
+    // a no-op and the pre-existing behavior is preserved bit-for-bit.
+    if (process.env.CRM_LEARNED_TIMING_ENABLED === "true") {
+      const timingCfg = campaign.scheduleConfig as RecurringScheduleConfig | null;
+      if (timingCfg?.timeWindow) {
+        const tz = timingCfg.timezone || "America/Sao_Paulo";
+        const learned = await SendTimingIntelligenceService
+          .bestSendHours(campaign.restaurantId, tz)
+          .catch(() => null); // intelligence must never break the send path
+        if (learned) {
+          const bestHour = SendTimingIntelligenceService.pickBestHourWithin(
+            timingCfg.timeWindow.start,
+            timingCfg.timeWindow.end,
+            learned.hourScores,
+          );
+          const { hours: localHour } = getLocalTimeInfo(tz);
+          if (bestHour !== null && localHour < bestHour) {
+            const reason = `Aguardando melhor horário aprendido (${String(bestHour).padStart(2, "0")}:00, dentro da janela configurada)`;
+            console.log(`[ScheduledCampaignRunner] ${campaign.name} deferred — ${reason}`);
+            return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason, completed: false };
+          }
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // ── Global safety checks ─────────────────────────────────────────────────
     const safety = await getSafetyConfig(campaign.restaurantId);

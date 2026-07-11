@@ -13,7 +13,17 @@
  * No DB, no WhatsApp, no orders, no Pix — OpenAI and Prisma fully mocked.
  */
 
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+
+// O serviço agora fala com a IA via o portão do Brain (selectEngineRouted +
+// callStructuredJson). Com a chave presente o router seleciona OPENAI e o
+// dispatcher usa o MESMO módulo @/lib/openai — que continua mockado abaixo.
+const OLD_OPENAI_KEY = process.env.OPENAI_API_KEY;
+beforeAll(() => { process.env.OPENAI_API_KEY = "sk-test"; });
+afterAll(() => {
+  if (OLD_OPENAI_KEY === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = OLD_OPENAI_KEY;
+});
 
 const prismaMock = vi.hoisted(() => ({
   agentTrainingConfig:      { findUnique: vi.fn() },

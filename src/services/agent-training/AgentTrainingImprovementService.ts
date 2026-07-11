@@ -8,7 +8,8 @@
  * Human approval is always required.
  */
 
-import { openai } from "@/lib/openai";
+import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
+import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import { prisma } from "@/lib/prisma";
 import type { AgentType, ProposalChangeType, TranscriptTurn } from "./types";
 
@@ -127,17 +128,18 @@ export async function generateProposal(opts: {
   };
 
   try {
-    const response = await openai.chat.completions.create({
-      model:           TRAINER_MODEL,
-      messages:        [
-        { role: "system", content: TRAINER_SYSTEM_PROMPT },
-        { role: "user",   content: userMessage },
-      ],
-      temperature:     0.2,
-      max_tokens:      800,
-      response_format: { type: "json_object" },
+    const routed = await selectEngineRouted("quality", { taskProfile: "JUDGE" });
+    // Preserva o modelo do trainer (gpt-4o) no piloto OpenAI — trocar de modelo
+    // é decisão governada, não efeito colateral da migração.
+    const selection = routed.provider === "OPENAI" ? { ...routed, model: TRAINER_MODEL } : routed;
+    const raw = await callStructuredJson({
+      selection,
+      systemPrompt:   TRAINER_SYSTEM_PROMPT,
+      userContent:    userMessage,
+      temperature:    0.2,
+      maxTokens:      800,
+      responseFormat: "json",
     });
-    const raw = response.choices[0]?.message?.content ?? "{}";
     parsed = JSON.parse(extractJsonFromLlmResponse(raw));
   } catch (err) {
     // Deterministic fallback: always create a PENDING_APPROVAL proposal so the

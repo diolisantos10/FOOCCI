@@ -6,6 +6,7 @@
  * a change — the Brain never touches the live runtime.
  */
 
+import Link from "next/link";
 import { BrainDirectorQueue } from "./BrainDirectorQueue";
 import { AGENT_ENGINE_PREFERENCES } from "@/services/brain/engines/AIEngineRouter";
 
@@ -47,6 +48,11 @@ export default function AdminBrainPage() {
         </p>
         <p className="mt-2 text-[11px] font-semibold text-green-700">
           🔒 Camada 100% segura: o Brain raciocina e propõe — nunca altera o atendimento real sozinho. Runtime intocado.
+        </p>
+        <p className="mt-2 text-[11px] text-gray-500">
+          <Link href="/admin/brain/free-form" className="font-semibold text-indigo-600 hover:underline">
+            🪜 Escada do free-form (shadow → allowlist → restaurante) →
+          </Link>
         </p>
       </section>
 
