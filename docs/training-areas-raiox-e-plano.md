@@ -48,6 +48,23 @@ merge.
 > A "escola" não se apaga — ela se pluga no único motor que forma de verdade:
 > o Brain (aprovado → prompt/config governada → gate → evidência → promoção).
 
+## STATUS DE EXECUÇÃO (2026-07-11)
+
+| Fase | Status |
+|---|---|
+| **A** — Fechar os canos | ✅ ENTREGUE (garçom consome pool, executor TRAINING_RULE, aprovação gera learning) |
+| **B** — Um inbox, um miner | ✅ ENTREGUE (Caixa Única lê 7 filas + decisão; dedupe cross-miner) |
+| **E** — Prompt Room + categoria | ✅ ENTREGUE (menu por categorias, fichas técnicas editáveis, seletor de piloto) |
+| **D** — Escola de verdade | ✅ ENTREGUE (aba 🎓 Formatura: boletim de sombra + gates + promoção) |
+| **C** — Faxina | 🟡 PARCIAL — 3 telas órfãs deletadas + sidebar podada; fusões com link vivo (simulator, routing-test → Central WhatsApp) ficaram para rodada dedicada |
+
+**Follow-up da Fase C (fusões seguras, exigem religar referências):**
+- Fundir `whatsapp-text-ordering/simulator` no cockpit (3 referrers)
+- `whatsapp-routing-test` como aba da Central WhatsApp (referrer em quality/registryMeta)
+- Waiter/CRM/Analytics Testes viram abas dentro de /admin/quality (hoje delinkados do menu, acessíveis por lá)
+
+---
+
 ## 3. Plano de ação (4 fases, ordem obrigatória)
 
 ### FASE A — Fechar os canos (código; nenhuma tela muda)
