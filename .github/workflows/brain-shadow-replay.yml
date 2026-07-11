@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Brain Shadow Replay — motor CONTÍNUO do boletim de sombra (cron-safe)
+#
+# Lê as conversas REAIS do dia anterior (todos os canais, já armazenadas), passa
+# cada pergunta pelo Brain com a base de conhecimento de HOJE, o crítico avalia e
+# grava evidência em brain_shadow_logs. Mantém o boletim (usado pelos gates da
+# escada do raciocínio livre) sempre fresco — e, quando o free-form estiver ao
+# vivo, vira detecção de regressão contínua.
+#
+# READ-ONLY sobre as conversas · sanitiza PII · idempotente por conversa · NUNCA
+# envia mensagem · NUNCA toca o runtime (runtimeTouched:false por construção).
+#
+# Diário às 06:20 UTC (≈ 03:20 BRT, de madrugada) + dispatch manual.
+# Usa CRON_SECRET — NÃO ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Brain Shadow Replay
+
+on:
+  schedule:
+    - cron: "20 6 * * *" # 06:20 UTC ≈ 03:20 BRT — madrugada, lê o dia anterior
+  workflow_dispatch: {}
+
+jobs:
+  replay:
+    name: "Shadow Replay (dia anterior)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "replay=${BASE_URL}/api/cron/brain/shadow-replay" >> "$GITHUB_OUTPUT"
+
+      - name: "Replay yesterday's real conversations into shadow evidence"
+        env:
+          URL: ${{ steps.params.outputs.replay }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ POST $URL (janela = ontem 00:00→hoje 00:00 UTC, calculada pelo servidor)"
+          set +e
+          curl --connect-timeout 20 --max-time 300 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/replay.json -w "%{http_code}" > /tmp/rcode.txt
+          set -e
+          HTTP=$(cat /tmp/rcode.txt)
+          OK=$(jq -r '.ok' /tmp/replay.json 2>/dev/null)
+          RUNTIME_TOUCHED=$(jq -r '.result.runtimeTouched' /tmp/replay.json 2>/dev/null)
+          echo "← HTTP                    : $HTTP"
+          echo "← ok                      : $OK"
+          echo "← eligibleConversations   : $(jq -r '.result.eligibleConversations // 0' /tmp/replay.json 2>/dev/null)"
+          echo "← processed               : $(jq -r '.result.processed // 0' /tmp/replay.json 2>/dev/null)"
+          echo "← skippedMenu             : $(jq -r '.result.skippedMenu // 0' /tmp/replay.json 2>/dev/null)"
+          echo "← skippedAlreadyReplayed  : $(jq -r '.result.skippedAlreadyReplayed // 0' /tmp/replay.json 2>/dev/null)"
+          echo "← errors                  : $(jq -r '.result.errors // 0' /tmp/replay.json 2>/dev/null)"
+          echo "← estUsd                  : $(jq -r '.result.estUsd // 0' /tmp/replay.json 2>/dev/null)"
+          echo "← runtimeTouched          : $RUNTIME_TOUCHED"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::shadow-replay non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$OK" != "true" ]]; then echo "::error::shadow-replay ok=$OK"; exit 1; fi
+          if [[ "$RUNTIME_TOUCHED" != "false" ]]; then echo "::error::runtimeTouched must be false"; exit 1; fi
+          echo "✅ Shadow replay do dia anterior concluído — boletim atualizado, runtime intocado."
