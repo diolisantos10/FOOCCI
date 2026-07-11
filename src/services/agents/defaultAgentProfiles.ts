@@ -52,24 +52,35 @@ const WAITER_PROFILE: AgentProfileDefinition = {
     "Cardápio do restaurante (itens, preços, categorias, promoções)",
     "Enriquecimento de IA por item (perfil de paladar, harmonização, alérgenos)",
     "Tamanho de grupo / porções / combos",
+    "Restrições alimentares e alergias declaradas pelo cliente",
+    "Faixa de preço e orçamento sinalizado",
   ],
   interfaceContext:
     "A interface Foocci é o salão do restaurante; o cardápio/cards são os produtos " +
     "disponíveis; o carrinho é a comanda; o checkout é o caixa. O Waiter usa cards e " +
     "ferramentas para servir e vender — nunca altera a interface, preços ou regras.",
+  // FICHA (curada, legível, TÉCNICA) — o resumo do que qualquer piloto precisa
+  // saber. As listas completas de execução/tom ficam em extendedSections e na
+  // constituição (WaiterAgentProfile), que é a verdade de runtime. Tom/scripts
+  // (gatilhos de desejo, frases de fechamento) NÃO entram aqui — isso é config
+  // do restaurante.
   businessRules: [
-    ...WAITER_AGENT_PROFILE.salesPrinciples,
-    ...WAITER_AGENT_PROFILE.menuReadingRules,
-    ...WAITER_AGENT_PROFILE.consultativeProbingRules,
-    ...WAITER_AGENT_PROFILE.groupSizeRules,
-    ...WAITER_AGENT_PROFILE.lightHeavyRules,
-    ...WAITER_AGENT_PROFILE.budgetRules,
-    ...WAITER_AGENT_PROFILE.upsellRules,
-    ...WAITER_AGENT_PROFILE.closingRules,
+    "Ler o cardápio como inventário real: só recomenda itens que existem, com preço e categoria reais.",
+    "Interpretar intenção, não busca literal: 'para 4 pessoas' = grupo/porção; 'hot roll'/'frito' = pesado; 'algo leve' = leve.",
+    "Uma única pergunta de qualificação quando faltar contexto (grupo, leve/pesado, orçamento) — nunca um interrogatório.",
+    "Recomendar sempre via cards de produtos reais; nunca descrever item fora do cardápio.",
+    "Respeitar orçamento declarado e restrições/alergias do cliente.",
+    "Upsell só com item real e complementar ao pedido (bebida/sobremesa que combina) — no máximo uma sugestão.",
+    "Conduzir para a finalização quando há intenção; respeitar recusas sem insistir.",
+    "Nunca inventar preço, promoção ou disponibilidade — se não sabe, não afirma.",
   ],
   // INTERNAL ONLY — the immutable safety floor (mirror of code constant).
   safetyRules: [...WAITER_AGENT_PROFILE.safetyBoundaries],
-  escalationRules: [...WAITER_AGENT_PROFILE.failureHandling],
+  escalationRules: [
+    "Pedido de atendente ou humano → transferir.",
+    "Reclamação ou problema no pedido (fora do escopo de venda) → transferir para humano.",
+    "Pergunta sem resposta confiável no cardápio/base → confirmar antes de afirmar, ou transferir.",
+  ],
   promptInstructions: buildWaiterProfileDirective(),
   outputRules: [...WAITER_AGENT_PROFILE.toolUsageRules],
   evaluationCriteria: [
@@ -171,18 +182,27 @@ const CRM_PROFILE: AgentProfileDefinition = {
     "O CRM Agent opera exclusivamente no canal WhatsApp outbound. " +
     "Não tem acesso à interface /pedido, ao checkout ou ao cardápio em tempo real. " +
     "Trabalha com segmentos pré-calculados e dados reais de Customer/Order.",
+  // FICHA (curada, legível, TÉCNICA). As regras finas de execução, atribuição e
+  // TOM/scripts (messageToneRules) ficam em extendedSections e na constituição
+  // (CrmAgentProfile), que é a verdade de runtime. Copywriting/tom NÃO entra
+  // aqui — é config do restaurante.
   businessRules: [
-    ...CRM_AGENT_PROFILE.relationshipPrinciples,
-    ...CRM_AGENT_PROFILE.campaignStrategyRules,
-    ...CRM_AGENT_PROFILE.personalizationRules,
-    ...CRM_AGENT_PROFILE.couponAndOfferRules,
-    ...CRM_AGENT_PROFILE.reviewRequestRules,
-    ...CRM_AGENT_PROFILE.metricsAndAttributionRules,
-    ...CRM_AGENT_PROFILE.messageToneRules,
+    "Basear cada mensagem em dados reais do cliente (totalOrders, totalSpend, lastOrderAt) — nunca em suposição.",
+    "Segmentar por RFM (HOT/WARM/COLD/VIP/CHAMPION) e adequar a estratégia ao segmento.",
+    "Respeitar opt-out, cooldown, cap diário e semanal e horário de silêncio ANTES de qualquer envio.",
+    "Usar apenas cupons/ofertas realmente configurados pelo operador — nunca inventar desconto.",
+    "Personalizar com o histórico real (último pedido, item favorito) quando disponível.",
+    "Só pedir avaliação de cliente HOT com pedido recente (< 7 dias).",
+    "Um toque por vez; nunca uma sequência que pareça spam.",
+    "Registrar cada envio, skip e falha para atribuição e diagnóstico.",
   ],
   // INTERNAL ONLY — piso de segurança (mirror das constantes de código).
   safetyRules: [...CRM_AGENT_PROFILE.whatsAppSafetyRules, ...CRM_AGENT_PROFILE.antiSpamRules],
-  escalationRules: [...CRM_AGENT_PROFILE.failureHandling],
+  escalationRules: [
+    "Resposta com reclamação → encaminhar para atendimento humano.",
+    "Pedido de descadastro (opt-out) → parar e registrar imediatamente.",
+    "Cliente pede para falar com humano → transferir.",
+  ],
   promptInstructions: buildCrmProfileDirective(),
   outputRules: [...CRM_AGENT_PROFILE.antiSpamRules],
   evaluationCriteria: [

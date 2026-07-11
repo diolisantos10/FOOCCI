@@ -284,9 +284,95 @@ function PilotCard({ slug }: { slug: string }) {
   );
 }
 
+// ── Página padrão (roteador ficha cheia × "em breve") ────────────────────────────
+
+/** Os 6 blocos-lista que TODA ficha exibe, na mesma ordem — o "esqueleto" padrão. */
+const STANDARD_SECTIONS = [
+  "Funções",
+  "Pode fazer",
+  "NÃO pode fazer",
+  "Regras de negócio",
+  "Domínio",
+  "Escalação",
+] as const;
+
+/**
+ * Um agente é placeholder ("em breve") quando ainda não entrou em operação:
+ * status DRAFT ou sem nenhum conteúdo técnico preenchido. A página é a MESMA
+ * pra todo agente — placeholders só mostram o esqueleto padrão travado.
+ */
+function isPlaceholderAgent(a: AdminAgentProfileView): boolean {
+  if (a.status === "DRAFT") return true;
+  const hasContent = (a.mission?.trim().length ?? 0) > 0
+    || a.responsibilities.length > 0
+    || a.allowedActions.length > 0
+    || a.businessRules.length > 0;
+  return !hasContent;
+}
+
+/**
+ * Ficha Técnica — página padrão de QUALQUER agente. Mesma interface pra todos;
+ * a informação é que varia. Placeholders caem no modo "em breve".
+ */
+export function TechSheet({ agent }: { agent: AdminAgentProfileView }) {
+  if (isPlaceholderAgent(agent)) return <EmBreveSheet agent={agent} />;
+  return <EditableSheet agent={agent} />;
+}
+
+// ── Modo "em breve" (placeholder) ────────────────────────────────────────────────
+
+function GhostSection({ label }: { label: string }) {
+  return (
+    <section className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-5">
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-400">{label}</h3>
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-gray-400">
+          em breve
+        </span>
+      </div>
+      <div className="space-y-2">
+        <div className="h-2.5 w-3/4 rounded bg-gray-200/70" />
+        <div className="h-2.5 w-2/3 rounded bg-gray-200/70" />
+        <div className="h-2.5 w-1/2 rounded bg-gray-200/70" />
+      </div>
+    </section>
+  );
+}
+
+function EmBreveSheet({ agent }: { agent: AdminAgentProfileView }) {
+  return (
+    <div className="space-y-6">
+      {/* Aviso "em breve" */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-700">
+            🚧 Em breve
+          </span>
+          <span className="text-sm font-medium text-amber-900">Este agente ainda não está em operação.</span>
+        </div>
+        <p className="text-sm text-amber-900">
+          A ficha técnica de <strong>{agent.name}</strong> será preenchida quando ele entrar em desenvolvimento.
+          {agent.description ? <> Escopo previsto: <em>{agent.description}</em></> : null}
+        </p>
+      </div>
+
+      {/* Esqueleto padrão (mesmos campos de todas as fichas), travado */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-hidden>
+        {STANDARD_SECTIONS.map((label) => (
+          <GhostSection key={label} label={label} />
+        ))}
+      </div>
+
+      <p className="text-xs text-gray-400">
+        Mesma interface de todas as fichas — o conteúdo entra quando o agente for ativado.
+      </p>
+    </div>
+  );
+}
+
 // ── Ficha Técnica (editable sheet) ───────────────────────────────────────────────
 
-export function TechSheet({ agent }: { agent: AdminAgentProfileView }) {
+function EditableSheet({ agent }: { agent: AdminAgentProfileView }) {
   const router = useRouter();
 
   const [name, setName] = useState(agent.name);
