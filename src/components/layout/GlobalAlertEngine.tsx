@@ -34,6 +34,19 @@
  * stays silent) using the accurate, ack-aware set, regardless of which tab
  * Atendimento happens to be open in.
  *
+ * SINGLE-LEADER ACROSS DEVICES: Web Locks only coordinates tabs within ONE
+ * browser — a restaurant with Foocci open on SEVERAL separate devices at once
+ * (counter computer, kitchen tablet, owner's phone) still had every device's
+ * own local leader ringing independently ("plays everywhere, uncontrollably" —
+ * reported 2026-07-11). A second layer fixes this: the local tab leader
+ * heartbeats a server-side lease (POST /api/settings/sounds/claim-leader,
+ * AlarmLeaderService) keyed by a per-browser deviceId persisted in
+ * localStorage. Only when this device holds BOTH the local Web Lock AND the
+ * fresh server lease does it actually ring — see `isLeader()` below. A lease
+ * with no heartbeat for ALARM_LEASE_STALE_MS is reclaimed by the next
+ * device's heartbeat automatically, so a closed/crashed/offline device's
+ * lease fails over within one heartbeat cycle — no manual takeover needed.
+ *
  * Renders nothing. Two independent alarms:
  *   - ORDER  — polls PENDING orders every 8s. Simple, stateless: an order rings
  *     iff it is currently PENDING (and not a Pix/online payment still awaiting
@@ -75,6 +88,32 @@ const OVERDUE_POLL_MS = 60_000; // matches the existing Atendimento cadence
 const ALARM_LOCK_NAME    = "foocci-alarm-leader";
 const BRIDGE_CHANNEL_NAME = "foocci-alarm-bridge";
 
+// ── Cross-DEVICE lease (not just cross-tab) ─────────────────────────────────
+// Web Locks above only elects a leader WITHIN one browser — a restaurant with
+// Foocci open on several separate devices (counter computer, kitchen tablet,
+// owner's phone) still had every device's own local leader ringing at once.
+// This heartbeats a server-side lease (see AlarmLeaderService) so exactly one
+// DEVICE, across all of them, is ever allowed to actually play the alarm.
+// Mirrors AlarmLeaderService's ALARM_LEASE_HEARTBEAT_MS — kept as a plain
+// constant here (not imported) because that service pulls in the Prisma
+// client, which must never enter the browser bundle.
+const SERVER_LEASE_HEARTBEAT_MS = 6_000;
+const DEVICE_ID_KEY = "foocci-device-id";
+
+/** Stable per-BROWSER id, persisted in localStorage so every tab of the same
+ *  browser reports the same device — created once via crypto.randomUUID(). */
+function getOrCreateDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const fresh = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return `ephemeral-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
 type BridgeMessage =
   | { type: "attach" }
   | { type: "detach" }
@@ -101,6 +140,9 @@ export function GlobalAlertEngine() {
 
   // Only the tab holding the Web Lock actually plays audio — see header doc.
   const isLeaderRef = useRef(false);
+  // Only the DEVICE holding the server-side lease actually plays audio (in
+  // addition to being the local tab leader above) — see header doc.
+  const isServerLeaderRef = useRef(false);
 
   useEffect(() => {
     // ── Load settings, once + on every save from Configurações → Sons ────────
@@ -190,10 +232,30 @@ export function GlobalAlertEngine() {
       },
     });
 
-    // Only the leader tab's controller ever receives non-empty ids, so play()
-    // can never fire from a non-leader tab — see header doc.
-    const safeOrderSync   = (ids: string[]) => orderController.sync(isLeaderRef.current ? ids : []);
-    const safeHandoffSync = (ids: string[]) => handoffController.sync(isLeaderRef.current ? ids : []);
+    // Only the tab that is BOTH the local (Web Lock) leader AND the current
+    // server-lease holder ever receives non-empty ids, so play() can never
+    // fire from a non-leader tab OR a non-leader device — see header doc.
+    const isLeader = () => isLeaderRef.current && isServerLeaderRef.current;
+    const safeOrderSync   = (ids: string[]) => orderController.sync(isLeader() ? ids : []);
+    const safeHandoffSync = (ids: string[]) => handoffController.sync(isLeader() ? ids : []);
+
+    // ── Cross-device lease heartbeat — only the local tab leader attempts it ──
+    const deviceId = getOrCreateDeviceId();
+    const heartbeatLease = () => {
+      if (!isLeaderRef.current) { isServerLeaderRef.current = false; return; }
+      fetch("/api/settings/sounds/claim-leader", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ deviceId }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json: { data?: { isLeader?: boolean } } | null) => {
+          isServerLeaderRef.current = json?.data?.isLeader === true;
+        })
+        .catch(() => { isServerLeaderRef.current = false; }); // fail toward silence, not toward every device ringing
+    };
+    heartbeatLease();
+    const leaseTimer = setInterval(heartbeatLease, SERVER_LEASE_HEARTBEAT_MS);
 
     // ── ORDER poll — independent, stateless (see header doc) ─────────────────
     const pollOrders = () => {
@@ -298,6 +360,7 @@ export function GlobalAlertEngine() {
       clearInterval(orderTimer);
       clearInterval(humanTimer);
       clearInterval(overdueTimer);
+      clearInterval(leaseTimer);
       window.removeEventListener("foocci:sound-settings-changed", loadSettings);
       window.removeEventListener("foocci:handoff-attach", onAttach);
       window.removeEventListener("foocci:handoff-detach", onDetach);
@@ -306,6 +369,19 @@ export function GlobalAlertEngine() {
       window.removeEventListener("foocci:order-resolved", onOrderResolved);
       bridge?.close();
       releaseLeaderLock();
+      // Best-effort graceful release of the server lease (clean tab close —
+      // e.g. navigating away from the dashboard). keepalive lets the request
+      // survive page unload. Harmless if this tab wasn't the leader: the
+      // server only clears the lease when `deviceId` is still its holder. The
+      // 15s staleness window covers the crash/network-loss case regardless.
+      if (isServerLeaderRef.current) {
+        fetch("/api/settings/sounds/claim-leader", {
+          method:    "DELETE",
+          headers:   { "Content-Type": "application/json" },
+          body:      JSON.stringify({ deviceId }),
+          keepalive: true,
+        }).catch(() => undefined);
+      }
       orderController.dispose();
       handoffController.dispose();
       orderAudio.pause(); orderAudio.src = "";

@@ -1610,6 +1610,14 @@ model RestaurantSoundSettings {
   repeatHumanAttentionUntilSeen    Boolean @default(true)  // human-attention alarm repeats until assumed/resolved (P0)
   soundTheme                       String  @default("DEFAULT") // DEFAULT | SOFT | URGENT
 
+  // Cross-DEVICE alarm lease (not just cross-tab — Web Locks alone only dedupes
+  // tabs within one browser). Whichever device's heartbeat last renewed this is
+  // the only one allowed to actually play the alarm; the lease is considered
+  // stale (reclaimable by any other device) after ALARM_LEASE_STALE_MS with no
+  // renewal — see AlarmLeaderService.
+  alarmLeaderDeviceId    String?
+  alarmLeaderHeartbeatAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
