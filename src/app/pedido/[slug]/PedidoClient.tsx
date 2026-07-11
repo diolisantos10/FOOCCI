@@ -1603,32 +1603,176 @@ function PhoneEntryCard({
   );
 }
 
-// ── CustomerIdentityStrip ─────────────────────────────────────────────────────
-// Thin bar shown below the header once the customer is identified.
-// Shows "Olá, {name} · {phone}" and a "Trocar" button.
+// ── CustomerIdentityStrip / Área do cliente ───────────────────────────────────
+// Thin bar shown below the header once the customer is identified — "Olá, {name}
+// · {phone}" + "Trocar". Tapping it unrolls the customer area: dados básicos,
+// endereços (com o padrão), e os cupons do cliente. Classificação (Ouro/Prata…)
+// fica reservada para quando existir. Loaded lazily on first open.
+
+interface CustomerProfile {
+  name: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  email: string | null;
+  tier: string | null;
+  addresses: Array<{
+    id: string; label: string | null; street: string; number: string;
+    complement: string | null; neighborhood: string; city: string; state: string;
+    zipCode: string; isDefault: boolean;
+  }>;
+}
+
+type WalletCoupon = { id: string; label: string; discountType: string; discountValue: number; isReward?: boolean; expiresAt: string | null };
+
+function formatProfileAddress(a: CustomerProfile["addresses"][number]): string {
+  const line1 = [a.street, a.number].filter(Boolean).join(", ");
+  const rest  = [a.complement, a.neighborhood, a.city && a.state ? `${a.city}/${a.state}` : a.city || a.state]
+    .filter(Boolean).join(" · ");
+  return [line1, rest].filter(Boolean).join(" — ");
+}
 
 function CustomerIdentityStrip({
+  slug,
+  customerId,
   name,
   displayPhone,
   onReset,
 }: {
+  slug: string;
+  customerId: string | null | undefined;
   name: string | null;
   displayPhone: string | null;
   onReset: () => void;
 }) {
+  const [open, setOpen]       = useState(false);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [coupons, setCoupons] = useState<WalletCoupon[]>([]);
+  const [loading, setLoading] = useState(false);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!open || loadedRef.current || !customerId) return;
+    loadedRef.current = true;
+    setLoading(true);
+    Promise.all([
+      fetch(`/api/pedido/${slug}/customer-profile?customerId=${encodeURIComponent(customerId)}`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/pedido/${slug}/coupons?customerId=${encodeURIComponent(customerId)}`).then((r) => r.json()).catch(() => null),
+    ]).then(([p, c]) => {
+      if (p?.profile) setProfile(p.profile as CustomerProfile);
+      if (Array.isArray(c?.coupons)) setCoupons(c.coupons as WalletCoupon[]);
+    }).finally(() => setLoading(false));
+  }, [open, customerId, slug]);
+
   if (!name && !displayPhone) return null;
-  const label = name
-    ? `Olá, ${name}${displayPhone ? ` · ${displayPhone}` : ""}`
-    : `Cliente identificado${displayPhone ? ` · ${displayPhone}` : ""}`;
+  const greeting = name ? `Olá, ${name}` : "Cliente identificado";
+  const canExpand = Boolean(customerId);
+
   return (
-    <div className="shrink-0 flex items-center justify-between gap-2 border-b border-gray-100 bg-white/80 px-4 py-1.5">
-      <p className="min-w-0 truncate text-xs text-gray-600">{label}</p>
-      <button
-        onClick={onReset}
-        className="shrink-0 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-700"
-      >
-        Trocar
-      </button>
+    <div className="shrink-0 border-b border-gray-100 bg-white/80">
+      {/* Slim bar */}
+      <div className="flex items-center justify-between gap-2 px-4 py-1.5">
+        <button
+          type="button"
+          onClick={() => canExpand && setOpen((v) => !v)}
+          disabled={!canExpand}
+          className="flex min-w-0 items-center gap-1.5 text-left disabled:cursor-default"
+          aria-expanded={open}
+        >
+          <span className="min-w-0 truncate text-xs text-gray-600">
+            {greeting}{displayPhone ? ` · ${displayPhone}` : ""}
+          </span>
+          {canExpand && (
+            <svg className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+            </svg>
+          )}
+        </button>
+        <button
+          onClick={onReset}
+          className="shrink-0 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-700"
+        >
+          Trocar
+        </button>
+      </div>
+
+      {/* Área do cliente (unrolls) */}
+      {open && (
+        <div className="max-h-[55vh] overflow-y-auto border-t border-gray-100 bg-gray-50/60 px-4 py-3">
+          {loading && !profile ? (
+            <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+              Carregando seus dados…
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Meus dados */}
+              <section>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus dados</p>
+                <div className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700 space-y-0.5">
+                  <p><span className="text-gray-400">Nome:</span> <span className="font-medium">{profile?.name || name || "—"}</span></p>
+                  <p><span className="text-gray-400">Telefone:</span> <span className="font-medium">{displayPhone || profile?.phone || "—"}</span></p>
+                  {profile?.email && <p><span className="text-gray-400">E-mail:</span> <span className="font-medium">{profile.email}</span></p>}
+                </div>
+              </section>
+
+              {/* Meus endereços */}
+              <section>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
+                {profile && profile.addresses.length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {profile.addresses.map((a) => (
+                      <li key={a.id} className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
+                        <div className="flex items-center gap-1.5">
+                          {a.label && <span className="font-semibold text-ink">{a.label}</span>}
+                          {a.isDefault && <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-700">Padrão</span>}
+                        </div>
+                        <p className="mt-0.5 text-gray-600">{formatProfileAddress(a)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[11px] text-gray-400">
+                    Nenhum endereço salvo ainda — você informa no checkout.
+                  </p>
+                )}
+              </section>
+
+              {/* Meus cupons */}
+              <section>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus cupons</p>
+                {coupons.length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {coupons.map((w) => (
+                      <li key={w.id} className="flex items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/50 px-3 py-2 text-xs">
+                        <span className="min-w-0">
+                          <span className="block truncate font-bold text-ink">{w.isReward ? `🎁 ${w.label}` : `🏷 ${w.label}`}</span>
+                          {w.isReward && <span className="block text-[10px] text-gray-500">Recompensa — resgatada no pedido</span>}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-gray-500">
+                          {w.expiresAt ? `vence ${new Date(w.expiresAt).toLocaleDateString("pt-BR")}` : "sem validade"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[11px] text-gray-400">
+                    Você ainda não tem cupons. Eles chegam pelas mensagens do restaurante.
+                  </p>
+                )}
+              </section>
+
+              {/* Classificação — reservado para quando existir (Ouro/Prata…) */}
+              <section>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Sua classificação</p>
+                <p className="rounded-xl border border-dashed border-gray-200 px-3 py-2 text-[11px] text-gray-400">
+                  Em breve — seu nível de cliente aparecerá aqui.
+                </p>
+              </section>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2413,7 +2557,6 @@ export function PedidoClient({
   const [orderId, setOrderId] = useState<string | null>(null);
 
   // ── Coupon state ──────────────────────────────────────────────
-  const [couponInput,   setCouponInput]   = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
     promotionId: string; couponCode: string; discountAmount: number;
     discountType: string; name: string;
@@ -2421,7 +2564,6 @@ export function PedidoClient({
     customerCouponId?: string;
   } | null>(null);
   const [couponError,   setCouponError]   = useState<string | null>(null);
-  const [couponLoading, setCouponLoading] = useState(false);
   // Wallet coupons (earned via CRM campaigns), redeemable in the cart.
   const [walletCoupons, setWalletCoupons] = useState<Array<{ id: string; label: string; discountType: string; discountValue: number; isReward?: boolean; expiresAt: string | null }>>([]);
   const [walletOpen,    setWalletOpen]    = useState(false);
@@ -3748,51 +3890,6 @@ export function PedidoClient({
     pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
   }, [pushAssistantMessage]);
 
-  const handleApplyCoupon = useCallback(async () => {
-    if (!couponInput.trim()) return;
-    setCouponLoading(true);
-    setCouponError(null);
-    try {
-      const sub      = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const isManFee = deliveryMethod === "delivery" && deliveryMode === "manual";
-      const fee      = deliveryMethod === "delivery" && !isManFee
-        ? computeEffectiveFee(sub, resolvedDeliveryFee, freeDeliveryAbove)
-        : 0;
-      const res = await fetch(`/api/pedido/${slug}/validate-coupon`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          couponCode:     couponInput.trim(),
-          subtotal:       sub,
-          deliveryFee:    fee,
-          deliveryMethod: deliveryMethod ?? "delivery",
-          customerId:     resolvedCustomerId,
-        }),
-      });
-      const data = await res.json() as {
-        valid: boolean; error?: string;
-        promotionId?: string; couponCode?: string; discountAmount?: number;
-        discountType?: string; name?: string;
-      };
-      if (data.valid) {
-        setAppliedCoupon({
-          promotionId:    data.promotionId!,
-          couponCode:     data.couponCode!,
-          discountAmount: data.discountAmount!,
-          discountType:   data.discountType!,
-          name:           data.name!,
-        });
-        setCouponInput("");
-      } else {
-        setCouponError(data.error ?? "Cupom inválido ou expirado.");
-      }
-    } catch {
-      setCouponError("Erro ao validar cupom. Tente novamente.");
-    } finally {
-      setCouponLoading(false);
-    }
-  }, [couponInput, cart, deliveryMethod, deliveryMode, resolvedDeliveryFee, slug, resolvedCustomerId]);
-
   // Load the customer's wallet coupons (earned via CRM campaigns).
   const loadWallet = useCallback(async () => {
     if (!resolvedCustomerId) { setWalletCoupons([]); return; }
@@ -3824,7 +3921,6 @@ export function PedidoClient({
       discountType: w.discountType, name: w.label, customerCouponId: w.id,
     });
     setWalletOpen(false);
-    setCouponInput("");
   }, [cart, deliveryMethod, deliveryMode, resolvedDeliveryFee, freeDeliveryAbove]);
 
   const handleBackToBrowse = useCallback(() => {
@@ -4472,27 +4568,13 @@ export function PedidoClient({
                   </div>
                 )}
 
-                {/* Código de cupom */}
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={couponInput}
-                    onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleApplyCoupon(); } }}
-                    placeholder="Cupom de desconto"
-                    maxLength={30}
-                    style={{ fontSize: "16px" }}
-                    className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-gray-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleApplyCoupon()}
-                    disabled={couponLoading || !couponInput.trim()}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    {couponLoading ? "…" : "Aplicar"}
-                  </button>
-                </div>
+                {/* Cupom digitado foi removido: o cliente agora só SELECIONA um
+                    cupom da carteira ("Meus cupons") — nada de código manual. */}
+                {!resolvedCustomerId && (
+                  <p className="px-0.5 text-[11px] text-gray-400">
+                    Identifique-se para ver e usar seus cupons.
+                  </p>
+                )}
               </div>
             )}
             {couponError && (
@@ -4852,9 +4934,12 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Identity strip — thin bar shown when customer is recognised */}
+        {/* Identity strip — thin bar shown when customer is recognised; taps open
+            the customer area (dados, endereços, cupons). */}
         {entryPhase === "browsing" && (identifiedName || identifiedPhone) && (
           <CustomerIdentityStrip
+            slug={slug}
+            customerId={resolvedCustomerId}
             name={identifiedName}
             displayPhone={identifiedPhone}
             onReset={handleResetIdentity}
