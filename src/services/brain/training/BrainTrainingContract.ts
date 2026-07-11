@@ -20,10 +20,22 @@ export interface ApprovedLearning {
   sourceType: BrainLearningSource;
 }
 
-/** The Waiter's approved-learning pool, expressed in the Brain contract. */
+/**
+ * O runtime raciocina com identidades do Brain ("whatsapp"), mas o aprendizado
+ * ao vivo é gravado com slugs históricos ("whatsapp-receptionist" no
+ * liveLearningReview). Sem este mapa, o pool carregado em produção fica SEMPRE
+ * vazio — foi exatamente o bug que manteve a "escola" desligada do atendimento.
+ */
+const AGENT_SLUG_ALIASES: Record<string, string[]> = {
+  whatsapp: ["whatsapp", "whatsapp-receptionist"],
+};
+
+/** The approved-learning pool, expressed in the Brain contract. */
 export async function listApprovedLearningsForBrain(agentId = "waiter", limit = 100): Promise<ApprovedLearning[]> {
   const { listApprovedLearnings } = await import("@/services/waiterTraining/WaiterTrainingSuggestionStore");
-  const rows = await listApprovedLearnings(agentId, limit);
+  const slugs = AGENT_SLUG_ALIASES[agentId] ?? [agentId];
+  const rowsBySlug = await Promise.all(slugs.map((slug) => listApprovedLearnings(slug, limit)));
+  const rows = rowsBySlug.flat().slice(0, limit);
   return rows.map((r) => ({
     id: r.id,
     agentId,
