@@ -15,8 +15,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
 import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
 import type { RepeatOrderPayload } from "@/services/order/RepeatOrderService";
-import { buildDisplayCategories } from "@/services/order/repeatCategory";
-import { buildOpeningOptions, SUGGESTION_OPTION_VALUE } from "@/services/order/waiterOpening";
+import { buildDisplayCategories, REPEAT_CATEGORY_ID } from "@/services/order/repeatCategory";
+import { buildOpeningOptions, SUGGESTION_OPTION_VALUE, REPEAT_OPTION_VALUE } from "@/services/order/waiterOpening";
 import {
   payNowOptions,
   shouldShowPayNow,
@@ -1645,6 +1645,166 @@ const CUSTOMER_TABS: Array<{ id: "info" | "coupons"; label: string; emoji: strin
   { id: "coupons", label: "Meus cupons", emoji: "🎟️" },
 ];
 
+const BR_STATES = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB",
+  "PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+] as const;
+
+// Editable shape for the address form (id present → editing an existing one).
+interface AddressFormValue {
+  id?: string;
+  label: string; zipCode: string; street: string; number: string;
+  complement: string; neighborhood: string; city: string; state: string;
+  isDefault: boolean;
+}
+
+const EMPTY_ADDRESS = (isDefault: boolean): AddressFormValue => ({
+  label: "", zipCode: "", street: "", number: "", complement: "",
+  neighborhood: "", city: "", state: "", isDefault,
+});
+
+function addressToForm(a: CustomerProfile["addresses"][number]): AddressFormValue {
+  return {
+    id: a.id, label: a.label ?? "", zipCode: a.zipCode, street: a.street, number: a.number,
+    complement: a.complement ?? "", neighborhood: a.neighborhood, city: a.city, state: a.state,
+    isDefault: a.isDefault,
+  };
+}
+
+// ── Address form modal — add or edit an address from the customer area ─────────
+// CEP autofills street/neighborhood/city/state via ViaCEP (same source the
+// checkout uses). onSave returns an error string or null; null → closes.
+function AddressFormModal({
+  value, busy, onSave, onClose,
+}: {
+  value: AddressFormValue;
+  busy: boolean;
+  onSave: (v: AddressFormValue) => Promise<string | null>;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<AddressFormValue>(value);
+  const [cepBusy, setCepBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const set = <K extends keyof AddressFormValue>(k: K, v: AddressFormValue[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const lookupCep = async (raw: string) => {
+    const cep = raw.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    setCepBusy(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const d = await res.json().catch(() => null);
+      if (d && !d.erro) {
+        setForm((f) => ({
+          ...f,
+          street:       d.logradouro || f.street,
+          neighborhood: d.bairro     || f.neighborhood,
+          city:         d.localidade || f.city,
+          state:        d.uf         || f.state,
+        }));
+      }
+    } catch { /* deixa o cliente preencher manualmente */ }
+    finally { setCepBusy(false); }
+  };
+
+  const submit = async () => {
+    setErr(null);
+    if (!/^\d{5}-?\d{3}$/.test(form.zipCode.trim())) return setErr("Informe um CEP válido (00000-000).");
+    if (form.street.trim().length < 2)  return setErr("Informe a rua.");
+    if (!form.number.trim())            return setErr("Informe o número.");
+    if (form.neighborhood.trim().length < 2) return setErr("Informe o bairro.");
+    if (form.city.trim().length < 2)    return setErr("Informe a cidade.");
+    if (!BR_STATES.includes(form.state as (typeof BR_STATES)[number])) return setErr("Selecione o estado (UF).");
+    const e = await onSave(form);
+    if (e) setErr(e); else onClose();
+  };
+
+  const inputCls = "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100";
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
+          <p className="text-sm font-bold text-ink">{form.id ? "Editar endereço" : "Adicionar endereço"}</p>
+          <button onClick={onClose} aria-label="Fechar" className="text-gray-400 hover:text-gray-600">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">CEP</label>
+            <div className="flex gap-2">
+              <input
+                inputMode="numeric" value={form.zipCode} placeholder="00000-000" style={{ fontSize: "16px" }}
+                onChange={(e) => set("zipCode", e.target.value)}
+                onBlur={(e) => void lookupCep(e.target.value)}
+                className={inputCls}
+              />
+              <button type="button" onClick={() => void lookupCep(form.zipCode)} disabled={cepBusy}
+                className="shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-50">
+                {cepBusy ? "…" : "Buscar"}
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Rua</label>
+              <input value={form.street} onChange={(e) => set("street", e.target.value)} style={{ fontSize: "16px" }} className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Número</label>
+              <input value={form.number} onChange={(e) => set("number", e.target.value)} style={{ fontSize: "16px" }} className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Complemento <span className="font-normal normal-case text-gray-300">(opcional)</span></label>
+            <input value={form.complement} onChange={(e) => set("complement", e.target.value)} placeholder="Apto, bloco…" style={{ fontSize: "16px" }} className={inputCls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Bairro</label>
+            <input value={form.neighborhood} onChange={(e) => set("neighborhood", e.target.value)} style={{ fontSize: "16px" }} className={inputCls} />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Cidade</label>
+              <input value={form.city} onChange={(e) => set("city", e.target.value)} style={{ fontSize: "16px" }} className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">UF</label>
+              <select value={form.state} onChange={(e) => set("state", e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                {BR_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Apelido <span className="font-normal normal-case text-gray-300">(opcional)</span></label>
+            <input value={form.label} onChange={(e) => set("label", e.target.value)} placeholder="Casa, Trabalho…" maxLength={50} style={{ fontSize: "16px" }} className={inputCls} />
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 pt-0.5">
+            <input type="checkbox" checked={form.isDefault} onChange={(e) => set("isDefault", e.target.checked)} className="h-4 w-4 rounded border-gray-300 accent-brand-600" />
+            <span className="text-xs font-medium text-ink2">Usar como endereço padrão</span>
+          </label>
+          {err && <p className="text-xs font-medium text-red-500">{err}</p>}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
+          <button onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100">Cancelar</button>
+          <button onClick={() => void submit()} disabled={busy || cepBusy}
+            className="rounded-xl bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50">
+            {busy ? "Salvando…" : "Salvar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomerIdentityStrip({
   slug,
   customerId,
@@ -1664,7 +1824,17 @@ function CustomerIdentityStrip({
   const [coupons, setCoupons] = useState<WalletCoupon[]>([]);
   const [loading, setLoading] = useState(false);
   const [addrOpen, setAddrOpen] = useState(false); // "ver todos os endereços"
+  const [addrForm, setAddrForm] = useState<AddressFormValue | null>(null); // add/edit modal
+  const [addrBusy, setAddrBusy] = useState(false);
   const loadedRef = useRef(false);
+
+  // Refetch just the profile after an address change (so the list updates).
+  const reloadProfile = useCallback(async () => {
+    if (!customerId) return;
+    const p = await fetch(`/api/pedido/${slug}/customer-profile?customerId=${encodeURIComponent(customerId)}`)
+      .then((r) => r.json()).catch(() => null);
+    if (p?.profile) setProfile(p.profile as CustomerProfile);
+  }, [customerId, slug]);
 
   // Eager load once identified: lets the collapsed bar show a live hint (cupons)
   // and opens the panel instantly.
@@ -1680,6 +1850,57 @@ function CustomerIdentityStrip({
       if (Array.isArray(c?.coupons)) setCoupons(c.coupons as WalletCoupon[]);
     }).finally(() => setLoading(false));
   }, [customerId, slug]);
+
+  // ── Address CRUD (público, escopado por customerId+slug) ───────────────────
+  const setAddrDefault = async (id: string) => {
+    if (!customerId) return;
+    setAddrBusy(true);
+    await fetch(`/api/pedido/${slug}/customer-address/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId, isDefault: true }),
+    }).catch(() => {});
+    await reloadProfile();
+    setAddrBusy(false);
+  };
+  const removeAddr = async (id: string) => {
+    if (!customerId || typeof window === "undefined" || !window.confirm("Excluir este endereço?")) return;
+    setAddrBusy(true);
+    await fetch(`/api/pedido/${slug}/customer-address/${id}`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId }),
+    }).catch(() => {});
+    await reloadProfile();
+    setAddrBusy(false);
+  };
+  const saveAddr = async (v: AddressFormValue): Promise<string | null> => {
+    if (!customerId) return "Sessão do cliente não encontrada.";
+    setAddrBusy(true);
+    try {
+      const payload = {
+        customerId, label: v.label.trim() || undefined, zipCode: v.zipCode.trim(),
+        street: v.street.trim(), number: v.number.trim(), complement: v.complement.trim() || undefined,
+        neighborhood: v.neighborhood.trim(), city: v.city.trim(), state: v.state, isDefault: v.isDefault,
+      };
+      const url = v.id
+        ? `/api/pedido/${slug}/customer-address/${v.id}`
+        : `/api/pedido/${slug}/customer-address`;
+      const res = await fetch(url, {
+        method: v.id ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        return (j as { error?: string })?.error ?? "Não foi possível salvar o endereço.";
+      }
+      await reloadProfile();
+      return null;
+    } catch {
+      return "Erro de rede ao salvar. Tente de novo.";
+    } finally {
+      setAddrBusy(false);
+    }
+  };
 
   if (!name && !displayPhone) return null;
   const canExpand   = Boolean(customerId);
@@ -1782,9 +2003,20 @@ function CustomerIdentityStrip({
                   </div>
                 </section>
 
-                {/* Meus endereços — padrão em destaque + lista expansível */}
+                {/* Meus endereços — padrão em destaque + lista + adicionar/editar */}
                 <section>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
+                    {profile && profile.addresses.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAddrForm(EMPTY_ADDRESS(false))}
+                        className="text-[11px] font-bold text-brand-600 hover:text-brand-700"
+                      >
+                        + Adicionar
+                      </button>
+                    )}
+                  </div>
                   {defaultAddr ? (
                     <>
                       {/* Endereço padrão em destaque */}
@@ -1793,6 +2025,13 @@ function CustomerIdentityStrip({
                           <span aria-hidden className="text-sm">📍</span>
                           {defaultAddr.label && <span className="font-bold text-ink">{defaultAddr.label}</span>}
                           <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Padrão</span>
+                          <button
+                            type="button"
+                            onClick={() => setAddrForm(addressToForm(defaultAddr))}
+                            className="ml-auto text-[10px] font-semibold text-brand-600 hover:text-brand-700"
+                          >
+                            Editar
+                          </button>
                         </div>
                         <p className="mt-0.5 pl-6 text-gray-600">{formatProfileAddress(defaultAddr)}</p>
                       </div>
@@ -1819,20 +2058,26 @@ function CustomerIdentityStrip({
                                     {a.label && <span className="font-semibold text-ink">{a.label}</span>}
                                   </div>
                                   <p className="mt-0.5 pl-6 text-gray-600">{formatProfileAddress(a)}</p>
+                                  <div className="mt-1.5 flex gap-3 pl-6">
+                                    <button type="button" disabled={addrBusy} onClick={() => void setAddrDefault(a.id)} className="text-[10px] font-semibold text-brand-600 hover:text-brand-700 disabled:opacity-40">Tornar padrão</button>
+                                    <button type="button" disabled={addrBusy} onClick={() => setAddrForm(addressToForm(a))} className="text-[10px] font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-40">Editar</button>
+                                    <button type="button" disabled={addrBusy} onClick={() => void removeAddr(a.id)} className="text-[10px] font-semibold text-red-500 hover:text-red-700 disabled:opacity-40">Excluir</button>
+                                  </div>
                                 </li>
                               ))}
                             </ul>
                           )}
                         </>
                       )}
-                      <p className="mt-2 text-[10px] text-gray-400">
-                        Para adicionar ou editar um endereço, é só informar no checkout.
-                      </p>
                     </>
                   ) : (
-                    <p className="rounded-2xl border border-dashed border-gray-200 px-3.5 py-3 text-center text-[11px] text-gray-400">
-                      Nenhum endereço salvo ainda — você informa no checkout.
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAddrForm(EMPTY_ADDRESS(true))}
+                      className="w-full rounded-2xl border border-dashed border-brand-200 bg-brand-50/40 px-3.5 py-3 text-center text-[11px] font-semibold text-brand-600 hover:bg-brand-50"
+                    >
+                      + Adicionar meu primeiro endereço
+                    </button>
                   )}
                 </section>
               </div>
@@ -1871,6 +2116,16 @@ function CustomerIdentityStrip({
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal de adicionar/editar endereço */}
+      {addrForm && (
+        <AddressFormModal
+          value={addrForm}
+          busy={addrBusy}
+          onSave={saveAddr}
+          onClose={() => setAddrForm(null)}
+        />
       )}
     </div>
   );
@@ -2284,7 +2539,6 @@ export function PedidoClient({
   const [cartOpen, setCartOpen] = useState(false);
   const [cartRestored, setCartRestored] = useState(false);
   // "Pedir novamente" module — dismissed once acted on or when the customer taps "Ver cardápio".
-  const [repeatDismissed, setRepeatDismissed] = useState(false);
   // Products suggested by the AI — rendered in the product grid, not in chat.
   const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
   // ID of the harmonically suggested item — shown with ⭐ in the carousel.
@@ -3133,7 +3387,6 @@ export function PedidoClient({
   const hydrateRepeatCart = useCallback((data: RepeatOrderPayload) => {
     if (!data.items.length) {
       pushAssistantMessage("Seu último pedido não está disponível hoje, mas posso te sugerir algo parecido 😊");
-      setRepeatDismissed(true);
       return;
     }
     const repeatItems: CartItem[] = data.items.map((it) => ({
@@ -3153,7 +3406,6 @@ export function PedidoClient({
       }
       return Array.from(map.values());
     });
-    setRepeatDismissed(true);
     fireGtag("repeat_order", { items: repeatItems.length, source: "repeat_order" });
     pushAssistantMessage(
       data.unavailableCount > 0
@@ -3178,8 +3430,9 @@ export function PedidoClient({
     const greeting = name
       ? `Oi, ${name}! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`
       : `Oi! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`;
-    // Clean opening: ONE optional, low-friction action. "Pedir de novo" is NOT a
-    // chat button — it lives as a visual menu category (see displayCategories).
+    // Clean opening: "Quero uma sugestão" + (para quem já pediu) "Pedir
+    // novamente" ao lado. "Pedir novamente" abre a categoria "Comprar novamente".
+    const canRepeat = Boolean(repeatOrder && repeatOrder.items.length > 0);
     setMessages((prev) => [
       ...prev,
       {
@@ -3187,7 +3440,7 @@ export function PedidoClient({
         role: "assistant" as const,
         content: greeting,
         ts: new Date(),
-        options: buildOpeningOptions(),
+        options: buildOpeningOptions({ canRepeat }),
       },
     ]);
     // Fire ON_ENTRY to the server for Atendimento logging + early conversationId
@@ -3570,6 +3823,17 @@ export function PedidoClient({
           prev.map((m) => (m.options?.some((o) => o.value === SUGGESTION_OPTION_VALUE) ? { ...m, options: undefined } : m)),
         );
         sendText("me sugere algo", cart, stage, activeUpsell, { displayText: "Quero uma sugestão" });
+        return;
+      }
+
+      // "Pedir novamente" (ao lado das sugestões) → abre a categoria "Comprar
+      // novamente" (itens recentes do cliente), sem despejar tudo no carrinho.
+      if (value === REPEAT_OPTION_VALUE) {
+        setMessages((prev) =>
+          prev.map((m) => (m.options?.some((o) => o.value === REPEAT_OPTION_VALUE) ? { ...m, options: undefined } : m)),
+        );
+        setSuggestedProducts([]);
+        setSelectedCategoryId(REPEAT_CATEGORY_ID);
         return;
       }
 
@@ -5088,42 +5352,9 @@ export function PedidoClient({
             </>
           )}
 
-          {/* Repeat-order module (W3) — subtle bubble near the top of the chat.
-              Shown only to an identified returning customer with an empty cart,
-              never during a recovery flow (recovery cart takes precedence). */}
-          {REPEAT_ORDER_UI_ENABLED && stage === "BROWSE" && entryPhase === "browsing" && repeatOrder
-            && repeatOrder.items.length > 0 && !repeatDismissed
-            && cart.length === 0 && !recoveryCart?.length && (
-            <div className="flex justify-start" data-testid="repeat-order-module">
-              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3 border border-green-100">
-                <p className="text-sm font-semibold text-gray-900 mb-0.5 leading-relaxed">
-                  Quer repetir seu último pedido? 😊
-                </p>
-                <p className="text-xs text-gray-500 mb-3">
-                  Você pediu recentemente: {repeatOrder.summary}
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  <button
-                    type="button"
-                    data-testid="repeat-order-confirm"
-                    onClick={() => hydrateRepeatCart(repeatOrder)}
-                    className="w-full rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
-                    style={{ backgroundColor: 'var(--brand-primary)' }}
-                  >
-                    Pedir novamente
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="repeat-order-dismiss"
-                    onClick={() => setRepeatDismissed(true)}
-                    className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    Ver cardápio
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Repeat-order agora é um botão "Pedir novamente" ao lado de "Quero
+              uma sugestão" na abertura (abre a categoria "Comprar novamente") —
+              não é mais um balão separado. */}
 
           {messages.map((msg) => (
             <Bubble

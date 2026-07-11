@@ -95,11 +95,13 @@ describe("WaiterBrainV2 RC v1.6 — frozen UI surfaces", () => {
     expect(opts[0].label).toBe("Quero uma sugestão");
   });
 
-  it("the 'Pedir de novo' UI stays in standby (disabled flag)", () => {
+  it("the 'Comprar novamente' UI is ENABLED (repeat flag on, by product request)", () => {
     const src = readFileSync(
       join(process.cwd(), "src/app/pedido/[slug]/PedidoClient.tsx"),
       "utf8",
     );
-    expect(src).toMatch(/const\s+REPEAT_ORDER_UI_ENABLED\s*=\s*false\s*;/);
+    // Reativado a pedido do lojista: categoria "Comprar novamente" + botão
+    // "Pedir novamente" ao lado das sugestões.
+    expect(src).toMatch(/const\s+REPEAT_ORDER_UI_ENABLED\s*=\s*true\s*;/);
   });
 });
