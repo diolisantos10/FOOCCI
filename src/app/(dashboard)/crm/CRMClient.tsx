@@ -3883,6 +3883,47 @@ function CampaignCouponPerformance() {
   );
 }
 
+type CrmPeriodKey = "total" | "today" | "yesterday" | "week7" | "lastweek" | "days30" | "month" | "custom";
+
+const CRM_PERIODS: { id: CrmPeriodKey; label: string }[] = [
+  { id: "total",     label: "Total"          },
+  { id: "today",     label: "Hoje"           },
+  { id: "yesterday", label: "Ontem"          },
+  { id: "week7",     label: "Últimos 7 dias" },
+  { id: "lastweek",  label: "Semana passada" },
+  { id: "days30",    label: "Últimos 30 dias"},
+  { id: "month",     label: "Este mês"       },
+  { id: "custom",    label: "Personalizado"  },
+];
+
+/** Resolves a period key into an ISO [from,to] window, or null for "total" (lifetime). */
+function crmPeriodRange(key: CrmPeriodKey, customFrom?: string, customTo?: string): { from: string; to: string } | null {
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const endOfDay   = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  switch (key) {
+    case "total": return null;
+    case "today": return { from: startOfDay(now).toISOString(), to: now.toISOString() };
+    case "yesterday": {
+      const y = new Date(now.getTime() - 86_400_000);
+      return { from: startOfDay(y).toISOString(), to: endOfDay(y).toISOString() };
+    }
+    case "week7":  return { from: new Date(now.getTime() - 7 * 86_400_000).toISOString(),  to: now.toISOString() };
+    case "days30": return { from: new Date(now.getTime() - 30 * 86_400_000).toISOString(), to: now.toISOString() };
+    case "lastweek": {
+      const dow = (now.getDay() + 6) % 7; // 0 = Monday
+      const thisMonday = startOfDay(new Date(now.getTime() - dow * 86_400_000));
+      const lastMonday = new Date(thisMonday.getTime() - 7 * 86_400_000);
+      const lastSunday = new Date(thisMonday.getTime() - 1);
+      return { from: lastMonday.toISOString(), to: lastSunday.toISOString() };
+    }
+    case "month": return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to: now.toISOString() };
+    case "custom":
+      if (!customFrom || !customTo) return null;
+      return { from: startOfDay(new Date(customFrom)).toISOString(), to: endOfDay(new Date(customTo)).toISOString() };
+  }
+}
+
 function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [selectedTemplate,  setSelectedTemplate]  = useState<ActionTemplate | null>(null);
   const [showCreateModal,   setShowCreateModal]    = useState(false);
@@ -3914,6 +3955,10 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [cartBusy, setCartBusy] = useState(false);
   // Per-campaign coupon counts (campaignId → { sent, used }) for the Ativas table.
   const [couponCounts, setCouponCounts] = useState<Record<string, { sent: number; used: number }>>({});
+  // Period filter for the Ativas numbers (Total / Hoje / Ontem / … / Personalizado).
+  const [period,     setPeriod]     = useState<CrmPeriodKey>("total");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo,   setCustomTo]   = useState("");
   // Ids of the campaigns actually turned on in "Campanhas prontas". The Ativas panel
   // shows ONLY these, so old/deleted manual campaigns never linger there.
   const [activeReadyMadeIds, setActiveReadyMadeIds] = useState<string[]>([]);
@@ -3928,7 +3973,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   }
 
   useEffect(() => {
-    fetch("/api/crm/campaigns")
+    const range = crmPeriodRange(period, customFrom, customTo);
+    const qs = range ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}` : "";
+    fetch(`/api/crm/campaigns${qs}`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => setCampaigns(json.data ?? []))
       .catch(() => {})
@@ -3938,7 +3985,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => setActivity(json.data?.activity ?? []))
       .catch(() => {});
-  }, [readyMadeReload]);
+  }, [readyMadeReload, period, customFrom, customTo]);
 
   useEffect(() => {
     fetch("/api/crm/ready-made")
@@ -4129,6 +4176,31 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             Criar minha campanha
           </button>
         </div>
+      </div>
+
+      {/* ── Filtro de período (números da tabela por período) ────────────────── */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Período:</span>
+        {CRM_PERIODS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPeriod(p.id)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              period === p.id ? "bg-brand-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+        {period === "custom" && (
+          <span className="flex items-center gap-1.5">
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs text-ink focus:border-brand-400 focus:outline-none" />
+            <span className="text-xs text-muted">até</span>
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+              className="rounded-lg border border-line bg-paper px-2 py-1 text-xs text-ink focus:border-brand-400 focus:outline-none" />
+          </span>
+        )}
       </div>
 
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}

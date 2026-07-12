@@ -17,6 +17,15 @@ export async function GET(req: NextRequest) {
   if (!ctx) return unauthorized();
 
   try {
+    // Optional period window (from/to ISO) — when present, the per-campaign numbers
+    // (enviados / conversões / receita / falhas) are scoped to that window instead
+    // of lifetime, so the owner can read campaigns "por período".
+    const fromParam = req.nextUrl.searchParams.get("from");
+    const toParam   = req.nextUrl.searchParams.get("to");
+    const from = fromParam ? new Date(fromParam) : null;
+    const to   = toParam   ? new Date(toParam)   : null;
+    const periodActive = !!from && !!to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime());
+
     const campaigns = await prisma.campaign.findMany({
       where:   { restaurantId: ctx.restaurantId },
       orderBy: { createdAt: "desc" },
@@ -87,18 +96,39 @@ export async function GET(req: NextRequest) {
     const allIds = enriched.map((c) => c.id);
     const summaries: Record<string, ReturnType<typeof summarizeFromReasonCounts>> = {};
 
+    // Period-scoped numbers (enviados / conversões / receita) from the execution log.
+    const periodStats: Record<string, { sent: number; converted: number; revenue: number }> = {};
+    if (periodActive && allIds.length > 0) {
+      const [sentG, convG] = await Promise.all([
+        prisma.campaignExecution.groupBy({
+          by:     ["campaignId"],
+          where:  { campaignId: { in: allIds }, status: { in: ["SENT", "DELIVERED", "READ"] as never[] }, sentAt: { gte: from!, lte: to! } },
+          _count: { id: true },
+        }),
+        prisma.campaignExecution.groupBy({
+          by:     ["campaignId"],
+          where:  { campaignId: { in: allIds }, converted: true, convertedAt: { gte: from!, lte: to! } },
+          _count: { id: true }, _sum: { revenue: true },
+        }),
+      ]);
+      for (const id of allIds) periodStats[id] = { sent: 0, converted: 0, revenue: 0 };
+      for (const g of sentG) if (periodStats[g.campaignId]) periodStats[g.campaignId]!.sent = g._count.id;
+      for (const g of convG) if (periodStats[g.campaignId]) {
+        periodStats[g.campaignId]!.converted = g._count.id;
+        periodStats[g.campaignId]!.revenue = Number(g._sum.revenue ?? 0);
+      }
+    }
+
     if (allIds.length > 0) {
-      // Only count RECENT failures/blocks (last 48h). Recurring campaigns run every
-      // ~15 min forever, so a lifetime cumulative count is meaningless and alarming
-      // (e.g. "718 falhas" from weeks ago). The owner cares about "is it failing now".
-      // The full history is still available per-campaign in Gerenciar → Performance.
-      const failuresSince = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      // Failures window: the selected period, or the last 48h by default. Recurring
+      // campaigns run forever, so a lifetime cumulative count is meaningless/alarming.
+      const failFrom = periodActive ? from! : new Date(Date.now() - 48 * 60 * 60 * 1000);
       const groups = await prisma.campaignExecution.groupBy({
         by:    ["campaignId", "status", "failedReason", "errorMessage"],
         where: {
           campaignId: { in: allIds },
           status:     { in: ["FAILED", "BLOCKED"] as never[] },
-          createdAt:  { gte: failuresSince },
+          createdAt:  { gte: failFrom, ...(periodActive ? { lte: to! } : {}) },
         },
         _count: { id: true },
       });
@@ -113,8 +143,11 @@ export async function GET(req: NextRequest) {
 
     const withBreakdowns = enriched.map((c) => {
       const summary = summaries[c.id];
+      const ps = periodActive ? periodStats[c.id] : null;
       return {
         ...c,
+        // When a period is selected, show that window's numbers instead of lifetime.
+        ...(ps ? { totalSent: ps.sent, totalConverted: ps.converted, totalRevenue: ps.revenue } : {}),
         // Real failures only (provider/invalid phone), not safety blocks.
         totalFailed: summary ? summary.failedProvider : c.totalFailed,
         totalBlocked: summary ? summary.blockedSafety : 0,
