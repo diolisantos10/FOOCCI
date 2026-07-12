@@ -25,11 +25,59 @@ export interface CriticVerdict {
 }
 
 const JUDGE_SYSTEM_PROMPT =
-  "Você é um auditor rígido de atendimento. Julgue a RESPOSTA CANDIDATA de um agente a um cliente.\n" +
-  "REPROVE (approved=false) se a resposta: (1) afirmar produto, preço, promoção, horário ou forma de " +
-  "pagamento que NÃO esteja na BASE DE CONHECIMENTO; (2) NEGAR que algo existe sem a base dizer isso " +
-  "explicitamente; (3) não responder à pergunta do cliente. Na dúvida sobre um fato, REPROVE.\n" +
+  "Você é um auditor de atendimento. Julgue a RESPOSTA CANDIDATA de um agente a um cliente, " +
+  "comparando-a com a BASE DE CONHECIMENTO (que vem rotulada por fonte: Preços, Pagamentos, " +
+  "Horários, Produtos, etc.).\n" +
+  "REPROVE (approved=false) SOMENTE se a resposta: (1) afirmar um produto, preço, promoção, horário " +
+  "ou forma de pagamento que CONTRADIZ a base ou que NÃO aparece em NENHUMA fonte dela; (2) NEGAR " +
+  "que algo existe quando a base mostra que existe; (3) claramente não responder à pergunta.\n" +
+  "IMPORTANTE: se o fato afirmado ESTÁ na base — mesmo que em outra fonte/linha, ou escrito de forma " +
+  "diferente — APROVE. Não reprove só por não ter certeza; reprove apenas com contradição ou ausência " +
+  "clara. Um preço/horário/pagamento que casa com a base deve ser APROVADO.\n" +
   'Responda SOMENTE JSON: {"approved": boolean, "reason": "curta, em português"}';
+
+// Rótulos por fonte (espelham os do BrainReasoner) para o juiz LER a verdade,
+// não um JSON cru. Ordem de prioridade: fatos pequenos e mais afirmados primeiro,
+// o cardápio (grande) depois — assim preços/pagamentos/horários NUNCA são cortados.
+const TRUTH_LABELS: Record<string, string> = {
+  policies: "Identidade/política",
+  prices: "Preços",
+  payments: "Pagamentos",
+  hours: "Horários/atendimento",
+  materials: "Materiais",
+  evidence: "Evidências",
+  products: "Produtos",
+  customers: "Clientes (agregado)",
+  orders: "Pedidos (agregado)",
+  conversations: "Conversas (agregado)",
+};
+const TRUTH_PRIORITY = [
+  "policies", "prices", "payments", "hours", "materials", "evidence", "products", "customers", "orders", "conversations",
+];
+
+/** Verdade rotulada e priorizada para o juiz — completa, sem cortar os fatos-chave. */
+function formatTruthForJudge(truth: Record<string, unknown>, maxChars = 15000): string {
+  const keys = Object.keys(truth).sort((a, b) => {
+    const ia = TRUTH_PRIORITY.indexOf(a);
+    const ib = TRUTH_PRIORITY.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const parts: string[] = [];
+  let used = 0;
+  for (const key of keys) {
+    const value = truth[key];
+    if (value === undefined || value === null) continue;
+    let line = `- ${TRUTH_LABELS[key] ?? key}: ${JSON.stringify(value)}`;
+    if (used + line.length > maxChars) {
+      line = line.slice(0, Math.max(0, maxChars - used)) + "…(cortado)";
+      parts.push(line);
+      break;
+    }
+    parts.push(line);
+    used += line.length;
+  }
+  return parts.join("\n");
+}
 
 export async function judgeReply(input: {
   agentId: string;
@@ -43,7 +91,7 @@ export async function judgeReply(input: {
     if (selection.provider === "MOCK") return { approved: true, mode: "SKIPPED", reason: "sem piloto JUDGE configurado" };
 
     const userContent = [
-      `BASE DE CONHECIMENTO (verdade): ${JSON.stringify(input.snapshot.truthSources).slice(0, 6000)}`,
+      `BASE DE CONHECIMENTO (verdade — uma linha por fonte):\n${formatTruthForJudge(input.snapshot.truthSources)}`,
       `CONTEXTO AUSENTE (não afirmar): ${input.snapshot.missingContext.join("; ") || "nenhum"}`,
       `PERGUNTA DO CLIENTE: "${input.customerMessage}"`,
       `RESPOSTA CANDIDATA: "${input.candidateReply}"`,
