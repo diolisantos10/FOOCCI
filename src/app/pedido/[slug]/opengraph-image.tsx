@@ -13,14 +13,23 @@
 
 import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/prisma";
+import { getPublicSiteUrl } from "@/lib/public-url";
 
 export const runtime = "nodejs";
 export const alt = "Cardápio digital";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-function absoluteHttp(url: string | null | undefined): string | null {
-  return url && /^https?:\/\//i.test(url) ? url : null;
+/**
+ * Resolve a stored logo path to an absolute URL that ImageResponse can fetch.
+ * Logos live at relative `/api/media/<id>` (public), so a bare "/…" path is
+ * prefixed with the site origin. data:/unknown → null (emoji fallback).
+ */
+function resolveLogoUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/")) return `${getPublicSiteUrl()}${url}`;
+  return null;
 }
 
 function safeHexColor(color: string | null | undefined, fallback: string): string {
@@ -50,7 +59,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         persona && typeof persona === "object"
           ? ((persona as Record<string, unknown>).logoUrl as string | undefined)
           : undefined;
-      logoUrl = absoluteHttp(personaLogo ?? restaurant.logoUrl);
+      logoUrl = resolveLogoUrl(personaLogo ?? restaurant.logoUrl);
       brand = safeHexColor(restaurant.brandConfig?.brandPrimaryColor, brand);
     }
   } catch {
