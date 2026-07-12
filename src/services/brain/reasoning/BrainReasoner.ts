@@ -254,10 +254,16 @@ function coherenceOf(snap: BusinessKnowledgeSnapshot, core: RawCore): BrainCoher
   const hasIntent = !!core.primaryIntent;
   const claims = verifyAgainstSnapshot(core.idealResponse ?? "", snap);
 
-  const pass = answered && hasIntent && !claims.needsReview;
+  // Piso DURO: preço inventado NUNCA passa (risco real de alucinação). Uma negação
+  // ("não temos X") sem preço inventado NÃO trava aqui — ela sobe para o juiz LLM,
+  // que sabe distinguir negação HONESTA (X não está na base → ok) de negação
+  // ERRADA (base mostra X → reprova). O verificador determinístico não consegue
+  // fazer essa distinção; o juiz consegue. Assim paramos de barrar "não temos
+  // veganos" (honesto) sem reabrir o incidente rodízio (o juiz pega a negação errada).
+  const pass = answered && hasIntent && claims.doesNotInventFacts;
   const reasons: string[] = [];
   if (!answered) reasons.push("resposta vazia ou sem intenção");
-  if (claims.needsReview) reasons.push(claims.reason);
+  if (!claims.doesNotInventFacts) reasons.push(claims.reason);
 
   return {
     answersUserQuestion: answered,
@@ -265,7 +271,9 @@ function coherenceOf(snap: BusinessKnowledgeSnapshot, core: RawCore): BrainCoher
     doesNotInventFacts: claims.doesNotInventFacts,
     keepsBusinessObjective: true,
     verdict: pass ? "PASS" : "NEEDS_REVIEW",
-    reason: pass ? "resposta direta, claims compatíveis com a base" : reasons.join("; "),
+    reason: pass
+      ? (claims.serviceDenials.length ? "resposta direta; negação será arbitrada pelo juiz LLM" : "resposta direta, claims compatíveis com a base")
+      : reasons.join("; "),
   };
 }
 

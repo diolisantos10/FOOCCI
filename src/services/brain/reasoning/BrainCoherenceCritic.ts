@@ -37,6 +37,10 @@ const JUDGE_SYSTEM_PROMPT =
   "COERÊNCIA OBRIGATÓRIA: 'approved' TEM que bater com sua 'reason'. Se a reason conclui que o fato " +
   "casa com a base / não há contradição, então approved=true. approved=false SÓ quando a reason aponta " +
   "uma contradição, invenção ou não-resposta reais.\n" +
+  "NÃO reprove por diferenças TRIVIAIS que não mudam o sentido: formatação de preço (R$54 = R$54,00 = " +
+  "54 reais), maiúsculas/acentos, ordem de itens, sinônimos, arredondamento equivalente. Só o SENTIDO " +
+  "importa. Uma resposta HONESTA de que algo não existe (ex.: 'não temos X') quando X realmente não " +
+  "aparece na base é CORRETA — aprove.\n" +
   'Responda SOMENTE JSON: {"approved": boolean, "reason": "curta, em português"}';
 
 // Rótulos por fonte (espelham os do BrainReasoner) para o juiz LER a verdade,
