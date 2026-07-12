@@ -65,6 +65,32 @@ export async function GET(req: NextRequest, { params }: Params) {
     } catch {
       // Fall through to HMAC path on any unexpected error
     }
+
+    // ── 1b. WhatsApp short menu link (DB lookup) ─────────────────────────────
+    // The receptionist sends foocci.com.br/r/<code> instead of the long
+    // identified /pedido URL. Sign a FRESH waToken here and redirect. Same
+    // identity handoff, clean short link. (src=whatsapp, not recovery.)
+    try {
+      const menuLink = await prisma.waMenuLink.findUnique({
+        where:  { code },
+        select: { phone: true, name: true, expiresAt: true, restaurant: { select: { slug: true } } },
+      });
+      if (menuLink?.restaurant?.slug) {
+        if (menuLink.expiresAt > new Date()) {
+          // Fire-and-forget click counter.
+          prisma.waMenuLink.update({ where: { code }, data: { hits: { increment: 1 } } }).catch(() => {});
+          const waToken = signWaToken({ phone: menuLink.phone, name: menuLink.name ?? undefined });
+          const dest = new URL(`${siteUrl}/pedido/${menuLink.restaurant.slug}`);
+          dest.searchParams.set("waToken", waToken);
+          dest.searchParams.set("src", "whatsapp");
+          return NextResponse.redirect(dest, 302);
+        }
+        // Expired code → still send them to the menu, just without auto-identify.
+        return NextResponse.redirect(`${siteUrl}/pedido/${menuLink.restaurant.slug}`, 302);
+      }
+    } catch {
+      // Fall through to HMAC path on any unexpected error
+    }
   }
 
   // ── 2. Legacy HMAC recovery token (in-memory, no DB) ─────────────────────

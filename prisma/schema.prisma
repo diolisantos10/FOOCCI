@@ -107,6 +107,7 @@ model Restaurant {
   printJobs              PrintJob[]
   googleIntegrationConfig GoogleIntegrationConfig?
   apiKeys                ApiKey[]
+  waMenuLinks            WaMenuLink[]
 
   @@map("restaurants")
 }
@@ -578,6 +579,30 @@ model Payment {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+// ═══════════════════════════════════════════
+//  WHATSAPP SHORT MENU LINK
+// ═══════════════════════════════════════════
+// Short redirect code the receptionist sends instead of the long identified
+// /pedido URL (a ~180-char signed waToken looked awful in WhatsApp). One stable
+// code per (restaurant, customer); /r/[code] signs a fresh waToken on tap and
+// 302-redirects to /pedido/[slug]. expiresAt is refreshed on every send.
+
+model WaMenuLink {
+  code         String   @id
+  restaurantId String
+  phone        String
+  name         String?
+  hits         Int      @default(0)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, phone])
+  @@index([restaurantId])
+  @@map("wa_menu_links")
 }
 
 // ═══════════════════════════════════════════

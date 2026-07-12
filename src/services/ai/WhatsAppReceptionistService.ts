@@ -36,6 +36,7 @@ import { markConversationNeedsHuman } from "@/lib/handoff";
 import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getPublicMenuUrl, getPublicQrUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { signWaToken } from "@/lib/wa-token";
+import { buildShortMenuUrl } from "@/lib/wa-menu-link";
 import {
   P0_FALLBACK_REPLY,
   isRepeatedClarificationLoop,
@@ -911,12 +912,23 @@ async function run(conversationId: string): Promise<void> {
   // waToken is only handled by /pedido/ — remap /qr/ URLs so identity is not lost
   const fixedMenuUrl = rawMenuUrl?.replace(/\/qr\/([^/?]+)/, "/pedido/$1") ?? rawMenuUrl;
   const basePedidoUrl = fixedMenuUrl ? sanitizeCustomerUrl(fixedMenuUrl) : null;
-  // Build customer-identified URL so /pedido can skip the phone-entry step
-  const pedidoUrl = buildIdentifiedPedidoUrl(
-    basePedidoUrl,
-    resolvedPhone,
-    resolvedName,
-  );
+  // Build customer-identified URL so /pedido can skip the phone-entry step.
+  // Prefer a SHORT link (foocci.com.br/r/<code>) — the customer sees a clean URL
+  // instead of the ~180-char signed waToken. /r/[code] signs a fresh token and
+  // redirects. Falls back to the long identified URL if the short link can't be
+  // made, so the worst case is exactly the previous behavior.
+  let pedidoUrl: string | null = null;
+  let usedShortMenuLink = false;
+  if (basePedidoUrl && resolvedPhone.trim()) {
+    const shortUrl = await buildShortMenuUrl(restaurantId, resolvedPhone, resolvedName);
+    if (shortUrl) {
+      pedidoUrl = shortUrl;
+      usedShortMenuLink = true;
+    }
+  }
+  if (!pedidoUrl) {
+    pedidoUrl = buildIdentifiedPedidoUrl(basePedidoUrl, resolvedPhone, resolvedName);
+  }
   // Instrumentation: log link-generation state so we can diagnose waToken failures.
   console.info("[WhatsAppReceptionistService] link-gen", {
     conversationId,
@@ -927,11 +939,14 @@ async function run(conversationId: string): Promise<void> {
     secretLen:            (process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0,
     basePedidoUrlPrefix:  basePedidoUrl ? basePedidoUrl.slice(0, 60) : null,
     basePedidoIsAbsolute: basePedidoUrl?.startsWith("http") ?? false,
+    usedShortMenuLink,
     pedidoUrlHasWaToken:  pedidoUrl?.includes("waToken=") ?? false,
     pedidoUrlHasSrc:      pedidoUrl?.includes("src=whatsapp") ?? false,
   });
-  // Explicit warning if signing failed silently.
-  if (pedidoUrl && !pedidoUrl.includes("waToken=")) {
+  // Explicit warning if signing failed silently. Short menu links carry no
+  // waToken by design (it is minted at /r/[code] redirect time), so they are
+  // exempt from this check — only the long identified URL must be signed.
+  if (!usedShortMenuLink && pedidoUrl && !pedidoUrl.includes("waToken=")) {
     console.warn(
       `[WhatsAppReceptionistService] pedidoUrl has no waToken for conv ${conversationId} — signWaToken likely threw. secretLen=${(process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0}`,
     );
