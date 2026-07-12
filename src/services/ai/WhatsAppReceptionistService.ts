@@ -97,8 +97,11 @@ const GREETING_RE =
   /^(oi|opa|olá|ola|oii|bom dia|boa tarde|boa noite|hey|hi|hello|e aí|eai|tudo bem|tudo bom|pode ajudar|boas|fala|test(e)?|começar|inicio|ajuda|help)\b/i;
 const ORDER_RE =
   /quero (pedir|comprar)|fazer (um )?pedido|como (peço|fa[çc]o pedido)|link do pedido|quero fazer pedido/i;
+// "opção/opções" sozinho é AMBÍGUO ("tem opção sem lactose?" é pergunta, não
+// pedido de menu) — só conta como menu quando vem com verbo de exibição
+// ("ver/mostrar/quais as opções"). Assim perguntas reais chegam ao Brain.
 const MENU_RE =
-  /cardápio|cardapio|menu|ver (o )?menu|ver produtos|opções|opcoes|opção|opcao/i;
+  /cardápio|cardapio|\bmenu\b|ver (o )?menu|ver produtos|(ver|mostrar?|quais(\s+s[ãa]o)?|lista de)\s+(as\s+)?op[çc][õo]es/i;
 const HOURS_RE =
   /horário|horario|que horas|quando (abre|fecha|funciona)|funcionamento|horários de/i;
 const ADDRESS_RE =

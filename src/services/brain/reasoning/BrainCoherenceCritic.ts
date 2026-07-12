@@ -34,6 +34,9 @@ const JUDGE_SYSTEM_PROMPT =
   "IMPORTANTE: se o fato afirmado ESTÁ na base — mesmo que em outra fonte/linha, ou escrito de forma " +
   "diferente — APROVE. Não reprove só por não ter certeza; reprove apenas com contradição ou ausência " +
   "clara. Um preço/horário/pagamento que casa com a base deve ser APROVADO.\n" +
+  "COERÊNCIA OBRIGATÓRIA: 'approved' TEM que bater com sua 'reason'. Se a reason conclui que o fato " +
+  "casa com a base / não há contradição, então approved=true. approved=false SÓ quando a reason aponta " +
+  "uma contradição, invenção ou não-resposta reais.\n" +
   'Responda SOMENTE JSON: {"approved": boolean, "reason": "curta, em português"}';
 
 // Rótulos por fonte (espelham os do BrainReasoner) para o juiz LER a verdade,
