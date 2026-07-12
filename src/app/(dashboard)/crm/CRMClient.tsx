@@ -3380,7 +3380,7 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
               <th className="py-2.5 px-2 font-semibold text-right" title="Cupons concedidos pela campanha que foram resgatados">Cupons usados</th>
-              <th className="py-2.5 px-2 font-semibold text-right" title="Cupons usados ÷ cupons enviados">Conversão</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Pedidos atribuídos após a mensagem ÷ mensagens enviadas">Conversão</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
               <th className="py-2.5 px-2 font-semibold">Agenda</th>
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
@@ -3510,16 +3510,11 @@ function CampanhasAtivasSection({
                     })()}
                   </td>
 
-                  {/* Conversão de cupom — usados ÷ enviados */}
-                  <td className="py-3 px-2 text-right tabular-nums" title="Cupons usados ÷ cupons enviados">
-                    {(() => {
-                      const cc = couponCounts?.[c.id];
-                      const s = cc?.sent ?? 0;
-                      const u = cc?.used ?? 0;
-                      return s > 0
-                        ? <span className="font-semibold text-emerald-700">{Math.round((u / s) * 100)}%</span>
-                        : <span className="text-muted">—</span>;
-                    })()}
+                  {/* Conversão — pedidos atribuídos ÷ mensagens enviadas */}
+                  <td className="py-3 px-2 text-right tabular-nums" title="Pedidos atribuídos após a mensagem ÷ mensagens enviadas">
+                    {c.totalSent > 0
+                      ? <span className="font-semibold text-emerald-700">{Math.round((c.totalConverted / c.totalSent) * 100)}%</span>
+                      : <span className="text-muted">—</span>}
                   </td>
 
                   {/* Falhas — hover title shows breakdown; click "Gerenciar" for full detail */}
@@ -4214,87 +4209,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
                 )}
               </div>
 
-              {/* Campanhas encerradas / rascunhos */}
-              {historyRows.length === 0 ? null : (
-                <div className="space-y-2">
-                  {historyRows.map((c) => {
-                    const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
-                    const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number } | null;
-                    const isRecurring = cfg?.mode === "RECURRING";
-                    const displayDate = c.sentAt
-                      ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
-                      : c.scheduledAt
-                        ? `Prog. ${new Date(c.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })}`
-                        : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-                    const isDeletable = c.status === "DRAFT" || c.status === "CANCELLED";
-                    const convRate    = c.totalSent > 0
-                      ? Math.round((c.totalConverted / c.totalSent) * 100)
-                      : null;
-                    const showStats = ["SENT", "SENDING", "ACTIVE", "PAUSED", "COMPLETED"].includes(c.status) && c.totalSent > 0;
-                    return (
-                      <div key={c.id} className="rounded-xl border border-line bg-paper px-4 py-3 shadow-sm">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-ink truncate">{c.name}</p>
-                            <p className="text-[10px] text-muted mt-0.5">
-                              {isRecurring ? "Recorrente · WhatsApp" : `WhatsApp · ${displayDate}`}
-                            </p>
-                          </div>
-                          <div className="shrink-0 flex items-center gap-2">
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
-                              {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
-                            </span>
-                            <button
-                              onClick={() => openManage(c.id, "overview")}
-                              className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
-                            >
-                              Ver detalhes
-                            </button>
-                            {isDeletable && (
-                              <button
-                                title="Excluir"
-                                onClick={async () => {
-                                  if (!confirm("Excluir esta ação?")) return;
-                                  const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
-                                  if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
-                                }}
-                                className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                              >
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {isRecurring && cfg && (
-                          <div className="mt-1.5 text-[10px] text-muted">
-                            {cfg.weekdays && cfg.weekdays.map((d: number) => WEEKDAY_LABELS[d]).join(", ")}
-                            {cfg.timeWindow && ` · ${cfg.timeWindow.start}–${cfg.timeWindow.end}`}
-                            {cfg.dailyLimit && ` · ${cfg.dailyLimit}/dia`}
-                          </div>
-                        )}
-
-                        {showStats && (
-                          <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted border-t border-line pt-2">
-                            <span>{c.totalSent} enviados</span>
-                            {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
-                            {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} responderam</span>}
-                            {c.totalConverted > 0 && (
-                              <span className="text-green-600 font-semibold">
-                                {c.totalConverted} conversões
-                                {convRate !== null && ` (${convRate}%)`}
-                                {" · R$"}{Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           )}
         </div>
