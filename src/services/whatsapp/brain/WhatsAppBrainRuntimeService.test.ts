@@ -84,7 +84,8 @@ beforeEach(() => {
   });
   db.message.findFirst
     .mockResolvedValueOnce({ content: "vocês aceitam vale-refeição?", type: "TEXT", sentAt: new Date() })
-    .mockResolvedValueOnce(null); // alreadyReplied = none
+    .mockResolvedValueOnce(null) // alreadyReplied = none
+    .mockResolvedValueOnce({ id: "prev_ai_msg" }); // sessão ativa: bot já respondeu (menu já aberto)
   db.$transaction.mockResolvedValue([{}, {}]);
   evoCfg.getSnapshot.mockResolvedValue({ ok: true, data: { instanceName: "i", baseUrl: "u", apiKey: "k" } });
   evoClient.sendTextMessage.mockResolvedValue({ key: { id: "ext_1" } });
@@ -159,6 +160,22 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     expect(evoClient.sendTextMessage).toHaveBeenCalledTimes(1);
     expect(out.status).toBe("REPLIED");
     expect(recep.WhatsAppReceptionistService.respond).not.toHaveBeenCalled();
+  });
+
+  it("PRIMEIRA ABORDAGEM: sem sessão ativa, a pergunta abre o MENU — o Brain só entra depois", async () => {
+    db.brainFreeFormConfig.findUnique.mockResolvedValue({
+      restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5511999"], paused: false, minConfidence: 0.6, notes: null,
+    });
+    // 3ª findFirst (sessão ativa) = null → primeira abordagem: menu obrigatório.
+    db.message.findFirst
+      .mockReset()
+      .mockResolvedValueOnce({ content: "tem rodízio?", type: "TEXT", sentAt: new Date() }) // lastInbound
+      .mockResolvedValueOnce(null) // alreadyReplied
+      .mockResolvedValueOnce(null); // sessão ativa = NENHUMA
+    const out = await WhatsAppBrainRuntimeService.respond("conv_1");
+    expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledTimes(1); // menu
+    expect(brain.reasonAsAgent).not.toHaveBeenCalled(); // inteligência NÃO entra na 1ª
+    expect(out.reason).toMatch(/first-contact|menu obrigat/i);
   });
 
   it("VIVO (crítico reprova): coerência NEEDS_REVIEW → recepcionista assume, nada é enviado pelo Brain", async () => {

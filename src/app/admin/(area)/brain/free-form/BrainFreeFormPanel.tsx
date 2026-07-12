@@ -146,6 +146,24 @@ export function BrainFreeFormPanel() {
     await load();
   }, [armed, restaurantId, phonesInput, acknowledge, load]);
 
+  // Botão de PÂNICO: um clique volta pro seguro (SHADOW_ONLY = menu + recepcionista,
+  // Brain desligado pro público). Sem confirmação dupla de propósito — em
+  // emergência velocidade importa, e reverter é inócuo (o menu continua atendendo).
+  const panic = useCallback(async () => {
+    setBusy(true);
+    setResult(null);
+    setMsg("");
+    const res = await fetch(BASE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "rollback", restaurantId, confirm: ROLLBACK_FREEFORM_CONFIRM }),
+    }).then((r) => r.json()).catch(() => ({ ok: false, error: "Falha de rede." }));
+    if (res.result) setResult(res.result as TransitionResult);
+    else setMsg(res.error ?? "Falha.");
+    setBusy(false);
+    await load();
+  }, [restaurantId, load]);
+
   const armedLabel = (action: ActionKey, label: string) =>
     armed === action ? "Clique de novo para confirmar" : label;
 
@@ -160,6 +178,19 @@ export function BrainFreeFormPanel() {
         ℹ️ Promover roda os gates <strong>no servidor</strong> a cada transição — a escada não pula degrau.
         Tudo é config-only: nenhuma mensagem é enviada por este painel.
       </p>
+
+      {/* BOTÃO DE PÂNICO — um clique volta pro seguro. Só aparece quando o Brain
+          está ativo pro público/allowlist (nada a reverter em SHADOW). */}
+      {config && config.mode !== "SHADOW_ONLY" && (
+        <button
+          type="button"
+          onClick={() => void panic()}
+          disabled={busy}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition-colors hover:bg-red-700 disabled:opacity-50"
+        >
+          🛑 Voltar ao seguro agora — desliga o Brain pro público (menu continua)
+        </button>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="text-[11px] font-semibold text-gray-500" htmlFor="ff-restaurant">Restaurante</label>

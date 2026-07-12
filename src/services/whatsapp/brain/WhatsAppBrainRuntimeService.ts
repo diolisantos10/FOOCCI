@@ -204,6 +204,30 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     return { status: "REPLIED", reason: "menu-anchor" };
   }
 
+  // ── MENU OBRIGATÓRIO NA PRIMEIRA ABORDAGEM ─────────────────────────────────
+  // O menu é a experiência de entrada, sempre. Fora de uma sessão ativa (nenhuma
+  // resposta do bot nos últimos 30 min — o mesmo limiar de sessão do
+  // recepcionista), a PRIMEIRA mensagem SEMPRE abre o menu, mesmo que seja uma
+  // pergunta direta. A inteligência livre do Brain só entra DEPOIS, dentro de uma
+  // sessão já aberta pelo menu — quando o cliente sai do script por conta própria.
+  const SESSION_WINDOW_MS = 30 * 60 * 1000;
+  const activeSession = await prisma.message
+    .findFirst({
+      where: {
+        conversationId,
+        direction: "OUTBOUND",
+        senderType: "AI",
+        sentAt: { gte: new Date(Date.now() - SESSION_WINDOW_MS) },
+      },
+      select: { id: true },
+    })
+    .catch(() => null);
+  if (!activeSession) {
+    console.warn("[BrainDecision]", JSON.stringify({ gate: "first-contact-menu", text: inboundText.slice(0, 60) }));
+    await recep.WhatsAppReceptionistService.respond(conversationId);
+    return { status: "REPLIED", reason: "first-contact → menu obrigatório" };
+  }
+
   // ── Free-form desligado: pergunta fora do menu NÃO vai pro LLM ──────────────
   // O recepcionista trata de forma determinística (intents conhecidos por
   // template; qualquer pergunta aberta → handoff para humano). Sem resposta
