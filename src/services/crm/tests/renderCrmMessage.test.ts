@@ -131,6 +131,18 @@ describe("renderCrmMessage — coupon + social variables", () => {
     expect(renderCrmMessage("Ganhe {cupom}", customer, ctx)).toBe("Ganhe ");
   });
 
+  it("{validade} renders the coupon expiry (today + validityDays) as dd/mm", () => {
+    const out = renderCrmMessage("Válido até {validade}", customer, {
+      ...ctx, coupon: { type: "PERCENTAGE", value: 20, validityDays: 30 },
+    });
+    const expected = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    expect(out).toBe(`Válido até ${expected}`);
+  });
+
+  it("{validade} is empty when there is no coupon", () => {
+    expect(renderCrmMessage("Vence {validade}", customer, ctx)).toBe("Vence ");
+  });
+
   it("{tiktok} / {facebook} / {youtube} resolve to full clickable URLs from handles", () => {
     const out = renderCrmMessage("IG {instagram} TT {tiktok} FB {facebook} YT {youtube}", customer, {
       ...ctx, tiktokUrl: "@cazza", facebookUrl: "cazzapage", youtubeUrl: "@cazzatube",

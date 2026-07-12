@@ -1077,7 +1077,7 @@ export class ScheduledCampaignRunnerService {
     runOpts: {
       abortOnInstanceCollapse?: boolean;
       /** Card-defined coupon to credit to each customer's wallet on a successful send. */
-      coupon?: { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string } | null;
+      coupon?: { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string; validityDays?: number } | null;
       /** Days the granted coupon stays valid. */
       couponValidityDays?: number | null;
     } = {},

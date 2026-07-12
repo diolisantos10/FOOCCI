@@ -35,15 +35,28 @@ export interface RenderContext {
   facebookUrl?:    string | null;
   youtubeUrl?:     string | null;
   /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "sobremesa grátis". */
-  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null } | null;
+  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null; validityDays?: number | null } | null;
+}
+
+/** True when the coupon actually carries a benefit (drives {cupom}/{validade}). */
+function couponHasBenefit(coupon: RenderContext["coupon"]): boolean {
+  if (!coupon) return false;
+  return coupon.type === "CUSTOM" ? !!coupon.description?.trim() : coupon.value > 0;
 }
 
 /** Owner-facing coupon phrasing for use inside a message ("20% de desconto"). */
 export function couponMessageLabel(coupon: RenderContext["coupon"]): string {
-  if (!coupon) return "";
-  if (coupon.type === "CUSTOM") return coupon.description?.trim() || "";
-  if (!(coupon.value > 0)) return "";
-  return coupon.type === "PERCENTAGE" ? `${coupon.value}% de desconto` : `R$ ${coupon.value} de desconto`;
+  if (!couponHasBenefit(coupon)) return "";
+  if (coupon!.type === "CUSTOM") return coupon!.description!.trim();
+  return coupon!.type === "PERCENTAGE" ? `${coupon!.value}% de desconto` : `R$ ${coupon!.value} de desconto`;
+}
+
+/** The coupon's expiry date (today + validityDays) as "dd/mm" — empty if no coupon. */
+export function couponValidadeLabel(coupon: RenderContext["coupon"]): string {
+  if (!couponHasBenefit(coupon)) return "";
+  const days = coupon!.validityDays && coupon!.validityDays > 0 ? coupon!.validityDays : 30;
+  const expiry = new Date(Date.now() + days * 86_400_000);
+  return expiry.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
 const TIER_LABELS: Record<string, string> = {
@@ -65,6 +78,7 @@ export const KNOWN_CRM_VARIABLES = [
   "facebook",
   "youtube",
   "cupom",
+  "validade",
 ] as const;
 
 /**
@@ -118,6 +132,7 @@ export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext
     facebook,
     youtube,
     cupom:                 couponMessageLabel(ctx.coupon),
+    validade:              couponValidadeLabel(ctx.coupon),
   };
 }
 
