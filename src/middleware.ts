@@ -33,6 +33,8 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/qr(\/.*)?$/,                // Public QR dine-in menu API
   /^\/pedido(\/.*)?$/,                 // Public AI ordering experience pages
   /^\/api\/pedido(\/.*)?$/,            // Public AI ordering experience API
+  /^\/r(\/.*)?$/,                      // Public short redirects (WhatsApp menu link, cart recovery) — resolve a bearer code, then 302 to /pedido
+  /^\/l(\/.*)?$/,                      // Public tracking short links — 302 to /pedido or /qr with UTM params
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
   /^\/api\/payments\/mercadopago\/webhook$/, // Mercado Pago webhook (public — MP servers have no JWT)
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)
