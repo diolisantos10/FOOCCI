@@ -132,10 +132,15 @@ describe("REGRESSÃO 2026-07-10 — UNKNOWN não escala sozinho, sinais explíci
     expect(p.containsHandoff).toBe(true);
   });
 
-  it("ORDER_STATUS continua escalando sempre (sinal explícito)", () => {
+  // Mudança 2026-07-12: ORDER_STATUS ("cadê meu pedido?", "quanto tempo
+  // demora") deixou de escalar sozinho — no horário de pico isso lotava a
+  // fila de "aguarda atendimento humano" e o alarme não parava. Agora recebe
+  // uma resposta acolhedora (menu seguro) e só vira humano se o cliente pedir
+  // de fato (→ HUMAN_REQUEST, testado acima).
+  it("ORDER_STATUS ('quanto tempo demora') NÃO escala sozinho — resposta acolhedora (SAFE_MENU)", () => {
     const p = previewReceptionistResponse("quanto tempo demora", ctx());
-    expect(p.responseType).toBe("HANDOFF");
-    expect(p.containsHandoff).toBe(true);
+    expect(p.responseType).not.toBe("HANDOFF");
+    expect(p.containsHandoff).toBe(false);
   });
 });
 

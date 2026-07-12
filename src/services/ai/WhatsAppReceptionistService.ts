@@ -9,7 +9,8 @@
  *   - Detect intent from free-text messages using deterministic keyword rules.
  *   - Handle numeric/label menu option selection.
  *   - Route ORDER / MENU requests to the /pedido/[slug] link.
- *   - Hand off to human operator on: HUMAN_REQUEST, COMPLAINT, ORDER_STATUS.
+ *   - Hand off to human operator on: HUMAN_REQUEST, COMPLAINT.
+ *   - ORDER_STATUS gets a reassuring template reply (não escala sozinho).
  *   - In HUMAN_ASSISTED mode: also hand off on UNKNOWN.
  *   - For UNKNOWN in RECEPTIONIST_ONLY and for GREETING without menu options: use OpenAI GPT.
  *   - Set conversation.status = HUMAN + aiEnabled = false on handoff via markConversationNeedsHuman.
@@ -715,6 +716,13 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext, message: string =
       // order — NEVER a raw cardápio link (that triggers LINK_CARDAPIO, a P0).
       return buildPaymentInfoReply(message, ctx);
 
+    case "ORDER_STATUS":
+      // "Cadê meu pedido?" NÃO escala mais para humano — no movimento isso
+      // inundava o "aguarda atendimento humano". Resposta acolhedora e segura
+      // (sem afirmar um status específico que não temos aqui). Se o cliente
+      // QUISER mesmo uma pessoa, ele pede → HUMAN_REQUEST → handoff normal.
+      return "Já estou verificando aqui pra você! ⏳ Normalmente os pedidos saem rapidinho. Se já faz um tempo ou você quiser falar com uma pessoa da equipe, é só me dizer 😊";
+
     default:
       return null;
   }
@@ -735,8 +743,13 @@ function buildTemplateReply(intent: Intent, ctx: ReplyContext, message: string =
  * temaki?", "quanto tempo mais ou menos?"), mesmo sem o cliente pedir para
  * falar com alguém. UNKNOWN agora cai no caminho seguro (menu/boas-vindas +
  * registro de lacuna de conhecimento para o dono revisar depois) em vez de
- * escalar. HUMAN_REQUEST, COMPLAINT e ORDER_STATUS continuam escalando
- * sempre — são sinais explícitos, não "não entendi a frase".
+ * escalar. HUMAN_REQUEST e COMPLAINT continuam escalando sempre — são
+ * sinais explícitos, não "não entendi a frase".
+ *
+ * BUG CORRIGIDO (2026-07-12): ORDER_STATUS ("cadê meu pedido?") também
+ * deixou de escalar sozinho — no horário de pico isso lotava a fila de
+ * "aguarda atendimento humano" e disparava o alarme sem parar. Agora recebe
+ * uma resposta acolhedora e só vira humano se o cliente pedir de fato.
  */
 const ALLOW_FREE_FORM_REPLIES: boolean = false;
 
@@ -745,7 +758,10 @@ function needsHandoff(intent: Intent, agentMode: string): boolean {
   return (
     intent === "HUMAN_REQUEST" ||
     intent === "COMPLAINT" ||
-    intent === "ORDER_STATUS" ||
+    // ORDER_STATUS ("cadê meu pedido?") NÃO escala mais sozinho: no movimento
+    // isso inundava o alarme de "aguarda atendimento humano". Agora recebe uma
+    // resposta acolhedora (buildTemplateReply) e só vira humano se o cliente
+    // pedir explicitamente (→ HUMAN_REQUEST).
     // Opt-in por restaurante: em modo HUMAN_ASSISTED, toda pergunta fora do
     // menu vai para humano (configuração explícita, não o caso geral).
     (agentMode === "HUMAN_ASSISTED" && intent === "UNKNOWN")
@@ -1200,8 +1216,9 @@ async function run(conversationId: string): Promise<void> {
     // Hard handoff intents — never use GPT, always escalate immediately
     else if (needsHandoff(intent, agentMode)) {
       // When closed, HUMAN_REQUEST cannot be served — inform the customer and
-      // show the reduced closed-hours menu. COMPLAINT / ORDER_STATUS are
-      // emergencies and still escalate unconditionally even when closed.
+      // show the reduced closed-hours menu. COMPLAINT is an emergency and still
+      // escalates unconditionally even when closed. (ORDER_STATUS no longer
+      // reaches this branch — it is answered by a template, never handed off.)
       if (!effectivelyOpen && intent === "HUMAN_REQUEST") {
         const base = ctx.closedMessage ?? "No momento estamos fechados.";
         const closedMenuList = buildMenuList(effectiveMenuOptions);
@@ -1413,7 +1430,6 @@ async function run(conversationId: string): Promise<void> {
       selectedOpt?.flow === "handoff"        ? "MENU_OPTION"
       : detectIntent(lastMessage.content) === "COMPLAINT"     ? "COMPLAINT"
       : detectIntent(lastMessage.content) === "HUMAN_REQUEST" ? "CUSTOMER_REQUEST"
-      : detectIntent(lastMessage.content) === "ORDER_STATUS"  ? "AI_ESCALATION"
       :                                                          "AI_ESCALATION";
     await markConversationNeedsHuman(conversationId, handoffReason);
   }
