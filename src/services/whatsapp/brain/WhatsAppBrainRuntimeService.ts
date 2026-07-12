@@ -199,6 +199,7 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     recep.BACK_TO_MENU_RE.test(inboundText) ||
     /^\d+$/.test(inboundText);
   if (isMenuInteraction) {
+    console.warn("[BrainDecision]", JSON.stringify({ gate: "menu-anchor", intent: menuIntent, text: inboundText.slice(0, 60) }));
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return { status: "REPLIED", reason: "menu-anchor" };
   }
@@ -246,6 +247,16 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     outcome.result.coherenceCheck.verdict === "PASS" &&
     outcome.result.confidence >= freeForm.minConfidence;
   if (!criticOk) {
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate: "critic",
+      text: inboundText.slice(0, 60),
+      mode: outcome.reasoningMode,
+      coherence: outcome.result.coherenceCheck.verdict,
+      confidence: Number(outcome.result.confidence.toFixed(2)),
+      minConfidence: freeForm.minConfidence,
+      snapshotSources: Object.keys(outcome.snapshot?.truthSources ?? {}),
+      candidate: (outcome.result.idealResponse ?? "").slice(0, 80),
+    }));
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return {
       status: "REPLIED",
@@ -264,6 +275,7 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     snapshot: outcome.snapshot ?? { truthSources: {}, missingContext: [] },
   });
   if (!verdict.approved) {
+    console.warn("[BrainDecision]", JSON.stringify({ gate: "judge", text: inboundText.slice(0, 60), reason: verdict.reason, candidate: reply.slice(0, 80) }));
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return { status: "REPLIED", reason: `judge gate (${verdict.reason}) → receptionist` };
   }
@@ -306,6 +318,7 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     return { status: "HANDOFF", reason: outcome.result.escalationReason };
   }
 
+  console.warn("[BrainDecision]", JSON.stringify({ gate: "replied", text: inboundText.slice(0, 60), intent: outcome.result.primaryIntent, confidence: Number(outcome.result.confidence.toFixed(2)) }));
   return { status: "REPLIED", reason: outcome.result.primaryIntent };
 }
 
