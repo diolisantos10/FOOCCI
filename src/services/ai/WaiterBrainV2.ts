@@ -2303,12 +2303,44 @@ export interface CommercialResponseInput {
   confidence?:      number;
 }
 
-function getCopy(intent: CustomerIntent, config: WaiterSalesConfig): string {
+// Aberturas VARIADAS para a apresentação genérica de opções. Antes era uma frase
+// ÚNICA e fixa ("Boa! Separei algumas opções que fazem bastante sentido pra
+// você 👇") — então navegar categorias repetia a MESMA frase toda vez. Agora
+// escolhemos por um seed (os produtos mostrados), então categorias diferentes
+// dão aberturas diferentes, de forma natural e determinística (testável).
+const PRESENTATION_OPENERS: readonly string[] = [
+  "Olha essas aqui, acho que você vai curtir 👇",
+  "Dei uma garimpada e separei essas 👇",
+  "Essas costumam sair muito — dá uma olhada 👇",
+  "Tenho boas pedidas pra te mostrar 👇",
+  "Essas são apostas certeiras 👇",
+  "Deixa eu te mostrar umas que valem a pena 👇",
+  "Essas aqui são bem pedidas 👇",
+  "Separei umas que combinam com você 👇",
+  "Dá uma conferida nessas 👇",
+];
+
+/** Índice estável a partir de um seed (hash simples) — mesma entrada, mesma escolha. */
+function seedIndex(seed: string, len: number): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return len > 0 ? h % len : 0;
+}
+
+/** Abertura de apresentação variada e determinística pelo seed (produtos/contexto). */
+function presentationOpener(seed: string): string {
+  return PRESENTATION_OPENERS[seedIndex(seed, PRESENTATION_OPENERS.length)] ?? PRESENTATION_OPENERS[0]!;
+}
+
+function getCopy(intent: CustomerIntent, config: WaiterSalesConfig, seed = ""): string {
   const map =
     config.upsellStyle === "subtle"     ? { ...INTENT_COPY, ...SUBTLE_COPY }     :
     config.upsellStyle === "aggressive" ? { ...INTENT_COPY, ...AGGRESSIVE_COPY } :
     INTENT_COPY;
-  return map[intent] ?? "Separei boas opções pra você 👇";
+  // wants_recommendation é a apresentação genérica (a que mais repetia ao navegar
+  // categorias) — sempre variada pelo seed. Intents específicos mantêm cópia própria.
+  if (intent === "wants_recommendation") return presentationOpener(seed);
+  return map[intent] ?? presentationOpener(seed);
 }
 
 /**
@@ -2321,7 +2353,8 @@ export function buildCommercialResponse(
   config: WaiterSalesConfig = DEFAULT_WAITER_CONFIG,
 ): Pick<V2Output, "message" | "options" | "cards" | "mode"> {
   const { intent, selectedProducts, mode } = params;
-  const message = getCopy(intent, config);
+  // Seed = os produtos mostrados: categorias diferentes → aberturas diferentes.
+  const message = getCopy(intent, config, selectedProducts.join(","));
   return { message, options: [], cards: selectedProducts, mode };
 }
 
@@ -2397,7 +2430,7 @@ function buildSearchCopy(message: string): string {
   if (CONSTRAINT_RE_MSG.test(message)) {
     return "Entendido! Levei em conta sua restrição — veja essas opções 👇";
   }
-  return "Boa! Separei algumas opções que fazem bastante sentido pra você 👇";
+  return presentationOpener(message);
 }
 
 /**

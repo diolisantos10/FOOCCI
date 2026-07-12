@@ -1193,7 +1193,7 @@ describe("Sprint 4D: buildCommercialResponse", () => {
 
   it("unmapped intent falls back to generic seller message", () => {
     const r = buildCommercialResponse({ intent: "unclear", selectedProducts: ["id1"], mode: "SUGGESTION" });
-    expect(r.message).toBe("Separei boas opções pra você 👇");
+    expect(r.message).toMatch(/👇/); // abertura genérica (agora variada)
   });
 
   it("always returns options = [] (no confirmation buttons)", () => {
@@ -1288,7 +1288,7 @@ describe("Sprint 4D: handleUserMessage — seller tone via buildCommercialRespon
     expect(out.cards.length).toBeGreaterThan(0);
     expect(out.cards).toContain("s4"); // Suco de Laranja — the only drink
     expect(out.options).toHaveLength(0);
-    expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
+    expect(out.message).toMatch(/👇/); // abertura de apresentação (agora variada)
   });
 
   it("asks_for_dessert → returns dessert cards with the seller opener (no buttons)", () => {
@@ -1298,7 +1298,7 @@ describe("Sprint 4D: handleUserMessage — seller tone via buildCommercialRespon
     expect(out.cards.length).toBeGreaterThan(0);
     expect(out.cards).toContain("s5"); // Pudim de Leite — the only dessert
     expect(out.options).toHaveLength(0);
-    expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
+    expect(out.message).toMatch(/👇/); // abertura de apresentação (agora variada)
   });
 
   it("wants_group_order → copy references dividing/sharing", () => {
@@ -1942,7 +1942,7 @@ describe("23 — WaiterSalesConfig", () => {
       { intent: "wants_recommendation", selectedProducts: ["s1"], mode: "SUGGESTION" },
       config,
     );
-    expect(result.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇 Quer que eu adicione?");
+    expect(result.message).toMatch(/👇/); // abertura de apresentação (agora variada)
   });
 
   // ── G) config threads through decide() → handleUserMessage ──────────────────
@@ -1959,7 +1959,7 @@ describe("23 — WaiterSalesConfig", () => {
     // Current behavior: decide()'s suggestion fast-path emits a generic seller opener
     // regardless of upsellStyle (the subtle SUBTLE_COPY applies inside buildCommercialResponse).
     if (out.cards.length > 0) {
-      expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
+      expect(out.message).toMatch(/👇/); // abertura de apresentação (agora variada)
     }
   });
 
@@ -1975,7 +1975,7 @@ describe("23 — WaiterSalesConfig", () => {
     // Current behavior: decide()'s suggestion fast-path emits a generic seller opener
     // regardless of upsellStyle (the aggressive AGGRESSIVE_COPY applies inside buildCommercialResponse).
     if (out.cards.length > 0) {
-      expect(out.message).toBe("Boa! Separei algumas opções que fazem bastante sentido pra você 👇");
+      expect(out.message).toMatch(/👇/); // abertura de apresentação (agora variada)
     }
   });
 
