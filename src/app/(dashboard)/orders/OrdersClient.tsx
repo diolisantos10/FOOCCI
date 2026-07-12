@@ -135,7 +135,7 @@ interface ApiOrder {
     neighborhood: string;
   } | null;
   items: ApiOrderItem[];
-  payment: { method: string; providerName?: string | null; status?: string | null } | null;
+  payment: { method: string; providerName?: string | null; status?: string | null; changeFor?: string | number | null } | null;
   orderDraft?: { conversationId?: string | null } | null;
   // Saipos POS integration
   saiposSentAt:        string | null;
@@ -183,6 +183,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     payment:             resolvePaymentLabel(o.payment),
     paymentProviderName: o.payment?.providerName ?? null,
     paymentStatus:       o.payment?.status       ?? null,
+    changeFor:           o.payment?.changeFor != null ? parseFloat(String(o.payment.changeFor)) : undefined,
     address:
       type === "DELIVERY" && o.deliveryAddress
         ? [

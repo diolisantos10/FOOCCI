@@ -561,6 +561,10 @@ model Payment {
   method            PaymentMethod
   status            PaymentStatus @default(PENDING)
   amount            Decimal       @db.Decimal(10, 2)
+  // Cash change: the bill/note the customer will hand over ("troco para R$ 100").
+  // null = exact change / not a cash order. Change to bring = changeFor - total.
+  // Prints on the cashier ticket so the caixa knows before the order arrives.
+  changeFor         Decimal?      @db.Decimal(10, 2)
   paidAt            DateTime?
   // Stone / hosted-link fields (all nullable — not used for cash/card-machine flows)
   paymentMode       PaymentMode   @default(PAY_NOW)

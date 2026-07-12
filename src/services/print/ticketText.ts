@@ -185,7 +185,7 @@ export interface TicketOrder {
     street: string; number: string; complement: string | null;
     neighborhood: string; city: string;
   } | null;
-  payment: { method: string; amount: unknown; status: string | null } | null;
+  payment: { method: string; amount: unknown; status: string | null; changeFor?: unknown } | null;
 }
 
 export interface TicketStore {
@@ -312,6 +312,17 @@ export function renderCashierTicketText(args: {
     L.push(rule());
     L.push("Forma de pagamento");
     L.push(lr(paymentLabel ?? "-", money(order.payment.amount)));
+
+    // Troco (dinheiro): destaca a cédula que o cliente vai usar e quanto de troco
+    // levar, pra o caixa/entregador já sair com o dinheiro certo na mão.
+    const changeFor = order.payment.method === "CASH" ? Number(order.payment.changeFor ?? 0) : 0;
+    if (changeFor > 0) {
+      const troco = Math.max(0, changeFor - Number(order.total));
+      L.push(lr("Troco para", money(changeFor)));
+      L.push(lr("** LEVAR TROCO **", money(troco)));
+    } else if (order.payment.method === "CASH") {
+      L.push("Sem troco (valor exato)");
+    }
   }
 
   L.push(rule("="));

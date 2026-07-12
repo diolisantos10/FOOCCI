@@ -116,3 +116,39 @@ describe("cashier ticket", () => {
     expect(txt).not.toMatch(/\n{5,}/);
   });
 });
+
+describe("cashier ticket — troco (dinheiro)", () => {
+  const store = { cnpj: "x", lines: [] as string[] };
+  const cashOrder: TicketOrder = {
+    ...baseOrder,
+    subtotal: 48.5, deliveryFee: 0, discount: 0, total: 48.5,
+    payment: { method: "CASH", amount: 48.5, status: "PAY_ON_DELIVERY", changeFor: 100 },
+  };
+  const render = (order: TicketOrder) =>
+    renderCashierTicketText({ order, items, restaurantName: "Sushi Cazza", store, timezone: "America/Sao_Paulo" });
+
+  it("prints 'Troco para' (nota) and 'LEVAR TROCO' (changeFor - total)", () => {
+    const txt = render(cashOrder);
+    expect(txt).toContain("Dinheiro");
+    expect(txt).toMatch(/Troco para\s+100,00/);
+    expect(txt).toMatch(/LEVAR TROCO \*\*\s+51,50/); // 100,00 - 48,50
+  });
+
+  it("prints 'Sem troco (valor exato)' for cash without changeFor", () => {
+    const exact: TicketOrder = { ...cashOrder, payment: { method: "CASH", amount: 48.5, status: "PAY_ON_DELIVERY" } };
+    const txt = render(exact);
+    expect(txt).toContain("Sem troco (valor exato)");
+    expect(txt).not.toContain("Troco para");
+  });
+
+  it("never prints troco lines for a non-cash payment (changeFor ignored)", () => {
+    const card: TicketOrder = { ...cashOrder, payment: { method: "CARD_MACHINE", amount: 48.5, status: "PAY_ON_DELIVERY", changeFor: 100 } };
+    const txt = render(card);
+    expect(txt).not.toContain("Troco para");
+    expect(txt).not.toContain("Sem troco");
+  });
+
+  it("troco lines never exceed the paper width", () => {
+    for (const line of render(cashOrder).split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
+  });
+});

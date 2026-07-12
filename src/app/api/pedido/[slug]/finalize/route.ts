@@ -93,6 +93,10 @@ const bodySchema = z.object({
   address:          addressSchema,
   paymentMode:      z.enum(["pay_now", "pay_on_delivery", "pay_on_pickup"]),
   paymentMethodSub: z.enum(["card_machine", "pix_in_person", "cash"]).nullable().optional(),
+  // Cash change: "troco para quanto?" — the bill/note the customer will pay with.
+  // Only meaningful for cash; ignored (stored null) for other methods or when it
+  // is not strictly greater than the order total.
+  changeFor:        z.number().positive().nullable().optional(),
   customerPhone:    z.string().optional(),
   customerId:       z.string().optional(), // pre-resolved customer ID from identify flow
   clientDeliveryFee: z.number().nonnegative().optional(),
@@ -191,7 +195,7 @@ export async function POST(
 
   const {
     cart, customerName, deliveryMethod, address,
-    paymentMode, paymentMethodSub, customerPhone, customerId: incomingCustomerId,
+    paymentMode, paymentMethodSub, changeFor, customerPhone, customerId: incomingCustomerId,
     clientDeliveryFee, couponCode, customerCouponId,
     trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
   } = parsed.data;
@@ -702,6 +706,15 @@ export async function POST(
   };
   const dbMethod = paymentMethodSub ? (methodMap[paymentMethodSub] ?? "CASH") : "CASH";
 
+  // Cash change ("troco para"): only stored for cash, and only when the note the
+  // customer will hand over is strictly greater than the total (otherwise there
+  // is no change to give). null everywhere else. The cashier ticket computes the
+  // change to bring as changeFor - total.
+  const changeForValue =
+    dbMethod === "CASH" && changeFor != null && changeFor > finalTotal
+      ? new Decimal(changeFor)
+      : null;
+
   await prisma.$transaction([
     prisma.payment.create({
       data: {
@@ -709,6 +722,7 @@ export async function POST(
         method:      dbMethod,
         status:      isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
         amount:      new Decimal(finalTotal),
+        changeFor:   changeForValue,
         paymentMode: isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
       },
     }),

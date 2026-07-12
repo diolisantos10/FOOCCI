@@ -351,6 +351,21 @@ type Stage =
 type PaymentMode = "pay_now" | "pay_on_delivery" | "pay_on_pickup";
 type PaymentMethodSub = "card_machine" | "pix_in_person" | "cash";
 
+/**
+ * Parse a Brazilian-typed money string ("100", "150,00", "R$ 1.200,50") into a
+ * number. Returns null when there is no parseable value. Used for the cash
+ * "troco para quanto?" field.
+ */
+function parseMoneyBR(raw: string): number | null {
+  const cleaned = (raw ?? "")
+    .replace(/[^\d.,]/g, "")   // keep digits, dot, comma
+    .replace(/\.(?=\d{3}(\D|$))/g, "") // drop thousands separators (1.200 → 1200)
+    .replace(",", ".");
+  if (!cleaned) return null;
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
 interface Address {
   cep: string;
   street: string;
@@ -2909,6 +2924,14 @@ export function PedidoClient({
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
 
+  // ── Troco (dinheiro) ──────────────────────────────────────────
+  // changeFor = a cédula que o cliente vai usar (ex.: R$100). null = valor exato.
+  // cashPanelOpen abre o passo "precisa de troco?" ao escolher Dinheiro; o valor
+  // digitado fica em cashChangeInput até ser confirmado.
+  const [changeFor,      setChangeFor]      = useState<number | null>(null);
+  const [cashPanelOpen,  setCashPanelOpen]  = useState(false);
+  const [cashChangeInput, setCashChangeInput] = useState("");
+
   // ── Coupon state ──────────────────────────────────────────────
   const [appliedCoupon, setAppliedCoupon] = useState<{
     promotionId: string; couponCode: string; discountAmount: number;
@@ -4111,15 +4134,22 @@ export function PedidoClient({
   //  defined below, after handleOnlinePaymentSelect / handlePaymentMethodSub.)
 
   const handlePaymentMethodSub = useCallback(
-    (method: PaymentMethodSub) => {
+    (method: PaymentMethodSub, changeForValue: number | null = null) => {
       setPaymentMethodSub(method);
+      // Troco só faz sentido no dinheiro; qualquer outro método zera.
+      setChangeFor(method === "cash" ? changeForValue : null);
+      setCashPanelOpen(false);
       setStage("REVIEW_ORDER");
       const labels: Record<PaymentMethodSub, string> = {
         card_machine:  "💳 Cartão na maquininha",
         pix_in_person: "📱 Pix",
         cash:          "💵 Dinheiro",
       };
-      pushUserMessage(labels[method]);
+      const echoed =
+        method === "cash" && changeForValue
+          ? `💵 Dinheiro (troco para R$ ${changeForValue.toFixed(2).replace(".", ",")})`
+          : labels[method];
+      pushUserMessage(echoed);
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
     },
     [pushUserMessage, pushAssistantMessage],
@@ -4146,6 +4176,7 @@ export function PedidoClient({
           address,
           paymentMode,
           paymentMethodSub,
+          changeFor: paymentMethodSub === "cash" ? changeFor : undefined,
           clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
             ? computeEffectiveFee(
                 cart.reduce((s, i) => s + i.price * i.qty, 0),
@@ -4199,7 +4230,7 @@ export function PedidoClient({
       setUi("idle");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id, appliedCoupon]);
+  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, changeFor, ga4Id, appliedCoupon]);
 
   const handleOnlinePaymentSelect = useCallback(() => {
     setStage("REVIEW_ORDER");
@@ -4249,6 +4280,9 @@ export function PedidoClient({
     try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
     setPaymentMode(null);
     setPaymentMethodSub(null);
+    setChangeFor(null);
+    setCashPanelOpen(false);
+    setCashChangeInput("");
     setStage("PAYMENT");
     pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
   }, [pushAssistantMessage]);
@@ -4735,23 +4769,100 @@ export function PedidoClient({
     }
 
     if (stage === "PAYMENT_METHOD") {
+      // Total (itens + frete conhecido - desconto) pra validar/calcular o troco.
+      // Espelha o cálculo do REVIEW_ORDER; frete "a combinar" fica de fora.
+      const pmSubtotal   = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const pmManualFee  = deliveryMethod === "delivery" && deliveryMode === "manual";
+      const pmFee        = deliveryMethod === "delivery" && !pmManualFee
+        ? computeEffectiveFee(pmSubtotal, resolvedDeliveryFee, freeDeliveryAbove)
+        : 0;
+      const pmDiscount   = appliedCoupon?.discountAmount ?? 0;
+      const paymentTotal = Math.max(0, Math.round((pmSubtotal + pmFee - pmDiscount) * 100) / 100);
+
+      const parsedChange = parseMoneyBR(cashChangeInput);
+      const changeOk     = parsedChange != null && parsedChange > paymentTotal;
+      const trocoPreview = changeOk ? parsedChange - paymentTotal : null;
+      const suggestedNote = Math.max(10, Math.ceil((paymentTotal + 10) / 10) * 10);
+
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
           <p className="mb-2 text-xs font-semibold text-gray-500">{paymentMode === "pay_on_delivery" ? "Como prefere pagar na entrega?" : "Como prefere pagar na retirada?"}</p>
           <div className="flex flex-col gap-2">
             {(["card_machine", "pix_in_person", "cash"] as PaymentMethodSub[]).map((m) => {
               const labels = { card_machine: "💳 Cartão na maquininha", pix_in_person: "📱 Pix na entrega", cash: "💵 Dinheiro" };
+              const isCashOpen = m === "cash" && cashPanelOpen;
               return (
-                <button key={m} onClick={() => handlePaymentMethodSub(m)} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100">
+                <button
+                  key={m}
+                  data-testid={m === "cash" ? "pay-cash-btn" : undefined}
+                  onClick={() => {
+                    // Dinheiro abre o passo de troco em vez de avançar direto.
+                    if (m === "cash") { setCashChangeInput(""); setCashPanelOpen(true); }
+                    else handlePaymentMethodSub(m);
+                  }}
+                  className={`rounded-xl border px-4 py-2.5 text-left text-sm font-semibold text-gray-700 ${isCashOpen ? "border-emerald-300 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}
+                >
                   {labels[m]}
                 </button>
               );
             })}
           </div>
+
+          {/* Troco (dinheiro): expande abaixo do botão, não empurra o fluxo. */}
+          {cashPanelOpen && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3" data-testid="cash-change-panel">
+              <p className="text-sm font-semibold text-gray-800">Vai precisar de troco?</p>
+              <p className="mt-0.5 text-xs text-gray-500">Pra quanto você vai pagar? Deixe em branco se tiver o valor certo.</p>
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <span className="text-sm font-semibold text-gray-400">R$</span>
+                <input
+                  inputMode="decimal"
+                  value={cashChangeInput}
+                  onChange={(e) => setCashChangeInput(e.target.value)}
+                  placeholder={`ex.: ${suggestedNote}`}
+                  data-testid="cash-change-input"
+                  className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-300"
+                  autoFocus
+                />
+              </div>
+              {parsedChange != null && !changeOk && (
+                <p className="mt-1.5 text-xs text-red-500">
+                  Precisa ser maior que o total (R$ {paymentTotal.toFixed(2).replace(".", ",")}).
+                </p>
+              )}
+              {trocoPreview != null && (
+                <p className="mt-1.5 text-xs font-semibold text-emerald-700">
+                  💰 Você recebe R$ {trocoPreview.toFixed(2).replace(".", ",")} de troco.
+                </p>
+              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePaymentMethodSub("cash", null)}
+                  data-testid="cash-no-change-btn"
+                  className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Não preciso de troco
+                </button>
+                <button
+                  type="button"
+                  disabled={!changeOk}
+                  onClick={() => { if (changeOk) handlePaymentMethodSub("cash", parsedChange); }}
+                  data-testid="cash-confirm-change-btn"
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+                  style={{ backgroundColor: "var(--brand-primary)" }}
+                >
+                  Confirmar troco
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-2 flex justify-center">
             <button
               type="button"
               onClick={() => {
+                setCashPanelOpen(false);
                 setPaymentMode(null);
                 setStage("PAYMENT");
               }}
@@ -4986,7 +5097,14 @@ export function PedidoClient({
                 {address.neighborhood ? `, ${address.neighborhood}` : ""}
               </p>
             )}
-            <p><span className="font-semibold text-gray-800">Pagamento:</span> {pmLabel}</p>
+            <p>
+              <span className="font-semibold text-gray-800">Pagamento:</span> {pmLabel}
+              {paymentMethodSub === "cash" && (
+                changeFor
+                  ? <span className="text-emerald-700"> • troco para R$ {changeFor.toFixed(2).replace(".", ",")}</span>
+                  : <span className="text-gray-400"> • sem troco</span>
+              )}
+            </p>
             <p>
               <span className="font-semibold text-gray-800">Previsão:</span>{" "}
               ⏱ {Math.max(5, etaLow)}–{etaHigh} min
@@ -5021,6 +5139,9 @@ export function PedidoClient({
               onClick={() => {
                 setPaymentMode(null);
                 setPaymentMethodSub(null);
+                setChangeFor(null);
+                setCashPanelOpen(false);
+                setCashChangeInput("");
                 setStage("PAYMENT");
               }}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"

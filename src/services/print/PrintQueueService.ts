@@ -130,7 +130,7 @@ export class PrintQueueService {
           }
         : null,
       payment: order.payment
-        ? { method: order.payment.method, amount: order.payment.amount, status: order.payment.status }
+        ? { method: order.payment.method, amount: order.payment.amount, status: order.payment.status, changeFor: order.payment.changeFor }
         : null,
     };
     const allItems: TicketItem[] = order.items.map((it) => ({

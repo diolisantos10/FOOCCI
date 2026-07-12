@@ -118,6 +118,8 @@ interface OrderTicketOrder {
     method: string;
     amount: unknown;
     status?: string | null;
+    /** Cash change: the note the customer will pay with ("troco para R$ 100"). */
+    changeFor?: unknown;
   } | null;
 }
 
@@ -424,6 +426,26 @@ function CashierContent({
             <span>{paymentLabel}</span>
             <span>{money(order.payment.amount)}</span>
           </div>
+          {/* Troco (dinheiro) — destaque pro caixa/entregador */}
+          {order.payment.method === "CASH" && (() => {
+            const changeFor = Number(order.payment!.changeFor ?? 0);
+            if (changeFor <= 0) {
+              return <div style={{ color: DIM }}>Sem troco (valor exato)</div>;
+            }
+            const troco = Math.max(0, changeFor - Number(order.total));
+            return (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Troco para</span>
+                  <span>{money(changeFor)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
+                  <span>» LEVAR TROCO</span>
+                  <span>{money(troco)}</span>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
