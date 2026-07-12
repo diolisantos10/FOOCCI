@@ -17,6 +17,7 @@ import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotion
 import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
 import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
+import { getPublicSiteUrl } from "@/lib/public-url";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,20 @@ export async function generateMetadata({
     where: { slug },
     select: { name: true },
   });
+  const title = restaurant ? `Cardápio — ${restaurant.name}` : "Cardápio";
+  // Customer-facing copy — overrides the root layout's internal Foocci tagline so
+  // the WhatsApp/social preview speaks to the diner, not to restaurant owners.
+  const description = restaurant
+    ? `Peça agora pelo cardápio digital do ${restaurant.name}. 🍽️`
+    : "Peça agora pelo cardápio digital. 🍽️";
+  // metadataBase lets Next resolve the opengraph-image (wide preview banner) to an
+  // absolute URL so WhatsApp uses our compact card instead of scraping the big logo.
   return {
-    title: restaurant ? `Cardápio — ${restaurant.name}` : "Cardápio",
+    metadataBase: new URL(getPublicSiteUrl()),
+    title,
+    description,
+    openGraph: { title, description, type: "website" },
+    twitter:   { card: "summary_large_image", title, description },
   };
 }
 
