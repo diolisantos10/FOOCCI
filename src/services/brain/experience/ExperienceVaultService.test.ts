@@ -47,13 +47,14 @@ describe("ExperienceVaultService — o cofre de experiências", () => {
     expect(Array.isArray(data.tags)).toBe(true);
   });
 
-  it("deriva o agente pelo canal: WEB_AGENT → waiter", async () => {
+  it("deriva o agente pelo canal: WEB_AGENT e QR_AGENT → waiter", async () => {
     db.message.findMany.mockResolvedValue([
       agentMsg({ metadata: {}, conversation: { restaurantId: "r1", channel: "WEB_AGENT" } }),
+      agentMsg({ metadata: {}, conversation: { restaurantId: "r1", channel: "QR_AGENT" } }),
     ]);
     const r = await ingestExperiences({});
     expect(db.restaurantExperience.create.mock.calls[0][0].data.agentId).toBe("waiter");
-    expect(r.byAgent.waiter).toBe(1);
+    expect(r.byAgent.waiter).toBe(2);
   });
 
   it("WHATSAPP sem metadata do brain → receptionist", async () => {

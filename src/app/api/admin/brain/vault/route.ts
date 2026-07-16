@@ -77,9 +77,15 @@ export async function POST(req: NextRequest) {
   if (!checkAdminRequest(req)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
-  const body = (await req.json().catch(() => ({}))) as { sinceDays?: number; maxRecords?: number };
+  const body = (await req.json().catch(() => ({}))) as { sinceDays?: number; maxRecords?: number; reset?: boolean };
+  // reset: limpa o cofre antes de re-ingerir (uso só na fundação / correção de
+  // rótulo, enquanto não há dependência — evita duplicar por mudança de mapeamento).
+  let deleted = 0;
+  if (body.reset === true) {
+    deleted = (await prisma.restaurantExperience.deleteMany({}).catch(() => ({ count: 0 }))).count;
+  }
   const sinceDays = Number.isFinite(body.sinceDays) ? Math.max(1, Math.min(Number(body.sinceDays), 90)) : 7;
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
   const result = await ingestExperiences({ since, maxRecords: body.maxRecords });
-  return NextResponse.json({ ok: true, sinceDays, result });
+  return NextResponse.json({ ok: true, sinceDays, deleted, result });
 }

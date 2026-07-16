@@ -23,8 +23,8 @@ const MAX_TEXT = 400;
 /** Deriva o agente a partir do canal da conversa + metadata da mensagem. */
 function agentFor(channel: string, metaSource?: string): string {
   if (metaSource === "WHATSAPP_BRAIN") return "whatsapp";
-  if (channel === "WEB_AGENT") return "waiter";
-  if (channel === "INSTAGRAM_DIRECT") return "instagram";
+  if (channel === "WEB_AGENT" || channel === "QR_AGENT") return "waiter"; // /pedido (web ou QR na mesa)
+  if (channel === "INSTAGRAM_DIRECT" || channel === "INSTAGRAM_COMMENT") return "instagram";
   if (channel === "WHATSAPP") return "receptionist";
   return "unknown";
 }
