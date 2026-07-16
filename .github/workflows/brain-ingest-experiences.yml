@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Brain — Cofre de Experiências (ingestão diária)
+#
+# Lê as conversas REAIS do dia anterior (todos os agentes) e grava a versão
+# sanitizada (sem PII) no cofre restaurant_experiences — o insumo que otimiza
+# todas as IAs. READ-ONLY sobre as conversas · idempotente · nunca envia nada.
+#
+# Diário às 06:40 UTC (≈ 03:40 BRT) + dispatch manual. Usa CRON_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Brain Ingest Experiences
+
+on:
+  schedule:
+    - cron: "40 6 * * *" # 06:40 UTC ≈ 03:40 BRT — madrugada, após o shadow-replay
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    name: "Cofre de Experiências (dia anterior)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "ingest=${BASE_URL}/api/cron/brain/ingest-experiences" >> "$GITHUB_OUTPUT"
+
+      - name: "Ingest yesterday's conversations into the vault"
+        env:
+          URL: ${{ steps.params.outputs.ingest }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ POST $URL (janela = ontem, calculada pelo servidor)"
+          set +e
+          curl --connect-timeout 20 --max-time 300 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/ingest.json -w "%{http_code}" > /tmp/icode.txt
+          set -e
+          HTTP=$(cat /tmp/icode.txt)
+          OK=$(jq -r '.ok' /tmp/ingest.json 2>/dev/null)
+          echo "← HTTP      : $HTTP"
+          echo "← ok        : $OK"
+          echo "← scanned   : $(jq -r '.result.scanned // 0' /tmp/ingest.json 2>/dev/null)"
+          echo "← created   : $(jq -r '.result.created // 0' /tmp/ingest.json 2>/dev/null)"
+          echo "← skipped   : $(jq -r '.result.skipped // 0' /tmp/ingest.json 2>/dev/null)"
+          echo "← byAgent   : $(jq -rc '.result.byAgent // {}' /tmp/ingest.json 2>/dev/null)"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::ingest non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$OK" != "true" ]]; then echo "::error::ingest ok=$OK"; exit 1; fi
+          echo "✅ Cofre alimentado com as conversas do dia anterior (sanitizado)."

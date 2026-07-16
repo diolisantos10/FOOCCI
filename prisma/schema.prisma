@@ -4170,3 +4170,32 @@ model BrainShadowLog {
   @@index([restaurantId, createdAt])
   @@map("brain_shadow_logs")
 }
+
+/// Cofre de Experiências — o arquivo PROTEGIDO (sem PII) de interações reais de
+/// cliente, por restaurante e por AGENTE. É o insumo que otimiza TODAS as IAs:
+/// padrões de pergunta, o que os clientes mais querem, onde o agente escala.
+/// Ingerido diariamente das conversas reais (tudo sanitizado). Admin-only. Cada
+/// restaurante acumula sua própria experiência — a IA fica mais "veterana" nele.
+model RestaurantExperience {
+  id             String  @id @default(cuid())
+  restaurantId   String
+  agentId        String // whatsapp | waiter | crm | ...
+  channel        String  @default("WHATSAPP")
+  conversationId String?
+
+  intent       String? // intenção classificada (DÚVIDA, PEDIDO, SOCIAL, ...)
+  outcome      String // REPLIED | ESCALATED | MENU | FALLBACK
+  customerText String // SANITIZADO — sem PII
+  agentText    String? // SANITIZADO — sem PII
+  confidence   Float?
+  coherence    String? // PASS | NEEDS_REVIEW | ...
+  tags         String[] // padrões/palavras-chave derivadas
+
+  sourceAt  DateTime // quando a interação real aconteceu
+  createdAt DateTime @default(now())
+
+  @@unique([restaurantId, agentId, conversationId, sourceAt], name: "experience_dedup")
+  @@index([restaurantId, agentId, sourceAt])
+  @@index([restaurantId, intent])
+  @@map("restaurant_experiences")
+}
