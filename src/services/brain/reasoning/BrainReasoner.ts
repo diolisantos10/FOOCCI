@@ -24,6 +24,7 @@ import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
 import { resolveKnowledgeAdapter } from "../knowledge/KnowledgeAdapterRegistry";
 import type { BusinessKnowledgeSnapshot } from "../knowledge/BusinessKnowledgeContract";
 import { listApprovedLearningsForBrain } from "../training/BrainTrainingContract";
+import { getExperienceBrief } from "../experience/ExperienceBriefService";
 import { verifyAgainstSnapshot } from "./SnapshotCoherenceVerifier";
 import type { BrainReasoningRequest, BrainReasoningResult, BrainCoherenceCheck } from "../core/BrainTypes";
 
@@ -162,8 +163,12 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
 
   try {
     const learningsBlock = await approvedLearningsBlock(req.agentId);
+    // Consumo do Cofre de Experiências: contexto dos padrões reais do restaurante
+    // (o que os clientes mais pedem) — cacheado, e SÓ para antecipar, nunca verdade.
+    const experienceBrief = await getExperienceBrief(req.businessId, req.agentId).catch(() => "");
     const systemPrompt =
-      `${buildScopePrompt(profile)}\n\nBASE DE CONHECIMENTO (verdade):\n${knowledgeBlock(snapshot)}${learningsBlock}`;
+      `${buildScopePrompt(profile)}\n\nBASE DE CONHECIMENTO (verdade):\n${knowledgeBlock(snapshot)}${learningsBlock}` +
+      (experienceBrief ? `\n\n${experienceBrief}` : "");
     const historyBlock = req.sanitizedHistory?.length
       ? `HISTÓRICO RECENTE (sanitizado, do mais antigo ao mais novo):\n${req.sanitizedHistory
           .map((t) => `${t.role === "CUSTOMER" ? "Cliente" : "Agente"}: ${t.content}`)
