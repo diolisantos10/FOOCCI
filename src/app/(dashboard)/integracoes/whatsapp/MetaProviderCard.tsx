@@ -67,6 +67,7 @@ export function MetaProviderCard() {
   const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [copied, setCopied]   = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   // Support-only manual connect (gate ?suporte=1). Lets the Foocci team paste
   // credentials obtained via Meta's "Integrar com API" path before the 1-click
@@ -194,6 +195,24 @@ export function MetaProviderCard() {
     finally { setBusy(null); }
   }
 
+  // Remove the Meta connection entirely so the owner can re-run Embedded Signup and
+  // pick the correct number (e.g. Meta's +1 test number was connected by mistake).
+  async function disconnectMeta() {
+    setBusy("disconnect");
+    try {
+      const res = await fetch("/api/integracoes/whatsapp/meta/disconnect", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      });
+      const j = await res.json().catch(() => null);
+      if (res.ok) {
+        flash(true, "WhatsApp da Meta desconectado. Toque em “Conectar” para escolher o número certo.");
+        setConfirmDisconnect(false);
+        load(); loadDiag();
+      } else flash(false, j?.error ?? "Falha ao desconectar.");
+    } catch { flash(false, "Sem conexão."); }
+    finally { setBusy(null); }
+  }
+
   // Safe inbound simulation — runs the real normalizer, no message sent, no persistence.
   async function simulate() {
     setBusy("simulate");
@@ -306,6 +325,40 @@ export function MetaProviderCard() {
 
               {/* Message templates — required for CRM marketing via Meta. */}
               <MetaTemplatesPanel />
+
+              {/* Reconfigure / disconnect — lets the owner fix a wrong or test number
+                  (Meta auto-provisions a +1 test number for new apps). "Reconfigurar"
+                  re-runs the Meta login so a different number can be picked; the new
+                  choice overwrites the old one. "Desconectar" removes the connection. */}
+              <div className="mt-3 rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2.5">
+                <p className="text-[11px] text-muted">
+                  Número errado? Se aparecer um número de teste (ex.: começando com +1), reconfigure
+                  para fazer login na Meta de novo e escolher o número do seu restaurante.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button type="button" disabled={busy === "connect"} onClick={connect}
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                    {busy === "connect" ? "Abrindo Meta…" : "Reconfigurar / trocar número"}
+                  </button>
+                  {!confirmDisconnect ? (
+                    <button type="button" disabled={!!busy} onClick={() => setConfirmDisconnect(true)}
+                      className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-paper disabled:opacity-50">
+                      Desconectar
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      <button type="button" disabled={busy === "disconnect"} onClick={disconnectMeta}
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                        {busy === "disconnect" ? "Desconectando…" : "Confirmar desconexão"}
+                      </button>
+                      <button type="button" disabled={!!busy} onClick={() => setConfirmDisconnect(false)}
+                        className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-paper disabled:opacity-50">
+                        Cancelar
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </div>
             </>
           ) : (
             <>

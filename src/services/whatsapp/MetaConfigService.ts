@@ -134,6 +134,17 @@ export const MetaConfigService = {
       data:  { connectionStatus: "DISCONNECTED" },
     });
   },
+
+  /**
+   * Fully remove a restaurant's Meta config so the owner can start a clean
+   * Embedded Signup from scratch (e.g. connected the wrong/test number and needs
+   * to pick the real one). Deleting the row — rather than just flagging it
+   * DISCONNECTED — also frees the unique phoneNumberId, so the same number can be
+   * reconnected later without hitting the "já conectado em outra conta" guard.
+   */
+  async remove(restaurantId: string): Promise<void> {
+    await prisma.metaWhatsAppConfig.deleteMany({ where: { restaurantId } });
+  },
 };
 
 function resolve(cfg: {
