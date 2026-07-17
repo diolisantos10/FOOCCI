@@ -37,8 +37,9 @@
 
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
@@ -396,17 +397,8 @@ export class OrderDraftRecoverySendService {
 
       // ── Send ──────────────────────────────────────────────────────────────
       try {
-        const configResult = await EvolutionConfigService.getSnapshot(draft.restaurantId);
-        if (!configResult.ok) {
-          console.info(`[OrderDraftRecoverySendService] skipped no evolution config`, {
-            draftId:      draft.id,
-            restaurantId: draft.restaurantId,
-            slug:         draft.restaurant.slug,
-          });
-          skippedNoConfig++;
-          continue;
-        }
-        const config = configResult.data;
+        // Provider config is validated inside the active provider at send time
+        // (Evolution snapshot or Meta Cloud credentials — whichever is ACTIVE).
 
         // Generate short recovery code and persist it BEFORE sending so the
         // URL resolves in the DB the moment the customer taps the link.
@@ -441,10 +433,10 @@ export class OrderDraftRecoverySendService {
           customerId:   customer.id,
           restaurantId: draft.restaurantId,
           phoneMasked:  maskPhone(customer.phone),
-          instanceName: config.instanceName,
         });
 
-        await EvolutionClient.sendTextMessage(config, toPhone, message);
+        const sendRes = await sendWhatsAppText(draft.restaurantId, toPhone, message);
+        if (!sendRes.ok) throw new Error(sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
 
         // Stamp draft so it never fires again
         const now = new Date();

@@ -31,7 +31,7 @@
 import { prisma } from "@/lib/prisma";
 import { ConversationStatus } from "@prisma/client";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import {
   ReviewRequestService,
   type ReviewRequestDecision,
@@ -314,9 +314,14 @@ export class ReviewRequestSendService {
       };
     }
 
-    // 5. Load Evolution config.
+    // 5. Load Evolution config — only required when Evolution is the ACTIVE provider.
+    // A Meta-official restaurant sends via stored Cloud API credentials instead.
+    const activeProviderName = await prisma.restaurant
+      .findUnique({ where: { id: input.restaurantId }, select: { whatsappProvider: true } })
+      .then((r) => r?.whatsappProvider ?? "EVOLUTION")
+      .catch(() => "EVOLUTION");
     const cfgResult = await EvolutionConfigService.getSnapshot(input.restaurantId);
-    if (!cfgResult.ok) {
+    if (!cfgResult.ok && activeProviderName !== "META_CLOUD_API") {
       const row = buildReviewActionLog({
         status: "skipped",
         restaurantId: input.restaurantId,
@@ -342,7 +347,8 @@ export class ReviewRequestSendService {
 
     // 6. Send + log. On Evolution failure, log a FAILED row (retry-safe).
     try {
-      const evoResult = await EvolutionClient.sendTextMessage(cfgResult.data, phone, plan.message);
+      const sendRes = await sendWhatsAppText(input.restaurantId, phone, plan.message);
+      if (!sendRes.ok) throw new Error(sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
 
       const convId = await findOrCreateReviewConversation(
         input.restaurantId,
@@ -370,8 +376,11 @@ export class ReviewRequestSendService {
             content: plan.message,
             type: "TEXT",
             sentAt: now,
-            externalMessageId: evoResult.key.id,
             externalStatus: "sent",
+            provider: sendRes.provider,
+            ...(sendRes.providerMessageId
+              ? { externalMessageId: sendRes.providerMessageId, providerMessageId: sendRes.providerMessageId }
+              : {}),
             metadata: {
               source: "WHATSAPP",
               reviewRequest: true,

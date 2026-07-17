@@ -21,7 +21,7 @@
 import { prisma } from "@/lib/prisma";
 import { openai } from "@/lib/openai";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { BrandConfigService } from "./BrandConfigService";
 import { PromptBuilderService } from "./PromptBuilderService";
 import { UpsellEngine } from "./UpsellEngine";
@@ -549,6 +549,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
       id: true,
       restaurantId: true,
       customerId: true,
+      customerPhone: true,
       status: true,
       customer: { select: { phone: true } },
     },
@@ -588,7 +589,13 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     EvolutionConfigService.getSnapshot(restaurantId),
   ]);
 
-  if (!configResult.ok) {
+  // Only Evolution needs a local config; a Meta-official restaurant sends via the
+  // stored Cloud API credentials (activeProvider routes it).
+  const activeProviderName = await prisma.restaurant
+    .findUnique({ where: { id: restaurantId }, select: { whatsappProvider: true } })
+    .then((r) => r?.whatsappProvider ?? "EVOLUTION")
+    .catch(() => "EVOLUTION");
+  if (!configResult.ok && activeProviderName !== "META_CLOUD_API") {
     console.warn(
       `[AIOrderService] No Evolution config for restaurant ${restaurantId} — cannot send reply`
     );
@@ -598,9 +605,10 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     });
     return;
   }
-
-  const evolutionConfig = configResult.data;
-  const toPhone = conversation.customer!.phone!.replace(/^\+/, ""); // WhatsApp customers always have a phone
+  // Reply target: prefer the conversation's channel phone (from the WhatsApp webhook,
+  // always deliverable). Customer.phone is CRM data and can be malformed (seen live:
+  // 12-digit local number without country code, rejected by Meta as INVALID_PHONE).
+  const toPhone = ((conversation.customerPhone ?? "").trim() || conversation.customer!.phone! ).replace(/^\+/, "");
 
   // 4. Find current OPEN draft
   const existingDraft = await prisma.orderDraft.findFirst({
@@ -914,7 +922,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
       `Vou transferir você para um de nossos atendentes. ` +
       `Em breve alguém irá continuar o atendimento. 🙏`;
 
-    await sendWhatsAppReply(evolutionConfig, toPhone, handoffMsg, conversationId);
+    await sendWhatsAppReply(restaurantId, toPhone, handoffMsg, conversationId);
     await logTurn({ restaurantId, conversationId, model: brandConfig.aiModel,
       promptTokens, completionTokens, latencyMs, toolCallsMade,
       turnNumber: 1, success: true, errorMessage: `handoff: ${handoffReason}` });
@@ -923,7 +931,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 
   // 9. Send reply
   if (finalResponse) {
-    await sendWhatsAppReply(evolutionConfig, toPhone, finalResponse, conversationId);
+    await sendWhatsAppReply(restaurantId, toPhone, finalResponse, conversationId);
   }
 
   // 10. Restore to BOT status (it was set to BOT at start, keep it unless it's now HUMAN)
@@ -952,13 +960,18 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 // ─── helpers ─────────────────────────────────────────────────
 
 async function sendWhatsAppReply(
-  config: { instanceName: string; baseUrl: string; apiKey: string },
+  restaurantId: string,
   toPhone: string,
   text: string,
   conversationId: string
 ): Promise<void> {
   try {
-    const result = await EvolutionClient.sendTextMessage(config, toPhone, text);
+    // Route through the restaurant's ACTIVE provider (Meta official or Evolution).
+    const result = await sendWhatsAppText(restaurantId, toPhone, text);
+    if (!result.ok) {
+      console.error("[AIOrderService] send failed:", result.errorCode, result.error);
+      return;
+    }
     const now = new Date();
 
     await prisma.$transaction([
@@ -970,8 +983,11 @@ async function sendWhatsAppReply(
           content: text,
           type: "TEXT",
           sentAt: now,
-          externalMessageId: result.key.id,
           externalStatus: "sent",
+          provider: result.provider,
+          ...(result.providerMessageId
+            ? { externalMessageId: result.providerMessageId, providerMessageId: result.providerMessageId }
+            : {}),
         },
       }),
       prisma.conversation.update({
@@ -998,12 +1014,9 @@ async function safeHandoff(conversationId: string, message: string): Promise<voi
     });
 
     if (conv) {
-      const phone = (conv.customer?.phone ?? conv.customerPhone ?? "").trim().replace(/^\+/, "");
+      const phone = ((conv.customerPhone ?? "").trim() || (conv.customer?.phone ?? "").trim()).replace(/^\+/, "");
       if (phone) {
-        const cfgResult = await EvolutionConfigService.getSnapshot(conv.restaurantId);
-        if (cfgResult.ok) {
-          await sendWhatsAppReply(cfgResult.data, phone, message, conversationId);
-        }
+        await sendWhatsAppReply(conv.restaurantId, phone, message, conversationId);
       }
     }
   } catch (err) {

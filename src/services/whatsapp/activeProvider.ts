@@ -20,10 +20,19 @@ import { MetaWhatsAppCloudProvider } from "./providers/MetaWhatsAppCloudProvider
 
 /** Resolve the provider selected for this restaurant (defaults to Evolution). */
 export async function activeWhatsAppProvider(restaurantId: string): Promise<WhatsAppProvider> {
-  const r = await prisma.restaurant
-    .findUnique({ where: { id: restaurantId }, select: { whatsappProvider: true } })
-    .catch(() => null);
-  return r?.whatsappProvider === "META_CLOUD_API"
+  let providerName: string | null = null;
+  try {
+    const r = await prisma.restaurant.findUnique({
+      where:  { id: restaurantId },
+      select: { whatsappProvider: true },
+    });
+    providerName = r?.whatsappProvider ?? null;
+  } catch {
+    // Lookup failure → fall back to Evolution (the historical default) so a
+    // transient DB error never turns into a completely un-routable send.
+    providerName = null;
+  }
+  return providerName === "META_CLOUD_API"
     ? new MetaWhatsAppCloudProvider()
     : new EvolutionWhatsAppProvider();
 }
