@@ -222,6 +222,15 @@ export function GlobalAlertEngine() {
     // relayed cross-tab via the order-resolved bridge message.
     const resolvedOrderIds = new Set<string>();
 
+    // True only while the Central de Conversas (AtendimentoClient) is mounted in
+    // THIS tab (set by the LOCAL attach/detach events below — NOT the cross-tab
+    // bridge). On that tab the ORDER alarm is muted: the messages screen only
+    // plays its own human-attention sound. The order alarm still rings on every
+    // OTHER screen (Pedidos, Início, CRM…) and the ticket still auto-prints, so
+    // an order is never missed — it just doesn't blast the order sound over the
+    // operator who is actively answering a customer.
+    let atendimentoTabOpen = false;
+
     // Only a tab that currently CAN RING (visible, or the fallback leader when no
     // tab is visible) ever receives non-empty ids, so play() never fires from a
     // dormant background tab.
@@ -231,6 +240,10 @@ export function GlobalAlertEngine() {
 
     // ── ORDER poll — recent orders needing attention (see order-alert.ts) ────
     const pollOrders = () => {
+      // The Central de Conversas tab never plays the ORDER sound — it would
+      // blast over the operator answering a customer. Orders still ring on every
+      // other screen and still print. (Muted here, not fetched.)
+      if (atendimentoTabOpen) { safeOrderSync([]); return; }
       if (!soundEnabledRef.current || !newOrderSoundEnabledRef.current) {
         safeOrderSync([]);
         return;
@@ -340,10 +353,18 @@ export function GlobalAlertEngine() {
     const visibilityTimer = setInterval(announceVisible, VISIBILITY_PING_MS);
 
     // ── Attach/detach bridge with AtendimentoClient/OrdersClient (LOCAL tab) ──
-    const onAttach = () => { handoffDrivenRef.current = true; bridge?.postMessage({ type: "attach" }); };
+    // onAttach/onDetach fire on THIS tab's own AtendimentoClient mount/unmount,
+    // so they also flip the order-mute flag for this tab specifically.
+    const onAttach = () => {
+      handoffDrivenRef.current = true;
+      atendimentoTabOpen = true;
+      orderController.sync([]); // stop any order sound already going on this tab
+      bridge?.postMessage({ type: "attach" });
+    };
     const onDetach = () => {
       handoffDrivenRef.current = false;
-      pollHuman(); pollOverdue();
+      atendimentoTabOpen = false;
+      pollHuman(); pollOverdue(); pollOrders(); // leaving atendimento → orders may ring here again
       bridge?.postMessage({ type: "detach" });
     };
     const onRingIds = (e: Event) => {

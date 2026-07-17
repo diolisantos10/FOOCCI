@@ -76,4 +76,12 @@ describe("alarm contract — sound is bounded (sound window ≠ visual window)",
   it("the engine remembers handled orders so accepting one never re-rings it", () => {
     expect(engine).toContain("resolvedOrderIds");
   });
+
+  it("the Central de Conversas tab mutes the ORDER sound (still rings elsewhere)", () => {
+    // The order alarm must not blast over the operator answering a customer.
+    expect(engine).toContain("atendimentoTabOpen");
+    // …driven by THIS tab's own AtendimentoClient mount, which fires the event.
+    const atendimento = read("src/app/(dashboard)/atendimento/AtendimentoClient.tsx");
+    expect(atendimento).toContain('"foocci:handoff-attach"');
+  });
 });
