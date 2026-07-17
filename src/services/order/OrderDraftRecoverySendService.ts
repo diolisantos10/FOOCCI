@@ -39,6 +39,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
@@ -66,9 +67,9 @@ export interface RecoverySendResult {
   skippedPendingPayment:      number;
   /** Combined: order found via Rule 7 + AWAITING_PAYMENT via Rule 8. */
   skippedOrderOrPaymentExists: number;
-  skippedNoConfig:            number; // restaurant has no Evolution/WhatsApp integration configured
+  skippedNoConfig:            number; // restaurant has no working WhatsApp integration (Meta or Evolution)
   skippedRestaurantClosed:    number; // restaurant is closed — recovery deferred, attempts NOT incremented
-  failed:                     number; // Evolution API was called but returned an error
+  failed:                     number; // the active provider (Meta or Evolution) was called but returned an error
   dryRun:                     boolean;
   inactivityMinutes:          number;
   durationMs:                 number;
@@ -316,12 +317,44 @@ export class OrderDraftRecoverySendService {
       return open;
     };
 
+    // Config gate, provider-aware and cached per tick: a restaurant with no working
+    // WhatsApp integration must be SKIPPED (skippedNoConfig), not attempted. Without
+    // this gate the send fails every cron minute (draft never gets stamped) and the
+    // error log fills with EVOLUTION_NOT_CONFIGURED for restaurants that simply
+    // never connected WhatsApp.
+    const sendableCache = new Map<string, boolean>();
+    const canSendWhatsApp = async (restaurantId: string): Promise<boolean> => {
+      if (sendableCache.has(restaurantId)) return sendableCache.get(restaurantId)!;
+      let ok = false;
+      try {
+        const r = await prisma.restaurant.findUnique({
+          where:  { id: restaurantId },
+          select: { whatsappProvider: true },
+        });
+        if (r?.whatsappProvider === "META_CLOUD_API") {
+          ok = (await MetaConfigService.getResolved(restaurantId)) != null;
+        } else {
+          ok = (await EvolutionConfigService.getSnapshot(restaurantId)).ok;
+        }
+      } catch {
+        ok = false;
+      }
+      sendableCache.set(restaurantId, ok);
+      return ok;
+    };
+
     for (const draft of candidates) {
       const customer = draft.customer;
       const key      = `${draft.restaurantId}:${draft.customerId}`;
 
       // Cart recovery turned off for this restaurant (ready-made campaign off).
       if (cartDisabled.has(draft.restaurantId)) {
+        continue;
+      }
+
+      // No working WhatsApp integration → skip without attempting (see gate above).
+      if (!(await canSendWhatsApp(draft.restaurantId))) {
+        skippedNoConfig++;
         continue;
       }
 

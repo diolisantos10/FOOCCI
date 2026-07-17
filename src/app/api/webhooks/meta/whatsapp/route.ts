@@ -32,9 +32,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const raw = await req.text();
 
-  // TEMP DIAG [meta-wh]: confirm inbound POSTs arrive + whether the signature verifies.
-  console.log(`[meta-wh] POST bytes=${raw.length} sig=${(req.headers.get("x-hub-signature-256") ?? "none").slice(0, 20)}`);
-
   // Signature check — FAIL CLOSED. A missing app secret must reject (not accept
   // unsigned, spoofable payloads that could inject inbound messages into any tenant).
   const secret = metaAppSecret();
@@ -43,7 +40,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "webhook not configured" }, { status: 401 });
   }
   if (!validateMetaSignature(raw, req.headers.get("x-hub-signature-256"), secret)) {
-    console.warn("[meta-wh] SIGNATURE INVALID — rejecting inbound (bot never sees it)");
+    console.warn("[webhook/meta/whatsapp] invalid signature — rejected");
     return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
   }
 
@@ -65,7 +62,6 @@ const ACTIVE_STATUSES: ConversationStatus[] = [
 
 async function processMetaWebhook(payload: unknown): Promise<void> {
   const norm = normalizeMetaWebhook(payload);
-  console.log(`[meta-wh] parsed messages=${norm.messages.length} statuses=${norm.statuses.length}`);
 
   // Delivery statuses → update the matching OUTBOUND message.
   for (const s of norm.statuses) {
@@ -87,8 +83,7 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
   for (const m of norm.messages) {
     if (!m.phoneNumberId) continue;
     const cfg = await MetaConfigService.getByPhoneNumberId(m.phoneNumberId);
-    if (!cfg) { console.warn(`[meta-wh] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched`); continue; }
-    console.log(`[meta-wh] inbound matched restaurant=${cfg.restaurantId} type=${m.type} from=${m.fromPhone?.slice(0, 6)}… brainEnabled=${isWhatsAppBrainEnabled()}`);
+    if (!cfg) { console.warn(`[webhook/meta/whatsapp] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched`); continue; }
 
     // Dedupe by wamid — never write the same message twice.
     const existing = await prisma.message.findUnique({
