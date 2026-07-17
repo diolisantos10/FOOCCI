@@ -28,6 +28,7 @@ import { prisma } from "@/lib/prisma";
 import { openai } from "@/lib/openai";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 import { ConversationStatus } from "@prisma/client";
 import { detectBuildCommand } from "@/services/buildos/BuildCommandRouter";
 import type { MenuOption } from "@/validators/whatsapp-agent";
@@ -853,7 +854,7 @@ async function run(conversationId: string): Promise<void> {
   const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, lastOutbound, menuCatalogRaw] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
-      select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
+      select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true, whatsappProvider: true },
     }),
     prisma.storeProfile.findUnique({
       where:  { restaurantId },
@@ -903,7 +904,15 @@ async function run(conversationId: string): Promise<void> {
     }).catch(() => [] as { name: string; items: { name: string }[] }[]),
   ]);
 
-  if (!evolutionResult.ok) {
+  // Which channel does the AI reply THROUGH? Follows the restaurant's active provider
+  // so a number migrated to Meta official replies via Meta (not the dead Evolution).
+  const activeProvider: "EVOLUTION" | "META_CLOUD_API" =
+    restaurant?.whatsappProvider === "META_CLOUD_API" ? "META_CLOUD_API" : "EVOLUTION";
+  const evoConfig = evolutionResult.ok ? evolutionResult.data : null;
+
+  // Only Evolution needs a local config to send; Meta sends via the stored Cloud API
+  // credentials. Bail early only when the active channel has nothing to send with.
+  if (activeProvider === "EVOLUTION" && !evoConfig) {
     console.warn(`[WhatsAppReceptionistService] No active Evolution config for restaurant ${restaurantId}`);
     return;
   }
@@ -1088,7 +1097,7 @@ async function run(conversationId: string): Promise<void> {
 
   // Handle media messages — we cannot process images, audio, or documents.
   if (lastMessage.type !== "TEXT") {
-    await sendReply(evolutionResult.data, toPhone, MEDIA_MESSAGE_REPLY, conversationId);
+    await sendReply(evoConfig, toPhone, MEDIA_MESSAGE_REPLY, conversationId, restaurantId, activeProvider);
     return;
   }
 
@@ -1113,7 +1122,7 @@ async function run(conversationId: string): Promise<void> {
     // Use full (unfiltered) options if effectiveMenuOptions is empty — the
     // "0. menu" shortcut must always render something, even when closed.
     const backMenuOptions = effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
-    await sendReply(evolutionResult.data, toPhone, renderMainMenu(ctx, backMenuOptions), conversationId);
+    await sendReply(evoConfig, toPhone, renderMainMenu(ctx, backMenuOptions), conversationId, restaurantId, activeProvider);
     return;
   }
 
@@ -1518,22 +1527,41 @@ async function run(conversationId: string): Promise<void> {
       "intent-or-gpt",
   });
 
-  await sendReply(evolutionResult.data, toPhone, replyText, conversationId, replyMetadata);
+  await sendReply(evoConfig, toPhone, replyText, conversationId, restaurantId, activeProvider, replyMetadata);
 }
 
 // ─── outbound helper ──────────────────────────────────────────
 
 async function sendReply(
-  config: { instanceName: string; baseUrl: string; apiKey: string },
+  config: { instanceName: string; baseUrl: string; apiKey: string } | null,
   toPhone: string,
   text: string,
   conversationId: string,
+  restaurantId: string,
+  provider: "EVOLUTION" | "META_CLOUD_API",
   metadata?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    const result = await EvolutionClient.sendTextMessage(config, toPhone, text);
-    const now = new Date();
+    let externalMessageId: string | null = null;
 
+    if (provider === "META_CLOUD_API") {
+      // Reply through the official Meta Cloud API (uses stored, encrypted credentials).
+      const res = await new MetaWhatsAppCloudProvider().sendText({ restaurantId, to: toPhone, text });
+      if (!res.ok) {
+        console.error("[WhatsAppReceptionistService] Meta send failed:", res.errorCode, res.error);
+        return;
+      }
+      externalMessageId = res.providerMessageId;
+    } else {
+      if (!config) {
+        console.warn("[WhatsAppReceptionistService] No Evolution config to send reply");
+        return;
+      }
+      const result = await EvolutionClient.sendTextMessage(config, toPhone, text);
+      externalMessageId = result.key.id;
+    }
+
+    const now = new Date();
     await prisma.$transaction([
       prisma.message.create({
         data: {
@@ -1543,8 +1571,9 @@ async function sendReply(
           content:           text,
           type:              "TEXT",
           sentAt:            now,
-          externalMessageId: result.key.id,
           externalStatus:    "sent",
+          provider,
+          ...(externalMessageId ? { externalMessageId, providerMessageId: externalMessageId } : {}),
           ...(metadata ? { metadata: metadata as object } : {}),
         },
       }),
