@@ -36,6 +36,7 @@ import {
   type CustomerIntelligenceSnapshot,
 } from "@/services/crm/CustomerIntelligenceSnapshotService";
 import { buildCrmProfileDirective } from "@/services/crm/CrmAgentProfile";
+import { getExperienceBrief } from "@/services/brain/experience/ExperienceBriefService";
 
 // ─── Public types ──────────────────────────────────────────────────────────────
 
@@ -459,9 +460,10 @@ export function composePreview(args: {
 
 // ─── LLM prompt builders ─────────────────────────────────────────────────────────
 
-function buildSystemPrompt(tone: ToneSettings, couponCode: string | null): string {
+function buildSystemPrompt(tone: ToneSettings, couponCode: string | null, experienceBrief?: string): string {
   return [
     buildCrmProfileDirective(),
+    experienceBrief ? `\n${experienceBrief}` : "",
     "",
     "━━━ TAREFA ━━━",
     "Gere variações curtas de mensagem de WhatsApp para relacionamento (NÃO é envio — é rascunho para aprovação humana).",
@@ -585,9 +587,12 @@ export class MessageVariationService {
     if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "not-configured") {
       try {
         const selection = await selectEngineRouted("crm", { taskProfile: "GENERATE" });
+        // Consumo do Cofre: o que os clientes deste restaurante mais gostam —
+        // contexto pra personalizar o rascunho (aprovação humana continua obrigatória).
+        const experienceBrief = await getExperienceBrief(input.restaurantId).catch(() => "");
         const raw = await callStructuredJson({
           selection,
-          systemPrompt: buildSystemPrompt(tone, couponCode),
+          systemPrompt: buildSystemPrompt(tone, couponCode, experienceBrief),
           userContent: buildUserPrompt(intent, snapshot, couponCode, previousMessages, maxVariants),
           temperature: 0.7,
           maxTokens: 500,

@@ -20,8 +20,9 @@ import { sanitizeText } from "@/services/simulation/simulationSanitizer";
 
 const MAX_TEXT = 400;
 
-/** Deriva o agente a partir do canal da conversa + metadata da mensagem. */
-function agentFor(channel: string, metaSource?: string): string {
+/** Deriva o agente a partir do contexto/canal da conversa + metadata da mensagem. */
+function agentFor(channel: string, metaSource?: string, contextType?: string | null): string {
+  if (contextType === "CRM_CAMPAIGN" || contextType === "CRM_AUTOMATION") return "crm";
   if (metaSource === "WHATSAPP_BRAIN") return "whatsapp";
   if (channel === "WEB_AGENT" || channel === "QR_AGENT") return "waiter"; // /pedido (web ou QR na mesa)
   if (channel === "INSTAGRAM_DIRECT" || channel === "INSTAGRAM_COMMENT") return "instagram";
@@ -78,7 +79,7 @@ export async function ingestExperiences(
       content: true,
       sentAt: true,
       metadata: true,
-      conversation: { select: { restaurantId: true, channel: true } },
+      conversation: { select: { restaurantId: true, channel: true, contextType: true } },
     },
   });
 
@@ -92,7 +93,7 @@ export async function ingestExperiences(
     }
     const meta = (m.metadata ?? {}) as Record<string, unknown>;
     const channel = String(m.conversation?.channel ?? "WHATSAPP");
-    const agentId = agentFor(channel, typeof meta.source === "string" ? meta.source : undefined);
+    const agentId = agentFor(channel, typeof meta.source === "string" ? meta.source : undefined, m.conversation?.contextType ?? null);
     const intent = typeof meta.brainIntent === "string" ? meta.brainIntent : null;
 
     // A pergunta que disparou: o último INBOUND de texto antes desta resposta.

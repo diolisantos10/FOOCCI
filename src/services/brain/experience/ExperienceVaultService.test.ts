@@ -57,6 +57,14 @@ describe("ExperienceVaultService — o cofre de experiências", () => {
     expect(r.byAgent.waiter).toBe(2);
   });
 
+  it("conversa CRM (contextType CRM_CAMPAIGN) → crm", async () => {
+    db.message.findMany.mockResolvedValue([
+      agentMsg({ metadata: {}, conversation: { restaurantId: "r1", channel: "WHATSAPP", contextType: "CRM_CAMPAIGN" } }),
+    ]);
+    await ingestExperiences({});
+    expect(db.restaurantExperience.create.mock.calls[0][0].data.agentId).toBe("crm");
+  });
+
   it("WHATSAPP sem metadata do brain → receptionist", async () => {
     db.message.findMany.mockResolvedValue([
       agentMsg({ metadata: {}, conversation: { restaurantId: "r1", channel: "WHATSAPP" } }),

@@ -34,6 +34,7 @@ import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
 import { cartLineBaseIds } from "./cartNormalization";
 import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
+import { getExperienceBrief } from "@/services/brain/experience/ExperienceBriefService";
 import { getWaiterRuntimeKnowledge } from "@/services/waiterRuntime/WaiterLibraryRuntimeBridge";
 import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
 import type { UpsellSuggestion } from "./UpsellEngine";
@@ -290,7 +291,13 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   // identity (waiter/salesperson, not bot) BEFORE the per-turn behavior directive.
   // Web-only: this does not touch the WhatsApp Agent path (which uses build()).
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
-  messages[0] = { ...sysMsg, content: `${buildWaiterProfileDirective()}\n\n${sysMsg.content}` };
+  // Consumo do Cofre de Experiências: o que os clientes DESTE restaurante mais
+  // pedem — contexto pra o garçom antecipar/recomendar melhor (nunca verdade).
+  const experienceBrief = await getExperienceBrief(restaurantId).catch(() => "");
+  messages[0] = {
+    ...sysMsg,
+    content: `${buildWaiterProfileDirective()}\n\n${sysMsg.content}${experienceBrief ? `\n\n${experienceBrief}` : ""}`,
+  };
   let sysAddendum = v2.aiDirective;
 
   // Only inject upsell candidates for ON_USER_MESSAGE (not AFTER_CHECKOUT)
