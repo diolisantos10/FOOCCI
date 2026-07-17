@@ -77,11 +77,23 @@ describe("alarm contract — sound is bounded (sound window ≠ visual window)",
     expect(engine).toContain("resolvedOrderIds");
   });
 
-  it("the Central de Conversas tab mutes the ORDER sound (still rings elsewhere)", () => {
-    // The order alarm must not blast over the operator answering a customer.
-    expect(engine).toContain("atendimentoTabOpen");
-    // …driven by THIS tab's own AtendimentoClient mount, which fires the event.
-    const atendimento = read("src/app/(dashboard)/atendimento/AtendimentoClient.tsx");
-    expect(atendimento).toContain('"foocci:handoff-attach"');
+  it("each alarm rings ONLY on its own visible screen (order→Pedidos, handoff→Atendimento)", () => {
+    // The rule that ends the cross-screen bleed: sound = visible tab AND its home
+    // screen. Both gates must be present and both alarms must use them.
+    expect(engine).toContain("isVisibleRef");
+    expect(engine).toContain("isOrdersScreenRef");
+    expect(engine).toContain("isAtendimentoScreenRef");
+    expect(engine).toContain("canRingOrder");
+    expect(engine).toContain("canRingHandoff");
+    expect(engine).toContain('"/orders"');
+    expect(engine).toContain('"/atendimento"');
+  });
+
+  it("the old app-wide leader machinery that bled sound across screens is gone", () => {
+    // Web Locks / cross-tab BroadcastChannel / device lease made one sound play
+    // on several unrelated screens — all removed.
+    expect(engine).not.toContain("navigator.locks");
+    expect(engine).not.toContain("BroadcastChannel");
+    expect(engine).not.toContain("claim-leader");
   });
 });
