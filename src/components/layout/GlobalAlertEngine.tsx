@@ -2,67 +2,37 @@
 
 /**
  * GlobalAlertEngine — the ONE place that owns the new-order and human-attention
- * alarm sounds. Mounted once in the dashboard shell layout, so it plays no
- * matter which screen (Pedidos, Atendimento, Dashboard, CRM, Configurações, …)
- * is on screen — the alarm no longer depends on a specific page being open.
+ * alarm sounds. Mounted once in the dashboard shell layout, so it rings no matter
+ * which screen (Pedidos, Atendimento, Início, CRM, Configurações, …) is open —
+ * the alarm never depends on a specific page being on screen.
  *
- * WHY THIS EXISTS: before this component, both alarms were owned by the page
- * that displays the data (OrdersClient / AtendimentoClient) — the Audio element
- * and AlertLoopController were created in a useEffect scoped to that page and
- * torn down (`controller.dispose()`) the moment the operator navigated away.
- * A restaurant that isn't sitting on the exact right tab all day never heard
- * the alarm. This component polls independently so a new PENDING order or an
- * unassumed HUMAN conversation rings from anywhere in the app.
+ * WHO RINGS — "the tab you're looking at, on every device":
+ *  - Within ONE browser several Foocci tabs can be open. To avoid a cacophony,
+ *    only one tab per browser rings, and we PREFER the tab that is currently
+ *    VISIBLE (document.visibilityState). That matters a lot: a visible tab has
+ *    its audio unlocked and its timers running at full speed, whereas a
+ *    backgrounded tab is throttled by the browser (~1 poll/minute) and may be
+ *    autoplay-blocked. Tabs announce their visibility over a BroadcastChannel;
+ *    the visible one rings. If NO tab is visible (browser minimized / operator on
+ *    another app), the Web-Lock holder still rings so the device is never silent.
+ *  - Across DEVICES there is NO single leader: every device with Foocci open
+ *    rings on its own. A restaurant WANTS its counter tablet, kitchen screen and
+ *    the owner's phone to all beep for a new order. (A previous "one device for
+ *    the whole restaurant" server lease made most devices silent — most of the
+ *    time the elected device was backgrounded/muted/the wrong one — and is gone.)
  *
- * SINGLE-LEADER ACROSS TABS: a restaurant commonly has SEVERAL Foocci tabs open
- * at once (Pedidos, Atendimento, CRM, Início, …). Since this component mounts
- * fresh in every one of them, without coordination EVERY open tab would poll
- * and ring independently — a cacophony that sounds like "the alarm is playing
- * on screens that aren't even in use". The Web Locks API elects exactly ONE
- * open tab as the audio leader (whichever tab currently holds the named lock);
- * only that tab ever calls audio.play(). The lock is released automatically
- * the instant its tab closes/crashes (no manual heartbeat/timeout needed), so
- * leadership fails over to another open tab immediately. Browsers without the
- * Locks API (very old) fail OPEN — that single tab treats itself as leader
- * rather than silencing the alarm entirely.
- *
- * CROSS-TAB HANDOFF ACCURACY: the handoff alarm's ack-aware ring-set ("Estou
- * ciente" / "Silenciar atrasados") is only known to the tab that has
- * AtendimentoClient mounted — but that might NOT be the leader tab. A
- * BroadcastChannel relays the same attach/detach/ring-ids/resolved signals to
- * every other open tab, so whichever tab is currently leader always rings (or
- * stays silent) using the accurate, ack-aware set, regardless of which tab
- * Atendimento happens to be open in.
- *
- * SINGLE-LEADER ACROSS DEVICES: Web Locks only coordinates tabs within ONE
- * browser — a restaurant with Foocci open on SEVERAL separate devices at once
- * (counter computer, kitchen tablet, owner's phone) still had every device's
- * own local leader ringing independently ("plays everywhere, uncontrollably" —
- * reported 2026-07-11). A second layer fixes this: the local tab leader
- * heartbeats a server-side lease (POST /api/settings/sounds/claim-leader,
- * AlarmLeaderService) keyed by a per-browser deviceId persisted in
- * localStorage. Only when this device holds BOTH the local Web Lock AND the
- * fresh server lease does it actually ring — see `isLeader()` below. A lease
- * with no heartbeat for ALARM_LEASE_STALE_MS is reclaimed by the next
- * device's heartbeat automatically, so a closed/crashed/offline device's
- * lease fails over within one heartbeat cycle — no manual takeover needed.
- *
- * Renders nothing. Two independent alarms:
- *   - ORDER  — polls PENDING orders every 8s. Simple, stateless: an order rings
- *     iff it is currently PENDING (and not a Pix/online payment still awaiting
- *     confirmation) — no "first seen" bookkeeping, so a container restart or a
- *     fresh page load immediately (correctly) rings for any order already
- *     waiting, rather than staying silent about it.
- *   - HANDOFF — polls the BASE case (unassumed HUMAN conversations) + the
- *     overdue-escalation endpoint every 10s/60s. While AtendimentoClient is
- *     mounted (in ANY tab), it hands over full control (including its "Estou
- *     ciente" / "Silenciar atrasados" acknowledgements) via the attach/detach
- *     bridge, so existing Atendimento behavior is preserved byte-for-byte, and
- *     the background poll resumes the instant it's closed everywhere.
- *
- * Both engines honor the SAME DB-backed settings (Configurações → Sons e
- * alertas) as before, refreshed on mount and live via the
- * "foocci:sound-settings-changed" event the settings page dispatches on save.
+ * Renders nothing. Two independent alarms, both honoring the SAME DB-backed
+ * settings (Configurações → Sons e alertas), refreshed on mount and live via the
+ * "foocci:sound-settings-changed" event the settings page dispatches on save:
+ *  - ORDER — rings for a newly-arrived order (PENDING or CONFIRMED; pay-on-
+ *    delivery/pickup orders skip PENDING and land CONFIRMED) within a recency
+ *    window; stops when staff move it forward (PREPARING/…) or the window lapses.
+ *    See order-alert.ts. Stateless: a reload immediately (correctly) rings for any
+ *    order still waiting, rather than staying silent about it.
+ *  - HANDOFF — polls unassumed HUMAN conversations + the overdue-escalation
+ *    endpoint. While AtendimentoClient is mounted (in ANY tab) it drives the
+ *    ack-aware ring-set directly via the attach/detach/ring-ids bridge, so the
+ *    "Estou ciente" / "Silenciar atrasados" nuance is preserved byte-for-byte.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -78,7 +48,7 @@ import {
   HANDOFF_SOUND_LAST_ERROR_KEY,
   fetchRestaurantSoundSettings,
 } from "@/lib/sound-prefs";
-import { pendingActionOrderIds, type AlertOrderLike } from "@/lib/order-alert";
+import { pendingActionOrderIds, ORDER_ALARM_MAX_AGE_MS, type AlertOrderLike } from "@/lib/order-alert";
 import {
   pendingHumanRequestIds,
   HANDOFF_ALARM_MAX_AGE_MS,
@@ -89,33 +59,21 @@ const ORDER_POLL_MS   = 8_000;
 const HUMAN_POLL_MS   = 10_000;
 const OVERDUE_POLL_MS = 60_000; // matches the existing Atendimento cadence
 
-const ALARM_LOCK_NAME    = "foocci-alarm-leader";
+const ALARM_LOCK_NAME     = "foocci-alarm-leader";
 const BRIDGE_CHANNEL_NAME = "foocci-alarm-bridge";
 
-// ── Cross-DEVICE lease (not just cross-tab) ─────────────────────────────────
-// Web Locks above only elects a leader WITHIN one browser — a restaurant with
-// Foocci open on several separate devices (counter computer, kitchen tablet,
-// owner's phone) still had every device's own local leader ringing at once.
-// This heartbeats a server-side lease (see AlarmLeaderService) so exactly one
-// DEVICE, across all of them, is ever allowed to actually play the alarm.
-// Mirrors AlarmLeaderService's ALARM_LEASE_HEARTBEAT_MS — kept as a plain
-// constant here (not imported) because that service pulls in the Prisma
-// client, which must never enter the browser bundle.
-const SERVER_LEASE_HEARTBEAT_MS = 6_000;
-const DEVICE_ID_KEY = "foocci-device-id";
+// ── Visible-tab election within a browser ───────────────────────────────────
+// A tab announces "I'm visible" on this cadence; peers treat it as visible while
+// the announcement is fresh. The ringer is the visible tab (see canRing()).
+const VISIBILITY_PING_MS = 2_500;
+const PEER_VISIBLE_TTL   = 6_000;
 
-/** Stable per-BROWSER id, persisted in localStorage so every tab of the same
- *  browser reports the same device — created once via crypto.randomUUID(). */
-function getOrCreateDeviceId(): string {
-  try {
-    const existing = localStorage.getItem(DEVICE_ID_KEY);
-    if (existing) return existing;
-    const fresh = crypto.randomUUID();
-    localStorage.setItem(DEVICE_ID_KEY, fresh);
-    return fresh;
-  } catch {
-    return `ephemeral-${Math.random().toString(36).slice(2)}`;
-  }
+/** Shape of an order row from GET /api/orders (only the fields the alarm needs). */
+interface RawOrderRow {
+  id: string;
+  status: string;
+  createdAt: string;
+  payment?: { providerName?: string | null; status?: string | null } | null;
 }
 
 type BridgeMessage =
@@ -123,7 +81,8 @@ type BridgeMessage =
   | { type: "detach" }
   | { type: "ring-ids"; ids: string[] }
   | { type: "handoff-resolved"; id: string; reason: string }
-  | { type: "order-resolved"; id: string; reason: string };
+  | { type: "order-resolved"; id: string; reason: string }
+  | { type: "tab-visible"; tabId: string; at: number };
 
 export function GlobalAlertEngine() {
   const orderAudioRef   = useRef<HTMLAudioElement | null>(null);
@@ -142,15 +101,16 @@ export function GlobalAlertEngine() {
   // base-case poll drives it.
   const handoffDrivenRef = useRef(false);
 
-  // Only the tab holding the Web Lock actually plays audio — see header doc.
-  const isLeaderRef = useRef(false);
-  // Only the DEVICE holding the server-side lease actually plays audio (in
-  // addition to being the local tab leader above) — see header doc.
-  const isServerLeaderRef = useRef(false);
+  // The Web-Lock holder is the browser's FALLBACK ringer — used only when no tab
+  // is visible anywhere in this browser (minimized window / operator on another
+  // app). The primary ringer is whichever tab is currently visible.
+  const isLockLeaderRef = useRef(false);
+  // Whether THIS tab is currently visible/foreground.
+  const isVisibleRef = useRef(true);
 
   // Drives the app-wide "🔇 Silenciar alarme" button: how many handoff
-  // conversations are currently SOUNDING on this (leader) tab. > 0 → show the
-  // button, so the operator can stop the noise from ANY page with one tap.
+  // conversations are currently SOUNDING on this tab. > 0 → show the button, so
+  // the operator can stop the noise from ANY page with one tap.
   const [ringHandoffCount, setRingHandoffCount] = useState(0);
   const handoffControllerRef = useRef<AlertLoopController | null>(null);
   // After a manual silence, hold the alarm quiet for a beat so the next poll
@@ -194,20 +154,39 @@ export function GlobalAlertEngine() {
     handoffAudioRef.current = handoffAudio;
     installSilentUnlock(() => [orderAudio, handoffAudio]);
 
-    // ── Single-leader election across tabs (Web Locks API — see header doc) ──
+    // ── Visible-tab election ────────────────────────────────────────────────
+    const myTabId =
+      (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const peerVisibleAt = new Map<string, number>();
+    isVisibleRef.current =
+      typeof document === "undefined" ? true : document.visibilityState === "visible";
+    const anyPeerVisible = () => {
+      const now = Date.now();
+      for (const [tid, at] of peerVisibleAt) {
+        if (tid !== myTabId && now - at < PEER_VISIBLE_TTL) return true;
+      }
+      return false;
+    };
+    // A tab rings if it's the one you're looking at, or — when no tab is visible
+    // anywhere in this browser — the Web-Lock fallback leader.
+    const canRing = () => isVisibleRef.current || (isLockLeaderRef.current && !anyPeerVisible());
+
+    // ── Web Lock elects the single fallback ringer per browser ───────────────
     let releaseLeaderLock: () => void = () => {};
     const nav = typeof navigator !== "undefined" ? navigator : null;
     if (nav && "locks" in nav) {
       nav.locks
         .request(ALARM_LOCK_NAME, { mode: "exclusive" }, () =>
           new Promise<void>((resolve) => {
-            isLeaderRef.current = true;
+            isLockLeaderRef.current = true;
             releaseLeaderLock = resolve;
           }),
         )
         .catch(() => { /* lock request aborted (fast unmount) — harmless */ });
     } else {
-      isLeaderRef.current = true; // no Locks API — fail open rather than silence everyone
+      isLockLeaderRef.current = true; // no Locks API — fail open rather than silence everyone
     }
 
     // ── ORDER alarm controller ────────────────────────────────────────────────
@@ -221,7 +200,7 @@ export function GlobalAlertEngine() {
       isRepeatEnabled: () => repeatOrderRef.current || soundThemeRef.current === "URGENT",
       assetPath:       ORDER_ALERT_ASSET,
       intervalMs:      10_000,
-      maxDurationMs:   0, // rings until accepted/rejected or the sound is turned off
+      maxDurationMs:   0, // rings until accepted/advanced or the sound is turned off
       onDiagnostics: (d) => {
         try {
           localStorage.setItem(ORDER_ALERT_DIAG_KEY, JSON.stringify({ ...d, updatedAt: new Date().toISOString() }));
@@ -258,61 +237,51 @@ export function GlobalAlertEngine() {
     });
     handoffControllerRef.current = handoffController; // let the silence button reach it
 
-    // Only the tab that is BOTH the local (Web Lock) leader AND the current
-    // server-lease holder ever receives non-empty ids, so play() can never
-    // fire from a non-leader tab OR a non-leader device — see header doc.
-    const isLeader = () => isLeaderRef.current && isServerLeaderRef.current;
-    const safeOrderSync   = (ids: string[]) => orderController.sync(isLeader() ? ids : []);
+    // Only a tab that currently CAN RING (visible, or the fallback leader when no
+    // tab is visible) ever receives non-empty ids, so play() never fires from a
+    // dormant background tab.
+    const safeOrderSync   = (ids: string[]) => orderController.sync(canRing() ? ids : []);
     const safeHandoffSync = (ids: string[]) => {
       const suppressed = Date.now() < suppressRingUntilRef.current;
-      const eff = isLeader() && !suppressed ? ids : [];
+      const eff = canRing() && !suppressed ? ids : [];
       setRingHandoffCount(eff.length); // drives the "🔇 Silenciar alarme" button
       handoffController.sync(eff);
     };
 
-    // ── Cross-device lease heartbeat — only the local tab leader attempts it ──
-    const deviceId = getOrCreateDeviceId();
-    const heartbeatLease = () => {
-      if (!isLeaderRef.current) { isServerLeaderRef.current = false; return; }
-      fetch("/api/settings/sounds/claim-leader", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ deviceId }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((json: { data?: { isLeader?: boolean } } | null) => {
-          isServerLeaderRef.current = json?.data?.isLeader === true;
-        })
-        .catch(() => { isServerLeaderRef.current = false; }); // fail toward silence, not toward every device ringing
-    };
-    heartbeatLease();
-    const leaseTimer = setInterval(heartbeatLease, SERVER_LEASE_HEARTBEAT_MS);
-
-    // ── ORDER poll — independent, stateless (see header doc) ─────────────────
+    // ── ORDER poll — recent orders needing attention (see order-alert.ts) ────
     const pollOrders = () => {
-      if (!isLeaderRef.current) return; // non-leader tabs stay fully dormant
       if (!soundEnabledRef.current || !newOrderSoundEnabledRef.current) {
         safeOrderSync([]);
         return;
       }
-      fetch("/api/orders?status=PENDING&limit=50")
+      if (!canRing()) { safeOrderSync([]); return; } // dormant tabs neither fetch nor ring
+      // No status filter → the 50 most recent orders (the API already excludes
+      // AWAITING_PAYMENT); pendingActionOrderIds keeps only new PENDING/CONFIRMED.
+      fetch("/api/orders?limit=50")
         .then((r) => r.json())
-        .then((res: { success?: boolean; data?: { data?: (AlertOrderLike & { id: string })[] } }) => {
+        .then((res: { data?: { data?: RawOrderRow[] } }) => {
           const rows = res?.data?.data;
           if (!Array.isArray(rows)) return;
-          safeOrderSync(pendingActionOrderIds(rows));
+          const mapped: (AlertOrderLike & { id: string })[] = rows.map((o) => ({
+            id:                  o.id,
+            status:              o.status,
+            createdAt:           o.createdAt,
+            paymentProviderName: o.payment?.providerName ?? null,
+            paymentStatus:       o.payment?.status ?? null,
+          }));
+          safeOrderSync(pendingActionOrderIds(mapped, { maxAgeMs: ORDER_ALARM_MAX_AGE_MS }));
         })
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
     };
-    pollOrders();
-    const orderTimer = setInterval(pollOrders, ORDER_POLL_MS);
 
     // ── HANDOFF poll — base case + overdue escalation, skipped while driven ──
     let overdueIds: string[] = [];
     const pollHuman = () => {
-      if (!isLeaderRef.current) return; // non-leader tabs stay fully dormant
+      if (!canRing()) return; // dormant tabs stay silent
       if (handoffDrivenRef.current) return; // Atendimento (this tab or another) is driving directly
-      if (!handoffSoundEnabledRef.current) {
+      // Honor the master "Ativar todos os sons" toggle too (consistent with the
+      // order alarm and with AtendimentoClient) — no more "handoff ignores mute".
+      if (!soundEnabledRef.current || !handoffSoundEnabledRef.current) {
         safeHandoffSync([]);
         return;
       }
@@ -331,13 +300,10 @@ export function GlobalAlertEngine() {
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
     };
     const pollOverdue = () => {
-      if (!isLeaderRef.current || handoffDrivenRef.current) return;
+      if (!canRing() || handoffDrivenRef.current) return;
       fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
         .then((r) => r.json())
         .then((d: { data?: { overdue?: { id: string; waitingMinutes?: number }[] } }) => {
-          // Same stale-silence window as the base alarm: an overdue conversation
-          // whose customer has been silent past it stops SOUNDING (it still shows
-          // in Atendimento's "⏰ atrasados" banner — sound-only, nothing hidden).
           const maxMinutes = HANDOFF_ALARM_MAX_AGE_MS / 60_000;
           overdueIds = (d?.data?.overdue ?? [])
             .filter((o) => (o.waitingMinutes ?? 0) <= maxMinutes)
@@ -345,15 +311,17 @@ export function GlobalAlertEngine() {
         })
         .catch(() => {});
     };
+    pollOrders();
     pollHuman();
     pollOverdue();
+    const orderTimer   = setInterval(pollOrders, ORDER_POLL_MS);
     const humanTimer   = setInterval(pollHuman, HUMAN_POLL_MS);
     const overdueTimer = setInterval(pollOverdue, OVERDUE_POLL_MS);
 
     // ── Cross-tab bridge (BroadcastChannel) ───────────────────────────────────
-    // Relays this tab's LOCAL attach/detach/ring-ids/resolved signals (below) to
-    // every other open tab, so the (possibly different) leader tab always has
-    // the accurate ring-set regardless of which tab Atendimento/Pedidos is open in.
+    // Relays this tab's attach/detach/ring-ids/resolved signals AND visibility
+    // announcements to every other open tab, so whichever tab is currently the
+    // ringer always has the accurate ring-set and knows if a peer is visible.
     const bridge = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(BRIDGE_CHANNEL_NAME) : null;
     bridge?.addEventListener("message", (ev: MessageEvent<BridgeMessage>) => {
       const msg = ev.data;
@@ -364,11 +332,29 @@ export function GlobalAlertEngine() {
         case "ring-ids": safeHandoffSync(msg.ids ?? []); break;
         case "handoff-resolved": if (msg.id) handoffController.resolve(msg.id, msg.reason ?? "RESOLVED"); break;
         case "order-resolved":   if (msg.id) orderController.resolve(msg.id, msg.reason ?? "RESOLVED"); break;
+        case "tab-visible":      if (msg.tabId) peerVisibleAt.set(msg.tabId, msg.at ?? Date.now()); break;
       }
     });
 
+    // ── Visibility: announce ours, re-evaluate ring state on change ──────────
+    const announceVisible = () => {
+      if (isVisibleRef.current) bridge?.postMessage({ type: "tab-visible", tabId: myTabId, at: Date.now() });
+    };
+    const onVisibility = () => {
+      isVisibleRef.current = typeof document === "undefined" ? true : document.visibilityState === "visible";
+      announceVisible();
+      // A tab that just became visible should start ringing pending items; one
+      // that went hidden should hand off to the now-visible tab. Re-poll now so
+      // the switch is immediate, not up-to-a-poll-interval late.
+      pollOrders();
+      pollHuman();
+      pollOverdue();
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
+    announceVisible();
+    const visibilityTimer = setInterval(announceVisible, VISIBILITY_PING_MS);
+
     // ── Attach/detach bridge with AtendimentoClient/OrdersClient (LOCAL tab) ──
-    // Each local handler updates this tab's state AND relays to other tabs.
     const onAttach = () => { handoffDrivenRef.current = true; bridge?.postMessage({ type: "attach" }); };
     const onDetach = () => {
       handoffDrivenRef.current = false;
@@ -400,28 +386,16 @@ export function GlobalAlertEngine() {
       clearInterval(orderTimer);
       clearInterval(humanTimer);
       clearInterval(overdueTimer);
-      clearInterval(leaseTimer);
+      clearInterval(visibilityTimer);
       window.removeEventListener("foocci:sound-settings-changed", loadSettings);
       window.removeEventListener("foocci:handoff-attach", onAttach);
       window.removeEventListener("foocci:handoff-detach", onDetach);
       window.removeEventListener("foocci:handoff-ring-ids", onRingIds);
       window.removeEventListener("foocci:handoff-resolved", onHandoffResolved);
       window.removeEventListener("foocci:order-resolved", onOrderResolved);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
       bridge?.close();
       releaseLeaderLock();
-      // Best-effort graceful release of the server lease (clean tab close —
-      // e.g. navigating away from the dashboard). keepalive lets the request
-      // survive page unload. Harmless if this tab wasn't the leader: the
-      // server only clears the lease when `deviceId` is still its holder. The
-      // 15s staleness window covers the crash/network-loss case regardless.
-      if (isServerLeaderRef.current) {
-        fetch("/api/settings/sounds/claim-leader", {
-          method:    "DELETE",
-          headers:   { "Content-Type": "application/json" },
-          body:      JSON.stringify({ deviceId }),
-          keepalive: true,
-        }).catch(() => undefined);
-      }
       orderController.dispose();
       handoffController.dispose();
       orderAudio.pause(); orderAudio.src = "";
@@ -430,8 +404,8 @@ export function GlobalAlertEngine() {
   }, []);
 
   // Visible ONLY while the human-attention alarm is actually sounding on this
-  // (leader) tab — a from-anywhere kill switch so the operator never has to hunt
-  // for the conversation to stop the noise. One tap silences every page/device.
+  // tab — a from-anywhere kill switch so the operator never has to hunt for the
+  // conversation to stop the noise. One tap silences every page and every device.
   if (ringHandoffCount <= 0) return null;
   return (
     <button
