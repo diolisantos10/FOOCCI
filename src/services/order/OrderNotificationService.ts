@@ -17,8 +17,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 
 export type NotifyStatus =
   | "CONFIRMED"
@@ -96,10 +95,11 @@ export class OrderNotificationService {
       const finalMsg   = buildMessage(newStatus as NotifyStatus, firstName, orderNum, options);
       if (!finalMsg) return;
 
-      const cfgResult = await EvolutionConfigService.getSnapshot(restaurantId);
-      if (!cfgResult.ok) return;
-
-      await EvolutionClient.sendTextMessage(cfgResult.data, phone, finalMsg);
+      // Route through the restaurant's ACTIVE provider (Meta official or Evolution).
+      const sent = await sendWhatsAppText(restaurantId, phone, finalMsg);
+      if (!sent.ok) {
+        console.warn("[OrderNotificationService] send failed:", sent.errorCode, sent.error);
+      }
     } catch (err) {
       console.error("[OrderNotificationService] WhatsApp notification failed:", {
         restaurantId,

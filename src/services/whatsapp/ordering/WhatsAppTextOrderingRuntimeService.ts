@@ -235,17 +235,12 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
   let replySent = false;
   if (canReply && result.suggestedReply && input.conversationId) {
     try {
-      const { EvolutionConfigService } = await import("@/services/evolution/EvolutionConfigService");
-      const { EvolutionClient } = await import("@/lib/evolution/EvolutionClient");
+      const { sendWhatsAppText } = await import("@/services/whatsapp/activeProvider");
       const { prisma } = await import("@/lib/prisma");
 
-      const cfgResult = await EvolutionConfigService.getSnapshot(input.restaurantId);
-      if (cfgResult.ok) {
-        const sendResult = await EvolutionClient.sendTextMessage(
-          cfgResult.data,
-          input.phone,
-          result.suggestedReply,
-        );
+      // Route through the restaurant's ACTIVE provider (Meta official or Evolution).
+      const sendResult = await sendWhatsAppText(input.restaurantId, input.phone, result.suggestedReply);
+      if (sendResult.ok) {
         const now = new Date();
         await prisma.$transaction([
           prisma.message.create({
@@ -256,8 +251,11 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
               content:        result.suggestedReply,
               type:           "TEXT",
               sentAt:         now,
-              externalMessageId: sendResult.key.id,
               externalStatus: "sent",
+              provider:       sendResult.provider,
+              ...(sendResult.providerMessageId
+                ? { externalMessageId: sendResult.providerMessageId, providerMessageId: sendResult.providerMessageId }
+                : {}),
               metadata: {
                 source:           "PEDIDO_TEXTO",
                 waOrderingStage:  result.session.stage,
@@ -271,9 +269,9 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
           }),
         ]);
         replySent = true;
-        safetyNotes.push(`reply sent via Evolution (mode=${mode})`);
+        safetyNotes.push(`reply sent via ${sendResult.provider} (mode=${mode})`);
       } else {
-        safetyNotes.push("reply skipped: Evolution config not found for restaurant");
+        safetyNotes.push(`reply skipped: send failed (${sendResult.errorCode ?? "unknown"})`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

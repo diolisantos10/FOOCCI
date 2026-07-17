@@ -1093,7 +1093,14 @@ async function run(conversationId: string): Promise<void> {
     tiktokUrl:       brandConfig?.tiktokUrl    ?? null,
   };
 
-  const toPhone = resolvedPhone.replace(/^\+/, "");
+  // Reply TARGET: prefer the conversation's channel phone — it comes straight from
+  // the WhatsApp webhook (Meta/Evolution) and is always the real, deliverable wa
+  // number (e.g. "5511…"). Customer.phone is CRM data (imported/typed) and can be in
+  // a format providers reject — seen live: a 12-digit local number without the 55
+  // country code, which Meta refuses with INVALID_PHONE. resolvedPhone is still used
+  // for identity (waToken/pedidoUrl); only the send target prefers the channel phone.
+  const channelPhone = (conversation.customerPhone ?? "").trim();
+  const toPhone = (channelPhone || resolvedPhone).replace(/^\+/, "");
 
   // Handle media messages — we cannot process images, audio, or documents.
   if (lastMessage.type !== "TEXT") {
