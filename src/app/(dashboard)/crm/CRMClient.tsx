@@ -1861,6 +1861,48 @@ const WEEKDAY_LABELS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MANAGE_PREVIEW_CUSTOMER = { name: "Diego", tier: "OURO", lastOrderAt: new Date(Date.now() - 3 * 86_400_000).toISOString() };
 const MANAGE_PREVIEW_CTX = { restaurantName: "seu restaurante", pedidoUrl: "https://foocci.com.br", googleReviewUrl: null, instagramUrl: null };
 
+/** Failure reason breakdown + owner-facing verdict — lives in the Diagnóstico tab. */
+function CampaignFailureDiagnosis({ detail, isRecurring }: { detail: CampaignDetail; isRecurring: boolean }) {
+  if (detail.totalFailed <= 0) return null;
+  const map: Record<string, number> = {};
+  const catCount: Record<string, number> = {};
+  for (const ex of detail.executions) {
+    if (ex.status !== "FAILED") continue;
+    const badge = ex.classification?.badge ?? ex.failedReason ?? "Falha";
+    map[badge] = (map[badge] ?? 0) + 1;
+    const cat = ex.classification?.category ?? "";
+    catCount[cat] = (catCount[cat] ?? 0) + 1;
+  }
+  const entries = Object.entries(map).sort(([, a], [, b]) => b - a);
+  const numberProblems = (catCount["EVOLUTION_BAD_REQUEST"] ?? 0) + (catCount["BLOCKED_INVALID_PHONE"] ?? 0);
+  const infraProblems  = (catCount["EVOLUTION_INSTANCE_DISCONNECTED"] ?? 0) + (catCount["FAILED_PROVIDER"] ?? 0) + (catCount["FAILED_TIMEOUT"] ?? 0);
+  const authProblems   = catCount["EVOLUTION_AUTH_ERROR"] ?? 0;
+  const verdict = authProblems > numberProblems && authProblems > infraProblems
+    ? "🔑 Erro de autenticação da Evolution — verifique a chave/API da integração."
+    : numberProblems >= infraProblems
+    ? "📵 A maioria são números que não existem no WhatsApp (base antiga). Não há o que corrigir — são inalcançáveis e já saem do CRM automaticamente; os válidos recebem normalmente."
+    : "⚠️ A maioria são erros temporários da Evolution/conexão. O robô para o lote quando isso acontece e tenta de novo no próximo ciclo.";
+  return (
+    <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Diagnóstico de falhas</p>
+      <p className="rounded-lg bg-paper/70 px-3 py-2 text-xs text-ink2">{verdict}</p>
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+        {entries.map(([reason, count]) => (
+          <div key={reason} className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2 border border-red-100">
+            <span className="text-xs text-ink2 truncate">{FAILURE_REASON_LABELS[reason] ?? reason}</span>
+            <span className="text-xs font-bold text-red-600 shrink-0">{count}</span>
+          </div>
+        ))}
+      </div>
+      {isRecurring && (
+        <p className="text-[10px] text-red-400 leading-snug">
+          Campanha recorrente: falhas históricas incluem ciclos anteriores. Veja <strong>Performance → Último ciclo</strong> para o ciclo atual.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── CampaignManageModal ───────────────────────────────────────────────────────
 // Tabbed management console: Visão Geral | Mensagem | Agendamento | Performance | Diagnóstico
 
@@ -2252,49 +2294,6 @@ function CampaignManageModal({
                         </div>
                       )}
                     </div>
-
-                    {/* Failure breakdown — grouped by the CLASSIFIED reason (clean,
-                        owner-friendly) instead of the raw provider JSON. */}
-                    {detail.totalFailed > 0 && (() => {
-                      const map: Record<string, number> = {};
-                      const catCount: Record<string, number> = {};
-                      for (const ex of detail.executions) {
-                        if (ex.status !== "FAILED") continue;
-                        const badge = ex.classification?.badge ?? ex.failedReason ?? "Falha";
-                        map[badge] = (map[badge] ?? 0) + 1;
-                        const cat = ex.classification?.category ?? "";
-                        catCount[cat] = (catCount[cat] ?? 0) + 1;
-                      }
-                      const entries = Object.entries(map).sort(([, a], [, b]) => b - a);
-                      // Owner-facing interpretation of the dominant failure type.
-                      const numberProblems = (catCount["EVOLUTION_BAD_REQUEST"] ?? 0) + (catCount["BLOCKED_INVALID_PHONE"] ?? 0);
-                      const infraProblems  = (catCount["EVOLUTION_INSTANCE_DISCONNECTED"] ?? 0) + (catCount["FAILED_PROVIDER"] ?? 0) + (catCount["FAILED_TIMEOUT"] ?? 0);
-                      const authProblems   = catCount["EVOLUTION_AUTH_ERROR"] ?? 0;
-                      const verdict = authProblems > numberProblems && authProblems > infraProblems
-                        ? "🔑 Erro de autenticação da Evolution — verifique a chave/API da integração."
-                        : numberProblems >= infraProblems
-                        ? "📵 A maioria são números que não existem no WhatsApp (base antiga). Não há o que corrigir — esses números são inalcançáveis; os válidos recebem normalmente."
-                        : "⚠️ A maioria são erros temporários da Evolution/conexão. O robô agora para o lote quando isso acontece e tenta de novo no próximo ciclo.";
-                      return (
-                        <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Diagnóstico de falhas</p>
-                          <p className="rounded-lg bg-paper/70 px-3 py-2 text-xs text-ink2">{verdict}</p>
-                          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                            {entries.map(([reason, count]) => (
-                              <div key={reason} className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2 border border-red-100">
-                                <span className="text-xs text-ink2 truncate">{FAILURE_REASON_LABELS[reason] ?? reason}</span>
-                                <span className="text-xs font-bold text-red-600 shrink-0">{count}</span>
-                              </div>
-                            ))}
-                          </div>
-                          {isRecurring && (
-                            <p className="text-[10px] text-red-400 leading-snug">
-                              Esta campanha é recorrente. Falhas históricas incluem todos os ciclos anteriores e podem exceder o público atual. Veja a aba <strong>Performance → Último ciclo</strong> para o ciclo corrente.
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
 
                     {/* Operational status quick view */}
                     {debug && !loadingDebug && (
@@ -2900,14 +2899,7 @@ function CampaignManageModal({
                 {/* ── Diagnóstico ── */}
                 {activeTab === "diagnostics" && (
                   <div className="space-y-4">
-                    {detail.totalFailed > 0 && (
-                      <button
-                        onClick={() => setActiveTab("overview")}
-                        className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-left text-xs text-red-700 hover:bg-red-100 transition-colors"
-                      >
-                        📉 <strong>Por que as mensagens falharam?</strong> O detalhamento dos motivos (número inválido, erro do Evolution, etc.) fica na aba <strong>Visão Geral</strong> → clique aqui para ir. Números que não existem no WhatsApp já são removidos do CRM automaticamente.
-                      </button>
-                    )}
+                    <CampaignFailureDiagnosis detail={detail} isRecurring={isRecurring} />
                     {preflight && (
                       <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">Prévia de envio</p>
@@ -4012,13 +4004,15 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .catch(() => {});
   }, [readyMadeReload]);
 
-  // Per-campaign coupon counts for the Ativas table (Cupons enviados / usados).
+  // Per-campaign coupon counts for the Ativas table (Cupons usados), period-aware.
   useEffect(() => {
-    fetch("/api/crm/campaign-coupon-summary")
+    const range = crmPeriodRange(period, customFrom, customTo);
+    const qs = range ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}` : "";
+    fetch(`/api/crm/campaign-coupon-summary${qs}`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => setCouponCounts(json.data ?? {}))
       .catch(() => {});
-  }, [readyMadeReload]);
+  }, [readyMadeReload, period, customFrom, customTo]);
 
   // Toggle cart recovery on/off — the same control the other campaigns' Pausar/Ativar
   // give, wired to the readyMadeConfig.cartRecoveryEnabled flag.

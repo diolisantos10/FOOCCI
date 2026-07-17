@@ -257,21 +257,43 @@ export class CustomerCouponService {
    * One grouped query, tenant-scoped. Coupons with no sourceCampaignId (e.g. cart
    * recovery, which grants without a Campaign row) are not attributable and excluded.
    */
-  static async countByCampaign(restaurantId: string): Promise<Record<string, { sent: number; used: number }>> {
-    const grouped = await prisma.customerCoupon.groupBy({
-      by:      ["sourceCampaignId", "status"],
-      where:   { restaurantId, sourceCampaignId: { not: null } },
-      _count:  { _all: true },
-    });
+  static async countByCampaign(
+    restaurantId: string,
+    period?: { from: Date; to: Date } | null,
+  ): Promise<Record<string, { sent: number; used: number }>> {
     const map: Record<string, { sent: number; used: number }> = {};
-    for (const g of grouped) {
-      const id = g.sourceCampaignId;
-      if (!id) continue;
-      const entry = (map[id] ??= { sent: 0, used: 0 });
-      const n = g._count._all;
-      entry.sent += n;
-      if (g.status === "USED") entry.used += n;
+    const entry = (id: string) => (map[id] ??= { sent: 0, used: 0 });
+
+    if (!period) {
+      const grouped = await prisma.customerCoupon.groupBy({
+        by:      ["sourceCampaignId", "status"],
+        where:   { restaurantId, sourceCampaignId: { not: null } },
+        _count:  { _all: true },
+      });
+      for (const g of grouped) {
+        if (!g.sourceCampaignId) continue;
+        const e = entry(g.sourceCampaignId);
+        e.sent += g._count._all;
+        if (g.status === "USED") e.used += g._count._all;
+      }
+      return map;
     }
+
+    // Period-scoped: "sent" = granted in the window; "used" = redeemed in the window.
+    const [sentG, usedG] = await Promise.all([
+      prisma.customerCoupon.groupBy({
+        by:     ["sourceCampaignId"],
+        where:  { restaurantId, sourceCampaignId: { not: null }, grantedAt: { gte: period.from, lte: period.to } },
+        _count: { _all: true },
+      }),
+      prisma.customerCoupon.groupBy({
+        by:     ["sourceCampaignId"],
+        where:  { restaurantId, sourceCampaignId: { not: null }, status: "USED", usedAt: { gte: period.from, lte: period.to } },
+        _count: { _all: true },
+      }),
+    ]);
+    for (const g of sentG) if (g.sourceCampaignId) entry(g.sourceCampaignId).sent = g._count._all;
+    for (const g of usedG) if (g.sourceCampaignId) entry(g.sourceCampaignId).used = g._count._all;
     return map;
   }
 }

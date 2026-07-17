@@ -24,7 +24,13 @@ export async function GET(req: NextRequest) {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const counts = await CustomerCouponService.countByCampaign(ctx.restaurantId);
+    const fromP = req.nextUrl.searchParams.get("from");
+    const toP   = req.nextUrl.searchParams.get("to");
+    const from  = fromP ? new Date(fromP) : null;
+    const to    = toP   ? new Date(toP)   : null;
+    const period = from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) ? { from, to } : null;
+
+    const counts = await CustomerCouponService.countByCampaign(ctx.restaurantId, period);
     return ok(counts);
   } catch (err) {
     console.error("[GET /api/crm/campaign-coupon-summary]", err);
