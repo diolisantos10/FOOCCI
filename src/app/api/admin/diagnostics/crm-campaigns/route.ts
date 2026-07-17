@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
         status:         true,
         targetSegment:  true,
         templateId:     true,
+        message:        true,
         scheduleConfig: true,
         totalSent:      true,
         createdAt:      true,
