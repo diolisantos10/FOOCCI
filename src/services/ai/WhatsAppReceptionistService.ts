@@ -1548,7 +1548,7 @@ async function sendReply(
       // Reply through the official Meta Cloud API (uses stored, encrypted credentials).
       const res = await new MetaWhatsAppCloudProvider().sendText({ restaurantId, to: toPhone, text });
       if (!res.ok) {
-        console.error("[WhatsAppReceptionistService] Meta send failed:", res.errorCode, res.error);
+        console.error(`[WhatsAppReceptionistService] Meta send failed: ${res.errorCode} ${res.error} toPhoneLen=${toPhone.length} toPhone="${toPhone.slice(0, 4)}…${toPhone.slice(-2)}"`);
         return;
       }
       externalMessageId = res.providerMessageId;
