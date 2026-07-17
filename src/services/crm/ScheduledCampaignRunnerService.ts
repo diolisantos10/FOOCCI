@@ -850,8 +850,22 @@ export class ScheduledCampaignRunnerService {
     };
   }
 
-  /** True only when the restaurant's WhatsApp/Evolution instance reports state=open. */
+  /**
+   * True when the restaurant has a live channel to send CRM through.
+   *
+   * CRM-via-Meta: if the official Meta Cloud API is the CRM channel and it's
+   * connected, the Evolution (WhatsApp Web) instance being offline is IRRELEVANT —
+   * Meta is what actually sends. Checking only Evolution here wrongly blocked every
+   * campaign with "WhatsApp desconectado" for restaurants that migrated to Meta.
+   * Otherwise fall back to the Evolution instance reporting state=open.
+   */
   private static async _isInstanceConnected(restaurantId: string): Promise<boolean> {
+    const meta = await prisma.metaWhatsAppConfig.findUnique({
+      where:  { restaurantId },
+      select: { metaCrmEnabled: true, connectionStatus: true },
+    }).catch(() => null);
+    if (meta?.metaCrmEnabled === true && meta.connectionStatus === "CONNECTED") return true;
+
     const snap = await EvolutionConfigService.getSnapshot(restaurantId);
     if (!snap.ok) return false;
     const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
