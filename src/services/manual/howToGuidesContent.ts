@@ -76,6 +76,162 @@ Vá no menu lateral em **Integrações** e abra o cartão do **WhatsApp**.
 > O WhatsApp conectado é o que o atendimento e os agentes usam para falar com seus clientes.`,
   },
   {
+    slug: "guia-whatsapp-oficial-meta",
+    title: "Como conectar o WhatsApp oficial da Meta",
+    area: "WHATSAPP",
+    description: "Conectar o WhatsApp oficial (API da Meta) e escolher o número certo.",
+    content: `# Como conectar o WhatsApp oficial da Meta
+
+O **WhatsApp oficial da Meta** é a conexão pela API oficial (WhatsApp Cloud API). É mais estável, sem risco de bloqueio, e permite campanhas com **modelos aprovados**.
+
+Vá em **Integrações → WhatsApp**, no cartão **"Conexão de WhatsApp"**, lado **"WhatsApp oficial da Meta"**.
+
+## Passo a passo
+1. Clique em **Conectar WhatsApp oficial da Meta**.
+2. Faça login na **Meta** (Facebook) na janela que abrir.
+3. Escolha o **Portfólio empresarial** e a **Conta do WhatsApp Business** do seu restaurante.
+4. Escolha o **número** — use o **número real do restaurante**, não o de teste.
+5. Aguarde aparecer **✓ Conectado** com o seu número.
+
+## O número de teste (+1)
+Todo aplicativo novo da Meta vem com um **número de teste** que começa com **+1** (ex.: +1 555...). Ele é criado automaticamente e serve só para testes — **não use ele** para atender clientes de verdade. Selecione sempre o **número real** (+55...).
+
+## Trocar o número ou reconfigurar
+Se conectou o número errado (ex.: o +1 de teste):
+- No cartão da Meta, clique em **Reconfigurar / trocar número** para refazer o login e escolher outro número.
+- Ou clique em **Desconectar** para remover e começar do zero.
+
+> Um número só pode estar em **uma** conexão por vez. Se o número já é usado na conexão atual, veja o guia **"Como migrar seu número para a Meta oficial"**.`,
+  },
+  {
+    slug: "guia-migrar-numero-meta",
+    title: "Como migrar seu número para a Meta oficial",
+    area: "WHATSAPP",
+    description: "Passar o número do WhatsApp atual para a Meta oficial, sem susto.",
+    content: `# Como migrar seu número para a Meta oficial
+
+Para o **mesmo número** sair da conexão atual (WhatsApp comum) e ir para a **Meta oficial**, é preciso liberar o número. A Meta **não deixa** um número estar nos dois lugares ao mesmo tempo.
+
+## ⚠️ Faça com o restaurante FECHADO
+Durante a migração o WhatsApp fica **fora do ar** por alguns minutos. Faça na **madrugada / após o fechamento**, nunca no movimento.
+
+## Passo a passo
+1. **No Foocci:** em **Integrações → WhatsApp**, cartão **"WhatsApp atual"**, clique em **Desconectar e liberar número**.
+2. **No celular do restaurante:** apague a conta do WhatsApp desse número — **WhatsApp Business → ⋮ → Configurações → Conta → Apagar minha conta** e confirme com o número.
+   - Isso apaga só os dados **do app** (conversas, grupos). Você **não** perde a linha/chip, nem os dados do Foocci.
+3. Aguarde **3 a 5 minutos**.
+4. **Na tela da Meta:** peça o código de verificação. Se o **SMS não chegar**, escolha **verificação por LIGAÇÃO** (uma voz dita o código) — no Brasil funciona melhor que SMS.
+5. Digite o código de 6 dígitos → número verificado.
+6. Finalize no Foocci: **Usar como principal** e, se quiser campanhas pela Meta, ligue **Campanhas CRM via Meta**.
+
+## Dicas importantes
+- O **chip precisa estar num celular ligado e com sinal** para receber o código (SMS ou ligação).
+- **Não peça o código muitas vezes seguidas** — a Meta bloqueia por cerca de 1 hora. Se bloquear, espere.
+- Precisa do atendimento de volta rápido? Dá para **voltar para a conexão atual**: registre o número de novo no WhatsApp Business e reconecte pelo QR Code.`,
+  },
+  {
+    slug: "guia-whatsapp-evolution-vs-meta",
+    title: "WhatsApp atual x WhatsApp oficial da Meta: qual usar",
+    area: "WHATSAPP",
+    description: "Diferença entre as duas conexões de WhatsApp e quando usar cada uma.",
+    content: `# WhatsApp atual x WhatsApp oficial da Meta
+
+O Foocci trabalha com duas formas de conectar o WhatsApp. Em **Integrações → WhatsApp**, a etiqueta **"Em uso:"** mostra qual está ativa.
+
+## WhatsApp atual (conexão via QR)
+- Conecta como **aparelho conectado** (igual ao WhatsApp Web).
+- **Convive** com o WhatsApp do celular — não precisa derrubar nada.
+- Reconecta a qualquer hora, só escaneando o **QR Code**.
+- Ideal para começar rápido.
+
+## WhatsApp oficial da Meta (API oficial)
+- Conexão **oficial** pela Meta (WhatsApp Cloud API).
+- Mais **estável** e **sem risco de bloqueio**.
+- Permite **campanhas com modelos aprovados** e limites maiores.
+- O número passa a ser **exclusivo** da API (sai do app do celular).
+
+## Qual escolher?
+- Quer simplicidade e já está funcionando? Fique no **WhatsApp atual**.
+- Quer o caminho oficial e robusto para escalar campanhas? Vá para a **Meta oficial** (veja o guia de migração).
+
+> Não dá para usar o **mesmo número** nas duas conexões ao mesmo tempo.`,
+  },
+  {
+    slug: "guia-modelos-mensagem-whatsapp",
+    title: "Modelos de mensagem (templates) do WhatsApp oficial",
+    area: "WHATSAPP",
+    description: "O que são os modelos da Meta e por que precisam de aprovação.",
+    content: `# Modelos de mensagem (templates) do WhatsApp oficial
+
+No **WhatsApp oficial da Meta**, para enviar **campanhas de marketing** (mensagens que você inicia, fora de uma conversa em andamento), a Meta exige **modelos de mensagem aprovados**.
+
+## O que é um modelo?
+É um texto pré-cadastrado e **aprovado pela Meta** (ex.: uma promoção, um aviso). Só depois de aprovado ele pode ser disparado em massa.
+
+## Como sincronizar
+1. Em **Integrações → WhatsApp**, no cartão da Meta, clique em **Sincronizar modelos** para trazer os modelos aprovados da sua conta.
+2. Ao criar uma campanha de CRM pela Meta, escolha um modelo aprovado.
+
+## Pontos importantes
+- Modelos **novos** passam por análise da Meta (pode levar de minutos a algumas horas).
+- Sem modelo aprovado, a campanha **não sai** pela Meta — mas o atendimento normal (respostas dentro de conversas) funciona igual.
+- Atendimento e respostas do robô **não** precisam de modelo; só as campanhas iniciadas por você.`,
+  },
+  {
+    slug: "guia-limites-envio-whatsapp",
+    title: "Limites de envio e proteção contra bloqueio",
+    area: "WHATSAPP",
+    description: "Como o Foocci protege seu número de bloqueios ao enviar campanhas.",
+    content: `# Limites de envio e proteção contra bloqueio
+
+Para o WhatsApp **não bloquear** seu número por envio em massa, o Foocci aplica regras de segurança automáticas, que você vê na configuração do WhatsApp/CRM.
+
+## Aquecimento (warmup)
+Número novo começa enviando **pouco** e vai aumentando aos poucos, dia após dia. Isso imita um uso natural e reduz o risco de bloqueio.
+
+## Limite de contatos
+Você pode definir um **teto de contatos** para o CRM alcançar. Serve para controlar quanto está sendo enviado e o custo.
+
+## Controle manual
+Por padrão, as **proteções ficam ligadas** (modo seguro). Existe a opção de **controle manual** ("eu assumo a responsabilidade") para quem quer definir os próprios limites — use com cuidado.
+
+## Boas práticas
+- Não dispare para listas enormes de uma vez, principalmente com número novo.
+- Prefira mensagens relevantes; muitos bloqueios/denúncias derrubam a qualidade do número.
+- No WhatsApp oficial da Meta, respeite os **modelos aprovados** e acompanhe a **qualidade do número** (a Meta mostra isso na conexão).`,
+  },
+  {
+    slug: "guia-erros-whatsapp",
+    title: "Erros comuns do WhatsApp e como resolver",
+    area: "WHATSAPP",
+    description: "Soluções rápidas para os problemas mais frequentes do WhatsApp.",
+    content: `# Erros comuns do WhatsApp e como resolver
+
+## "Conectou, mas o robô não responde"
+Geralmente o **webhook** (o caminho que entrega as mensagens ao Foocci) caiu depois de reconectar.
+1. Abra **Integrações → WhatsApp**.
+2. Acrescente **?suporte=1** no final do endereço e aperte Enter.
+3. Clique em **Sincronizar webhook**.
+4. Mande uma mensagem de teste — o robô deve responder.
+
+## "Não recebi o código de verificação da Meta"
+- Escolha **verificação por LIGAÇÃO** em vez de SMS (funciona melhor no Brasil).
+- Confirme que o **chip está num celular ligado e com sinal**.
+- **Não peça o código várias vezes** seguidas — a Meta bloqueia por cerca de 1 hora.
+
+## "Esse número já está registrado em uma conta do WhatsApp"
+O número ainda está ativo no app do celular. Apague a conta: **WhatsApp Business → ⋮ → Configurações → Conta → Apagar minha conta**, espere alguns minutos e tente de novo. (Veja o guia de migração.)
+
+## "QR Code expirou / não aparece"
+- Clique em **Atualizar QR Code** ou **Gerar novo QR Code**.
+- Aguarde alguns segundos; o servidor pode levar até ~30s para gerar.
+
+## "Apareceu um número +1 que eu não reconheço"
+É o **número de teste** da Meta, criado automaticamente. Use **Reconfigurar / trocar número** e selecione o **número real** do restaurante.
+
+> Se nada resolver, fale com o suporte Foocci pelo próprio assistente de ajuda.`,
+  },
+  {
     slug: "guia-acompanhar-pedidos",
     title: "Como acompanhar e gerenciar pedidos",
     area: "GENERAL",
