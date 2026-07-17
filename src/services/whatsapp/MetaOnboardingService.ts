@@ -80,6 +80,34 @@ export async function subscribeAppToWaba(
   }
 }
 
+/**
+ * Read which apps are subscribed to a WABA (GET /{wabaId}/subscribed_apps). Used to
+ * confirm inbound routing after (re)subscribing — if OUR app isn't listed, inbound
+ * message webhooks never arrive and the assistant can't reply. Best-effort.
+ */
+export async function getWabaSubscribedApps(
+  accessToken: string,
+  wabaId:      string,
+): Promise<{ ok: boolean; appNames: string[]; error?: string }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${wabaId}/subscribed_apps`), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = (json as { error?: { message?: string } }).error?.message;
+      return { ok: false, appNames: [], error: maskGraphResponse(err ?? "Falha ao consultar assinaturas.") };
+    }
+    const data = (json as { data?: Array<{ whatsapp_business_api_data?: { name?: string } }> }).data ?? [];
+    const appNames = data
+      .map((d) => d?.whatsapp_business_api_data?.name)
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+    return { ok: true, appNames };
+  } catch (e) {
+    return { ok: false, appNames: [], error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
 export async function fetchPhoneDetails(
   accessToken:   string,
   phoneNumberId: string,

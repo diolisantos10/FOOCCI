@@ -345,6 +345,10 @@ export function MetaProviderCard() {
                   className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
                   Testar conexão
                 </button>
+                <button type="button" disabled={!!busy} onClick={() => action("repair-inbound", {}, "Recebimento reativado. Mande uma mensagem no WhatsApp do restaurante — a IA deve responder.")}
+                  className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
+                  {busy === "repair-inbound" ? "Reparando…" : "Reparar recebimento"}
+                </button>
                 {!isMeta && (
                   <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "META_CLOUD_API", confirm: true }, "Pronto — WhatsApp oficial da Meta agora é o principal.")}
                     className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
