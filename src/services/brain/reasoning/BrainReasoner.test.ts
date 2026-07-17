@@ -135,6 +135,24 @@ describe("BrainReasoner — the single reasoning gateway", () => {
     expect(systemPrompt).toContain("Combo Salmão 20 peças");
   });
 
+  it("ANTI-ALUCINAÇÃO DE COBERTURA: a regra de área de entrega chega ao prompt do piloto", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    ai.create.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        primaryIntent: "DELIVERY_AREA_QUESTION",
+        idealResponse: "Me passa seu CEP que eu confirmo a cobertura. 😊",
+        shouldEscalate: false,
+      }) } }],
+    });
+    const out = await reasonAsAgent({ ...baseReq, agentId: "whatsapp", agentRole: "WhatsApp", sanitizedInput: "vocês entregam em Salvador?" });
+    expect(out.reasoningMode).toBe("LLM");
+    const systemPrompt = ai.create.mock.calls[0][0].messages[0].content as string;
+    // O bug real: o Brain afirmava "sim, entregamos" p/ qualquer cidade (Salvador,
+    // Rio) sem cobertura na base. A regra que fecha isso TEM que chegar ao prompt.
+    expect(systemPrompt).toMatch(/[ÁA]REA DE ENTREGA\/COBERTURA/);
+    expect(systemPrompt).toMatch(/CEP/);
+  });
+
   it("CRÍTICO: preço inventado pelo piloto → coerência NEEDS_REVIEW (não passa batido)", async () => {
     process.env.OPENAI_API_KEY = "sk-test";
     db.menuItem.findMany.mockResolvedValue([

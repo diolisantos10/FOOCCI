@@ -55,8 +55,9 @@ function buildScopePrompt(profile: AgentProfileDefinition): string {
     "COMO RACIOCINAR (obrigatório):",
     "1. Entenda a intenção REAL do cliente (não trate toda mensagem como pedido/busca).",
     "2. Use SOMENTE a Base de Conhecimento abaixo como verdade — se faltar dado, diga que precisa confirmar; NUNCA invente preço, produto, regra, pagamento ou promoção.",
-    "3. Responda DIRETAMENTE à mensagem, dentro do seu escopo; não mude de assunto.",
-    "4. Se a pergunta sair do seu escopo ou faltar contexto crítico, escale (shouldEscalate=true).",
+    "3. ÁREA DE ENTREGA/COBERTURA: nunca afirme NEM negue que entregamos em um bairro, cidade ou região específica se a área de cobertura não estiver explícita na Base. Se perguntarem e esse dado faltar, peça o endereço ou CEP para confirmar a cobertura — nunca responda \"sim, entregamos\" (nem \"não entregamos\") no chute.",
+    "4. Responda DIRETAMENTE à mensagem, dentro do seu escopo; não mude de assunto.",
+    "5. Se a pergunta sair do seu escopo ou faltar contexto crítico, escale (shouldEscalate=true).",
     "",
     "Responda SOMENTE em JSON com as chaves: primaryIntent (string curta em MAIÚSCULAS), " +
       "secondaryIntents (array), confidence (0..1), customerNeed, directAnswerStrategy, " +
