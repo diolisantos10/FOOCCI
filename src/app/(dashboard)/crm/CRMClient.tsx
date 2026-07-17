@@ -2900,6 +2900,14 @@ function CampaignManageModal({
                 {/* ── Diagnóstico ── */}
                 {activeTab === "diagnostics" && (
                   <div className="space-y-4">
+                    {detail.totalFailed > 0 && (
+                      <button
+                        onClick={() => setActiveTab("overview")}
+                        className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-left text-xs text-red-700 hover:bg-red-100 transition-colors"
+                      >
+                        📉 <strong>Por que as mensagens falharam?</strong> O detalhamento dos motivos (número inválido, erro do Evolution, etc.) fica na aba <strong>Visão Geral</strong> → clique aqui para ir. Números que não existem no WhatsApp já são removidos do CRM automaticamente.
+                      </button>
+                    )}
                     {preflight && (
                       <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">Prévia de envio</p>

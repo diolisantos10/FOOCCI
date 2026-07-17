@@ -1158,6 +1158,7 @@ export class ScheduledCampaignRunnerService {
     // instance/provider failures we stop the batch — a reconnect is needed, not more tries.
     let consecutiveInstanceFailures = 0;
     const INSTANCE_COLLAPSE_THRESHOLD = 5;
+    let uncontactableMarked = 0; // numbers auto-retired because they can't receive WhatsApp
 
     for (const customer of customers) {
       // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
@@ -1402,6 +1403,17 @@ export class ScheduledCampaignRunnerService {
           cls.category === "EVOLUTION_AUTH_ERROR";
         consecutiveInstanceFailures = isInstanceFailure ? consecutiveInstanceFailures + 1 : 0;
 
+        // Auto-cleanup: a genuine per-number failure (bad request / invalid phone —
+        // NOT a transient session/instance problem) means this number can't receive
+        // WhatsApp. Retire it from CRM (crmContactable = false) so it stops being
+        // tried every cycle and stops inflating failures. Reversible in the cadastro.
+        if (cls.category === "EVOLUTION_BAD_REQUEST" || cls.category === "BLOCKED_INVALID_PHONE") {
+          await prisma.customer.update({
+            where: { id: customer.id }, data: { crmContactable: false },
+          }).catch(() => {});
+          uncontactableMarked++;
+        }
+
         // Circuit breaker (all paths, incl. cron): once the session is clearly
         // collapsed, stop the batch instead of hammering the whole audience and
         // racking up hundreds of identical failures. A reconnect is what's needed.
@@ -1419,6 +1431,10 @@ export class ScheduledCampaignRunnerService {
           if (!liveStatus || liveStatus.state !== "open") { aborted = true; break; }
         }
       }
+    }
+
+    if (uncontactableMarked > 0) {
+      console.info(`[CampaignRunner] auto-retired ${uncontactableMarked} unreachable number(s) from CRM`, { campaignId: campaign.id });
     }
 
     // Single campaign counter update after batch. totalFailed counts REAL send
