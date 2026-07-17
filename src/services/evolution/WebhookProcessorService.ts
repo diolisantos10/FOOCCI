@@ -624,7 +624,11 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
     }),
     prisma.conversation.update({
       where: { id: conversation.id },
-      data: { lastMessageAt: now },
+      // Staff answered from their own phone/WhatsApp Web — that IS acknowledging
+      // the handoff. Silences the alarm durably (all pages/devices) while the
+      // conversation stays HUMAN/visible. This was the #1 source of the chronic
+      // "apita e não para": phone-answered conversations kept ringing for hours.
+      data: { lastMessageAt: now, handoffAlarmAckAt: now },
     }),
   ]);
 

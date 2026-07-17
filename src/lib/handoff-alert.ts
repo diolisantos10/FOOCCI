@@ -59,11 +59,23 @@ export interface HandoffRingOptions {
 
 export const HANDOFF_REQUEST_STATUS = "HUMAN";
 
-/** How long after a customer's last message the human-attention alarm keeps
- *  SOUNDING before it auto-silences (the conversation stays visible in the
- *  inbox). Deliberately generous — far beyond any real "answer me now" window
- *  for a food order — so it only ever quiets genuinely stale/abandoned handoffs. */
+/** VISUAL window: how long a handoff stays in the "🙋 aguardando atendimento
+ *  humano" banner/auto-select on the Atendimento screen. Generous on purpose —
+ *  visibility should long outlive the noise. */
 export const HANDOFF_ALARM_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/** SOUND window: how long after the conversation's last message the alarm keeps
+ *  BEEPING before it auto-silences. Short on purpose (raio-x 2, 2026-07-14): the
+ *  sound is a "come look NOW" signal — after this long it is noise, not signal,
+ *  and it was beeping on every screen for hours ("apita em página aleatória").
+ *  The conversation stays fully visible; answering the customer (auto-ack) or
+ *  assuming it stops the sound immediately. */
+export const HANDOFF_SOUND_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
+/** SOUND cap for the overdue (10-min unanswered) escalation: it re-beeps for an
+ *  ignored customer, but only while the wait is still recent — a conversation
+ *  waiting longer than this stays on the "⏰ atrasados" banner without noise. */
+export const OVERDUE_SOUND_MAX_WAIT_MINUTES = 20;
 
 function toMs(v: string | Date | null | undefined): number | null {
   if (!v) return null;

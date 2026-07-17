@@ -65,7 +65,8 @@ export async function POST(
       }),
       prisma.conversation.update({
         where: { id },
-        data:  { lastMessageAt: now },
+        // Replying IS acknowledging — a human answer silences the handoff alarm.
+        data:  { lastMessageAt: now, handoffAlarmAckAt: now },
       }),
     ]);
 

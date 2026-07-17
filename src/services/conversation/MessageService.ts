@@ -167,7 +167,9 @@ export class MessageService {
         }),
         prisma.conversation.update({
           where: { id: conversationId },
-          data: { lastMessageAt: now },
+          // Replying IS acknowledging: a human answer silences the handoff alarm
+          // durably (all pages/devices). The conversation stays HUMAN/visible.
+          data: { lastMessageAt: now, handoffAlarmAckAt: now },
         }),
       ]);
       // Cardápio replies are delivered to the customer via /pedido polling.
@@ -231,7 +233,9 @@ export class MessageService {
       }),
       prisma.conversation.update({
         where: { id: conversationId },
-        data: { lastMessageAt: now },
+        // Replying IS acknowledging: a human answer silences the handoff alarm
+        // durably (all pages/devices). The conversation stays HUMAN/visible.
+        data: { lastMessageAt: now, handoffAlarmAckAt: now },
       }),
     ]);
 

@@ -9,7 +9,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { pendingHumanRequestIds, HANDOFF_ALARM_MAX_AGE_MS } from "@/lib/handoff-alert";
+import {
+  pendingHumanRequestIds,
+  HANDOFF_ALARM_MAX_AGE_MS,
+  HANDOFF_SOUND_MAX_AGE_MS,
+  OVERDUE_SOUND_MAX_WAIT_MINUTES,
+} from "@/lib/handoff-alert";
 
 describe("pendingHumanRequestIds", () => {
   it("A — includes conversations waiting for a human (status HUMAN)", () => {
@@ -103,5 +108,37 @@ describe("pendingHumanRequestIds", () => {
 
   it("returns [] for no conversations", () => {
     expect(pendingHumanRequestIds([])).toEqual([]);
+  });
+
+  // ── SOUND window (raio-x 2, 2026-07-14) ────────────────────────────────────
+  // The beep is a "come look NOW" signal: it auto-quiets after 10 min while the
+  // conversation stays visible (the 2h VISUAL window is separate). This is the
+  // contract that ended the "apita em página aleatória por horas" complaint.
+  it("SOUND window is 10 min and VISUAL window is 2h (sound ≪ visual)", () => {
+    expect(HANDOFF_SOUND_MAX_AGE_MS).toBe(10 * 60 * 1000);
+    expect(HANDOFF_ALARM_MAX_AGE_MS).toBe(2 * 60 * 60 * 1000);
+    expect(HANDOFF_SOUND_MAX_AGE_MS).toBeLessThan(HANDOFF_ALARM_MAX_AGE_MS);
+    expect(OVERDUE_SOUND_MAX_WAIT_MINUTES).toBe(20);
+  });
+
+  it("under the SOUND window, an 11-min-old handoff is quiet while a 9-min-old one rings", () => {
+    const now = Date.parse("2026-07-14T19:00:00.000Z");
+    const ids = pendingHumanRequestIds(
+      [
+        { id: "quiet", status: "HUMAN", lastMessageAt: new Date(now - 11 * 60_000) },
+        { id: "rings", status: "HUMAN", lastMessageAt: new Date(now - 9 * 60_000) },
+      ],
+      { now, maxAgeMs: HANDOFF_SOUND_MAX_AGE_MS },
+    );
+    expect(ids).toEqual(["rings"]);
+  });
+
+  it("the same 11-min-old handoff still counts for the VISUAL window (2h)", () => {
+    const now = Date.parse("2026-07-14T19:00:00.000Z");
+    const ids = pendingHumanRequestIds(
+      [{ id: "visible", status: "HUMAN", lastMessageAt: new Date(now - 11 * 60_000) }],
+      { now, maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS },
+    );
+    expect(ids).toEqual(["visible"]);
   });
 });

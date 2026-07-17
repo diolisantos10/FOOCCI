@@ -48,10 +48,11 @@ import {
   HANDOFF_SOUND_LAST_ERROR_KEY,
   fetchRestaurantSoundSettings,
 } from "@/lib/sound-prefs";
-import { pendingActionOrderIds, ORDER_ALARM_MAX_AGE_MS, type AlertOrderLike } from "@/lib/order-alert";
+import { pendingActionOrderIds, type AlertOrderLike } from "@/lib/order-alert";
 import {
   pendingHumanRequestIds,
-  HANDOFF_ALARM_MAX_AGE_MS,
+  HANDOFF_SOUND_MAX_AGE_MS,
+  OVERDUE_SOUND_MAX_WAIT_MINUTES,
   type HandoffConversationLike,
 } from "@/lib/handoff-alert";
 
@@ -214,10 +215,18 @@ export function GlobalAlertEngine() {
         } catch { /* storage unavailable */ }
       },
     });
+    // Orders the operator explicitly handled this session (Accept/Reject on the
+    // modal or list). Accepting a PENDING order moves it to CONFIRMED — which is
+    // still inside the new-order ring-set — so without this memory the alarm
+    // would re-ring the very order that was just accepted. Session-scoped and
+    // relayed cross-tab via the order-resolved bridge message.
+    const resolvedOrderIds = new Set<string>();
+
     // Only a tab that currently CAN RING (visible, or the fallback leader when no
     // tab is visible) ever receives non-empty ids, so play() never fires from a
     // dormant background tab.
-    const safeOrderSync   = (ids: string[]) => orderController.sync(canRing() ? ids : []);
+    const safeOrderSync = (ids: string[]) =>
+      orderController.sync(canRing() ? ids.filter((id) => !resolvedOrderIds.has(id)) : []);
     const safeHandoffSync = (ids: string[]) => handoffController.sync(canRing() ? ids : []);
 
     // ── ORDER poll — recent orders needing attention (see order-alert.ts) ────
@@ -241,7 +250,7 @@ export function GlobalAlertEngine() {
             paymentProviderName: o.payment?.providerName ?? null,
             paymentStatus:       o.payment?.status ?? null,
           }));
-          safeOrderSync(pendingActionOrderIds(mapped, { maxAgeMs: ORDER_ALARM_MAX_AGE_MS }));
+          safeOrderSync(pendingActionOrderIds(mapped));
         })
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
     };
@@ -263,10 +272,10 @@ export function GlobalAlertEngine() {
           if (handoffDrivenRef.current) return; // a race with attach — defer to the page
           const raw = json?.data;
           const rows: HandoffConversationLike[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
-          // maxAgeMs stops the SOUND for handoffs whose customer has been silent
-          // for hours (the "apita e não para" stale-escalation case) — they stay
-          // visible in the inbox, they just go quiet on their own.
-          const pending = pendingHumanRequestIds(rows, { maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS });
+          // Short SOUND window (10 min): the beep is a "come look now" signal —
+          // it auto-quiets on its own while the conversation stays fully visible
+          // in the inbox. Answering the customer (auto-ack) stops it immediately.
+          const pending = pendingHumanRequestIds(rows, { maxAgeMs: HANDOFF_SOUND_MAX_AGE_MS });
           safeHandoffSync([...new Set([...pending, ...overdueIds])]);
         })
         .catch(() => { /* keep ringing on last known state; next poll retries */ });
@@ -276,9 +285,11 @@ export function GlobalAlertEngine() {
       fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
         .then((r) => r.json())
         .then((d: { data?: { overdue?: { id: string; waitingMinutes?: number }[] } }) => {
-          const maxMinutes = HANDOFF_ALARM_MAX_AGE_MS / 60_000;
+          // Overdue = customer waiting ≥10 min unanswered. It re-beeps, but only
+          // while the wait is still recent (≤20 min) — an older one stays on the
+          // "⏰ atrasados" banner without app-wide noise.
           overdueIds = (d?.data?.overdue ?? [])
-            .filter((o) => (o.waitingMinutes ?? 0) <= maxMinutes)
+            .filter((o) => (o.waitingMinutes ?? 0) <= OVERDUE_SOUND_MAX_WAIT_MINUTES)
             .map((o) => o.id);
         })
         .catch(() => {});
@@ -303,7 +314,9 @@ export function GlobalAlertEngine() {
         case "detach":  handoffDrivenRef.current = false; pollHuman(); pollOverdue(); break;
         case "ring-ids": safeHandoffSync(msg.ids ?? []); break;
         case "handoff-resolved": if (msg.id) handoffController.resolve(msg.id, msg.reason ?? "RESOLVED"); break;
-        case "order-resolved":   if (msg.id) orderController.resolve(msg.id, msg.reason ?? "RESOLVED"); break;
+        case "order-resolved":
+          if (msg.id) { resolvedOrderIds.add(msg.id); orderController.resolve(msg.id, msg.reason ?? "RESOLVED"); }
+          break;
         case "tab-visible":      if (msg.tabId) peerVisibleAt.set(msg.tabId, msg.at ?? Date.now()); break;
       }
     });
@@ -345,8 +358,11 @@ export function GlobalAlertEngine() {
     };
     const onOrderResolved = (e: Event) => {
       const { id, reason } = (e as CustomEvent<{ id: string; reason: string }>).detail ?? {};
-      if (id) orderController.resolve(id, reason ?? "RESOLVED");
-      if (id) bridge?.postMessage({ type: "order-resolved", id, reason: reason ?? "RESOLVED" });
+      if (id) {
+        resolvedOrderIds.add(id); // handled — never re-ring it (accept moves PENDING→CONFIRMED, still in the ring-set)
+        orderController.resolve(id, reason ?? "RESOLVED");
+        bridge?.postMessage({ type: "order-resolved", id, reason: reason ?? "RESOLVED" });
+      }
     };
     window.addEventListener("foocci:handoff-attach", onAttach);
     window.addEventListener("foocci:handoff-detach", onDetach);
@@ -375,10 +391,10 @@ export function GlobalAlertEngine() {
     };
   }, []);
 
-  // Renders nothing — the engine is sound-only. (A floating "Silenciar alarme"
-  // button used to live here; the owner asked for it to be removed. The alarm now
-  // bounds its own noise via the recency windows in order-alert/handoff-alert, so
-  // no kill switch is needed — handling the order/conversation stops it, and a
-  // stale one goes quiet on its own.)
+  // Renders nothing — the engine is sound-only. (A floating mute balloon used to
+  // live here; the owner asked for it to be removed. The alarm now bounds its own
+  // noise via the recency windows in order-alert/handoff-alert, so no kill switch
+  // is needed — handling the order/conversation stops it, answering the customer
+  // auto-acks it, and a stale one goes quiet on its own.)
   return null;
 }

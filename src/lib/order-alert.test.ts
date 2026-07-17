@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { isPaymentPendingOrder, pendingActionOrderIds } from "@/lib/order-alert";
+import {
+  isPaymentPendingOrder,
+  pendingActionOrderIds,
+  PENDING_ORDER_SOUND_MAX_AGE_MS,
+  CONFIRMED_ORDER_SOUND_MAX_AGE_MS,
+} from "@/lib/order-alert";
 
 describe("isPaymentPendingOrder", () => {
   it("AWAITING_PAYMENT is always payment-pending", () => {
@@ -18,53 +23,67 @@ describe("isPaymentPendingOrder", () => {
 });
 
 describe("pendingActionOrderIds", () => {
+  const now = 100_000_000;
+  const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+
   it("rings for newly-arrived orders — PENDING AND CONFIRMED — minus payment-pending", () => {
     const orders = [
-      { id: "o1", status: "PENDING" },
-      { id: "o2", status: "AWAITING_PAYMENT" },
-      { id: "o3", status: "PENDING", paymentProviderName: "mercadopago", paymentStatus: "LINK_SENT" },
-      { id: "o4", status: "CONFIRMED" }, // pay-on-delivery lands here — MUST ring
-      { id: "o5", status: "PENDING" },
+      { id: "o1", status: "PENDING",   createdAt: iso(60_000) },
+      { id: "o2", status: "AWAITING_PAYMENT", createdAt: iso(60_000) },
+      { id: "o3", status: "PENDING",   createdAt: iso(60_000), paymentProviderName: "mercadopago", paymentStatus: "LINK_SENT" },
+      { id: "o4", status: "CONFIRMED", createdAt: iso(60_000) }, // pay-on-delivery lands here — MUST ring
+      { id: "o5", status: "PENDING",   createdAt: iso(60_000) },
     ];
-    expect(pendingActionOrderIds(orders)).toEqual(["o1", "o4", "o5"]);
+    expect(pendingActionOrderIds(orders, { now })).toEqual(["o1", "o4", "o5"]);
   });
 
   it("does NOT ring for orders already being handled (PREPARING/READY/…)", () => {
     const orders = [
-      { id: "a", status: "PREPARING" },
-      { id: "b", status: "READY" },
-      { id: "c", status: "OUT_FOR_DELIVERY" },
-      { id: "d", status: "DELIVERED" },
-      { id: "e", status: "CANCELLED" },
-      { id: "f", status: "CONFIRMED" }, // only this one is "new"
+      { id: "a", status: "PREPARING",        createdAt: iso(60_000) },
+      { id: "b", status: "READY",            createdAt: iso(60_000) },
+      { id: "c", status: "OUT_FOR_DELIVERY", createdAt: iso(60_000) },
+      { id: "d", status: "DELIVERED",        createdAt: iso(60_000) },
+      { id: "e", status: "CANCELLED",        createdAt: iso(60_000) },
+      { id: "f", status: "CONFIRMED",        createdAt: iso(60_000) }, // only this one is "new"
     ];
-    expect(pendingActionOrderIds(orders)).toEqual(["f"]);
+    expect(pendingActionOrderIds(orders, { now })).toEqual(["f"]);
   });
 
   it("empty list -> empty result", () => {
     expect(pendingActionOrderIds([])).toEqual([]);
   });
 
-  describe("recency safety-net (maxAgeMs)", () => {
-    const now = 10_000_000;
-    const iso = (ms: number) => new Date(ms).toISOString();
-
-    it("keeps a fresh order but drops one older than the window", () => {
+  describe("per-status sound windows", () => {
+    it("PENDING rings up to 15 min, then auto-quiets", () => {
       const orders = [
-        { id: "fresh", status: "CONFIRMED", createdAt: iso(now - 60_000) },       // 1 min old
-        { id: "stale", status: "CONFIRMED", createdAt: iso(now - 30 * 60_000) },  // 30 min old
+        { id: "fresh", status: "PENDING", createdAt: iso(PENDING_ORDER_SOUND_MAX_AGE_MS - 60_000) },
+        { id: "stale", status: "PENDING", createdAt: iso(PENDING_ORDER_SOUND_MAX_AGE_MS + 60_000) },
       ];
-      expect(pendingActionOrderIds(orders, { now, maxAgeMs: 15 * 60_000 })).toEqual(["fresh"]);
+      expect(pendingActionOrderIds(orders, { now })).toEqual(["fresh"]);
     });
 
-    it("with no window given, age is ignored (rings regardless)", () => {
-      const orders = [{ id: "old", status: "CONFIRMED", createdAt: iso(now - 10 * 60 * 60_000) }];
-      expect(pendingActionOrderIds(orders)).toEqual(["old"]);
+    it("CONFIRMED rings up to 3 min, then auto-quiets (heads-up only)", () => {
+      const orders = [
+        { id: "fresh", status: "CONFIRMED", createdAt: iso(CONFIRMED_ORDER_SOUND_MAX_AGE_MS - 30_000) },
+        { id: "stale", status: "CONFIRMED", createdAt: iso(CONFIRMED_ORDER_SOUND_MAX_AGE_MS + 30_000) },
+      ];
+      expect(pendingActionOrderIds(orders, { now })).toEqual(["fresh"]);
+    });
+
+    it("a 10-min-old CONFIRMED is quiet while a 10-min-old PENDING still rings", () => {
+      const orders = [
+        { id: "c", status: "CONFIRMED", createdAt: iso(10 * 60_000) },
+        { id: "p", status: "PENDING",   createdAt: iso(10 * 60_000) },
+      ];
+      expect(pendingActionOrderIds(orders, { now })).toEqual(["p"]);
     });
 
     it("missing/invalid timestamp fails toward ringing, not silence", () => {
-      const orders = [{ id: "x", status: "CONFIRMED" }];
-      expect(pendingActionOrderIds(orders, { now, maxAgeMs: 15 * 60_000 })).toEqual(["x"]);
+      const orders = [
+        { id: "x", status: "CONFIRMED" },
+        { id: "y", status: "PENDING", createdAt: "not-a-date" },
+      ];
+      expect(pendingActionOrderIds(orders, { now })).toEqual(["x", "y"]);
     });
   });
 });

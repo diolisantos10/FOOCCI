@@ -291,7 +291,7 @@ export default function SonsPage() {
       <PageCard>
         <SectionHeading
           title="Som de novo pedido"
-          subtitle="Toca quando um novo pedido PENDENTE chega na tela de Pedidos."
+          subtitle="Toca em qualquer tela quando um novo pedido chega (aguardando aceite ou já confirmado)."
         />
         <div className="space-y-4">
           <Toggle

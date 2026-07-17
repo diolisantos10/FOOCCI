@@ -11,7 +11,12 @@ import {
 } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { HANDOFF_SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
-import { pendingHumanRequestIds, HANDOFF_ALARM_MAX_AGE_MS } from "@/lib/handoff-alert";
+import {
+  pendingHumanRequestIds,
+  HANDOFF_ALARM_MAX_AGE_MS,
+  HANDOFF_SOUND_MAX_AGE_MS,
+  OVERDUE_SOUND_MAX_WAIT_MINUTES,
+} from "@/lib/handoff-alert";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
@@ -502,13 +507,19 @@ export function AtendimentoClient({
   }, []);
 
   // Conversations waiting for a human (status === "HUMAN", not Staff/equipe),
-  // unassumed. This is the visible pending queue AND the base of the alarm.
-  // maxAgeMs mirrors the app-wide engine: a handoff whose customer has been
-  // silent for hours stops SOUNDING on its own (it stays listed below — the
-  // conversation is not hidden, only quieted). This is what keeps the alarm
-  // from "apitando e não parando" for old/stale escalations.
+  // unassumed. VISUAL window (2h): drives the "🙋 aguardando" banner, the
+  // auto-select and the "Estou ciente" batch — visibility long outlives noise.
   const pendingHumanIds = useMemo(
     () => pendingHumanRequestIds(conversations, { maxAgeMs: HANDOFF_ALARM_MAX_AGE_MS }),
+    [conversations],
+  );
+
+  // SOUND window (10 min) — mirrors the app-wide engine: the beep is a "come
+  // look now" signal that auto-quiets on its own; answering the customer
+  // (auto-ack) or assuming the conversation stops it immediately. The
+  // conversation stays fully visible above regardless.
+  const soundWindowHumanIds = useMemo(
+    () => pendingHumanRequestIds(conversations, { maxAgeMs: HANDOFF_SOUND_MAX_AGE_MS }),
     [conversations],
   );
 
@@ -537,12 +548,13 @@ export function AtendimentoClient({
     });
   }, [pendingHumanIds]);
 
-  // The alarm rings for pending requests MINUS the acknowledged batch. Plays
-  // immediately on a new request, repeats while any remain, stops when assumed/
-  // resolved/acknowledged — never because the page is open or a conversation is viewed.
+  // The alarm rings for pending requests INSIDE THE SOUND WINDOW minus the
+  // acknowledged batch. Plays immediately on a new request, repeats while any
+  // remain, stops when assumed/resolved/acknowledged/answered — or quiets on its
+  // own once the sound window lapses (the conversation stays visible).
   const alarmingHumanIds = useMemo(
-    () => pendingHumanIds.filter((id) => !acknowledgedHumanIds.has(id)),
-    [pendingHumanIds, acknowledgedHumanIds],
+    () => soundWindowHumanIds.filter((id) => !acknowledgedHumanIds.has(id)),
+    [soundWindowHumanIds, acknowledgedHumanIds],
   );
 
   // Overdue handoffs re-arm the alarm via their own ack set. Drop acks once a
@@ -560,15 +572,14 @@ export function AtendimentoClient({
     });
   }, [overdueIds]);
 
-  // Sound only for overdue handoffs still within the stale window — an item the
-  // customer abandoned hours ago keeps showing in the "⏰ atrasados" banner but
-  // stops making noise on its own (matches the app-wide engine).
-  const overdueSoundMaxMinutes = HANDOFF_ALARM_MAX_AGE_MS / 60_000;
+  // Sound only for overdue handoffs whose wait is still recent (≤20 min) — an
+  // item waiting longer keeps showing in the "⏰ atrasados" banner but stops
+  // making noise on its own (matches the app-wide engine).
   const alarmingOverdueIds = useMemo(
     () => overdueHandoffs
-      .filter((o) => o.waitingMinutes <= overdueSoundMaxMinutes && !acknowledgedOverdueIds.has(o.id))
+      .filter((o) => o.waitingMinutes <= OVERDUE_SOUND_MAX_WAIT_MINUTES && !acknowledgedOverdueIds.has(o.id))
       .map((o) => o.id),
-    [overdueHandoffs, acknowledgedOverdueIds, overdueSoundMaxMinutes],
+    [overdueHandoffs, acknowledgedOverdueIds],
   );
 
   // The alarm sound rings for pending (unacked) ∪ overdue (unacked), deduped.

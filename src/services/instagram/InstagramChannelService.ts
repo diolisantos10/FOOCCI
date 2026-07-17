@@ -392,7 +392,8 @@ export async function sendManualReply(
     },
     select: { id: true },
   });
-  await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } }).catch(() => undefined);
+  // Replying IS acknowledging — a human answer silences the handoff alarm.
+  await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now, handoffAlarmAckAt: now } }).catch(() => undefined);
 
   return { ok: send.ok, send, messageId: message.id, reason: send.reason };
 }
@@ -459,7 +460,8 @@ export async function sendCommentReply(
     },
     select: { id: true },
   });
-  await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } }).catch(() => undefined);
+  // Replying IS acknowledging — a human answer silences the handoff alarm.
+  await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now, handoffAlarmAckAt: now } }).catch(() => undefined);
 
   return { ok: send.ok, send, messageId: message.id, reason: send.reason };
 }
