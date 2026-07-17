@@ -148,9 +148,23 @@ async function findOrCreateConversation(
       ],
     },
     orderBy: { lastMessageAt: "desc" },
-    select:  { id: true },
+    select:  { id: true, customerPhone: true },
   });
-  if (existing) return existing;
+  if (existing) {
+    // Self-heal the channel phone: Meta's wa_id (fromPhone) is the authoritative,
+    // deliverable recipient for /messages. Conversations created earlier (or matched
+    // via a malformed CRM Customer.phone) can carry a number the Cloud API rejects
+    // (seen live: 12-digit local without the 55 country code → INVALID_PHONE, bot
+    // silently mute). Overwrite whenever it differs so replies always target the
+    // exact number that just messaged us.
+    if (existing.customerPhone !== fromPhone) {
+      await prisma.conversation.update({
+        where: { id: existing.id },
+        data:  { customerPhone: fromPhone },
+      }).catch(() => { /* best-effort — reply still uses stored phone if this fails */ });
+    }
+    return existing;
+  }
 
   const customer = await prisma.customer.findFirst({
     where:  { restaurantId, phone: { contains: tail } },
@@ -163,7 +177,9 @@ async function findOrCreateConversation(
       channel:       "WHATSAPP",
       status:        "OPEN",
       customerId:    customer?.id ?? null,
-      customerPhone: customer?.phone ?? fromPhone,
+      // Channel phone = Meta's wa_id, NOT Customer.phone: the CRM value can be in a
+      // format the Cloud API rejects; wa_id is exactly what /messages accepts back.
+      customerPhone: fromPhone,
       customerName:  customer?.name ?? profileName ?? fromPhone,
       contextType:   "INBOUND",
     },
