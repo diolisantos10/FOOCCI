@@ -1158,7 +1158,7 @@ export class ScheduledCampaignRunnerService {
     // instance/provider failures we stop the batch — a reconnect is needed, not more tries.
     let consecutiveInstanceFailures = 0;
     const INSTANCE_COLLAPSE_THRESHOLD = 5;
-    let uncontactableMarked = 0; // numbers auto-retired because they can't receive WhatsApp
+    const unreachableIds: string[] = []; // numbers that can't receive WhatsApp (retire/delete)
 
     for (const customer of customers) {
       // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
@@ -1404,14 +1404,11 @@ export class ScheduledCampaignRunnerService {
         consecutiveInstanceFailures = isInstanceFailure ? consecutiveInstanceFailures + 1 : 0;
 
         // Auto-cleanup: a genuine per-number failure (bad request / invalid phone —
-        // NOT a transient session/instance problem) means this number can't receive
-        // WhatsApp. Retire it from CRM (crmContactable = false) so it stops being
-        // tried every cycle and stops inflating failures. Reversible in the cadastro.
+        // NOT a transient session/instance problem, which is retried) means this
+        // number can't receive WhatsApp. Collect it — after the batch, dead leads are
+        // DELETED and the ones with order history are retired (kept non-contactable).
         if (cls.category === "EVOLUTION_BAD_REQUEST" || cls.category === "BLOCKED_INVALID_PHONE") {
-          await prisma.customer.update({
-            where: { id: customer.id }, data: { crmContactable: false },
-          }).catch(() => {});
-          uncontactableMarked++;
+          unreachableIds.push(customer.id);
         }
 
         // Circuit breaker (all paths, incl. cron): once the session is clearly
@@ -1433,8 +1430,32 @@ export class ScheduledCampaignRunnerService {
       }
     }
 
-    if (uncontactableMarked > 0) {
-      console.info(`[CampaignRunner] auto-retired ${uncontactableMarked} unreachable number(s) from CRM`, { campaignId: campaign.id });
+    // Auto-cleanup of numbers that can't receive WhatsApp (irreversible). Dead LEADS
+    // (no order/draft history) are physically DELETED — "só cadastros limpos ficam".
+    // Contacts WITH order history are kept but retired from CRM (crmContactable=false),
+    // so the sales history is never destroyed. Reversible failures are NOT here — they
+    // stay eligible and get retried in a later cycle.
+    if (unreachableIds.length > 0) {
+      const ids = [...new Set(unreachableIds)];
+      try {
+        await prisma.customer.updateMany({ where: { id: { in: ids } }, data: { crmContactable: false } });
+        const rows = await prisma.customer.findMany({
+          where:  { id: { in: ids } },
+          select: { id: true, _count: { select: { orders: true, orderDrafts: true } } },
+        });
+        const deletable = rows.filter((r) => r._count.orders === 0 && r._count.orderDrafts === 0).map((r) => r.id);
+        if (deletable.length > 0) {
+          // Conversation is the only non-cascading FK on a lead with no orders — unlink
+          // it (keep the chat) so the delete never blocks. Addresses/prefs/etc. cascade.
+          await prisma.$transaction([
+            prisma.conversation.updateMany({ where: { customerId: { in: deletable } }, data: { customerId: null } }),
+            prisma.customer.deleteMany({ where: { id: { in: deletable } } }),
+          ]);
+        }
+        console.info(`[CampaignRunner] unreachable cleanup: ${deletable.length} deleted, ${ids.length - deletable.length} retired`, { campaignId: campaign.id });
+      } catch (e) {
+        console.warn(`[CampaignRunner] unreachable cleanup failed`, { campaignId: campaign.id, error: e instanceof Error ? e.message : String(e) });
+      }
     }
 
     // Single campaign counter update after batch. totalFailed counts REAL send
