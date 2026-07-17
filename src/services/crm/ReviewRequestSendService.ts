@@ -402,7 +402,7 @@ export class ReviewRequestSendService {
         platform: plan.platform,
         reviewLink: plan.link,
         messageText: plan.message,
-        messageId: evoResult.key.id,
+        messageId: sendRes.providerMessageId ?? undefined,
         blockReasons: [],
         reasons: eligibility.reasons,
         eligibility,
