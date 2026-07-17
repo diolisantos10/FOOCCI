@@ -18,8 +18,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
-import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { activeWhatsAppProvider } from "@/services/whatsapp/activeProvider";
+import type { SendResult } from "@/services/whatsapp/providers/types";
 import { sendManualReply as sendInstagramManualReply, sendCommentReply as sendInstagramCommentReply } from "@/services/instagram/InstagramChannelService";
 import type { SendMessageInput, MessageListQuery } from "@/validators/conversation";
 import { ConversationStatus, MessageType } from "@prisma/client";
@@ -176,45 +176,41 @@ export class MessageService {
       return serviceOk({ ...message, _internalOnly: !isCardapio, _deliveredVia: isCardapio ? "CARDAPIO" : null });
     }
 
-    // WhatsApp: fetch decrypted credentials
-    const configResult = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!configResult.ok) {
-      return serviceFail("WHATSAPP_NOT_CONFIGURED", 502);
-    }
+    // WhatsApp: route through the restaurant's ACTIVE provider (Meta Cloud API or
+    // Evolution). A restaurant that migrated its number to the official Meta Cloud API
+    // has no live Evolution instance, so a hardcoded Evolution send fails with HTTP 400
+    // and the agent can't reply. Routing by the active provider fixes that while leaving
+    // Evolution-only restaurants untouched.
+    const provider = await activeWhatsAppProvider(restaurantId);
 
-    const config = configResult.data;
-
-    const toNumber = (conv.customer?.phone ?? conv.customerPhone ?? "").trim().replace(/^\+/, "");
+    // Channel phone (customerPhone) is the authoritative recipient: for Meta it's the
+    // wa_id the inbound webhook self-heals; fall back to the CRM customer.phone. Both
+    // providers normalize/validate the number themselves.
+    const toNumber = (conv.customerPhone ?? conv.customer?.phone ?? "").trim().replace(/^\+/, "");
     if (!toNumber) {
-      return serviceFail("Conversation has no phone — cannot send via Evolution", 422);
+      return serviceFail("Conversa sem telefone — não é possível enviar.", 422);
     }
 
-    let externalMessageId: string | null = null;
-
-    try {
-      if (input.type === "TEXT") {
-        const result = await EvolutionClient.sendTextMessage(config, toNumber, input.content);
-        externalMessageId = result.key.id;
-      } else if (input.mediaUrl) {
-        const mediaType = input.type.toLowerCase() as "image" | "audio" | "document";
-        const result = await EvolutionClient.sendMediaMessage(
-          config,
-          toNumber,
-          mediaType,
-          input.mediaUrl,
-          input.content || undefined
-        );
-        externalMessageId = result.key.id;
-      } else {
-        return serviceFail("mediaUrl is required for non-text messages", 400);
+    let sendResult: SendResult;
+    if (input.type === "TEXT") {
+      sendResult = await provider.sendText({ restaurantId, to: toNumber, text: input.content });
+    } else if (input.mediaUrl) {
+      if (!provider.sendMedia) {
+        return serviceFail("Este provedor de WhatsApp não suporta envio de mídia.", 400);
       }
-    } catch (err) {
-      if (err instanceof EvolutionApiError) {
-        console.error("[MessageService.sendOutbound] Evolution API error", err.status, err.body);
-        return serviceFail(`Failed to deliver message via WhatsApp: ${err.message}`, 502);
-      }
-      throw err;
+      const mediaType = input.type.toLowerCase() as "image" | "audio" | "video" | "document";
+      sendResult = await provider.sendMedia({
+        restaurantId, to: toNumber, mediaType, mediaUrl: input.mediaUrl, caption: input.content || undefined,
+      });
+    } else {
+      return serviceFail("mediaUrl is required for non-text messages", 400);
     }
+
+    if (!sendResult.ok) {
+      console.error("[MessageService.sendOutbound] provider send failed", sendResult.provider, sendResult.errorCode, sendResult.error);
+      return serviceFail(`Failed to deliver message via WhatsApp: ${sendResult.error ?? sendResult.errorCode ?? "erro no envio"}`, 502);
+    }
+    const externalMessageId = sendResult.providerMessageId;
 
     const [message] = await prisma.$transaction([
       prisma.message.create({
@@ -228,7 +224,9 @@ export class MessageService {
           sentAt:     now,
           externalMessageId,
           externalStatus: "sent",
-          metadata:   { source: "WHATSAPP" } as object,
+          provider:          sendResult.provider,
+          ...(externalMessageId ? { providerMessageId: externalMessageId } : {}),
+          metadata:   { source: "WHATSAPP", provider: sendResult.provider } as object,
         },
       }),
       prisma.conversation.update({
