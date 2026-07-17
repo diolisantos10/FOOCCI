@@ -35,7 +35,7 @@
  *    "Estou ciente" / "Silenciar atrasados" nuance is preserved byte-for-byte.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { AlertLoopController } from "@/lib/alert-loop";
 import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
 import {
@@ -107,27 +107,6 @@ export function GlobalAlertEngine() {
   const isLockLeaderRef = useRef(false);
   // Whether THIS tab is currently visible/foreground.
   const isVisibleRef = useRef(true);
-
-  // Drives the app-wide "🔇 Silenciar alarme" button: how many handoff
-  // conversations are currently SOUNDING on this tab. > 0 → show the button, so
-  // the operator can stop the noise from ANY page with one tap.
-  const [ringHandoffCount, setRingHandoffCount] = useState(0);
-  const handoffControllerRef = useRef<AlertLoopController | null>(null);
-  // After a manual silence, hold the alarm quiet for a beat so the next poll
-  // (which may fire before the server ack commits) can't briefly re-ring.
-  const suppressRingUntilRef = useRef(0);
-
-  /** One-tap "silence the human-attention alarm everywhere". Optimistically goes
-   *  quiet on this device, then persists the acknowledgement server-side so the
-   *  alarm stays silent on every page and every device (acknowledge-all). */
-  const silenceAllHandoffs = () => {
-    suppressRingUntilRef.current = Date.now() + 12_000;
-    setRingHandoffCount(0);
-    handoffControllerRef.current?.sync([]); // instant local silence
-    void fetch("/api/atendimento/handoff/acknowledge-all", { method: "POST" }).catch(() => {
-      /* the DB ack is best-effort; the local silence above already stopped this device */
-    });
-  };
 
   useEffect(() => {
     // ── Load settings, once + on every save from Configurações → Sons ────────
@@ -235,18 +214,11 @@ export function GlobalAlertEngine() {
         } catch { /* storage unavailable */ }
       },
     });
-    handoffControllerRef.current = handoffController; // let the silence button reach it
-
     // Only a tab that currently CAN RING (visible, or the fallback leader when no
     // tab is visible) ever receives non-empty ids, so play() never fires from a
     // dormant background tab.
     const safeOrderSync   = (ids: string[]) => orderController.sync(canRing() ? ids : []);
-    const safeHandoffSync = (ids: string[]) => {
-      const suppressed = Date.now() < suppressRingUntilRef.current;
-      const eff = canRing() && !suppressed ? ids : [];
-      setRingHandoffCount(eff.length); // drives the "🔇 Silenciar alarme" button
-      handoffController.sync(eff);
-    };
+    const safeHandoffSync = (ids: string[]) => handoffController.sync(canRing() ? ids : []);
 
     // ── ORDER poll — recent orders needing attention (see order-alert.ts) ────
     const pollOrders = () => {
@@ -403,19 +375,10 @@ export function GlobalAlertEngine() {
     };
   }, []);
 
-  // Visible ONLY while the human-attention alarm is actually sounding on this
-  // tab — a from-anywhere kill switch so the operator never has to hunt for the
-  // conversation to stop the noise. One tap silences every page and every device.
-  if (ringHandoffCount <= 0) return null;
-  return (
-    <button
-      type="button"
-      onClick={silenceAllHandoffs}
-      title="Silenciar o alarme de atendimento humano em todas as telas e aparelhos"
-      className="fixed bottom-24 right-4 z-[70] flex items-center gap-2 rounded-full bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-xl ring-2 ring-white transition hover:bg-red-700 active:scale-95"
-    >
-      <span aria-hidden>🔇</span>
-      Silenciar alarme{ringHandoffCount > 1 ? ` (${ringHandoffCount})` : ""}
-    </button>
-  );
+  // Renders nothing — the engine is sound-only. (A floating "Silenciar alarme"
+  // button used to live here; the owner asked for it to be removed. The alarm now
+  // bounds its own noise via the recency windows in order-alert/handoff-alert, so
+  // no kill switch is needed — handling the order/conversation stops it, and a
+  // stale one goes quiet on its own.)
+  return null;
 }
