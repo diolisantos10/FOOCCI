@@ -108,6 +108,36 @@ export async function getWabaSubscribedApps(
   }
 }
 
+/**
+ * Register a phone number on the WhatsApp Cloud API (POST /{phoneNumberId}/register).
+ * A migrated/verified number stays `platform_type: NOT_APPLICABLE` — connected to the
+ * WABA but NOT activated on the Cloud runtime — until this runs, so Meta delivers no
+ * inbound webhooks. `pin` is the number's 2-step verification PIN: if 2FA is unset it
+ * gets set to this value; if already set it must match. Idempotent-ish (re-registering
+ * an active number succeeds).
+ */
+export async function registerPhoneNumber(
+  accessToken:   string,
+  phoneNumberId: string,
+  pin:           string,
+): Promise<{ ok: boolean; error?: string; raw?: unknown }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${phoneNumberId}/register`), {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body:    JSON.stringify({ messaging_product: "whatsapp", pin }),
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = (json as { error?: { message?: string } }).error?.message;
+      return { ok: false, error: maskGraphResponse(err ?? "Falha ao registrar o número na Cloud API."), raw: json };
+    }
+    return { ok: true, raw: json };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
 export async function fetchPhoneDetails(
   accessToken:   string,
   phoneNumberId: string,
