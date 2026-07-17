@@ -1,0 +1,70 @@
+/**
+ * GET /api/admin/meta/diag — admin-only Meta WhatsApp inbound diagnostics.
+ *
+ * For each stored Meta config, reports (masked) the WABA/phone ids and queries the
+ * Graph API live for: which apps are subscribed to the WABA (subscribed_apps) and the
+ * phone number's status. Used to diagnose "connects + sends but inbound never arrives"
+ * — almost always the WABA is not subscribed to OUR app. Read-only.
+ */
+
+import { NextRequest } from "next/server";
+import { checkAdminRequest } from "@/lib/admin-auth";
+import { ok, unauthorized, serverError } from "@/lib/api-response";
+import { prisma } from "@/lib/prisma";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { metaAppId, metaGraphUrl } from "@/services/whatsapp/metaFlag";
+
+function mask(v: string | null): string {
+  if (!v) return "—";
+  return v.length <= 4 ? "••••" : `••••${v.slice(-4)}`;
+}
+
+async function graph(path: string, token: string): Promise<unknown> {
+  try {
+    const res = await fetch(metaGraphUrl(path), { headers: { Authorization: `Bearer ${token}` } });
+    return await res.json().catch(() => ({ parseError: true }));
+  } catch (e) {
+    return { fetchError: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function GET(req: NextRequest) {
+  if (!checkAdminRequest(req)) return unauthorized();
+  try {
+    const rows = await prisma.metaWhatsAppConfig.findMany({ select: { restaurantId: true } });
+    const ourAppId = metaAppId();
+    const out = [];
+
+    for (const row of rows) {
+      const cfg = await MetaConfigService.getResolved(row.restaurantId);
+      if (!cfg) continue;
+
+      const subscribed = await graph(`${cfg.wabaId}/subscribed_apps`, cfg.accessToken);
+      const phone      = await graph(`${cfg.phoneNumberId}?fields=display_phone_number,verified_name,code_verification_status,quality_rating,platform_type,throughput,webhook_configuration`, cfg.accessToken);
+      const wabaInfo   = await graph(`${cfg.wabaId}?fields=id,name,timezone_id,message_template_namespace`, cfg.accessToken);
+
+      // Does subscribed_apps include OUR app id?
+      const subApps = (subscribed as { data?: Array<{ whatsapp_business_api_data?: { id?: string; name?: string } }> })?.data ?? [];
+      const ourAppSubscribed = subApps.some((a) => a?.whatsapp_business_api_data?.id === ourAppId);
+
+      out.push({
+        restaurantId:      row.restaurantId,
+        connectionStatus:  cfg.connectionStatus,
+        wabaId_masked:     mask(cfg.wabaId),
+        phoneNumberId_masked: mask(cfg.phoneNumberId),
+        displayPhoneNumber: cfg.displayPhoneNumber,
+        ourAppId,
+        ourAppSubscribed,
+        subscribedAppIds:  subApps.map((a) => ({ id: a?.whatsapp_business_api_data?.id, name: a?.whatsapp_business_api_data?.name })),
+        subscribedRaw:     subscribed,
+        phone,
+        wabaInfo,
+      });
+    }
+
+    return ok({ count: out.length, configs: out });
+  } catch (err) {
+    console.error("[GET /api/admin/meta/diag]", err);
+    return serverError();
+  }
+}
