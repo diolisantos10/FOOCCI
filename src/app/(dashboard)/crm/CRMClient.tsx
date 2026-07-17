@@ -3358,6 +3358,22 @@ function CampanhasAtivasSection({
     : active;
   const count = active.length + (showCartRow ? 1 : 0);
 
+  // Totals row — sums the displayed campaigns (the synthetic cart row has no
+  // per-campaign numbers, so it doesn't contribute).
+  const totals = shown.reduce(
+    (a, c) => {
+      a.revenue     += Number(c.totalRevenue) || 0;
+      a.sent        += c.totalSent || 0;
+      a.converted   += c.totalConverted || 0;
+      a.failed      += c.totalFailed || 0;
+      a.couponsUsed += couponCounts?.[c.id]?.used ?? 0;
+      return a;
+    },
+    { revenue: 0, sent: 0, converted: 0, failed: 0, couponsUsed: 0 },
+  );
+  const totalConvPct = totals.sent > 0 ? Math.round((totals.converted / totals.sent) * 100) : null;
+  const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
   return (
     <div data-testid="campanhas-ativas-section">
       <div className="mb-3 flex items-center justify-between">
@@ -3568,6 +3584,18 @@ function CampanhasAtivasSection({
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-line bg-[#FAFAF8] font-bold text-ink">
+              <td className="py-2.5 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted" colSpan={4}>Totais ({shown.length})</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.revenue > 0 ? brl(totals.revenue) : "—"}</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-blue-700">{totals.sent > 0 ? totals.sent : "—"}</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.couponsUsed > 0 ? totals.couponsUsed : "—"}</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-emerald-700">{totalConvPct !== null ? `${totalConvPct}%` : "—"}</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-red-600">{totals.failed > 0 ? totals.failed : "—"}</td>
+              <td className="py-2.5 px-2"></td>
+              <td className="py-2.5 pl-2 pr-4"></td>
+            </tr>
+          </tfoot>
         </table>
         {onSeeAll && active.length > shown.length && (
           <div className="border-t border-line bg-[#FAFAF8] p-3 text-center">
