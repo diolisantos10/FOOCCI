@@ -1293,6 +1293,12 @@ export class ScheduledCampaignRunnerService {
           const { result: metaResult } = await sendMetaCrmMessage(metaProvider, {
             restaurantId: campaign.restaurantId, phone, freeformText: messageText, firstName,
             campaign: { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+            // Fill approved-template body params from the SAME canonical context that
+            // rendered the freeform text, so a multi-variable template ({{2}}=cupom,
+            // {{3}}=link, …) delivers exactly what the freeform message would. Use the
+            // firstName fallback ("Cliente") for {nome} so a blank-name customer keeps the
+            // exact single-variable behavior instead of bailing to freeform on an empty param.
+            renderToken: (token) => personalizeMessage(token, { ...customer, name: customer.name || firstName }, msgCtx),
           });
           if (metaResult.ok) {
             externalMessageId = metaResult.providerMessageId;

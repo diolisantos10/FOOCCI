@@ -54,15 +54,28 @@ function resolveParamToken(token: string, firstName: string): string {
 
 export interface ResolvedMetaTemplate { name: string; language: string; params: string[] }
 
+/** True when a value still carries an unresolved {token} — unsafe to send to Meta. */
+function hasUnresolvedToken(value: string): boolean {
+  return /\{\{?\s*[a-z_]+\s*\}?\}/i.test(value);
+}
+
 /**
  * Resolves the approved Meta template for a campaign. Priority: explicit name in
  * audienceConfig, then the template mapped to the campaign objective. Returns null
- * when no APPROVED template is available (caller then uses legacy freeform).
+ * when no APPROVED template is available OR when its body params cannot be filled
+ * safely (caller then uses legacy freeform).
+ *
+ * Body params: when the template carries variable tokens (audienceConfig.metaTemplate
+ * .params, in body order), each is filled via `renderToken` — the caller renders it
+ * against the same canonical CRM context as the freeform message, so the delivered
+ * template matches. Without a renderToken, only the single-{{1}}=name shape is fillable;
+ * anything else returns null (→ freeform) rather than sending a malformed template.
  */
 export async function resolveMetaCrmTemplate(
   restaurantId: string,
   campaign:     MetaCrmCampaignRef,
   firstName:    string,
+  renderToken?: (token: string) => string,
 ): Promise<ResolvedMetaTemplate | null> {
   const explicit = readExplicitTemplate(campaign.audienceConfig);
   const found = await MetaTemplateService.findApproved(restaurantId, {
@@ -72,14 +85,26 @@ export async function resolveMetaCrmTemplate(
   });
   if (!found) return null;
 
+  const tokens = explicit?.params ?? [];
+
   let params: string[];
-  if (explicit?.params && explicit.params.length > 0) {
-    params = explicit.params.map((p) => resolveParamToken(p, firstName));
+  if (tokens.length > 0) {
+    // Fill each body token. Prefer the caller's full-context renderer; fall back to the
+    // name-only resolver (which leaves non-name tokens literal → caught below).
+    params = tokens.map((t) => (renderToken ? renderToken(t) : resolveParamToken(t, firstName)));
+    // Never send a template with an unresolved or empty param — Meta rejects it, and a
+    // literal "{cupom}" would reach the customer. Bail to freeform instead.
+    if (params.some((p) => !p.trim() || hasUnresolvedToken(p))) return null;
+    // Param count must match the template's variable count.
+    if (found.bodyVariables > 0 && params.length !== found.bodyVariables) return null;
   } else if (found.bodyVariables === 1) {
     // Most marketing templates carry a single {{1}} = customer first name.
     params = [firstName];
+  } else if (found.bodyVariables === 0) {
+    params = [];
   } else {
-    params = []; // 0 vars, or >1 with no explicit mapping (Meta validates count)
+    // Multi-variable template with no token mapping — can't fill safely.
+    return null;
   }
   return { name: found.templateName, language: found.languageCode, params };
 }
@@ -97,9 +122,12 @@ export async function sendMetaCrmMessage(
     freeformText: string;        // personalized message used inside the 24h window
     campaign:     MetaCrmCampaignRef;
     firstName:    string;
+    /** Renders one template body token (e.g. "{cupom}") in the caller's per-customer
+     *  CRM context. Enables multi-variable templates; omit for name-only templates. */
+    renderToken?: (token: string) => string;
   },
 ): Promise<{ result: SendResult; usedTemplate: boolean }> {
-  const tpl = await resolveMetaCrmTemplate(input.restaurantId, input.campaign, input.firstName);
+  const tpl = await resolveMetaCrmTemplate(input.restaurantId, input.campaign, input.firstName, input.renderToken);
   if (tpl) {
     const result = await provider.sendTemplate({
       restaurantId: input.restaurantId, to: input.phone,
