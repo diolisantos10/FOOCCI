@@ -167,12 +167,12 @@ export async function GET(req: NextRequest) {
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
         },
       }),
-      // 13. Conversion — VISITS: identified entries. A MenuEvent is fired only
-      //     once the visitor passes the mandatory phone screen (customerId set),
-      //     so anonymous opens that bounce do NOT count; an identified person who
-      //     enters 10× counts 10. This is the denominator of the real conversion.
+      // 13. Conversion — VISITS: how many people OPENED the cardápio (MenuEvent,
+      //     one per session). The phone screen is mandatory on entry, so an open
+      //     is a good proxy for "quantas pessoas entraram" — and historical data
+      //     can't separate who bounced at the phone. Denominator of the conversion.
       prisma.menuEvent.count({
-        where: { restaurantId: ctx.restaurantId, customerId: { not: null }, createdAt: { gte: rangeStart, lte: rangeEnd } },
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
       }),
       // 14. …and SALES: real Foocci orders finalized this period ("quantos
       //     compraram"). Imported historical orders excluded — they have no visit.
@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
       }),
       // 15-16. Same visits/sales for the previous period (conversion delta).
       prisma.menuEvent.count({
-        where: { restaurantId: ctx.restaurantId, customerId: { not: null }, createdAt: { gte: prevStart, lt: prevFetchEnd } },
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
       }),
       prisma.order.count({
         where: {

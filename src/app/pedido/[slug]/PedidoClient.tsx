@@ -2521,9 +2521,18 @@ export function PedidoClient({
       firstSeenAt: new Date().toISOString(),
     }));
 
-    // NOTE: the MENU_VIEW (visit) event is NOT fired here on open — it fires only
-    // once the visitor is IDENTIFIED (see the effect below), so an anonymous open
-    // that never passes the phone screen does not count as a visit.
+    // Fire MENU_VIEW once per session per restaurant. A "visita" = alguém abriu o
+    // cardápio. A tela de telefone é obrigatória logo na entrada, então isto
+    // aproxima muito bem "quantas pessoas entraram" — e os dados antigos não
+    // permitem separar quem desistiu no telefone, então contamos as aberturas.
+    if (!sessionStorage.getItem(viewFiredKey)) {
+      sessionStorage.setItem(viewFiredKey, "1");
+      fetch("/api/menu/analytics/event", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ slug, source }),
+      }).catch(() => {});
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2653,22 +2662,6 @@ export function PedidoClient({
   // customerId state updated when PhoneEntryCard resolves identity client-side
   const [sessionCustomerId, setSessionCustomerId] = useState<string | undefined>(undefined);
   const resolvedCustomerId = effectiveCustomerId ?? sessionCustomerId;
-
-  // Count a VISIT only once the customer is IDENTIFIED (passed the mandatory phone
-  // screen, or arrived already identified). An anonymous open that never enters a
-  // phone never fires this — so it is not counted as a visit for the conversion
-  // KPI. Once per session; a new identified entry (new session) = a new visit.
-  useEffect(() => {
-    if (entryPhase !== "browsing" || !resolvedCustomerId) return;
-    if (sessionStorage.getItem(viewFiredKey)) return;
-    sessionStorage.setItem(viewFiredKey, "1");
-    fetch("/api/menu/analytics/event", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ slug, source: getUtm().source ?? "direct", customerId: resolvedCustomerId }),
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entryPhase, resolvedCustomerId]);
 
   function handlePhoneIdentified(name: string | null, customerId?: string, displayPhone?: string) {
     if (customerId) setSessionCustomerId(customerId);
