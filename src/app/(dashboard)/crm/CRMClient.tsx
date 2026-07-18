@@ -6411,7 +6411,7 @@ export function CRMClient({
 
   return (
     <div className="min-h-full bg-canvas p-6 lg:p-8">
-     <div className="mx-auto max-w-5xl">
+     <div className="mx-auto max-w-6xl">
 
       {/* Tabs */}
       <div className="mb-5 flex flex-wrap gap-1 rounded-xl border border-line bg-[#F4F4F2] p-1">
