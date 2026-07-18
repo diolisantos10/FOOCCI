@@ -50,6 +50,14 @@ export function validateMetaSignature(
 
 // ── Normalization ─────────────────────────────────────────────────────────────
 
+export interface NormalizedInboundMedia {
+  id:       string;                 // Meta media id — download via Graph /{id}
+  mimeType: string | null;
+  caption:  string | null;
+  filename: string | null;
+  kind:     "image" | "audio" | "video" | "document" | "sticker";
+}
+
 export interface NormalizedInboundMessage {
   providerMessageId: string;   // wamid... — dedupe key
   fromPhone:         string;    // customer wa_id (digits)
@@ -58,6 +66,7 @@ export interface NormalizedInboundMessage {
   type:              string;    // text | image | interactive | ...
   text:              string | null;
   profileName:       string | null;
+  media:             NormalizedInboundMedia | null; // set for image/audio/video/document/sticker
 }
 
 export interface NormalizedStatus {
@@ -78,7 +87,12 @@ interface RawValue {
   contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
   messages?: Array<{
     from?: string; id?: string; timestamp?: string; type?: string;
-    text?: { body?: string };
+    text?:     { body?: string };
+    image?:    { id?: string; mime_type?: string; caption?: string };
+    audio?:    { id?: string; mime_type?: string };
+    video?:    { id?: string; mime_type?: string; caption?: string };
+    document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
+    sticker?:  { id?: string; mime_type?: string };
   }>;
   statuses?: Array<{ id?: string; status?: string; timestamp?: string; errors?: Array<{ code?: number | string }> }>;
 }
@@ -87,6 +101,24 @@ function tsToDate(ts?: string): Date | null {
   if (!ts) return null;
   const n = Number(ts);
   return Number.isFinite(n) ? new Date(n * 1000) : null;
+}
+
+/** Extracts the media descriptor from a raw inbound message (null for text/interactive). */
+function extractMedia(m: NonNullable<RawValue["messages"]>[number]): NormalizedInboundMedia | null {
+  const kinds: NormalizedInboundMedia["kind"][] = ["image", "video", "audio", "document", "sticker"];
+  for (const kind of kinds) {
+    const obj = m[kind] as { id?: string; mime_type?: string; caption?: string; filename?: string } | undefined;
+    if (obj?.id) {
+      return {
+        id:       String(obj.id),
+        mimeType: obj.mime_type ?? null,
+        caption:  obj.caption ?? null,
+        filename: obj.filename ?? null,
+        kind,
+      };
+    }
+  }
+  return null;
 }
 
 /** Normalizes a Meta webhook body into the internal inbound/status shape. */
@@ -115,14 +147,17 @@ export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
 
       for (const m of value.messages ?? []) {
         if (!m.id || !m.from) continue;
+        const media = extractMedia(m);
         out.messages.push({
           providerMessageId: m.id,
           fromPhone:         m.from,
           phoneNumberId,
           timestamp:         tsToDate(m.timestamp) ?? new Date(),
           type:              m.type ?? "unknown",
-          text:              m.text?.body ?? null,
+          // Media captions carry the customer's text — surface it as the message body.
+          text:              m.text?.body ?? media?.caption ?? null,
           profileName:       profileByWaId.get(m.from) ?? null,
+          media,
         });
       }
 

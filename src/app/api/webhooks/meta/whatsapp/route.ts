@@ -93,20 +93,37 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
     if (existing) continue;
 
     const conv = await findOrCreateConversation(cfg.restaurantId, m.fromPhone, m.profileName);
+    // Media (image/audio/video/document/sticker): store the Meta media id so the
+    // authenticated attachment proxy can download the bytes on demand. whatsappMedia
+    // flags the viewer; metaMediaId routes it to the Meta (not Evolution) download path.
+    const mediaType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT" =
+      m.media?.kind === "image" || m.media?.kind === "sticker" ? "IMAGE" :
+      m.media?.kind === "audio" ? "AUDIO" :
+      m.media ? "DOCUMENT" : "TEXT"; // video/document → DOCUMENT (viewer uses real mime)
     await prisma.message.create({
       data: {
         conversationId:    conv.id,
         direction:         "INBOUND",
         senderType:        "CUSTOMER",
         content:           m.text ?? "",
-        type:              "TEXT",
+        type:              mediaType,
         sentAt:            m.timestamp,
         externalMessageId: m.providerMessageId,
         externalStatus:    "received",
         provider:          "META_CLOUD_API",
         providerMessageId: m.providerMessageId,
         providerStatus:    "received",
-        metadata:          { provider: "META_CLOUD_API", phoneNumberId: m.phoneNumberId, messageType: m.type },
+        metadata:          {
+          provider:      "META_CLOUD_API",
+          phoneNumberId: m.phoneNumberId,
+          messageType:   m.type,
+          ...(m.media ? {
+            whatsappMedia: true,
+            metaMediaId:   m.media.id,
+            mimetype:      m.media.mimeType,
+            fileName:      m.media.filename,
+          } : {}),
+        },
       },
     });
     await prisma.conversation.update({

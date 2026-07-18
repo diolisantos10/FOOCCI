@@ -16,6 +16,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { downloadMetaMedia } from "@/services/whatsapp/metaMedia";
 
 interface WaMediaMeta {
   whatsappMedia?: boolean;
@@ -23,6 +24,17 @@ interface WaMediaMeta {
   fileName?: string;
   remoteJid?: string;
   fromMe?: boolean;
+  /** Meta Cloud API media id — present on inbound media received via the official API. */
+  metaMediaId?: string;
+}
+
+function mediaHeaders(contentType: string, fileName?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type":  contentType,
+    "Cache-Control": "private, max-age=3600",
+  };
+  if (fileName) headers["Content-Disposition"] = `inline; filename="${fileName.replace(/"/g, "")}"`;
+  return headers;
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -44,6 +56,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   const meta = (message.metadata ?? {}) as WaMediaMeta;
+
+  // Meta Cloud API media → download via the Graph API (token-authenticated, server-side).
+  if (meta.metaMediaId) {
+    const dl = await downloadMetaMedia(ctx.restaurantId, meta.metaMediaId);
+    if (!dl.ok || !dl.buffer) return new NextResponse(null, { status: 502 });
+    const contentType = dl.mimeType || meta.mimetype || "application/octet-stream";
+    return new NextResponse(new Uint8Array(dl.buffer), { status: 200, headers: mediaHeaders(contentType, meta.fileName) });
+  }
+
+  // Evolution media → decrypt via the stored Evolution credentials.
   if (!meta.whatsappMedia || !message.externalMessageId || !meta.remoteJid) {
     return new NextResponse(null, { status: 404 });
   }

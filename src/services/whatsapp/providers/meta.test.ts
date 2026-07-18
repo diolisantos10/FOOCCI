@@ -135,6 +135,40 @@ describe("F/G — inbound webhook normalization", () => {
     expect(normalizeMetaWebhook({}).messages).toEqual([]);
     expect(normalizeMetaWebhook({ entry: [] }).messages).toEqual([]);
   });
+
+  it("H — captures inbound image media (id + mime + caption as body)", () => {
+    const mediaPayload = {
+      object: "whatsapp_business_account",
+      entry: [{ id: "WABA1", changes: [{ field: "messages", value: {
+        metadata: { phone_number_id: "PN123" },
+        messages: [{
+          from: "5511988887777", id: "wamid.IMG", timestamp: "1700000000",
+          type: "image", image: { id: "MEDIA-1", mime_type: "image/jpeg", caption: "olha isso" },
+        }],
+      } }] }],
+    };
+    const n = normalizeMetaWebhook(mediaPayload);
+    expect(n.messages[0].media).toMatchObject({ id: "MEDIA-1", mimeType: "image/jpeg", kind: "image" });
+    // Caption surfaces as the message body so staff see the customer's text.
+    expect(n.messages[0].text).toBe("olha isso");
+  });
+
+  it("H — captures document media with filename; text messages carry no media", () => {
+    const docPayload = {
+      object: "whatsapp_business_account",
+      entry: [{ id: "WABA1", changes: [{ field: "messages", value: {
+        metadata: { phone_number_id: "PN123" },
+        messages: [{
+          from: "5511988887777", id: "wamid.DOC", timestamp: "1700000000",
+          type: "document", document: { id: "MEDIA-2", mime_type: "application/pdf", filename: "cardapio.pdf" },
+        }],
+      } }] }],
+    };
+    const n = normalizeMetaWebhook(docPayload);
+    expect(n.messages[0].media).toMatchObject({ id: "MEDIA-2", filename: "cardapio.pdf", kind: "document" });
+    // A plain text message has no media.
+    expect(normalizeMetaWebhook(payload).messages[0].media).toBeNull();
+  });
 });
 
 describe("signature validation", () => {
