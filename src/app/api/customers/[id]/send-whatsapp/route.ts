@@ -12,8 +12,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { isGuestIdentifier } from "@/lib/guest";
 import { isInternalCommandText } from "@/services/buildos/BuildCommandRouter";
 import { ok, badRequest, unauthorized, notFound, serverError } from "@/lib/api-response";
@@ -60,13 +59,6 @@ export async function POST(req: NextRequest, { params }: Params) {
       return badRequest("Cliente optou por não receber mensagens (opt-out).");
     }
 
-    // ── Load Evolution config ──────────────────────────────────────────────────
-    const configResult = await EvolutionConfigService.getSnapshot(ctx.restaurantId);
-    if (!configResult.ok) {
-      return badRequest("WhatsApp não configurado para este restaurante.");
-    }
-    const evoConfig = configResult.data;
-
     // ── Find or create WhatsApp conversation ──────────────────────────────────
     const toPhone = phone.replace(/^\+/, "");
 
@@ -93,8 +85,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       select: { id: true },
     })).id;
 
-    // ── Send via Evolution ─────────────────────────────────────────────────────
-    const evoResult = await EvolutionClient.sendTextMessage(evoConfig, toPhone, message);
+    // ── Send via the ACTIVE provider (Meta or Evolution) ───────────────────────
+    const sendRes = await sendWhatsAppText(ctx.restaurantId, toPhone, message);
+    if (!sendRes.ok) {
+      console.error("[POST /api/customers/[id]/send-whatsapp] provider send failed", sendRes.provider, sendRes.errorCode, sendRes.error);
+      return badRequest(sendRes.error ?? "Não foi possível enviar a mensagem pelo WhatsApp.");
+    }
 
     // ── Record outbound message in conversation ────────────────────────────────
     const now = new Date();
@@ -107,8 +103,11 @@ export async function POST(req: NextRequest, { params }: Params) {
           content:           message,
           type:              "TEXT",
           sentAt:            now,
-          externalMessageId: evoResult.key.id,
           externalStatus:    "sent",
+          provider:          sendRes.provider,
+          ...(sendRes.providerMessageId
+            ? { externalMessageId: sendRes.providerMessageId, providerMessageId: sendRes.providerMessageId }
+            : {}),
         },
       }),
       prisma.conversation.update({
@@ -117,7 +116,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }),
     ]);
 
-    return ok({ conversationId, externalMessageId: evoResult.key.id });
+    return ok({ conversationId, externalMessageId: sendRes.providerMessageId ?? null });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     console.error("[POST /api/customers/[id]/send-whatsapp]", err);

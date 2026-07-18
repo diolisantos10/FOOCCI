@@ -15,8 +15,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { ConversationStatus } from "@prisma/client";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { buildReturnToAiMessage } from "@/lib/return-to-ai-message";
 import { getPublicMenuUrl } from "@/lib/public-url";
 import type { MenuOption } from "@/validators/whatsapp-agent";
@@ -59,10 +58,11 @@ export async function POST(
 
     // Send return-to-AI message with menu options (WhatsApp only)
     if (conv.channel === "WHATSAPP") {
-      const toPhone = (conv.customer?.phone ?? conv.customerPhone ?? "").replace(/^\+/, "");
+      // Channel phone (customerPhone) is the authoritative recipient (Meta wa_id, self-healed).
+      const toPhone = (conv.customerPhone ?? conv.customer?.phone ?? "").replace(/^\+/, "");
       if (toPhone) {
         try {
-          const [agentCfgData, restaurantData, evolutionResult] = await Promise.all([
+          const [agentCfgData, restaurantData] = await Promise.all([
             prisma.whatsAppAgentConfig.findUnique({
               where:  { restaurantId: conv.restaurantId },
               select: { menuOptions: true, menuUrl: true },
@@ -71,27 +71,27 @@ export async function POST(
               where:  { id: conv.restaurantId },
               select: { slug: true },
             }),
-            EvolutionConfigService.getSnapshot(conv.restaurantId),
           ]);
 
-          if (evolutionResult.ok) {
-            const menuOptions: MenuOption[] = Array.isArray(agentCfgData?.menuOptions)
-              ? (agentCfgData.menuOptions as unknown as MenuOption[])
-              : [];
-            const baseMenuUrl =
-              agentCfgData?.menuUrl?.trim() ||
-              (restaurantData?.slug ? getPublicMenuUrl(restaurantData.slug) : null);
+          const menuOptions: MenuOption[] = Array.isArray(agentCfgData?.menuOptions)
+            ? (agentCfgData.menuOptions as unknown as MenuOption[])
+            : [];
+          const baseMenuUrl =
+            agentCfgData?.menuUrl?.trim() ||
+            (restaurantData?.slug ? getPublicMenuUrl(restaurantData.slug) : null);
 
-            const returnText = buildReturnToAiMessage({
-              preamble:    "Estou de volta para te ajudar! 😊",
-              menuOptions,
-              baseMenuUrl,
-              phone:       toPhone,
-              name:        conv.customer?.name ?? null,
-            });
+          const returnText = buildReturnToAiMessage({
+            preamble:    "Estou de volta para te ajudar! 😊",
+            menuOptions,
+            baseMenuUrl,
+            phone:       toPhone,
+            name:        conv.customer?.name ?? null,
+          });
 
-            await EvolutionClient.sendTextMessage(evolutionResult.data, toPhone, returnText);
-
+          // Route through the ACTIVE provider (Meta or Evolution) — a migrated number has
+          // no live Evolution instance, so the old hardcoded Evolution send returned HTTP 500.
+          const sendRes = await sendWhatsAppText(conv.restaurantId, toPhone, returnText);
+          if (sendRes.ok) {
             await prisma.$transaction([
               prisma.message.create({
                 data: {
@@ -101,6 +101,10 @@ export async function POST(
                   content:        returnText,
                   type:           "TEXT",
                   sentAt:         now,
+                  provider:       sendRes.provider,
+                  ...(sendRes.providerMessageId
+                    ? { externalMessageId: sendRes.providerMessageId, providerMessageId: sendRes.providerMessageId }
+                    : {}),
                 },
               }),
               prisma.conversation.update({
@@ -108,6 +112,8 @@ export async function POST(
                 data:  { lastMessageAt: now },
               }),
             ]);
+          } else {
+            console.error("[POST /api/chat/conversations/[id]/release] return message send failed", sendRes.provider, sendRes.errorCode, sendRes.error);
           }
         } catch (sendErr) {
           console.error("[POST /api/chat/conversations/[id]/release] Failed to send return message:", sendErr);
