@@ -2284,10 +2284,15 @@ model MenuEvent {
   restaurantId String
   /// Normalized source: instagram | whatsapp | google | qrcode | crm | manual | direct | other
   source       String?
+  /// Set when the visitor is IDENTIFIED (passed the mandatory phone screen, or
+  /// arrived already identified). A visit only counts for conversion when this is
+  /// present — an anonymous open that never enters a phone is not a real visit.
+  customerId   String?
   createdAt    DateTime @default(now())
 
   @@index([restaurantId, source])
   @@index([restaurantId, createdAt])
+  @@index([restaurantId, customerId])
   @@map("menu_events")
 }
 

@@ -16,7 +16,7 @@ const VALID_SOURCES = new Set([
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { slug?: string; source?: string };
+    const body = await req.json() as { slug?: string; source?: string; customerId?: string };
 
     if (!body.slug?.trim()) return badRequest("slug é obrigatório");
 
@@ -31,9 +31,15 @@ export async function POST(req: NextRequest) {
     }
 
     const source = body.source && VALID_SOURCES.has(body.source) ? body.source : "other";
+    // Identified visit only: the client sends customerId once the visitor passed
+    // the mandatory phone screen (or arrived identified). Null → anonymous open,
+    // which is not counted as a real visit for the conversion KPI.
+    const customerId = typeof body.customerId === "string" && body.customerId.trim()
+      ? body.customerId.trim()
+      : null;
 
     await prisma.menuEvent.create({
-      data: { restaurantId: restaurant.id, source },
+      data: { restaurantId: restaurant.id, source, customerId },
     });
 
     return ok({ ok: true });
