@@ -39,17 +39,17 @@ describe("conversion visita contract", () => {
     expect(src).not.toContain("viewFiredKey");
   });
 
-  it("conversion = buyers ÷ loggers (compraram ÷ logaram com o número)", () => {
+  it("conversion = buyers ÷ cardápio entries (compraram ÷ entraram), clamped ≤100%", () => {
     const src = read("src/app/api/dashboard/route.ts");
-    // Denominator = loggers (distinct identified customers); numerator = buyers.
-    expect(src).toMatch(/loggersNow\s*>\s*0\s*\?\s*Math\.round\(\(buyersNowN\s*\/\s*loggersNow\)/);
-    // Loggers are built from login-events (MenuEvent w/ customerId) + carts + buyers,
-    // so they have real history AND buyers are a subset (ratio always ≤ 100%).
-    expect(src).toContain("loggersNowSet");
-    expect(src).toMatch(/prisma\.orderDraft\.findMany/);
-    expect(src).toMatch(/customerId:\s*\{\s*not:\s*null\s*\}[\s\S]*?distinct:\s*\[\s*"customerId"\s*\]/);
-    // The old "count every open" and clamp hacks are gone.
-    expect(src).not.toContain("visitsNowAdj");
-    expect(src).not.toContain("CARDAPIO_ORDER_SOURCES");
+    // Numerator = distinct buyers; denominator = entries, clamped to ≥ buyers.
+    expect(src).toMatch(/entriesNow\s*>\s*0\s*\?\s*Math\.round\(\(buyersNowN\s*\/\s*entriesNow\)/);
+    expect(src).toMatch(/Math\.max\(\s*menuEntriesNow\s*,\s*buyersNowN\s*\)/);
+    // Denominator counts ALL MenuEvent entries (history included) — no customerId
+    // filter that would zero out periods before server-side login logging existed.
+    const marker = "prisma.menuEvent.count(";
+    const positions: number[] = [];
+    for (let i = src.indexOf(marker); i !== -1; i = src.indexOf(marker, i + 1)) positions.push(i);
+    expect(positions.length).toBeGreaterThanOrEqual(2);
+    for (const pos of positions) expect(src.slice(pos, pos + 200)).not.toContain("customerId");
   });
 });

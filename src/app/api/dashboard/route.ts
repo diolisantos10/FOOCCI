@@ -170,7 +170,7 @@ export async function GET(req: NextRequest) {
     //    period + JS intersection, instead of 2 counts × N channels.
     const [
       convRowsNow, convRowsPrev, orderCustNow, orderCustPrev,
-      loginCustNow, loginCustPrev, draftCustNow, draftCustPrev,
+      menuEntriesNow, menuEntriesPrev,
     ] = await Promise.all([
       prisma.conversation.findMany({
         where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, customerId: { not: null }, customer: { isGuest: false } },
@@ -188,27 +188,17 @@ export async function GET(req: NextRequest) {
         where: { restaurantId: ctx.restaurantId, importedAt: null, createdAt: { gte: prevStart, lt: prevFetchEnd }, status: { in: REVENUE_STATUS } },
         select: { customerId: true },
       }),
-      // Loggers ("clientes que logaram com o número") — the conversion DENOMINATOR.
-      //   Distinct customers who identified themselves in the period. Sourced from
-      //   MenuEvent logins (logged server-side at the phone screen, going forward)
-      //   plus OrderDraft (started a cart → had logged in), which gives real history
-      //   before login-events existed. Buyers are a subset (they also ordered), so
-      //   the ratio is always coherent (≤ 100%).
-      prisma.menuEvent.findMany({
-        where:  { restaurantId: ctx.restaurantId, customerId: { not: null }, createdAt: { gte: rangeStart, lte: rangeEnd } },
-        select: { customerId: true }, distinct: ["customerId"],
+      // ENTRADAS no cardápio — the conversion DENOMINATOR ("quantas pessoas
+      //   entraram"). Every MenuEvent = one cardápio entry: the mandatory phone
+      //   screen means an entry is effectively a login with the number. Counts
+      //   ALL rows (not just customerId-tagged ones) so historical periods — where
+      //   entries were logged anonymously by the old open-beacon — show the real
+      //   volume, not ~0. Going forward the row is written server-side at identify.
+      prisma.menuEvent.count({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
       }),
-      prisma.menuEvent.findMany({
-        where:  { restaurantId: ctx.restaurantId, customerId: { not: null }, createdAt: { gte: prevStart, lt: prevFetchEnd } },
-        select: { customerId: true }, distinct: ["customerId"],
-      }),
-      prisma.orderDraft.findMany({
-        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
-        select: { customerId: true }, distinct: ["customerId"],
-      }),
-      prisma.orderDraft.findMany({
-        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
-        select: { customerId: true }, distinct: ["customerId"],
+      prisma.menuEvent.count({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
       }),
     ]);
 
@@ -227,11 +217,6 @@ export async function GET(req: NextRequest) {
       });
     const buyersNow    = new Set(orderCustNow.filter((o) => o.customerId).map((o) => o.customerId as string));
     const buyersPrev   = new Set(orderCustPrev.filter((o) => o.customerId).map((o) => o.customerId as string));
-    // Loggers = distinct identified customers seen in the period (logged in with
-    // their number). Union of login-events + carts + buyers, so buyers ⊆ loggers.
-    const idsOf = (rows: Array<{ customerId: string | null }>) => rows.map((r) => r.customerId).filter((v): v is string => !!v);
-    const loggersNowSet  = new Set<string>([...idsOf(loginCustNow),  ...idsOf(draftCustNow),  ...buyersNow]);
-    const loggersPrevSet = new Set<string>([...idsOf(loginCustPrev), ...idsOf(draftCustPrev), ...buyersPrev]);
     const funnelNow    = channelFunnel(convRowsNow, buyersNow);
     const funnelPrev   = channelFunnel(convRowsPrev, buyersPrev);
     const conversionByChannel = funnelNow.map((n, i) => {
@@ -259,16 +244,16 @@ export async function GET(req: NextRequest) {
     const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
 
     // ── Conversion rate — the REAL one, per the definition:
-    //    clientes que COMPRARAM ÷ clientes que LOGARAM com o número.
+    //    clientes que COMPRARAM ÷ pessoas que ENTRARAM no cardápio.
     //    Numerator = distinct customers with a finalized sale (buyers).
-    //    Denominator = distinct customers who identified themselves (loggers).
-    //    Buyers ⊆ loggers by construction, so the ratio is always ≤ 100%.
-    const loggersNow = loggersNowSet.size;
-    const loggersPrev = loggersPrevSet.size;
+    //    Denominator = cardápio entries (MenuEvent), clamped to ≥ buyers so a
+    //    day whose entries were under-logged can never read >100%.
     const buyersNowN = buyersNow.size;
     const buyersPrevN = buyersPrev.size;
-    const conversionRate     = loggersNow  > 0 ? Math.round((buyersNowN  / loggersNow)  * 100) : null;
-    const conversionRatePrev = loggersPrev > 0 ? Math.round((buyersPrevN / loggersPrev) * 100) : null;
+    const entriesNow  = Math.max(menuEntriesNow,  buyersNowN);
+    const entriesPrev = Math.max(menuEntriesPrev, buyersPrevN);
+    const conversionRate     = entriesNow  > 0 ? Math.round((buyersNowN  / entriesNow)  * 100) : null;
+    const conversionRatePrev = entriesPrev > 0 ? Math.round((buyersPrevN / entriesPrev) * 100) : null;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -363,7 +348,7 @@ export async function GET(req: NextRequest) {
       // Conversion KPI (identified entrant → finalized sale)
       conversionRate,
       conversionRatePrev,
-      conversionIdentified: loggersNow,  // clientes que logaram com o número
+      conversionIdentified: entriesNow,  // pessoas que entraram no cardápio
       conversionConverted:  buyersNowN,  // clientes que compraram
       conversionByChannel,
 
