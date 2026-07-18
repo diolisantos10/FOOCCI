@@ -17,9 +17,26 @@ import { registerPhoneNumber, subscribeAppToWaba } from "@/services/whatsapp/Met
 export async function POST(req: NextRequest) {
   if (!checkAdminRequest(req)) return unauthorized();
   try {
-    const body = (await req.json().catch(() => ({}))) as { pin?: string; restaurantId?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      pin?: string; restaurantId?: string; phoneNumberId?: string; displayPhoneNumber?: string;
+    };
     const pin  = (body.pin ?? "").trim();
     if (!/^\d{6}$/.test(pin)) return badRequest("Informe um PIN de 6 dígitos.");
+
+    // Recovery: repoint the config to a specific phoneNumberId within the SAME WABA before
+    // registering — used when a reconnect accidentally swapped the number (e.g. picked the
+    // +1 test number). The encrypted access token is preserved (same WABA/portfolio).
+    if (body.restaurantId && body.phoneNumberId) {
+      await prisma.metaWhatsAppConfig.update({
+        where: { restaurantId: body.restaurantId },
+        data:  {
+          phoneNumberId:    body.phoneNumberId,
+          connectionStatus: "CONNECTED",
+          lastError:        null,
+          ...(body.displayPhoneNumber ? { displayPhoneNumber: body.displayPhoneNumber } : {}),
+        },
+      });
+    }
 
     const rows = body.restaurantId
       ? [{ restaurantId: body.restaurantId }]
