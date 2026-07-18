@@ -25,6 +25,11 @@ import { computePeriodRange, buildChartBuckets, type Period } from "@/lib/dashbo
 
 const TERMINAL: OrderStatus[]        = ["DELIVERED", "CANCELLED"];
 const REVENUE_STATUS: OrderStatus[]  = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
+// Conversion numerator = sales from the SAME funnel as the visit signal: the
+// cardápio (delivery /pedido + dine-in /qr), both of which log a visit via
+// /api/qr/[slug]/identify. WhatsApp/manual orders come from a different funnel
+// (no cardápio phone-screen visit) and would otherwise push sales > visits.
+const CARDAPIO_ORDER_SOURCES = ["pedido", "qr"];
 const ACTIVE_CAMP: CampaignStatus[]  = ["ACTIVE", "SCHEDULED", "SENDING"];
 const DELAY_MS                       = 20 * 60 * 1_000;
 const DELAY_OK: OrderStatus[]        = ["READY", "OUT_FOR_DELIVERY", "AWAITING_PAYMENT"];
@@ -175,12 +180,14 @@ export async function GET(req: NextRequest) {
       prisma.menuEvent.count({
         where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
       }),
-      // 14. …and SALES: real Foocci orders finalized this period ("quantos
-      //     compraram"). Imported historical orders excluded — they have no visit.
+      // 14. …and SALES: cardápio orders finalized this period ("quantos
+      //     compraram"). Same funnel as the visits above, so a sale always has a
+      //     matching visit. Imported/WhatsApp/manual orders excluded.
       prisma.order.count({
         where: {
           restaurantId: ctx.restaurantId,
           importedAt:   null,
+          source:       { in: CARDAPIO_ORDER_SOURCES },
           createdAt:    { gte: rangeStart, lte: rangeEnd },
           status:       { in: REVENUE_STATUS },
         },
@@ -193,6 +200,7 @@ export async function GET(req: NextRequest) {
         where: {
           restaurantId: ctx.restaurantId,
           importedAt:   null,
+          source:       { in: CARDAPIO_ORDER_SOURCES },
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
           status:       { in: REVENUE_STATUS },
         },
@@ -262,12 +270,18 @@ export async function GET(req: NextRequest) {
     const ordersPrev    = prevOrders.length;
     const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
 
-    // ── Conversion rate — the REAL one: of everyone who OPENED the cardápio
-    //    (visits/MenuEvent) in the period, how many bought (sales). vendas ÷
-    //    visitas. Capped at 100% (a repeat buyer can order more than once per
-    //    visit window, which would otherwise read >100%).
-    const conversionRate     = visitsNow  > 0 ? Math.min(100, Math.round((salesNow  / visitsNow)  * 100)) : null;
-    const conversionRatePrev = visitsPrev > 0 ? Math.min(100, Math.round((salesPrev / visitsPrev) * 100)) : null;
+    // ── Conversion rate — the REAL one: of everyone who entered the cardápio
+    //    (visits, logged at the phone screen) in the period, how many bought
+    //    (cardápio sales). vendas ÷ visitas.
+    //    Proof-of-visit clamp: a finalized cardápio sale is proof that someone
+    //    entered, so visits can never be fewer than sales. This heals days where
+    //    a visit wasn't logged (a returning customer who didn't re-identify, or
+    //    the transition day when server-side logging first went live) and keeps
+    //    the ratio coherent (≤ 100%) instead of the nonsensical "5 de 4".
+    const visitsNowAdj  = Math.max(visitsNow,  salesNow);
+    const visitsPrevAdj = Math.max(visitsPrev, salesPrev);
+    const conversionRate     = visitsNowAdj  > 0 ? Math.round((salesNow  / visitsNowAdj)  * 100) : null;
+    const conversionRatePrev = visitsPrevAdj > 0 ? Math.round((salesPrev / visitsPrevAdj) * 100) : null;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -362,8 +376,8 @@ export async function GET(req: NextRequest) {
       // Conversion KPI (identified entrant → finalized sale)
       conversionRate,
       conversionRatePrev,
-      conversionIdentified: visitsNow, // now = visits (people who opened the menu)
-      conversionConverted:  salesNow,  // now = sales (orders finalized)
+      conversionIdentified: visitsNowAdj, // visits (entered the cardápio), ≥ sales
+      conversionConverted:  salesNow,     // cardápio sales (orders finalized)
       conversionByChannel,
 
       // Real-time

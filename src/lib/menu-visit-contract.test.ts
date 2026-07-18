@@ -53,4 +53,20 @@ describe("conversion visita contract", () => {
       expect(block).not.toContain("customerId");
     }
   });
+
+  it("conversion numerator counts only cardápio-funnel sales (same funnel as visits)", () => {
+    const src = read("src/app/api/dashboard/route.ts");
+    // sales must be scoped to the cardápio funnel; otherwise WhatsApp/manual
+    // orders (no cardápio visit) push sales > visits → nonsensical >100%.
+    expect(src).toContain("CARDAPIO_ORDER_SOURCES");
+    expect(src).toMatch(/CARDAPIO_ORDER_SOURCES\s*=\s*\[\s*"pedido"\s*,\s*"qr"\s*\]/);
+    const salesQueries = src.match(/source:\s*\{\s*in:\s*CARDAPIO_ORDER_SOURCES\s*\}/g) ?? [];
+    expect(salesQueries.length).toBeGreaterThanOrEqual(2); // current + previous period
+  });
+
+  it("proof-of-visit clamp keeps visits >= sales (ratio never nonsensical >100%)", () => {
+    const src = read("src/app/api/dashboard/route.ts");
+    expect(src).toMatch(/Math\.max\(\s*visitsNow\s*,\s*salesNow\s*\)/);
+    expect(src).toMatch(/Math\.max\(\s*visitsPrev\s*,\s*salesPrev\s*\)/);
+  });
 });
