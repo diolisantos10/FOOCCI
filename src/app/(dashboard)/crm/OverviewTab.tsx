@@ -953,7 +953,8 @@ export function OverviewTab({
     <div className="space-y-6">
 
       {/* 1. Números de clientes — primeira camada (não dependem do período) */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* 7 cards on one row from lg up (all client categories aligned, no wrap). */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         <KPICard
           label="Clientes na base"
           value={stats.totalCustomers.toLocaleString("pt-BR")}

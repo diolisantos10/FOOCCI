@@ -3367,9 +3367,10 @@ function CampanhasAtivasSection({
       a.converted   += c.totalConverted || 0;
       a.failed      += c.totalFailed || 0;
       a.couponsUsed += couponCounts?.[c.id]?.used ?? 0;
+      a.dailyLimit  += (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit ?? 0;
       return a;
     },
-    { revenue: 0, sent: 0, converted: 0, failed: 0, couponsUsed: 0 },
+    { revenue: 0, sent: 0, converted: 0, failed: 0, couponsUsed: 0, dailyLimit: 0 },
   );
   const totalConvPct = totals.sent > 0 ? Math.round((totals.converted / totals.sent) * 100) : null;
   const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -3395,6 +3396,7 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold">Público</th>
               <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Máximo de mensagens que esta campanha pode enviar por dia">Limite/dia</th>
               <th className="py-2.5 px-2 font-semibold text-right" title="Cupons concedidos pela campanha que foram resgatados">Cupons usados</th>
               <th className="py-2.5 px-2 font-semibold text-right" title="Pedidos atribuídos após a mensagem ÷ mensagens enviadas">Conversão</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
@@ -3421,8 +3423,9 @@ function CampanhasAtivasSection({
                   <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE["Recorrente"]}`}>Automática</span>
                 </td>
                 <td className="py-3 px-2 max-w-[100px]"><span className="text-ink2 truncate block text-[11px]">quem abandonou</span></td>
-                {/* Enviados · Cupons usados · Conversão · Falhas · Receita — cart recovery
-                    grants without a Campaign row, so these aren't per-campaign attributable. */}
+                {/* Receita · Enviados · Limite · Cupons usados · Conversão · Falhas — cart
+                    recovery grants without a Campaign row, so these aren't attributable. */}
+                <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
                 <td className="py-3 px-2 text-right text-muted">—</td>
@@ -3518,6 +3521,14 @@ function CampanhasAtivasSection({
                     {c.totalSent > 0 ? c.totalSent : "—"}
                   </td>
 
+                  {/* Limite/dia — máximo desta campanha por dia (scheduleConfig.dailyLimit) */}
+                  <td className="py-3 px-2 text-right tabular-nums text-muted">
+                    {(() => {
+                      const dl = (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit;
+                      return dl && dl > 0 ? `${dl}/dia` : "—";
+                    })()}
+                  </td>
+
                   {/* Cupons usados — resgatados pelos clientes */}
                   <td className="py-3 px-2 text-right tabular-nums">
                     {(() => {
@@ -3589,6 +3600,7 @@ function CampanhasAtivasSection({
               <td className="py-2.5 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted" colSpan={4}>Totais ({shown.length})</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.revenue > 0 ? brl(totals.revenue) : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-blue-700">{totals.sent > 0 ? totals.sent : "—"}</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-ink2">{totals.dailyLimit > 0 ? `${totals.dailyLimit}/dia` : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.couponsUsed > 0 ? totals.couponsUsed : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-emerald-700">{totalConvPct !== null ? `${totalConvPct}%` : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-red-600">{totals.failed > 0 ? totals.failed : "—"}</td>
@@ -4042,6 +4054,23 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .catch(() => {});
   }, [readyMadeReload, period, customFrom, customTo]);
 
+  // Global daily send limit (shown above the table). In safe mode it's the warmup
+  // number that grows on its own; in manual mode it's the owner-set cap (0 = none).
+  const [sendLimit, setSendLimit] = useState<{ manual: boolean; cap: number; safe: number } | null>(null);
+  useEffect(() => {
+    fetch("/api/settings/crm-safety")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then(({ data }) => {
+        if (!data) return;
+        setSendLimit({
+          manual: !!data.manualOverride,
+          cap:    typeof data.dailyGlobalCap === "number" ? data.dailyGlobalCap : 0,
+          safe:   data.warmup?.safeDailyLimit ?? 0,
+        });
+      })
+      .catch(() => {});
+  }, [readyMadeReload]);
+
   // Toggle cart recovery on/off — the same control the other campaigns' Pausar/Ativar
   // give, wired to the readyMadeConfig.cartRecoveryEnabled flag.
   async function handleCartRecoveryToggle() {
@@ -4207,6 +4236,26 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           </button>
         </div>
       </div>
+
+      {/* ── Limite global de envio (o teto de mensagens/dia de TODAS as campanhas) ── */}
+      {sendLimit && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📤</span>
+            <p className="text-xs text-ink2">
+              <span className="font-bold text-brand-700">
+                Limite total de envio: {sendLimit.manual
+                  ? (sendLimit.cap > 0 ? `${sendLimit.cap} msgs/dia` : "sem limite")
+                  : `${sendLimit.safe} msgs/dia`}
+              </span>
+              {" · "}
+              {sendLimit.manual
+                ? "definido por você (controle manual) — some os limites por campanha abaixo."
+                : "modo seguro: sobe sozinho conforme o número amadurece. Ligue o controle manual em Configurações para elevar."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Filtro de período (números da tabela por período) ────────────────── */}
       <div className="flex flex-wrap items-center gap-1.5">
