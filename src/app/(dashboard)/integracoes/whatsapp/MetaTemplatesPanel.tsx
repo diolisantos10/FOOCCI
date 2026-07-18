@@ -76,31 +76,6 @@ export function MetaTemplatesPanel() {
     finally { setBusy(null); }
   }
 
-  async function createDefaults() {
-    setBusy("create");
-    try {
-      const res = await fetch("/api/integracoes/whatsapp/meta/templates", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create-defaults" }),
-      });
-      const j = await res.json().catch(() => null);
-      if (res.ok) {
-        setTemplates((j.data?.templates ?? []) as MetaTemplate[]);
-        const created = j.data?.created ?? 0;
-        const existed = j.data?.existed ?? 0;
-        const failed  = j.data?.failed ?? 0;
-        const parts = [
-          created > 0 ? `${created} enviado${created === 1 ? "" : "s"} para análise` : null,
-          existed > 0 ? `${existed} já existia${existed === 1 ? "" : "m"}` : null,
-          failed  > 0 ? `${failed} com erro` : null,
-        ].filter(Boolean);
-        flash(failed === 0, parts.length ? parts.join(" · ") : "Nenhum modelo criado.");
-      } else {
-        flash(false, j?.error ?? "Não foi possível criar os modelos.");
-      }
-    } catch { flash(false, "Sem conexão. Tente novamente."); }
-    finally { setBusy(null); }
-  }
-
   async function map(t: MetaTemplate, value: string) {
     setBusy(t.id);
     try {
@@ -127,22 +102,15 @@ export function MetaTemplatesPanel() {
             em qual tipo de campanha cada modelo deve ser usado.
           </p>
         </div>
-        <div className="ml-3 flex flex-shrink-0 items-center gap-2">
-          <button type="button" disabled={busy !== null} onClick={createDefaults}
-            className="rounded-lg bg-ink px-3 py-1.5 text-[11px] font-semibold text-paper hover:opacity-90 disabled:opacity-50">
-            {busy === "create" ? "Criando…" : "Criar modelos automaticamente"}
-          </button>
-          <button type="button" disabled={busy !== null} onClick={sync}
-            className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
-            {busy === "sync" ? "Sincronizando…" : "Sincronizar"}
-          </button>
-        </div>
+        <button type="button" disabled={busy === "sync"} onClick={sync}
+          className="ml-3 flex-shrink-0 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
+          {busy === "sync" ? "Sincronizando…" : "Sincronizar modelos"}
+        </button>
       </div>
 
       <p className="mt-2 text-[11px] text-muted">
-        <strong className="font-semibold text-ink2">Criar modelos automaticamente</strong> pega as suas campanhas
-        ativas e envia cada mensagem para análise da Meta, já no formato certo. A Meta revisa (de minutos a 24h);
-        depois é só usar nas campanhas.
+        As frases das campanhas são criadas e enviadas para aprovação da Meta lá em <strong className="font-semibold text-ink2">CRM → Campanhas</strong>.
+        Aqui você só acompanha e sincroniza o status.
       </p>
 
       {msg && (

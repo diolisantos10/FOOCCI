@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, forbidden, unauthorized, serverError } from "@/lib/api-response";
 import { ReadyMadeCampaignService } from "@/services/crm/ReadyMadeCampaignService";
+import { submitTemplateForReadyMade } from "@/services/whatsapp/MetaTemplateProvisionService";
 import type { ReadyMadeOverrides } from "@/services/crm/readyMadeCampaigns";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const body = (await req.json().catch(() => ({}))) as {
-      action?:    "activate" | "deactivate" | "update";
+      action?:    "activate" | "deactivate" | "update" | "submit-meta-template";
       overrides?: ReadyMadeOverrides;
     };
 
@@ -38,7 +39,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const r = await ReadyMadeCampaignService.update(ctx.restaurantId, params.id, overrides);
       return r.ok ? ok(r) : badRequest(r.error);
     }
-    return badRequest("action inválida (use activate | deactivate | update).");
+    if (body.action === "submit-meta-template") {
+      // Human "Enviar para aprovação": submit THIS campaign's phrase to Meta for review.
+      const r = await submitTemplateForReadyMade(ctx.restaurantId, params.id);
+      return r.ok ? ok(r) : badRequest(r.error ?? "Não foi possível enviar para aprovação.");
+    }
+    return badRequest("action inválida (use activate | deactivate | update | submit-meta-template).");
   } catch (err) {
     console.error("[POST /api/crm/ready-made/[id]]", err);
     return serverError();

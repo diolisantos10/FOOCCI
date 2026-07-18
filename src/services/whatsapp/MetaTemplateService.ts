@@ -24,6 +24,7 @@ export interface MetaTemplateView {
   status:             string;
   bodyVariables:      number;
   mappedCampaignType: string | null;
+  rejectedReason:     string | null;
 }
 
 export interface MetaTemplateInput {
@@ -35,15 +36,18 @@ export interface MetaTemplateInput {
   bodyVariables?:      number;
   /** Pass to set; OMIT (undefined) to preserve an existing mapping on update. */
   mappedCampaignType?: string | null;
+  /** Pass to set; OMIT (undefined) to preserve on update. */
+  rejectedReason?:     string | null;
 }
 
 function toView(t: {
   id: string; templateName: string; languageCode: string; category: string;
-  status: string; bodyVariables: number; mappedCampaignType: string | null;
+  status: string; bodyVariables: number; mappedCampaignType: string | null; rejectedReason: string | null;
 }): MetaTemplateView {
   return {
     id: t.id, templateName: t.templateName, languageCode: t.languageCode, category: t.category,
     status: t.status, bodyVariables: t.bodyVariables, mappedCampaignType: t.mappedCampaignType,
+    rejectedReason: t.rejectedReason,
   };
 }
 
@@ -88,6 +92,7 @@ export const MetaTemplateService = {
       status:             input.status ?? "PENDING",
       bodyVariables:      input.bodyVariables ?? 0,
       mappedCampaignType: input.mappedCampaignType ?? null,
+      rejectedReason:     input.rejectedReason ?? null,
     };
     // On update, only touch status and mappedCampaignType when the caller explicitly
     // provided them. Sync passes both → they refresh. Provisioning re-runs OMIT status
@@ -95,13 +100,14 @@ export const MetaTemplateService = {
     // prior sync) is PRESERVED, never clobbered back to PENDING (which would make
     // findApproved miss it and silently drop the CRM send path to freeform).
     const update: {
-      category: string; bodyVariables: number; status?: string; mappedCampaignType?: string | null;
+      category: string; bodyVariables: number; status?: string; mappedCampaignType?: string | null; rejectedReason?: string | null;
     } = {
       category:      input.category ?? "UTILITY",
       bodyVariables: input.bodyVariables ?? 0,
     };
     if (input.status !== undefined) update.status = input.status;
     if (input.mappedCampaignType !== undefined) update.mappedCampaignType = input.mappedCampaignType;
+    if (input.rejectedReason !== undefined) update.rejectedReason = input.rejectedReason;
 
     const row = await prisma.metaMessageTemplate.upsert({
       where: {
@@ -166,6 +172,33 @@ export const MetaTemplateService = {
   },
 
   /**
+   * Deletes a template on Meta by name (DELETE /{wabaId}/message_templates?name=…) and
+   * removes the local mirror row. Used to RE-SUBMIT an edited phrase: Meta templates are
+   * immutable by name, so a rejected template must be deleted before the fixed version is
+   * created. Never throws.
+   */
+  async deleteOnMeta(restaurantId: string, templateName: string): Promise<{ ok: boolean; error?: string }> {
+    const cfg = await MetaConfigService.getResolved(restaurantId);
+    if (!cfg) return { ok: false, error: "WhatsApp oficial da Meta não está conectado." };
+    try {
+      const res = await fetch(metaGraphUrl(`${cfg.wabaId}/message_templates?name=${encodeURIComponent(templateName)}`), {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${cfg.accessToken}` },
+      });
+      const json: unknown = await res.json().catch(() => ({}));
+      // Remove the local mirror regardless (a missing-on-Meta template should not linger locally).
+      await prisma.metaMessageTemplate.deleteMany({ where: { restaurantId, templateName } }).catch(() => {});
+      if (!res.ok) {
+        const err = (json as { error?: { message?: string } }).error;
+        return { ok: false, error: maskGraphResponse(err?.message ?? "Falha ao remover o modelo na Meta.") };
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+    }
+  },
+
+  /**
    * Pulls the restaurant's templates from the Meta Graph API
    * (GET /{wabaId}/message_templates) and mirrors name/language/category/status/
    * variable-count locally. Preserves existing campaign mappings. Best-effort,
@@ -176,7 +209,7 @@ export const MetaTemplateService = {
     if (!cfg) return { ok: false, synced: 0, error: "WhatsApp oficial da Meta não está conectado." };
     try {
       let url: string | null =
-        metaGraphUrl(`${cfg.wabaId}/message_templates?fields=name,language,category,status,components&limit=100`);
+        metaGraphUrl(`${cfg.wabaId}/message_templates?fields=name,language,category,status,components,rejected_reason&limit=100`);
       let synced = 0;
       let pages = 0;
       while (url && pages < 10) {
@@ -189,15 +222,19 @@ export const MetaTemplateService = {
         const data = (json as { data?: unknown }).data;
         const rows = Array.isArray(data) ? data : [];
         for (const t of rows) {
-          const tpl = t as { name?: unknown; language?: unknown; category?: unknown; status?: unknown; components?: unknown };
+          const tpl = t as { name?: unknown; language?: unknown; category?: unknown; status?: unknown; components?: unknown; rejected_reason?: unknown };
           if (!tpl.name) continue;
+          const mapped = mapMetaStatus(tpl.status);
+          const reasonRaw = tpl.rejected_reason != null ? String(tpl.rejected_reason) : "";
           await this.upsert({
             restaurantId,
             templateName:  String(tpl.name),
             languageCode:  String(tpl.language ?? "pt_BR"),
             category:      String(tpl.category ?? "UTILITY").toUpperCase(),
-            status:        mapMetaStatus(tpl.status),
+            status:        mapped,
             bodyVariables: countBodyVariables(tpl.components),
+            // Rejection reason: set on REJECTED, clear otherwise (a fixed re-submit clears it).
+            rejectedReason: mapped === "REJECTED" ? (reasonRaw && reasonRaw !== "NONE" ? reasonRaw : "Rejeitado pela Meta") : null,
             // mappedCampaignType omitted → preserved
           });
           synced++;

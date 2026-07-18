@@ -1191,6 +1191,7 @@ model MetaMessageTemplate {
   status           String  @default("PENDING") // PENDING | APPROVED | REJECTED | DISABLED
   bodyVariables    Int     @default(0) // number of {{n}} placeholders in the body
   mappedCampaignType String? // optional: CRM campaign type this template fulfils
+  rejectedReason   String? // Meta's reason when status = REJECTED (shown to the owner)
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

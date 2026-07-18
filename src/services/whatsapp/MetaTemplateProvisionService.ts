@@ -28,7 +28,7 @@ const LANGUAGE = "pt_BR";
 /** Per ready-made template: Meta template name + category + whether to add the opt-out footer. */
 interface TemplateConfig { name: string; category: "MARKETING" | "UTILITY"; footer: boolean }
 
-const TEMPLATE_CONFIG: Record<string, TemplateConfig> = {
+export const TEMPLATE_CONFIG: Record<string, TemplateConfig> = {
   "pedido-avaliacao":    { name: "pedir_avaliacao",           category: "UTILITY",   footer: false },
   "aniversariantes":     { name: "aniversario",               category: "MARKETING", footer: false },
   "segunda-compra":      { name: "segunda_compra",            category: "MARKETING", footer: true  },
@@ -47,6 +47,11 @@ export interface ProvisionItemResult {
   templateName: string;   // Meta template name (e.g. "cliente_perdido")
   status:       "created" | "existed" | "failed";
   error?:       string;
+}
+
+/** The Meta template name a ready-made campaign maps to (null if not mappable). */
+export function metaTemplateNameFor(readyMadeId: string): string | null {
+  return TEMPLATE_CONFIG[readyMadeId]?.name ?? null;
 }
 
 export interface ProvisionResult {
@@ -189,4 +194,111 @@ export async function provisionDefaultTemplates(restaurantId: string): Promise<P
   }
 
   return { ok: failed === 0, created, existed, failed, items };
+}
+
+export interface SubmitOneResult {
+  ok:           boolean;
+  status:       "created" | "existed" | "resubmitted" | "pending" | "approved" | "failed";
+  templateName: string;
+  error?:       string;
+}
+
+/**
+ * Submits ONE ready-made campaign's current phrase to Meta for approval. This is the
+ * shared motor behind the human "Enviar para aprovação" button and (later) the CRM
+ * agent's automatic submission. Idempotent and re-submit aware:
+ *   - no template / disabled → create + submit (PENDING)
+ *   - REJECTED               → delete the old one + recreate with the fixed phrase
+ *   - PENDING                → no-op ("já está em análise")
+ *   - APPROVED               → no-op ("já aprovado"); changing it needs a new template
+ */
+export async function submitTemplateForReadyMade(restaurantId: string, readyMadeId: string): Promise<SubmitOneResult> {
+  const config = TEMPLATE_CONFIG[readyMadeId];
+  if (!config) return { ok: false, status: "failed", templateName: readyMadeId, error: "Esta campanha não tem modelo mapeável." };
+
+  const campaign = await prisma.campaign.findFirst({
+    where:   { restaurantId, templateId: readyMadeId },
+    orderBy: { createdAt: "desc" },
+    select:  { id: true, message: true, audienceConfig: true },
+  });
+
+  const readyMade = getReadyMadeCampaign(readyMadeId);
+  const message = campaign?.message?.trim() || readyMade?.defaultMessage;
+  if (!message) return { ok: false, status: "failed", templateName: config.name, error: "Campanha sem mensagem." };
+
+  const exampleCtx = await buildExampleContext(restaurantId);
+  const { cupom, validade } = couponExamples(readyMade?.defaultCoupon);
+  const examples: Partial<Record<KnownToken, string>> = {
+    nome: "Maria", restaurante: exampleCtx.restaurante, link_cardapio: exampleCtx.link_cardapio,
+    instagram: exampleCtx.instagram, link_avaliacao_google: exampleCtx.link_avaliacao_google, cupom, validade,
+  };
+  const built = buildMetaTemplate({
+    name: config.name, message, category: config.category, language: LANGUAGE,
+    footer: config.footer ? OPT_OUT_FOOTER : null, examples,
+  });
+
+  const wireMapping = async () => {
+    if (!campaign) return;
+    const prev = (campaign.audienceConfig && typeof campaign.audienceConfig === "object")
+      ? (campaign.audienceConfig as Record<string, unknown>) : {};
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      // submittedMessage records the EXACT phrase last sent to Meta, so a later submit can
+      // tell whether an approved template's phrase actually changed (needs re-approval) or
+      // is unchanged (leave the live approved template alone).
+      data:  { audienceConfig: { ...prev, metaTemplate: { name: config.name, language: LANGUAGE, params: built.paramTokens, submittedMessage: message } } as never },
+    }).catch(() => { /* best-effort */ });
+  };
+
+  // The phrase last submitted to Meta for this campaign (to detect edits post-approval).
+  const prevMeta = (campaign?.audienceConfig && typeof campaign.audienceConfig === "object")
+    ? ((campaign.audienceConfig as Record<string, unknown>).metaTemplate as { submittedMessage?: unknown } | undefined)
+    : undefined;
+  const lastSubmittedMessage = typeof prevMeta?.submittedMessage === "string" ? prevMeta.submittedMessage : null;
+
+  // Delete the old template + recreate with the current phrase (Meta names are immutable).
+  const deleteAndRecreate = async (): Promise<SubmitOneResult> => {
+    await MetaTemplateService.deleteOnMeta(restaurantId, config.name);
+    const recreated = await MetaTemplateService.createOnMeta(restaurantId, built.payload);
+    if (!recreated.ok && !recreated.alreadyExists) {
+      return { ok: false, status: "failed", templateName: config.name, error: recreated.error };
+    }
+    await MetaTemplateService.upsert({
+      restaurantId, templateName: config.name, languageCode: LANGUAGE,
+      category: config.category, bodyVariables: built.bodyVariables, status: "PENDING", rejectedReason: null,
+    });
+    await wireMapping();
+    return { ok: true, status: "resubmitted", templateName: config.name };
+  };
+
+  // Refresh from Meta so we act on the true current status.
+  await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
+  const existing = (await MetaTemplateService.list(restaurantId)).find((t) => t.templateName === config.name);
+
+  if (existing) {
+    if (existing.status === "PENDING") { await wireMapping(); return { ok: true, status: "pending", templateName: config.name }; }
+    if (existing.status === "APPROVED") {
+      // Unchanged phrase → keep the live approved template. Edited phrase → resubmit the
+      // new text (goes back to Meta review; the old body is replaced on re-approval).
+      if (lastSubmittedMessage !== null && lastSubmittedMessage === message) {
+        await wireMapping();
+        return { ok: true, status: "approved", templateName: config.name };
+      }
+      return deleteAndRecreate();
+    }
+    // REJECTED, DISABLED, or unknown → recreate with the current phrase.
+    return deleteAndRecreate();
+  }
+
+  const res = await MetaTemplateService.createOnMeta(restaurantId, built.payload);
+  if (res.ok || res.alreadyExists) {
+    await MetaTemplateService.upsert({
+      restaurantId, templateName: config.name, languageCode: LANGUAGE,
+      category: config.category, bodyVariables: built.bodyVariables,
+      ...(res.ok ? { status: "PENDING", rejectedReason: null } : {}),
+    });
+    await wireMapping();
+    return { ok: true, status: res.alreadyExists ? "existed" : "created", templateName: config.name };
+  }
+  return { ok: false, status: "failed", templateName: config.name, error: res.error };
 }

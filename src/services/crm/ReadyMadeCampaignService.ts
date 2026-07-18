@@ -16,6 +16,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { CrmCampaignService } from "./CrmCampaignService";
+import { MetaTemplateService } from "@/services/whatsapp/MetaTemplateService";
+import { metaTemplateNameFor } from "@/services/whatsapp/MetaTemplateProvisionService";
 import {
   READY_MADE_CAMPAIGNS,
   getReadyMadeCampaign,
@@ -91,6 +93,8 @@ export interface ReadyMadeCampaignState {
   weekdays:      number[];
   timeWindow:    { start: string; end: string };
   dailyLimit:    number;
+  /** Meta approval state of this campaign's message template (null = not submitted / not mappable). */
+  metaTemplate:  { name: string; status: string; rejectedReason: string | null } | null;
 }
 
 // ─── config helpers ─────────────────────────────────────────────────────────────
@@ -149,7 +153,18 @@ export class ReadyMadeCampaignService {
 
     const config = await getConfig(restaurantId);
 
+    // Meta approval state per campaign, matched by the deterministic template name.
+    // Best-effort: an Evolution-only restaurant simply has no rows here.
+    const metaByName = new Map<string, { name: string; status: string; rejectedReason: string | null }>();
+    try {
+      for (const t of await MetaTemplateService.list(restaurantId)) {
+        metaByName.set(t.templateName, { name: t.templateName, status: t.status, rejectedReason: t.rejectedReason });
+      }
+    } catch { /* no Meta templates → all null */ }
+
     return READY_MADE_CAMPAIGNS.map((rm) => {
+      const metaName = metaTemplateNameFor(rm.id);
+      const metaTemplate = metaName ? (metaByName.get(metaName) ?? null) : null;
       const base = {
         id: rm.id, emoji: rm.emoji, name: rm.name, tagline: rm.tagline,
         description: rm.description, objective: rm.objective, engine: rm.engine,
@@ -157,6 +172,7 @@ export class ReadyMadeCampaignService {
         messageVariants: getReadyMadeMessageVariants(rm.id),
         timing: getReadyMadeTiming(rm.id),
         triggerDaysLabel: rm.triggerDaysLabel,
+        metaTemplate,
       };
 
       const row = byTemplate.get(rm.id);
@@ -195,6 +211,19 @@ export class ReadyMadeCampaignService {
         triggerDays: cfg?.triggerDays ?? rm.triggerDays,
       };
     });
+  }
+
+  /**
+   * Whether the official Meta Cloud API is connected for this restaurant — the gate for
+   * showing the "Aprovação da Meta" UI. When true, marketing needs approved templates;
+   * Evolution-only restaurants never see it.
+   */
+  static async isMetaConnected(restaurantId: string): Promise<boolean> {
+    const cfg = await prisma.metaWhatsAppConfig.findUnique({
+      where:  { restaurantId },
+      select: { connectionStatus: true },
+    }).catch(() => null);
+    return cfg?.connectionStatus === "CONNECTED";
   }
 
   /**

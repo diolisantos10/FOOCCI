@@ -12,8 +12,11 @@ export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
   if (!ctx) return unauthorized();
   try {
-    const states = await ReadyMadeCampaignService.getStates(ctx.restaurantId);
-    return ok({ campaigns: states });
+    const [states, metaCrmActive] = await Promise.all([
+      ReadyMadeCampaignService.getStates(ctx.restaurantId),
+      ReadyMadeCampaignService.isMetaConnected(ctx.restaurantId),
+    ]);
+    return ok({ campaigns: states, metaCrmActive });
   } catch (err) {
     console.error("[GET /api/crm/ready-made]", err);
     return serverError();
