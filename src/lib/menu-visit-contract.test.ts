@@ -39,34 +39,17 @@ describe("conversion visita contract", () => {
     expect(src).not.toContain("viewFiredKey");
   });
 
-  it("dashboard counts every MenuEvent (no customerId filter that would crash history)", () => {
+  it("conversion = buyers ÷ loggers (compraram ÷ logaram com o número)", () => {
     const src = read("src/app/api/dashboard/route.ts");
-    // The two visit counts (current + previous period) must NOT filter customerId,
-    // otherwise historical rows (null customerId from the old beacon) drop to ~0.
-    const marker = "prisma.menuEvent.count(";
-    const positions: number[] = [];
-    for (let i = src.indexOf(marker); i !== -1; i = src.indexOf(marker, i + 1)) positions.push(i);
-    expect(positions.length).toBeGreaterThanOrEqual(2);
-    for (const pos of positions) {
-      // inspect the count() call body (a comfortable window past the marker)
-      const block = src.slice(pos, pos + 220);
-      expect(block).not.toContain("customerId");
-    }
-  });
-
-  it("conversion numerator counts only cardápio-funnel sales (same funnel as visits)", () => {
-    const src = read("src/app/api/dashboard/route.ts");
-    // sales must be scoped to the cardápio funnel; otherwise WhatsApp/manual
-    // orders (no cardápio visit) push sales > visits → nonsensical >100%.
-    expect(src).toContain("CARDAPIO_ORDER_SOURCES");
-    expect(src).toMatch(/CARDAPIO_ORDER_SOURCES\s*=\s*\[\s*"pedido"\s*,\s*"qr"\s*\]/);
-    const salesQueries = src.match(/source:\s*\{\s*in:\s*CARDAPIO_ORDER_SOURCES\s*\}/g) ?? [];
-    expect(salesQueries.length).toBeGreaterThanOrEqual(2); // current + previous period
-  });
-
-  it("proof-of-visit clamp keeps visits >= sales (ratio never nonsensical >100%)", () => {
-    const src = read("src/app/api/dashboard/route.ts");
-    expect(src).toMatch(/Math\.max\(\s*visitsNow\s*,\s*salesNow\s*\)/);
-    expect(src).toMatch(/Math\.max\(\s*visitsPrev\s*,\s*salesPrev\s*\)/);
+    // Denominator = loggers (distinct identified customers); numerator = buyers.
+    expect(src).toMatch(/loggersNow\s*>\s*0\s*\?\s*Math\.round\(\(buyersNowN\s*\/\s*loggersNow\)/);
+    // Loggers are built from login-events (MenuEvent w/ customerId) + carts + buyers,
+    // so they have real history AND buyers are a subset (ratio always ≤ 100%).
+    expect(src).toContain("loggersNowSet");
+    expect(src).toMatch(/prisma\.orderDraft\.findMany/);
+    expect(src).toMatch(/customerId:\s*\{\s*not:\s*null\s*\}[\s\S]*?distinct:\s*\[\s*"customerId"\s*\]/);
+    // The old "count every open" and clamp hacks are gone.
+    expect(src).not.toContain("visitsNowAdj");
+    expect(src).not.toContain("CARDAPIO_ORDER_SOURCES");
   });
 });

@@ -25,11 +25,6 @@ import { computePeriodRange, buildChartBuckets, type Period } from "@/lib/dashbo
 
 const TERMINAL: OrderStatus[]        = ["DELIVERED", "CANCELLED"];
 const REVENUE_STATUS: OrderStatus[]  = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
-// Conversion numerator = sales from the SAME funnel as the visit signal: the
-// cardápio (delivery /pedido + dine-in /qr), both of which log a visit via
-// /api/qr/[slug]/identify. WhatsApp/manual orders come from a different funnel
-// (no cardápio phone-screen visit) and would otherwise push sales > visits.
-const CARDAPIO_ORDER_SOURCES = ["pedido", "qr"];
 const ACTIVE_CAMP: CampaignStatus[]  = ["ACTIVE", "SCHEDULED", "SENDING"];
 const DELAY_MS                       = 20 * 60 * 1_000;
 const DELAY_OK: OrderStatus[]        = ["READY", "OUT_FOR_DELIVERY", "AWAITING_PAYMENT"];
@@ -69,10 +64,6 @@ export async function GET(req: NextRequest) {
       cancelledPeriodCount,
       orderSourceCounts,
       newCustomersPrev,
-      visitsNow,
-      salesNow,
-      visitsPrev,
-      salesPrev,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + chart)
       prisma.order.findMany({
@@ -172,45 +163,15 @@ export async function GET(req: NextRequest) {
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
         },
       }),
-      // 13. Conversion — VISITS: identified entries (MenuEvent). Logged server-side
-      //     in /api/qr/[slug]/identify the moment someone passes the mandatory phone
-      //     screen — one row per entry, so 10 entries = 10 visits. (Rows before
-      //     2026-07-18 came from the old open-beacon and are counted the same.)
-      //     Denominator of the conversion: "quantas pessoas entraram".
-      prisma.menuEvent.count({
-        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
-      }),
-      // 14. …and SALES: cardápio orders finalized this period ("quantos
-      //     compraram"). Same funnel as the visits above, so a sale always has a
-      //     matching visit. Imported/WhatsApp/manual orders excluded.
-      prisma.order.count({
-        where: {
-          restaurantId: ctx.restaurantId,
-          importedAt:   null,
-          source:       { in: CARDAPIO_ORDER_SOURCES },
-          createdAt:    { gte: rangeStart, lte: rangeEnd },
-          status:       { in: REVENUE_STATUS },
-        },
-      }),
-      // 15-16. Same visits/sales for the previous period (conversion delta).
-      prisma.menuEvent.count({
-        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
-      }),
-      prisma.order.count({
-        where: {
-          restaurantId: ctx.restaurantId,
-          importedAt:   null,
-          source:       { in: CARDAPIO_ORDER_SOURCES },
-          createdAt:    { gte: prevStart, lt: prevFetchEnd },
-          status:       { in: REVENUE_STATUS },
-        },
-      }),
     ]);
 
     // ── Conversion by channel — the same identified→sale funnel, split by where
     //    the customer entered (conversation channel). Two light list queries per
     //    period + JS intersection, instead of 2 counts × N channels.
-    const [convRowsNow, convRowsPrev, orderCustNow, orderCustPrev] = await Promise.all([
+    const [
+      convRowsNow, convRowsPrev, orderCustNow, orderCustPrev,
+      loginCustNow, loginCustPrev, draftCustNow, draftCustPrev,
+    ] = await Promise.all([
       prisma.conversation.findMany({
         where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, customerId: { not: null }, customer: { isGuest: false } },
         select: { channel: true, customerId: true },
@@ -220,12 +181,34 @@ export async function GET(req: NextRequest) {
         select: { channel: true, customerId: true },
       }),
       prisma.order.findMany({
-        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, status: { in: REVENUE_STATUS } },
+        where: { restaurantId: ctx.restaurantId, importedAt: null, createdAt: { gte: rangeStart, lte: rangeEnd }, status: { in: REVENUE_STATUS } },
         select: { customerId: true },
       }),
       prisma.order.findMany({
-        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd }, status: { in: REVENUE_STATUS } },
+        where: { restaurantId: ctx.restaurantId, importedAt: null, createdAt: { gte: prevStart, lt: prevFetchEnd }, status: { in: REVENUE_STATUS } },
         select: { customerId: true },
+      }),
+      // Loggers ("clientes que logaram com o número") — the conversion DENOMINATOR.
+      //   Distinct customers who identified themselves in the period. Sourced from
+      //   MenuEvent logins (logged server-side at the phone screen, going forward)
+      //   plus OrderDraft (started a cart → had logged in), which gives real history
+      //   before login-events existed. Buyers are a subset (they also ordered), so
+      //   the ratio is always coherent (≤ 100%).
+      prisma.menuEvent.findMany({
+        where:  { restaurantId: ctx.restaurantId, customerId: { not: null }, createdAt: { gte: rangeStart, lte: rangeEnd } },
+        select: { customerId: true }, distinct: ["customerId"],
+      }),
+      prisma.menuEvent.findMany({
+        where:  { restaurantId: ctx.restaurantId, customerId: { not: null }, createdAt: { gte: prevStart, lt: prevFetchEnd } },
+        select: { customerId: true }, distinct: ["customerId"],
+      }),
+      prisma.orderDraft.findMany({
+        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
+        select: { customerId: true }, distinct: ["customerId"],
+      }),
+      prisma.orderDraft.findMany({
+        where:  { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
+        select: { customerId: true }, distinct: ["customerId"],
       }),
     ]);
 
@@ -242,8 +225,13 @@ export async function GET(req: NextRequest) {
         for (const id of identified) if (buyers.has(id)) converted++;
         return { key: g.key, identified: identified.size, converted };
       });
-    const buyersNow    = new Set(orderCustNow.map((o) => o.customerId as string));
-    const buyersPrev   = new Set(orderCustPrev.map((o) => o.customerId as string));
+    const buyersNow    = new Set(orderCustNow.filter((o) => o.customerId).map((o) => o.customerId as string));
+    const buyersPrev   = new Set(orderCustPrev.filter((o) => o.customerId).map((o) => o.customerId as string));
+    // Loggers = distinct identified customers seen in the period (logged in with
+    // their number). Union of login-events + carts + buyers, so buyers ⊆ loggers.
+    const idsOf = (rows: Array<{ customerId: string | null }>) => rows.map((r) => r.customerId).filter((v): v is string => !!v);
+    const loggersNowSet  = new Set<string>([...idsOf(loginCustNow),  ...idsOf(draftCustNow),  ...buyersNow]);
+    const loggersPrevSet = new Set<string>([...idsOf(loginCustPrev), ...idsOf(draftCustPrev), ...buyersPrev]);
     const funnelNow    = channelFunnel(convRowsNow, buyersNow);
     const funnelPrev   = channelFunnel(convRowsPrev, buyersPrev);
     const conversionByChannel = funnelNow.map((n, i) => {
@@ -270,18 +258,17 @@ export async function GET(req: NextRequest) {
     const ordersPrev    = prevOrders.length;
     const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
 
-    // ── Conversion rate — the REAL one: of everyone who entered the cardápio
-    //    (visits, logged at the phone screen) in the period, how many bought
-    //    (cardápio sales). vendas ÷ visitas.
-    //    Proof-of-visit clamp: a finalized cardápio sale is proof that someone
-    //    entered, so visits can never be fewer than sales. This heals days where
-    //    a visit wasn't logged (a returning customer who didn't re-identify, or
-    //    the transition day when server-side logging first went live) and keeps
-    //    the ratio coherent (≤ 100%) instead of the nonsensical "5 de 4".
-    const visitsNowAdj  = Math.max(visitsNow,  salesNow);
-    const visitsPrevAdj = Math.max(visitsPrev, salesPrev);
-    const conversionRate     = visitsNowAdj  > 0 ? Math.round((salesNow  / visitsNowAdj)  * 100) : null;
-    const conversionRatePrev = visitsPrevAdj > 0 ? Math.round((salesPrev / visitsPrevAdj) * 100) : null;
+    // ── Conversion rate — the REAL one, per the definition:
+    //    clientes que COMPRARAM ÷ clientes que LOGARAM com o número.
+    //    Numerator = distinct customers with a finalized sale (buyers).
+    //    Denominator = distinct customers who identified themselves (loggers).
+    //    Buyers ⊆ loggers by construction, so the ratio is always ≤ 100%.
+    const loggersNow = loggersNowSet.size;
+    const loggersPrev = loggersPrevSet.size;
+    const buyersNowN = buyersNow.size;
+    const buyersPrevN = buyersPrev.size;
+    const conversionRate     = loggersNow  > 0 ? Math.round((buyersNowN  / loggersNow)  * 100) : null;
+    const conversionRatePrev = loggersPrev > 0 ? Math.round((buyersPrevN / loggersPrev) * 100) : null;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -376,8 +363,8 @@ export async function GET(req: NextRequest) {
       // Conversion KPI (identified entrant → finalized sale)
       conversionRate,
       conversionRatePrev,
-      conversionIdentified: visitsNowAdj, // visits (entered the cardápio), ≥ sales
-      conversionConverted:  salesNow,     // cardápio sales (orders finalized)
+      conversionIdentified: loggersNow,  // clientes que logaram com o número
+      conversionConverted:  buyersNowN,  // clientes que compraram
       conversionByChannel,
 
       // Real-time
