@@ -3316,6 +3316,7 @@ function CampanhasAtivasSection({
   restrictToIds,
   cartRecoveryActive,
   couponCounts,
+  audiences,
   onCartRecoveryManage,
   onCartRecoveryToggle,
 }: {
@@ -3334,6 +3335,8 @@ function CampanhasAtivasSection({
   cartRecoveryActive?: boolean;
   /** Per-campaign coupon counts (campaignId → { sent, used }) from the wallet. */
   couponCounts?: Record<string, { sent: number; used: number }>;
+  /** Per-campaign eligible audience for today (campaignId → count of reachable clients). */
+  audiences?: Record<string, number>;
   /** Open the cart-recovery config modal (same as "Gerenciar" for real campaigns). */
   onCartRecoveryManage?: () => void;
   /** Toggle cart recovery on/off (same as "Pausar"/"Ativar" for real campaigns). */
@@ -3368,9 +3371,10 @@ function CampanhasAtivasSection({
       a.failed      += c.totalFailed || 0;
       a.couponsUsed += couponCounts?.[c.id]?.used ?? 0;
       a.dailyLimit  += (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit ?? 0;
+      a.audience    += audiences?.[c.id] ?? 0;
       return a;
     },
-    { revenue: 0, sent: 0, converted: 0, failed: 0, couponsUsed: 0, dailyLimit: 0 },
+    { revenue: 0, sent: 0, converted: 0, failed: 0, couponsUsed: 0, dailyLimit: 0, audience: 0 },
   );
   const totalConvPct = totals.sent > 0 ? Math.round((totals.converted / totals.sent) * 100) : null;
   const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -3394,6 +3398,7 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold">Nome</th>
               <th className="py-2.5 px-2 font-semibold">Tipo</th>
               <th className="py-2.5 px-2 font-semibold">Público</th>
+              <th className="py-2.5 px-2 font-semibold text-right" title="Clientes no segmento hoje que ainda podem receber uma mensagem — atualiza sozinho conforme os clientes mudam de faixa">Audiência</th>
               <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
               <th className="py-2.5 px-2 font-semibold text-right" title="Máximo de mensagens que esta campanha pode enviar por dia">Limite/dia</th>
@@ -3423,6 +3428,8 @@ function CampanhasAtivasSection({
                   <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE["Recorrente"]}`}>Automática</span>
                 </td>
                 <td className="py-3 px-2 max-w-[100px]"><span className="text-ink2 truncate block text-[11px]">quem abandonou</span></td>
+                {/* Audiência — cart recovery is event-based (dispara no abandono), sem pool fixo. */}
+                <td className="py-3 px-2 text-right text-muted">—</td>
                 {/* Receita · Enviados · Limite · Cupons usados · Conversão · Falhas — cart
                     recovery grants without a Campaign row, so these aren't attributable. */}
                 <td className="py-3 px-2 text-right text-muted">—</td>
@@ -3507,6 +3514,16 @@ function CampanhasAtivasSection({
                     <span className="text-ink2 truncate block text-[11px]">
                       {c.targetSegment ? (SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment) : "—"}
                     </span>
+                  </td>
+
+                  {/* Audiência — clientes elegíveis hoje (recalculada a cada carregamento) */}
+                  <td className="py-3 px-2 text-right tabular-nums" title="Clientes no segmento agora que ainda podem receber a mensagem">
+                    {(() => {
+                      const aud = audiences?.[c.id];
+                      return aud != null && aud > 0
+                        ? <span className="font-semibold text-indigo-600">{aud}</span>
+                        : <span className="text-muted">{aud === 0 ? "0" : "—"}</span>;
+                    })()}
                   </td>
 
                   {/* Receita — coluna mais importante, vem primeiro */}
@@ -3598,6 +3615,7 @@ function CampanhasAtivasSection({
           <tfoot>
             <tr className="border-t-2 border-line bg-[#FAFAF8] font-bold text-ink">
               <td className="py-2.5 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted" colSpan={4}>Totais ({shown.length})</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-indigo-600">{totals.audience > 0 ? totals.audience : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.revenue > 0 ? brl(totals.revenue) : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-blue-700">{totals.sent > 0 ? totals.sent : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-ink2">{totals.dailyLimit > 0 ? `${totals.dailyLimit}/dia` : "—"}</td>
@@ -3995,6 +4013,8 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [cartBusy, setCartBusy] = useState(false);
   // Per-campaign coupon counts (campaignId → { sent, used }) for the Ativas table.
   const [couponCounts, setCouponCounts] = useState<Record<string, { sent: number; used: number }>>({});
+  // Per-campaign eligible audience (campaignId → count), recomputed live (today's segments).
+  const [audiences, setAudiences] = useState<Record<string, number>>({});
   // Period filter for the Ativas numbers (Total / Hoje / Ontem / … / Personalizado).
   const [period,     setPeriod]     = useState<CrmPeriodKey>("today");
   const [customFrom, setCustomFrom] = useState("");
@@ -4053,6 +4073,15 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .then((json) => setCouponCounts(json.data ?? {}))
       .catch(() => {});
   }, [readyMadeReload, period, customFrom, customTo]);
+
+  // Per-campaign eligible audience for TODAY (independent of the period filter — it's
+  // always "how many clients are in this segment right now"). Recomputed on every reload.
+  useEffect(() => {
+    fetch("/api/crm/campaign-audiences")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setAudiences(json.data ?? {}))
+      .catch(() => {});
+  }, [readyMadeReload]);
 
   // Global daily send limit (shown above the table). In safe mode it's the warmup
   // number that grows on its own; in manual mode it's the owner-set cap (0 = none).
@@ -4291,6 +4320,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           restrictToIds={activeReadyMadeIds}
           cartRecoveryActive={cartRecoveryOn}
           couponCounts={couponCounts}
+          audiences={audiences}
           onCartRecoveryManage={() => { void handleCartManage(); }}
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
