@@ -178,6 +178,49 @@ export class CrmAudienceService {
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
+      // ── Segment: QUENTE_ESFRIANDO — still hot, but in the last ~7 days of the hot
+      //    window (ordered between hotMaxDays and hotMaxDays-7 days ago), about to
+      //    turn MORNO. Mirrors resolveAudience so preview == send audience. ─────────
+      case "quente-esfriando": {
+        const COOLING_WINDOW_DAYS = 7;
+        const coolingCutoff = new Date(
+          ts.getTime() - Math.max(1, segCfg.hotMaxDays - COOLING_WINDOW_DAYS) * 86_400_000,
+        );
+        const dateCond  = { OR: [
+          { lastOrderAt:         { gte: cutoffs.hotCutoff, lte: coolingCutoff } },
+          { lastOrderAt: null, importedLastOrderAt: { gte: cutoffs.hotCutoff, lte: coolingCutoff } },
+        ] };
+        const segWhere  = { restaurantId, isGuest: false, ...dateCond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...dateCond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({
+            where:   eligWhere,
+            orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+            take:    PREVIEW_LIMIT,
+            select:  baseSelect,
+          }),
+        ]);
+        const excl = await computeExclusions(restaurantId, dateCond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
+      // ── Segment: SEM_PEDIDOS — identified/contactable but NEVER ordered (no native
+      //    and no imported history). First-order campaign target. ──────────────────
+      case "cadastro-sem-compra": {
+        const noOrders  = { totalOrders: 0, OR: [{ importedOrderCount: null }, { importedOrderCount: 0 }] };
+        const segWhere  = { restaurantId, isGuest: false, ...noOrders };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...noOrders };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { createdAt: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, noOrders, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
       // ── Segment: MORNO — effective last order within (warmCutoff, hotCutoff) ─
       case "reativar-mornos":
       case "recorrente-sumido": {
@@ -334,7 +377,8 @@ export class CrmAudienceService {
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
-      // ── All contactable customers ─────────────────────────────────────────────
+      // ── All contactable customers (broadcast) — "siga-redes" targets TODOS ─────
+      case "siga-redes":
       case "todos-clientes": {
         const segWhere  = { restaurantId, isGuest: false };
         const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
