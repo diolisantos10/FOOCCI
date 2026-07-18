@@ -210,7 +210,10 @@ export interface SubmitOneResult {
  *   - no template / disabled → create + submit (PENDING)
  *   - REJECTED               → delete the old one + recreate with the fixed phrase
  *   - PENDING                → no-op ("já está em análise")
- *   - APPROVED               → no-op ("já aprovado"); changing it needs a new template
+ *   - APPROVED, phrase same  → no-op ("já aprovado")
+ *   - APPROVED, phrase edited → edit IN PLACE when the variable shape is unchanged (zero
+ *     gap — the live approved body keeps sending until Meta re-approves); otherwise
+ *     delete + recreate.
  */
 export async function submitTemplateForReadyMade(restaurantId: string, readyMadeId: string): Promise<SubmitOneResult> {
   const config = TEMPLATE_CONFIG[readyMadeId];
@@ -250,11 +253,15 @@ export async function submitTemplateForReadyMade(restaurantId: string, readyMade
     }).catch(() => { /* best-effort */ });
   };
 
-  // The phrase last submitted to Meta for this campaign (to detect edits post-approval).
+  // The phrase + variable shape last submitted to Meta for this campaign (to detect edits).
   const prevMeta = (campaign?.audienceConfig && typeof campaign.audienceConfig === "object")
-    ? ((campaign.audienceConfig as Record<string, unknown>).metaTemplate as { submittedMessage?: unknown } | undefined)
+    ? ((campaign.audienceConfig as Record<string, unknown>).metaTemplate as { submittedMessage?: unknown; params?: unknown } | undefined)
     : undefined;
   const lastSubmittedMessage = typeof prevMeta?.submittedMessage === "string" ? prevMeta.submittedMessage : null;
+  const prevParams = Array.isArray(prevMeta?.params) ? prevMeta!.params.map(String) : null;
+  // Same variable shape ⇒ Meta's in-place edit is valid (zero-gap). A changed variable
+  // count/order requires delete+recreate (param positions would otherwise mismatch).
+  const sameVariableShape = prevParams !== null && JSON.stringify(prevParams) === JSON.stringify(built.paramTokens);
 
   // Delete the old template + recreate with the current phrase (Meta names are immutable).
   const deleteAndRecreate = async (): Promise<SubmitOneResult> => {
@@ -266,6 +273,9 @@ export async function submitTemplateForReadyMade(restaurantId: string, readyMade
     await MetaTemplateService.upsert({
       restaurantId, templateName: config.name, languageCode: LANGUAGE,
       category: config.category, bodyVariables: built.bodyVariables, status: "PENDING", rejectedReason: null,
+      // deleteOnMeta cleared the local row, so pass the new id (or null when unknown) to
+      // avoid carrying a stale template id.
+      metaTemplateId: recreated.id ?? null,
     });
     await wireMapping();
     return { ok: true, status: "resubmitted", templateName: config.name };
@@ -278,11 +288,24 @@ export async function submitTemplateForReadyMade(restaurantId: string, readyMade
   if (existing) {
     if (existing.status === "PENDING") { await wireMapping(); return { ok: true, status: "pending", templateName: config.name }; }
     if (existing.status === "APPROVED") {
-      // Unchanged phrase → keep the live approved template. Edited phrase → resubmit the
-      // new text (goes back to Meta review; the old body is replaced on re-approval).
+      // Unchanged phrase → keep the live approved template, nothing to do.
       if (lastSubmittedMessage !== null && lastSubmittedMessage === message) {
         await wireMapping();
         return { ok: true, status: "approved", templateName: config.name };
+      }
+      // Edited phrase, SAME variable shape, and we know Meta's id → edit IN PLACE. Meta keeps
+      // the current approved body live while re-reviewing the new one — zero gap, no failed
+      // sends. Falls back to delete+recreate if the edit is rejected by Meta.
+      if (existing.metaTemplateId && sameVariableShape) {
+        const edited = await MetaTemplateService.editOnMeta(restaurantId, existing.metaTemplateId, {
+          category: built.payload.category, components: built.payload.components,
+        });
+        if (edited.ok) {
+          // Stays APPROVED locally (the live version still sends) — record the new phrase.
+          await wireMapping();
+          return { ok: true, status: "resubmitted", templateName: config.name };
+        }
+        // Edit refused (e.g. monthly edit limit) → fall through to delete+recreate.
       }
       return deleteAndRecreate();
     }
@@ -296,6 +319,9 @@ export async function submitTemplateForReadyMade(restaurantId: string, readyMade
       restaurantId, templateName: config.name, languageCode: LANGUAGE,
       category: config.category, bodyVariables: built.bodyVariables,
       ...(res.ok ? { status: "PENDING", rejectedReason: null } : {}),
+      // Record Meta's template id (returned on create) so a later approved-phrase edit can
+      // update in place instead of delete+recreate.
+      ...(res.id ? { metaTemplateId: res.id } : {}),
     });
     await wireMapping();
     return { ok: true, status: res.alreadyExists ? "existed" : "created", templateName: config.name };

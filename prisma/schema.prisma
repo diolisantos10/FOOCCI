@@ -1192,6 +1192,7 @@ model MetaMessageTemplate {
   bodyVariables    Int     @default(0) // number of {{n}} placeholders in the body
   mappedCampaignType String? // optional: CRM campaign type this template fulfils
   rejectedReason   String? // Meta's reason when status = REJECTED (shown to the owner)
+  metaTemplateId   String? // Meta's template id — enables zero-gap edits of an approved template
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

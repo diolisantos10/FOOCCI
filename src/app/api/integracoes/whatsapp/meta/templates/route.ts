@@ -17,7 +17,6 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { isMetaWhatsAppEnabled } from "@/services/whatsapp/metaFlag";
 import { MetaTemplateService } from "@/services/whatsapp/MetaTemplateService";
-import { provisionDefaultTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
@@ -46,17 +45,6 @@ export async function POST(req: NextRequest) {
       const result = await MetaTemplateService.syncFromMeta(ctx.restaurantId);
       if (!result.ok) return badRequest(result.error ?? "Não foi possível sincronizar os modelos.");
       return ok({ synced: result.synced, templates: await MetaTemplateService.list(ctx.restaurantId) });
-    }
-
-    if (body.action === "create-defaults") {
-      const result = await provisionDefaultTemplates(ctx.restaurantId);
-      if (result.error && result.created === 0 && result.existed === 0 && result.failed === 0) {
-        return badRequest(result.error);
-      }
-      return ok({
-        created: result.created, existed: result.existed, failed: result.failed, items: result.items,
-        templates: await MetaTemplateService.list(ctx.restaurantId),
-      });
     }
 
     if (body.action === "map") {
