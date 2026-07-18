@@ -167,10 +167,11 @@ export async function GET(req: NextRequest) {
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
         },
       }),
-      // 13. Conversion — VISITS: how many people OPENED the cardápio (MenuEvent,
-      //     one per session). The phone screen is mandatory on entry, so an open
-      //     is a good proxy for "quantas pessoas entraram" — and historical data
-      //     can't separate who bounced at the phone. Denominator of the conversion.
+      // 13. Conversion — VISITS: identified entries (MenuEvent). Logged server-side
+      //     in /api/qr/[slug]/identify the moment someone passes the mandatory phone
+      //     screen — one row per entry, so 10 entries = 10 visits. (Rows before
+      //     2026-07-18 came from the old open-beacon and are counted the same.)
+      //     Denominator of the conversion: "quantas pessoas entraram".
       prisma.menuEvent.count({
         where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
       }),

@@ -2488,7 +2488,6 @@ export function PedidoClient({
 
   // ── UTM + source capture — read from URL params and persist to sessionStorage ─
   const utmKey      = `foocci-utm-${slug}`;
-  const viewFiredKey = `foocci-view-fired-${slug}`;
 
   const SRC_NORMALIZE: Record<string, string> = {
     instagram: "instagram", ig: "instagram",
@@ -2521,18 +2520,12 @@ export function PedidoClient({
       firstSeenAt: new Date().toISOString(),
     }));
 
-    // Fire MENU_VIEW once per session per restaurant. A "visita" = alguém abriu o
-    // cardápio. A tela de telefone é obrigatória logo na entrada, então isto
-    // aproxima muito bem "quantas pessoas entraram" — e os dados antigos não
-    // permitem separar quem desistiu no telefone, então contamos as aberturas.
-    if (!sessionStorage.getItem(viewFiredKey)) {
-      sessionStorage.setItem(viewFiredKey, "1");
-      fetch("/api/menu/analytics/event", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ slug, source }),
-      }).catch(() => {});
-    }
+    // A "visita" (para o KPI de conversão) NÃO é registrada aqui. Uma abertura
+    // anônima não conta — só conta quem passa da tela de telefone (obrigatória).
+    // Esse registro é feito no servidor, em /api/qr/[slug]/identify, que é o
+    // sinal confiável de "entrou identificado" (à prova de ad-block, 1 por
+    // entrada). O antigo beacon de abertura foi removido para não contar
+    // desistências nem contar em dobro.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

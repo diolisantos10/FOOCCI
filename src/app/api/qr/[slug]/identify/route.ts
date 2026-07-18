@@ -18,6 +18,25 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { phoneCandidates, toE164 } from "@/lib/phone";
 
+const VISIT_SOURCES = new Set([
+  "instagram", "whatsapp", "google", "qrcode", "crm", "manual", "direct", "other",
+]);
+
+/**
+ * Log one identified visit (MenuEvent). This is the canonical "visita" signal:
+ * it fires exactly when someone passes the mandatory phone screen (manual submit
+ * or auto-identify for a returning customer). Server-side, so it can't be blocked
+ * by ad-blockers and never misses like the old client beacon. One row per entry,
+ * so a customer who enters 10× counts as 10 visits — matching the KPI spec.
+ * Fire-and-forget: never blocks or fails the identify response.
+ */
+function logVisit(restaurantId: string, customerId: string, rawSource?: unknown): void {
+  const source = typeof rawSource === "string" && VISIT_SOURCES.has(rawSource) ? rawSource : "direct";
+  void prisma.menuEvent
+    .create({ data: { restaurantId, source, customerId } })
+    .catch(() => { /* best-effort analytics — never throw */ });
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { slug: string } }
@@ -56,6 +75,7 @@ export async function POST(
     });
 
     if (existing) {
+      logVisit(restaurant.id, existing.id, body.source);
       const firstName = existing.name.trim().split(/\s+/)[0]!;
       return NextResponse.json({ found: true, name: firstName, customerId: existing.id });
     }
@@ -73,6 +93,7 @@ export async function POST(
         select: { id: true },
       }).catch(() => null);
 
+      if (created?.id) logVisit(restaurant.id, created.id, body.source);
       const firstName = rawName.trim().split(/\s+/)[0]!;
       return NextResponse.json({
         found: false,
