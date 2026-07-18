@@ -896,6 +896,27 @@ model CRMContactLedger {
   @@map("crm_contact_ledger")
 }
 
+/// Records a customer leaving the CRM base during auto-cleanup, so the Migração
+/// panel can show "how many left for lack of contact" over a period. Written when
+/// the runner deletes a dead lead (invalid/unreachable number, no history) or
+/// retires a contactable=false customer that still has order history.
+model CrmBaseExclusion {
+  id           String   @id @default(cuid())
+  restaurantId String
+  customerId   String? // soft reference — the row may have been hard-deleted
+  phone        String?
+  /// INVALID_PHONE_DELETED | RETIRED_NO_CONTACT — canonical exclusion reason
+  reason       String
+  /// true = the customer had order history (retired, not deleted)
+  hadHistory   Boolean  @default(false)
+  /// segment the customer was in at exclusion time (QUENTE|MORNO|FRIO|PERDIDO|SEM_PEDIDOS)
+  priorSegment String?
+  createdAt    DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@map("crm_base_exclusions")
+}
+
 model CampaignExecution {
   id               String          @id @default(cuid())
   campaignId       String

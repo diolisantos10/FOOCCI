@@ -25,6 +25,8 @@ import {
   resolveAudience,
   personalizeMessage,
 } from "./CrmCampaignService";
+import { getSegmentConfig } from "@/lib/crm-segments";
+import { resolveCustomerSegment } from "./CustomerSegmentService";
 import {
   markConversationCrmContext,
   buildConversationMetadataForCrmSend,
@@ -1461,18 +1463,49 @@ export class ScheduledCampaignRunnerService {
         await prisma.customer.updateMany({ where: { id: { in: ids } }, data: { crmContactable: false } });
         const rows = await prisma.customer.findMany({
           where:  { id: { in: ids } },
-          select: { id: true, _count: { select: { orders: true, orderDrafts: true } } },
+          select: {
+            id: true, phone: true,
+            lastOrderAt: true, importedLastOrderAt: true, totalOrders: true, importedOrderCount: true,
+            _count: { select: { orders: true, orderDrafts: true } },
+          },
         });
-        const deletable = rows.filter((r) => r._count.orders === 0 && r._count.orderDrafts === 0).map((r) => r.id);
-        if (deletable.length > 0) {
+        const deletable = new Set(rows.filter((r) => r._count.orders === 0 && r._count.orderDrafts === 0).map((r) => r.id));
+
+        // Log each exclusion for the Migração panel — the segment the customer sat in
+        // at the moment they left the base ("how many perdidos/frios we lost to bad
+        // numbers"). Written before the hard delete so we don't lose the record.
+        try {
+          const segCfg = await getSegmentConfig(campaign.restaurantId);
+          await prisma.crmBaseExclusion.createMany({
+            data: rows.map((r) => ({
+              restaurantId: campaign.restaurantId,
+              customerId:   r.id,
+              phone:        r.phone,
+              reason:       deletable.has(r.id) ? "INVALID_PHONE_DELETED" : "RETIRED_NO_CONTACT",
+              hadHistory:   !deletable.has(r.id),
+              priorSegment: resolveCustomerSegment({
+                lastOrderAt:         r.lastOrderAt,
+                importedLastOrderAt: r.importedLastOrderAt,
+                totalOrders:         r.totalOrders,
+                importedOrderCount:  r.importedOrderCount ?? 0,
+                cfg:                 segCfg,
+              }).segment,
+            })),
+          });
+        } catch (logErr) {
+          console.warn(`[CampaignRunner] exclusion log failed`, { error: logErr instanceof Error ? logErr.message : String(logErr) });
+        }
+
+        if (deletable.size > 0) {
+          const delIds = [...deletable];
           // Conversation is the only non-cascading FK on a lead with no orders — unlink
           // it (keep the chat) so the delete never blocks. Addresses/prefs/etc. cascade.
           await prisma.$transaction([
-            prisma.conversation.updateMany({ where: { customerId: { in: deletable } }, data: { customerId: null } }),
-            prisma.customer.deleteMany({ where: { id: { in: deletable } } }),
+            prisma.conversation.updateMany({ where: { customerId: { in: delIds } }, data: { customerId: null } }),
+            prisma.customer.deleteMany({ where: { id: { in: delIds } } }),
           ]);
         }
-        console.info(`[CampaignRunner] unreachable cleanup: ${deletable.length} deleted, ${ids.length - deletable.length} retired`, { campaignId: campaign.id });
+        console.info(`[CampaignRunner] unreachable cleanup: ${deletable.size} deleted, ${ids.length - deletable.size} retired`, { campaignId: campaign.id });
       } catch (e) {
         console.warn(`[CampaignRunner] unreachable cleanup failed`, { campaignId: campaign.id, error: e instanceof Error ? e.message : String(e) });
       }
