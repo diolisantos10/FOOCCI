@@ -527,8 +527,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
                   value={data.conversionRate != null ? `${data.conversionRate}%` : "—"}
                   change={data.conversionRate != null && data.conversionRatePrev != null ? delta(data.conversionRate, data.conversionRatePrev) : undefined}
                   sub={data.conversionIdentified > 0
-                    ? `${fmtNum(data.conversionConverted)} de ${fmtNum(data.conversionIdentified)} identificados`
-                    : "sem identificados ainda"}
+                    ? `${fmtNum(data.conversionConverted)} vendas de ${fmtNum(data.conversionIdentified)} visitas`
+                    : "sem visitas ainda"}
                 />
               </div>
             </div>

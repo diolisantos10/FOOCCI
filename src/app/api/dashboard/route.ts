@@ -64,10 +64,10 @@ export async function GET(req: NextRequest) {
       cancelledPeriodCount,
       orderSourceCounts,
       newCustomersPrev,
-      convIdentifiedNow,
-      convConvertedNow,
-      convIdentifiedPrev,
-      convConvertedPrev,
+      visitsNow,
+      salesNow,
+      visitsPrev,
+      salesPrev,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + chart)
       prisma.order.findMany({
@@ -167,38 +167,33 @@ export async function GET(req: NextRequest) {
           createdAt:    { gte: prevStart, lt: prevFetchEnd },
         },
       }),
-      // 13. Conversion funnel — IDENTIFIED entrants: real (non-guest) customers
-      //     who entered the Foocci agent (a conversation) within the period.
-      prisma.customer.count({
+      // 13. Conversion — VISITS: how many people OPENED the menu this period.
+      //     A MenuEvent is fired every time the /pedido cardápio is opened, so
+      //     this is the real "quantos entraram" (visitantes, não só os
+      //     identificados). This is the denominator of the true conversion.
+      prisma.menuEvent.count({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd } },
+      }),
+      // 14. …and SALES: real Foocci orders finalized this period ("quantos
+      //     compraram"). Imported historical orders excluded — they have no visit.
+      prisma.order.count({
         where: {
           restaurantId: ctx.restaurantId,
-          isGuest:      false,
-          conversations: { some: { createdAt: { gte: rangeStart, lte: rangeEnd } } },
+          importedAt:   null,
+          createdAt:    { gte: rangeStart, lte: rangeEnd },
+          status:       { in: REVENUE_STATUS },
         },
       }),
-      // 14. …and of those, how many finalized a sale (an order) in the period.
-      prisma.customer.count({
-        where: {
-          restaurantId: ctx.restaurantId,
-          isGuest:      false,
-          conversations: { some: { createdAt: { gte: rangeStart, lte: rangeEnd } } },
-          orders:        { some: { createdAt: { gte: rangeStart, lte: rangeEnd }, status: { in: REVENUE_STATUS } } },
-        },
+      // 15-16. Same visits/sales for the previous period (conversion delta).
+      prisma.menuEvent.count({
+        where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
       }),
-      // 15-16. Same funnel for the previous period (conversion delta).
-      prisma.customer.count({
+      prisma.order.count({
         where: {
           restaurantId: ctx.restaurantId,
-          isGuest:      false,
-          conversations: { some: { createdAt: { gte: prevStart, lt: prevFetchEnd } } },
-        },
-      }),
-      prisma.customer.count({
-        where: {
-          restaurantId: ctx.restaurantId,
-          isGuest:      false,
-          conversations: { some: { createdAt: { gte: prevStart, lt: prevFetchEnd } } },
-          orders:        { some: { createdAt: { gte: prevStart, lt: prevFetchEnd }, status: { in: REVENUE_STATUS } } },
+          importedAt:   null,
+          createdAt:    { gte: prevStart, lt: prevFetchEnd },
+          status:       { in: REVENUE_STATUS },
         },
       }),
     ]);
@@ -266,11 +261,12 @@ export async function GET(req: NextRequest) {
     const ordersPrev    = prevOrders.length;
     const avgTicketPrev = ordersPrev > 0 ? revenuePrev / ordersPrev : 0;
 
-    // ── Conversion rate — of the identified people who entered the Foocci agent
-    //    in the period (provided a number / got identified), how many finalized
-    //    a sale. converted ÷ identified.
-    const conversionRate     = convIdentifiedNow  > 0 ? Math.round((convConvertedNow  / convIdentifiedNow)  * 100) : null;
-    const conversionRatePrev = convIdentifiedPrev > 0 ? Math.round((convConvertedPrev / convIdentifiedPrev) * 100) : null;
+    // ── Conversion rate — the REAL one: of everyone who OPENED the cardápio
+    //    (visits/MenuEvent) in the period, how many bought (sales). vendas ÷
+    //    visitas. Capped at 100% (a repeat buyer can order more than once per
+    //    visit window, which would otherwise read >100%).
+    const conversionRate     = visitsNow  > 0 ? Math.min(100, Math.round((salesNow  / visitsNow)  * 100)) : null;
+    const conversionRatePrev = visitsPrev > 0 ? Math.min(100, Math.round((salesPrev / visitsPrev) * 100)) : null;
 
     // ── Order pipeline (real-time) ─────────────────────────────────────────────
     const pipeline = {
@@ -365,8 +361,8 @@ export async function GET(req: NextRequest) {
       // Conversion KPI (identified entrant → finalized sale)
       conversionRate,
       conversionRatePrev,
-      conversionIdentified: convIdentifiedNow,
-      conversionConverted:  convConvertedNow,
+      conversionIdentified: visitsNow, // now = visits (people who opened the menu)
+      conversionConverted:  salesNow,  // now = sales (orders finalized)
       conversionByChannel,
 
       // Real-time
