@@ -3926,7 +3926,6 @@ function CampaignCouponPerformance() {
 type CrmPeriodKey = "total" | "today" | "yesterday" | "week7" | "lastweek" | "days30" | "month" | "custom";
 
 const CRM_PERIODS: { id: CrmPeriodKey; label: string }[] = [
-  { id: "total",     label: "Total"          },
   { id: "today",     label: "Hoje"           },
   { id: "yesterday", label: "Ontem"          },
   { id: "week7",     label: "Últimos 7 dias" },
@@ -3934,6 +3933,7 @@ const CRM_PERIODS: { id: CrmPeriodKey; label: string }[] = [
   { id: "days30",    label: "Últimos 30 dias"},
   { id: "month",     label: "Este mês"       },
   { id: "custom",    label: "Personalizado"  },
+  { id: "total",     label: "Total"          },
 ];
 
 /** Resolves a period key into an ISO [from,to] window, or null for "total" (lifetime). */
@@ -3996,7 +3996,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Per-campaign coupon counts (campaignId → { sent, used }) for the Ativas table.
   const [couponCounts, setCouponCounts] = useState<Record<string, { sent: number; used: number }>>({});
   // Period filter for the Ativas numbers (Total / Hoje / Ontem / … / Personalizado).
-  const [period,     setPeriod]     = useState<CrmPeriodKey>("total");
+  const [period,     setPeriod]     = useState<CrmPeriodKey>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo,   setCustomTo]   = useState("");
   // Ids of the campaigns actually turned on in "Campanhas prontas". The Ativas panel
