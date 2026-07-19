@@ -41,18 +41,26 @@ function fmtDate(iso: string): string {
  * Números reconstruídos ao vivo a partir da data do último pedido de cada cliente.
  */
 export function MigracaoTab() {
-  const [days, setDays]       = useState(7);
-  const [data, setData]       = useState<MigrationResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [days, setDays]             = useState(7);
+  const [custom, setCustom]         = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo]     = useState("");
+  const [data, setData]             = useState<MigrationResult | null>(null);
+  const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
+    // Custom mode only fires once both dates are filled and in order.
+    const qs = custom
+      ? (customFrom && customTo && customFrom <= customTo ? `?from=${customFrom}&to=${customTo}` : null)
+      : `?days=${days}`;
+    if (!qs) return;
     setLoading(true);
-    fetch(`/api/crm/migration?days=${days}`)
+    fetch(`/api/crm/migration${qs}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((json: { data?: MigrationResult }) => setData(json.data ?? null))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [days]);
+  }, [days, custom, customFrom, customTo]);
 
   const flows       = data?.flows ?? [];
   const transitions = data?.transitions ?? [];
@@ -68,18 +76,35 @@ export function MigracaoTab() {
             Como seus clientes se movimentaram entre as faixas no período — quem esfriou, quem reativou e quem saiu da base.
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {PERIODS.map((p) => (
             <button
               key={p.days}
-              onClick={() => setDays(p.days)}
+              onClick={() => { setCustom(false); setDays(p.days); }}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                days === p.days ? "bg-brand-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
+                !custom && days === p.days ? "bg-brand-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
               }`}
             >
               {p.label}
             </button>
           ))}
+          <button
+            onClick={() => setCustom(true)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              custom ? "bg-brand-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
+            }`}
+          >
+            Personalizado
+          </button>
+          {custom && (
+            <span className="flex items-center gap-1.5">
+              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-lg border border-line bg-paper px-2 py-1 text-xs text-ink focus:border-brand-400 focus:outline-none" />
+              <span className="text-xs text-muted">até</span>
+              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-lg border border-line bg-paper px-2 py-1 text-xs text-ink focus:border-brand-400 focus:outline-none" />
+            </span>
+          )}
         </div>
       </div>
 

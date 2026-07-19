@@ -76,6 +76,26 @@ describe("CrmBaseMigrationService — base movement reconstruction", () => {
     expect(res.flows.find((f) => f.segment === "QUENTE")?.after).toBe(1);
   });
 
+  it("reconstructs a fully historical custom window (orders after `to` don't leak in)", async () => {
+    // Order 45 days ago, then again 2 days ago. Window = 20d→10d ago:
+    // at `from` the order was 25d old (QUENTE), at `to` it was 35d old (MORNO).
+    // The 2-days-ago order is AFTER the window and must not turn this into a
+    // reactivation — both endpoints resolve from orders on/before their date.
+    db.customer.findMany.mockResolvedValue([
+      { id: "c5", lastOrderAt: daysAgo(2), importedLastOrderAt: null },
+    ]);
+    db.order.groupBy.mockResolvedValue([
+      { customerId: "c5", _max: { createdAt: daysAgo(45) } },
+    ]);
+    const res = await CrmBaseMigrationService.getMigration(R, {
+      from: daysAgo(20), to: daysAgo(10), now: NOW,
+    });
+
+    expect(res.days).toBe(10);
+    expect(res.transitions).toEqual([{ from: "QUENTE", to: "MORNO", count: 1 }]);
+    expect(res.reactivations).toBe(0);
+  });
+
   it("aggregates exclusions from the log by reason and prior segment", async () => {
     db.customer.findMany.mockResolvedValue([]);
     db.crmBaseExclusion.findMany.mockResolvedValue([

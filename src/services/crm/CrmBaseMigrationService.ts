@@ -91,37 +91,50 @@ const RECENCY_RANK: Record<BaseSegment, number> = {
 export class CrmBaseMigrationService {
   static async getMigration(
     restaurantId: string,
-    opts: { days?: number; now?: Date } = {},
+    opts: { days?: number; now?: Date; from?: Date; to?: Date } = {},
   ): Promise<MigrationResult> {
-    const days = Math.max(1, Math.floor(opts.days ?? 7));
-    const now  = opts.now ?? new Date();
-    const ref  = new Date(now.getTime() - days * 86_400_000);
+    const now = opts.now ?? new Date();
+    // Custom window (from/to) wins; otherwise a rolling N-day window ending now.
+    // `end` may sit in the past — both endpoints are reconstructed the same way.
+    const end = opts.to && opts.to < now ? opts.to : now;
+    const ref = opts.from && opts.from < end
+      ? opts.from
+      : new Date(end.getTime() - Math.max(1, Math.floor(opts.days ?? 7)) * 86_400_000);
+    const days = Math.max(1, daysBetween(ref, end));
 
     const cfg = await getSegmentConfig(restaurantId);
 
-    // Everyone currently in the base (guests are never part of the CRM base).
+    // Everyone in the base (guests never are). For a historical window, customers
+    // registered after its end didn't exist yet — leave them out.
     const customers = await prisma.customer.findMany({
-      where:  { restaurantId, isGuest: false },
+      where:  { restaurantId, isGuest: false, createdAt: { lte: end } },
       select: { id: true, lastOrderAt: true, importedLastOrderAt: true },
     });
 
-    // Reactivations: native order landed inside the window → effective-last moved.
-    // We need each such customer's effective-last AS OF the reference date to know
-    // which base they came FROM. Pull their latest order on/before `ref` in one query.
-    const orderedInWindow = customers.filter(
-      (c) => c.lastOrderAt !== null && c.lastOrderAt > ref,
-    );
-    const priorNativeLast = new Map<string, Date>();
-    if (orderedInWindow.length > 0) {
+    // A customer whose lastOrderAt falls AFTER an endpoint had a different effective
+    // last order at that date — recover it from their latest order on/before it.
+    // (One groupBy per endpoint; the `end` one is empty when end === now.)
+    const priorNativeLastAt = async (cutoff: Date): Promise<Map<string, Date>> => {
+      const ids = customers.filter((c) => c.lastOrderAt !== null && c.lastOrderAt > cutoff).map((c) => c.id);
+      const map = new Map<string, Date>();
+      if (ids.length === 0) return map;
       const grouped = await prisma.order.groupBy({
         by:    ["customerId"],
-        where: { customerId: { in: orderedInWindow.map((c) => c.id) }, createdAt: { lte: ref } },
+        where: { customerId: { in: ids }, createdAt: { lte: cutoff } },
         _max:  { createdAt: true },
       });
       for (const g of grouped) {
-        if (g.customerId && g._max.createdAt) priorNativeLast.set(g.customerId, g._max.createdAt);
+        if (g.customerId && g._max.createdAt) map.set(g.customerId, g._max.createdAt);
       }
-    }
+      return map;
+    };
+    const [priorAtRef, priorAtEnd] = await Promise.all([priorNativeLastAt(ref), priorNativeLastAt(end)]);
+
+    /** Effective last order as of `date` (native first, imported summary as fallback). */
+    const effAt = (c: (typeof customers)[number], date: Date, prior: Map<string, Date>): Date | null =>
+      c.lastOrderAt !== null && c.lastOrderAt > date
+        ? (prior.get(c.id) ?? c.importedLastOrderAt ?? null)
+        : (c.lastOrderAt ?? c.importedLastOrderAt);
 
     // Build the before/after segment for every customer.
     const matrix = new Map<string, number>(); // `${from}->${to}` → count
@@ -131,18 +144,10 @@ export class CrmBaseMigrationService {
     const key = (f: BaseSegment, t: BaseSegment) => `${f}->${t}`;
 
     for (const c of customers) {
-      const effNow = c.lastOrderAt ?? c.importedLastOrderAt;
-      const segNow = classifyByDays(effNow ? daysBetween(effNow, now) : null, cfg);
+      const effEnd = effAt(c, end, priorAtEnd);
+      const segNow = classifyByDays(effEnd ? daysBetween(effEnd, end) : null, cfg);
 
-      // Effective last as of the reference date.
-      let effRef: Date | null;
-      if (c.lastOrderAt !== null && c.lastOrderAt > ref) {
-        // Ordered inside the window — use the pre-window native order, else the
-        // imported summary, else they were brand new (no history at ref).
-        effRef = priorNativeLast.get(c.id) ?? c.importedLastOrderAt ?? null;
-      } else {
-        effRef = effNow; // unchanged across the window
-      }
+      const effRef = effAt(c, ref, priorAtRef);
       const segRef = classifyByDays(effRef ? daysBetween(effRef, ref) : null, cfg);
 
       matrix.set(key(segRef, segNow), (matrix.get(key(segRef, segNow)) ?? 0) + 1);
@@ -174,7 +179,7 @@ export class CrmBaseMigrationService {
 
     // Exclusions from the log (only accrues going forward).
     const exclusionRows = await prisma.crmBaseExclusion.findMany({
-      where:  { restaurantId, createdAt: { gte: ref, lte: now } },
+      where:  { restaurantId, createdAt: { gte: ref, lte: end } },
       select: { reason: true, priorSegment: true },
     });
     const byPriorSegment: Record<string, number> = {};
@@ -188,7 +193,7 @@ export class CrmBaseMigrationService {
 
     return {
       from: ref.toISOString(),
-      to:   now.toISOString(),
+      to:   end.toISOString(),
       days,
       totalTracked: customers.length,
       flows,

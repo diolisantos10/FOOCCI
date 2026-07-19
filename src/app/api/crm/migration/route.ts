@@ -21,7 +21,20 @@ export async function GET(req: NextRequest) {
     const raw  = Number(req.nextUrl.searchParams.get("days"));
     const days = Number.isFinite(raw) && raw > 0 ? Math.min(90, Math.floor(raw)) : 7;
 
-    const data = await CrmBaseMigrationService.getMigration(ctx.restaurantId, { days });
+    // Custom window: from/to as YYYY-MM-DD. `from` opens the day, `to` closes it
+    // (23:59:59.999), so a same-day range still spans the whole day.
+    const parseDay = (v: string | null, endOfDay: boolean): Date | undefined => {
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined;
+      const d = new Date(`${v}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    };
+    const from = parseDay(req.nextUrl.searchParams.get("from"), false);
+    const to   = parseDay(req.nextUrl.searchParams.get("to"),   true);
+
+    const data = await CrmBaseMigrationService.getMigration(
+      ctx.restaurantId,
+      from && to && from < to ? { from, to } : { days },
+    );
     return ok(data);
   } catch (err) {
     console.error("[GET /api/crm/migration]", err);
