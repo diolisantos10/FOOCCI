@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createPixPayment } from "@/lib/mercadopago";
+import { resolveCardProvider } from "@/services/payment/PaymentRouter";
 import { createPaymentLink } from "@/lib/stone";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -93,6 +94,9 @@ const bodySchema = z.object({
   address:          addressSchema,
   paymentMode:      z.enum(["pay_now", "pay_on_delivery", "pay_on_pickup"]),
   paymentMethodSub: z.enum(["card_machine", "pix_in_person", "cash"]).nullable().optional(),
+  // pay_now online method: "pix" (Mercado Pago) or "card" (SumUp transparent checkout).
+  // Defaults to "pix" so existing clients keep the current behaviour unchanged.
+  onlineMethod:     z.enum(["pix", "card"]).optional().default("pix"),
   // Cash change: "troco para quanto?" — the bill/note the customer will pay with.
   // Only meaningful for cash; ignored (stored null) for other methods or when it
   // is not strictly greater than the order total.
@@ -195,7 +199,7 @@ export async function POST(
 
   const {
     cart, customerName, deliveryMethod, address,
-    paymentMode, paymentMethodSub, changeFor, customerPhone, customerId: incomingCustomerId,
+    paymentMode, paymentMethodSub, onlineMethod, changeFor, customerPhone, customerId: incomingCustomerId,
     clientDeliveryFee, couponCode, customerCouponId,
     trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
   } = parsed.data;
@@ -593,6 +597,50 @@ export async function POST(
 
   // ── pay_now: generate online payment link ──────────────────────
   if (paymentMode === "pay_now") {
+    // ── Card (SumUp) — transparent checkout ────────────────────────
+    // Create the operator-side checkout and hand the client the id its widget
+    // will complete. The final status is verified server-side by /card/confirm
+    // (and the SumUp webhook). Kept fully separate from the Pix/Stone path below.
+    if (onlineMethod === "card") {
+      const cardProvider = await resolveCardProvider(restaurantId);
+      if (!cardProvider) {
+        await prisma.order.delete({ where: { id: orderId } }).catch(() => null);
+        return NextResponse.json(
+          { error: "Pagamento com cartão não configurado. Escolha Pix ou pagamento na entrega." },
+          { status: 503 }
+        );
+      }
+      try {
+        const init = await cardProvider.createCardCheckout({
+          orderId,
+          amount:      finalTotal,
+          description: `Pedido – ${restaurantId}`,
+        });
+        // Order stays AWAITING_PAYMENT (set in phase-1). Record the pending payment;
+        // providerReference = the operator checkout id used to verify + confirm.
+        await prisma.payment.create({
+          data: {
+            orderId,
+            method:            "ONLINE",
+            status:            "LINK_SENT",
+            amount:            new Decimal(finalTotal),
+            paymentMode:       "PAY_NOW",
+            providerName:      init.providerName,
+            providerReference: init.checkoutId,
+          },
+        });
+        return NextResponse.json({
+          orderId,
+          card: { checkoutId: init.checkoutId, ...init.clientParams },
+        });
+      } catch (err) {
+        await prisma.order.delete({ where: { id: orderId } }).catch(() => null);
+        const msg = err instanceof Error ? err.message : "SumUp error";
+        console.error("[finalize] SumUp checkout failed", { orderId, error: msg });
+        return NextResponse.json({ error: "Não foi possível iniciar o pagamento com cartão. Tente novamente." }, { status: 502 });
+      }
+    }
+
     const mpCfg = await prisma.integrationConfig.findUnique({
       where:  { restaurantId_provider: { restaurantId, provider: "mercadopago" } },
       select: { configBlob: true, isActive: true },
