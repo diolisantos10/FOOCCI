@@ -19,6 +19,11 @@ const SEG_STYLE: Record<BaseSegment, { dot: string; text: string; bg: string }> 
   SEM_PEDIDOS: { dot: "bg-violet-400", text: "text-violet-700", bg: "bg-violet-50" },
 };
 
+/** Recency ladder — higher = closer to buying. Used to tell climbs from drops. */
+const RANK: Record<BaseSegment, number> = {
+  QUENTE: 4, MORNO: 3, FRIO: 2, PERDIDO: 1, SEM_PEDIDOS: 0,
+};
+
 const PERIODS = [
   { days: 7,  label: "7 dias" },
   { days: 14, label: "14 dias" },
@@ -163,6 +168,122 @@ export function MigracaoTab() {
         </table>
       </div>
 
+      {/* Subida × Descida — as duas visões que explicam a efetividade do CRM */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* ⬆️ De onde vieram os quentes (recuperação por faixa) */}
+        <div className="rounded-2xl border border-line bg-paper shadow-sm">
+          <div className="border-b border-line px-4 py-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-600">⬆️ De onde vieram os quentes</h3>
+            <p className="mt-0.5 text-xs text-muted">Quem voltou a comprar no período — participação de cada faixa de origem.</p>
+          </div>
+          <div className="p-4">
+            {loading ? (
+              <p className="py-4 text-center text-sm text-muted">Carregando…</p>
+            ) : (() => {
+              const arrivals = transitions
+                .filter((t) => t.to === "QUENTE")
+                .sort((a, b) => b.count - a.count);
+              const totalArr = arrivals.reduce((a, t) => a + t.count, 0);
+              if (totalArr === 0) {
+                return <p className="py-4 text-center text-sm text-muted">Ninguém virou quente neste período.</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {arrivals.map((t) => {
+                    const s      = SEG_STYLE[t.from];
+                    const share  = Math.round((t.count / totalArr) * 100);
+                    const base   = flows.find((f) => f.segment === t.from)?.before ?? 0;
+                    const rate   = base > 0 ? Math.round((t.count / base) * 100) : null;
+                    const isNew  = t.from === "SEM_PEDIDOS";
+                    return (
+                      <div key={t.from}>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${s.text}`}>
+                            <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                            {SEG_LABEL[t.from]}{isNew && " (1ª compra)"}
+                          </span>
+                          <span className="text-xs tabular-nums text-ink">
+                            <strong>{t.count.toLocaleString("pt-BR")}</strong>
+                            <span className="ml-1.5 font-semibold text-emerald-700">{share}%</span>
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-[#F4F4F2]">
+                          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.max(4, share)}%` }} />
+                        </div>
+                        {rate !== null && !isNew && (
+                          <p className="mt-0.5 text-[10px] text-muted">
+                            recuperou {rate}% dos {base.toLocaleString("pt-BR")} que estavam na faixa
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <p className="border-t border-line pt-2 text-[11px] text-muted">
+                    <strong className="text-emerald-700">{totalArr.toLocaleString("pt-BR")}</strong> clientes viraram quentes no período
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* ⬇️ Quem desceu a escada (queda por faixa) */}
+        <div className="rounded-2xl border border-line bg-paper shadow-sm">
+          <div className="border-b border-line px-4 py-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-red-500">⬇️ Quem desceu a escada</h3>
+            <p className="mt-0.5 text-xs text-muted">Quantos caíram de faixa no período — e o % da faixa que se distanciou.</p>
+          </div>
+          <div className="p-4">
+            {loading ? (
+              <p className="py-4 text-center text-sm text-muted">Carregando…</p>
+            ) : (() => {
+              const drops = transitions
+                .filter((t) => RANK[t.to] < RANK[t.from] && t.from !== "SEM_PEDIDOS")
+                .sort((a, b) => RANK[b.from] - RANK[a.from]);
+              const totalDrops = drops.reduce((a, t) => a + t.count, 0);
+              if (totalDrops === 0) {
+                return <p className="py-4 text-center text-sm text-muted">Ninguém caiu de faixa neste período. 🎉</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {drops.map((t) => {
+                    const from  = SEG_STYLE[t.from], to = SEG_STYLE[t.to];
+                    const base  = flows.find((f) => f.segment === t.from)?.before ?? 0;
+                    const rate  = base > 0 ? Math.round((t.count / base) * 100) : null;
+                    const share = Math.round((t.count / totalDrops) * 100);
+                    return (
+                      <div key={`${t.from}-${t.to}`}>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold">
+                            <span className={`inline-flex items-center gap-1 ${from.text}`}>
+                              <span className={`h-2 w-2 rounded-full ${from.dot}`} />{SEG_LABEL[t.from]}
+                            </span>
+                            <span className="text-muted">→</span>
+                            <span className={`inline-flex items-center gap-1 ${to.text}`}>
+                              <span className={`h-2 w-2 rounded-full ${to.dot}`} />{SEG_LABEL[t.to]}
+                            </span>
+                          </span>
+                          <span className="text-xs tabular-nums text-ink">
+                            <strong>{t.count.toLocaleString("pt-BR")}</strong>
+                            {rate !== null && <span className="ml-1.5 font-semibold text-red-600">{rate}% da faixa</span>}
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-[#F4F4F2]">
+                          <div className="h-full rounded-full bg-red-400 transition-all" style={{ width: `${Math.max(4, share)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="border-t border-line pt-2 text-[11px] text-muted">
+                    <strong className="text-red-600">{totalDrops.toLocaleString("pt-BR")}</strong> clientes se distanciaram no período
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
       {/* Movimentações detalhadas (setas) */}
       <div className="rounded-2xl border border-line bg-paper shadow-sm">
         <div className="border-b border-line px-4 py-3">
@@ -248,8 +369,7 @@ export function MigracaoTab() {
 
 /** Total customers that dropped to a colder base (quente→morno, morno→frio, etc.). */
 function coolingCount(transitions: { from: BaseSegment; to: BaseSegment; count: number }[]): number {
-  const rank = { QUENTE: 4, MORNO: 3, FRIO: 2, PERDIDO: 1, SEM_PEDIDOS: 0 } as Record<BaseSegment, number>;
   return transitions
-    .filter((t) => rank[t.to] < rank[t.from] && t.from !== "SEM_PEDIDOS")
+    .filter((t) => RANK[t.to] < RANK[t.from] && t.from !== "SEM_PEDIDOS")
     .reduce((a, t) => a + t.count, 0);
 }
