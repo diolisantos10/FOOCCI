@@ -108,6 +108,8 @@ model Restaurant {
   googleIntegrationConfig GoogleIntegrationConfig?
   apiKeys                ApiKey[]
   waMenuLinks            WaMenuLink[]
+  pricingConfig          RestaurantPricingConfig?
+  priceChangeLogs        PriceChangeLog[]
 
   @@map("restaurants")
 }
@@ -310,6 +312,8 @@ model MenuItem {
   priceDelivery         Decimal? @db.Decimal(10, 2) // price shown/used on the /pedido delivery channel
   priceDineIn           Decimal? @db.Decimal(10, 2) // price shown/used on the /qr salão (dine-in) channel
   priceIfood            Decimal? @db.Decimal(10, 2) // price for iFood (export/admin; integration optional)
+  // ── CMV / precificação ────────────────────────────────────────────────
+  cost                  Decimal? @db.Decimal(10, 2) // unit cost (CMV por item) — edited on /precificacao; null = not informed yet
   imageUrl              String?
   sortOrder             Int      @default(0)
   isActive              Boolean  @default(true)
@@ -382,6 +386,87 @@ model MenuItemVariant {
 
   @@index([menuItemId])
   @@map("menu_item_variants")
+}
+
+// ═══════════════════════════════════════════
+//  CMV & PRECIFICAÇÃO  (página /precificacao)
+// ═══════════════════════════════════════════
+//
+// The lojista registers each item's unit cost (MenuItem.cost) plus the
+// restaurant's markup assumptions here. The engine derives the ideal price:
+//   markup = 100 / (100 − (fixas% + impostos/taxas% + margem%))
+//   ideal  = cost × markup  (then rounded per `rounding`)
+// The reprice device reacts to cost/assumption changes according to
+// `autoRepriceMode`. Every applied change is audited in PriceChangeLog.
+
+enum AutoRepriceMode {
+  OFF     // page only shows ideal prices; nothing ever changes on its own
+  SUGGEST // change → pending suggestion; lojista applies with 1 click (default)
+  AUTO    // change → price applied immediately, within maxAutoChangePct guardrail
+}
+
+enum PriceRounding {
+  NONE      // exact value, 2 decimal places
+  ENDING_90 // round UP to the next price ending in ,90 (default)
+  ENDING_99 // round UP to the next price ending in ,99
+}
+
+enum PriceChangeSource {
+  MANUAL    // price typed directly by the lojista
+  APPLIED   // lojista applied a suggested price (individual or bulk)
+  AUTO      // applied by AutoRepriceMode.AUTO after a cost/assumption change
+  COST_EDIT // cost updated (price untouched) — kept for a complete audit trail
+}
+
+model RestaurantPricingConfig {
+  id           String @id @default(cuid())
+  restaurantId String @unique
+
+  // Markup assumptions (percentages of the selling price)
+  monthlyRevenue       Decimal? @db.Decimal(12, 2) // faturamento médio mensal — converts fixed R$ → %
+  fixedExpensesMonthly Decimal? @db.Decimal(12, 2) // despesas fixas mensais (aluguel, equipe, luz…)
+  taxesFeesPct         Decimal  @default(0) @db.Decimal(5, 2) // impostos + taxas de cartão/apps
+  targetProfitPct      Decimal  @default(0) @db.Decimal(5, 2) // margem de lucro desejada
+
+  // Reprice device
+  autoRepriceMode  AutoRepriceMode @default(SUGGEST)
+  rounding         PriceRounding   @default(ENDING_90)
+  maxAutoChangePct Decimal         @default(15) @db.Decimal(5, 2) // AUTO applies only up to this variation; beyond it stays a suggestion
+
+  // CMV do período (optional gauge: opening stock + purchases − closing stock)
+  periodOpeningStock Decimal? @db.Decimal(12, 2)
+  periodPurchases    Decimal? @db.Decimal(12, 2)
+  periodClosingStock Decimal? @db.Decimal(12, 2)
+  periodRevenue      Decimal? @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_pricing_configs")
+}
+
+model PriceChangeLog {
+  id           String  @id @default(cuid())
+  restaurantId String
+  // Intentionally NOT a FK to MenuItem: the audit trail must survive item
+  // deletion. itemName is denormalized for the same reason.
+  menuItemId   String
+  itemName     String
+  oldPrice     Decimal? @db.Decimal(10, 2)
+  newPrice     Decimal? @db.Decimal(10, 2)
+  oldCost      Decimal? @db.Decimal(10, 2)
+  newCost      Decimal? @db.Decimal(10, 2)
+  source       PriceChangeSource
+  changedByUserId String?
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, createdAt])
+  @@index([menuItemId])
+  @@map("price_change_logs")
 }
 
 // ═══════════════════════════════════════════
