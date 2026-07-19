@@ -23,7 +23,7 @@ interface TestResult {
   debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
-type Provider = "whatsapp" | "instagram" | "facebook" | "google" | "stone" | "mercadopago" | "openai" | "saipos";
+type Provider = "whatsapp" | "instagram" | "facebook" | "google" | "stone" | "mercadopago" | "openai" | "saipos" | "sumup";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -94,6 +94,13 @@ const INTEGRATIONS: {
     description: "PDV e gestão de pedidos — envio automático de pedidos ao caixa e atualizações de status em tempo real.",
     icon:        "🖥️",
     color:       "bg-violet-600",
+  },
+  {
+    provider:    "sumup",
+    name:        "SumUp",
+    description: "Cartão de crédito dentro do app (checkout transparente) — o cliente paga sem sair da tela, com 3D Secure.",
+    icon:        "💳",
+    color:       "bg-[#1E1A4D]",
   },
 ];
 
@@ -618,6 +625,90 @@ function MercadoPagoForm({
         hint="Encontre no painel do Mercado Pago → Credenciais → Access Token."
         value={accessToken}
         onChange={setAccessToken}
+      />
+      <div className="flex justify-end pt-1">
+        <button type="submit" disabled={saving}
+          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function SumUpForm({
+  view, saving, onSave,
+}: {
+  view: IntegrationView | null;
+  saving: boolean;
+  onSave: (data: Record<string, unknown>) => void;
+}) {
+  const f = view?.fields ?? {};
+  const [environment, setEnvironment]         = useState(f.environment ?? "production");
+  const [apiKey, setApiKey]                   = useState("");
+  const [merchantCode, setMerchantCode]       = useState((f.merchantCode as string) ?? "");
+  const [maxInstallments, setMaxInstallments] = useState((f.maxInstallments as string) ?? "1");
+
+  useEffect(() => {
+    setEnvironment(f.environment ?? "production");
+    setApiKey("");
+    setMerchantCode((f.merchantCode as string) ?? "");
+    setMaxInstallments((f.maxInstallments as string) ?? "1");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.provider]);
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSave({ environment, apiKey, merchantCode, maxInstallments }); }}
+      className="space-y-4"
+    >
+      <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+        <p className="text-xs font-semibold text-ink2">Cartão de crédito no app</p>
+        <p className="mt-1 text-[10px] leading-relaxed text-muted">
+          O cliente digita o cartão dentro do seu app (checkout transparente, com 3D Secure).
+          Os dados do cartão nunca passam pelos nossos servidores.
+        </p>
+      </div>
+
+      <SelectField
+        label="Ambiente"
+        name="environment"
+        value={environment}
+        options={[
+          { value: "production", label: "Produção" },
+          { value: "sandbox",    label: "Sandbox (teste)" },
+        ]}
+        onChange={setEnvironment}
+      />
+      <SecretField
+        label="API Key (Secret key)"
+        name="sumupApiKey"
+        placeholder={f.apiKeyPreview ? `Atual: ${f.apiKeyPreview} — deixe em branco para manter` : "sup_sk_..."}
+        hint="SumUp → Configurações para programadores → Chaves de API. Fica criptografada."
+        value={apiKey}
+        onChange={setApiKey}
+      />
+      <TextField
+        label="Merchant code"
+        name="sumupMerchantCode"
+        placeholder="Ex.: MCXXXXXX"
+        hint="SumUp → Perfil da conta → Código do comerciante (merchant code)."
+        value={merchantCode}
+        onChange={setMerchantCode}
+      />
+      <SelectField
+        label="Parcelas máximas"
+        name="sumupMaxInstallments"
+        value={maxInstallments}
+        options={[
+          { value: "1",  label: "Somente à vista" },
+          { value: "2",  label: "Até 2x" },
+          { value: "3",  label: "Até 3x" },
+          { value: "4",  label: "Até 4x" },
+          { value: "6",  label: "Até 6x" },
+          { value: "12", label: "Até 12x" },
+        ]}
+        onChange={setMaxInstallments}
       />
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
@@ -1301,6 +1392,7 @@ function DetailPanel({
               {provider === "whatsapp"    && <WhatsAppForm    view={view} saving={saving} onSave={handleSave} />}
               {provider === "stone"       && <StoneForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "mercadopago" && <MercadoPagoForm view={view} saving={saving} onSave={handleSave} />}
+              {provider === "sumup"       && <SumUpForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "openai"      && <OpenAIForm      view={view} saving={saving} onSave={handleSave} />}
               {provider === "saipos"      && <SaiposForm      view={view} saving={saving} onSave={handleSave} />}
             </div>

@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 
-export const VALID_PROVIDERS = ["stone", "mercadopago", "openai", "saipos"] as const;
+export const VALID_PROVIDERS = ["stone", "mercadopago", "openai", "saipos", "sumup"] as const;
 export type IntegrationProvider = (typeof VALID_PROVIDERS)[number];
 
 export function isValidProvider(v: string): v is IntegrationProvider {
@@ -61,6 +61,18 @@ export const saiposConfigSchema = z.object({
 
 export type SaiposConfigInput = z.infer<typeof saiposConfigSchema>;
 
+// ── SumUp (card / checkout transparente) ───────────────────────────────────────
+
+export const sumupConfigSchema = z.object({
+  environment:     z.enum(["sandbox", "production"]),
+  apiKey:          z.string(),                       // secret — empty = keep existing
+  merchantCode:    z.string().min(1, "Merchant code obrigatório"),
+  // Parcelas máximas oferecidas no cartão (Brasil). 1 = só à vista.
+  maxInstallments: z.coerce.number().int().min(1).max(12).optional().default(1),
+});
+
+export type SumUpConfigInput = z.infer<typeof sumupConfigSchema>;
+
 // ── Union dispatcher ──────────────────────────────────────────────────────────
 
 export function parseProviderConfig(provider: IntegrationProvider, body: unknown) {
@@ -69,5 +81,6 @@ export function parseProviderConfig(provider: IntegrationProvider, body: unknown
     case "mercadopago": return mercadopagoConfigSchema.safeParse(body);
     case "openai":      return openaiConfigSchema.safeParse(body);
     case "saipos":      return saiposConfigSchema.safeParse(body);
+    case "sumup":       return sumupConfigSchema.safeParse(body);
   }
 }

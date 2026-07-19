@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt, maskSecret } from "@/lib/crypto";
+import { validateSumUpCredentials } from "@/lib/sumup";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
@@ -25,6 +26,7 @@ import type {
   MercadoPagoConfigInput,
   OpenAIConfigInput,
   SaiposConfigInput,
+  SumUpConfigInput,
 } from "@/validators/integrations";
 
 // ── Public view type (safe for API responses) ─────────────────────────────────
@@ -59,8 +61,14 @@ interface SaiposRaw  {
   syncCatalog:     boolean;
   paymentMappings: Record<string, number>;
 }
+interface SumupRaw   {
+  environment:     string;
+  apiKey:          string;
+  merchantCode:    string;
+  maxInstallments: number;
+}
 
-type AnyRaw = StoneRaw | MpRaw | OpenAIRaw | SaiposRaw;
+type AnyRaw = StoneRaw | MpRaw | OpenAIRaw | SaiposRaw | SumupRaw;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +114,15 @@ function maskView(raw: AnyRaw, provider: IntegrationProvider): Record<string, st
       autoSendOrders:   String(r.autoSendOrders),
       syncCatalog:      String(r.syncCatalog),
       paymentMappings:  JSON.stringify(r.paymentMappings ?? {}),
+    };
+  }
+  if (provider === "sumup") {
+    const r = raw as SumupRaw;
+    return {
+      environment:      r.environment,
+      apiKeyPreview:    maskSecret(r.apiKey),
+      merchantCode:     r.merchantCode,          // not a secret
+      maxInstallments:  String(r.maxInstallments ?? 1),
     };
   }
   // openai
@@ -170,7 +187,7 @@ export class IntegrationService {
 
     // Ensure all known providers appear, even if not yet configured
     const configuredProviders = new Set(otherViews.map((v) => v.provider));
-    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "openai", "saipos"] as IntegrationProvider[])
+    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "openai", "saipos", "sumup"] as IntegrationProvider[])
       .filter((p) => !configuredProviders.has(p))
       .map((p) => ({
         provider:     p,
@@ -294,6 +311,15 @@ export class IntegrationService {
         syncCatalog:    Boolean(inp.syncCatalog),
         paymentMappings,
       };
+    } else if (provider === "sumup") {
+      const inp = input as SumUpConfigInput;
+      const old = existingRaw as SumupRaw | null;
+      newRaw = {
+        environment:     inp.environment,
+        apiKey:          inp.apiKey || old?.apiKey || "",
+        merchantCode:    inp.merchantCode,
+        maxInstallments: inp.maxInstallments ?? old?.maxInstallments ?? 1,
+      };
     } else {
       // openai
       const inp = input as OpenAIConfigInput;
@@ -364,6 +390,7 @@ export class IntegrationService {
       if (provider === "stone")            result = await IntegrationService._testStone(raw as StoneRaw);
       else if (provider === "mercadopago") result = await IntegrationService._testMercadoPago(raw as MpRaw);
       else if (provider === "saipos")      result = await IntegrationService._testSaipos(restaurantId);
+      else if (provider === "sumup")       result = await IntegrationService._testSumUp(raw as SumupRaw);
       else                                 result = await IntegrationService._testOpenAI(raw as OpenAIRaw);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
@@ -489,6 +516,11 @@ export class IntegrationService {
     } catch {
       return { success: false, message: "Não foi possível alcançar o Mercado Pago." };
     }
+  }
+
+  private static async _testSumUp(raw: SumupRaw): Promise<TestResult> {
+    const r = await validateSumUpCredentials({ apiKey: raw.apiKey, merchantCode: raw.merchantCode });
+    return { success: r.ok, message: r.message };
   }
 
   private static async _testOpenAI(raw: OpenAIRaw): Promise<TestResult> {
