@@ -346,6 +346,7 @@ type Stage =
   | "ONLINE_METHOD_SELECT"
   | "REVIEW_ORDER"
   | "PAYMENT_LINK"
+  | "CARD_FORM"
   | "DONE";
 
 type PaymentMode = "pay_now" | "pay_on_delivery" | "pay_on_pickup";
@@ -425,6 +426,8 @@ interface Props {
   repeatOrder?: RepeatOrderPayload;
   /** Whether online Pix ("Pagar agora") is available/configured. Defaults to true (current behavior). */
   pixOnlineEnabled?: boolean;
+  /** Show the online "Cartão de crédito" option — true only when SumUp is active. */
+  cardOnlineEnabled?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2356,6 +2359,7 @@ export function PedidoClient({
   recoveryCart,
   repeatOrder,
   pixOnlineEnabled = true,
+  cardOnlineEnabled = false,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -2943,6 +2947,15 @@ export function PedidoClient({
   const [pixCopyPaste,    setPixCopyPaste]    = useState<string | null>(null);
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
   const [pixCopied,       setPixCopied]       = useState(false);
+  // ── Cartão online (SumUp checkout transparente) ───────────────
+  // onlineMethod distingue "Pagar agora" via Pix vs Cartão. cardCheckout guarda
+  // o que o widget do SumUp precisa (checkoutId + params). cardStatus controla a
+  // tela do cartão (formulário → verificando → aguardando/erro).
+  const [onlineMethod, setOnlineMethod] = useState<"pix" | "card">("pix");
+  const [cardCheckout, setCardCheckout] = useState<
+    { checkoutId: string; currency?: string; amount?: string; merchantCode?: string; locale?: string; maxInstallments?: number } | null
+  >(null);
+  const [cardStatus, setCardStatus] = useState<"form" | "verifying" | "pending" | "failed">("form");
   const [orderTrackingData, setOrderTrackingData]   = useState<OrderTrackingData | null>(null);
   const [activeOrderId,     setActiveOrderId]       = useState<string | null>(null);
   const [showActiveBanner,  setShowActiveBanner]    = useState(false);
@@ -2965,9 +2978,11 @@ export function PedidoClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveryMethod]);
 
-  // ── Poll payment status while in PAYMENT_LINK stage ───────────────
+  // ── Poll payment status while in PAYMENT_LINK / CARD_FORM stage ───────────────
+  // For card, this is the backstop: the SumUp webhook confirms the order async,
+  // so even if the inline /card/confirm misses, polling advances to DONE.
   useEffect(() => {
-    if (stage !== "PAYMENT_LINK" || !orderId) return;
+    if ((stage !== "PAYMENT_LINK" && stage !== "CARD_FORM") || !orderId) return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/pedido/payment-status?orderId=${orderId}`);
@@ -2996,6 +3011,80 @@ export function PedidoClient({
         .catch(() => {});
     });
   }, [pixCopyPaste, pixQrCodeBase64]);
+
+  // ── Mount the SumUp card widget while in CARD_FORM ────────────────────
+  // Loads the SumUp SDK once, mounts the card widget for the checkout, and on a
+  // reported success verifies server-side (/card/confirm) before advancing to
+  // DONE. The widget collects the card inside a SumUp iframe — card data never
+  // touches us. The payment-status poll above is the async backstop (webhook).
+  useEffect(() => {
+    if (stage !== "CARD_FORM" || !cardCheckout) return;
+    let cancelled = false;
+    let widget: { unmount?: () => void } | null = null;
+    const SDK_SRC = "https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js";
+
+    const verifyPaid = async (): Promise<boolean> => {
+      if (!orderId) return false;
+      try {
+        const res = await fetch(`/api/pedido/${slug}/card/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        return data.status === "paid";
+      } catch { return false; }
+    };
+
+    const mount = () => {
+      const SumUpCard = (window as unknown as {
+        SumUpCard?: { mount: (o: Record<string, unknown>) => { unmount?: () => void } };
+      }).SumUpCard;
+      if (!SumUpCard || cancelled) return;
+      const maxInst = cardCheckout.maxInstallments ?? 1;
+      widget = SumUpCard.mount({
+        id:         "sumup-card-container",
+        checkoutId: cardCheckout.checkoutId,
+        locale:     cardCheckout.locale ?? "pt-BR",
+        currency:   cardCheckout.currency ?? "BRL",
+        ...(cardCheckout.amount ? { amount: cardCheckout.amount } : {}),
+        ...(maxInst > 1 ? { showInstallments: true, installments: maxInst } : {}),
+        onResponse: async (type: string) => {
+          if (cancelled) return;
+          if (type === "success") {
+            setCardStatus("verifying");
+            let paid = false;
+            for (let i = 0; i < 3 && !paid && !cancelled; i++) {
+              paid = await verifyPaid();
+              if (!paid) await new Promise((r) => setTimeout(r, 1500));
+            }
+            if (cancelled) return;
+            if (paid) { try { widget?.unmount?.(); } catch { /* ignore */ } setStage("DONE"); }
+            else setCardStatus("pending"); // webhook + polling will finish it
+          } else if (type === "error" || type === "fail") {
+            setCardStatus("failed");
+          }
+        },
+      });
+    };
+
+    setCardStatus("form");
+    const existing = document.querySelector(`script[src="${SDK_SRC}"]`) as HTMLScriptElement | null;
+    if ((window as unknown as { SumUpCard?: unknown }).SumUpCard) {
+      mount();
+    } else if (existing) {
+      existing.addEventListener("load", mount, { once: true });
+    } else {
+      const s = document.createElement("script");
+      s.src = SDK_SRC;
+      s.async = true;
+      s.addEventListener("load", mount, { once: true });
+      document.body.appendChild(s);
+    }
+
+    return () => { cancelled = true; try { widget?.unmount?.(); } catch { /* ignore */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, cardCheckout, orderId, slug]);
 
   // ── Category bar: show right-fade hint when more categories are off-screen ──
   useEffect(() => {
@@ -4172,6 +4261,7 @@ export function PedidoClient({
           address,
           paymentMode,
           paymentMethodSub,
+          onlineMethod: paymentMode === "pay_now" ? onlineMethod : undefined,
           changeFor: paymentMethodSub === "cash" ? changeFor : undefined,
           clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
             ? computeEffectiveFee(
@@ -4190,6 +4280,27 @@ export function PedidoClient({
         }),
       });
       const data = await res.json();
+
+      // ── Card (SumUp): finalize created the order + checkout; show the widget ──
+      if (paymentMode === "pay_now" && onlineMethod === "card") {
+        if (!res.ok || !data.card?.checkoutId) {
+          setMessages((prev) => [
+            ...prev,
+            { id: uid(), role: "assistant" as const, content: (data && data.error) || "Não foi possível iniciar o pagamento com cartão. Tente novamente.", ts: new Date() },
+          ]);
+          return;
+        }
+        const cardOrderId = data.orderId ?? null;
+        setOrderId(cardOrderId);
+        if (cardOrderId) {
+          try { localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify({ orderId: cardOrderId, createdAt: Date.now() })); } catch { /* ignore */ }
+        }
+        setCardStatus("form");
+        setCardCheckout(data.card);
+        setStage("CARD_FORM");
+        return;
+      }
+
       const resolvedOrderId = data.orderId ?? data.data?.orderId ?? null;
       setOrderId(resolvedOrderId);
 
@@ -4226,7 +4337,7 @@ export function PedidoClient({
       setUi("idle");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, changeFor, ga4Id, appliedCoupon]);
+  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, onlineMethod, changeFor, ga4Id, appliedCoupon]);
 
   const handleOnlinePaymentSelect = useCallback(() => {
     setStage("REVIEW_ORDER");
@@ -4238,9 +4349,20 @@ export function PedidoClient({
   // "Pagar agora" (online Pix): set pay_now then go straight to review — same
   // flow as the previous two-step PAYMENT → ONLINE_METHOD_SELECT path.
   const handlePayNowPix = useCallback(() => {
+    setOnlineMethod("pix");
     setPaymentMode("pay_now");
     handleOnlinePaymentSelect();
   }, [handleOnlinePaymentSelect]);
+
+  // "Pagar agora" via Cartão de crédito (SumUp): set pay_now + card, then review.
+  // finalize returns the SumUp checkout and the flow enters CARD_FORM (widget).
+  const handlePayNowCard = useCallback(() => {
+    setOnlineMethod("card");
+    setPaymentMode("pay_now");
+    setStage("REVIEW_ORDER");
+    pushUserMessage("💳 Cartão de crédito");
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
+  }, [pushUserMessage, pushAssistantMessage]);
 
   // "Pagar na entrega/retirada": set BOTH the arrival mode and the chosen
   // sub-method in one tap, then advance to review — identical state + payload to
@@ -4692,7 +4814,7 @@ export function PedidoClient({
     }
 
     if (stage === "PAYMENT") {
-      const showPayNow = shouldShowPayNow(pixOnlineEnabled);
+      const showPayNow = shouldShowPayNow(pixOnlineEnabled, cardOnlineEnabled);
       const arrivalOptions = deliveryPaymentOptions();
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
@@ -4704,11 +4826,13 @@ export function PedidoClient({
               <p className="text-xs font-semibold text-gray-700">Pagar agora</p>
               <p className="mb-2 text-[11px] text-gray-400">Você paga online antes do pedido ser enviado ao restaurante.</p>
               <div className="flex flex-col gap-2">
-                {payNowOptions(pixOnlineEnabled).map((opt) => (
+                {payNowOptions(pixOnlineEnabled, cardOnlineEnabled).map((opt) => {
+                  const isCard = opt.id === "card_online";
+                  return (
                   <button
                     key={opt.id}
-                    data-testid="pix-online-select-btn"
-                    onClick={handlePayNowPix}
+                    data-testid={isCard ? "card-online-select-btn" : "pix-online-select-btn"}
+                    onClick={isCard ? handlePayNowCard : handlePayNowPix}
                     className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100 active:scale-[0.99] transition-all"
                   >
                     <span className="shrink-0 text-lg">{opt.emoji}</span>
@@ -4716,9 +4840,10 @@ export function PedidoClient({
                       <p className="text-sm font-semibold text-indigo-800">{opt.label}</p>
                       {opt.hint && <p className="text-xs text-indigo-600">{opt.hint}</p>}
                     </div>
-                    <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white">Gerar QR Pix</span>
+                    <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white">{isCard ? "Pagar" : "Gerar QR Pix"}</span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -5261,6 +5386,51 @@ export function PedidoClient({
             type="button"
             onClick={handleCancelPix}
             className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
+          >
+            Voltar para revisar pedido
+          </button>
+        </div>
+      );
+    }
+
+    if (stage === "CARD_FORM") {
+      return (
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4" data-testid="card-form-area">
+          <p className="mb-1 text-sm font-bold text-gray-800">Pagamento com cartão</p>
+          <p className="mb-3 text-[11px] text-gray-400">
+            Seus dados são processados com segurança e não passam pelo restaurante.
+          </p>
+
+          {/* SumUp mounts the card fields inside this container (iframe). */}
+          <div
+            id="sumup-card-container"
+            className={cardStatus === "verifying" ? "pointer-events-none opacity-60" : ""}
+          />
+
+          {cardStatus === "verifying" && (
+            <p className="mt-3 text-center text-xs text-gray-500">Confirmando pagamento…</p>
+          )}
+          {cardStatus === "pending" && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-700">
+              Estamos confirmando seu pagamento. Isso pode levar alguns segundos…
+            </p>
+          )}
+          {cardStatus === "failed" && (
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600">
+              Não foi possível concluir. Confira os dados do cartão e tente novamente.
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setCardCheckout(null);
+              setCardStatus("form");
+              setOrderId(null);
+              try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
+              setStage("REVIEW_ORDER");
+            }}
+            className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
           >
             Voltar para revisar pedido
           </button>

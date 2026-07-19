@@ -21,15 +21,20 @@ export interface PayOption {
   hint?: string;
 }
 
-/** Online ("Pagar agora") options — Pix only, and only when enabled/configured. */
-export function payNowOptions(pixOnlineEnabled: boolean): PayOption[] {
-  if (!pixOnlineEnabled) return [];
-  return [{ id: "pix_online", label: "Pix", emoji: "⚡", hint: "QR Code ou copia e cola" }];
+/**
+ * Online ("Pagar agora") options — each shown only when its operator is
+ * enabled/configured. Pix → Mercado Pago; Cartão → SumUp (checkout transparente).
+ */
+export function payNowOptions(pixOnlineEnabled: boolean, cardOnlineEnabled = false): PayOption[] {
+  const opts: PayOption[] = [];
+  if (pixOnlineEnabled)  opts.push({ id: "pix_online",  label: "Pix",                emoji: "⚡", hint: "QR Code ou copia e cola" });
+  if (cardOnlineEnabled) opts.push({ id: "card_online", label: "Cartão de crédito",  emoji: "💳", hint: "Pague pelo app, sem sair da tela" });
+  return opts;
 }
 
 /** Whether the "Pagar agora" block should be shown at all. */
-export function shouldShowPayNow(pixOnlineEnabled: boolean): boolean {
-  return payNowOptions(pixOnlineEnabled).length > 0;
+export function shouldShowPayNow(pixOnlineEnabled: boolean, cardOnlineEnabled = false): boolean {
+  return payNowOptions(pixOnlineEnabled, cardOnlineEnabled).length > 0;
 }
 
 /**

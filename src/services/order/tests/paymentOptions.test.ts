@@ -21,6 +21,18 @@ describe("paymentOptions — unified payment UI model", () => {
     expect(payNowOptions(false)).toEqual([]);
   });
 
+  it("adds the online card option only when card (SumUp) is enabled", () => {
+    // card defaults off → unchanged
+    expect(payNowOptions(true).map((o) => o.id)).toEqual(["pix_online"]);
+    // pix + card
+    expect(payNowOptions(true, true).map((o) => o.id)).toEqual(["pix_online", "card_online"]);
+    // card only (no Pix configured)
+    const cardOnly = payNowOptions(false, true);
+    expect(cardOnly.map((o) => o.id)).toEqual(["card_online"]);
+    expect(cardOnly[0].label).toBe("Cartão de crédito");
+    expect(shouldShowPayNow(false, true)).toBe(true);
+  });
+
   it("'Pagar na entrega' lists the existing on-arrival methods (no invented method)", () => {
     const ids = deliveryPaymentOptions().map((o) => o.id);
     expect(ids).toEqual(["cash", "card_machine", "pix_in_person"]);

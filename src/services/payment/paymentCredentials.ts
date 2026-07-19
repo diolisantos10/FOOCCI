@@ -43,6 +43,11 @@ export interface SumUpCredentialsRecord {
   maxInstallments?: number;
 }
 
+/** True when card payment (SumUp) is usable for this restaurant. Safe for the client. */
+export async function isSumUpCardEnabled(restaurantId: string): Promise<boolean> {
+  return (await getSumUpCredentials(restaurantId)) !== null;
+}
+
 /** SumUp creds only when the integration is ACTIVE and complete. null otherwise. */
 export async function getSumUpCredentials(
   restaurantId: string
