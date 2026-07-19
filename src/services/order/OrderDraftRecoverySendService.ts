@@ -45,6 +45,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { parseReadyMadeConfig } from "@/services/crm/ReadyMadeCampaignService";
+import { parseMessagePool, resolveActivePhrases, pickPhrase } from "@/services/crm/crmMessagePool";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { parseSafetyConfig } from "@/lib/crm-safety";
@@ -452,7 +453,16 @@ export class OrderDraftRecoverySendService {
           | { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null }
           | null | undefined;
         const cartCoupon = rowCoupon ?? cartCfg?.cartRecoveryCoupon ?? null;
-        const customMsg  = cartRow?.message?.trim() || cartCfg?.cartRecoveryMessage?.trim();
+        // Message pool: rotate over the phrases the owner selected in the manage
+        // modal (same behavior as recurring campaigns); empty pool falls back to
+        // the row's single message, then the legacy config.
+        const drawn = cartRow
+          ? pickPhrase(resolveActivePhrases(
+              { templateId: "carrinho-abandonado", message: cartRow.message ?? "" },
+              parseMessagePool(cartRow.scheduleConfig),
+            ))
+          : null;
+        const customMsg  = drawn?.text?.trim() || cartCfg?.cartRecoveryMessage?.trim();
         const message    = customMsg
           ? renderCrmMessage(customMsg, { name: customer.name ?? "" }, {
               restaurantName: draft.restaurant.name ?? "nossa loja",
