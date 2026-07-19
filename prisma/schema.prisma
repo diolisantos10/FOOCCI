@@ -569,10 +569,14 @@ model Payment {
   paidAt            DateTime?
   // Stone / hosted-link fields (all nullable — not used for cash/card-machine flows)
   paymentMode       PaymentMode   @default(PAY_NOW)
-  providerName      String? // "stone" | null
-  providerReference String? // Stone payment ID
-  paymentUrl        String? // hosted checkout URL
+  providerName      String? // "stone" | "mercadopago" | "sumup" | null
+  providerReference String? // provider payment/checkout id (Stone link, MP payment, SumUp checkout)
+  paymentUrl        String? // hosted checkout URL / Pix copy-paste
   expiresAt         DateTime? // Stone link expiry
+  // Transparent card (SumUp) result metadata — null for Pix/cash.
+  installments      Int? // parcelas (1 = à vista)
+  cardBrand         String? // "visa" | "master" | … (for the receipt/ticket)
+  cardLast4         String? // last 4 digits (display only)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 

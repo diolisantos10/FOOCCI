@@ -2,17 +2,24 @@
  * Payment provider abstraction — the seam that makes the checkout "transparente"
  * and multi-operadora.
  *
- * Every acquirer/PSP (Mercado Pago today; others later) implements PaymentProvider.
- * The customer never sees which one processed the charge — the PaymentRouter picks
- * a provider per method (card → operator A, Pix → operator B) behind the scenes.
+ * Pix and card are DIFFERENT flows, so they have different provider shapes:
  *
- * Card charges take an opaque token that is created CLIENT-SIDE by the provider's
- * SDK. Raw card numbers never reach our servers (PCI SAQ A-EP).
+ *   PixProvider  — charge model. Server creates a charge and gets back a
+ *                  copy-paste/QR; the customer pays in their bank app; a
+ *                  webhook/poll confirms. (Mercado Pago.)
+ *
+ *   CardProvider — checkout model. Server creates a checkout; the client
+ *                  mounts the operator's card widget (card data never touches
+ *                  our server — PCI-safe); the server then verifies the final
+ *                  status. (SumUp.)
+ *
+ * The customer never sees which operator processed the charge — the
+ * PaymentRouter picks one per method behind the scenes.
  */
 
 export type PaymentMethodKind = "pix" | "card";
 
-// ── Pix ────────────────────────────────────────────────────────────────────────
+// ── Pix (charge model) ─────────────────────────────────────────────────────────
 
 export interface PixChargeInput {
   orderId: string;
@@ -32,45 +39,54 @@ export interface PixChargeResult {
   status: string;
 }
 
-// ── Card (transparent) ─────────────────────────────────────────────────────────
+export interface PixProvider {
+  readonly name: string;
+  createPixCharge(input: PixChargeInput): Promise<PixChargeResult>;
+}
 
-export interface CardChargeInput {
+// ── Card (checkout model) ──────────────────────────────────────────────────────
+
+export interface CardCheckoutInput {
   orderId: string;
   amount: number;              // BRL
   description: string;
-  cardToken: string;           // tokenized client-side — raw PAN/CVV never reach us
-  installments: number;        // 1 = à vista
-  paymentMethodId?: string;    // brand id from the SDK (visa/master/…)
-  issuerId?: string;
   payerEmail?: string;
-  notificationUrl?: string;
+  installments?: number;       // 1 = à vista (widget still lets the customer pick)
 }
 
-/** Normalized outcome across providers, so callers don't special-case each PSP. */
-export type CardChargeStatus =
-  | "approved"
-  | "pending"     // in_process / awaiting review
-  | "rejected"
-  | "cancelled"
-  | "unknown";
+/** Non-secret values handed to the client so it can mount the card widget. */
+export interface CardCheckoutClientParams {
+  currency: string;            // "BRL"
+  amount: string;              // formatted for the widget button, e.g. "90.50"
+  merchantCode?: string;       // SumUp merchant identifier (not a secret)
+  locale?: string;             // "pt-BR"
+  maxInstallments?: number;    // parcelas allowed (BR)
+}
 
-export interface CardChargeResult {
+export interface CardCheckoutInit {
   providerName: string;
-  providerPaymentId: string;
-  status: CardChargeStatus;
-  statusDetail?: string;       // raw provider detail, for logs/support
+  checkoutId: string;          // operator-side checkout id the widget mounts
+  clientParams: CardCheckoutClientParams;
+}
+
+/** Normalized final status across card operators. */
+export type CardCheckoutStatus = "paid" | "pending" | "failed" | "unknown";
+
+export interface CardCheckoutResult {
+  providerName: string;
+  checkoutId: string;
+  status: CardCheckoutStatus;
+  statusDetail?: string;       // raw operator detail, for logs/support
   last4?: string;
   brand?: string;
-  installments: number;
+  installments?: number;
+  amount?: number;
 }
 
-// ── Provider ─────────────────────────────────────────────────────────────────
-
-export interface PaymentProvider {
+export interface CardProvider {
   readonly name: string;
-  supports(kind: PaymentMethodKind): boolean;
-  /** Throws if the provider does not support Pix — gate with supports() first. */
-  createPixCharge(input: PixChargeInput): Promise<PixChargeResult>;
-  /** Throws if the provider does not support card — gate with supports() first. */
-  createCardCharge(input: CardChargeInput): Promise<CardChargeResult>;
+  /** Create the operator-side checkout the client widget will complete. */
+  createCardCheckout(input: CardCheckoutInput): Promise<CardCheckoutInit>;
+  /** Verify the final status server-side — never trust the client's "success". */
+  getCardCheckoutStatus(checkoutId: string): Promise<CardCheckoutResult>;
 }
