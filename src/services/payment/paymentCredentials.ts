@@ -13,6 +13,7 @@ import { decrypt } from "@/lib/crypto";
 
 export interface MercadoPagoCredentials {
   accessToken: string;
+  publicKey?: string;     // client-safe — used by the MP SDK to tokenize the card
   environment?: string;   // "test" | "production"
 }
 
@@ -28,7 +29,7 @@ export async function getMercadoPagoCredentials(
   try {
     const raw = JSON.parse(decrypt(row.configBlob)) as MercadoPagoCredentials;
     if (!raw.accessToken) return null;
-    return { accessToken: raw.accessToken, environment: raw.environment };
+    return { accessToken: raw.accessToken, publicKey: raw.publicKey, environment: raw.environment };
   } catch {
     return null;
   }

@@ -571,16 +571,18 @@ function MercadoPagoForm({
   const f = view?.fields ?? {};
   const [environment, setEnvironment] = useState(f.environment ?? "test");
   const [accessToken, setAccessToken] = useState("");
+  const [publicKey,   setPublicKey]   = useState((f.publicKey as string) ?? "");
 
   useEffect(() => {
     setEnvironment(f.environment ?? "test");
     setAccessToken("");
+    setPublicKey((f.publicKey as string) ?? "");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view?.provider]);
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); onSave({ environment, accessToken }); }}
+      onSubmit={(e) => { e.preventDefault(); onSave({ environment, accessToken, publicKey }); }}
       className="space-y-4"
     >
       {/* Payment methods — read-only status panel */}
@@ -625,6 +627,14 @@ function MercadoPagoForm({
         hint="Encontre no painel do Mercado Pago → Credenciais → Access Token."
         value={accessToken}
         onChange={setAccessToken}
+      />
+      <TextField
+        label="Public Key"
+        name="publicKey"
+        placeholder="APP_USR-xxxx-xxxx-… (para o cartão no app)"
+        hint="Credenciais → Public Key. Necessária para o cartão transparente dentro do app. O Pix funciona sem ela."
+        value={publicKey}
+        onChange={setPublicKey}
       />
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}

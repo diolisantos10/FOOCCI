@@ -50,7 +50,7 @@ export interface TestResult {
 // ── Internal raw config shapes ────────────────────────────────────────────────
 
 interface StoneRaw   { environment: string; clientId: string; clientSecret: string }
-interface MpRaw      { environment: string; accessToken: string }
+interface MpRaw      { environment: string; accessToken: string; publicKey?: string }
 interface OpenAIRaw  { apiKey: string }
 interface SaiposRaw  {
   environment:     string;
@@ -102,6 +102,8 @@ function maskView(raw: AnyRaw, provider: IntegrationProvider): Record<string, st
     return {
       environment:         r.environment,
       accessTokenPreview:  maskSecret(r.accessToken),
+      // Public Key is not a secret (it ships to the browser) — show it in full.
+      publicKey:           r.publicKey || null,
     };
   }
   if (provider === "saipos") {
@@ -294,6 +296,7 @@ export class IntegrationService {
       newRaw = {
         environment: inp.environment,
         accessToken: inp.accessToken || old?.accessToken || "",
+        publicKey:   inp.publicKey  || old?.publicKey  || "",
       };
     } else if (provider === "saipos") {
       const inp = input as SaiposConfigInput;

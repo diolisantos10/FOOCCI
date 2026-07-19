@@ -37,7 +37,35 @@ export async function resolveCardProvider(
   );
 }
 
+/**
+ * Which card operator handles this restaurant, plus the client-safe config the
+ * browser needs. Mercado Pago transparent card is preferred when it has a Public
+ * Key configured; SumUp is the fallback. null = card not available.
+ *
+ * The two operators use different client flows:
+ *   mercadopago → token model (MP SDK tokenizes the card → server charges)
+ *   sumup       → checkout model (server creates a checkout → SumUp widget)
+ */
+export type CardOperatorInfo =
+  | { provider: "mercadopago"; publicKey: string }
+  | { provider: "sumup"; merchantCode: string; maxInstallments: number };
+
+export async function resolveCardOperator(
+  restaurantId: string
+): Promise<CardOperatorInfo | null> {
+  const mp = await getMercadoPagoCredentials(restaurantId);
+  if (mp?.publicKey) return { provider: "mercadopago", publicKey: mp.publicKey };
+  const su = await getSumUpCredentials(restaurantId);
+  if (su) return { provider: "sumup", merchantCode: su.merchantCode, maxInstallments: su.maxInstallments ?? 1 };
+  return null;
+}
+
+/** True when card payment is usable for this restaurant (MP transparent OR SumUp). */
+export async function isCardEnabled(restaurantId: string): Promise<boolean> {
+  return (await resolveCardOperator(restaurantId)) !== null;
+}
+
 /** Which operators are wired per method (for diagnostics/UI). */
 export function knownPaymentProviders(): { pix: string[]; card: string[] } {
-  return { pix: ["mercadopago"], card: ["sumup"] };
+  return { pix: ["mercadopago"], card: ["mercadopago", "sumup"] };
 }

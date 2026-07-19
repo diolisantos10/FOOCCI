@@ -2953,7 +2953,9 @@ export function PedidoClient({
   // tela do cartão (formulário → verificando → aguardando/erro).
   const [onlineMethod, setOnlineMethod] = useState<"pix" | "card">("pix");
   const [cardCheckout, setCardCheckout] = useState<
-    { checkoutId: string; currency?: string; amount?: string; merchantCode?: string; locale?: string; maxInstallments?: number } | null
+    | { provider: "mercadopago"; publicKey: string; amount?: number }
+    | { provider: "sumup"; checkoutId: string; currency?: string; amount?: string; merchantCode?: string; locale?: string; maxInstallments?: number }
+    | null
   >(null);
   const [cardStatus, setCardStatus] = useState<"form" | "verifying" | "pending" | "failed">("form");
   const [orderTrackingData, setOrderTrackingData]   = useState<OrderTrackingData | null>(null);
@@ -3012,17 +3014,82 @@ export function PedidoClient({
     });
   }, [pixCopyPaste, pixQrCodeBase64]);
 
-  // ── Mount the SumUp card widget while in CARD_FORM ────────────────────
-  // Loads the SumUp SDK once, mounts the card widget for the checkout, and on a
-  // reported success verifies server-side (/card/confirm) before advancing to
-  // DONE. The widget collects the card inside a SumUp iframe — card data never
-  // touches us. The payment-status poll above is the async backstop (webhook).
+  // ── Mount the card widget while in CARD_FORM (Mercado Pago OR SumUp) ──────────
+  // Loads the operator SDK, mounts its card UI, and completes the charge. The card
+  // is collected inside the operator's iframe — it never touches us. The
+  // payment-status poll above is the async backstop (webhook).
   useEffect(() => {
     if (stage !== "CARD_FORM" || !cardCheckout) return;
     let cancelled = false;
-    let widget: { unmount?: () => void } | null = null;
-    const SDK_SRC = "https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js";
+    let controller: { unmount?: () => void } | null = null;
+    setCardStatus("form");
 
+    // Ensure the SDK script is present, then wait for its global before calling back.
+    const ensureSdk = (src: string, globalName: string, onReady: () => void) => {
+      const w = window as unknown as Record<string, unknown>;
+      if (!document.querySelector(`script[src="${src}"]`)) {
+        const s = document.createElement("script");
+        s.src = src; s.async = true;
+        document.body.appendChild(s);
+      }
+      if (w[globalName]) { onReady(); return; }
+      let tries = 0;
+      const t = setInterval(() => {
+        if (cancelled) { clearInterval(t); return; }
+        if (w[globalName]) { clearInterval(t); onReady(); }
+        else if (++tries > 40) { clearInterval(t); setCardStatus("failed"); } // ~10s
+      }, 250);
+    };
+
+    // ── Mercado Pago — token model (Card Payment Brick) ──────────────
+    if (cardCheckout.provider === "mercadopago") {
+      const mp = cardCheckout;
+      const mountMp = () => {
+        const MP = (window as unknown as {
+          MercadoPago?: new (k: string, o?: unknown) => { bricks: () => { create: (t: string, id: string, s: unknown) => Promise<{ unmount?: () => void }> } };
+        }).MercadoPago;
+        if (!MP || cancelled) return;
+        try {
+          const inst = new MP(mp.publicKey, { locale: "pt-BR" });
+          inst.bricks().create("cardPayment", "mp-card-container", {
+            initialization: { amount: mp.amount ?? 0 },
+            callbacks: {
+              onReady: () => {},
+              onError: () => { if (!cancelled) setCardStatus("failed"); },
+              onSubmit: (arg: { formData?: Record<string, unknown> } & Record<string, unknown>) => {
+                const fd = (arg.formData ?? arg) as Record<string, unknown>;
+                setCardStatus("verifying");
+                return fetch(`/api/pedido/${slug}/card/charge`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    orderId,
+                    token:           fd.token,
+                    installments:    fd.installments,
+                    paymentMethodId: fd.payment_method_id,
+                    issuerId:        fd.issuer_id,
+                    payerEmail:      (fd.payer as { email?: string } | undefined)?.email,
+                  }),
+                })
+                  .then((r) => r.json().catch(() => ({})))
+                  .then((data) => {
+                    if (cancelled) return;
+                    if (data.status === "approved") setStage("DONE");
+                    else if (data.status === "pending") setCardStatus("pending");
+                    else setCardStatus("failed");
+                  })
+                  .catch(() => { if (!cancelled) setCardStatus("failed"); });
+              },
+            },
+          }).then((c) => { controller = c; }).catch(() => { if (!cancelled) setCardStatus("failed"); });
+        } catch { if (!cancelled) setCardStatus("failed"); }
+      };
+      ensureSdk("https://sdk.mercadopago.com/js/v2", "MercadoPago", mountMp);
+      return () => { cancelled = true; try { controller?.unmount?.(); } catch { /* ignore */ } };
+    }
+
+    // ── SumUp — checkout model (card widget) ─────────────────────────
+    const su = cardCheckout;
     const verifyPaid = async (): Promise<boolean> => {
       if (!orderId) return false;
       try {
@@ -3035,19 +3102,18 @@ export function PedidoClient({
         return data.status === "paid";
       } catch { return false; }
     };
-
-    const mount = () => {
+    const mountSumUp = () => {
       const SumUpCard = (window as unknown as {
         SumUpCard?: { mount: (o: Record<string, unknown>) => { unmount?: () => void } };
       }).SumUpCard;
       if (!SumUpCard || cancelled) return;
-      const maxInst = cardCheckout.maxInstallments ?? 1;
-      widget = SumUpCard.mount({
+      const maxInst = su.maxInstallments ?? 1;
+      controller = SumUpCard.mount({
         id:         "sumup-card-container",
-        checkoutId: cardCheckout.checkoutId,
-        locale:     cardCheckout.locale ?? "pt-BR",
-        currency:   cardCheckout.currency ?? "BRL",
-        ...(cardCheckout.amount ? { amount: cardCheckout.amount } : {}),
+        checkoutId: su.checkoutId,
+        locale:     su.locale ?? "pt-BR",
+        currency:   su.currency ?? "BRL",
+        ...(su.amount ? { amount: su.amount } : {}),
         ...(maxInst > 1 ? { showInstallments: true, installments: maxInst } : {}),
         onResponse: async (type: string) => {
           if (cancelled) return;
@@ -3059,30 +3125,16 @@ export function PedidoClient({
               if (!paid) await new Promise((r) => setTimeout(r, 1500));
             }
             if (cancelled) return;
-            if (paid) { try { widget?.unmount?.(); } catch { /* ignore */ } setStage("DONE"); }
-            else setCardStatus("pending"); // webhook + polling will finish it
+            if (paid) { try { controller?.unmount?.(); } catch { /* ignore */ } setStage("DONE"); }
+            else setCardStatus("pending");
           } else if (type === "error" || type === "fail") {
             setCardStatus("failed");
           }
         },
       });
     };
-
-    setCardStatus("form");
-    const existing = document.querySelector(`script[src="${SDK_SRC}"]`) as HTMLScriptElement | null;
-    if ((window as unknown as { SumUpCard?: unknown }).SumUpCard) {
-      mount();
-    } else if (existing) {
-      existing.addEventListener("load", mount, { once: true });
-    } else {
-      const s = document.createElement("script");
-      s.src = SDK_SRC;
-      s.async = true;
-      s.addEventListener("load", mount, { once: true });
-      document.body.appendChild(s);
-    }
-
-    return () => { cancelled = true; try { widget?.unmount?.(); } catch { /* ignore */ } };
+    ensureSdk("https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js", "SumUpCard", mountSumUp);
+    return () => { cancelled = true; try { controller?.unmount?.(); } catch { /* ignore */ } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, cardCheckout, orderId, slug]);
 
@@ -5401,11 +5453,18 @@ export function PedidoClient({
             Seus dados são processados com segurança e não passam pelo restaurante.
           </p>
 
-          {/* SumUp mounts the card fields inside this container (iframe). */}
-          <div
-            id="sumup-card-container"
-            className={cardStatus === "verifying" ? "pointer-events-none opacity-60" : ""}
-          />
+          {/* The operator mounts its card fields inside its container (iframe). */}
+          {cardCheckout?.provider === "mercadopago" ? (
+            <div
+              id="mp-card-container"
+              className={cardStatus === "verifying" ? "pointer-events-none opacity-60" : ""}
+            />
+          ) : (
+            <div
+              id="sumup-card-container"
+              className={cardStatus === "verifying" ? "pointer-events-none opacity-60" : ""}
+            />
+          )}
 
           {cardStatus === "verifying" && (
             <p className="mt-3 text-center text-xs text-gray-500">Confirmando pagamento…</p>

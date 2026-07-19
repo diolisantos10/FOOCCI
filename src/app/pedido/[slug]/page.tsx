@@ -9,7 +9,7 @@ import { notFound } from "next/navigation";
 import Script from "next/script";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
-import { isSumUpCardEnabled } from "@/services/payment/paymentCredentials";
+import { isCardEnabled } from "@/services/payment/PaymentRouter";
 import { phoneCandidates } from "@/lib/phone";
 import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
@@ -378,7 +378,7 @@ export default async function PedidoPage({
   const [activePromotions, bestSellerRows, cardOnlineEnabled] = await Promise.all([
     getActiveMenuPromotions(restaurant.id, "DELIVERY"),
     getMenuBestSellerRows(restaurant.id),
-    isSumUpCardEnabled(restaurant.id), // show the online card option only when SumUp is active
+    isCardEnabled(restaurant.id), // show the online card option only when a card operator (MP/SumUp) is active
   ]);
 
   // Collect all raw items with their home categoryId for building the promotion map

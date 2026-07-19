@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createPixPayment } from "@/lib/mercadopago";
-import { resolveCardProvider } from "@/services/payment/PaymentRouter";
+import { resolveCardProvider, resolveCardOperator } from "@/services/payment/PaymentRouter";
 import { createPaymentLink } from "@/lib/stone";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -597,27 +597,50 @@ export async function POST(
 
   // ── pay_now: generate online payment link ──────────────────────
   if (paymentMode === "pay_now") {
-    // ── Card (SumUp) — transparent checkout ────────────────────────
-    // Create the operator-side checkout and hand the client the id its widget
-    // will complete. The final status is verified server-side by /card/confirm
-    // (and the SumUp webhook). Kept fully separate from the Pix/Stone path below.
+    // ── Card — transparent checkout (Mercado Pago token model OR SumUp checkout) ──
+    // The operator is resolved server-side; the client gets only what its flow
+    // needs. Verified/charged by /card/charge (MP) or /card/confirm (SumUp).
+    // Kept fully separate from the Pix/Stone path below.
     if (onlineMethod === "card") {
-      const cardProvider = await resolveCardProvider(restaurantId);
-      if (!cardProvider) {
+      const cardOp = await resolveCardOperator(restaurantId);
+      if (!cardOp) {
         await prisma.order.delete({ where: { id: orderId } }).catch(() => null);
         return NextResponse.json(
           { error: "Pagamento com cartão não configurado. Escolha Pix ou pagamento na entrega." },
           { status: 503 }
         );
       }
+
+      // Mercado Pago — transparent card (token model): record a pending payment
+      // and hand the client the Public Key. The browser tokenizes the card and
+      // /card/charge completes the charge. Order stays AWAITING_PAYMENT.
+      if (cardOp.provider === "mercadopago") {
+        await prisma.payment.create({
+          data: {
+            orderId,
+            method:       "ONLINE",
+            status:       "LINK_SENT",
+            amount:       new Decimal(finalTotal),
+            paymentMode:  "PAY_NOW",
+            providerName: "mercadopago",
+          },
+        });
+        return NextResponse.json({
+          orderId,
+          card: { provider: "mercadopago", publicKey: cardOp.publicKey, amount: finalTotal },
+        });
+      }
+
+      // SumUp — checkout model: create the operator checkout; the widget completes
+      // it and /card/confirm verifies. providerReference = the checkout id.
       try {
+        const cardProvider = await resolveCardProvider(restaurantId);
+        if (!cardProvider) throw new Error("SumUp provider unavailable");
         const init = await cardProvider.createCardCheckout({
           orderId,
           amount:      finalTotal,
           description: `Pedido – ${restaurantId}`,
         });
-        // Order stays AWAITING_PAYMENT (set in phase-1). Record the pending payment;
-        // providerReference = the operator checkout id used to verify + confirm.
         await prisma.payment.create({
           data: {
             orderId,
@@ -631,12 +654,12 @@ export async function POST(
         });
         return NextResponse.json({
           orderId,
-          card: { checkoutId: init.checkoutId, ...init.clientParams },
+          card: { provider: "sumup", checkoutId: init.checkoutId, ...init.clientParams },
         });
       } catch (err) {
         await prisma.order.delete({ where: { id: orderId } }).catch(() => null);
         const msg = err instanceof Error ? err.message : "SumUp error";
-        console.error("[finalize] SumUp checkout failed", { orderId, error: msg });
+        console.error("[finalize] card checkout failed", { orderId, error: msg });
         return NextResponse.json({ error: "Não foi possível iniciar o pagamento com cartão. Tente novamente." }, { status: 502 });
       }
     }
