@@ -10,6 +10,7 @@ import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-r
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions, buildEligibilityMetrics } from "@/services/crm/crmExecutionClassification";
 import { EVOLUTION_WEB_MAX_PER_RUN, ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
+import { parseMessagePool } from "@/services/crm/crmMessagePool";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -291,11 +292,23 @@ export async function PATCH(
     if (body.scheduleConfig !== undefined && body.scheduleConfig !== null) {
       const existing = (campaign.scheduleConfig as Record<string, unknown> | null) ?? {};
       const patch    = body.scheduleConfig;
+      // messagePool goes through the canonical sanitizer (drops malformed rows,
+      // caps custom phrases at MAX_CUSTOM_PHRASES); phrase texts are length-capped.
+      let poolPatch: Record<string, unknown> = {};
+      if (patch.messagePool !== undefined) {
+        const parsed = parseMessagePool({ messagePool: patch.messagePool });
+        poolPatch = {
+          messagePool: parsed
+            ? { ...parsed, custom: parsed.custom?.map((c) => ({ ...c, text: c.text.slice(0, 1000) })) }
+            : null,
+        };
+      }
       updateData.scheduleConfig = {
         ...existing,
         ...(patch.weekdays   !== undefined ? { weekdays:   patch.weekdays   } : {}),
         ...(patch.timeWindow !== undefined ? { timeWindow: patch.timeWindow } : {}),
         ...(patch.dailyLimit !== undefined ? { dailyLimit: patch.dailyLimit } : {}),
+        ...poolPatch,
       };
     }
 
