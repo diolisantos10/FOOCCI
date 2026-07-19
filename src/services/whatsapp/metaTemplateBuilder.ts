@@ -91,7 +91,7 @@ export function buildMetaTemplate(input: MetaTemplateBuildInput): MetaTemplateBu
   const exampleValues: string[] = [];
 
   let counter = 0;
-  const bodyText = input.message.replace(TOKEN_RE, (_match, token: string) => {
+  let bodyText = input.message.trim().replace(TOKEN_RE, (_match, token: string) => {
     counter += 1;
     const t = token as KnownToken;
     paramTokens.push(`{${t}}`);
@@ -99,6 +99,13 @@ export function buildMetaTemplate(input: MetaTemplateBuildInput): MetaTemplateBu
     exampleValues.push(ex);
     return `{{${counter}}}`;
   });
+
+  // Meta rejects a BODY whose text begins or ends with a variable ("Variables
+  // can't be at the start or end of the template"). Nearly every CRM phrase ends
+  // with {link_cardapio}, so pad with a neutral greeting/closer instead of
+  // bouncing the submission back to the owner.
+  if (/^\{\{\d+\}\}/.test(bodyText)) bodyText = `👋 ${bodyText}`;
+  if (/\{\{\d+\}\}$/.test(bodyText)) bodyText = `${bodyText} 🧡`;
 
   const bodyComponent: Record<string, unknown> = { type: "BODY", text: bodyText };
   if (exampleValues.length > 0) {

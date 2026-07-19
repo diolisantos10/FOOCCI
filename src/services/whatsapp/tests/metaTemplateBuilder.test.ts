@@ -10,7 +10,8 @@ describe("buildMetaTemplate", () => {
       footer: "Para não receber mais ofertas, responda SAIR.",
       examples: { nome: "Maria", cupom: "20% de desconto", validade: "31/12", link_cardapio: "https://x.com" },
     });
-    expect(r.bodyText).toBe("Oi, {{1}}! 💔 Você ganhou {{2}} pra voltar! Válido até {{3}}: {{4}}");
+    // Trailing variable gets the 🧡 pad — Meta rejects bodies ending on a variable.
+    expect(r.bodyText).toBe("Oi, {{1}}! 💔 Você ganhou {{2}} pra voltar! Válido até {{3}}: {{4}} 🧡");
     expect(r.paramTokens).toEqual(["{nome}", "{cupom}", "{validade}", "{link_cardapio}"]);
     expect(r.bodyVariables).toBe(4);
   });
@@ -34,9 +35,30 @@ describe("buildMetaTemplate", () => {
   });
 
   it("handles double-brace and spaced token variants", () => {
-    const r = buildMetaTemplate({ name: "t", category: "UTILITY", message: "{{ nome }} no {restaurante}", examples: {} });
-    expect(r.bodyText).toBe("{{1}} no {{2}}");
+    const r = buildMetaTemplate({ name: "t", category: "UTILITY", message: "{{ nome }} no {restaurante} hoje", examples: {} });
+    expect(r.bodyText).toBe("👋 {{1}} no {{2}} hoje");
     expect(r.paramTokens).toEqual(["{nome}", "{restaurante}"]);
+  });
+
+  it("pads a body that starts with a variable (Meta rejects leading variables)", () => {
+    const r = buildMetaTemplate({ name: "t", category: "MARKETING", message: "{nome}, hoje é seu dia! 🎂", examples: {} });
+    expect(r.bodyText).toBe("👋 {{1}}, hoje é seu dia! 🎂");
+  });
+
+  it("pads a body that ends with a variable (Meta rejects trailing variables)", () => {
+    const r = buildMetaTemplate({ name: "t", category: "MARKETING", message: "Peça pelo cardápio: {link_cardapio}", examples: {} });
+    expect(r.bodyText).toBe("Peça pelo cardápio: {{1}} 🧡");
+  });
+
+  it("pads both ends when the body starts AND ends with variables", () => {
+    const r = buildMetaTemplate({ name: "t", category: "MARKETING", message: "{nome}, seu link: {link_cardapio}", examples: {} });
+    expect(r.bodyText).toBe("👋 {{1}}, seu link: {{2}} 🧡");
+    expect(r.paramTokens).toEqual(["{nome}", "{link_cardapio}"]);
+  });
+
+  it("does not pad when the body is already framed by text", () => {
+    const r = buildMetaTemplate({ name: "t", category: "MARKETING", message: "Oi {nome}, tudo bem?", examples: {} });
+    expect(r.bodyText).toBe("Oi {{1}}, tudo bem?");
   });
 
   it("produces no example block when there are no variables", () => {
