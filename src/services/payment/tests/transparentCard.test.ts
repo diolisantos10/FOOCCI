@@ -106,15 +106,15 @@ describe("MercadoPagoProvider status normalization", () => {
 describe("resolvePaymentProvider", () => {
   beforeEach(() => { vi.resetModules(); });
 
-  it("returns the MP provider when credentials are active", async () => {
+  it("routes Pix to MP; card has no MP operator (MP is Pix-only)", async () => {
     vi.doMock("@/services/payment/paymentCredentials", () => ({
       getMercadoPagoCredentials: async () => ({ accessToken: "APP-TOKEN" }),
     }));
     const { resolvePaymentProvider } = await import("@/services/payment/PaymentRouter");
-    const card = await resolvePaymentProvider("r1", "card");
     const pix  = await resolvePaymentProvider("r1", "pix");
-    expect(card?.name).toBe("mercadopago");
+    const card = await resolvePaymentProvider("r1", "card");
     expect(pix?.name).toBe("mercadopago");
+    expect(card).toBeNull(); // card operator (SumUp) is added separately
   });
 
   it("returns null when no operator is configured/active", async () => {

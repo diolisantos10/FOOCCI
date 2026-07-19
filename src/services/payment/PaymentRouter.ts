@@ -25,7 +25,7 @@ const PROVIDER_BUILDERS: Array<{
 }> = [
   {
     name: "mercadopago",
-    supports: (kind) => kind === "pix" || kind === "card",
+    supports: (kind) => kind === "pix", // Pix only — card handled by a card operator (SumUp)
     build: async (restaurantId) => {
       const creds = await getMercadoPagoCredentials(restaurantId);
       return creds ? new MercadoPagoProvider(creds.accessToken) : null;

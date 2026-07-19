@@ -37,7 +37,10 @@ export class MercadoPagoProvider implements PaymentProvider {
   constructor(private readonly accessToken: string) {}
 
   supports(kind: PaymentMethodKind): boolean {
-    return kind === "pix" || kind === "card";
+    // MP is used for Pix ONLY in this operation. Card goes through a dedicated
+    // card operator (SumUp) — see PaymentRouter. createCardCharge stays
+    // implemented for completeness, but the router never routes card here.
+    return kind === "pix";
   }
 
   async createPixCharge(input: PixChargeInput): Promise<PixChargeResult> {
