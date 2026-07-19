@@ -28,6 +28,15 @@ import {
 import { getSegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "./CustomerSegmentService";
 import {
+  parseMessagePool,
+  resolveActivePhrases,
+  readPhraseMetaTemplates,
+  pickPhrase,
+  phraseKey,
+  type PoolPhrase,
+} from "./crmMessagePool";
+import { MetaTemplateService } from "@/services/whatsapp/MetaTemplateService";
+import {
   markConversationCrmContext,
   buildConversationMetadataForCrmSend,
   CONTEXT_TYPE,
@@ -1042,7 +1051,7 @@ export class ScheduledCampaignRunnerService {
 
     const reproCoupon = (campaign.scheduleConfig as RecurringScheduleConfig | null)?.coupon ?? null;
     const send = await this._sendBatch(
-      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+      { id: campaign.id, restaurantId: campaign.restaurantId, name: campaign.name, status: campaign.status, message: campaign.message, templateId: campaign.templateId, targetSegment: campaign.targetSegment, objective: campaign.objective, audienceConfig: campaign.audienceConfig, scheduleConfig: campaign.scheduleConfig },
       customers,
       safety,
       { allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride, campaignFamilyKey: campaign.campaignFamilyKey ?? null, messageFingerprint: fingerprint || null },
@@ -1085,7 +1094,7 @@ export class ScheduledCampaignRunnerService {
     campaign: {
       id: string; restaurantId: string; name: string; status: string;
       message: string; templateId: string | null; targetSegment: string | null;
-      objective: string | null; audienceConfig: unknown;
+      objective: string | null; audienceConfig: unknown; scheduleConfig?: unknown;
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
@@ -1144,6 +1153,32 @@ export class ScheduledCampaignRunnerService {
       youtubeUrl:      brandConfig?.youtubeUrl      ?? null,
       coupon:          runOpts.coupon ?? null,
     };
+
+    // ── Message pool: the phrases rotating for this campaign ──────────────────
+    // Owner-selected ready-made variants + their custom phrases; empty pool falls
+    // back to campaign.message (legacy single-phrase behavior). Each send draws one
+    // at random and records its variantKey so per-phrase conversion is measurable.
+    const activePhrases = resolveActivePhrases(
+      { templateId: campaign.templateId, message: campaign.message },
+      parseMessagePool(campaign.scheduleConfig),
+    );
+    const fallbackPhrase: PoolPhrase = { key: phraseKey(campaign.message), text: campaign.message, source: "fallback" };
+    // On the Meta path, marketing to cold audiences REQUIRES an approved template —
+    // rotation is limited to phrases whose per-phrase template is APPROVED. With
+    // none approved, the legacy single-template path (campaign.message) is used.
+    const phraseTemplates = readPhraseMetaTemplates(campaign.audienceConfig);
+    let metaPhrases: PoolPhrase[] = [];
+    if (metaProvider && activePhrases.length > 0) {
+      const checks = await Promise.all(activePhrases.map(async (p) => {
+        const tpl = phraseTemplates[p.key];
+        if (!tpl?.name) return null;
+        const found = await MetaTemplateService.findApproved(campaign.restaurantId, {
+          templateName: tpl.name, languageCode: tpl.language,
+        }).catch(() => null);
+        return found ? p : null;
+      }));
+      metaPhrases = checks.filter((p): p is PoolPhrase => p !== null);
+    }
 
     // Pre-fetch opt-out status
     const optedOutIds = new Set(
@@ -1248,10 +1283,15 @@ export class ScheduledCampaignRunnerService {
         continue;
       }
 
-      const messageText = personalizeMessage(campaign.message, customer, msgCtx);
+      // Draw this recipient's phrase. Meta path rotates only over phrases whose
+      // template is approved; anything else keeps the legacy single-phrase flow.
+      const phrase = (metaProvider
+        ? (pickPhrase(metaPhrases) ?? fallbackPhrase)
+        : (pickPhrase(activePhrases) ?? fallbackPhrase));
+      const messageText = personalizeMessage(phrase.text, customer, msgCtx);
 
       if (!messageText.trim()) {
-        const unresolved = (campaign.message.match(/\{[^}]+\}/g) ?? []).join(", ");
+        const unresolved = (phrase.text.match(/\{[^}]+\}/g) ?? []).join(", ");
         await prisma.campaignExecution.create({
           data: {
             campaignId:    campaign.id,
@@ -1260,6 +1300,7 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
+            variantKey:    phrase.key || null,
             status:        "FAILED",
             failedReason:  unresolved
               ? `Mensagem vazia após substituição de variáveis (não resolvidas: ${unresolved})`
@@ -1292,9 +1333,15 @@ export class ScheduledCampaignRunnerService {
           // template. Resolve the campaign's template + fill {{1}}=nome; falls back to
           // freeform only when no template is configured.
           const firstName = (customer.name ?? "").split(" ")[0] || "Cliente";
+          // When the drawn phrase has its own approved template, send THAT one;
+          // the fallback phrase keeps the campaign's legacy template resolution.
+          const phraseTpl = phraseTemplates[phrase.key];
+          const metaAudienceCfg = phrase.source !== "fallback" && phraseTpl
+            ? { metaTemplate: phraseTpl }
+            : campaign.audienceConfig;
           const { result: metaResult } = await sendMetaCrmMessage(metaProvider, {
             restaurantId: campaign.restaurantId, phone, freeformText: messageText, firstName,
-            campaign: { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+            campaign: { objective: campaign.objective, audienceConfig: metaAudienceCfg },
             // Fill approved-template body params from the SAME canonical context that
             // rendered the freeform text, so a multi-variable template ({{2}}=cupom,
             // {{3}}=link, …) delivers exactly what the freeform message would. Use the
@@ -1337,6 +1384,7 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText,
+            variantKey:    phrase.key || null,
             status:        "SENT",
             sentAt:        now,
           },
@@ -1407,6 +1455,7 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
+            variantKey:    phrase.key || null,
             status:        "FAILED",
             failedReason:  errMsg,
             errorMessage:  errorCode,

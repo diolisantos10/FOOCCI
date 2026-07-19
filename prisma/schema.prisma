@@ -925,6 +925,7 @@ model CampaignExecution {
   customerName     String? // snapshot at campaign creation
   customerPhone    String? // snapshot at campaign creation
   messageText      String?         @db.Text // personalized message for this recipient
+  variantKey       String? // fingerprint of the phrase template used (message pool A/B tracking)
   status           ExecutionStatus @default(PENDING)
   sentAt           DateTime?
   readAt           DateTime?
