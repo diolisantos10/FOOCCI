@@ -305,9 +305,11 @@ export async function PATCH(
       }
       updateData.scheduleConfig = {
         ...existing,
-        ...(patch.weekdays   !== undefined ? { weekdays:   patch.weekdays   } : {}),
-        ...(patch.timeWindow !== undefined ? { timeWindow: patch.timeWindow } : {}),
-        ...(patch.dailyLimit !== undefined ? { dailyLimit: patch.dailyLimit } : {}),
+        ...(patch.weekdays    !== undefined ? { weekdays:    patch.weekdays    } : {}),
+        ...(patch.timeWindow  !== undefined ? { timeWindow:  patch.timeWindow  } : {}),
+        ...(patch.dailyLimit  !== undefined ? { dailyLimit:  patch.dailyLimit  } : {}),
+        ...(patch.coupon      !== undefined ? { coupon:      patch.coupon      } : {}),
+        ...(patch.triggerDays !== undefined ? { triggerDays: patch.triggerDays } : {}),
         ...poolPatch,
       };
     }

@@ -12,6 +12,7 @@ import {
   READY_MADE_CAMPAIGNS,
   type CouponType, type ReadyMadeCoupon,
 } from "@/services/crm/readyMadeCampaigns";
+import { parseMessagePool, phraseKey, MAX_CUSTOM_PHRASES } from "@/services/crm/crmMessagePool";
 
 // Ids of the "fixed" ready-made campaigns — used to badge a row as Fixa vs Personalizada.
 const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
@@ -1952,10 +1953,15 @@ function CampaignManageModal({
   const [savingName,  setSavingName]  = useState(false);
   const [nameSaved,   setNameSaved]   = useState(false);
 
-  // Edit – message
+  // Edit – message pool (which phrases rotate) + the new-phrase composer.
+  // msgText doubles as the composer input; poolCustom holds the owner's phrases.
   const [msgText,   setMsgText]   = useState("");
   const [savingMsg, setSavingMsg] = useState(false);
   const [msgSaved,  setMsgSaved]  = useState(false);
+  const [poolSelected, setPoolSelected] = useState<Set<string>>(new Set());
+  const [poolCustom, setPoolCustom]     = useState<{ id: string; text: string; on: boolean }[]>([]);
+  const [composing, setComposing]       = useState(false);
+  const [phraseStats, setPhraseStats]   = useState<Record<string, { sent: number; converted: number; revenue: number }>>({});
 
   // Edit – schedule
   const [editWd,      setEditWd]      = useState<number[]>([]);
@@ -1987,8 +1993,29 @@ function CampaignManageModal({
       .then((json) => {
         const d = json.data as CampaignDetail;
         setDetail(d);
-        setMsgText(d.message ?? "");
+        setMsgText("");
+        setComposing(false);
         setEditName(d.name ?? "");
+        // Phrase pool: use the stored pool; legacy campaigns (no pool yet) start
+        // with the phrase actually running — the catalog variant matching
+        // campaign.message, or the message itself as an initial custom phrase.
+        {
+          const pool = parseMessagePool(d.scheduleConfig);
+          if (pool) {
+            setPoolSelected(new Set(pool.selected ?? []));
+            setPoolCustom((pool.custom ?? []).map((c) => ({ id: c.id, text: c.text, on: c.on !== false })));
+          } else {
+            const msgKey   = phraseKey(d.message ?? "");
+            const variants = d.templateId ? getReadyMadeMessageVariants(d.templateId) : [];
+            if (variants.some((v) => phraseKey(v) === msgKey)) {
+              setPoolSelected(new Set([msgKey]));
+              setPoolCustom([]);
+            } else {
+              setPoolSelected(new Set());
+              setPoolCustom((d.message ?? "").trim() ? [{ id: "atual", text: d.message, on: true }] : []);
+            }
+          }
+        }
         const cfg = d.scheduleConfig as ScheduleCfg | null;
         if (cfg) {
           setEditWd(cfg.weekdays ?? []);
@@ -2013,6 +2040,13 @@ function CampaignManageModal({
     fetch(`/api/crm/campaigns/${detailId}/preflight`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => setPreflight(json.data ?? null))
+      .catch(() => {});
+
+    // Per-phrase effectiveness (sent → converted per variantKey) for the pool list.
+    setPhraseStats({});
+    fetch(`/api/crm/campaigns/${detailId}/phrase-stats`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setPhraseStats(json.data ?? {}))
       .catch(() => {});
   }, [detailId]);
 
@@ -2066,6 +2100,9 @@ function CampaignManageModal({
   const rmCanEditMsg   = !readyMade || readyMade.editable.includes("message");
   const rmCanTrigger   = !!readyMade?.editable.includes("triggerDays");
   const msgPreview     = renderCrmMessage(msgText, MANAGE_PREVIEW_CUSTOMER, { ...MANAGE_PREVIEW_CTX, coupon });
+  // How many phrases are actually rotating (selected catalog + ON custom).
+  const poolActiveCount = rmVariants.filter((v) => poolSelected.has(phraseKey(v))).length
+    + poolCustom.filter((c) => c.on).length;
 
   async function handleSaveName() {
     if (!detail || !editName.trim() || editName.trim() === detail.name) return;
@@ -2084,20 +2121,39 @@ function CampaignManageModal({
     } finally { setSavingName(false); }
   }
 
-  async function handleSaveMessage() {
-    if (!detail || !msgText.trim() || msgText.trim() === detail.message) return;
+  /** Persists the phrase pool (selected catalog variants + custom phrases). */
+  async function savePool(
+    nextSelected: Set<string>,
+    nextCustom: { id: string; text: string; on: boolean }[],
+  ) {
+    if (!detail) return;
+    setPoolSelected(nextSelected);
+    setPoolCustom(nextCustom);
     setSavingMsg(true);
     try {
       const res = await fetch(`/api/crm/campaigns/${detail.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msgText.trim() }),
+        body: JSON.stringify({ scheduleConfig: { messagePool: { selected: [...nextSelected], custom: nextCustom } } }),
       });
       if (res.ok) {
-        setDetail((p) => p ? { ...p, message: msgText.trim() } : p);
+        const json = await res.json() as { data?: { scheduleConfig: unknown } };
+        if (json.data?.scheduleConfig) {
+          setDetail((p) => p ? { ...p, scheduleConfig: json.data!.scheduleConfig as Record<string, unknown> } : p);
+        }
         setMsgSaved(true);
-        setTimeout(() => setMsgSaved(false), 3000);
+        setTimeout(() => setMsgSaved(false), 2500);
       }
     } finally { setSavingMsg(false); }
+  }
+
+  /** Adds a new custom phrase (composer) to the pool, already turned on. */
+  async function handleAddPhrase() {
+    const text = msgText.trim();
+    if (!detail || !text || poolCustom.length >= MAX_CUSTOM_PHRASES) return;
+    const id = `p${Date.now().toString(36)}`;
+    await savePool(poolSelected, [...poolCustom, { id, text, on: true }]);
+    setMsgText("");
+    setComposing(false);
   }
 
   async function handleSaveSchedule() {
@@ -2360,60 +2416,145 @@ function CampaignManageModal({
                 {/* ── Mensagem ── */}
                 {activeTab === "message" && (
                   <div className="space-y-5">
-                    <div>
-                      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Mensagem atual</p>
-                      <div className="rounded-2xl border border-line2 bg-[#e7ffd1] px-4 py-3 text-sm text-ink whitespace-pre-wrap leading-relaxed shadow-sm">
-                        {detail.message}
-                      </div>
-                    </div>
                     {canEdit && rmCanEditMsg ? (
                       <div>
-                        {rmVariants.length > 0 && (
-                          <div className="mb-4">
-                            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Escolha uma mensagem pronta</p>
-                            <div className="space-y-2">
-                              {rmVariants.map((v, i) => {
-                                const selected = v === msgText;
-                                return (
-                                  <button
-                                    key={i}
-                                    onClick={() => setMsgText(v)}
-                                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm leading-relaxed transition-colors ${selected ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
-                                  >
-                                    {v}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Frases da campanha</p>
+                            <p className="mt-0.5 text-xs text-muted">
+                              Ative as frases que vão rodar — cada envio sorteia uma das ativas, e os números mostram qual converte mais.
+                            </p>
                           </div>
+                          {savingMsg
+                            ? <span className="shrink-0 text-xs font-semibold text-muted">Salvando…</span>
+                            : msgSaved
+                            ? <span className="shrink-0 text-xs font-semibold text-green-600">✓ Salvo</span>
+                            : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          {/* Frases prontas do catálogo */}
+                          {rmVariants.map((v) => {
+                            const key = phraseKey(v);
+                            const on  = poolSelected.has(key);
+                            const st  = phraseStats[key];
+                            return (
+                              <div key={key} className={`rounded-xl border px-3 py-2.5 transition-colors ${on ? "border-emerald-200 bg-emerald-50/40" : "border-line bg-white"}`}>
+                                <div className="flex items-start gap-3">
+                                  <button
+                                    onClick={() => {
+                                      const next = new Set(poolSelected);
+                                      if (on) next.delete(key); else next.add(key);
+                                      void savePool(next, poolCustom);
+                                    }}
+                                    disabled={savingMsg}
+                                    aria-label={on ? "Desativar frase" : "Ativar frase"}
+                                    className={`mt-0.5 shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${on ? "bg-emerald-500" : "bg-gray-300"}`}
+                                  >
+                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-[1.15rem]" : "translate-x-0.5"}`} />
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{v}</p>
+                                    <p className="mt-1 text-[10px] tabular-nums text-muted">
+                                      {st && st.sent > 0
+                                        ? <>📤 {st.sent} enviadas · 🛒 {st.converted} pedidos · <span className={st.converted > 0 ? "font-bold text-emerald-700" : ""}>{Math.round((st.converted / st.sent) * 100)}%</span>{st.revenue > 0 && <> · R$ {st.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>}</>
+                                        : "sem envios ainda"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Frases personalizadas do dono */}
+                          {poolCustom.map((c) => {
+                            const key = phraseKey(c.text);
+                            const st  = phraseStats[key];
+                            return (
+                              <div key={c.id} className={`rounded-xl border px-3 py-2.5 transition-colors ${c.on ? "border-emerald-200 bg-emerald-50/40" : "border-line bg-white"}`}>
+                                <div className="flex items-start gap-3">
+                                  <button
+                                    onClick={() => void savePool(poolSelected, poolCustom.map((x) => x.id === c.id ? { ...x, on: !x.on } : x))}
+                                    disabled={savingMsg}
+                                    aria-label={c.on ? "Desativar frase" : "Ativar frase"}
+                                    className={`mt-0.5 shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${c.on ? "bg-emerald-500" : "bg-gray-300"}`}
+                                  >
+                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${c.on ? "translate-x-[1.15rem]" : "translate-x-0.5"}`} />
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{c.text}</p>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">Sua frase</span>
+                                      <p className="text-[10px] tabular-nums text-muted">
+                                        {st && st.sent > 0
+                                          ? <>📤 {st.sent} enviadas · 🛒 {st.converted} pedidos · <span className={st.converted > 0 ? "font-bold text-emerald-700" : ""}>{Math.round((st.converted / st.sent) * 100)}%</span></>
+                                          : "sem envios ainda"}
+                                      </p>
+                                      <button
+                                        onClick={() => { if (confirm("Excluir esta frase personalizada?")) void savePool(poolSelected, poolCustom.filter((x) => x.id !== c.id)); }}
+                                        disabled={savingMsg}
+                                        className="text-[10px] font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
+                                      >Excluir</button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {poolActiveCount === 0 && (
+                          <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            Nenhuma frase ativa — a mensagem padrão da campanha continua rodando até você ativar pelo menos uma.
+                          </p>
                         )}
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted">{rmVariants.length > 0 ? "Ou escreva a sua" : "Editar mensagem"}</p>
-                        <p className="mb-2 text-xs text-muted">
-                          Alterações valem para os próximos envios. Mensagens já enviadas não são afetadas.
-                        </p>
-                        <textarea
-                          value={msgText}
-                          onChange={(e) => setMsgText(e.target.value)}
-                          rows={7}
-                          maxLength={4000}
-                          className="w-full resize-y rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 text-sm text-ink placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                        />
-                        <p className="mt-1 text-[10px] text-muted">Variáveis: {"{nome}"}, {"{restaurante}"}, {"{link_cardapio}"}, {"{cupom}"}</p>
-                        {/* Prévia com variáveis resolvidas */}
-                        <div className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Prévia</p>
-                          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{msgPreview}</p>
-                        </div>
-                        <div className="mt-3 flex items-center gap-3">
-                          <button
-                            onClick={handleSaveMessage}
-                            disabled={savingMsg || msgText.trim() === detail.message}
-                            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
-                          >
-                            {savingMsg ? "Salvando…" : "Salvar mensagem"}
-                          </button>
-                          {msgSaved && <p className="text-xs font-semibold text-green-600">✓ Salvo com sucesso!</p>}
-                        </div>
+
+                        {/* Nova frase personalizada (máx {MAX_CUSTOM_PHRASES}) */}
+                        {poolCustom.length < MAX_CUSTOM_PHRASES ? (
+                          composing ? (
+                            <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/30 p-3">
+                              <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted">Nova frase personalizada</p>
+                              <textarea
+                                value={msgText}
+                                onChange={(e) => setMsgText(e.target.value)}
+                                rows={5}
+                                maxLength={1000}
+                                autoFocus
+                                placeholder="Escreva sua frase… use {nome}, {cupom}, {validade}, {link_cardapio}"
+                                className="w-full resize-y rounded-xl border border-line2 bg-white px-3 py-2.5 text-sm text-ink placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                              />
+                              <p className="mt-1 text-[10px] text-muted">Variáveis: {"{nome}"}, {"{restaurante}"}, {"{cupom}"}, {"{validade}"}, {"{link_cardapio}"}</p>
+                              {msgText.trim() && (
+                                <div className="mt-2 rounded-lg bg-emerald-50/60 px-3 py-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Prévia</p>
+                                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{msgPreview}</p>
+                                </div>
+                              )}
+                              <div className="mt-2 flex items-center gap-2">
+                                <button
+                                  onClick={() => void handleAddPhrase()}
+                                  disabled={savingMsg || !msgText.trim()}
+                                  className="rounded-xl bg-brand-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
+                                >Adicionar frase</button>
+                                <button
+                                  onClick={() => { setComposing(false); setMsgText(""); }}
+                                  className="rounded-xl border border-line px-3.5 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] transition-colors"
+                                >Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setComposing(true)}
+                              className="mt-3 w-full rounded-xl border-2 border-dashed border-line px-3 py-2.5 text-xs font-semibold text-ink2 hover:border-brand-300 hover:text-brand-700 transition-colors"
+                            >
+                              + Nova frase personalizada ({poolCustom.length}/{MAX_CUSTOM_PHRASES})
+                            </button>
+                          )
+                        ) : (
+                          <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            Limite de {MAX_CUSTOM_PHRASES} frases personalizadas atingido — exclua uma para criar outra.
+                          </p>
+                        )}
                       </div>
                     ) : !canEdit ? (
                       <p className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-xs text-muted">
