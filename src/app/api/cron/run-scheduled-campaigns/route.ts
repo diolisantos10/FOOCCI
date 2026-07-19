@@ -15,6 +15,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
+import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
+import { prisma } from "@/lib/prisma";
 
 function checkCronAuth(req: NextRequest): { ok: true } | { ok: false; status: 401 | 503; error: string } {
   const secret = process.env.CRON_SECRET;
@@ -75,6 +77,26 @@ export async function POST(req: NextRequest) {
 
     // Run all due campaigns (optionally scoped to one restaurant)
     const summary = await ScheduledCampaignRunnerService.runDueCampaigns({ restaurantId, dryRun, limit });
+
+    // Zero-click Meta approval: make sure every catalog/custom phrase of every
+    // active campaign has its template submitted. After the first sweep this is a
+    // handful of DB reads per restaurant (skip-guard) — no Graph traffic.
+    if (!dryRun) {
+      try {
+        const metaRestaurants = await prisma.metaWhatsAppConfig.findMany({
+          where:  { metaCrmEnabled: true, connectionStatus: "CONNECTED", ...(restaurantId ? { restaurantId } : {}) },
+          select: { restaurantId: true },
+        });
+        for (const r of metaRestaurants) {
+          const res = await provisionPoolTemplates(r.restaurantId).catch(() => null);
+          if (res && res.created > 0) {
+            console.log(`[cron/run-scheduled-campaigns] auto-submitted ${res.created} phrase template(s) to Meta`, { restaurantId: r.restaurantId });
+          }
+        }
+      } catch (e) {
+        console.warn("[cron/run-scheduled-campaigns] phrase template provisioning failed", e);
+      }
+    }
 
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {

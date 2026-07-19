@@ -63,13 +63,11 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
   const [openId, setOpenId]   = useState<string | null>(null);
-  const [metaCrmActive, setMetaCrmActive] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const rmRes = await fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null);
       if (rmRes?.data?.campaigns) setItems(rmRes.data.campaigns as ReadyMadeState[]);
-      setMetaCrmActive(Boolean(rmRes?.data?.metaCrmActive));
     } finally {
       setLoading(false);
     }
@@ -92,52 +90,6 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
   }
 
   const toggle = (c: ReadyMadeState) => post(c.id, { action: c.active ? "deactivate" : "activate" });
-
-  // Meta approval — submit ONE campaign's phrase for review, then refresh statuses.
-  const [approvalMsg, setApprovalMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [syncing, setSyncing] = useState(false);
-
-  async function submitForApproval(c: ReadyMadeState) {
-    setBusyId(c.id);
-    setApprovalMsg(null);
-    try {
-      const res = await fetch(`/api/crm/ready-made/${c.id}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit-meta-template" }),
-      });
-      const j = await res.json().catch(() => null);
-      if (res.ok) {
-        const st = j?.data?.status as string | undefined;
-        const label =
-          st === "created" || st === "resubmitted" ? `"${c.name}" enviada para aprovação da Meta.` :
-          st === "pending"   ? `"${c.name}" já está em análise na Meta.` :
-          st === "approved"  ? `"${c.name}" já está aprovada.` :
-          st === "existed"   ? `"${c.name}" já estava na Meta — status sincronizado.` :
-          `"${c.name}" enviada.`;
-        setApprovalMsg({ ok: true, text: label });
-      } else {
-        setApprovalMsg({ ok: false, text: j?.error ?? "Não foi possível enviar para aprovação." });
-      }
-      await load();
-    } catch {
-      setApprovalMsg({ ok: false, text: "Sem conexão. Tente novamente." });
-    } finally {
-      setBusyId(null);
-      setTimeout(() => setApprovalMsg(null), 6000);
-    }
-  }
-
-  async function syncApprovals() {
-    setSyncing(true);
-    try {
-      await fetch("/api/integracoes/whatsapp/meta/templates", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sync" }),
-      }).catch(() => null);
-      await load();
-    } finally {
-      setSyncing(false);
-    }
-  }
 
   // "Configurar" opens the ONE unified "Gerenciar" modal for recurring campaigns.
   // If no campaign row exists yet, create a PAUSED one to hold the config, then open it.
@@ -176,17 +128,6 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
 
   return (
     <div>
-      {metaCrmActive && (
-        <MetaApprovalsPanel
-          items={items}
-          busyId={busyId}
-          syncing={syncing}
-          message={approvalMsg}
-          onSubmit={(c) => void submitForApproval(c)}
-          onSync={() => void syncApprovals()}
-        />
-      )}
-
       <h3 className="mb-1 text-sm font-bold uppercase tracking-widest text-muted">Campanhas prontas</h3>
       <p className="mb-4 text-sm text-muted">
         Já vêm configuradas para qualquer restaurante. É só ligar — e ajustar antes ou depois, se quiser.
@@ -212,101 +153,6 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
           onToggle={() => void toggle(openItem)}
           onSave={(ov) => post(openItem.id, { action: "update", overrides: ov })}
         />
-      )}
-    </div>
-  );
-}
-
-// ── Meta approvals panel ──────────────────────────────────────────────────────────
-
-function metaStatusStyle(status: string | null): { label: string; cls: string } {
-  switch (status) {
-    case "APPROVED": return { label: "Aprovado",   cls: "bg-green-50 text-green-700" };
-    case "PENDING":  return { label: "Em análise",  cls: "bg-amber-50 text-amber-700" };
-    case "REJECTED": return { label: "Rejeitado",   cls: "bg-red-50 text-red-600" };
-    case "DISABLED": return { label: "Desativado",  cls: "bg-[#F4F4F2] text-muted" };
-    default:         return { label: "Não enviado", cls: "bg-[#F4F4F2] text-muted" };
-  }
-}
-
-function MetaApprovalsPanel({ items, busyId, syncing, message, onSubmit, onSync }: {
-  items: ReadyMadeState[];
-  busyId: string | null;
-  syncing: boolean;
-  message: { ok: boolean; text: string } | null;
-  onSubmit: (c: ReadyMadeState) => void;
-  onSync: () => void;
-}) {
-  // Show campaigns that are in use OR already have a Meta template — the ones that matter.
-  const rows = items.filter((c) => c.active || c.metaTemplate);
-
-  return (
-    <div className="mb-6 rounded-xl border border-line2 bg-[#FAFAF8]/70 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-ink">Aprovações da Meta</h3>
-          <p className="mt-0.5 text-xs text-muted">
-            Para disparar campanhas pelo WhatsApp oficial, a Meta precisa aprovar cada frase. Envie a frase de cada
-            campanha para análise — a Meta responde em minutos até 24h. Se editar uma frase já aprovada, clique em
-            <strong className="font-semibold text-ink2"> Reenviar frase</strong>: o novo texto volta para análise.
-          </p>
-        </div>
-        <button type="button" onClick={onSync} disabled={syncing}
-          className="flex-shrink-0 rounded-lg border border-line2 bg-paper px-3 py-1.5 text-[11px] font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
-          {syncing ? "Sincronizando…" : "Sincronizar status"}
-        </button>
-      </div>
-
-      {message && (
-        <div className={`mt-3 rounded-md px-3 py-2 text-xs ${message.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
-          {message.text}
-        </div>
-      )}
-
-      {rows.length === 0 ? (
-        <p className="mt-3 text-xs text-muted">Ative uma campanha para enviar a frase dela para aprovação da Meta.</p>
-      ) : (
-        <ul className="mt-3 space-y-2">
-          {rows.map((c) => {
-            const status = c.metaTemplate?.status ?? null;
-            const st = metaStatusStyle(status);
-            const busy = busyId === c.id;
-            // Everything except a template already in review can be (re)submitted. For an
-            // APPROVED template the backend no-ops if the phrase is unchanged, and resubmits
-            // (back to review) only when the owner actually edited it.
-            const canSubmit = status !== "PENDING";
-            const btnLabel =
-              status === "APPROVED" ? "Reenviar frase" :
-              status === "REJECTED" ? "Reenviar" :
-              "Enviar para aprovação";
-            return (
-              <li key={c.id} className="rounded-lg border border-line2 bg-paper px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-ink">{c.emoji} {c.name}</p>
-                    <p className="truncate text-[11px] text-muted">{c.message.slice(0, 70)}{c.message.length > 70 ? "…" : ""}</p>
-                  </div>
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.cls}`}>{st.label}</span>
-                    {canSubmit && (
-                      <button type="button" onClick={() => onSubmit(c)} disabled={busy}
-                        className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50 ${
-                          status === "APPROVED"
-                            ? "border border-line2 bg-paper text-ink2 hover:bg-[#FAFAF8]"
-                            : "bg-ink text-paper hover:opacity-90"
-                        }`}>
-                        {busy ? "Enviando…" : btnLabel}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {status === "REJECTED" && c.metaTemplate?.rejectedReason && (
-                  <p className="mt-1.5 text-[11px] text-red-600">Motivo da Meta: {c.metaTemplate.rejectedReason}</p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
       )}
     </div>
   );

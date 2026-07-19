@@ -17,7 +17,7 @@
 import { prisma } from "@/lib/prisma";
 import { getReadyMadeCampaign, type ReadyMadeCoupon } from "@/services/crm/readyMadeCampaigns";
 import {
-  parseMessagePool, resolveActivePhrases, readPhraseMetaTemplates,
+  parseMessagePool, listPoolCandidates, readPhraseMetaTemplates,
 } from "@/services/crm/crmMessagePool";
 import { couponMessageLabel, couponValidadeLabel } from "@/services/crm/renderCrmMessage";
 import { buildInstagramUrl } from "@/lib/social";
@@ -206,14 +206,15 @@ function poolTemplateName(base: string, phraseFingerprint: string): string {
 }
 
 /**
- * Ensures every ACTIVE pool phrase of the campaign(s) has its own Meta template
- * submitted for approval, and wires audienceConfig.metaTemplates
- * ({ [variantKey]: { name, language, params, submittedMessage } }) so the runner
- * can rotate over the APPROVED ones. This is what makes phrase approval OUR job,
- * not the owner's: selecting a phrase automatically submits it.
+ * Ensures EVERY phrase a campaign could run — the full ready-made catalog plus
+ * the owner's custom phrases — has its own Meta template submitted for approval,
+ * and wires audienceConfig.metaTemplates ({ [variantKey]: { name, language,
+ * params, submittedMessage } }) so the runner can rotate over the APPROVED ones.
+ * Submitting the whole catalog up-front means a phrase the owner toggles on
+ * later is usually ALREADY approved — zero wait, zero clicks.
  *
- * Cheap when there's nothing new: campaigns whose active phrases are all already
- * mapped are skipped before any Graph call. Safe to re-run.
+ * Cheap when there's nothing new: campaigns whose candidate phrases are all
+ * already mapped are skipped before any Graph call. Safe to re-run (cron-safe).
  */
 export async function provisionPoolTemplates(restaurantId: string, campaignId?: string): Promise<ProvisionResult> {
   const campaigns = await prisma.campaign.findMany({
@@ -223,15 +224,12 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
     select: { id: true, templateId: true, message: true, scheduleConfig: true, audienceConfig: true },
   });
 
-  // Work list: campaigns with a mappable config AND at least one pool phrase missing
-  // its template mapping. Everything else is skipped without touching the Graph API.
+  // Work list: campaigns with a mappable config AND at least one candidate phrase
+  // missing its template mapping. Everything else skips without any Graph call.
   const work = campaigns.flatMap((campaign) => {
     const config = campaign.templateId ? TEMPLATE_CONFIG[campaign.templateId] : undefined;
     if (!config) return [];
-    const phrases = resolveActivePhrases(
-      { templateId: campaign.templateId, message: campaign.message },
-      parseMessagePool(campaign.scheduleConfig),
-    ).filter((p) => p.source !== "fallback");
+    const phrases = listPoolCandidates(campaign.templateId, parseMessagePool(campaign.scheduleConfig));
     if (phrases.length === 0) return [];
     const mapped = readPhraseMetaTemplates(campaign.audienceConfig);
     if (phrases.every((p) => !!mapped[p.key])) return [];
@@ -254,8 +252,8 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
       instagram: exampleCtx.instagram, link_avaliacao_google: exampleCtx.link_avaliacao_google, cupom, validade,
     };
 
-    // Rebuild the mapping from the ACTIVE phrases only — entries for phrases that were
-    // deleted or turned off drop out, so the runner never rotates over stale templates.
+    // Rebuild the mapping from the current candidates (catalog + existing custom) —
+    // entries for deleted custom phrases drop out, so stale templates never rotate.
     const metaTemplates: Record<string, { name: string; language: string; params: string[]; submittedMessage: string }> = {};
 
     for (const phrase of phrases) {

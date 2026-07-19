@@ -31,34 +31,51 @@ beforeEach(() => {
   meta.createOnMeta.mockResolvedValue({ ok: true, id: "tpl_1" });
 });
 
-describe("provisionPoolTemplates — one Meta template per selected phrase", () => {
-  it("creates a template for each selected phrase and wires audienceConfig.metaTemplates", async () => {
+const allKeys = variants.map(phraseKey);
+const fullMap = Object.fromEntries(allKeys.map((k) => [k, { name: `cliente_frio_${k.replace(/^mf_/, "v")}`, language: "pt_BR", params: [] }]));
+
+describe("provisionPoolTemplates — one Meta template per catalog/custom phrase", () => {
+  it("submits the WHOLE catalog (even without a pool) and wires audienceConfig.metaTemplates", async () => {
     db.campaign.findMany.mockResolvedValue([{
       id: "c1", templateId: "recuperar-frios", message: variants[0],
-      scheduleConfig: { mode: "RECURRING", messagePool: { selected: [k0, k1] } },
+      scheduleConfig: { mode: "RECURRING" },
       audienceConfig: {},
     }]);
 
     const res = await provisionPoolTemplates(R, "c1");
 
-    expect(res.created).toBe(2);
+    expect(res.created).toBe(variants.length);
     expect(res.failed).toBe(0);
     // Names derive from the ready-made base + the phrase fingerprint.
     const names = meta.createOnMeta.mock.calls.map((c) => (c[1] as { name: string }).name);
     expect(names.every((n) => n.startsWith("cliente_frio_v"))).toBe(true);
-    expect(new Set(names).size).toBe(2);
+    expect(new Set(names).size).toBe(variants.length);
     // Mapping written with per-phrase name + submittedMessage.
     const upd = db.campaign.update.mock.calls[0][0] as { data: { audienceConfig: { metaTemplates: Record<string, { name: string; submittedMessage: string }> } } };
     const map = upd.data.audienceConfig.metaTemplates;
-    expect(Object.keys(map).sort()).toEqual([k0, k1].sort());
+    expect(Object.keys(map).sort()).toEqual([...allKeys].sort());
     expect(map[k0].submittedMessage).toBe(variants[0]);
   });
 
-  it("skips entirely (no Graph calls) when every active phrase is already mapped", async () => {
+  it("includes the owner's custom phrases in the sweep", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING", messagePool: { selected: [k0], custom: [{ id: "p1", text: "ola sentimos sua falta" }] } },
+      audienceConfig: {},
+    }]);
+
+    const res = await provisionPoolTemplates(R, "c1");
+
+    expect(res.created).toBe(variants.length + 1);
+    const upd = db.campaign.update.mock.calls[0][0] as { data: { audienceConfig: { metaTemplates: Record<string, { submittedMessage: string }> } } };
+    expect(upd.data.audienceConfig.metaTemplates[phraseKey("ola sentimos sua falta")].submittedMessage).toBe("ola sentimos sua falta");
+  });
+
+  it("skips entirely (no Graph calls) when every candidate phrase is already mapped", async () => {
     db.campaign.findMany.mockResolvedValue([{
       id: "c1", templateId: "recuperar-frios", message: variants[0],
       scheduleConfig: { mode: "RECURRING", messagePool: { selected: [k0] } },
-      audienceConfig: { metaTemplates: { [k0]: { name: "cliente_frio_x", language: "pt_BR", params: [] } } },
+      audienceConfig: { metaTemplates: fullMap },
     }]);
 
     const res = await provisionPoolTemplates(R, "c1");
@@ -68,28 +85,16 @@ describe("provisionPoolTemplates — one Meta template per selected phrase", () 
     expect(meta.createOnMeta).not.toHaveBeenCalled();
   });
 
-  it("does nothing for campaigns without a pool (fallback single-phrase flow)", async () => {
-    db.campaign.findMany.mockResolvedValue([{
-      id: "c1", templateId: "recuperar-frios", message: variants[0],
-      scheduleConfig: { mode: "RECURRING" }, audienceConfig: {},
-    }]);
-
-    const res = await provisionPoolTemplates(R);
-    expect(res.created + res.existed + res.failed).toBe(0);
-    expect(meta.createOnMeta).not.toHaveBeenCalled();
-  });
-
-  it("reuses an existing Meta template by name instead of recreating", async () => {
+  it("reuses existing Meta templates by name instead of recreating", async () => {
     db.campaign.findMany.mockResolvedValue([{
       id: "c1", templateId: "recuperar-frios", message: variants[0],
       scheduleConfig: { mode: "RECURRING", messagePool: { selected: [k0] } },
       audienceConfig: {},
     }]);
-    const expectedName = `cliente_frio_${k0.replace(/^mf_/, "v")}`;
-    meta.list.mockResolvedValue([{ templateName: expectedName }]);
+    meta.list.mockResolvedValue(allKeys.map((k) => ({ templateName: `cliente_frio_${k.replace(/^mf_/, "v")}` })));
 
     const res = await provisionPoolTemplates(R, "c1");
-    expect(res.existed).toBe(1);
+    expect(res.existed).toBe(variants.length);
     expect(res.created).toBe(0);
     expect(meta.createOnMeta).not.toHaveBeenCalled();
   });

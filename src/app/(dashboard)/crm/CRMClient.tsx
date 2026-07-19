@@ -1962,6 +1962,8 @@ function CampaignManageModal({
   const [poolCustom, setPoolCustom]     = useState<{ id: string; text: string; on: boolean }[]>([]);
   const [composing, setComposing]       = useState(false);
   const [phraseStats, setPhraseStats]   = useState<Record<string, { sent: number; converted: number; revenue: number }>>({});
+  // Meta approval status per phrase (variantKey → APPROVED/PENDING/REJECTED).
+  const [phraseMeta, setPhraseMeta]     = useState<{ enabled: boolean; status: Record<string, string> }>({ enabled: false, status: {} });
 
   // Edit – schedule
   const [editWd,      setEditWd]      = useState<number[]>([]);
@@ -2042,11 +2044,15 @@ function CampaignManageModal({
       .then((json) => setPreflight(json.data ?? null))
       .catch(() => {});
 
-    // Per-phrase effectiveness (sent → converted per variantKey) for the pool list.
+    // Per-phrase effectiveness + Meta approval status for the pool list.
     setPhraseStats({});
+    setPhraseMeta({ enabled: false, status: {} });
     fetch(`/api/crm/campaigns/${detailId}/phrase-stats`)
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json) => setPhraseStats(json.data ?? {}))
+      .then((json) => {
+        setPhraseStats(json.data?.stats ?? {});
+        setPhraseMeta({ enabled: !!json.data?.metaEnabled, status: json.data?.meta ?? {} });
+      })
       .catch(() => {});
   }, [detailId]);
 
@@ -2103,6 +2109,16 @@ function CampaignManageModal({
   // How many phrases are actually rotating (selected catalog + ON custom).
   const poolActiveCount = rmVariants.filter((v) => poolSelected.has(phraseKey(v))).length
     + poolCustom.filter((c) => c.on).length;
+
+  /** Meta approval badge for a phrase (only when the restaurant uses Meta CRM). */
+  const metaBadge = (key: string) => {
+    if (!phraseMeta.enabled) return null;
+    const st = phraseMeta.status[key];
+    if (st === "APPROVED") return <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-700">✓ Meta aprovada</span>;
+    if (st === "PENDING")  return <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">⏳ Meta em análise</span>;
+    if (st === "REJECTED") return <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-red-700">✗ Meta rejeitou</span>;
+    return <span className="rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-muted">Meta: na fila</span>;
+  };
 
   async function handleSaveName() {
     if (!detail || !editName.trim() || editName.trim() === detail.name) return;
@@ -2455,11 +2471,14 @@ function CampaignManageModal({
                                   </button>
                                   <div className="min-w-0 flex-1">
                                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{v}</p>
-                                    <p className="mt-1 text-[10px] tabular-nums text-muted">
-                                      {st && st.sent > 0
-                                        ? <>📤 {st.sent} enviadas · 🛒 {st.converted} pedidos · <span className={st.converted > 0 ? "font-bold text-emerald-700" : ""}>{Math.round((st.converted / st.sent) * 100)}%</span>{st.revenue > 0 && <> · R$ {st.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>}</>
-                                        : "sem envios ainda"}
-                                    </p>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                      {metaBadge(key)}
+                                      <p className="text-[10px] tabular-nums text-muted">
+                                        {st && st.sent > 0
+                                          ? <>📤 {st.sent} enviadas · 🛒 {st.converted} pedidos · <span className={st.converted > 0 ? "font-bold text-emerald-700" : ""}>{Math.round((st.converted / st.sent) * 100)}%</span>{st.revenue > 0 && <> · R$ {st.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>}</>
+                                          : "sem envios ainda"}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -2485,6 +2504,7 @@ function CampaignManageModal({
                                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{c.text}</p>
                                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                                       <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">Sua frase</span>
+                                      {metaBadge(key)}
                                       <p className="text-[10px] tabular-nums text-muted">
                                         {st && st.sent > 0
                                           ? <>📤 {st.sent} enviadas · 🛒 {st.converted} pedidos · <span className={st.converted > 0 ? "font-bold text-emerald-700" : ""}>{Math.round((st.converted / st.sent) * 100)}%</span></>
