@@ -17,6 +17,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { isMetaWhatsAppEnabled } from "@/services/whatsapp/metaFlag";
 import { MetaTemplateService } from "@/services/whatsapp/MetaTemplateService";
+import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest) {
     if (body.action === "sync") {
       const result = await MetaTemplateService.syncFromMeta(ctx.restaurantId);
       if (!result.ok) return badRequest(result.error ?? "Não foi possível sincronizar os modelos.");
+      // Zero-click phrase approval: any selected pool phrase still missing its Meta
+      // template gets submitted now. No-op (no Graph calls) when everything is mapped.
+      await provisionPoolTemplates(ctx.restaurantId)
+        .catch((e) => console.warn("[meta/templates] pool provision on sync failed", e));
       return ok({ synced: result.synced, templates: await MetaTemplateService.list(ctx.restaurantId) });
     }
 

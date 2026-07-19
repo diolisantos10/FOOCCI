@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions, buildEligibilityMetrics } from "@/services/crm/crmExecutionClassification";
 import { EVOLUTION_WEB_MAX_PER_RUN, ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
 import { parseMessagePool } from "@/services/crm/crmMessagePool";
+import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -331,6 +332,21 @@ export async function PATCH(
       data:   updateData as never,
       select: { id: true, status: true, scheduledAt: true, name: true, message: true, scheduleConfig: true },
     });
+
+    // Pool changed + Meta CRM on → auto-submit templates for any newly selected
+    // phrase, so approval is the system's job, not the owner's. Cheap no-op when
+    // every active phrase is already mapped; failures never break the save.
+    if (body.scheduleConfig && body.scheduleConfig.messagePool !== undefined) {
+      const metaCfg = await prisma.metaWhatsAppConfig.findUnique({
+        where:  { restaurantId: ctx.restaurantId },
+        select: { metaCrmEnabled: true, connectionStatus: true },
+      }).catch(() => null);
+      if (metaCfg?.metaCrmEnabled && metaCfg.connectionStatus === "CONNECTED") {
+        await provisionPoolTemplates(ctx.restaurantId, params.id)
+          .then((r) => { if (r.created > 0) console.info(`[CRM] auto-submitted ${r.created} pool template(s) for campaign ${params.id}`); })
+          .catch((e) => console.warn("[CRM] pool template auto-submit failed", e));
+      }
+    }
 
     return ok(updated);
   } catch (err) {

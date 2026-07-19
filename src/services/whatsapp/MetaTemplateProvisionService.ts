@@ -16,6 +16,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { getReadyMadeCampaign, type ReadyMadeCoupon } from "@/services/crm/readyMadeCampaigns";
+import {
+  parseMessagePool, resolveActivePhrases, readPhraseMetaTemplates,
+} from "@/services/crm/crmMessagePool";
 import { couponMessageLabel, couponValidadeLabel } from "@/services/crm/renderCrmMessage";
 import { buildInstagramUrl } from "@/lib/social";
 import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/public-url";
@@ -194,6 +197,124 @@ export async function provisionDefaultTemplates(restaurantId: string): Promise<P
   }
 
   return { ok: failed === 0, created, existed, failed, items };
+}
+
+/** Meta template names allow [a-z0-9_]; phrase keys are already base36+underscore. */
+function poolTemplateName(base: string, phraseFingerprint: string): string {
+  const suffix = phraseFingerprint.replace(/^mf_/, "v").replace(/[^a-z0-9_]/g, "");
+  return `${base}_${suffix}`.slice(0, 120);
+}
+
+/**
+ * Ensures every ACTIVE pool phrase of the campaign(s) has its own Meta template
+ * submitted for approval, and wires audienceConfig.metaTemplates
+ * ({ [variantKey]: { name, language, params, submittedMessage } }) so the runner
+ * can rotate over the APPROVED ones. This is what makes phrase approval OUR job,
+ * not the owner's: selecting a phrase automatically submits it.
+ *
+ * Cheap when there's nothing new: campaigns whose active phrases are all already
+ * mapped are skipped before any Graph call. Safe to re-run.
+ */
+export async function provisionPoolTemplates(restaurantId: string, campaignId?: string): Promise<ProvisionResult> {
+  const campaigns = await prisma.campaign.findMany({
+    where: campaignId
+      ? { id: campaignId, restaurantId }
+      : { restaurantId, status: "ACTIVE" as never },
+    select: { id: true, templateId: true, message: true, scheduleConfig: true, audienceConfig: true },
+  });
+
+  // Work list: campaigns with a mappable config AND at least one pool phrase missing
+  // its template mapping. Everything else is skipped without touching the Graph API.
+  const work = campaigns.flatMap((campaign) => {
+    const config = campaign.templateId ? TEMPLATE_CONFIG[campaign.templateId] : undefined;
+    if (!config) return [];
+    const phrases = resolveActivePhrases(
+      { templateId: campaign.templateId, message: campaign.message },
+      parseMessagePool(campaign.scheduleConfig),
+    ).filter((p) => p.source !== "fallback");
+    if (phrases.length === 0) return [];
+    const mapped = readPhraseMetaTemplates(campaign.audienceConfig);
+    if (phrases.every((p) => !!mapped[p.key])) return [];
+    return [{ campaign, config, phrases }];
+  });
+  if (work.length === 0) return { ok: true, created: 0, existed: 0, failed: 0, items: [] };
+
+  await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
+  const existingNames = new Set((await MetaTemplateService.list(restaurantId)).map((t) => t.templateName));
+  const exampleCtx = await buildExampleContext(restaurantId);
+
+  const items: ProvisionItemResult[] = [];
+  let created = 0, existed = 0, failed = 0;
+
+  for (const { campaign, config, phrases } of work) {
+    const readyMade = getReadyMadeCampaign(campaign.templateId as string);
+    const { cupom, validade } = couponExamples(readyMade?.defaultCoupon);
+    const examples: Partial<Record<KnownToken, string>> = {
+      nome: "Maria", restaurante: exampleCtx.restaurante, link_cardapio: exampleCtx.link_cardapio,
+      instagram: exampleCtx.instagram, link_avaliacao_google: exampleCtx.link_avaliacao_google, cupom, validade,
+    };
+
+    // Rebuild the mapping from the ACTIVE phrases only — entries for phrases that were
+    // deleted or turned off drop out, so the runner never rotates over stale templates.
+    const metaTemplates: Record<string, { name: string; language: string; params: string[]; submittedMessage: string }> = {};
+
+    for (const phrase of phrases) {
+      const name  = poolTemplateName(config.name, phrase.key);
+      const built = buildMetaTemplate({
+        name, message: phrase.text, category: config.category, language: LANGUAGE,
+        footer: config.footer ? OPT_OUT_FOOTER : null, examples,
+      });
+      metaTemplates[phrase.key] = { name, language: LANGUAGE, params: built.paramTokens, submittedMessage: phrase.text };
+
+      if (existingNames.has(name)) {
+        await MetaTemplateService.upsert({
+          restaurantId, templateName: name, languageCode: LANGUAGE,
+          category: config.category, bodyVariables: built.bodyVariables,
+        });
+        existed++;
+        items.push({ templateId: campaign.templateId as string, templateName: name, status: "existed" });
+        continue;
+      }
+      const res = await MetaTemplateService.createOnMeta(restaurantId, built.payload);
+      if (res.ok || res.alreadyExists) {
+        await MetaTemplateService.upsert({
+          restaurantId, templateName: name, languageCode: LANGUAGE,
+          category: config.category, bodyVariables: built.bodyVariables,
+          ...(res.ok ? { status: "PENDING", rejectedReason: null } : {}),
+          ...(res.id ? { metaTemplateId: res.id } : {}),
+        });
+        existingNames.add(name);
+        if (res.alreadyExists) { existed++; items.push({ templateId: campaign.templateId as string, templateName: name, status: "existed" }); }
+        else                   { created++; items.push({ templateId: campaign.templateId as string, templateName: name, status: "created" }); }
+      } else {
+        failed++;
+        items.push({ templateId: campaign.templateId as string, templateName: name, status: "failed", error: res.error });
+      }
+    }
+
+    const prev = (campaign.audienceConfig && typeof campaign.audienceConfig === "object")
+      ? (campaign.audienceConfig as Record<string, unknown>) : {};
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data:  { audienceConfig: { ...prev, metaTemplates } as never },
+    }).catch(() => { /* best-effort */ });
+  }
+
+  return { ok: failed === 0, created, existed, failed, items };
+}
+
+/** provisionDefaultTemplates + the per-phrase pool templates, in one sweep. */
+export async function provisionAllTemplates(restaurantId: string): Promise<ProvisionResult> {
+  const base = await provisionDefaultTemplates(restaurantId);
+  const pool = await provisionPoolTemplates(restaurantId);
+  return {
+    ok:      base.ok && pool.ok,
+    created: base.created + pool.created,
+    existed: base.existed + pool.existed,
+    failed:  base.failed  + pool.failed,
+    items:   [...base.items, ...pool.items],
+    error:   base.error,
+  };
 }
 
 export interface SubmitOneResult {
