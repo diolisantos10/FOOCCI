@@ -2472,7 +2472,7 @@ function CampaignManageModal({
                                   <div className="min-w-0 flex-1">
                                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{v}</p>
                                     {coupon && !/\{cupom\}/i.test(v) && (
-                                      <p className="mt-0.5 text-[10px] text-emerald-600">🎁 + linha do cupom no final (automática): "você ganhou {couponLabel(coupon)}…"</p>
+                                      <p className="mt-0.5 text-[10px] text-emerald-600">🎁 + linha do cupom no final (automática): &ldquo;você ganhou {couponLabel(coupon)}…&rdquo;</p>
                                     )}
                                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                                       {metaBadge(key)}
@@ -2506,7 +2506,7 @@ function CampaignManageModal({
                                   <div className="min-w-0 flex-1">
                                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{c.text}</p>
                                     {coupon && !/\{cupom\}/i.test(c.text) && (
-                                      <p className="mt-0.5 text-[10px] text-emerald-600">🎁 + linha do cupom no final (automática): "você ganhou {couponLabel(coupon)}…"</p>
+                                      <p className="mt-0.5 text-[10px] text-emerald-600">🎁 + linha do cupom no final (automática): &ldquo;você ganhou {couponLabel(coupon)}…&rdquo;</p>
                                     )}
                                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                                       <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">Sua frase</span>
