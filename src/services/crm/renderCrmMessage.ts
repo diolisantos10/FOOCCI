@@ -34,8 +34,10 @@ export interface RenderContext {
   tiktokUrl?:      string | null;
   facebookUrl?:    string | null;
   youtubeUrl?:     string | null;
-  /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "sobremesa grátis". */
-  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null; validityDays?: number | null } | null;
+  /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "sobremesa grátis".
+   *  `expiresAt` (a wallet coupon's REAL expiry, e.g. the cupom-vencendo campaign)
+   *  wins over validityDays when resolving {validade}. */
+  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null; validityDays?: number | null; expiresAt?: Date | string | null } | null;
 }
 
 /** True when the coupon actually carries a benefit (drives {cupom}/{validade}). */
@@ -51,9 +53,16 @@ export function couponMessageLabel(coupon: RenderContext["coupon"]): string {
   return coupon!.type === "PERCENTAGE" ? `${coupon!.value}% de desconto` : `R$ ${coupon!.value} de desconto`;
 }
 
-/** The coupon's expiry date (today + validityDays) as "dd/mm" — empty if no coupon. */
+/** The coupon's expiry date as "dd/mm" — the real expiresAt when present, else
+ *  today + validityDays. Empty if no coupon benefit. */
 export function couponValidadeLabel(coupon: RenderContext["coupon"]): string {
   if (!couponHasBenefit(coupon)) return "";
+  if (coupon!.expiresAt) {
+    const d = new Date(coupon!.expiresAt);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    }
+  }
   const days = coupon!.validityDays && coupon!.validityDays > 0 ? coupon!.validityDays : 30;
   const expiry = new Date(Date.now() + days * 86_400_000);
   return expiry.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });

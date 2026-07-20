@@ -42,6 +42,7 @@ export const TEMPLATE_CONFIG: Record<string, TemplateConfig> = {
   "recuperar-frios":     { name: "cliente_frio",              category: "MARKETING", footer: true  },
   "recuperar-perdidos":  { name: "cliente_perdido",           category: "MARKETING", footer: true  },
   "clientes-vip":        { name: "cliente_vip",               category: "MARKETING", footer: true  },
+  "cupom-vencendo":      { name: "cupom_vencendo",            category: "MARKETING", footer: true  },
   "carrinho-abandonado": { name: "carrinho_abandonado",       category: "UTILITY",   footer: false },
   "siga-redes":          { name: "siga_redes",                category: "MARKETING", footer: true  },
 };

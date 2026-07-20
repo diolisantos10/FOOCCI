@@ -95,6 +95,7 @@ const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "pedido-avaliacao":   "RECENTE_AVALIACAO",
   "recorrente-sumido":  "RECORRENTE_SUMIDO",
   "aniversariantes":    "ANIVERSARIANTES",
+  "cupom-vencendo":     "CUPOM_VENCENDO",
   "aumentar-bebidas":   "SEM_BEBIDA",
   "aumentar-sobremesas":"SEM_SOBREMESA",
 };
@@ -249,6 +250,21 @@ export async function resolveAudience(
       const until = new Date(now.getTime() - days * 86_400_000);
       return serialize(await prisma.customer.findMany({
         where: { ...baseWhere, totalOrders: 1, lastOrderAt: { lte: until } },
+        orderBy: { lastOrderAt: "desc" },
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+    }
+
+    case "CUPOM_VENCENDO": {
+      // Customers holding an ACTIVE (unused) coupon that expires within the next
+      // `triggerDays` days — the last window to convert it into an order.
+      const days  = Math.max(1, opts?.triggerDays ?? 3);
+      const until = new Date(now.getTime() + days * 86_400_000);
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          coupons: { some: { status: "ACTIVE", expiresAt: { gte: now, lte: until } } },
+        },
         orderBy: { lastOrderAt: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);

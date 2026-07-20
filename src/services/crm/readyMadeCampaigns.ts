@@ -242,6 +242,23 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
+    id:          "cupom-vencendo",
+    emoji:       "⏰",
+    name:        "Cupom vencendo",
+    tagline:     "Avisa quem tem cupom prestes a vencer — antes que perca",
+    description: "O cliente ganhou um cupom e esqueceu. Um aviso na reta final da validade transforma cupom parado em pedido — a mensagem mostra o cupom DELE e a data real de vencimento.",
+    objective:   "Converter cupons já distribuídos antes de vencerem",
+    engine:      "RECURRING",
+    targetSegment: "cupom-vencendo",
+    priority:    "CART_ABANDONED", // time-critical: the coupon dies in days
+    defaultMessage:
+      "Oi, {nome}! ⏰ Corre que ainda dá tempo: seu {cupom} vence em {validade}! Use no pedido pelo nosso cardápio: {link_cardapio}",
+    schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    triggerDays: 3,
+    triggerDaysLabel: "Avisar quantos dias antes de vencer",
+    editable:    ["message", "triggerDays", "schedule", "dailyLimit"],
+  },
+  {
     id:          "carrinho-abandonado",
     emoji:       "🛒",
     name:        "Carrinho abandonado",
@@ -355,6 +372,13 @@ export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
     "{nome}, segue a gente e fica por dentro de tudo! 📱 Instagram: {instagram} · TikTok: {tiktok}",
     "Oi, {nome}! Curte nossa página no Facebook pra acompanhar as novidades do {restaurante}: {facebook}",
   ],
+  "cupom-vencendo": [
+    "Oi, {nome}! ⏰ Corre que ainda dá tempo: seu {cupom} vence em {validade}! Use no pedido pelo nosso cardápio: {link_cardapio}",
+    "{nome}, não deixa vencer! ⏳ Seu {cupom} vale só até {validade}. Garante o seu pedido: {link_cardapio}",
+    "Oi, {nome}! Seu {cupom} no {restaurante} tá quase vencendo — válido até {validade}. Aproveita: {link_cardapio}",
+    "{nome}, últimos dias! 🏃 O {cupom} que você ganhou vence em {validade}. Pede logo o seu: {link_cardapio}",
+    "Oi, {nome}! 🎁 Lembra do seu {cupom}? Ele vence em {validade} — usa antes que expire, pelo nosso cardápio: {link_cardapio}",
+  ],
   "carrinho-abandonado": [
     "Oi, {nome}! 🛒 Vi que você começou um pedido no {restaurante} e não finalizou. Posso te ajudar a concluir? É só voltar aqui: {link_cardapio}",
     "{nome}, seu pedido tá quase pronto! 🛒 Faltou só finalizar. Bora terminar? {link_cardapio}",
@@ -395,6 +419,7 @@ export const READY_MADE_TIMING: Record<string, ReadyMadeTiming> = {
   "recuperar-frios":     { summary: "Enviada a quem está 60+ dias sem pedir.",                          fromSegmentation: true },
   "recuperar-perdidos":  { summary: "Enviada a quem está há muito tempo sem pedir (fase perdida).",     fromSegmentation: true },
   "clientes-vip":        { summary: "Enviada periodicamente aos clientes Ouro e Diamante.",             fromSegmentation: false },
+  "cupom-vencendo":      { summary: "Enviada a quem tem cupom ativo vencendo nos próximos dias.",       fromSegmentation: false },
   "carrinho-abandonado": { summary: "Enviada poucos minutos após o cliente abandonar um pedido.",       fromSegmentation: false },
   "siga-redes":          { summary: "Enviada aos clientes, convidando a seguir suas redes sociais.",     fromSegmentation: false },
 };

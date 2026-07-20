@@ -263,6 +263,21 @@ export class CrmAudienceService {
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
+      // ── Cupom vencendo — ACTIVE wallet coupon expiring in the next ~3 days ────
+      case "cupom-vencendo": {
+        const until    = new Date(ts.getTime() + 3 * 86_400_000);
+        const couponCond = { coupons: { some: { status: "ACTIVE" as never, expiresAt: { gte: ts, lte: until } } } };
+        const segWhere  = { restaurantId, isGuest: false, ...couponCond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...couponCond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { lastOrderAt: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, couponCond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
       // ── Segment: primeira compra ─────────────────────────────────────────────
       case "segunda-compra": {
         const segWhere  = { restaurantId, isGuest: false, totalOrders: 1 };

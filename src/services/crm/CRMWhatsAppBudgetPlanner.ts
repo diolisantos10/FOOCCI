@@ -57,6 +57,10 @@ export function inferCampaignPriority(campaign: {
   if (tid.includes("carrinho") || seg.includes("carrinho") || seg.includes("abandon") || obj === "CART_ABANDONED") {
     return "CART_ABANDONED";
   }
+  // Coupon about to expire is as time-critical as an abandoned cart — same rank.
+  if (tid === "cupom-vencendo" || seg.includes("cupom-vencendo")) {
+    return "CART_ABANDONED";
+  }
   if (tid.includes("avaliacao") || seg.includes("avaliacao") || seg.includes("pedido-avaliacao") || obj === "POST_ORDER" || obj === "REVIEW") {
     return "POST_ORDER_REVIEW";
   }

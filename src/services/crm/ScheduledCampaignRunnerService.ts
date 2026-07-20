@@ -1242,6 +1242,36 @@ export class ScheduledCampaignRunnerService {
       metaPhrases = checks.filter((p): p is PoolPhrase => p !== null);
     }
 
+    // "Cupom vencendo" speaks about the customer's OWN wallet coupon — resolve each
+    // recipient's soonest-expiring ACTIVE coupon so {cupom}/{validade} render THEIR
+    // reward and its real expiry date (not a campaign-level coupon).
+    const expiringCouponByCustomer = new Map<string, NonNullable<(typeof msgCtx)["coupon"]> & { expiresAt?: Date | null }>();
+    if (campaign.templateId === "cupom-vencendo") {
+      try {
+        const rows = await prisma.customerCoupon.findMany({
+          where: {
+            restaurantId: campaign.restaurantId,
+            customerId:   { in: customers.map((c) => c.id) },
+            status:       "ACTIVE" as never,
+            expiresAt:    { gte: new Date() },
+          },
+          orderBy: { expiresAt: "asc" },
+          select:  { customerId: true, discountType: true, discountValue: true, description: true, expiresAt: true },
+        });
+        for (const r of rows) {
+          if (expiringCouponByCustomer.has(r.customerId)) continue; // keep the soonest
+          expiringCouponByCustomer.set(r.customerId, {
+            type:        r.discountType === "PERCENTAGE" || r.discountType === "FIXED" ? r.discountType : "CUSTOM",
+            value:       Number(r.discountValue ?? 0),
+            description: r.description ?? undefined,
+            expiresAt:   r.expiresAt,
+          });
+        }
+      } catch (e) {
+        console.warn(`[CampaignRunner] expiring-coupon lookup failed`, { campaignId: campaign.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     // Pre-fetch opt-out status
     const optedOutIds = new Set(
       (await prisma.customer.findMany({
@@ -1345,12 +1375,36 @@ export class ScheduledCampaignRunnerService {
         continue;
       }
 
+      // Per-recipient render context: cupom-vencendo swaps in the customer's OWN
+      // expiring coupon; anyone whose coupon got used/expired since the audience
+      // was resolved is skipped (nothing truthful left to say).
+      const recipientCtx = campaign.templateId === "cupom-vencendo"
+        ? { ...msgCtx, coupon: expiringCouponByCustomer.get(customer.id) ?? null }
+        : msgCtx;
+      if (campaign.templateId === "cupom-vencendo" && !recipientCtx.coupon) {
+        await prisma.campaignExecution.create({
+          data: {
+            campaignId:    campaign.id,
+            restaurantId:  campaign.restaurantId,
+            customerId:    customer.id,
+            customerName:  customer.name,
+            customerPhone: customer.phone,
+            messageText:   "",
+            status:        "SKIPPED" as never,
+            failedReason:  "Cupom já usado ou expirado",
+            errorMessage:  "NO_ACTIVE_EXPIRING_COUPON",
+          },
+        });
+        skipped++;
+        continue;
+      }
+
       // Draw this recipient's phrase. Meta path rotates only over phrases whose
       // template is approved; anything else keeps the legacy single-phrase flow.
       const phrase = (metaProvider
         ? (pickPhrase(metaPhrases) ?? fallbackPhrase)
         : (pickPhrase(activePhrases) ?? fallbackPhrase));
-      const messageText = personalizeMessage(phrase.text, customer, msgCtx);
+      const messageText = personalizeMessage(phrase.text, customer, recipientCtx);
 
       if (!messageText.trim()) {
         const unresolved = (phrase.text.match(/\{[^}]+\}/g) ?? []).join(", ");
@@ -1409,7 +1463,7 @@ export class ScheduledCampaignRunnerService {
             // {{3}}=link, …) delivers exactly what the freeform message would. Use the
             // firstName fallback ("Cliente") for {nome} so a blank-name customer keeps the
             // exact single-variable behavior instead of bailing to freeform on an empty param.
-            renderToken: (token) => personalizeMessage(token, { ...customer, name: customer.name || firstName }, msgCtx),
+            renderToken: (token) => personalizeMessage(token, { ...customer, name: customer.name || firstName }, recipientCtx),
           });
           if (metaResult.ok) {
             externalMessageId = metaResult.providerMessageId;

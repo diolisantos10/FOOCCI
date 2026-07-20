@@ -3,6 +3,7 @@ import {
   renderCrmMessage,
   resolveCrmVariables,
   findUnknownCrmVariables,
+  couponValidadeLabel,
   type RenderCustomer,
   type RenderContext,
 } from "../renderCrmMessage";
@@ -159,5 +160,20 @@ describe("resolveCrmVariables", () => {
     expect(v.nome).toBe("Diego");
     expect(v.restaurante).toBe("Sushi Cazza");
     expect(v.instagram).toBe("https://www.instagram.com/sushicazzaoficial/");
+  });
+});
+
+describe("couponValidadeLabel — real wallet expiry (cupom-vencendo)", () => {
+  it("uses the coupon's actual expiresAt over validityDays for {validade}", () => {
+    const expiresAt = new Date("2026-08-05T12:00:00.000Z");
+    const label = couponValidadeLabel({ type: "PERCENTAGE", value: 10, validityDays: 30, expiresAt });
+    expect(label).toBe(expiresAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }));
+  });
+
+  it("falls back to validityDays when expiresAt is absent or invalid", () => {
+    const fromDays = couponValidadeLabel({ type: "PERCENTAGE", value: 10, validityDays: 5 });
+    const expected = new Date(Date.now() + 5 * 86_400_000).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    expect(fromDays).toBe(expected);
+    expect(couponValidadeLabel({ type: "PERCENTAGE", value: 10, validityDays: 5, expiresAt: "not-a-date" })).toBe(expected);
   });
 });
