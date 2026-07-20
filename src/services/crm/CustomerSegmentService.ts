@@ -161,17 +161,9 @@ export function resolveCustomerClassification(input: ClassificationInput): Custo
 }
 
 // ── Tier ladder helpers ────────────────────────────────────────────────────────
-
-/** Loyalty ladder rank — higher = better. */
-export const TIER_RANK: Record<string, number> = {
-  BRONZE: 0, PRATA: 1, OURO: 2, DIAMANTE: 3,
-};
-
-/** True when `next` is a genuine level-UP from `prev` (drives "Subiu de nível"). */
-export function isTierUp(prev: string | null | undefined, next: string): boolean {
-  if (!prev) return false; // first classification is not a level-up
-  return (TIER_RANK[next] ?? 0) > (TIER_RANK[prev] ?? 0);
-}
+// Moved to crm-helpers (a leaf) to break the CustomerSegmentService ⇄
+// RelationshipProgramService import cycle. Re-exported here for compatibility.
+export { TIER_RANK, isTierUp } from "./crm-helpers";
 
 // ── Convenience defaults ───────────────────────────────────────────────────────
 

@@ -17,7 +17,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { TierSettings } from "@prisma/client";
-import { isTierUp } from "./CustomerSegmentService";
+import { isTierUp } from "./crm-helpers";
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
