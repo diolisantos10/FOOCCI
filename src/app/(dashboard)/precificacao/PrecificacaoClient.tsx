@@ -63,8 +63,22 @@ export interface PriceLogDTO {
   newPrice: number | null;
   oldCost: number | null;
   newCost: number | null;
-  source: "MANUAL" | "APPLIED" | "AUTO" | "COST_EDIT";
+  source: "MANUAL" | "APPLIED" | "AUTO" | "COST_EDIT" | "RECIPE";
   createdAt: string;
+}
+
+export interface IngredientDTO {
+  id: string;
+  name: string;
+  unit: string;
+  costPerUnit: number | null;
+  usedIn: number;
+}
+
+export interface RecipeLineDTO {
+  menuItemId: string;
+  ingredientId: string;
+  quantity: number | null;
 }
 
 interface ItemStateDTO {
@@ -107,6 +121,16 @@ function parseMoney(s: string): number | null {
   const n = Number(s.replace(",", "."));
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
+
+/** 4-dp variant for ingredient unit costs and quantities (g/ml precision). */
+function parseNum4(s: string): number | null {
+  if (s.trim() === "") return null;
+  const n = Number(s.replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 10000) / 10000 : null;
+}
+
+const fmtQty = (n: number) =>
+  n.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
 
 const numToInput = (n: number | null): string => (n === null ? "" : String(n));
 
@@ -205,7 +229,10 @@ const SOURCE_LABEL: Record<PriceLogDTO["source"], string> = {
   APPLIED: "sugestão aplicada",
   AUTO: "automático",
   COST_EDIT: "custo atualizado",
+  RECIPE: "ficha de insumos",
 };
+
+const UNIT_OPTIONS = ["un", "g", "kg", "ml", "L", "fatia", "porção"];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -213,11 +240,15 @@ export function PrecificacaoClient({
   initialConfig,
   initialItems,
   initialLogs,
+  initialIngredients,
+  initialRecipeLines,
   canEdit,
 }: {
   initialConfig: PricingConfigDTO;
   initialItems: PricingItemDTO[];
   initialLogs: PriceLogDTO[];
+  initialIngredients: IngredientDTO[];
+  initialRecipeLines: RecipeLineDTO[];
   canEdit: boolean;
 }) {
   const [savedConfig, setSavedConfig] = useState<PricingConfigDTO>(initialConfig);
@@ -226,7 +257,22 @@ export function PrecificacaoClient({
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<PriceLogDTO[]>(initialLogs);
 
-  const [tab, setTab] = useState<"formula" | "precos" | "automacao">("formula");
+  // ── Insumos (ingredient catalog + ficha por produto) ──
+  const [ingredients, setIngredients] = useState<IngredientDTO[]>(initialIngredients);
+  const [recipeLines, setRecipeLines] = useState<RecipeLineDTO[]>(initialRecipeLines);
+  const [ingCostDrafts, setIngCostDrafts] = useState<Record<string, string>>({});
+  const [ingUnitDrafts, setIngUnitDrafts] = useState<Record<string, string>>({});
+  const [ingSearch, setIngSearch] = useState("");
+  const [newIng, setNewIng] = useState({ name: "", unit: "un", cost: "" });
+  const [fichaItemId, setFichaItemId] = useState("");
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({}); // key `${itemId}:${ingId}`
+  const [addLine, setAddLine] = useState({ ingredientId: "", quantity: "" });
+  const [savingIngredients, setSavingIngredients] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [deleteIngId, setDeleteIngId] = useState<string | null>(null);
+  const [insumosMsg, setInsumosMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [tab, setTab] = useState<"formula" | "precos" | "insumos" | "automacao">("formula");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
@@ -320,6 +366,67 @@ export function PrecificacaoClient({
     return changes;
   }, [costDrafts, items]);
 
+  // ── Derived: insumos & fichas ──
+  const ingredientById = useMemo(
+    () => new Map(ingredients.map((i) => [i.id, i])),
+    [ingredients]
+  );
+
+  const linesByItem = useMemo(() => {
+    const m = new Map<string, RecipeLineDTO[]>();
+    for (const l of recipeLines) {
+      const arr = m.get(l.menuItemId);
+      if (arr) arr.push(l);
+      else m.set(l.menuItemId, [l]);
+    }
+    return m;
+  }, [recipeLines]);
+
+  /** Ficha state per product: complete = every line has qty + ingredient cost. */
+  const recipeStateByItem = useMemo(() => {
+    const m = new Map<string, { complete: boolean; cost: number | null; lines: number }>();
+    for (const [itemId, lines] of Array.from(linesByItem.entries())) {
+      let total = 0;
+      let complete = lines.length > 0;
+      for (const l of lines) {
+        const ing = ingredientById.get(l.ingredientId);
+        if (l.quantity === null || !ing || ing.costPerUnit === null) complete = false;
+        else total += l.quantity * ing.costPerUnit;
+      }
+      m.set(itemId, {
+        complete,
+        cost: complete ? Math.round(total * 100) / 100 : null,
+        lines: lines.length,
+      });
+    }
+    return m;
+  }, [linesByItem, ingredientById]);
+
+  const ingredientsWithoutCost = ingredients.filter((i) => i.costPerUnit === null).length;
+
+  const visibleIngredients = ingredients.filter(
+    (i) => !ingSearch || i.name.toLowerCase().includes(ingSearch.toLowerCase())
+  );
+
+  const dirtyIngredients = useMemo(() => {
+    const changes: Array<{ id: string; costPerUnit?: number | null; unit?: string }> = [];
+    const ids = new Set([...Object.keys(ingCostDrafts), ...Object.keys(ingUnitDrafts)]);
+    for (const id of Array.from(ids)) {
+      const ing = ingredients.find((i) => i.id === id);
+      if (!ing) continue;
+      const change: { id: string; costPerUnit?: number | null; unit?: string } = { id };
+      const rawCost = ingCostDrafts[id];
+      if (rawCost !== undefined) {
+        const parsed = parseNum4(rawCost);
+        if (parsed !== ing.costPerUnit) change.costPerUnit = parsed;
+      }
+      const rawUnit = ingUnitDrafts[id];
+      if (rawUnit !== undefined && rawUnit !== ing.unit) change.unit = rawUnit;
+      if (change.costPerUnit !== undefined || change.unit !== undefined) changes.push(change);
+    }
+    return changes;
+  }, [ingCostDrafts, ingUnitDrafts, ingredients]);
+
   // ── Actions ──
   function mergeItems(updates: ItemStateDTO[]) {
     if (updates.length === 0) return;
@@ -338,6 +445,218 @@ export function PrecificacaoClient({
       if (res?.success) setLogs(res.data);
     } catch {
       // histórico é informativo — não bloqueia a ação principal
+    }
+  }
+
+  // ── Actions: insumos ──
+  type PropagationDTO = {
+    updated: number;
+    auto: RepriceOutcomeDTO | null;
+    items: ItemStateDTO[];
+  } | null;
+
+  /** Merge product-cost recomputes into the table and describe them. */
+  function absorbPropagation(prop: PropagationDTO): string {
+    if (!prop || prop.updated === 0) return "";
+    mergeItems(prop.items);
+    void refreshLogs();
+    let text = ` · ${prop.updated} produto(s) com custo recalculado pela ficha`;
+    if (prop.auto && prop.auto.applied > 0)
+      text += ` · ${prop.auto.applied} preço(s) atualizados automaticamente`;
+    if (prop.auto && prop.auto.heldByGuardrail > 0)
+      text += ` · ${prop.auto.heldByGuardrail} como sugestão (acima da trava)`;
+    return text;
+  }
+
+  async function refreshIngredients() {
+    const res = await apiFetch("/api/pricing/ingredients", "GET");
+    if (res?.success) {
+      setIngredients(res.data.ingredients);
+      setRecipeLines(res.data.lines);
+    }
+  }
+
+  async function saveIngredients() {
+    if (dirtyIngredients.length === 0) return;
+    setSavingIngredients(true);
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/ingredients", "PATCH", {
+        items: dirtyIngredients,
+      });
+      const { updated, propagation } = res.data as {
+        updated: number;
+        propagation: PropagationDTO;
+      };
+      setIngredients((prev) =>
+        prev.map((ing) => {
+          const change = dirtyIngredients.find((c) => c.id === ing.id);
+          if (!change) return ing;
+          return {
+            ...ing,
+            ...(change.costPerUnit !== undefined && { costPerUnit: change.costPerUnit }),
+            ...(change.unit !== undefined && { unit: change.unit }),
+          };
+        })
+      );
+      setIngCostDrafts({});
+      setIngUnitDrafts({});
+      setInsumosMsg({ ok: true, text: `${updated} insumo(s) salvos${absorbPropagation(propagation)}.` });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar insumos." });
+    } finally {
+      setSavingIngredients(false);
+    }
+  }
+
+  async function createIngredientAction() {
+    const name = newIng.name.trim();
+    if (name.length < 2) {
+      setInsumosMsg({ ok: false, text: "Dê um nome ao insumo (mínimo 2 letras)." });
+      return;
+    }
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/ingredients", "POST", {
+        name,
+        unit: newIng.unit,
+        costPerUnit: parseNum4(newIng.cost),
+      });
+      const { id } = res.data as { id: string };
+      setIngredients((prev) =>
+        [...prev, { id, name, unit: newIng.unit, costPerUnit: parseNum4(newIng.cost), usedIn: 0 }].sort(
+          (a, b) => a.name.localeCompare(b.name, "pt-BR")
+        )
+      );
+      setNewIng({ name: "", unit: "un", cost: "" });
+      setInsumosMsg({ ok: true, text: `Insumo "${name}" cadastrado.` });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao cadastrar." });
+    }
+  }
+
+  async function doDeleteIngredient(id: string) {
+    setDeleteIngId(null);
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch(`/api/pricing/ingredients/${id}`, "DELETE");
+      const { productsRecalculated } = res.data as { productsRecalculated: PropagationDTO };
+      const name = ingredientById.get(id)?.name ?? "insumo";
+      setIngredients((prev) => prev.filter((i) => i.id !== id));
+      setRecipeLines((prev) => prev.filter((l) => l.ingredientId !== id));
+      setInsumosMsg({ ok: true, text: `"${name}" removido${absorbPropagation(productsRecalculated)}.` });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao remover." });
+    }
+  }
+
+  async function runImport() {
+    setImporting(true);
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/ingredients/import", "POST", {});
+      const o = res.data as {
+        ingredientsCreated: number;
+        linksCreated: number;
+        itemsLinked: number;
+        itemsWithoutText: number;
+      };
+      await refreshIngredients();
+      let text = `Importação concluída: ${o.ingredientsCreated} insumo(s) novos, ${o.linksCreated} vínculo(s) com produtos.`;
+      if (o.itemsWithoutText > 0)
+        text += ` ${o.itemsWithoutText} produto(s) do cardápio não têm ingredientes preenchidos.`;
+      setInsumosMsg({ ok: true, text });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro na importação." });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function saveQty(menuItemId: string, ingredientId: string, raw: string) {
+    const key = `${menuItemId}:${ingredientId}`;
+    const parsed = parseNum4(raw);
+    const current = recipeLines.find(
+      (l) => l.menuItemId === menuItemId && l.ingredientId === ingredientId
+    );
+    if (!current || parsed === current.quantity) return;
+    if (parsed !== null && parsed <= 0) {
+      setInsumosMsg({ ok: false, text: "Quantidade deve ser maior que zero (ou vazia)." });
+      setQtyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/recipe", "PUT", {
+        menuItemId,
+        ingredientId,
+        quantity: parsed,
+      });
+      const { propagation } = res.data as { propagation: PropagationDTO };
+      setRecipeLines((prev) =>
+        prev.map((l) =>
+          l.menuItemId === menuItemId && l.ingredientId === ingredientId
+            ? { ...l, quantity: parsed }
+            : l
+        )
+      );
+      setQtyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      const suffix = absorbPropagation(propagation);
+      if (suffix) setInsumosMsg({ ok: true, text: `Quantidade salva${suffix}.` });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar quantidade." });
+    }
+  }
+
+  async function addLineAction() {
+    if (!fichaItemId || !addLine.ingredientId) return;
+    setInsumosMsg(null);
+    try {
+      const quantity = parseNum4(addLine.quantity);
+      const res = await apiFetch("/api/pricing/recipe", "PUT", {
+        menuItemId: fichaItemId,
+        ingredientId: addLine.ingredientId,
+        quantity,
+      });
+      const { propagation } = res.data as { propagation: PropagationDTO };
+      setRecipeLines((prev) => [
+        ...prev.filter(
+          (l) => !(l.menuItemId === fichaItemId && l.ingredientId === addLine.ingredientId)
+        ),
+        { menuItemId: fichaItemId, ingredientId: addLine.ingredientId, quantity },
+      ]);
+      setIngredients((prev) =>
+        prev.map((i) => (i.id === addLine.ingredientId ? { ...i, usedIn: i.usedIn + 1 } : i))
+      );
+      setAddLine({ ingredientId: "", quantity: "" });
+      setInsumosMsg({ ok: true, text: `Insumo adicionado à ficha${absorbPropagation(propagation)}.` });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao adicionar." });
+    }
+  }
+
+  async function removeLineAction(menuItemId: string, ingredientId: string) {
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/recipe", "DELETE", { menuItemId, ingredientId });
+      const { propagation } = res.data as { propagation: PropagationDTO };
+      setRecipeLines((prev) =>
+        prev.filter((l) => !(l.menuItemId === menuItemId && l.ingredientId === ingredientId))
+      );
+      setIngredients((prev) =>
+        prev.map((i) => (i.id === ingredientId ? { ...i, usedIn: Math.max(0, i.usedIn - 1) } : i))
+      );
+      setInsumosMsg({ ok: true, text: `Insumo removido da ficha${absorbPropagation(propagation)}.` });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao remover da ficha." });
     }
   }
 
@@ -433,6 +752,7 @@ export function PrecificacaoClient({
   const tabs = [
     { key: "formula" as const, label: "Custos & Fórmula" },
     { key: "precos" as const, label: "Preços do cardápio", badge: pendingCount },
+    { key: "insumos" as const, label: "Insumos", badge: ingredientsWithoutCost },
     { key: "automacao" as const, label: "Automação" },
   ];
 
@@ -762,6 +1082,7 @@ export function PrecificacaoClient({
                       const draftValue = costDrafts[row.id] ?? numToInput(row.cost);
                       const isDirty = dirtyCosts.some((c) => c.id === row.id);
                       const applying = applyingIds.has(row.id);
+                      const fichaComplete = recipeStateByItem.get(row.id)?.complete === true;
                       return (
                         <tr key={row.id} className="border-b border-line last:border-b-0">
                           <td className="px-4 py-2.5">
@@ -776,13 +1097,23 @@ export function PrecificacaoClient({
                               min={0}
                               step="0.01"
                               placeholder="—"
+                              title={
+                                fichaComplete
+                                  ? "Custo calculado pela ficha de insumos — edite na aba Insumos"
+                                  : undefined
+                              }
                               className={`${INPUT_CLS} w-24 text-right tabular-nums ${isDirty ? "border-brand-400 ring-1 ring-brand-200" : ""}`}
                               value={draftValue}
                               onChange={(e) =>
                                 setCostDrafts((prev) => ({ ...prev, [row.id]: e.target.value }))
                               }
-                              disabled={!canEdit}
+                              disabled={!canEdit || fichaComplete}
                             />
+                            {fichaComplete && (
+                              <span className="mt-1 block text-[10.5px] font-semibold text-brand-600">
+                                🧾 pela ficha
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                             {fmtBRL(row.price)}
@@ -849,6 +1180,388 @@ export function PrecificacaoClient({
                 ))}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── ABA · Insumos ──────────────────────────────────────────────── */}
+      {tab === "insumos" && (
+        <div className="space-y-5">
+          {/* Catálogo de insumos */}
+          <Card className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-bold text-ink">Lista de insumos</h3>
+                <p className="mt-0.5 text-[12.5px] text-muted">
+                  Todos os ingredientes que o restaurante usa, importados do cardápio. Atualize o
+                  custo quando a compra subir — os produtos com ficha completa recalculam sozinhos
+                  e o dispositivo de preço entra em ação.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {canEdit && (
+                  <Button onClick={() => void runImport()} disabled={importing}>
+                    {importing ? "Importando…" : "↻ Importar do cardápio"}
+                  </Button>
+                )}
+                {canEdit && dirtyIngredients.length > 0 && (
+                  <Button
+                    variant="primary"
+                    onClick={() => void saveIngredients()}
+                    disabled={savingIngredients}
+                  >
+                    {savingIngredients ? "Salvando…" : `Salvar insumos (${dirtyIngredients.length})`}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {canEdit && (
+              <div className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-line2 p-3">
+                <div className="min-w-40 flex-1">
+                  <span className="mb-1 block text-[11.5px] font-semibold text-ink2">Novo insumo</span>
+                  <input
+                    type="text"
+                    placeholder="ex.: Salmão fresco"
+                    className={INPUT_CLS}
+                    value={newIng.name}
+                    onChange={(e) => setNewIng((p) => ({ ...p, name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <span className="mb-1 block text-[11.5px] font-semibold text-ink2">Unidade</span>
+                  <select
+                    className={INPUT_CLS}
+                    value={newIng.unit}
+                    onChange={(e) => setNewIng((p) => ({ ...p, unit: e.target.value }))}
+                  >
+                    {UNIT_OPTIONS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <span className="mb-1 block text-[11.5px] font-semibold text-ink2">
+                    Custo por unidade (R$)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    placeholder="0,00"
+                    className={`${INPUT_CLS} w-32`}
+                    value={newIng.cost}
+                    onChange={(e) => setNewIng((p) => ({ ...p, cost: e.target.value }))}
+                  />
+                </div>
+                <Button variant="secondary" onClick={() => void createIngredientAction()}>
+                  ＋ Cadastrar
+                </Button>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <input
+                type="search"
+                placeholder="Buscar insumo…"
+                className={`${INPUT_CLS} max-w-56`}
+                value={ingSearch}
+                onChange={(e) => setIngSearch(e.target.value)}
+              />
+            </div>
+
+            {ingredients.length === 0 ? (
+              <EmptyState
+                icon="🧺"
+                title="Nenhum insumo ainda"
+                sub="Use “Importar do cardápio” para puxar os ingredientes dos produtos, ou cadastre manualmente acima."
+              />
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[640px] text-[13.5px]">
+                  <thead>
+                    <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-[.05em] text-muted">
+                      <th className="px-3 py-2.5 font-semibold">Insumo</th>
+                      <th className="px-3 py-2.5 font-semibold">Unidade</th>
+                      <th className="px-3 py-2.5 text-right font-semibold">Custo por unidade (R$)</th>
+                      <th className="px-3 py-2.5 text-right font-semibold">Usado em</th>
+                      <th className="px-3 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleIngredients.map((ing) => {
+                      const costDraft = ingCostDrafts[ing.id] ?? numToInput(ing.costPerUnit);
+                      const unitDraft = ingUnitDrafts[ing.id] ?? ing.unit;
+                      const isDirty = dirtyIngredients.some((c) => c.id === ing.id);
+                      return (
+                        <tr key={ing.id} className="border-b border-line last:border-b-0">
+                          <td className="px-3 py-2 font-medium text-ink">
+                            {ing.name}
+                            {ing.costPerUnit === null && (
+                              <Pill tone="amber" className="ml-2">
+                                sem custo
+                              </Pill>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              className={`${INPUT_CLS} w-24`}
+                              value={unitDraft}
+                              onChange={(e) =>
+                                setIngUnitDrafts((prev) => ({ ...prev, [ing.id]: e.target.value }))
+                              }
+                              disabled={!canEdit}
+                            >
+                              {(UNIT_OPTIONS.includes(unitDraft)
+                                ? UNIT_OPTIONS
+                                : [unitDraft, ...UNIT_OPTIONS]
+                              ).map((u) => (
+                                <option key={u} value={u}>
+                                  {u}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.0001"
+                              placeholder="—"
+                              className={`${INPUT_CLS} w-28 text-right tabular-nums ${isDirty ? "border-brand-400 ring-1 ring-brand-200" : ""}`}
+                              value={costDraft}
+                              onChange={(e) =>
+                                setIngCostDrafts((prev) => ({ ...prev, [ing.id]: e.target.value }))
+                              }
+                              disabled={!canEdit}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right text-[12.5px] text-muted">
+                            {ing.usedIn} produto(s)
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {canEdit && (
+                              <button
+                                type="button"
+                                aria-label={`Remover ${ing.name}`}
+                                onClick={() =>
+                                  ing.usedIn > 0 ? setDeleteIngId(ing.id) : void doDeleteIngredient(ing.id)
+                                }
+                                className="rounded-lg px-2 py-1 text-[12px] text-muted hover:bg-red-50 hover:text-red-600"
+                              >
+                                🗑
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {insumosMsg &&
+              (insumosMsg.ok ? (
+                <InlineSuccess message={insumosMsg.text} />
+              ) : (
+                <InlineError message={insumosMsg.text} />
+              ))}
+          </Card>
+
+          {/* Ficha por produto */}
+          <Card className="p-5">
+            <h3 className="text-[15px] font-bold text-ink">Ficha por produto</h3>
+            <p className="mt-0.5 text-[12.5px] text-muted">
+              Informe a quantidade de cada insumo no produto. Ficha completa (todas as quantidades
+              + todos os custos) → o custo do produto passa a ser calculado automaticamente.
+              Enquanto estiver incompleta, vale o custo digitado na aba Preços.
+            </p>
+
+            <div className="mt-4 max-w-md">
+              <select
+                className={INPUT_CLS}
+                value={fichaItemId}
+                onChange={(e) => {
+                  setFichaItemId(e.target.value);
+                  setAddLine({ ingredientId: "", quantity: "" });
+                }}
+              >
+                <option value="">Escolha um produto…</option>
+                {categories.map((c) => (
+                  <optgroup key={c.id} label={c.name}>
+                    {items
+                      .filter((i) => i.categoryId === c.id)
+                      .map((i) => {
+                        const st = recipeStateByItem.get(i.id);
+                        return (
+                          <option key={i.id} value={i.id}>
+                            {i.name}
+                            {st ? ` (${st.lines} insumo${st.lines > 1 ? "s" : ""}${st.complete ? " · ficha completa" : ""})` : ""}
+                          </option>
+                        );
+                      })}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            {fichaItemId &&
+              (() => {
+                const lines = linesByItem.get(fichaItemId) ?? [];
+                const st = recipeStateByItem.get(fichaItemId);
+                const item = items.find((i) => i.id === fichaItemId);
+                const availableToAdd = ingredients.filter(
+                  (ing) => !lines.some((l) => l.ingredientId === ing.id)
+                );
+                return (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {st?.complete ? (
+                        <Pill tone="green">
+                          Ficha completa · custo calculado: {fmtBRL(st.cost ?? 0)}
+                        </Pill>
+                      ) : (
+                        <Pill tone="amber">
+                          Ficha incompleta — faltam quantidades ou custos de insumos
+                        </Pill>
+                      )}
+                      {item?.cost !== null && item?.cost !== undefined && (
+                        <span className="text-[12.5px] text-muted">
+                          custo atual do produto: {fmtBRL(item.cost)}
+                        </span>
+                      )}
+                    </div>
+
+                    {lines.length === 0 ? (
+                      <EmptyState
+                        title="Este produto ainda não tem insumos na ficha"
+                        sub="Adicione abaixo, ou preencha os ingredientes do produto no Cardápio e reimporte."
+                      />
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] text-[13.5px]">
+                          <thead>
+                            <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-[.05em] text-muted">
+                              <th className="px-3 py-2 font-semibold">Insumo</th>
+                              <th className="px-3 py-2 text-right font-semibold">Quantidade</th>
+                              <th className="px-3 py-2 text-right font-semibold">Custo da linha</th>
+                              <th className="px-3 py-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lines.map((line) => {
+                              const ing = ingredientById.get(line.ingredientId);
+                              if (!ing) return null;
+                              const key = `${line.menuItemId}:${line.ingredientId}`;
+                              const qtyValue = qtyDrafts[key] ?? numToInput(line.quantity);
+                              const lineCost =
+                                line.quantity !== null && ing.costPerUnit !== null
+                                  ? line.quantity * ing.costPerUnit
+                                  : null;
+                              return (
+                                <tr key={key} className="border-b border-line last:border-b-0">
+                                  <td className="px-3 py-2 font-medium text-ink">
+                                    {ing.name}
+                                    {ing.costPerUnit === null && (
+                                      <Pill tone="amber" className="ml-2">
+                                        sem custo
+                                      </Pill>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="0.0001"
+                                        placeholder="—"
+                                        className={`${INPUT_CLS} w-24 text-right tabular-nums`}
+                                        value={qtyValue}
+                                        onChange={(e) =>
+                                          setQtyDrafts((prev) => ({ ...prev, [key]: e.target.value }))
+                                        }
+                                        onBlur={(e) =>
+                                          void saveQty(line.menuItemId, line.ingredientId, e.target.value)
+                                        }
+                                        disabled={!canEdit}
+                                      />
+                                      <span className="w-10 text-left text-[12px] text-muted">{ing.unit}</span>
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right tabular-nums">
+                                    {lineCost === null ? (
+                                      <span className="text-muted">—</span>
+                                    ) : (
+                                      fmtBRL(lineCost)
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    {canEdit && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Remover ${ing.name} da ficha`}
+                                        onClick={() =>
+                                          void removeLineAction(line.menuItemId, line.ingredientId)
+                                        }
+                                        className="rounded-lg px-2 py-1 text-[12px] text-muted hover:bg-red-50 hover:text-red-600"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {canEdit && availableToAdd.length > 0 && (
+                      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-line2 p-3">
+                        <div className="min-w-44 flex-1">
+                          <span className="mb-1 block text-[11.5px] font-semibold text-ink2">
+                            Adicionar insumo à ficha
+                          </span>
+                          <select
+                            className={INPUT_CLS}
+                            value={addLine.ingredientId}
+                            onChange={(e) => setAddLine((p) => ({ ...p, ingredientId: e.target.value }))}
+                          >
+                            <option value="">Escolha…</option>
+                            {availableToAdd.map((ing) => (
+                              <option key={ing.id} value={ing.id}>
+                                {ing.name} ({ing.unit})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <span className="mb-1 block text-[11.5px] font-semibold text-ink2">Quantidade</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.0001"
+                            placeholder="opcional"
+                            className={`${INPUT_CLS} w-28`}
+                            value={addLine.quantity}
+                            onChange={(e) => setAddLine((p) => ({ ...p, quantity: e.target.value }))}
+                          />
+                        </div>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void addLineAction()}
+                          disabled={!addLine.ingredientId}
+                        >
+                          ＋ Adicionar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+          </Card>
         </div>
       )}
 
@@ -1048,6 +1761,29 @@ export function PrecificacaoClient({
                 }}
               >
                 Aplicar todos
+              </Button>
+            </>
+          }
+        />
+      )}
+
+      {deleteIngId && (
+        <ConfirmDialog
+          tone="danger"
+          icon={<span>🗑</span>}
+          title={`Remover "${ingredientById.get(deleteIngId)?.name ?? "insumo"}"?`}
+          subtitle={`Este insumo está na ficha de ${ingredientById.get(deleteIngId)?.usedIn ?? 0} produto(s). As linhas dessas fichas serão removidas — os custos dos produtos não mudam sozinhos por isso, a menos que a ficha continue completa.`}
+          footer={
+            <>
+              <Button className="flex-1" onClick={() => setDeleteIngId(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                variant="primary"
+                onClick={() => void doDeleteIngredient(deleteIngId)}
+              >
+                Remover
               </Button>
             </>
           }

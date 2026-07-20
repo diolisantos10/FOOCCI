@@ -180,7 +180,9 @@ export interface UpdateCostsResult {
 export async function updateCostsWithReprice(
   restaurantId: string,
   changes: Array<{ id: string; cost: number | null }>,
-  userId: string | null
+  userId: string | null,
+  // COST_EDIT = lojista typed the cost; RECIPE = recomputed from the ficha de insumos
+  costSource: Extract<PriceChangeSource, "COST_EDIT" | "RECIPE"> = "COST_EDIT"
 ): Promise<ServiceResult<UpdateCostsResult>> {
   const ids = changes.map((c) => c.id);
   const items = await prisma.menuItem.findMany({
@@ -216,7 +218,7 @@ export async function updateCostsWithReprice(
           newPrice: item.price,
           oldCost: item.cost,
           newCost: change.cost === null ? null : new Decimal(change.cost.toFixed(2)),
-          source: "COST_EDIT",
+          source: costSource,
           changedByUserId: userId,
         },
       })

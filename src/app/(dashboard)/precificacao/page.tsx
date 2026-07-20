@@ -4,11 +4,14 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateConfig } from "@/services/menu/RepriceService";
+import { importFromMenu } from "@/services/menu/RecipeCostService";
 import {
   PrecificacaoClient,
   type PricingConfigDTO,
   type PricingItemDTO,
   type PriceLogDTO,
+  type IngredientDTO,
+  type RecipeLineDTO,
 } from "./PrecificacaoClient";
 
 export const metadata = { title: "CMV & Precificação — Foocci" };
@@ -20,7 +23,16 @@ export default async function PrecificacaoPage() {
   const restaurantId = session.user.restaurantId;
   const canEdit = ["OWNER", "MANAGER"].includes(session.user.role);
 
-  const [config, categories, logs] = await Promise.all([
+  // First visit: seed the Insumos catalog from the cardápio's ingredients
+  // text automatically (idempotent — only runs while the catalog is empty).
+  const ingredientCount = await prisma.ingredient.count({ where: { restaurantId } });
+  if (ingredientCount === 0) {
+    await importFromMenu(restaurantId).catch((err) =>
+      console.error("[precificacao] auto-import de insumos falhou", err)
+    );
+  }
+
+  const [config, categories, logs, ingredients, recipeLines] = await Promise.all([
     getOrCreateConfig(restaurantId),
     prisma.menuCategory.findMany({
       where: { restaurantId, isActive: true },
@@ -39,6 +51,15 @@ export default async function PrecificacaoPage() {
       where: { restaurantId },
       orderBy: { createdAt: "desc" },
       take: 50,
+    }),
+    prisma.ingredient.findMany({
+      where: { restaurantId },
+      orderBy: { name: "asc" },
+      include: { _count: { select: { recipeLines: true } } },
+    }),
+    prisma.recipeLine.findMany({
+      where: { menuItem: { category: { restaurantId } } },
+      select: { menuItemId: true, ingredientId: true, quantity: true },
     }),
   ]);
 
@@ -82,6 +103,20 @@ export default async function PrecificacaoPage() {
     createdAt: log.createdAt.toISOString(),
   }));
 
+  const initialIngredients: IngredientDTO[] = ingredients.map((i) => ({
+    id: i.id,
+    name: i.name,
+    unit: i.unit,
+    costPerUnit: i.costPerUnit === null ? null : Number(i.costPerUnit),
+    usedIn: i._count.recipeLines,
+  }));
+
+  const initialRecipeLines: RecipeLineDTO[] = recipeLines.map((l) => ({
+    menuItemId: l.menuItemId,
+    ingredientId: l.ingredientId,
+    quantity: l.quantity === null ? null : Number(l.quantity),
+  }));
+
   return (
     <>
       <TopBar title="CMV & Precificação" />
@@ -89,6 +124,8 @@ export default async function PrecificacaoPage() {
         initialConfig={initialConfig}
         initialItems={initialItems}
         initialLogs={initialLogs}
+        initialIngredients={initialIngredients}
+        initialRecipeLines={initialRecipeLines}
         canEdit={canEdit}
       />
     </>

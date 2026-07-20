@@ -26,6 +26,22 @@
    `prisma migrate diff`) + 23 checks E2E em Postgres real (Sugerir não toca
    preço; Automático aplica +6% e retém −22%/+45% na trava; auditoria; tenant).
 
+## ✅ Entregue (2ª leva — 20/07/2026)
+
+5. **Aba Insumos** em `/precificacao` — catálogo de ingredientes por restaurante:
+   - **Importação automática do cardápio** na primeira visita (parser do campo
+     `ingredients` dos produtos: vírgulas, "e"/"com", quebras; Title Case;
+     dedupe entre produtos) + botão "↻ Importar do cardápio" (idempotente).
+   - Custo por unidade (4 casas — R$/g, R$/ml), unidade, cadastro manual,
+     exclusão com confirmação quando em uso.
+   - **Ficha por produto**: quantidades por insumo; ficha completa → custo do
+     produto **calculado e propagado automaticamente** (auditoria `RECIPE`),
+     entrando direto no dispositivo Sugerir/Automático + trava. Ficha
+     incompleta → vale o custo digitado (aba Preços mostra "🧾 pela ficha" e
+     bloqueia edição manual quando a ficha assume).
+   - Modelos `Ingredient` + `RecipeLine` (migration aditiva
+     `20260719200000_ingredients_recipe`); 22 checks E2E em Postgres real.
+
 ## 🔜 Próximas fases (ordem sugerida)
 
 - **P1 — Corrigir importador de planilhas** *(pequeno)* — hoje
@@ -50,10 +66,10 @@
   estourou a faixa saudável → mensagem proativa.
 - **P7 — Custo por variação** *(pequeno/médio)* — hoje o custo é do item base;
   adicionar `cost` em `MenuItemVariant` com herança (mesmo padrão dos preços).
-- **P8 — Ficha técnica completa** *(grande)* — cadastro de insumos, quantidades
-  e rendimento por receita → custo do prato calculado automaticamente; abre
-  caminho para controle de estoque. Substitui o custo digitado sem retrabalho
-  (a fundação da v1 permanece).
+- **P8 — Ficha técnica completa** *(médio — v1 já entregue na 2ª leva)* —
+  evoluções restantes: rendimento/perda por receita (fator de correção),
+  preço por embalagem de compra (ex.: caixa 2 kg → custo/g automático),
+  histórico de custo do insumo, e integração futura com estoque.
 
 ## 📌 Decisões tomadas (aprovadas pelo dono em 19/07 — não rediscutir)
 

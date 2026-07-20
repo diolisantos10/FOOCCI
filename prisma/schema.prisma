@@ -110,6 +110,7 @@ model Restaurant {
   waMenuLinks            WaMenuLink[]
   pricingConfig          RestaurantPricingConfig?
   priceChangeLogs        PriceChangeLog[]
+  ingredients            Ingredient[]
 
   @@map("restaurants")
 }
@@ -344,6 +345,7 @@ model MenuItem {
   optionGroups     OptionGroup[]
   placements       MenuItemPlacement[]
   imageEnhancement MenuItemImageEnhancement?
+  recipeLines      RecipeLine[]
 
   @@index([categoryId])
   @@map("menu_items")
@@ -416,6 +418,48 @@ enum PriceChangeSource {
   APPLIED   // lojista applied a suggested price (individual or bulk)
   AUTO      // applied by AutoRepriceMode.AUTO after a cost/assumption change
   COST_EDIT // cost updated (price untouched) — kept for a complete audit trail
+  RECIPE    // cost recomputed from the ingredient ficha (recipe lines)
+}
+
+// Catálogo de insumos do restaurante (aba Insumos em /precificacao).
+// Seeded automatically from MenuItem.ingredients free text on first visit.
+model Ingredient {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  unit         String   @default("un") // un, g, kg, ml, L, fatia, porção…
+  costPerUnit  Decimal? @db.Decimal(12, 4) // custo por unidade; null = não informado
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant  Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  recipeLines RecipeLine[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+  @@map("ingredients")
+}
+
+// Ficha técnica: quanto de cada insumo entra em cada produto.
+// quantity NULL = link importado do cardápio ainda sem quantidade — não entra
+// na conta. Quando TODAS as linhas de um produto têm quantity + costPerUnit,
+// o custo do produto passa a ser calculado (source RECIPE) e propaga para o
+// dispositivo de reprecificação.
+model RecipeLine {
+  id           String   @id @default(cuid())
+  menuItemId   String
+  ingredientId String
+  quantity     Decimal? @db.Decimal(12, 4) // na unidade do ingrediente
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, ingredientId])
+  @@index([ingredientId])
+  @@map("recipe_lines")
 }
 
 model RestaurantPricingConfig {
