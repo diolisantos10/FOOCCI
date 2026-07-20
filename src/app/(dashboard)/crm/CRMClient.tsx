@@ -18,7 +18,7 @@ import { parseMessagePool, phraseKey, MAX_CUSTOM_PHRASES } from "@/services/crm/
 const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
 const isFixedCampaign = (templateId: string | null | undefined): boolean =>
   !!templateId && READY_MADE_ID_SET.has(templateId);
-import { ReadyMadeCampaignsSection, ReadyMadeConfigModal, type ReadyMadeState } from "./ReadyMadeCampaignsSection";
+import { ReadyMadeCampaignsSection, type ReadyMadeState } from "./ReadyMadeCampaignsSection";
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
@@ -4177,7 +4177,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Full ready-made state for carrinho-abandonado, so its "Gerenciar" opens the SAME
   // modern config modal the other campaigns use (message + reward + on/off).
   const [cartRecoveryItem, setCartRecoveryItem] = useState<ReadyMadeState | null>(null);
-  const [cartConfigOpen, setCartConfigOpen] = useState(false);
   const [cartBusy, setCartBusy] = useState(false);
   // Per-campaign coupon counts (campaignId → { sent, used }) for the Ativas table.
   const [couponCounts, setCouponCounts] = useState<Record<string, { sent: number; used: number }>>({});
@@ -4306,20 +4305,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       }
     }
     if (campaignId) openManage(campaignId, "message");
-  }
-
-  // Save cart recovery config (message + reward) — feeds the modern config modal.
-  async function handleCartRecoverySave(overrides: Record<string, unknown>) {
-    setCartBusy(true);
-    try {
-      await fetch("/api/crm/ready-made/carrinho-abandonado", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update", overrides }),
-      });
-      setReadyMadeReload((n) => n + 1);
-    } finally {
-      setCartBusy(false);
-    }
   }
 
   async function handleCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
@@ -4688,18 +4673,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onClose={() => { setDetailId(null); setReadyMadeReload((n) => n + 1); }}
           onCampaignAction={handleCampaignAction}
           onCampaignUpdated={handleCampaignFieldsUpdated}
-        />
-      )}
-
-      {/* Cart recovery config — the SAME modern modal the other campaigns use,
-          opened from the "Gerenciar" button in the Ativas table. */}
-      {cartConfigOpen && cartRecoveryItem && (
-        <ReadyMadeConfigModal
-          c={cartRecoveryItem}
-          busy={cartBusy}
-          onClose={() => setCartConfigOpen(false)}
-          onToggle={() => { void handleCartRecoveryToggle(); }}
-          onSave={handleCartRecoverySave}
         />
       )}
 
