@@ -105,8 +105,18 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
             where: { id: businessId },
             select: {
               name: true,
+              address: true,
               paymentSettings: { select: { acceptPix: true, acceptCash: true, acceptCard: true, acceptLink: true } },
-              deliveryConfig: { select: { enabled: true, pickupEnabled: true } },
+              deliveryConfig: {
+                select: {
+                  enabled: true,
+                  pickupEnabled: true,
+                  fee: true,
+                  areaDescription: true,
+                  minOrderValue: true,
+                  geoRadiusKm: true,
+                },
+              },
               brandConfig: { select: { tone: true } },
             },
           })
@@ -223,6 +233,30 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
     if (!restaurant.deliveryConfig) missingContext.push("delivery/retirada");
     if (!businessHours.length) missingContext.push("horários de funcionamento detalhados");
 
+    // ── Entrega: taxa, área de cobertura, raio e pedido mínimo (verdade real p/
+    // aterrar "qual a taxa?" e "vocês entregam em X?" — sem isto o agente chuta). ──
+    const dc = restaurant.deliveryConfig;
+    const entrega = dc
+      ? {
+          disponivel: dc.enabled,
+          retirada: dc.pickupEnabled,
+          ...(dc.fee != null ? { taxa: money(dc.fee) } : {}),
+          ...(dc.areaDescription ? { area: dc.areaDescription.slice(0, MAX_ANSWER_CHARS) } : {}),
+          ...(dc.geoRadiusKm != null ? { raioKm: dc.geoRadiusKm } : {}),
+          ...(dc.minOrderValue != null ? { pedidoMinimo: money(dc.minOrderValue) } : {}),
+        }
+      : undefined;
+    // Se a cobertura não está cadastrada, sinaliza — a regra do prompt faz o agente
+    // pedir o CEP em vez de afirmar. Se está, ele responde com a verdade.
+    if (dc?.enabled && !dc.areaDescription && dc.geoRadiusKm == null) {
+      missingContext.push("área de cobertura de entrega não cadastrada — confirmar por CEP, nunca afirmar cidade/bairro");
+    }
+    if (dc?.enabled && dc.fee == null) missingContext.push("taxa de entrega não cadastrada");
+
+    // ── Local: o endereço PRÓPRIO do restaurante (não é PII de cliente) ─────────
+    const local = restaurant.address ? { endereco: restaurant.address.slice(0, MAX_ANSWER_CHARS) } : undefined;
+    if (!local) missingContext.push("endereço do restaurante não cadastrado");
+
     // ── Policies: identity + the curated, human-approved Q&A (highest-quality truth).
     // Com queryHint, os itens relevantes à pergunta REAL sobem (embeddings quando
     // configurados; keyword como fallback determinístico).
@@ -264,6 +298,8 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         ...(prices ? { prices } : {}),
         payments,
         hours,
+        ...(entrega ? { entrega } : {}),
+        ...(local ? { local } : {}),
         policies,
         materials: [{ librarySources: materialCount }],
         evidence: [{ approved: approvedEvidenceCount }],
