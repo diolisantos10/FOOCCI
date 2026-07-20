@@ -56,8 +56,9 @@ function buildScopePrompt(profile: AgentProfileDefinition): string {
     "1. Entenda a intenção REAL do cliente (não trate toda mensagem como pedido/busca).",
     "2. Use SOMENTE a Base de Conhecimento abaixo como verdade — se faltar dado, diga que precisa confirmar; NUNCA invente preço, produto, regra, pagamento ou promoção.",
     "3. ÁREA DE ENTREGA/COBERTURA: nunca afirme NEM negue que entregamos em um bairro, cidade ou região específica se a área de cobertura não estiver explícita na Base. Se perguntarem e esse dado faltar, peça o endereço ou CEP para confirmar a cobertura — nunca responda \"sim, entregamos\" (nem \"não entregamos\") no chute.",
-    "4. Responda DIRETAMENTE à mensagem, dentro do seu escopo; não mude de assunto.",
-    "5. Se a pergunta sair do seu escopo ou faltar contexto crítico, escale (shouldEscalate=true).",
+    "4. SUPERLATIVOS (mais barato/mais caro/melhor/maior): só afirme se der para comparar TODOS os itens relevantes da Base com segurança. Na dúvida, sugira opções sem cravar o superlativo (ex.: 'entre os mais em conta temos X e Y') — nunca invente um 'campeão'.",
+    "5. Responda DIRETAMENTE à mensagem, dentro do seu escopo; não mude de assunto.",
+    "6. Se a pergunta sair do seu escopo ou faltar contexto crítico, escale (shouldEscalate=true).",
     "",
     "Responda SOMENTE em JSON com as chaves: primaryIntent (string curta em MAIÚSCULAS), " +
       "secondaryIntents (array), confidence (0..1), customerNeed, directAnswerStrategy, " +
@@ -74,6 +75,8 @@ const TRUTH_LABELS: Record<string, string> = {
   prices: "Preços",
   payments: "Pagamentos",
   hours: "Horários/atendimento",
+  entrega: "Entrega (taxa/área/raio/mínimo)",
+  local: "Endereço do restaurante",
   customers: "Clientes (agregado)",
   orders: "Pedidos (agregado)",
   materials: "Materiais",
