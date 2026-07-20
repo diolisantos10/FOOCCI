@@ -70,6 +70,7 @@ export async function generatePix(input: GeneratePixInput): Promise<WaPaymentInf
   const { createPixPayment } = await import("@/lib/mercadopago");
   const { decrypt }          = await import("@/lib/crypto");
   const { getPublicSiteUrl } = await import("@/lib/public-url");
+  const { paymentDescription } = await import("@/lib/payment-description");
 
   const mpCfg = await prisma.integrationConfig.findUnique({
     where:  { restaurantId_provider: { restaurantId: input.restaurantId, provider: "mercadopago" } },
@@ -91,10 +92,13 @@ export async function generatePix(input: GeneratePixInput): Promise<WaPaymentInf
   }
 
   const appUrl = getPublicSiteUrl();
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: input.restaurantId }, select: { name: true },
+  });
   const pix = await createPixPayment(mpToken, {
     orderId:         input.orderId,
     amount:          input.amount,
-    description:     input.description ?? `Pedido WhatsApp – ${input.restaurantId}`,
+    description:     input.description ?? paymentDescription(restaurant?.name),
     notificationUrl: appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
   });
 

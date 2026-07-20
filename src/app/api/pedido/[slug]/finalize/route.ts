@@ -25,6 +25,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createPixPayment } from "@/lib/mercadopago";
 import { resolveCardProvider, resolveCardOperator } from "@/services/payment/PaymentRouter";
+import { paymentDescription } from "@/lib/payment-description";
 import { createPaymentLink } from "@/lib/stone";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -149,6 +150,7 @@ export async function POST(
     where:  { slug },
     select: {
       id: true,
+      name: true,
       storeProfile: { select: { latitude: true, longitude: true } },
     },
   });
@@ -639,7 +641,7 @@ export async function POST(
         const init = await cardProvider.createCardCheckout({
           orderId,
           amount:      finalTotal,
-          description: `Pedido – ${restaurantId}`,
+          description: paymentDescription(restaurant.name),
         });
         await prisma.payment.create({
           data: {
@@ -707,7 +709,7 @@ export async function POST(
         const pixResult = await createPixPayment(mpToken, {
           orderId,
           amount:          finalTotal,
-          description:     `Pedido – ${restaurantId}`,
+          description:     paymentDescription(restaurant.name),
           notificationUrl: appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
         });
         providerReference  = pixResult.paymentId;
@@ -726,7 +728,7 @@ export async function POST(
         const stoneResult = await createPaymentLink({
           orderId:          orderId,
           amount:           finalTotal,
-          description:      `Pedido – ${restaurantId}`,
+          description:      paymentDescription(restaurant.name),
           expiresInMinutes: 30,
         });
         providerReference = stoneResult.providerReference;

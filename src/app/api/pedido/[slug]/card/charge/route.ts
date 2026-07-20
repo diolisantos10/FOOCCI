@@ -16,6 +16,7 @@ import { createCardPayment } from "@/lib/mercadopago";
 import { getMercadoPagoCredentials } from "@/services/payment/paymentCredentials";
 import { confirmMpPayment } from "@/app/api/payments/mercadopago/webhook/route";
 import { getPublicSiteUrl } from "@/lib/public-url";
+import { paymentDescription } from "@/lib/payment-description";
 
 const bodySchema = z.object({
   orderId:         z.string().min(1),
@@ -40,7 +41,7 @@ export async function POST(
 
   const payment = await prisma.payment.findUnique({
     where:   { orderId },
-    include: { order: { select: { id: true, restaurantId: true, status: true } } },
+    include: { order: { select: { id: true, restaurantId: true, status: true, restaurant: { select: { name: true } } } } },
   });
   if (!payment || !payment.order || payment.providerName !== "mercadopago") {
     return NextResponse.json({ error: "Pagamento não encontrado." }, { status: 404 });
@@ -57,7 +58,7 @@ export async function POST(
     result = await createCardPayment(creds.accessToken, {
       orderId,
       amount:          Number(payment.amount),
-      description:     `Pedido – ${payment.order.restaurantId}`,
+      description:     paymentDescription(payment.order.restaurant?.name),
       token,
       installments,
       paymentMethodId,
