@@ -48,35 +48,24 @@ describe("createCardPayment (MP transparent card)", () => {
   });
 });
 
-describe("resolveCardOperator", () => {
+describe("resolveCardOperator (card = SumUp; MP is Pix-only)", () => {
   beforeEach(() => { vi.resetModules(); });
 
-  it("prefers Mercado Pago when it has a Public Key", async () => {
+  it("routes card to SumUp even when MP has a Public Key", async () => {
     vi.doMock("@/services/payment/paymentCredentials", () => ({
       getMercadoPagoCredentials: async () => ({ accessToken: "T", publicKey: "APP_USR-pk" }),
-      getSumUpCredentials: async () => ({ apiKey: "sup_sk", merchantCode: "MC" }),
+      getSumUpCredentials: async () => ({ apiKey: "sup_sk", merchantCode: "MC", maxInstallments: 6 }),
     }));
     const { resolveCardOperator, isCardEnabled } = await import("@/services/payment/PaymentRouter");
     const op = await resolveCardOperator("r1");
-    expect(op?.provider).toBe("mercadopago");
-    if (op?.provider === "mercadopago") expect(op.publicKey).toBe("APP_USR-pk");
+    expect(op?.provider).toBe("sumup");
+    if (op?.provider === "sumup") expect(op.maxInstallments).toBe(6);
     expect(await isCardEnabled("r1")).toBe(true);
   });
 
-  it("falls back to SumUp when MP has no Public Key", async () => {
+  it("card is disabled when SumUp is not configured (MP alone doesn't enable card)", async () => {
     vi.doMock("@/services/payment/paymentCredentials", () => ({
-      getMercadoPagoCredentials: async () => ({ accessToken: "T" }), // Pix-only, no publicKey
-      getSumUpCredentials: async () => ({ apiKey: "sup_sk", merchantCode: "MC", maxInstallments: 6 }),
-    }));
-    const { resolveCardOperator } = await import("@/services/payment/PaymentRouter");
-    const op = await resolveCardOperator("r1");
-    expect(op?.provider).toBe("sumup");
-    if (op?.provider === "sumup") expect(op.maxInstallments).toBe(6);
-  });
-
-  it("returns null / disabled when neither is configured", async () => {
-    vi.doMock("@/services/payment/paymentCredentials", () => ({
-      getMercadoPagoCredentials: async () => null,
+      getMercadoPagoCredentials: async () => ({ accessToken: "T", publicKey: "APP_USR-pk" }),
       getSumUpCredentials: async () => null,
     }));
     const { resolveCardOperator, isCardEnabled } = await import("@/services/payment/PaymentRouter");

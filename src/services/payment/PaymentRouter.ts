@@ -53,8 +53,8 @@ export type CardOperatorInfo =
 export async function resolveCardOperator(
   restaurantId: string
 ): Promise<CardOperatorInfo | null> {
-  const mp = await getMercadoPagoCredentials(restaurantId);
-  if (mp?.publicKey) return { provider: "mercadopago", publicKey: mp.publicKey };
+  // Card runs on SumUp in this operation. Mercado Pago is Pix-only. (The MP card
+  // token flow stays in the codebase, dormant, in case card is repointed to MP.)
   const su = await getSumUpCredentials(restaurantId);
   if (su) return { provider: "sumup", merchantCode: su.merchantCode, maxInstallments: su.maxInstallments ?? 1 };
   return null;

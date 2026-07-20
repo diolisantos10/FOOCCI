@@ -33,10 +33,8 @@ export type StoneConfigInput = z.infer<typeof stoneConfigSchema>;
 
 export const mercadopagoConfigSchema = z.object({
   environment:  z.enum(["test", "production"]),
-  accessToken:  z.string(), // secret — empty = keep existing
-  // Public Key: client-safe key the MP SDK uses to tokenize the card for the
-  // transparent card checkout. Optional (Pix works without it). Empty = keep.
-  publicKey:    z.string().optional().default(""),
+  accessToken:  z.string(), // empty = keep existing
+  // Mercado Pago is Pix-only in this operation — card runs on SumUp.
 });
 
 export type MercadoPagoConfigInput = z.infer<typeof mercadopagoConfigSchema>;
