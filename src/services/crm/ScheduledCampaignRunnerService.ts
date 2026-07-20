@@ -33,6 +33,7 @@ import {
   readPhraseMetaTemplates,
   pickPhrase,
   phraseKey,
+  withCouponLine,
   type PoolPhrase,
 } from "./crmMessagePool";
 import { MetaTemplateService } from "@/services/whatsapp/MetaTemplateService";
@@ -1158,20 +1159,27 @@ export class ScheduledCampaignRunnerService {
     // Owner-selected ready-made variants + their custom phrases; empty pool falls
     // back to campaign.message (legacy single-phrase behavior). Each send draws one
     // at random and records its variantKey so per-phrase conversion is measurable.
+    // A campaign that grants a coupon must SAY so — phrases without {cupom} get the
+    // prize line appended (withCouponLine). Identity/stats stay on the base text.
+    const hasCoupon = !!runOpts.coupon;
     const activePhrases = resolveActivePhrases(
       { templateId: campaign.templateId, message: campaign.message },
       parseMessagePool(campaign.scheduleConfig),
+      { hasCoupon },
     );
-    const fallbackPhrase: PoolPhrase = { key: phraseKey(campaign.message), text: campaign.message, source: "fallback" };
+    const fallbackPhrase: PoolPhrase = {
+      key: phraseKey(campaign.message), text: withCouponLine(campaign.message, hasCoupon), source: "fallback",
+    };
     // On the Meta path, marketing to cold audiences REQUIRES an approved template —
-    // rotation is limited to phrases whose per-phrase template is APPROVED. With
-    // none approved, the legacy single-template path (campaign.message) is used.
+    // rotation is limited to phrases whose per-phrase template is APPROVED **for the
+    // current text** (a coupon toggle changes the text; a stale template would send
+    // the old wording). With none eligible, the legacy single-template path is used.
     const phraseTemplates = readPhraseMetaTemplates(campaign.audienceConfig);
     let metaPhrases: PoolPhrase[] = [];
     if (metaProvider && activePhrases.length > 0) {
       const checks = await Promise.all(activePhrases.map(async (p) => {
         const tpl = phraseTemplates[p.key];
-        if (!tpl?.name) return null;
+        if (!tpl?.name || tpl.submittedMessage !== p.text) return null;
         const found = await MetaTemplateService.findApproved(campaign.restaurantId, {
           templateName: tpl.name, languageCode: tpl.language,
         }).catch(() => null);

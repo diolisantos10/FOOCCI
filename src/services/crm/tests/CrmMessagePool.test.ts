@@ -6,6 +6,8 @@ import {
   pickPhrase,
   phraseKey,
   readPhraseMetaTemplates,
+  withCouponLine,
+  COUPON_SUFFIX,
   MAX_CUSTOM_PHRASES,
 } from "../crmMessagePool";
 import { getReadyMadeMessageVariants } from "../readyMadeCampaigns";
@@ -75,6 +77,31 @@ describe("crmMessagePool — pick & meta templates", () => {
     expect(pickPhrase(phrases, () => 0)?.text).toBe(variants[0]);
     expect(pickPhrase(phrases, () => 0.99)?.text).toBe(variants[2]);
     expect(pickPhrase([], () => 0)).toBeNull();
+  });
+
+  it("appends the prize line when the campaign has a coupon and the phrase lacks {cupom}", () => {
+    const plain = "Oi {nome}, peça pelo cardápio: {link_cardapio}";
+    expect(withCouponLine(plain, false)).toBe(plain);
+    expect(withCouponLine(plain, true)).toBe(`${plain}${COUPON_SUFFIX}`);
+    // Phrase that already announces the coupon is left alone.
+    const withCupom = "Você ganhou {cupom}! Use até {validade}.";
+    expect(withCouponLine(withCupom, true)).toBe(withCupom);
+    // The suffix itself frames it as a prize with validity, and never ends on a variable.
+    expect(COUPON_SUFFIX).toContain("você ganhou {cupom}");
+    expect(COUPON_SUFFIX).toContain("{validade}");
+    expect(/\{[a-z_]+\}\s*$/.test(COUPON_SUFFIX)).toBe(false);
+  });
+
+  it("keeps phrase identity on the BASE text when the coupon line is applied", () => {
+    // quente-esfriando phrases don't mention {cupom} — the prize line applies.
+    const noCupomVariants = getReadyMadeMessageVariants("quente-esfriando");
+    const pool = parseMessagePool({ messagePool: { selected: [phraseKey(noCupomVariants[0])] } });
+    const campaign = { templateId: "quente-esfriando", message: noCupomVariants[0] };
+    const withoutCoupon = resolveActivePhrases(campaign, pool, { hasCoupon: false });
+    const withCoupon    = resolveActivePhrases(campaign, pool, { hasCoupon: true });
+    expect(withCoupon[0].key).toBe(withoutCoupon[0].key);       // stats/selection stable
+    expect(withCoupon[0].text).not.toBe(withoutCoupon[0].text); // delivered text differs
+    expect(withCoupon[0].text.endsWith("🧡")).toBe(true);
   });
 
   it("reads per-phrase meta templates defensively", () => {

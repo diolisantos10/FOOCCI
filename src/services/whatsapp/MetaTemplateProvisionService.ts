@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { getReadyMadeCampaign, type ReadyMadeCoupon } from "@/services/crm/readyMadeCampaigns";
 import {
   parseMessagePool, listPoolCandidates, readPhraseMetaTemplates,
+  phraseKey as phraseKeyOf,
 } from "@/services/crm/crmMessagePool";
 import { couponMessageLabel, couponValidadeLabel } from "@/services/crm/renderCrmMessage";
 import { buildInstagramUrl } from "@/lib/social";
@@ -225,14 +226,16 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
   });
 
   // Work list: campaigns with a mappable config AND at least one candidate phrase
-  // missing its template mapping. Everything else skips without any Graph call.
+  // whose mapping is missing OR stale (text changed — e.g. the coupon prize line
+  // was toggled). Everything else skips without any Graph call.
   const work = campaigns.flatMap((campaign) => {
     const config = campaign.templateId ? TEMPLATE_CONFIG[campaign.templateId] : undefined;
     if (!config) return [];
-    const phrases = listPoolCandidates(campaign.templateId, parseMessagePool(campaign.scheduleConfig));
+    const hasCoupon = !!(campaign.scheduleConfig as { coupon?: unknown } | null)?.coupon;
+    const phrases = listPoolCandidates(campaign.templateId, parseMessagePool(campaign.scheduleConfig), { hasCoupon });
     if (phrases.length === 0) return [];
     const mapped = readPhraseMetaTemplates(campaign.audienceConfig);
-    if (phrases.every((p) => !!mapped[p.key])) return [];
+    if (phrases.every((p) => mapped[p.key]?.submittedMessage === p.text)) return [];
     return [{ campaign, config, phrases }];
   });
   if (work.length === 0) return { ok: true, created: 0, existed: 0, failed: 0, items: [] };
@@ -257,7 +260,10 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
     const metaTemplates: Record<string, { name: string; language: string; params: string[]; submittedMessage: string }> = {};
 
     for (const phrase of phrases) {
-      const name  = poolTemplateName(config.name, phrase.key);
+      // Name derives from the EFFECTIVE text (coupon line included), so the with-
+      // coupon and without-coupon versions of a phrase are DIFFERENT templates on
+      // Meta — toggling the coupon back reuses the already-approved original.
+      const name  = poolTemplateName(config.name, phraseKeyOf(phrase.text));
       const built = buildMetaTemplate({
         name, message: phrase.text, category: config.category, language: LANGUAGE,
         footer: config.footer ? OPT_OUT_FOOTER : null, examples,

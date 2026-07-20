@@ -45,6 +45,28 @@ export function phraseKey(text: string): string {
   return generateMessageFingerprint(text);
 }
 
+/**
+ * Prize line auto-appended when the campaign grants a coupon but the phrase never
+ * mentions it — the customer must ALWAYS be told what they won ("você ganhou"),
+ * with validity and channel. Ends on text (Meta rejects trailing variables).
+ */
+export const COUPON_SUFFIX =
+  "\n\n🎁 E tem presente: você ganhou {cupom}! Válido até {validade} — é só usar no pedido pelo cardápio. 🧡";
+
+const CUPOM_VAR_RE = /\{\{?\s*cupom\s*\}?\}/i;
+
+/**
+ * The text actually sent for a phrase: unchanged when the campaign has no coupon
+ * or the phrase already announces it; otherwise the prize line is appended.
+ * Identity (phraseKey/selection/stats) always stays on the BASE text, so turning
+ * a coupon on/off never resets a phrase's stats or selection.
+ */
+export function withCouponLine(text: string, hasCoupon: boolean): string {
+  const base = (text ?? "").trim();
+  if (!hasCoupon || !base || CUPOM_VAR_RE.test(base)) return base;
+  return `${base}${COUPON_SUFFIX}`;
+}
+
 /** Reads scheduleConfig.messagePool defensively (JSON from the DB). */
 export function parseMessagePool(scheduleConfig: unknown): MessagePoolConfig | null {
   if (!scheduleConfig || typeof scheduleConfig !== "object") return null;
@@ -67,24 +89,30 @@ export function parseMessagePool(scheduleConfig: unknown): MessagePoolConfig | n
   return { selected, custom };
 }
 
-/** Every phrase the owner COULD enable: catalog variants + their custom ones. */
+/**
+ * Every phrase the owner COULD enable: catalog variants + their custom ones.
+ * `opts.hasCoupon` appends the prize line to each text (key stays on the base
+ * text — see withCouponLine).
+ */
 export function listPoolCandidates(
   templateId: string | null | undefined,
   pool:       MessagePoolConfig | null,
+  opts:       { hasCoupon?: boolean } = {},
 ): PoolPhrase[] {
+  const hasCoupon = opts.hasCoupon ?? false;
   const out: PoolPhrase[] = [];
   const seen = new Set<string>();
   for (const text of templateId ? getReadyMadeMessageVariants(templateId) : []) {
     const key = phraseKey(text);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, text, source: "catalog" });
+    out.push({ key, text: withCouponLine(text, hasCoupon), source: "catalog" });
   }
   for (const c of pool?.custom ?? []) {
     const key = phraseKey(c.text);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, text: c.text, source: "custom" });
+    out.push({ key, text: withCouponLine(c.text, hasCoupon), source: "custom" });
   }
   return out;
 }
@@ -97,11 +125,12 @@ export function listPoolCandidates(
 export function resolveActivePhrases(
   campaign: { templateId: string | null; message: string },
   pool:     MessagePoolConfig | null,
+  opts:     { hasCoupon?: boolean } = {},
 ): PoolPhrase[] {
   const active: PoolPhrase[] = [];
   if (pool) {
     const selected = new Set(pool.selected ?? []);
-    for (const cand of listPoolCandidates(campaign.templateId, pool)) {
+    for (const cand of listPoolCandidates(campaign.templateId, pool, opts)) {
       if (cand.source === "catalog" && selected.has(cand.key)) active.push(cand);
       if (cand.source === "custom") {
         const c = pool.custom?.find((x) => phraseKey(x.text) === cand.key);
@@ -111,7 +140,9 @@ export function resolveActivePhrases(
   }
   if (active.length > 0) return active;
   const fallback = (campaign.message ?? "").trim();
-  return fallback ? [{ key: phraseKey(fallback), text: fallback, source: "fallback" }] : [];
+  return fallback
+    ? [{ key: phraseKey(fallback), text: withCouponLine(fallback, opts.hasCoupon ?? false), source: "fallback" }]
+    : [];
 }
 
 /** Uniform random draw (injectable RNG for tests). */
@@ -121,7 +152,11 @@ export function pickPhrase(phrases: PoolPhrase[], rand: () => number = Math.rand
 }
 
 /** Per-phrase Meta template mapping stored in audienceConfig.metaTemplates. */
-export interface PhraseMetaTemplate { name?: string; language?: string; params?: string[] }
+export interface PhraseMetaTemplate {
+  name?: string; language?: string; params?: string[];
+  /** Exact text last submitted to Meta — lets callers detect a stale template. */
+  submittedMessage?: string;
+}
 
 export function readPhraseMetaTemplates(audienceConfig: unknown): Record<string, PhraseMetaTemplate> {
   if (!audienceConfig || typeof audienceConfig !== "object") return {};
@@ -133,9 +168,10 @@ export function readPhraseMetaTemplates(audienceConfig: unknown): Record<string,
     const o = v as PhraseMetaTemplate;
     if (typeof o.name === "string" && o.name) {
       out[k] = {
-        name:     o.name,
-        language: typeof o.language === "string" ? o.language : undefined,
-        params:   Array.isArray(o.params) ? o.params.map(String) : undefined,
+        name:             o.name,
+        language:         typeof o.language === "string" ? o.language : undefined,
+        params:           Array.isArray(o.params) ? o.params.map(String) : undefined,
+        submittedMessage: typeof o.submittedMessage === "string" ? o.submittedMessage : undefined,
       };
     }
   }

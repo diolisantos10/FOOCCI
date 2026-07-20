@@ -32,7 +32,10 @@ beforeEach(() => {
 });
 
 const allKeys = variants.map(phraseKey);
-const fullMap = Object.fromEntries(allKeys.map((k) => [k, { name: `cliente_frio_${k.replace(/^mf_/, "v")}`, language: "pt_BR", params: [] }]));
+const fullMap = Object.fromEntries(variants.map((v) => {
+  const k = phraseKey(v);
+  return [k, { name: `cliente_frio_${k.replace(/^mf_/, "v")}`, language: "pt_BR", params: [], submittedMessage: v }];
+}));
 
 describe("provisionPoolTemplates — one Meta template per catalog/custom phrase", () => {
   it("submits the WHOLE catalog (even without a pool) and wires audienceConfig.metaTemplates", async () => {

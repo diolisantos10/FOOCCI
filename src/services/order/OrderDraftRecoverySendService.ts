@@ -460,6 +460,7 @@ export class OrderDraftRecoverySendService {
           ? pickPhrase(resolveActivePhrases(
               { templateId: "carrinho-abandonado", message: cartRow.message ?? "" },
               parseMessagePool(cartRow.scheduleConfig),
+              { hasCoupon: !!cartCoupon },
             ))
           : null;
         const customMsg  = drawn?.text?.trim() || cartCfg?.cartRecoveryMessage?.trim();
