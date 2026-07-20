@@ -22,8 +22,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { CrmTestRunnerService, type CrmTestMode } from "@/services/crm/testing/CrmTestRunnerService";
-import { getCrmScenarioGroups, type CrmScenarioGroupId } from "@/services/crm/testing/crmScenarios";
+import type { CrmTestMode } from "@/services/crm/testing/CrmTestRunnerService";
+import type { CrmScenarioGroupId } from "@/services/crm/testing/crmScenarios";
 
 const VALID_MODES: CrmTestMode[] = ["quick", "group", "full"];
 
@@ -34,6 +34,13 @@ export async function POST(req: NextRequest) {
   if (!checkAdminRequest(req)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
+
+  // Loaded lazily: these CRM services sit in a heavy module graph with a circular
+  // import that trips Next's build-time page-data collection (TDZ: "Cannot access
+  // 'a' before initialization"). A dynamic import defers eval to request time and
+  // keeps the build green without touching the CRM feature. (Admin-only route.)
+  const { CrmTestRunnerService } = await import("@/services/crm/testing/CrmTestRunnerService");
+  const { getCrmScenarioGroups } = await import("@/services/crm/testing/crmScenarios");
 
   let slug: string;
   let mode: CrmTestMode = "full";
