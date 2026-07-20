@@ -18,6 +18,7 @@ import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWha
 import { sendMetaCrmMessage } from "./metaCrmSend";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
+import { RelationshipProgramService } from "./RelationshipProgramService";
 import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
@@ -96,6 +97,9 @@ const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "recorrente-sumido":  "RECORRENTE_SUMIDO",
   "aniversariantes":    "ANIVERSARIANTES",
   "cupom-vencendo":     "CUPOM_VENCENDO",
+  "subiu-de-nivel":     "SUBIU_DE_NIVEL",
+  "quase-no-proximo-nivel": "QUASE_PROXIMO_NIVEL",
+  "mimo-mensal-nivel":  "MIMO_MENSAL_NIVEL",
   "aumentar-bebidas":   "SEM_BEBIDA",
   "aumentar-sobremesas":"SEM_SOBREMESA",
 };
@@ -254,6 +258,45 @@ export async function resolveAudience(
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
     }
+
+    case "SUBIU_DE_NIVEL": {
+      // Customers who moved UP a tier within the last `triggerDays` days — the
+      // congratulate-and-reward window (tierUpAt is stamped by the tier writers).
+      const days  = Math.max(1, opts?.triggerDays ?? 7);
+      const since = new Date(now.getTime() - days * 86_400_000);
+      return serialize(await prisma.customer.findMany({
+        where:   { ...baseWhere, tierUpAt: { gte: since } },
+        orderBy: { tierUpAt: "desc" } as never,
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+    }
+
+    case "QUASE_PROXIMO_NIVEL": {
+      // Customers within 20% of the NEXT tier's spend threshold (spend-based only).
+      const s = await RelationshipProgramService.getSettings(restaurantId);
+      const near = (threshold: number) => ({ gte: threshold * 0.8, lt: threshold });
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          OR: [
+            { tier: "BRONZE", totalSpend: near(Number(s.silverMinSpend)) },
+            { tier: "PRATA",  totalSpend: near(Number(s.goldMinSpend)) },
+            { tier: "OURO",   totalSpend: near(Number(s.diamondMinSpend)) },
+          ],
+        },
+        orderBy: { totalSpend: "desc" },
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+    }
+
+    case "MIMO_MENSAL_NIVEL":
+      // Everyone who already climbed the ladder (Prata+) — the monthly perk pool.
+      // "Monthly" is enforced by the campaign's recontactDays window (30).
+      return serialize(await prisma.customer.findMany({
+        where:   { ...baseWhere, tier: { in: ["PRATA", "OURO", "DIAMANTE"] } },
+        orderBy: [{ tier: "desc" }, { totalSpend: "desc" }],
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
 
     case "CUPOM_VENCENDO": {
       // Customers holding an ACTIVE (unused) coupon that expires within the next

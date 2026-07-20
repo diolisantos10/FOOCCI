@@ -22,7 +22,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { isCrmCountable } from "./crm-countable";
-import { resolveCustomerClassification } from "./CustomerSegmentService";
+import { resolveCustomerClassification, isTierUp } from "./CustomerSegmentService";
 import {
   RelationshipProgramService,
   DEFAULT_SETTINGS,
@@ -110,6 +110,7 @@ export class CustomerMetricsSyncService {
       const current = await tx.customer.findUnique({
         where:  { id: order.customerId! },
         select: {
+          tier:                true,
           totalSpend:          true,
           totalOrders:         true,
           importedTotalSpent:  true,
@@ -142,6 +143,8 @@ export class CustomerMetricsSyncService {
           lastOrderAt: now,
           tier,
           segment,
+          // Level-up stamp — the "Subiu de nível" campaign congratulates + rewards.
+          ...(isTierUp(current?.tier, tier) ? { previousTier: current?.tier, tierUpAt: now } : {}),
         },
       });
 
@@ -204,6 +207,7 @@ export class CustomerMetricsSyncService {
         where:  { id: customerId },
         select: {
           restaurantId:        true,
+          tier:                true,
           importedLastOrderAt: true,
           importedOrderCount:  true,
           importedTotalSpent:  true,
@@ -260,6 +264,7 @@ export class CustomerMetricsSyncService {
           lastOrderAt,
           tier,
           segment,
+          ...(isTierUp(customer?.tier, tier) ? { previousTier: customer?.tier, tierUpAt: now } : {}),
         },
       });
 

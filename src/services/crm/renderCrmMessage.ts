@@ -38,6 +38,10 @@ export interface RenderContext {
    *  `expiresAt` (a wallet coupon's REAL expiry, e.g. the cupom-vencendo campaign)
    *  wins over validityDays when resolving {validade}. */
   coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null; validityDays?: number | null; expiresAt?: Date | string | null } | null;
+  /** Next-tier nudge ("Quase no próximo nível"): the tier the customer is chasing
+   *  and how much spend is missing — both resolved per recipient by the runner. */
+  nextTierLabel?:   string | null;
+  nextTierMissing?: number | null;
 }
 
 /** True when the coupon actually carries a benefit (drives {cupom}/{validade}). */
@@ -88,6 +92,8 @@ export const KNOWN_CRM_VARIABLES = [
   "youtube",
   "cupom",
   "validade",
+  "proximo_nivel",
+  "falta_proximo_nivel",
 ] as const;
 
 /**
@@ -142,6 +148,10 @@ export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext
     youtube,
     cupom:                 couponMessageLabel(ctx.coupon),
     validade:              couponValidadeLabel(ctx.coupon),
+    proximo_nivel:         ctx.nextTierLabel?.trim() ?? "",
+    falta_proximo_nivel:   typeof ctx.nextTierMissing === "number" && ctx.nextTierMissing > 0
+      ? `R$ ${Math.ceil(ctx.nextTierMissing).toLocaleString("pt-BR")}`
+      : "",
   };
 }
 

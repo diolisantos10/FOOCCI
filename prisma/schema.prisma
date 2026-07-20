@@ -205,6 +205,8 @@ model Customer {
   totalSpend             Decimal   @default(0) @db.Decimal(10, 2)
   lastOrderAt            DateTime?
   tier                   String    @default("BRONZE") // BRONZE | PRATA | OURO | DIAMANTE
+  previousTier           String? // tier before the last level-up (drives "Subiu de nível")
+  tierUpAt               DateTime? // when the customer last moved UP a tier
   segment                String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS
   isActive               Boolean   @default(true)
   isGuest                Boolean   @default(false) // true = anonymous session; excluded from CRM lists and metric sync

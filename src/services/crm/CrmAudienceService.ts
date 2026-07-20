@@ -20,6 +20,7 @@
 import { prisma } from "@/lib/prisma";
 import type { SegmentConfig } from "@/lib/crm-segments";
 import { DEFAULT_SEGMENT_CONFIG, buildCutoffs } from "@/lib/crm-segments";
+import { RelationshipProgramService } from "./RelationshipProgramService";
 
 const PREVIEW_LIMIT = 20;
 const now = () => new Date();
@@ -260,6 +261,55 @@ export class CrmAudienceService {
           }),
         ]);
         const excl = await computeExclusions(restaurantId, dateCond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
+      // ── Subiu de nível — leveled up within the last ~7 days ───────────────────
+      case "subiu-de-nivel": {
+        const since    = new Date(ts.getTime() - 7 * 86_400_000);
+        const cond     = { tierUpAt: { gte: since } };
+        const segWhere  = { restaurantId, isGuest: false, ...cond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...cond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { tierUpAt: "desc" } as never, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, cond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
+      // ── Quase no próximo nível — within 20% of the next tier's spend threshold ─
+      case "quase-no-proximo-nivel": {
+        const s = await RelationshipProgramService.getSettings(restaurantId);
+        const near = (t: number) => ({ gte: t * 0.8, lt: t });
+        const cond = { OR: [
+          { tier: "BRONZE", totalSpend: near(Number(s.silverMinSpend)) },
+          { tier: "PRATA",  totalSpend: near(Number(s.goldMinSpend)) },
+          { tier: "OURO",   totalSpend: near(Number(s.diamondMinSpend)) },
+        ] };
+        const segWhere  = { restaurantId, isGuest: false, ...cond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...cond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, cond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
+      // ── Mimo mensal — everyone Prata+ (monthly cap via recontactDays) ──────────
+      case "mimo-mensal-nivel": {
+        const cond      = { tier: { in: ["PRATA", "OURO", "DIAMANTE"] } };
+        const segWhere  = { restaurantId, isGuest: false, ...cond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...cond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: [{ tier: "desc" }, { totalSpend: "desc" }], take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, cond, eligible);
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 

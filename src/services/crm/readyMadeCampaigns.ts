@@ -89,6 +89,10 @@ export interface ReadyMadeCampaign {
   triggerDays?:  number;
   /** Label for the triggerDays field in the editor. */
   triggerDaysLabel?: string;
+  /** Recurring re-contact window in days: a customer may receive this campaign again
+   *  after this many days (absent = once ever, the historical default). Powers
+   *  monthly-style campaigns like "Mimo mensal por nível". */
+  recontactDays?: number;
   /** Which fields the inline editor exposes. */
   editable:      Array<"message" | "schedule" | "dailyLimit" | "coupon" | "triggerDays">;
 }
@@ -242,6 +246,57 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
+    id:          "subiu-de-nivel",
+    emoji:       "🏆",
+    name:        "Subiu de nível",
+    tagline:     "Parabeniza e premia quem acabou de subir de nível",
+    description: "O momento mais poderoso do programa: o cliente acabou de conquistar um nível novo. A mensagem celebra a conquista e entrega a recompensa na hora — é o que faz ele se sentir valorizado de verdade.",
+    objective:   "Celebrar a conquista e reforçar a fidelidade no auge do engajamento",
+    engine:      "RECURRING",
+    targetSegment: "subiu-de-nivel",
+    priority:    "POST_ORDER_REVIEW", // celebration rides the post-order high
+    defaultMessage:
+      "Parabéns, {nome}! 🏆 Você acaba de virar cliente {nivel} no {restaurante}! E conquista merece prêmio: você ganhou {cupom}! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
+    defaultCoupon: { type: "PERCENTAGE", value: 10 },
+    schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    triggerDays: 7,
+    triggerDaysLabel: "Janela de dias após a subida de nível",
+    editable:    ["message", "triggerDays", "schedule", "dailyLimit", "coupon"],
+  },
+  {
+    id:          "quase-no-proximo-nivel",
+    emoji:       "🏃",
+    name:        "Quase no próximo nível",
+    tagline:     "Falta pouco pra subir — o empurrão que gera o próximo pedido",
+    description: "Clientes a até 20% do próximo nível recebem a conta na mão: \"faltam R$ X pra você virar {proximo_nivel}\". Quem enxerga a meta perto pede de novo pra alcançar — é a alavanca de venda do programa.",
+    objective:   "Acelerar o próximo pedido usando a meta de nível como incentivo",
+    engine:      "RECURRING",
+    targetSegment: "quase-no-proximo-nivel",
+    priority:    "GENERIC_PROMO",
+    defaultMessage:
+      "Oi, {nome}! 🏃 Você tá quase lá: faltam só {falta_proximo_nivel} pra você virar cliente {proximo_nivel} no {restaurante} — e desbloquear vantagens novas! Bora? {link_cardapio}",
+    schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 30, // remind at most once a month while they're close
+    editable:    ["message", "schedule", "dailyLimit", "coupon"],
+  },
+  {
+    id:          "mimo-mensal-nivel",
+    emoji:       "🎁",
+    name:        "Mimo mensal por nível",
+    tagline:     "Todo mês, um agrado pra quem já subiu na escada (Prata+)",
+    description: "Clientes Prata, Ouro e Diamante recebem um mimo todo mês — o benefício recorrente que faz o nível valer a pena e mantém o cliente ativo. Cada cliente recebe no máximo 1 por mês.",
+    objective:   "Entregar valor recorrente aos níveis e sustentar a recorrência",
+    engine:      "RECURRING",
+    targetSegment: "mimo-mensal-nivel",
+    priority:    "GENERIC_PROMO",
+    defaultMessage:
+      "Oi, {nome}! 💛 Chegou seu mimo do mês de cliente {nivel}: você ganhou {cupom}! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
+    defaultCoupon: { type: "PERCENTAGE", value: 10 },
+    schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 30, // the "monthly" in Mimo mensal
+    editable:    ["message", "schedule", "dailyLimit", "coupon"],
+  },
+  {
     id:          "cupom-vencendo",
     emoji:       "⏰",
     name:        "Cupom vencendo",
@@ -372,6 +427,27 @@ export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
     "{nome}, segue a gente e fica por dentro de tudo! 📱 Instagram: {instagram} · TikTok: {tiktok}",
     "Oi, {nome}! Curte nossa página no Facebook pra acompanhar as novidades do {restaurante}: {facebook}",
   ],
+  "subiu-de-nivel": [
+    "Parabéns, {nome}! 🏆 Você acaba de virar cliente {nivel} no {restaurante}! E conquista merece prêmio: você ganhou {cupom}! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
+    "{nome}, que orgulho! 🎉 Você subiu pra {nivel} no {restaurante}! De presente, você ganhou {cupom} — use até {validade} no nosso cardápio: {link_cardapio}",
+    "Oi, {nome}! ✨ Novidade boa: agora você é cliente {nivel}! Pra comemorar, você ganhou {cupom}. Válido até {validade}: {link_cardapio}",
+    "{nome}, você merece! 👏 Acabou de conquistar o nível {nivel} no {restaurante} e ganhou {cupom} de presente. Aproveite até {validade}: {link_cardapio}",
+    "Parabéns, {nome}! 🥇 Nível {nivel} desbloqueado no {restaurante}! Seu prêmio: {cupom}, válido até {validade}. Peça pelo cardápio: {link_cardapio}",
+  ],
+  "quase-no-proximo-nivel": [
+    "Oi, {nome}! 🏃 Você tá quase lá: faltam só {falta_proximo_nivel} pra você virar cliente {proximo_nivel} no {restaurante} — e desbloquear vantagens novas! Bora? {link_cardapio}",
+    "{nome}, tá no detalhe! 🔥 Só mais {falta_proximo_nivel} e você vira {proximo_nivel} no {restaurante}. Seu próximo pedido pode ser o da virada: {link_cardapio}",
+    "Oi, {nome}! Sabia que você tá a {falta_proximo_nivel} de virar cliente {proximo_nivel}? 👀 Nível novo, vantagem nova. Garante: {link_cardapio}",
+    "{nome}, falta pouquinho! ✨ Mais {falta_proximo_nivel} em pedidos e o nível {proximo_nivel} é seu — com direito a mimos exclusivos: {link_cardapio}",
+    "Oi, {nome}! 🚀 Seu próximo nível tá logo ali: {falta_proximo_nivel} e você é {proximo_nivel} no {restaurante}. Pede agora: {link_cardapio}",
+  ],
+  "mimo-mensal-nivel": [
+    "Oi, {nome}! 💛 Chegou seu mimo do mês de cliente {nivel}: você ganhou {cupom}! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
+    "{nome}, presente do mês na área! 🎁 Por ser cliente {nivel}, você ganhou {cupom}. Use até {validade} no nosso cardápio: {link_cardapio}",
+    "Oi, {nome}! Todo mês tem: seu mimo de cliente {nivel} chegou — você ganhou {cupom}! Válido até {validade}: {link_cardapio}",
+    "{nome}, ser {nivel} tem suas vantagens 😎 Seu mimo mensal: {cupom}, válido até {validade}. Aproveita: {link_cardapio}",
+    "Oi, {nome}! 💛 O {restaurante} preparou seu agrado do mês: você ganhou {cupom} por ser cliente {nivel}. Use até {validade}: {link_cardapio}",
+  ],
   "cupom-vencendo": [
     "Oi, {nome}! ⏰ Corre que ainda dá tempo: seu {cupom} vence em {validade}! Use no pedido pelo nosso cardápio: {link_cardapio}",
     "{nome}, não deixa vencer! ⏳ Seu {cupom} vale só até {validade}. Garante o seu pedido: {link_cardapio}",
@@ -419,6 +495,9 @@ export const READY_MADE_TIMING: Record<string, ReadyMadeTiming> = {
   "recuperar-frios":     { summary: "Enviada a quem está 60+ dias sem pedir.",                          fromSegmentation: true },
   "recuperar-perdidos":  { summary: "Enviada a quem está há muito tempo sem pedir (fase perdida).",     fromSegmentation: true },
   "clientes-vip":        { summary: "Enviada periodicamente aos clientes Ouro e Diamante.",             fromSegmentation: false },
+  "subiu-de-nivel":      { summary: "Enviada dias após o cliente conquistar um nível novo.",            fromSegmentation: false },
+  "quase-no-proximo-nivel": { summary: "Enviada a quem está a até 20% do próximo nível (máx. 1×/mês).", fromSegmentation: false },
+  "mimo-mensal-nivel":   { summary: "Enviada 1× por mês aos clientes Prata, Ouro e Diamante.",          fromSegmentation: false },
   "cupom-vencendo":      { summary: "Enviada a quem tem cupom ativo vencendo nos próximos dias.",       fromSegmentation: false },
   "carrinho-abandonado": { summary: "Enviada poucos minutos após o cliente abandonar um pedido.",       fromSegmentation: false },
   "siga-redes":          { summary: "Enviada aos clientes, convidando a seguir suas redes sociais.",     fromSegmentation: false },

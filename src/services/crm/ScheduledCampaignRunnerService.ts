@@ -28,6 +28,8 @@ import {
 import { getSegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "./CustomerSegmentService";
 import { CrmAudienceService } from "./CrmAudienceService";
+import { getReadyMadeCampaign } from "./readyMadeCampaigns";
+import { RelationshipProgramService } from "./RelationshipProgramService";
 import {
   parseMessagePool,
   resolveActivePhrases,
@@ -451,10 +453,17 @@ export class ScheduledCampaignRunnerService {
       { triggerDays: cfg.triggerDays },
     );
 
-    // Exclude customers already sent this campaign
+    // Exclude customers already sent this campaign. Campaigns with a recontactDays
+    // window (e.g. "Mimo mensal") only exclude sends INSIDE the window — the same
+    // customer becomes eligible again after it passes. Absent = once ever (default).
+    const recontactDays = (campaign.templateId ? getReadyMadeCampaign(campaign.templateId)?.recontactDays : undefined) ?? null;
     const alreadySentIds = new Set(
       (await prisma.campaignExecution.findMany({
-        where:  { campaignId, status: { in: ["SENT", "DELIVERED", "READ"] } },
+        where:  {
+          campaignId,
+          status: { in: ["SENT", "DELIVERED", "READ"] },
+          ...(recontactDays ? { sentAt: { gte: new Date(Date.now() - recontactDays * 86_400_000) } } : {}),
+        },
         select: { customerId: true },
       })).map((e) => e.customerId)
     );
@@ -1272,6 +1281,28 @@ export class ScheduledCampaignRunnerService {
       }
     }
 
+    // "Quase no próximo nível" renders each recipient's chasing target: which tier
+    // comes next and how much spend is missing ({proximo_nivel}/{falta_proximo_nivel}).
+    let nextTierOf: ((c: { tier: string; totalSpend: number }) => { label: string; missing: number } | null) | null = null;
+    if (campaign.templateId === "quase-no-proximo-nivel") {
+      try {
+        const s = await RelationshipProgramService.getSettings(campaign.restaurantId);
+        const LADDER = [
+          { from: "BRONZE", label: "Prata",    threshold: Number(s.silverMinSpend) },
+          { from: "PRATA",  label: "Ouro",     threshold: Number(s.goldMinSpend) },
+          { from: "OURO",   label: "Diamante", threshold: Number(s.diamondMinSpend) },
+        ];
+        nextTierOf = (c) => {
+          const step = LADDER.find((l) => l.from === c.tier);
+          if (!step) return null;
+          const missing = step.threshold - c.totalSpend;
+          return missing > 0 ? { label: step.label, missing } : null;
+        };
+      } catch (e) {
+        console.warn(`[CampaignRunner] tier-settings lookup failed`, { campaignId: campaign.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     // Pre-fetch opt-out status
     const optedOutIds = new Set(
       (await prisma.customer.findMany({
@@ -1376,11 +1407,32 @@ export class ScheduledCampaignRunnerService {
       }
 
       // Per-recipient render context: cupom-vencendo swaps in the customer's OWN
-      // expiring coupon; anyone whose coupon got used/expired since the audience
-      // was resolved is skipped (nothing truthful left to say).
+      // expiring coupon; quase-no-proximo-nivel adds their next tier + missing R$.
+      // Anyone whose state changed since audience resolution (coupon used, tier
+      // crossed) is skipped — never message something untruthful.
+      const nextTierInfo = nextTierOf ? nextTierOf(customer) : null;
       const recipientCtx = campaign.templateId === "cupom-vencendo"
         ? { ...msgCtx, coupon: expiringCouponByCustomer.get(customer.id) ?? null }
+        : nextTierInfo
+        ? { ...msgCtx, nextTierLabel: nextTierInfo.label, nextTierMissing: nextTierInfo.missing }
         : msgCtx;
+      if (campaign.templateId === "quase-no-proximo-nivel" && !nextTierInfo) {
+        await prisma.campaignExecution.create({
+          data: {
+            campaignId:    campaign.id,
+            restaurantId:  campaign.restaurantId,
+            customerId:    customer.id,
+            customerName:  customer.name,
+            customerPhone: customer.phone,
+            messageText:   "",
+            status:        "SKIPPED" as never,
+            failedReason:  "Cliente já cruzou o próximo nível",
+            errorMessage:  "NO_NEXT_TIER_TARGET",
+          },
+        });
+        skipped++;
+        continue;
+      }
       if (campaign.templateId === "cupom-vencendo" && !recipientCtx.coupon) {
         await prisma.campaignExecution.create({
           data: {

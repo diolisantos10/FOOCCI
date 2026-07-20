@@ -17,6 +17,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { TierSettings } from "@prisma/client";
+import { isTierUp } from "./CustomerSegmentService";
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
@@ -169,12 +170,13 @@ export class RelationshipProgramService {
     const customers = await prisma.customer.findMany({
       where:  { restaurantId, isGuest: false },
       select: {
-        id: true, totalSpend: true, totalOrders: true,
+        id: true, tier: true, totalSpend: true, totalOrders: true,
         importedTotalSpent: true, importedOrderCount: true,
       },
     });
 
     let updated = 0;
+    const now = new Date();
     // Batch updates in chunks of 100
     for (let i = 0; i < customers.length; i += 100) {
       const chunk = customers.slice(i, i + 100);
@@ -188,7 +190,11 @@ export class RelationshipProgramService {
           const tier = computeTierWithSettings(effSpend, effOrders, settings);
           return prisma.customer.update({
             where: { id: c.id },
-            data:  { tier },
+            data:  {
+              tier,
+              // Level-up stamp — feeds the "Subiu de nível" campaign.
+              ...(isTierUp(c.tier, tier) ? { previousTier: c.tier, tierUpAt: now } : {}),
+            },
           });
         }),
       );

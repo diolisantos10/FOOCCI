@@ -64,6 +64,10 @@ export function inferCampaignPriority(campaign: {
   if (tid.includes("avaliacao") || seg.includes("avaliacao") || seg.includes("pedido-avaliacao") || obj === "POST_ORDER" || obj === "REVIEW") {
     return "POST_ORDER_REVIEW";
   }
+  // Tier-up congratulation rides the post-order high — same urgency bucket.
+  if (tid === "subiu-de-nivel" || seg.includes("subiu-de-nivel")) {
+    return "POST_ORDER_REVIEW";
+  }
   if (
     seg.includes("frio") || seg.includes("morno") || seg.includes("sumido") ||
     seg.includes("reativ") || seg.includes("esfri") || tid.includes("esfri") ||

@@ -27,6 +27,8 @@ const KNOWN_TOKENS = [
   "youtube",
   "cupom",
   "validade",
+  "proximo_nivel",
+  "falta_proximo_nivel",
 ] as const;
 
 export type KnownToken = (typeof KNOWN_TOKENS)[number];
@@ -78,6 +80,8 @@ const DEFAULT_EXAMPLES: Record<KnownToken, string> = {
   youtube:               "https://youtube.com",
   cupom:                 "10% de desconto",
   validade:              "31/12",
+  proximo_nivel:         "Ouro",
+  falta_proximo_nivel:   "R$ 80",
 };
 
 /**
