@@ -116,6 +116,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     schedule:    { weekdays: ALL_WEEK, timeWindow: { start: "12:00", end: "20:00" }, dailyLimit: 30 },
     triggerDays: 2,
     triggerDaysLabel: "Enviar quantos dias após o pedido",
+    recontactDays: 60, // may ask again for a later order after 2 months
     editable:    ["message", "triggerDays", "schedule", "dailyLimit"],
   },
   {
@@ -132,6 +133,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
       "Feliz aniversário, {nome}! 🎉 Você ganhou um presente do {restaurante}: {cupom}! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 20 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: { start: "10:00", end: "18:00" }, dailyLimit: 20 },
+    recontactDays: 365, // next year's birthday
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -165,6 +167,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
       "Oi, {nome}! 👋 Você ganhou {cupom} pra estrear no {restaurante}! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 10 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 45, // nudge non-buyers again every ~6 weeks
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -180,6 +183,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 👋 Bateu vontade de algo gostoso? O {restaurante} tá com o cardápio no capricho hoje — dá uma olhada: {link_cardapio}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 30, // re-rescue each time they re-enter the cooling window
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -195,6 +199,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 🌡️ Faz um tempinho que não te vemos por aqui. Tem novidade deliciosa no {restaurante} — quer ver o cardápio? {link_cardapio}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 30, // keep re-engaging while they stay warm
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -211,6 +216,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
       "Oi, {nome}! 😊 Sentimos sua falta! Você ganhou {cupom} pra voltar ao {restaurante}. 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 10 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 45, // retry cold customers every ~6 weeks
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -227,6 +233,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
       "Oi, {nome}! 💔 Faz muito tempo... Você ganhou {cupom} pra te reconquistar! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 20 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 60, // retry lost customers every 2 months
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -243,6 +250,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
       "Oi, {nome}! ✨ Você é VIP no {restaurante} e ganhou {cupom} exclusivo! 🎁 Válido até {validade}, só em pedidos pelo nosso cardápio: {link_cardapio}",
     defaultCoupon: { type: "PERCENTAGE", value: 20 },
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 20 },
+    recontactDays: 30, // periodic VIP mimo, monthly
     editable:    ["message", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -261,6 +269,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
     triggerDays: 7,
     triggerDaysLabel: "Janela de dias após a subida de nível",
+    recontactDays: 30, // a later level-up gets its own congratulation
     editable:    ["message", "triggerDays", "schedule", "dailyLimit", "coupon"],
   },
   {
@@ -311,6 +320,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
     triggerDays: 5, // warn 5 days BEFORE the coupon expires (owner-tunable)
     triggerDaysLabel: "Avisar quantos dias antes de vencer",
+    recontactDays: 30, // a NEW expiring coupon deserves a new warning
     editable:    ["message", "triggerDays", "schedule", "dailyLimit"],
   },
   {
@@ -344,6 +354,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 😊 Tá curtindo o {restaurante}? Então segue a gente no Instagram pra não perder novidade e promoção: {instagram}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 90, // gentle quarterly reminder
     editable:    ["message", "schedule", "dailyLimit"],
   },
 ];
