@@ -98,7 +98,7 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
       "Snapshot é agregado — nunca contém nome/telefone/endereço de cliente.",
     ];
 
-    const [restaurant, menuItemCount, menuItems, businessHours, promotions, knowledgeItems, materialCount, approvedEvidenceCount] =
+    const [restaurant, menuItemCount, menuItems, businessHours, promotions, knowledgeItems, materialCount, approvedEvidenceCount, deliveryZones] =
       await Promise.all([
         prisma.restaurant
           .findUnique({
@@ -111,9 +111,17 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
                 select: {
                   enabled: true,
                   pickupEnabled: true,
+                  mode: true,
                   fee: true,
+                  estimatedMinutes: true,
                   areaDescription: true,
                   minOrderValue: true,
+                  freeDeliveryAbove: true,
+                  distanceBaseFee: true,
+                  distancePricePerKm: true,
+                  distanceMaxKm: true,
+                  distanceMinFee: true,
+                  distanceMaxFee: true,
                   geoRadiusKm: true,
                 },
               },
@@ -168,6 +176,13 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
           .catch(() => [] as KnowledgeRow[]),
         prisma.agentLibrarySource.count({ where: { agentSlug: agentId } }).catch(() => 0),
         prisma.waiterResultEvidence.count({ where: { restaurantId: businessId, status: "APPROVED" } }).catch(() => 0),
+        prisma.deliveryZone
+          .findMany({
+            where: { restaurantId: businessId, isActive: true },
+            select: { name: true, maxDistanceKm: true, fee: true, estimatedMinutes: true, minOrderValue: true },
+            orderBy: { sortOrder: "asc" },
+          })
+          .catch(() => [] as Array<{ name: string; maxDistanceKm: number; fee: unknown; estimatedMinutes: number; minOrderValue: unknown }>),
       ]);
 
     if (!restaurant) {
@@ -233,25 +248,59 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
     if (!restaurant.deliveryConfig) missingContext.push("delivery/retirada");
     if (!businessHours.length) missingContext.push("horários de funcionamento detalhados");
 
-    // ── Entrega: taxa, área de cobertura, raio e pedido mínimo (verdade real p/
-    // aterrar "qual a taxa?" e "vocês entregam em X?" — sem isto o agente chuta). ──
+    // ── Entrega: taxa, área/raio de cobertura e pedido mínimo, nos TRÊS modos
+    // (simple/distance/advanced-por-zonas). O lojista pode ter cadastrado em
+    // qualquer um; ler só o "simple" fazia o agente dizer "não cadastrado" à toa. ──
     const dc = restaurant.deliveryConfig;
+    const zonas = deliveryZones.map((z) => ({
+      nome: z.name,
+      ateKm: z.maxDistanceKm,
+      taxa: money(z.fee),
+      ...(z.minOrderValue != null ? { pedidoMinimo: money(z.minOrderValue) } : {}),
+      ...(z.estimatedMinutes != null ? { minutos: z.estimatedMinutes } : {}),
+    }));
+    // Raio de cobertura: distância máxima em qualquer modo (o "vocês entregam em X?").
+    const raioMaxKm =
+      dc?.distanceMaxKm ??
+      dc?.geoRadiusKm ??
+      (zonas.length ? Math.max(...zonas.map((z) => z.ateKm)) : null);
+    // Descrição da taxa conforme o modo cadastrado.
+    let taxa: unknown;
+    if (dc?.fee != null) {
+      taxa = { valor: money(dc.fee) };
+    } else if (dc?.mode === "distance" && (dc.distanceBaseFee != null || dc.distancePricePerKm != null)) {
+      taxa = {
+        formula: "por distância",
+        base: money(dc.distanceBaseFee),
+        porKm: money(dc.distancePricePerKm),
+        ...(dc.distanceMinFee != null ? { minima: money(dc.distanceMinFee) } : {}),
+        ...(dc.distanceMaxFee != null ? { maxima: money(dc.distanceMaxFee) } : {}),
+        observacao: "depende da distância do endereço — confirmar pelo CEP",
+      };
+    } else if (zonas.length) {
+      taxa = { porZona: zonas.map((z) => ({ ate: `${z.ateKm}km`, valor: z.taxa })) };
+    }
+    const pedidoMinimo = dc?.minOrderValue != null ? money(dc.minOrderValue) : undefined;
     const entrega = dc
       ? {
           disponivel: dc.enabled,
           retirada: dc.pickupEnabled,
-          ...(dc.fee != null ? { taxa: money(dc.fee) } : {}),
+          modo: dc.mode,
+          ...(taxa ? { taxa } : {}),
+          ...(raioMaxKm != null ? { raioKm: raioMaxKm } : {}),
           ...(dc.areaDescription ? { area: dc.areaDescription.slice(0, MAX_ANSWER_CHARS) } : {}),
-          ...(dc.geoRadiusKm != null ? { raioKm: dc.geoRadiusKm } : {}),
-          ...(dc.minOrderValue != null ? { pedidoMinimo: money(dc.minOrderValue) } : {}),
+          ...(zonas.length ? { zonas } : {}),
+          ...(pedidoMinimo != null ? { pedidoMinimo } : {}),
+          ...(dc.freeDeliveryAbove != null ? { freteGratisAcimaDe: money(dc.freeDeliveryAbove) } : {}),
+          ...(dc.estimatedMinutes != null ? { minutos: dc.estimatedMinutes } : {}),
         }
       : undefined;
-    // Se a cobertura não está cadastrada, sinaliza — a regra do prompt faz o agente
-    // pedir o CEP em vez de afirmar. Se está, ele responde com a verdade.
-    if (dc?.enabled && !dc.areaDescription && dc.geoRadiusKm == null) {
+    // Só sinaliza "não cadastrado" se NÃO houver o dado em NENHUM modo — aí o prompt
+    // faz o agente pedir o CEP em vez de afirmar. Havendo, ele responde com a verdade.
+    if (dc?.enabled && raioMaxKm == null && !dc.areaDescription) {
       missingContext.push("área de cobertura de entrega não cadastrada — confirmar por CEP, nunca afirmar cidade/bairro");
     }
-    if (dc?.enabled && dc.fee == null) missingContext.push("taxa de entrega não cadastrada");
+    if (dc?.enabled && !taxa) missingContext.push("taxa de entrega não cadastrada");
 
     // ── Local: o endereço PRÓPRIO do restaurante (não é PII de cliente) ─────────
     const local = restaurant.address ? { endereco: restaurant.address.slice(0, MAX_ANSWER_CHARS) } : undefined;
