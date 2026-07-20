@@ -753,7 +753,6 @@ function SortableItemRow({
   categorySource,
   categoryIsAvailable,
   filterActive,
-  otherManualCategories,
   onSave,
   onEdit,
   onPromo,
@@ -764,7 +763,6 @@ function SortableItemRow({
   categorySource: MenuSource;
   categoryIsAvailable: boolean;
   filterActive?: boolean;
-  otherManualCategories: Category[];
   onSave: (
     id: string,
     patch: Partial<{
@@ -787,8 +785,7 @@ function SortableItemRow({
   } = useSortable({ id: item.id });
 
   const editable = categorySource === "MANUAL";
-  const [placingIn, setPlacingIn] = useState<string | null>(null);
-  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -796,14 +793,17 @@ function SortableItemRow({
     opacity: isDragging ? 0.4 : 1,
   };
 
-  async function handleDuplicate(targetCategoryId: string) {
-    if (placingIn) return;
-    setPlacingIn(targetCategoryId);
+  // Duplica rápido: cria uma cópia idêntica na MESMA categoria, logo abaixo do
+  // original. Sem seletor de categoria — pra mudar a categoria depois, é só
+  // editar o produto.
+  async function handleDuplicate() {
+    if (duplicating) return;
+    setDuplicating(true);
     try {
       const data = await apiFetch(
         `/api/menu/items/${item.id}/duplicate`,
         "POST",
-        { targetCategoryId }
+        {} // sem targetCategoryId → mesma categoria, logo abaixo do original
       );
       const raw = data.data;
       const newItem: Item = {
@@ -844,10 +844,9 @@ function SortableItemRow({
           quantity: e.quantity,
         })),
       };
-      onDuplicated(newItem, targetCategoryId);
+      onDuplicated(newItem, raw.categoryId);
     } catch { /* ignore */ }
-    setPlacingIn(null);
-    setDuplicateOpen(false);
+    setDuplicating(false);
   }
 
   return (
@@ -933,61 +932,15 @@ function SortableItemRow({
               >
                 % Promo
               </button>
-              {otherManualCategories.length > 0 && (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => setDuplicateOpen((o) => !o)}
-                    className="rounded px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 transition-colors"
-                    title="Duplicar para outra categoria"
-                  >
-                    + Duplicar
-                  </button>
-                  {duplicateOpen && (
-                    <div
-                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-                      onClick={() => setDuplicateOpen(false)}
-                    >
-                      <div
-                        className="w-full max-w-xs rounded-2xl bg-paper p-4 shadow-2xl"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="mb-3 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-ink">Duplicar produto</p>
-                            <p className="mt-0.5 text-xs text-muted truncate max-w-[200px]">{item.name}</p>
-                          </div>
-                          <button onClick={() => setDuplicateOpen(false)} className="text-muted hover:text-ink2 text-lg leading-none">✕</button>
-                        </div>
-                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                          Selecione a categoria de destino
-                        </p>
-                        <p className="mb-2 text-[10px] text-muted">
-                          Copia variações, opções e adicionais.
-                        </p>
-                        <div className="max-h-64 overflow-y-auto space-y-0.5">
-                          {otherManualCategories.map((cat) => (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              disabled={!!placingIn}
-                              onClick={() => handleDuplicate(cat.id)}
-                              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-ink2 hover:bg-brand-50 disabled:opacity-50 transition-colors"
-                            >
-                              {placingIn === cat.id ? (
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-400 border-t-transparent shrink-0" />
-                              ) : (
-                                <span className="h-2.5 w-2.5 rounded-full bg-brand-300 shrink-0" />
-                              )}
-                              {cat.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDuplicate(); }}
+                disabled={duplicating}
+                className="rounded px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-50 transition-colors"
+                title="Duplicar produto (cópia idêntica, logo abaixo)"
+              >
+                {duplicating ? "Duplicando…" : "+ Duplicar"}
+              </button>
             </>
           )}
         </div>
@@ -1383,9 +1336,6 @@ function CategoryCard({
                   categorySource={category.source}
                   categoryIsAvailable={category.isAvailable}
                   filterActive={filterActive}
-                  otherManualCategories={allCategories.filter(
-                    (c) => c.id !== category.id && c.source === "MANUAL"
-                  )}
                   onSave={saveItem}
                   onEdit={(it) => onEditItem(it, category.id)}
                   onPromo={onPromoItem}

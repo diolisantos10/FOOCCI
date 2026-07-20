@@ -27,7 +27,10 @@ import { getTenantContext } from "@/lib/tenant";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const bodySchema = z.object({
-  targetCategoryId: z.string().min(1),
+  // Optional: when omitted, the copy goes into the SOURCE item's own category,
+  // right below the original ("duplicar rápido"). A value duplicates into another
+  // category (legacy behaviour, copy lands at the top).
+  targetCategoryId: z.string().min(1).optional(),
 });
 
 export async function POST(
@@ -46,8 +49,6 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: "targetCategoryId é obrigatório" }, { status: 400 });
   }
-  const { targetCategoryId } = parsed.data;
-
   // ── Validate source item belongs to this restaurant ──────────────────────────
   const source = await prisma.menuItem.findFirst({
     where:  { id: params.id, category: { restaurantId: ctx.restaurantId } },
@@ -65,18 +66,35 @@ export async function POST(
     return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
   }
 
-  // ── Validate target category belongs to this restaurant ──────────────────────
-  const targetCategory = await prisma.menuCategory.findFirst({
-    where:  { id: targetCategoryId, restaurantId: ctx.restaurantId },
-    select: { id: true },
-  });
+  // Default: duplicate into the source's OWN category, right below the original.
+  const targetCategoryId = parsed.data.targetCategoryId ?? source.categoryId;
+  const sameCategory     = targetCategoryId === source.categoryId;
 
-  if (!targetCategory) {
-    return NextResponse.json({ error: "Categoria de destino não encontrada" }, { status: 404 });
+  // Validate an explicit (cross-category) target belongs to this restaurant.
+  // The source's own category is already validated by the source lookup above.
+  if (!sameCategory) {
+    const targetCategory = await prisma.menuCategory.findFirst({
+      where:  { id: targetCategoryId, restaurantId: ctx.restaurantId },
+      select: { id: true },
+    });
+    if (!targetCategory) {
+      return NextResponse.json({ error: "Categoria de destino não encontrada" }, { status: 404 });
+    }
   }
 
   // ── Deep copy in a transaction ────────────────────────────────────────────────
   const newItem = await prisma.$transaction(async (tx) => {
+    // Position: right below the original when duplicating in place; otherwise top.
+    let newSortOrder = 0;
+    if (sameCategory) {
+      // Open a gap right after the source, then drop the copy into it.
+      await tx.menuItem.updateMany({
+        where: { categoryId: targetCategoryId, sortOrder: { gt: source.sortOrder } },
+        data:  { sortOrder: { increment: 1 } },
+      });
+      newSortOrder = source.sortOrder + 1;
+    }
+
     // 1. Create the new MenuItem
     const created = await tx.menuItem.create({
       data: {
@@ -86,7 +104,7 @@ export async function POST(
         ingredients:          source.ingredients,
         price:                new Decimal(source.price.toString()),
         imageUrl:             source.imageUrl,
-        sortOrder:            0,
+        sortOrder:            newSortOrder,
         isActive:             source.isActive,
         isAvailable:          source.isAvailable,
         showInDelivery:       source.showInDelivery,
