@@ -28,7 +28,10 @@ import {
 import { getSegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "./CustomerSegmentService";
 import { CrmAudienceService } from "./CrmAudienceService";
-import { getReadyMadeCampaign } from "./readyMadeCampaigns";
+import {
+  getReadyMadeCampaign, resolveTierCoupon, TIER_COUPON_CAMPAIGN_IDS,
+  type TierCouponsConfig,
+} from "./readyMadeCampaigns";
 import { RelationshipProgramService } from "./RelationshipProgramService";
 import {
   parseMessagePool,
@@ -1281,6 +1284,14 @@ export class ScheduledCampaignRunnerService {
       }
     }
 
+    // Per-tier rewards ("Subiu de nível" / "Mimo mensal"): each recipient gets the
+    // coupon configured for THEIR tier (scheduleConfig.tierCoupons), falling back
+    // to the campaign's base coupon.
+    const tierCoupons: TierCouponsConfig | null =
+      campaign.templateId && (TIER_COUPON_CAMPAIGN_IDS as readonly string[]).includes(campaign.templateId)
+        ? ((campaign.scheduleConfig as { tierCoupons?: TierCouponsConfig } | null)?.tierCoupons ?? null)
+        : null;
+
     // "Quase no próximo nível" renders each recipient's chasing target: which tier
     // comes next and how much spend is missing ({proximo_nivel}/{falta_proximo_nivel}).
     let nextTierOf: ((c: { tier: string; totalSpend: number }) => { label: string; missing: number } | null) | null = null;
@@ -1411,10 +1422,17 @@ export class ScheduledCampaignRunnerService {
       // Anyone whose state changed since audience resolution (coupon used, tier
       // crossed) is skipped — never message something untruthful.
       const nextTierInfo = nextTierOf ? nextTierOf(customer) : null;
+      // The coupon THIS recipient earns: their tier's reward when configured,
+      // else the campaign's base coupon (unchanged for regular campaigns).
+      const recipientCoupon = tierCoupons
+        ? resolveTierCoupon(tierCoupons, customer.tier, runOpts.coupon ?? null)
+        : (runOpts.coupon ?? null);
       const recipientCtx = campaign.templateId === "cupom-vencendo"
         ? { ...msgCtx, coupon: expiringCouponByCustomer.get(customer.id) ?? null }
         : nextTierInfo
         ? { ...msgCtx, nextTierLabel: nextTierInfo.label, nextTierMissing: nextTierInfo.missing }
+        : tierCoupons
+        ? { ...msgCtx, coupon: recipientCoupon }
         : msgCtx;
       if (campaign.templateId === "quase-no-proximo-nivel" && !nextTierInfo) {
         await prisma.campaignExecution.create({
@@ -1597,12 +1615,12 @@ export class ScheduledCampaignRunnerService {
         // Coupon wallet: if this campaign grants a card-defined coupon, credit it to
         // the customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
         // never break a successful send.
-        if (runOpts.coupon) {
+        if (recipientCoupon) {
           await CustomerCouponService.grant({
             restaurantId:     campaign.restaurantId,
             customerId:       customer.id,
-            coupon:           runOpts.coupon,
-            validityDays:     runOpts.couponValidityDays ?? null,
+            coupon:           recipientCoupon,
+            validityDays:     recipientCoupon.validityDays ?? runOpts.couponValidityDays ?? null,
             sourceCampaignId: campaign.id,
             monthlyBudget:    safety?.couponMonthlyBudget ?? 0,
             avgTicket:        safety?.couponAvgTicket ?? 50,

@@ -5,6 +5,7 @@ import {
   getReadyMadeMessageVariants,
   getReadyMadeTiming,
   buildReadyMadeCampaignPayload,
+  resolveTierCoupon,
 } from "../readyMadeCampaigns";
 import { inferCampaignPriority } from "../CRMWhatsAppBudgetPlanner";
 import { renderCrmMessage } from "../renderCrmMessage";
@@ -160,5 +161,28 @@ describe("buildReadyMadeCampaignPayload", () => {
     const frio = getReadyMadeCampaign("recuperar-frios")!;
     expect(frio.triggerDays).toBeUndefined();
     expect(buildReadyMadeCampaignPayload(frio).scheduleConfig).not.toHaveProperty("triggerDays");
+  });
+});
+
+describe("resolveTierCoupon — per-tier rewards", () => {
+  const base = { type: "PERCENTAGE" as const, value: 10 };
+  const map  = {
+    PRATA:    { type: "PERCENTAGE" as const, value: 5 },
+    OURO:     { type: "PERCENTAGE" as const, value: 10 },
+    DIAMANTE: { type: "CUSTOM" as const, value: 0, description: "sobremesa grátis" },
+  };
+
+  it("gives each tier its own configured reward", () => {
+    expect(resolveTierCoupon(map, "PRATA", base)?.value).toBe(5);
+    expect(resolveTierCoupon(map, "DIAMANTE", base)?.description).toBe("sobremesa grátis");
+  });
+
+  it("falls back to the base coupon when the tier has no entry or no map exists", () => {
+    expect(resolveTierCoupon({ OURO: map.OURO }, "PRATA", base)).toBe(base);
+    expect(resolveTierCoupon(null, "OURO", base)).toBe(base);
+  });
+
+  it("explicit null means that tier gets NOTHING (not the fallback)", () => {
+    expect(resolveTierCoupon({ PRATA: null }, "PRATA", base)).toBeNull();
   });
 });

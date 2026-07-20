@@ -13,6 +13,7 @@ import {
   type CouponType, type ReadyMadeCoupon,
 } from "@/services/crm/readyMadeCampaigns";
 import { parseMessagePool, phraseKey, MAX_CUSTOM_PHRASES } from "@/services/crm/crmMessagePool";
+import { TIER_COUPON_CAMPAIGN_IDS } from "@/services/crm/readyMadeCampaigns";
 
 // Ids of the "fixed" ready-made campaigns — used to badge a row as Fixa vs Personalizada.
 const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
@@ -1981,6 +1982,12 @@ function CampaignManageModal({
   // Edit – trigger days ("X dias após o evento") for event-based ready-made campaigns
   const [triggerDays, setTriggerDays] = useState<number>(2);
 
+  // Edit – per-tier rewards (Subiu de nível / Mimo mensal): Prata/Ouro/Diamante
+  // each with their own coupon, so levels FEEL different.
+  const [tierCoupons, setTierCoupons]       = useState<Record<string, ReadyMadeCoupon | null>>({});
+  const [savingTierC, setSavingTierC]       = useState(false);
+  const [tierCSaved, setTierCSaved]         = useState(false);
+
   useEffect(() => {
     setLoading(true);
     setError(false);
@@ -2027,6 +2034,13 @@ function CampaignManageModal({
         }
         setCoupon(((cfg as unknown as { coupon?: ReadyMadeCoupon | null })?.coupon) ?? null);
         setTriggerDays(((cfg as unknown as { triggerDays?: number })?.triggerDays) ?? 2);
+        // Per-tier rewards: stored map, else seed every tier with the base coupon.
+        {
+          const stored = (cfg as unknown as { tierCoupons?: Record<string, ReadyMadeCoupon | null> })?.tierCoupons;
+          const base   = ((cfg as unknown as { coupon?: ReadyMadeCoupon | null })?.coupon) ?? { type: "PERCENTAGE" as const, value: 10 };
+          setTierCoupons(stored ?? { PRATA: base, OURO: base, DIAMANTE: base });
+        }
+        setTierCSaved(false);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -2105,6 +2119,8 @@ function CampaignManageModal({
   const rmTiming       = detail?.templateId ? getReadyMadeTiming(detail.templateId) : null;
   const rmCanEditMsg   = !readyMade || readyMade.editable.includes("message");
   const rmCanTrigger   = !!readyMade?.editable.includes("triggerDays");
+  const isTierCouponCampaign = !!detail?.templateId
+    && (TIER_COUPON_CAMPAIGN_IDS as readonly string[]).includes(detail.templateId);
   const msgPreview     = renderCrmMessage(msgText, MANAGE_PREVIEW_CUSTOMER, { ...MANAGE_PREVIEW_CTX, coupon });
   // How many phrases are actually rotating (selected catalog + ON custom).
   const poolActiveCount = rmVariants.filter((v) => poolSelected.has(phraseKey(v))).length
@@ -2194,6 +2210,25 @@ function CampaignManageModal({
         setTimeout(() => setSchedSaved(false), 3000);
       }
     } finally { setSavingSched(false); }
+  }
+
+  async function handleSaveTierCoupons() {
+    if (!detail) return;
+    setSavingTierC(true);
+    try {
+      const res = await fetch(`/api/crm/campaigns/${detail.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduleConfig: { tierCoupons } }),
+      });
+      if (res.ok) {
+        const json = await res.json() as { data?: { scheduleConfig: unknown } };
+        if (json.data?.scheduleConfig) {
+          setDetail((p) => p ? { ...p, scheduleConfig: json.data!.scheduleConfig as Record<string, unknown> } : p);
+        }
+        setTierCSaved(true);
+        setTimeout(() => setTierCSaved(false), 3000);
+      }
+    } finally { setSavingTierC(false); }
   }
 
   async function handleSaveCoupon() {
@@ -2592,8 +2627,88 @@ function CampaignManageModal({
                       </p>
                     )}
 
+                    {/* ── Recompensa por nível (Subiu de nível / Mimo mensal) ── */}
+                    {canEdit && isTierCouponCampaign && (
+                      <div className="border-t border-line pt-5">
+                        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted">Recompensa por nível</p>
+                        <p className="mb-3 text-xs text-muted">
+                          Cada nível ganha a própria recompensa — Diamante deve sentir que vale mais que Prata.
+                        </p>
+                        <div className="space-y-2">
+                          {([
+                            { key: "PRATA",    label: "🥈 Prata" },
+                            { key: "OURO",     label: "🥇 Ouro" },
+                            { key: "DIAMANTE", label: "💎 Diamante" },
+                          ] as { key: string; label: string }[]).map(({ key, label }) => {
+                            const c = tierCoupons[key] ?? null;
+                            const setTier = (v: ReadyMadeCoupon | null) => setTierCoupons((p) => ({ ...p, [key]: v }));
+                            return (
+                              <div key={key} className="rounded-xl border border-line p-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="w-24 text-sm font-bold text-ink">{label}</span>
+                                  {([
+                                    { t: null,         lbl: "Sem" },
+                                    { t: "PERCENTAGE", lbl: "%" },
+                                    { t: "FIXED",      lbl: "R$" },
+                                    { t: "CUSTOM",     lbl: "Brinde" },
+                                  ] as { t: CouponType | null; lbl: string }[]).map((opt) => (
+                                    <button
+                                      key={opt.lbl}
+                                      onClick={() => setTier(
+                                        opt.t === null ? null
+                                        : opt.t === "CUSTOM"
+                                        ? { type: "CUSTOM", value: c?.type === "CUSTOM" ? c.value : 0, description: c?.description ?? "", validityDays: c?.validityDays ?? 30 }
+                                        : { type: opt.t, value: c && c.type === opt.t ? c.value : (opt.t === "PERCENTAGE" ? 10 : 15), validityDays: c?.validityDays ?? 30 }
+                                      )}
+                                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${(c?.type ?? null) === opt.t ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
+                                    >{opt.lbl}</button>
+                                  ))}
+                                  {c && c.type !== "CUSTOM" && (
+                                    <input
+                                      type="number" min={1} max={100000} value={c.value}
+                                      onChange={(e) => setTier({ ...c, value: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                      className="w-20 rounded-lg border border-line bg-white px-2 py-1 text-sm text-ink focus:border-brand-400 focus:outline-none"
+                                    />
+                                  )}
+                                  {c && c.type === "CUSTOM" && (
+                                    <input
+                                      type="text" maxLength={80} placeholder="ex.: sobremesa grátis" value={c.description ?? ""}
+                                      onChange={(e) => setTier({ ...c, description: e.target.value })}
+                                      className="min-w-[160px] flex-1 rounded-lg border border-line bg-white px-2 py-1 text-sm text-ink focus:border-brand-400 focus:outline-none"
+                                    />
+                                  )}
+                                  {c && (
+                                    <span className="flex items-center gap-1 text-xs text-muted">
+                                      válido
+                                      <input
+                                        type="number" min={1} max={365} value={c.validityDays ?? 30}
+                                        onChange={(e) => setTier({ ...c, validityDays: Math.max(1, parseInt(e.target.value, 10) || 30) })}
+                                        className="w-14 rounded-lg border border-line bg-white px-1.5 py-1 text-sm text-ink focus:border-brand-400 focus:outline-none"
+                                      />
+                                      dias
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-1.5 text-[11px] text-emerald-700">
+                                  {c ? <>Ganha <span className="font-bold">{couponLabel(c)}</span> na carteira.</> : <span className="text-muted">Este nível não recebe recompensa.</span>}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <button
+                            onClick={() => void handleSaveTierCoupons()}
+                            disabled={savingTierC}
+                            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
+                          >{savingTierC ? "Salvando…" : "Salvar recompensas"}</button>
+                          {tierCSaved && <p className="text-xs font-semibold text-green-600">✓ Salvo!</p>}
+                        </div>
+                      </div>
+                    )}
+
                     {/* ── Cupom / recompensa (recorrentes + carrinho) ── */}
-                    {canEdit && (isRecurring || isCartRecovery) && (
+                    {canEdit && (isRecurring || isCartRecovery) && !isTierCouponCampaign && (
                       <div className="border-t border-line pt-5">
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">Cupom de desconto (opcional)</p>
                         <div className="flex flex-wrap gap-2">

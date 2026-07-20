@@ -311,6 +311,13 @@ export async function PATCH(
         ...(patch.dailyLimit  !== undefined ? { dailyLimit:  patch.dailyLimit  } : {}),
         ...(patch.coupon      !== undefined ? { coupon:      patch.coupon      } : {}),
         ...(patch.triggerDays !== undefined ? { triggerDays: patch.triggerDays } : {}),
+        // Per-tier rewards (Subiu de nível / Mimo mensal): only the 3 ladder keys.
+        ...(patch.tierCoupons !== undefined ? {
+          tierCoupons: patch.tierCoupons && typeof patch.tierCoupons === "object"
+            ? Object.fromEntries(Object.entries(patch.tierCoupons as Record<string, unknown>)
+                .filter(([k]) => ["PRATA", "OURO", "DIAMANTE"].includes(k)))
+            : null,
+        } : {}),
         ...poolPatch,
       };
     }

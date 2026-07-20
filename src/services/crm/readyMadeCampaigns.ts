@@ -352,6 +352,29 @@ export function getReadyMadeCampaign(id: string): ReadyMadeCampaign | null {
   return READY_MADE_CAMPAIGNS.find((c) => c.id === id) ?? null;
 }
 
+// ── Per-tier rewards ──────────────────────────────────────────────────────────
+
+/** Campaigns whose reward can differ per tier (scheduleConfig.tierCoupons):
+ *  Prata gets X, Ouro gets Y, Diamante gets Z — levels must FEEL different. */
+export const TIER_COUPON_CAMPAIGN_IDS = ["subiu-de-nivel", "mimo-mensal-nivel"] as const;
+
+export type TierCouponsConfig = Partial<Record<"PRATA" | "OURO" | "DIAMANTE", ReadyMadeCoupon | null>>;
+
+/**
+ * The reward a given recipient should get: their tier's configured coupon when
+ * the campaign defines one (explicit null = that tier gets nothing), otherwise
+ * the campaign's base coupon.
+ */
+export function resolveTierCoupon(
+  tierCoupons: TierCouponsConfig | null | undefined,
+  tier:        string,
+  fallback:    ReadyMadeCoupon | null,
+): ReadyMadeCoupon | null {
+  if (!tierCoupons) return fallback;
+  const key = tier as keyof TierCouponsConfig;
+  return tierCoupons[key] !== undefined ? (tierCoupons[key] ?? null) : fallback;
+}
+
 /**
  * Ready-to-use message options per campaign (≥5). The owner picks one and can edit
  * it freely afterwards. The first entry mirrors the campaign's defaultMessage.
