@@ -4255,6 +4255,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Global daily send limit (shown above the table). In safe mode it's the warmup
   // number that grows on its own; in manual mode it's the owner-set cap (0 = none).
   const [sendLimit, setSendLimit] = useState<{ manual: boolean; cap: number; safe: number } | null>(null);
+  // How the daily budget is split across campaigns (EQUAL | AUDIENCE | MANUAL) —
+  // saved through the full raw safety config (the PATCH replaces the whole object).
+  const [safetyRaw, setSafetyRaw]   = useState<Record<string, unknown> | null>(null);
+  const [distMode, setDistMode]     = useState<string>("EQUAL");
+  const [savingDist, setSavingDist] = useState(false);
   useEffect(() => {
     fetch("/api/settings/crm-safety")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -4265,9 +4270,26 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           cap:    typeof data.dailyGlobalCap === "number" ? data.dailyGlobalCap : 0,
           safe:   data.warmup?.safeDailyLimit ?? 0,
         });
+        setSafetyRaw(data);
+        setDistMode((data.crmWhatsAppSafety as { distributionMode?: string } | undefined)?.distributionMode ?? "EQUAL");
       })
       .catch(() => {});
   }, [readyMadeReload]);
+
+  async function saveDistributionMode(mode: string) {
+    if (!safetyRaw || savingDist || mode === distMode) return;
+    setSavingDist(true);
+    setDistMode(mode);
+    try {
+      await fetch("/api/settings/crm-safety", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...safetyRaw,
+          crmWhatsAppSafety: { ...(safetyRaw.crmWhatsAppSafety as object ?? {}), distributionMode: mode },
+        }),
+      });
+    } finally { setSavingDist(false); }
+  }
 
   // Toggle cart recovery on/off — the same control the other campaigns' Pausar/Ativar
   // give, wired to the readyMadeConfig.cartRecoveryEnabled flag.
@@ -4423,7 +4445,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
       {/* ── Limite global de envio (o teto de mensagens/dia de TODAS as campanhas) ── */}
       {sendLimit && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-2.5">
+        <div className="space-y-2 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <span className="text-base">📤</span>
             <p className="text-xs text-ink2">
@@ -4435,8 +4457,30 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
               {" · "}
               {sendLimit.manual
                 ? "definido por você (controle manual) — some os limites por campanha abaixo."
-                : "modo seguro: sobe sozinho conforme o número amadurece. Ligue o controle manual em Configurações para elevar."}
+                : "modo seguro: ajustado automaticamente ao canal conectado. Ligue o controle manual em Configurações para mudar."}
             </p>
+          </div>
+          {/* Como o limite diário é repartido entre as campanhas */}
+          <div className="flex flex-wrap items-center gap-1.5 pl-7">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Distribuição:</span>
+            {([
+              { id: "AUDIENCE", label: "🎯 Por audiência", title: "Reparte o limite diário proporcionalmente ao tamanho da audiência de cada campanha — segmentos maiores recebem mais envios, automaticamente" },
+              { id: "EQUAL",    label: "Igual para todas", title: "Divide o limite diário em partes iguais entre as campanhas ativas" },
+              { id: "MANUAL",   label: "Manual (Limite/dia)", title: "Cada campanha usa o próprio Limite/dia configurado na aba Agendamento" },
+            ] as { id: string; label: string; title: string }[]).map((opt) => (
+              <button
+                key={opt.id}
+                title={opt.title}
+                onClick={() => void saveDistributionMode(opt.id)}
+                disabled={savingDist}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-60 ${
+                  distMode === opt.id ? "bg-brand-600 text-white" : "bg-white text-ink2 hover:bg-line2"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+            {savingDist && <span className="text-[10px] text-muted">salvando…</span>}
           </div>
         </div>
       )}

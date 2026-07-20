@@ -300,3 +300,47 @@ describe("isCycleIntervalActive (min interval between cycles)", () => {
     expect(isCycleIntervalActive("not-a-date", 10, now)).toBe(false);
   });
 });
+
+describe("AUDIENCE distribution — daily budget proportional to audience size", () => {
+  const cfg = (over: Partial<import("@/lib/crm-safety").CRMWhatsAppBudgetConfig> = {}) => ({
+    enabled: true, providerMode: "EVOLUTION_WEB" as const,
+    globalDailyLimit: 100, globalCycleLimit: 40, minMinutesBetweenCycles: 0,
+    distributionMode: "AUDIENCE" as const,
+    stopOnInstanceDisconnected: true, pauseOnFailureRatePercent: 0, maxConsecutiveProviderFailures: 0,
+    ...over,
+  });
+  const camp = (id: string, audience: number, sent = 0) => ({
+    campaignId: id, priority: "GENERIC_PROMO" as const,
+    alreadySentToday: sent, remainingAudience: audience,
+  });
+
+  it("splits the daily budget proportionally to each campaign's audience", () => {
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config: cfg(), globalSentToday: 0, instanceConnected: true,
+      campaigns: [camp("big", 300), camp("mid", 100), camp("tiny", 0)],
+    });
+    const byId = Object.fromEntries(plan.perCampaign.map((p) => [p.campaignId, p]));
+    expect(byId.big.dailyQuota).toBe(75);   // 300/400 of 100
+    expect(byId.mid.dailyQuota).toBe(25);   // 100/400 of 100
+    expect(byId.tiny.dailyQuota).toBe(0);   // empty audience gets nothing
+    expect(byId.big.dailyQuota + byId.mid.dailyQuota).toBe(100);
+  });
+
+  it("guarantees at least 1 daily slot to any non-empty audience", () => {
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config: cfg({ globalDailyLimit: 10 }), globalSentToday: 0, instanceConnected: true,
+      campaigns: [camp("huge", 1000), camp("tiny", 1)],
+    });
+    const tiny = plan.perCampaign.find((p) => p.campaignId === "tiny")!;
+    expect(tiny.dailyQuota).toBeGreaterThanOrEqual(1);
+  });
+
+  it("falls back to the even split when no audience data exists", () => {
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config: cfg(), globalSentToday: 0, instanceConnected: true,
+      campaigns: [camp("a", 0), camp("b", 0)],
+    });
+    expect(plan.perCampaign[0]!.dailyQuota).toBe(50);
+    expect(plan.perCampaign[1]!.dailyQuota).toBe(50);
+  });
+});

@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 export type CRMProviderMode = "EVOLUTION_WEB" | "META_CLOUD";
 
 /** How the daily/cycle budget is split across the active campaigns. */
-export type CRMBudgetDistributionMode = "EQUAL" | "PRIORITY" | "MANUAL";
+export type CRMBudgetDistributionMode = "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
 
 /**
  * Restaurant-level WhatsApp sending budget + orchestration.
@@ -146,7 +146,8 @@ export function parseBudgetConfig(raw: unknown): CRMWhatsAppBudgetConfig {
   const providerMode: CRMProviderMode =
     r.providerMode === "META_CLOUD" || r.providerMode === "EVOLUTION_WEB" ? r.providerMode : d.providerMode;
   const distributionMode: CRMBudgetDistributionMode =
-    r.distributionMode === "EQUAL" || r.distributionMode === "PRIORITY" || r.distributionMode === "MANUAL"
+    r.distributionMode === "EQUAL" || r.distributionMode === "PRIORITY" ||
+    r.distributionMode === "MANUAL" || r.distributionMode === "AUDIENCE"
       ? r.distributionMode
       : d.distributionMode;
   return {

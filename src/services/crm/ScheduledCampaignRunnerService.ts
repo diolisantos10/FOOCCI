@@ -27,6 +27,7 @@ import {
 } from "./CrmCampaignService";
 import { getSegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "./CustomerSegmentService";
+import { CrmAudienceService } from "./CrmAudienceService";
 import {
   parseMessagePool,
   resolveActivePhrases,
@@ -166,7 +167,7 @@ export interface StuckSendingRecoveryResult {
 export interface BudgetSnapshot {
   enabled:               boolean;
   providerMode:          "EVOLUTION_WEB" | "META_CLOUD";
-  distributionMode:      "EQUAL" | "PRIORITY" | "MANUAL";
+  distributionMode:      "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
   globalDailyUsed?:      number;
   globalDailyLimit?:     number;
   globalCycleLimit?:     number;
@@ -325,9 +326,9 @@ export class ScheduledCampaignRunnerService {
    */
   static async runCampaignBatch(
     campaignId: string,
-    options: { dryRun?: boolean; limit?: number; abortOnInstanceCollapse?: boolean } = {}
+    options: { dryRun?: boolean; limit?: number; abortOnInstanceCollapse?: boolean; dailyLimitOverride?: number } = {}
   ): Promise<CampaignBatchResult> {
-    const { dryRun = false, limit, abortOnInstanceCollapse = false } = options;
+    const { dryRun = false, limit, abortOnInstanceCollapse = false, dailyLimitOverride } = options;
 
     const campaign = await prisma.campaign.findUnique({
       where:  { id: campaignId },
@@ -416,7 +417,11 @@ export class ScheduledCampaignRunnerService {
     // ────────────────────────────────────────────────────────────────────────
 
     const cfg = campaign.scheduleConfig as unknown as RecurringScheduleConfig;
-    const dailyLimit = Math.max(1, Math.min(cfg.dailyLimit ?? 20, 200));
+    // AUDIENCE distribution passes the planner's proportional share as an override;
+    // otherwise the campaign's own configured limit applies (MANUAL behavior).
+    const dailyLimit = dailyLimitOverride && dailyLimitOverride > 0
+      ? dailyLimitOverride
+      : Math.max(1, Math.min(cfg.dailyLimit ?? 20, 200));
 
     // Count last-24h sends (rolling daily window)
     const cutoff24h  = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -719,16 +724,37 @@ export class ScheduledCampaignRunnerService {
       }),
     );
 
+    // AUDIENCE distribution needs each campaign's real eligible-audience size to
+    // weight the split. Resolved once per distinct template (segments are shared).
+    const audienceByCampaign = new Map<string, number>();
+    if (budget.distributionMode === "AUDIENCE") {
+      try {
+        const segCfg = await getSegmentConfig(restaurantId);
+        const templateOf = (c: (typeof due)[number]) => c.templateId || c.targetSegment || "todos-clientes";
+        const byTemplate = new Map<string, number>();
+        await Promise.all([...new Set(due.map(templateOf))].map(async (tpl) => {
+          try {
+            const res = await CrmAudienceService.getAudiencePreview(restaurantId, tpl, segCfg);
+            byTemplate.set(tpl, res.eligibleCount);
+          } catch { byTemplate.set(tpl, 0); }
+        }));
+        for (const c of due) audienceByCampaign.set(c.id, byTemplate.get(templateOf(c)) ?? 0);
+      } catch { /* fall back to unweighted below */ }
+    }
+
     let pending: BudgetCampaignInput[] = due.map((c) => {
       const cfg = c.scheduleConfig as RecurringScheduleConfig | null;
+      const audience = audienceByCampaign.get(c.id);
       return {
         campaignId:        c.id,
         campaignName:      c.name,
         priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
         alreadySentToday:  sentByCampaign.get(c.id) ?? 0,
-        // Real eligible audience is discovered during the send; redistribution of an
-        // empty campaign's slot is handled by re-planning each iteration.
-        remainingAudience: Number.MAX_SAFE_INTEGER,
+        // AUDIENCE mode weights by the real eligible pool; other modes discover the
+        // audience during the send (redistribution handles empty campaigns).
+        remainingAudience: typeof audience === "number"
+          ? Math.max(0, audience - (sentByCampaign.get(c.id) ?? 0))
+          : Number.MAX_SAFE_INTEGER,
         // MANUAL distribution mode uses the campaign's own daily limit as its quota
         // (same clamp as runCampaignBatch applies).
         manualDailyQuota:  Math.max(1, Math.min(cfg?.dailyLimit ?? 20, 200)),
@@ -773,6 +799,11 @@ export class ScheduledCampaignRunnerService {
         dryRun,
         limit:                   next.allocated,
         abortOnInstanceCollapse: true,
+        // AUDIENCE mode: the planner's proportional share replaces the campaign's
+        // own dailyLimit (otherwise a 20/day leftover from MANUAL would choke it).
+        ...(budget.distributionMode === "AUDIENCE" && next.dailyQuota > 0
+          ? { dailyLimitOverride: next.dailyQuota }
+          : {}),
       }).catch((err): CampaignBatchResult => ({
         campaignId:   campaign.id,
         campaignName: campaign.name,

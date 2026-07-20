@@ -156,6 +156,35 @@ function computeDailyQuotas(dailyLimit: number, n: number, order: number[]): num
   return quotas;
 }
 
+/**
+ * AUDIENCE mode: split the daily budget proportionally to each campaign's
+ * eligible audience — a campaign with 300 frios gets 3× the quota of one with
+ * 100 mornos. Campaigns with a non-empty audience always get at least 1 slot
+ * (a tiny segment must still trickle). Zero-audience campaigns get 0. Falls
+ * back to the even split when no audience data is available.
+ */
+function computeAudienceQuotas(dailyLimit: number, audiences: number[], order: number[]): number[] {
+  const n = audiences.length;
+  if (n === 0) return [];
+  if (dailyLimit <= 0) return new Array(n).fill(UNLIMITED);
+  const weights = audiences.map((a) => (Number.isFinite(a) && a > 0 ? a : 0));
+  const total   = weights.reduce((s, v) => s + v, 0);
+  if (total <= 0) return computeDailyQuotas(dailyLimit, n, order);
+
+  const quotas = weights.map((w) => (w > 0 ? Math.max(1, Math.floor((dailyLimit * w) / total)) : 0));
+  // Hand out any remainder (or claw back any floor-overshoot) by priority order.
+  let assigned = quotas.reduce((s, v) => s + v, 0);
+  for (const idx of order) {
+    if (assigned >= dailyLimit) break;
+    if ((weights[idx] ?? 0) > 0) { quotas[idx] = (quotas[idx] ?? 0) + 1; assigned += 1; }
+  }
+  for (const idx of [...order].reverse()) {
+    if (assigned <= dailyLimit) break;
+    if ((quotas[idx] ?? 0) > 1) { quotas[idx] = (quotas[idx] ?? 0) - 1; assigned -= 1; }
+  }
+  return quotas;
+}
+
 // ─── Cycle distribution ─────────────────────────────────────────────────────────
 
 /**
@@ -258,13 +287,18 @@ export class CRMWhatsAppBudgetPlanner {
     // owner sets it per campaign), instead of an equal split of the global budget.
     // Campaigns without a limit fall back to the equal share so a half-configured
     // setup still behaves sanely. The global daily/cycle ceilings still apply.
+    // AUDIENCE mode: the daily budget is split proportionally to each campaign's
+    // eligible audience — bigger segments get bigger quotas, automatically.
     const equalQuotas = computeDailyQuotas(config.globalDailyLimit, n, order);
-    const dailyQuotas = config.distributionMode === "MANUAL"
-      ? campaigns.map((c, i) =>
-          typeof c.manualDailyQuota === "number" && c.manualDailyQuota >= 0
-            ? c.manualDailyQuota
-            : (equalQuotas[i] ?? 0))
-      : equalQuotas;
+    const dailyQuotas =
+      config.distributionMode === "MANUAL"
+        ? campaigns.map((c, i) =>
+            typeof c.manualDailyQuota === "number" && c.manualDailyQuota >= 0
+              ? c.manualDailyQuota
+              : (equalQuotas[i] ?? 0))
+        : config.distributionMode === "AUDIENCE"
+        ? computeAudienceQuotas(config.globalDailyLimit, campaigns.map((c) => c.remainingAudience), order)
+        : equalQuotas;
 
     // Per-campaign capacity this cycle = what's left of the daily quota, bounded
     // by the remaining audience (no point allocating a slot nobody can receive).
