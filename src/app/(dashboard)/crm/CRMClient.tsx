@@ -4223,9 +4223,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         setCartRecoveryItem(cart);
         setCartRecoveryOn(!!cart?.active);
         // Carrinho is shown as its own dedicated row, so exclude it here to avoid a
-        // duplicate row once it has a Campaign record.
+        // duplicate row once it has a Campaign record. PAUSED rows are INCLUDED —
+        // a paused fixed campaign must stay visible (status "Pausada" + Retomar),
+        // not vanish from the table; the status filter handles the rest.
         setActiveReadyMadeIds(
-          rm.filter((c) => c.active && c.campaignId && c.id !== "carrinho-abandonado").map((c) => c.campaignId as string),
+          rm.filter((c) => c.campaignId && c.id !== "carrinho-abandonado").map((c) => c.campaignId as string),
         );
       })
       .catch(() => {});
