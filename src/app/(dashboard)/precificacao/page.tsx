@@ -12,6 +12,7 @@ import {
   type PriceLogDTO,
   type IngredientDTO,
   type RecipeLineDTO,
+  type CategoryDTO,
 } from "./PrecificacaoClient";
 
 export const metadata = { title: "CMV & Precificação — Foocci" };
@@ -40,6 +41,7 @@ export default async function PrecificacaoPage() {
       select: {
         id: true,
         name: true,
+        markupOverride: true,
         items: {
           where: { isActive: true },
           orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -117,6 +119,12 @@ export default async function PrecificacaoPage() {
     quantity: l.quantity === null ? null : Number(l.quantity),
   }));
 
+  const initialCategories: CategoryDTO[] = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    markupOverride: c.markupOverride === null ? null : Number(c.markupOverride),
+  }));
+
   return (
     <>
       <TopBar title="CMV & Precificação" />
@@ -126,6 +134,7 @@ export default async function PrecificacaoPage() {
         initialLogs={initialLogs}
         initialIngredients={initialIngredients}
         initialRecipeLines={initialRecipeLines}
+        initialCategories={initialCategories}
         canEdit={canEdit}
       />
     </>

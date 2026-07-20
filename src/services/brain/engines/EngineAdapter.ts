@@ -16,6 +16,12 @@ export interface StructuredCallInput {
   maxTokens?: number;
   /** "json" (default) força objeto JSON; "text" devolve texto livre. */
   responseFormat?: "json" | "text";
+  /**
+   * Entrada visual opcional (data URL base64, ex.: leitura de nota de compra).
+   * Suportada hoje pelo piloto OPENAI; os demais lançam erro claro — o caller
+   * decide o fallback, como em qualquer falha de engine.
+   */
+  imageDataUrl?: string;
 }
 
 /** Cada adapter de provider implementa isto. Lança em erro — o caller decide o fallback. */

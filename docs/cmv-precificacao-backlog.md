@@ -42,6 +42,24 @@
    - Modelos `Ingredient` + `RecipeLine` (migration aditiva
      `20260719200000_ingredients_recipe`); 22 checks E2E em Postgres real.
 
+## ✅ Entregue (3ª leva — 20/07/2026)
+
+6. **Aba Markup** em `/precificacao` — markup por categoria
+   (`MenuCategory.markupOverride`, migration aditiva): override vence o markup
+   global das premissas; funciona até sem premissas globais; tabela com CMV
+   alvo por categoria e exemplo "custo R$ 10 vira"; em modo Automático a
+   mudança de markup reprecifica a categoria na hora, dentro da trava.
+   Benchmarks do setor na tela (pratos 2,5–3× · bebidas/sobremesas 4–5×).
+7. **Importador de nota de compra (foto/PDF)** na aba Insumos — o lojista
+   fotografa a nota (ou sobe PDF), a IA extrai os itens **através do Brain**
+   (Regra de Ouro: `selectEngine("invoice-reader")` + `callStructuredJson`,
+   com suporte a imagem adicionado ao contrato do motor), o sistema casa os
+   itens com o catálogo (tokenização pt-BR + conversão kg→g, L→ml) e abre a
+   **tela de revisão obrigatória** — nada é aplicado sem confirmação. A
+   aplicação reusa o pipeline existente: auditoria → ficha recalcula CMV →
+   dispositivo reprecifica o cardápio. Modelo com override por env
+   (`INVOICE_EXTRACT_MODEL`).
+
 ## 🔜 Próximas fases (ordem sugerida)
 
 - **P1 — Corrigir importador de planilhas** *(pequeno)* — hoje

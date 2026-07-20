@@ -48,8 +48,28 @@ export const applyPricesSchema = z.object({
   itemIds: z.array(z.string().cuid()).min(1).max(500),
 });
 
+// ─── Markup por categoria (aba Markup) ────────────────────────
+
+export const categoryMarkupSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        categoryId: z.string().cuid(),
+        // null = volta ao markup global; ≥1 porque abaixo de 1× vende no prejuízo
+        markupOverride: z
+          .number()
+          .min(1, "Markup deve ser no mínimo 1×")
+          .max(50, "Markup alto demais")
+          .nullable(),
+      })
+    )
+    .min(1)
+    .max(200),
+});
+
 // ─── Exported types ───────────────────────────────────────────
 
 export type PricingConfigInput = z.infer<typeof pricingConfigSchema>;
 export type UpdateCostsInput = z.infer<typeof updateCostsSchema>;
 export type ApplyPricesInput = z.infer<typeof applyPricesSchema>;
+export type CategoryMarkupInput = z.infer<typeof categoryMarkupSchema>;

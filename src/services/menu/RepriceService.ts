@@ -108,15 +108,18 @@ async function applyIdealToItems(
   };
   if (itemIds.length === 0) return outcome;
 
+  // May be null (premissas not set) — a category markupOverride still works.
   const markup = markupFromConfig(config);
-  if (markup === null) {
-    outcome.skipped = itemIds.length;
-    return outcome;
-  }
 
   const items = await prisma.menuItem.findMany({
     where: { id: { in: itemIds }, category: { restaurantId } },
-    select: { id: true, name: true, price: true, cost: true },
+    select: {
+      id: true,
+      name: true,
+      price: true,
+      cost: true,
+      category: { select: { markupOverride: true } },
+    },
   });
 
   const maxChange = num(config.maxAutoChangePct) ?? 0;
@@ -126,7 +129,9 @@ async function applyIdealToItems(
   for (const item of items) {
     const currentPrice = Number(item.price);
     const cost = num(item.cost);
-    const ideal = idealPrice(cost, markup, rounding);
+    // Category override (aba Markup) beats the global markup from premissas.
+    const effectiveMarkup = num(item.category.markupOverride) ?? markup;
+    const ideal = idealPrice(cost, effectiveMarkup, rounding);
 
     if (ideal === null || ideal === currentPrice) {
       outcome.skipped++;
@@ -253,10 +258,17 @@ export async function applySuggestedPrices(
 ): Promise<ServiceResult<RepriceOutcome & { items: ItemPriceState[] }>> {
   const config = await getOrCreateConfig(restaurantId);
   if (markupFromConfig(config) === null) {
-    return serviceFail(
-      "Defina as premissas de precificação (Bloco Custos & Fórmula) antes de aplicar preços.",
-      400
-    );
+    // Without global premissas the apply can still work for categories that
+    // carry their own markup override (aba Markup).
+    const overrides = await prisma.menuCategory.count({
+      where: { restaurantId, markupOverride: { not: null } },
+    });
+    if (overrides === 0) {
+      return serviceFail(
+        "Defina as premissas de precificação (Bloco Custos & Fórmula) antes de aplicar preços.",
+        400
+      );
+    }
   }
   const outcome = await applyIdealToItems(restaurantId, itemIds, config, {
     source: "APPLIED",
@@ -292,11 +304,65 @@ export async function repriceAllAfterConfigChange(
   );
 }
 
+/**
+ * Save per-category markup overrides (aba Markup). null clears the override
+ * (category goes back to the global markup). In AUTO mode the device
+ * immediately re-derives the affected items' prices within the guardrail.
+ */
+export async function updateCategoryMarkups(
+  restaurantId: string,
+  changes: Array<{ categoryId: string; markupOverride: number | null }>,
+  userId: string | null
+): Promise<
+  ServiceResult<{ updated: number; auto: RepriceOutcome | null; items: ItemPriceState[] }>
+> {
+  const ids = changes.map((c) => c.categoryId);
+  const cats = await prisma.menuCategory.findMany({
+    where: { id: { in: ids }, restaurantId },
+    select: { id: true },
+  });
+  if (cats.length !== ids.length) {
+    return serviceFail("Uma ou mais categorias não pertencem a este restaurante.", 404);
+  }
+
+  await prisma.$transaction(
+    changes.map((c) =>
+      prisma.menuCategory.update({
+        where: { id: c.categoryId },
+        data: {
+          markupOverride:
+            c.markupOverride === null ? null : new Decimal(c.markupOverride.toFixed(3)),
+        },
+      })
+    )
+  );
+
+  let auto: RepriceOutcome | null = null;
+  let items: ItemPriceState[] = [];
+  const config = await getOrCreateConfig(restaurantId);
+  if (config.autoRepriceMode === "AUTO") {
+    const affected = await prisma.menuItem.findMany({
+      where: { isActive: true, cost: { not: null }, categoryId: { in: ids } },
+      select: { id: true },
+    });
+    auto = await applyIdealToItems(
+      restaurantId,
+      affected.map((i) => i.id),
+      config,
+      { source: "AUTO", userId, respectGuardrail: true }
+    );
+    items = await fetchItemsState(restaurantId, auto.changedIds);
+  }
+
+  return serviceOk({ updated: changes.length, auto, items });
+}
+
 export const RepriceService = {
   getOrCreateConfig,
   markupFromConfig,
   updateCostsWithReprice,
   applySuggestedPrices,
   repriceAllAfterConfigChange,
+  updateCategoryMarkups,
   fetchItemsState,
 };

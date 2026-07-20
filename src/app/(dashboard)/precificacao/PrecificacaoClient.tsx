@@ -13,7 +13,7 @@
  * reage ao rascunho em edição.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, Card, ConfirmDialog, EmptyState, Pill } from "@/components/ui";
 import {
   CMV_HEALTHY_MAX_PCT,
@@ -79,6 +79,43 @@ export interface RecipeLineDTO {
   menuItemId: string;
   ingredientId: string;
   quantity: number | null;
+}
+
+export interface CategoryDTO {
+  id: string;
+  name: string;
+  markupOverride: number | null; // null = segue o markup global das premissas
+}
+
+interface InvoiceProposalDTO {
+  extractedName: string;
+  extractedUnit: string | null;
+  extractedUnitPrice: number | null;
+  matchedIngredientId: string | null;
+  matchedIngredientName: string | null;
+  confidence: "high" | "medium" | "none";
+  suggestedCost: number | null;
+  conversionNote: string | null;
+}
+
+interface InvoiceRow {
+  include: boolean;
+  extractedName: string;
+  extractedUnit: string | null;
+  extractedUnitPrice: number | null;
+  /** "" = sem destino · "__new__" = criar insumo novo · senão id do insumo */
+  ingredientId: string;
+  cost: string;
+  note: string | null;
+  confidence: "high" | "medium" | "none";
+}
+
+function titleCasePt(s: string): string {
+  return s
+    .toLocaleLowerCase("pt-BR")
+    .replace(/(^|\s)\S/g, (c) => c.toLocaleUpperCase("pt-BR"))
+    .trim()
+    .slice(0, 60);
 }
 
 interface ItemStateDTO {
@@ -242,6 +279,7 @@ export function PrecificacaoClient({
   initialLogs,
   initialIngredients,
   initialRecipeLines,
+  initialCategories,
   canEdit,
 }: {
   initialConfig: PricingConfigDTO;
@@ -249,6 +287,7 @@ export function PrecificacaoClient({
   initialLogs: PriceLogDTO[];
   initialIngredients: IngredientDTO[];
   initialRecipeLines: RecipeLineDTO[];
+  initialCategories: CategoryDTO[];
   canEdit: boolean;
 }) {
   const [savedConfig, setSavedConfig] = useState<PricingConfigDTO>(initialConfig);
@@ -272,7 +311,21 @@ export function PrecificacaoClient({
   const [deleteIngId, setDeleteIngId] = useState<string | null>(null);
   const [insumosMsg, setInsumosMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const [tab, setTab] = useState<"formula" | "precos" | "insumos" | "automacao">("formula");
+  // ── Importador de nota de compra (foto/PDF) ──
+  const invoiceFileRef = useRef<HTMLInputElement>(null);
+  const [readingInvoice, setReadingInvoice] = useState(false);
+  const [applyingInvoice, setApplyingInvoice] = useState(false);
+  const [invoiceRows, setInvoiceRows] = useState<InvoiceRow[] | null>(null);
+
+  // ── Markup por categoria ──
+  const [cats, setCats] = useState<CategoryDTO[]>(initialCategories);
+  const [markupDrafts, setMarkupDrafts] = useState<Record<string, string>>({});
+  const [savingMarkups, setSavingMarkups] = useState(false);
+  const [markupMsg, setMarkupMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [tab, setTab] = useState<"formula" | "markup" | "precos" | "insumos" | "automacao">(
+    "formula"
+  );
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
@@ -323,11 +376,19 @@ export function PrecificacaoClient({
     revenue: parseMoney(draft.periodRevenue),
   });
 
+  // ── Derived: markup efetivo por categoria (override da aba Markup > global) ──
+  const catOverrideById = useMemo(
+    () => new Map(cats.map((c) => [c.id, c.markupOverride])),
+    [cats]
+  );
+  const hasAnyMarkup = savedMarkup !== null || cats.some((c) => c.markupOverride !== null);
+
   // ── Derived: table rows ──
   const rows: Row[] = useMemo(
     () =>
       items.map((item) => {
-        const ideal = idealPrice(item.cost, savedMarkup, savedConfig.rounding);
+        const effectiveMarkup = catOverrideById.get(item.categoryId) ?? savedMarkup;
+        const ideal = idealPrice(item.cost, effectiveMarkup, savedConfig.rounding);
         return {
           ...item,
           cmv: cmvPct(item.cost, item.price),
@@ -336,18 +397,28 @@ export function PrecificacaoClient({
           status: ideal === null ? null : classifyPrice(item.price, ideal),
         };
       }),
-    [items, savedMarkup, savedConfig.rounding]
+    [items, savedMarkup, savedConfig.rounding, catOverrideById]
   );
 
   const belowRows = rows.filter((r) => r.status === "BELOW");
   const pendingCount = belowRows.length;
   const pendingGain = belowRows.reduce((sum, r) => sum + (r.diff ?? 0), 0);
 
-  const categories = useMemo(() => {
-    const map = new Map<string, string>();
-    items.forEach((i) => map.set(i.categoryId, i.categoryName));
-    return Array.from(map, ([id, name]) => ({ id, name }));
-  }, [items]);
+  const categories = useMemo(
+    () => cats.filter((c) => items.some((i) => i.categoryId === c.id)),
+    [cats, items]
+  );
+
+  const dirtyMarkups = useMemo(() => {
+    const changes: Array<{ categoryId: string; markupOverride: number | null }> = [];
+    for (const [categoryId, raw] of Object.entries(markupDrafts)) {
+      const cat = cats.find((c) => c.id === categoryId);
+      if (!cat) continue;
+      const parsed = parseNum4(raw);
+      if (parsed !== cat.markupOverride) changes.push({ categoryId, markupOverride: parsed });
+    }
+    return changes;
+  }, [markupDrafts, cats]);
 
   const visibleRows = rows.filter((r) => {
     if (categoryFilter && r.categoryId !== categoryFilter) return false;
@@ -643,6 +714,93 @@ export function PrecificacaoClient({
     }
   }
 
+  async function uploadInvoice(file: File) {
+    setReadingInvoice(true);
+    setInsumosMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/pricing/ingredients/import-invoice", {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `Falha na leitura (${res.status})`);
+      const proposals = json.data.proposals as InvoiceProposalDTO[];
+      setInvoiceRows(
+        proposals.map((p) => ({
+          // Pré-marca apenas o que tem destino E custo convertido com segurança
+          include: p.matchedIngredientId !== null && p.suggestedCost !== null,
+          extractedName: p.extractedName,
+          extractedUnit: p.extractedUnit,
+          extractedUnitPrice: p.extractedUnitPrice,
+          ingredientId: p.matchedIngredientId ?? "",
+          cost: p.suggestedCost !== null ? String(p.suggestedCost) : "",
+          note: p.conversionNote,
+          confidence: p.confidence,
+        }))
+      );
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao ler a nota." });
+    } finally {
+      setReadingInvoice(false);
+      if (invoiceFileRef.current) invoiceFileRef.current.value = "";
+    }
+  }
+
+  async function applyInvoice() {
+    if (!invoiceRows) return;
+    const rowsToApply = invoiceRows.filter(
+      (r) => r.include && r.ingredientId !== "" && parseNum4(r.cost) !== null
+    );
+    if (rowsToApply.length === 0) {
+      setInsumosMsg({ ok: false, text: "Nenhuma linha marcada com insumo e custo válidos." });
+      return;
+    }
+    setApplyingInvoice(true);
+    setInsumosMsg(null);
+    try {
+      let createdCount = 0;
+      const existingChanges: Array<{ id: string; costPerUnit: number | null }> = [];
+
+      for (const row of rowsToApply) {
+        const cost = parseNum4(row.cost)!;
+        if (row.ingredientId === "__new__") {
+          await apiFetch("/api/pricing/ingredients", "POST", {
+            name: titleCasePt(row.extractedName),
+            unit: row.extractedUnit ?? "un",
+            costPerUnit: cost,
+          });
+          createdCount++;
+        } else {
+          existingChanges.push({ id: row.ingredientId, costPerUnit: cost });
+        }
+      }
+
+      let suffix = "";
+      if (existingChanges.length > 0) {
+        const res = await apiFetch("/api/pricing/ingredients", "PATCH", {
+          items: existingChanges,
+        });
+        const { propagation } = res.data as { updated: number; propagation: PropagationDTO };
+        suffix = absorbPropagation(propagation);
+      }
+
+      await refreshIngredients();
+      setInvoiceRows(null);
+      setInsumosMsg({
+        ok: true,
+        text: `Nota aplicada: ${existingChanges.length} custo(s) atualizados${
+          createdCount > 0 ? `, ${createdCount} insumo(s) novos` : ""
+        }${suffix}.`,
+      });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao aplicar a nota." });
+    } finally {
+      setApplyingInvoice(false);
+    }
+  }
+
   async function removeLineAction(menuItemId: string, ingredientId: string) {
     setInsumosMsg(null);
     try {
@@ -748,9 +906,49 @@ export function PrecificacaoClient({
     }
   }
 
+  async function saveMarkups() {
+    if (dirtyMarkups.length === 0) return;
+    const invalid = dirtyMarkups.find(
+      (c) => c.markupOverride !== null && c.markupOverride < 1
+    );
+    if (invalid) {
+      setMarkupMsg({ ok: false, text: "Markup deve ser no mínimo 1× (abaixo disso vende no prejuízo)." });
+      return;
+    }
+    setSavingMarkups(true);
+    setMarkupMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/markup", "PATCH", { items: dirtyMarkups });
+      const { auto, items: freshItems } = res.data as {
+        updated: number;
+        auto: RepriceOutcomeDTO | null;
+        items: ItemStateDTO[];
+      };
+      setCats((prev) =>
+        prev.map((c) => {
+          const change = dirtyMarkups.find((d) => d.categoryId === c.id);
+          return change ? { ...c, markupOverride: change.markupOverride } : c;
+        })
+      );
+      setMarkupDrafts({});
+      mergeItems(freshItems);
+      let text = `${dirtyMarkups.length} categoria(s) salvas.`;
+      if (auto && auto.applied > 0) text += ` ${auto.applied} preço(s) atualizados automaticamente.`;
+      if (auto && auto.heldByGuardrail > 0)
+        text += ` ${auto.heldByGuardrail} ficaram como sugestão (acima da trava).`;
+      setMarkupMsg({ ok: true, text });
+      if (auto && auto.applied > 0) void refreshLogs();
+    } catch (err) {
+      setMarkupMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar markups." });
+    } finally {
+      setSavingMarkups(false);
+    }
+  }
+
   // ── Render ──
   const tabs = [
     { key: "formula" as const, label: "Custos & Fórmula" },
+    { key: "markup" as const, label: "Markup" },
     { key: "precos" as const, label: "Preços do cardápio", badge: pendingCount },
     { key: "insumos" as const, label: "Insumos", badge: ingredientsWithoutCost },
     { key: "automacao" as const, label: "Automação" },
@@ -993,15 +1191,149 @@ export function PrecificacaoClient({
         </div>
       )}
 
+      {/* ── ABA · Markup ───────────────────────────────────────────────── */}
+      {tab === "markup" && (
+        <div className="space-y-5">
+          <Card className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-bold text-ink">Markup por categoria</h3>
+                <p className="mt-0.5 max-w-2xl text-[12.5px] text-muted">
+                  O markup global vem das premissas (Custos & Fórmula). Aqui você pode dar a cada
+                  categoria um multiplicador próprio — prática do setor: pratos 2,5–3× · bebidas e
+                  sobremesas 4–5×. Categoria sem valor segue o global.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11.5px] font-semibold uppercase tracking-[.06em] text-muted">
+                  Markup global
+                </p>
+                <p className="text-[28px] font-extrabold leading-tight tracking-[-.02em] text-ink">
+                  {savedMarkup !== null
+                    ? `${savedMarkup.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}×`
+                    : "—"}
+                </p>
+                {savedMarkup === null && (
+                  <p className="max-w-44 text-[11px] text-muted">
+                    defina as premissas em Custos & Fórmula
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[680px] text-[13.5px]">
+                <thead>
+                  <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-[.05em] text-muted">
+                    <th className="px-3 py-2.5 font-semibold">Categoria</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Itens</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Markup da categoria</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">CMV alvo</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Custo R$ 10 vira</th>
+                    <th className="px-3 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {cats.map((cat) => {
+                    const draftVal = markupDrafts[cat.id] ?? numToInput(cat.markupOverride);
+                    const parsed = parseNum4(draftVal);
+                    const effective = parsed ?? savedMarkup;
+                    const itemCount = items.filter((i) => i.categoryId === cat.id).length;
+                    const isDirty = dirtyMarkups.some((d) => d.categoryId === cat.id);
+                    const example =
+                      effective !== null && effective >= 1
+                        ? idealPrice(10, effective, savedConfig.rounding)
+                        : null;
+                    return (
+                      <tr key={cat.id} className="border-b border-line last:border-b-0">
+                        <td className="px-3 py-2 font-medium text-ink">
+                          {cat.name}
+                          {parsed === null && (
+                            <Pill tone="neutral" className="ml-2">
+                              global
+                            </Pill>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-muted">{itemCount}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className="inline-flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              step="0.01"
+                              placeholder={
+                                savedMarkup !== null
+                                  ? savedMarkup.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+                                  : "—"
+                              }
+                              className={`${INPUT_CLS} w-24 text-right tabular-nums ${isDirty ? "border-brand-400 ring-1 ring-brand-200" : ""}`}
+                              value={draftVal}
+                              onChange={(e) =>
+                                setMarkupDrafts((prev) => ({ ...prev, [cat.id]: e.target.value }))
+                              }
+                              disabled={!canEdit}
+                            />
+                            <span className="text-[12px] text-muted">×</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-muted">
+                          {effective !== null && effective >= 1 ? fmtPct(100 / effective) : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-ink">
+                          {example !== null ? fmtBRL(example) : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {canEdit && (parsed !== null || draftVal !== "") && (
+                            <button
+                              type="button"
+                              onClick={() => setMarkupDrafts((prev) => ({ ...prev, [cat.id]: "" }))}
+                              className="rounded-lg px-2 py-1 text-[12px] text-muted hover:bg-[#F4F4F2] hover:text-ink"
+                              title="Voltar ao markup global"
+                            >
+                              limpar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {canEdit && (
+              <div className="mt-4 flex items-center gap-3">
+                <Button
+                  variant="primary"
+                  onClick={() => void saveMarkups()}
+                  disabled={savingMarkups || dirtyMarkups.length === 0}
+                >
+                  {savingMarkups ? "Salvando…" : `Salvar markups (${dirtyMarkups.length})`}
+                </Button>
+                <span className="text-[12.5px] text-muted">
+                  Os preços ideais da aba Preços passam a usar o markup da categoria.
+                </span>
+              </div>
+            )}
+            {markupMsg &&
+              (markupMsg.ok ? (
+                <InlineSuccess message={markupMsg.text} />
+              ) : (
+                <InlineError message={markupMsg.text} />
+              ))}
+          </Card>
+        </div>
+      )}
+
       {/* ── BLOCO B · Preços do cardápio ───────────────────────────────── */}
       {tab === "precos" && (
         <div className="space-y-4">
-          {savedMarkup === null ? (
+          {!hasAnyMarkup ? (
             <Card>
               <EmptyState
                 icon="🧮"
                 title="Defina as premissas primeiro"
-                sub="Preencha e salve o bloco Custos & Fórmula — o markup calculado é o que gera o preço ideal de cada item."
+                sub="Preencha e salve o bloco Custos & Fórmula (ou um markup por categoria na aba Markup) — é isso que gera o preço ideal de cada item."
               />
             </Card>
           ) : (
@@ -1045,7 +1377,9 @@ export function PrecificacaoClient({
               {configDirty && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-700">
                   Você alterou premissas sem salvar — esta tabela ainda usa as premissas salvas
-                  (markup {savedMarkup.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}×).
+                  {savedMarkup !== null &&
+                    ` (markup global ${savedMarkup.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}×)`}
+                  .
                 </p>
               )}
 
@@ -1197,7 +1531,28 @@ export function PrecificacaoClient({
                   e o dispositivo de preço entra em ação.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {canEdit && (
+                  <>
+                    <input
+                      ref={invoiceFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadInvoice(f);
+                      }}
+                    />
+                    <Button
+                      variant="primary"
+                      onClick={() => invoiceFileRef.current?.click()}
+                      disabled={readingInvoice}
+                    >
+                      {readingInvoice ? "Lendo a nota…" : "📷 Ler nota de compra"}
+                    </Button>
+                  </>
+                )}
                 {canEdit && (
                   <Button onClick={() => void runImport()} disabled={importing}>
                     {importing ? "Importando…" : "↻ Importar do cardápio"}
@@ -1744,9 +2099,7 @@ export function PrecificacaoClient({
           tone="brand"
           icon={<span>🧮</span>}
           title={`Aplicar ${pendingCount} preço(s) sugerido(s)?`}
-          subtitle={`Os itens abaixo do ideal sobem para o preço calculado (markup ${
-            savedMarkup?.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) ?? "—"
-          }×). Potencial de ${fmtBRL(pendingGain)} somando uma venda de cada. Vale imediatamente no cardápio e no WhatsApp.`}
+          subtitle={`Os itens abaixo do ideal sobem para o preço calculado pelo markup vigente (global ou o da categoria). Potencial de ${fmtBRL(pendingGain)} somando uma venda de cada. Vale imediatamente no cardápio e no WhatsApp.`}
           footer={
             <>
               <Button className="flex-1" onClick={() => setBulkOpen(false)}>
@@ -1765,6 +2118,127 @@ export function PrecificacaoClient({
             </>
           }
         />
+      )}
+
+      {invoiceRows && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-2xl border border-line bg-paper shadow-2xl">
+            <div className="border-b border-line px-5 py-4">
+              <h3 className="text-[15px] font-bold text-ink">Revisar preços da nota</h3>
+              <p className="mt-0.5 text-[12.5px] text-muted">
+                A IA leu {invoiceRows.length} item(ns). Confira insumo e custo de cada linha —
+                nada muda sem a sua confirmação. Depois de aplicar, fichas completas recalculam o
+                CMV e o dispositivo cuida do preço do cardápio.
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-[13px]">
+                  <thead>
+                    <tr className="border-b border-line text-left text-[11px] uppercase tracking-[.05em] text-muted">
+                      <th className="px-2 py-2" />
+                      <th className="px-2 py-2 font-semibold">Item da nota</th>
+                      <th className="px-2 py-2 font-semibold">Insumo</th>
+                      <th className="px-2 py-2 text-right font-semibold">Novo custo (R$/unid.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceRows.map((row, idx) => {
+                      const targetUnit =
+                        row.ingredientId === "__new__"
+                          ? (row.extractedUnit ?? "un")
+                          : (ingredientById.get(row.ingredientId)?.unit ?? "");
+                      const setRow = (patch: Partial<InvoiceRow>) =>
+                        setInvoiceRows((prev) =>
+                          prev ? prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)) : prev
+                        );
+                      return (
+                        <tr key={idx} className="border-b border-line align-top last:border-b-0">
+                          <td className="px-2 py-2.5">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-brand-500"
+                              checked={row.include}
+                              onChange={(e) => setRow({ include: e.target.checked })}
+                              aria-label={`Incluir ${row.extractedName}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <span className="font-medium text-ink">{row.extractedName}</span>
+                            <span className="mt-0.5 block text-[11.5px] text-muted">
+                              {row.extractedUnitPrice !== null
+                                ? `${fmtBRL(row.extractedUnitPrice)}${row.extractedUnit ? ` / ${row.extractedUnit}` : ""} na nota`
+                                : "preço não identificado na nota"}
+                              {row.confidence === "medium" && row.ingredientId && (
+                                <Pill tone="amber" className="ml-1.5">
+                                  confira
+                                </Pill>
+                              )}
+                            </span>
+                            {row.note && (
+                              <span className="mt-0.5 block text-[11px] text-muted">{row.note}</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <select
+                              className={`${INPUT_CLS} min-w-40`}
+                              value={row.ingredientId}
+                              onChange={(e) => setRow({ ingredientId: e.target.value, include: true })}
+                            >
+                              <option value="">— ignorar —</option>
+                              <option value="__new__">➕ Criar insumo novo</option>
+                              {ingredients.map((ing) => (
+                                <option key={ing.id} value={ing.id}>
+                                  {ing.name} ({ing.unit})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-2.5 text-right">
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.0001"
+                                placeholder="—"
+                                className={`${INPUT_CLS} w-28 text-right tabular-nums`}
+                                value={row.cost}
+                                onChange={(e) => setRow({ cost: e.target.value })}
+                              />
+                              {targetUnit && (
+                                <span className="w-10 text-left text-[11.5px] text-muted">/ {targetUnit}</span>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-4">
+              <span className="text-[12.5px] text-muted">
+                {invoiceRows.filter((r) => r.include && r.ingredientId !== "" && parseNum4(r.cost) !== null).length}{" "}
+                linha(s) prontas para aplicar
+              </span>
+              <div className="flex gap-2">
+                <Button onClick={() => setInvoiceRows(null)} disabled={applyingInvoice}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void applyInvoice()}
+                  disabled={applyingInvoice}
+                >
+                  {applyingInvoice ? "Aplicando…" : "Aplicar preços marcados"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {deleteIngId && (

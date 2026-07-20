@@ -9,6 +9,7 @@
  */
 
 import { openai } from "@/lib/openai";
+import type OpenAI from "openai";
 import type { AIEngineSelection } from "./AIEngineTypes";
 import type { StructuredCallInput } from "./EngineAdapter";
 
@@ -20,6 +21,14 @@ export interface StructuredJsonCallInput extends StructuredCallInput {
 
 async function callOpenAI(input: StructuredCallInput): Promise<string> {
   const wantsJson = (input.responseFormat ?? "json") === "json";
+  // Visual input (e.g. nota de compra) rides along as an image part.
+  const userContent: string | OpenAI.Chat.Completions.ChatCompletionContentPart[] =
+    input.imageDataUrl
+      ? [
+          { type: "text", text: input.userContent },
+          { type: "image_url", image_url: { url: input.imageDataUrl } },
+        ]
+      : input.userContent;
   const completion = await openai.chat.completions.create({
     model: input.selection.model,
     temperature: input.temperature ?? 0.2,
@@ -27,7 +36,7 @@ async function callOpenAI(input: StructuredCallInput): Promise<string> {
     ...(wantsJson ? { response_format: { type: "json_object" as const } } : {}),
     messages: [
       { role: "system", content: input.systemPrompt },
-      { role: "user", content: input.userContent },
+      { role: "user", content: userContent },
     ],
   });
   const raw = completion.choices[0]?.message?.content;
@@ -44,10 +53,16 @@ export async function callStructuredJson(input: StructuredJsonCallInput): Promis
     case "OPENAI":
       return callOpenAI(input);
     case "CLAUDE": {
+      if (input.imageDataUrl) {
+        throw new Error("Entrada de imagem ainda não suportada no piloto CLAUDE — roteie para OPENAI.");
+      }
       const { callAnthropic } = await import("./AnthropicEngineAdapter");
       return callAnthropic(input);
     }
     case "GEMINI": {
+      if (input.imageDataUrl) {
+        throw new Error("Entrada de imagem ainda não suportada no piloto GEMINI — roteie para OPENAI.");
+      }
       const { callGemini } = await import("./GeminiEngineAdapter");
       return callGemini(input);
     }

@@ -284,6 +284,10 @@ model MenuCategory {
   name           String
   description    String?
   imageUrl       String?
+  // Markup multiplier override for /precificacao (null = use the restaurant's
+  // global markup from RestaurantPricingConfig). Sector practice: pratos
+  // 2,5–3× · bebidas/sobremesas 4–5×.
+  markupOverride Decimal?   @db.Decimal(6, 3)
   sortOrder      Int        @default(0)
   isActive       Boolean    @default(true)
   isAvailable    Boolean    @default(true) // false = category temporarily unavailable (does not modify item flags)
