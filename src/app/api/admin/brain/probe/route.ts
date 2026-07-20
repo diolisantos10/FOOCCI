@@ -107,7 +107,12 @@ export async function POST(req: NextRequest) {
         continue;
       }
       if (!criticOk) {
-        rows.push({ ...base, gate: "critic", wouldReply: false, note: "reprovado no piso (modo/coerência/confiança)" });
+        // Em FALLBACK, o motivo real (erro do motor de IA) fica em escalationReason —
+        // expõe aqui para diagnosticar causa externa (ex.: cota/chave OpenAI).
+        const why = outcome.reasoningMode === "FALLBACK" && outcome.result.escalationReason
+          ? ` — motor: ${outcome.result.escalationReason}`
+          : "";
+        rows.push({ ...base, gate: "critic", wouldReply: false, note: `reprovado no piso (modo/coerência/confiança)${why}` });
         continue;
       }
 
