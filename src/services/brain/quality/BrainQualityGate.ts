@@ -72,6 +72,20 @@ export const runWhatsAppGateForBrain: BrainQualityGateRunner = async () => {
   };
 };
 
+/** Gate do CRM: diagnóstico hermético do piso de segurança (sem oferta inventada,
+ *  sem spam, sem repetição) com P0=0 — mesmo molde do WhatsApp. */
+export const runCrmGateForBrain: BrainQualityGateRunner = async () => {
+  const { runCrmBrainDiagnostic } = await import("@/services/crm/CrmBrainDiagnostic");
+  const diag = runCrmBrainDiagnostic();
+  return {
+    passed: diag.status === "PASS" && diag.p0 === 0,
+    p0Count: diag.p0,
+    reason: diag.status === "PASS" ? `diagnóstico PASS (${diag.passed}/${diag.total})` : `diagnóstico FAIL (${diag.passed}/${diag.total}, p0=${diag.p0})`,
+    ranAt: new Date().toISOString(),
+  };
+};
+
 // Gates built-in registrados na carga do módulo.
 registerQualityGate("waiter", runWaiterGateForBrain);
 registerQualityGate("whatsapp", runWhatsAppGateForBrain);
+registerQualityGate("crm", runCrmGateForBrain);
