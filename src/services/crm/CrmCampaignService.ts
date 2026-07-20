@@ -300,8 +300,9 @@ export async function resolveAudience(
 
     case "CUPOM_VENCENDO": {
       // Customers holding an ACTIVE (unused) coupon that expires within the next
-      // `triggerDays` days — the last window to convert it into an order.
-      const days  = Math.max(1, opts?.triggerDays ?? 3);
+      // `triggerDays` days (i.e. warned N days BEFORE expiry) — the last window
+      // to convert it into an order.
+      const days  = Math.max(1, opts?.triggerDays ?? 5);
       const until = new Date(now.getTime() + days * 86_400_000);
       return serialize(await prisma.customer.findMany({
         where: {

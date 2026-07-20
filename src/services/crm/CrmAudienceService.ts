@@ -313,9 +313,9 @@ export class CrmAudienceService {
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
-      // ── Cupom vencendo — ACTIVE wallet coupon expiring in the next ~3 days ────
+      // ── Cupom vencendo — ACTIVE wallet coupon expiring in the next ~5 days ────
       case "cupom-vencendo": {
-        const until    = new Date(ts.getTime() + 3 * 86_400_000);
+        const until    = new Date(ts.getTime() + 5 * 86_400_000);
         const couponCond = { coupons: { some: { status: "ACTIVE" as never, expiresAt: { gte: ts, lte: until } } } };
         const segWhere  = { restaurantId, isGuest: false, ...couponCond };
         const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...couponCond };

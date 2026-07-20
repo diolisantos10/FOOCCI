@@ -17,6 +17,8 @@ import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { CrmAudienceService } from "@/services/crm/CrmAudienceService";
 import { getSegmentConfig } from "@/lib/crm-segments";
+import { getSafetyConfig } from "@/lib/crm-safety";
+import { CRMWhatsAppBudgetPlanner, inferCampaignPriority } from "@/services/crm/CRMWhatsAppBudgetPlanner";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +70,37 @@ export async function GET(req: NextRequest) {
       map[c.id] = byTemplate.get(templateOf(c)) ?? 0;
     }
 
-    return ok(map);
+    // Effective daily quota per campaign under the CURRENT distribution mode —
+    // what the table's "Limite/dia" must show ("quanto vem pra casa"), computed
+    // by the same pure planner the runner uses.
+    const quotas: Record<string, number> = {};
+    let mode = "EQUAL";
+    try {
+      const budget = (await getSafetyConfig(ctx.restaurantId)).crmWhatsAppSafety;
+      if (budget?.enabled) {
+        mode = budget.distributionMode;
+        const recurring = campaigns.filter((c) => (c.scheduleConfig as { mode?: string } | null)?.mode === "RECURRING");
+        if (recurring.length > 0) {
+          const plan = CRMWhatsAppBudgetPlanner.plan({
+            config:            budget,
+            globalSentToday:   0,
+            instanceConnected: true,
+            campaigns: recurring.map((c) => ({
+              campaignId:        c.id,
+              priority:          inferCampaignPriority({ templateId: c.templateId, targetSegment: c.targetSegment }),
+              alreadySentToday:  0,
+              remainingAudience: map[c.id] ?? 0,
+              manualDailyQuota:  Math.max(1, Math.min((c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit ?? 20, 200)),
+            })),
+          });
+          for (const p of plan.perCampaign) quotas[p.campaignId] = p.dailyQuota;
+        }
+      }
+    } catch (e) {
+      console.warn("[campaign-audiences] quota computation failed", e);
+    }
+
+    return ok({ audiences: map, quotas, mode });
   } catch (err) {
     console.error("[GET /api/crm/campaign-audiences]", err);
     return serverError();

@@ -2816,7 +2816,11 @@ function CampaignManageModal({
 
                     {canEdit && rmCanTrigger && (
                       <div className="rounded-2xl border border-line p-4">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Dias após o evento</p>
+                        {/* Each campaign defines its own wording (before/after the event) —
+                            e.g. cupom-vencendo: "Avisar quantos dias ANTES de vencer". */}
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
+                          {readyMade?.triggerDaysLabel ?? "Dias após o evento"}
+                        </p>
                         <div className="flex items-center gap-2">
                           <input
                             type="number" min={0} max={90}
@@ -2824,7 +2828,7 @@ function CampaignManageModal({
                             onChange={(e) => setTriggerDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
                             className="w-24 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
                           />
-                          <span className="text-sm text-muted">dias após o evento (salvo junto com o agendamento)</span>
+                          <span className="text-sm text-muted">dias (salvo junto com o agendamento)</span>
                         </div>
                       </div>
                     )}
@@ -3600,6 +3604,7 @@ function CampanhasAtivasSection({
   cartRecoveryActive,
   couponCounts,
   audiences,
+  dailyQuotas,
   onCartRecoveryManage,
   onCartRecoveryToggle,
 }: {
@@ -3620,6 +3625,8 @@ function CampanhasAtivasSection({
   couponCounts?: Record<string, { sent: number; used: number }>;
   /** Per-campaign eligible audience for today (campaignId → count of reachable clients). */
   audiences?: Record<string, number>;
+  /** Effective daily quota under the current distribution mode (campaignId → msgs/day). */
+  dailyQuotas?: Record<string, number>;
   /** Open the cart-recovery config modal (same as "Gerenciar" for real campaigns). */
   onCartRecoveryManage?: () => void;
   /** Toggle cart recovery on/off (same as "Pausar"/"Ativar" for real campaigns). */
@@ -3653,7 +3660,13 @@ function CampanhasAtivasSection({
       a.converted   += c.totalConverted || 0;
       a.failed      += c.totalFailed || 0;
       a.couponsUsed += couponCounts?.[c.id]?.used ?? 0;
-      a.dailyLimit  += (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit ?? 0;
+      // Same value the Limite/dia cell shows: effective quota, else stored limit.
+      {
+        const quota = dailyQuotas?.[c.id];
+        a.dailyLimit += typeof quota === "number" && quota > 0
+          ? quota
+          : ((c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit ?? 0);
+      }
       a.audience    += audiences?.[c.id] ?? 0;
       return a;
     },
@@ -3821,10 +3834,13 @@ function CampanhasAtivasSection({
                     {c.totalSent > 0 ? c.totalSent : "—"}
                   </td>
 
-                  {/* Limite/dia — máximo desta campanha por dia (scheduleConfig.dailyLimit) */}
-                  <td className="py-3 px-2 text-right tabular-nums text-muted">
+                  {/* Limite/dia — a cota EFETIVA sob a distribuição atual (quanto pode
+                      sair por dia de verdade); cai pro dailyLimit salvo sem cota. */}
+                  <td className="py-3 px-2 text-right tabular-nums text-muted" title="Quanto esta campanha pode enviar por dia sob a distribuição atual do limite global">
                     {(() => {
-                      const dl = (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit;
+                      const quota  = dailyQuotas?.[c.id];
+                      const stored = (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit;
+                      const dl     = typeof quota === "number" && quota > 0 ? quota : stored;
                       return dl && dl > 0 ? `${dl}/dia` : "—";
                     })()}
                   </td>
@@ -4297,6 +4313,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [couponCounts, setCouponCounts] = useState<Record<string, { sent: number; used: number }>>({});
   // Per-campaign eligible audience (campaignId → count), recomputed live (today's segments).
   const [audiences, setAudiences] = useState<Record<string, number>>({});
+  // Effective daily quota per campaign under the current distribution mode — what
+  // "Limite/dia" really is once the budget is split (por audiência / igual / manual).
+  const [dailyQuotas, setDailyQuotas] = useState<Record<string, number>>({});
   // Period filter for the Ativas numbers (Total / Hoje / Ontem / … / Personalizado).
   const [period,     setPeriod]     = useState<CrmPeriodKey>("today");
   const [customFrom, setCustomFrom] = useState("");
@@ -4363,7 +4382,10 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   useEffect(() => {
     fetch("/api/crm/campaign-audiences")
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json) => setAudiences(json.data ?? {}))
+      .then((json) => {
+        setAudiences(json.data?.audiences ?? {});
+        setDailyQuotas(json.data?.quotas ?? {});
+      })
       .catch(() => {});
   }, [readyMadeReload]);
 
@@ -4635,6 +4657,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           cartRecoveryActive={cartRecoveryOn}
           couponCounts={couponCounts}
           audiences={audiences}
+          dailyQuotas={dailyQuotas}
           onCartRecoveryManage={() => { void handleCartManage(); }}
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />

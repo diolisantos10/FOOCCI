@@ -309,7 +309,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! ⏰ Corre que ainda dá tempo: seu {cupom} vence em {validade}! Use no pedido pelo nosso cardápio: {link_cardapio}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
-    triggerDays: 3,
+    triggerDays: 5, // warn 5 days BEFORE the coupon expires (owner-tunable)
     triggerDaysLabel: "Avisar quantos dias antes de vencer",
     editable:    ["message", "triggerDays", "schedule", "dailyLimit"],
   },
