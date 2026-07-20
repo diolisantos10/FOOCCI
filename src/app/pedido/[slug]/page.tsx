@@ -375,11 +375,19 @@ export default async function PedidoPage({
   // Fetch active promotions + dynamic best sellers in parallel. "Mais vendidos"
   // uses the Analytics-consistent aggregation (30-day Foocci real sales, valid
   // operational orders), ranked by units sold — see services/menu/menuBestSellers.
-  const [activePromotions, bestSellerRows, cardOnlineEnabled] = await Promise.all([
+  const [activePromotions, bestSellerRows, cardOnlineEnabled, bestSeller7Rows] = await Promise.all([
     getActiveMenuPromotions(restaurant.id, "DELIVERY"),
     getMenuBestSellerRows(restaurant.id),
     isCardEnabled(restaurant.id), // show the online card option only when a card operator (MP/SumUp) is active
+    getMenuBestSellerRows(restaurant.id, 7), // last-7-day rank for ordering products WITHIN each category
   ]);
+
+  // Rank map: menuItemId → position among the last 7 days' best-sellers (lower =
+  // more sold). Non-sellers fall to the end, keeping their admin sortOrder (the
+  // sort below is stable and c.items already comes ordered by sortOrder).
+  const bestSellerRank = new Map<string, number>();
+  bestSeller7Rows.forEach((r, idx) => bestSellerRank.set(r.menuItemId, idx));
+  const rankOf = (id: string) => bestSellerRank.get(id) ?? Number.MAX_SAFE_INTEGER;
 
   // Collect all raw items with their home categoryId for building the promotion map
   const allRawItems = rawCategories.flatMap((c) => [
@@ -413,11 +421,13 @@ export default async function PedidoPage({
 
   const categories = rawCategories
     .map((c) => {
-      const ownIds = new Set(c.items.map((i) => i.id));
-      const placedItems = c.placements.map((p) => p.item).filter((i) => !ownIds.has(i.id));
+      // Category shows ONLY its own products — cross-category placements no longer
+      // bleed to the end. Ordered by last-7-day best-sellers first, then the admin
+      // sortOrder (c.items already comes sorted; Array.sort is stable).
+      const ordered = [...c.items].sort((a, b) => rankOf(a.id) - rankOf(b.id));
       return {
         id: c.id, name: c.name, description: c.description ?? null, imageUrl: c.imageUrl ?? null,
-        items: [...c.items, ...placedItems].map(mapPedidoItem),
+        items: ordered.map(mapPedidoItem),
       };
     })
     .filter((c) => c.items.length > 0);

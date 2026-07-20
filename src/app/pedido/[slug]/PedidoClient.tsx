@@ -2963,7 +2963,16 @@ export function PedidoClient({
   const [showActiveBanner,  setShowActiveBanner]    = useState(false);
   const trackingPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const categoryBarRef     = useRef<HTMLDivElement>(null);
+  const mobileProductsRef  = useRef<HTMLDivElement>(null);
+  const desktopProductsRef = useRef<HTMLDivElement>(null);
   const [categoryFadeEnd, setCategoryFadeEnd] = useState(true);
+
+  // Switching category always starts at the FIRST product — reset the product
+  // scroll to the top/left whenever the selected category changes.
+  useEffect(() => {
+    if (mobileProductsRef.current)  mobileProductsRef.current.scrollLeft = 0;
+    if (desktopProductsRef.current) desktopProductsRef.current.scrollTop = 0;
+  }, [selectedCategoryId]);
 
   // ── Delivery-quote state (distance mode) ──────────────────────────────────────
   const [quoteDeliveryFee, setQuoteDeliveryFee] = useState<number | null>(null);
@@ -5856,6 +5865,7 @@ export function PedidoClient({
                   </p>
                 )}
                 <div
+                  ref={mobileProductsRef}
                   className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
                   style={{ scrollbarWidth: "none" }}
                 >
@@ -5975,7 +5985,7 @@ export function PedidoClient({
         {stage === "BROWSE" && entryPhase === "browsing" ? (
           <>
             {/* Product area — fills available space, scrollable */}
-            <div className="flex-1 overflow-y-auto p-5">
+            <div ref={desktopProductsRef} className="flex-1 overflow-y-auto p-5">
               {/* Desktop promotion banners */}
               {banners.length > 0 && (
                 <div className="mb-4 flex flex-col gap-2">
