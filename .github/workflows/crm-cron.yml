@@ -101,10 +101,11 @@ jobs:
           echo "url=${BASE_URL}/api/cron/run-scheduled-campaigns" >> "$GITHUB_OUTPUT"
 
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            # Scheduled run: always live, batch capped at 5 to prevent proxy timeouts.
-            # The runner inserts ≤10 s inter-send delays, so 5 msgs ≤ ~45 s total.
-            echo 'body={"dryRun":false,"limit":5}' >> "$GITHUB_OUTPUT"
-            echo "dry_run=false"                   >> "$GITHUB_OUTPUT"
+            # Scheduled run: always live. The runner enforces the real per-provider
+            # caps (Evolution Web: 5/run with long delays; Meta official: 40/run
+            # with 1-2 s pacing) — this limit is just an upper-bound guard.
+            echo 'body={"dryRun":false,"limit":40}' >> "$GITHUB_OUTPUT"
+            echo "dry_run=false"                    >> "$GITHUB_OUTPUT"
           else
             # Manual dispatch: honour inputs
             DRY_RUN="${{ inputs.dry_run }}"
@@ -146,7 +147,7 @@ jobs:
           # Previously the step died at this line (exit 56 = RECV_ERROR) before
           # printing HTTP status or response body — making failures undiagnosable.
           set +e
-          curl --connect-timeout 20 --max-time 120 -sS \
+          curl --connect-timeout 20 --max-time 280 -sS \
             -X POST "$ENDPOINT_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \

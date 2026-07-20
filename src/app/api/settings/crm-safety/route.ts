@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays, couponSpentThisMonth, couponUsedThisMonth] = await Promise.all([
+    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays, couponSpentThisMonth, couponUsedThisMonth, metaCfg] = await Promise.all([
       prisma.restaurantCRMProfile.findUnique({
         where:  { restaurantId: ctx.restaurantId },
         select: { whatsAppSafetyConfig: true },
@@ -29,17 +29,23 @@ export async function GET(req: NextRequest) {
       getNumberAgeDays(ctx.restaurantId),
       CustomerCouponService.monthlySpend(ctx.restaurantId),
       CustomerCouponService.monthlyUsedStats(ctx.restaurantId),
+      prisma.metaWhatsAppConfig.findUnique({
+        where:  { restaurantId: ctx.restaurantId },
+        select: { metaCrmEnabled: true, connectionStatus: true },
+      }).catch(() => null),
     ]);
 
+    const metaOfficial = metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED";
     const raw       = parseSafetyConfig(profile?.whatsAppSafetyConfig);
-    const effective = applyEffectiveSafety(raw, ageDays);
+    const effective = applyEffectiveSafety(raw, ageDays, { metaOfficial });
     // The UI binds the form to `raw`; when manualOverride is OFF it shows `effective`
-    // (locked). `warmup` explains the auto daily number.
+    // (locked). `warmup` explains the auto daily number — on Meta official the safe
+    // limit is the Meta-tier ceiling, not the Web-session warmup ramp.
     return ok({
       ...raw,
       todaySent, weekSent, contactBudgetUsed, couponSpentThisMonth,
       couponUsedCount: couponUsedThisMonth.count, couponUsedSpend: couponUsedThisMonth.spend,
-      warmup:    { ageDays, safeDailyLimit: warmupDailyLimit(ageDays) },
+      warmup:    { ageDays, safeDailyLimit: metaOfficial ? effective.dailyGlobalCap : warmupDailyLimit(ageDays), metaOfficial },
       effective,
     });
   } catch (err) {

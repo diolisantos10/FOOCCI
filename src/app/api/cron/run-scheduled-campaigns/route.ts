@@ -47,9 +47,10 @@ export async function POST(req: NextRequest) {
     const campaignId   = (url.searchParams.get("campaignId")   ?? body.campaignId  as string | undefined) || undefined;
     const limitRaw     = url.searchParams.get("limit")         ?? body.limit;
 
-    // Default batch cap: 5 per cron run when no explicit limit is given.
-    // Prevents runaway requests when the workflow omits the limit param.
-    const BATCH_DEFAULT = 5;
+    // Default batch cap when no explicit limit is given — an upper-bound guard
+    // only: the runner enforces the real per-provider caps (Evolution Web 5/run,
+    // Meta official 40/run).
+    const BATCH_DEFAULT = 40;
     const limit = limitRaw
       ? Math.min(200, Math.max(1, parseInt(String(limitRaw))))
       : BATCH_DEFAULT;

@@ -206,6 +206,16 @@ export function warmupDailyLimit(ageDays: number): number {
   return 250;
 }
 
+// ─── Meta Cloud API (official) throughput ────────────────────────────────────
+// The warmup ramp + tiny cycles exist to protect an UNOFFICIAL WhatsApp Web
+// session from bans. On the official Meta Cloud API none of that applies — the
+// real ceiling is Meta's messaging tier (1k business-initiated/24h at entry,
+// scaling to 10k/100k). Safe mode on Meta therefore runs at full power:
+/** Daily send ceiling in safe mode on Meta official (under the 1k entry tier). */
+export const META_SAFE_DAILY_LIMIT = 900;
+/** Per-cron-cycle ceiling on Meta official (36 cycles/day ⇒ ~1.4k capacity). */
+export const META_CYCLE_LIMIT = 40;
+
 /** WhatsApp number age in days, from when its Evolution config was created. */
 export async function getNumberAgeDays(restaurantId: string): Promise<number> {
   const cfg = await prisma.evolutionConfig.findUnique({
@@ -221,9 +231,15 @@ export async function getNumberAgeDays(restaurantId: string): Promise<number> {
  * manualOverride ON → stored values as-is. OFF → safe locked rules + warmup daily limit.
  * The prepaid contact budget + timezone are always kept from the owner's config.
  */
-export function applyEffectiveSafety(raw: CRMWhatsAppSafetyConfig, ageDays: number): CRMWhatsAppSafetyConfig {
+export function applyEffectiveSafety(
+  raw: CRMWhatsAppSafetyConfig,
+  ageDays: number,
+  opts: { metaOfficial?: boolean } = {},
+): CRMWhatsAppSafetyConfig {
   if (raw.manualOverride) return raw;
-  const safeDaily = warmupDailyLimit(ageDays);
+  // Meta official → full power (tier is the real limit); Evolution → warmup ramp.
+  const metaOfficial = opts.metaOfficial ?? false;
+  const safeDaily = metaOfficial ? META_SAFE_DAILY_LIMIT : warmupDailyLimit(ageDays);
   return {
     ...raw,
     manualOverride:        false,
@@ -236,13 +252,15 @@ export function applyEffectiveSafety(raw: CRMWhatsAppSafetyConfig, ageDays: numb
     sendOnWeekends:        true,
     maxPerWeekPerCustomer: 5,
     randomDelayEnabled:    true,
-    randomDelayMinSec:     5,
-    randomDelayMaxSec:     45,
+    // Humanization delays protect a Web session; the official API only needs a
+    // light pace (also keeps each cron request comfortably inside its timeout).
+    randomDelayMinSec:     metaOfficial ? 1 : 5,
+    randomDelayMaxSec:     metaOfficial ? 2 : 45,
     crmWhatsAppSafety: {
       ...raw.crmWhatsAppSafety,
       enabled:                        true,
       globalDailyLimit:               safeDaily,
-      globalCycleLimit:               5,
+      globalCycleLimit:               metaOfficial ? META_CYCLE_LIMIT : 5,
       minMinutesBetweenCycles:        10,
       stopOnInstanceDisconnected:     true,
       pauseOnFailureRatePercent:      50,
@@ -259,14 +277,24 @@ export function applyEffectiveSafety(raw: CRMWhatsAppSafetyConfig, ageDays: numb
  * override ON. This is the single choke point that keeps the number protected.
  */
 export async function getSafetyConfig(restaurantId: string): Promise<CRMWhatsAppSafetyConfig> {
-  const [profile, ageDays] = await Promise.all([
+  const [profile, ageDays, metaCfg] = await Promise.all([
     prisma.restaurantCRMProfile.findUnique({
       where:  { restaurantId },
       select: { whatsAppSafetyConfig: true },
     }),
     getNumberAgeDays(restaurantId),
+    (async () => {
+      try {
+        return await prisma.metaWhatsAppConfig.findUnique({
+          where:  { restaurantId },
+          select: { metaCrmEnabled: true, connectionStatus: true },
+        });
+      } catch { return null; } // absent table/mock → Evolution rules (conservative)
+    })(),
   ]);
-  return applyEffectiveSafety(parseSafetyConfig(profile?.whatsAppSafetyConfig), ageDays);
+  return applyEffectiveSafety(parseSafetyConfig(profile?.whatsAppSafetyConfig), ageDays, {
+    metaOfficial: metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED",
+  });
 }
 
 /**

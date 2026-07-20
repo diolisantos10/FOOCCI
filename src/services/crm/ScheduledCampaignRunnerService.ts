@@ -124,6 +124,27 @@ const REPROCESSING_CAMPAIGNS = new Set<string>();
  */
 export const EVOLUTION_WEB_MAX_PER_RUN = 5;
 
+/**
+ * Per-run ceiling on the OFFICIAL Meta Cloud API — no session to protect, so the
+ * cap only paces requests and keeps each cron HTTP call inside its timeout.
+ * 40/run × ~36 cron cycles/day ≈ 1.4k capacity, comfortably above the safe
+ * daily limit (META_SAFE_DAILY_LIMIT), so the day's budget is always reachable.
+ */
+export const META_CLOUD_MAX_PER_RUN = 40;
+
+/** True when the restaurant sends CRM through the official Meta Cloud API. */
+async function isMetaCrmActive(restaurantId: string): Promise<boolean> {
+  try {
+    const cfg = await prisma.metaWhatsAppConfig.findUnique({
+      where:  { restaurantId },
+      select: { metaCrmEnabled: true, connectionStatus: true },
+    });
+    return cfg?.metaCrmEnabled === true && cfg.connectionStatus === "CONNECTED";
+  } catch {
+    return false; // absent table/mock → treat as Evolution (the conservative path)
+  }
+}
+
 export interface ScheduledCampaignRunSummary {
   dryRun:             boolean;
   campaignsProcessed: number;
@@ -412,9 +433,10 @@ export class ScheduledCampaignRunnerService {
     }
 
     const remainingToday = dailyLimit - todaySent;
-    // Evolution Web hard cap: never more than EVOLUTION_WEB_MAX_PER_RUN per run,
-    // even if a caller passes a larger limit or the daily limit is higher.
-    const batchCap       = Math.min(remainingToday, limit ?? remainingToday, EVOLUTION_WEB_MAX_PER_RUN);
+    // Per-run hard cap is provider-specific: the Evolution Web session needs tiny
+    // batches (ban risk); the official Meta Cloud API runs at full pace.
+    const perRunCap      = (await isMetaCrmActive(campaign.restaurantId)) ? META_CLOUD_MAX_PER_RUN : EVOLUTION_WEB_MAX_PER_RUN;
+    const batchCap       = Math.min(remainingToday, limit ?? remainingToday, perRunCap);
 
     // Resolve full eligible audience at execution time
     const allEligible = await resolveAudience(
@@ -903,16 +925,17 @@ export class ScheduledCampaignRunnerService {
     ctx: { restaurantId: string; confirm: unknown },
   ): Promise<ReprocessRecoverableResult> {
     // Reprocess never bypasses the global WhatsApp budget: the per-run cap is the
-    // smaller of the Evolution Web hard ceiling, the configured cycle limit, and
+    // smaller of the provider's hard ceiling, the configured cycle limit, and
     // whatever is left of today's global daily budget (Section 10).
     const budget = (await getSafetyConfig(ctx.restaurantId)).crmWhatsAppSafety;
-    let cap = EVOLUTION_WEB_MAX_PER_RUN;
+    const perRunCap = (await isMetaCrmActive(ctx.restaurantId)) ? META_CLOUD_MAX_PER_RUN : EVOLUTION_WEB_MAX_PER_RUN;
+    let cap = perRunCap;
     let budgetExhausted = false;
     if (budget?.enabled && budget.providerMode === "EVOLUTION_WEB") {
       const remainingDaily = budget.globalDailyLimit > 0
         ? Math.max(0, budget.globalDailyLimit - await getTodayGlobalSendCount(ctx.restaurantId))
         : Number.MAX_SAFE_INTEGER;
-      cap = Math.max(0, Math.min(EVOLUTION_WEB_MAX_PER_RUN, budget.globalCycleLimit, remainingDaily));
+      cap = Math.max(0, Math.min(perRunCap, budget.globalCycleLimit, remainingDaily));
       budgetExhausted = remainingDaily <= 0;
     }
     const emptyPlan = { recoverableExecutions: 0, distinctRecipients: 0, duplicatesRemoved: 0, cap, nextBatchCount: 0 };
