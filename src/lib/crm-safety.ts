@@ -352,6 +352,11 @@ export async function getContactBudgetStatus(restaurantId: string): Promise<Cont
  * Total CRM messages successfully sent in the last 24 hours for this restaurant,
  * across ALL campaigns and automations.
  */
+/** Campaigns that NEVER consume (nor are blocked by) the global send budget —
+ *  they must not fail for lack of quota. Birthday is sacred; cart recovery runs
+ *  on its own event engine and never created executions here anyway. */
+export const BUDGET_EXEMPT_TEMPLATE_IDS = ["aniversariantes"] as const;
+
 export async function getTodayGlobalSendCount(restaurantId: string): Promise<number> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return prisma.campaignExecution.count({
@@ -359,6 +364,11 @@ export async function getTodayGlobalSendCount(restaurantId: string): Promise<num
       restaurantId,
       sentAt: { gte: cutoff },
       status: { in: ["SENT", "DELIVERED", "READ"] },
+      // Budget-exempt sends don't eat the other campaigns' daily allowance.
+      campaign: { OR: [
+        { templateId: null },
+        { templateId: { notIn: [...BUDGET_EXEMPT_TEMPLATE_IDS] } },
+      ] },
     },
   });
 }

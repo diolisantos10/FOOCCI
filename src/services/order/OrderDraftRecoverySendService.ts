@@ -45,7 +45,9 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { parseReadyMadeConfig } from "@/services/crm/ReadyMadeCampaignService";
-import { parseMessagePool, resolveActivePhrases, pickPhrase } from "@/services/crm/crmMessagePool";
+import { parseMessagePool, resolveActivePhrases, pickPhrase, readPhraseMetaTemplates } from "@/services/crm/crmMessagePool";
+import { sendMetaCrmMessage } from "@/services/crm/metaCrmSend";
+import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { parseSafetyConfig } from "@/lib/crm-safety";
@@ -253,10 +255,18 @@ export class OrderDraftRecoverySendService {
     const cartRows = await prisma.campaign.findMany({
       where:  { restaurantId: { in: candidateRestaurantIds }, templateId: "carrinho-abandonado" },
       orderBy: { createdAt: "desc" },
-      select: { id: true, restaurantId: true, status: true, message: true, scheduleConfig: true },
+      select: { id: true, restaurantId: true, status: true, message: true, scheduleConfig: true, audienceConfig: true },
     });
     const cartRowByRestaurant = new Map<string, (typeof cartRows)[number]>();
     for (const r of cartRows) if (!cartRowByRestaurant.has(r.restaurantId)) cartRowByRestaurant.set(r.restaurantId, r);
+
+    // Meta official per restaurant: cart messages to web-cart customers (no open
+    // 24h window) must go out as APPROVED templates, not freeform.
+    const metaCfgs = await prisma.metaWhatsAppConfig.findMany({
+      where:  { restaurantId: { in: candidateRestaurantIds } },
+      select: { restaurantId: true, metaCrmEnabled: true, connectionStatus: true },
+    }).catch(() => [] as { restaurantId: string; metaCrmEnabled: boolean; connectionStatus: string | null }[]);
+    const metaCfgByRestaurant = new Map(metaCfgs.map((m) => [m.restaurantId, m]));
 
     const cartDisabled = new Set(
       candidateRestaurantIds.filter((rid) => {
@@ -479,8 +489,38 @@ export class OrderDraftRecoverySendService {
           phoneMasked:  maskPhone(customer.phone),
         });
 
-        const sendRes = await sendWhatsAppText(draft.restaurantId, toPhone, message);
-        if (!sendRes.ok) throw new Error(sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
+        // On the official Meta API, a web-cart customer usually has NO open 24h
+        // service window — freeform text is REJECTED. Send the phrase's APPROVED
+        // template (same mechanics as the CRM runner); freeform stays the
+        // fallback for Evolution / in-window customers.
+        const metaCfg = metaCfgByRestaurant.get(draft.restaurantId);
+        if (metaCfg?.metaCrmEnabled && metaCfg.connectionStatus === "CONNECTED" && cartRow) {
+          const renderCtx = {
+            restaurantName: draft.restaurant.name ?? "nossa loja",
+            pedidoUrl:      shortRecoveryUrl,
+            coupon:         cartCoupon,
+          };
+          // Prefer the drawn phrase's own approved template (text must match).
+          const phraseTpl = drawn ? readPhraseMetaTemplates(cartRow.audienceConfig)[drawn.key] : undefined;
+          const metaAudienceCfg = phraseTpl && phraseTpl.submittedMessage === drawn?.text
+            ? { metaTemplate: phraseTpl }
+            : cartRow.audienceConfig;
+          const { result: metaResult, usedTemplate } = await sendMetaCrmMessage(new MetaWhatsAppCloudProvider(), {
+            restaurantId: draft.restaurantId,
+            phone:        toPhone,
+            freeformText: message,
+            firstName:    (customer.name ?? "").split(" ")[0] || "Cliente",
+            campaign:     { objective: "CART_ABANDONED", audienceConfig: metaAudienceCfg },
+            renderToken:  (token) => renderCrmMessage(token, { name: customer.name ?? "" }, renderCtx),
+          });
+          if (!metaResult.ok) {
+            throw new Error(metaResult.errorCode ?? metaResult.error ?? (usedTemplate ? "META_TEMPLATE_SEND_FAILED" : "META_SEND_FAILED"));
+          }
+          if (usedTemplate) console.info(`[OrderDraftRecoverySendService] sent via approved Meta template`, { draftId: draft.id });
+        } else {
+          const sendRes = await sendWhatsAppText(draft.restaurantId, toPhone, message);
+          if (!sendRes.ok) throw new Error(sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
+        }
 
         // Stamp draft so it never fires again
         const now = new Date();

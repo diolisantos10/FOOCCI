@@ -354,7 +354,7 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     defaultMessage:
       "Oi, {nome}! 😊 Tá curtindo o {restaurante}? Então segue a gente no Instagram pra não perder novidade e promoção: {instagram}",
     schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
-    recontactDays: 90, // gentle quarterly reminder
+    // Once ever — asking someone to follow you is a one-time invitation (owner decision).
     editable:    ["message", "schedule", "dailyLimit"],
   },
 ];

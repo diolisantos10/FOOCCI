@@ -56,6 +56,7 @@ import {
   checkWeekendBlock,
   randomDelayMs,
   isBirthdayCampaign,
+  BUDGET_EXEMPT_TEMPLATE_IDS,
   type CRMWhatsAppSafetyConfig,
 } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
@@ -704,6 +705,24 @@ export class ScheduledCampaignRunnerService {
     opts: { dryRun?: boolean },
   ): Promise<CampaignBatchResult[]> {
     const { dryRun = false } = opts;
+
+    // Budget-exempt campaigns (birthday) run FIRST and OUTSIDE the plan: they can
+    // never be blocked — or delayed — by the global daily/cycle budget. Their own
+    // per-campaign dailyLimit and the per-customer safety gates still apply.
+    const exempt = due.filter((c) => c.templateId && (BUDGET_EXEMPT_TEMPLATE_IDS as readonly string[]).includes(c.templateId));
+    const exemptResults: CampaignBatchResult[] = [];
+    for (const c of exempt) {
+      exemptResults.push(await this.runCampaignBatch(c.id, { dryRun, abortOnInstanceCollapse: true })
+        .catch((err): CampaignBatchResult => ({
+          campaignId: c.id, campaignName: c.name,
+          eligible: 0, sent: 0, failed: 0, skipped: 0,
+          reason: err instanceof Error ? err.message : "Unknown error",
+          completed: false,
+        })));
+    }
+    due = due.filter((c) => !exempt.includes(c));
+    if (due.length === 0) return exemptResults;
+
     const byId = new Map(due.map((c) => [c.id, c]));
 
     const skip = (
@@ -838,8 +857,8 @@ export class ScheduledCampaignRunnerService {
       pending = pending.filter((p) => p.campaignId !== campaign.id);
     }
 
-    // Restore the original campaign order in the returned results.
-    return due.map((c) => resultsById.get(c.id) ?? skip(c, "GLOBAL_CYCLE_LIMIT_REACHED"));
+    // Restore the original campaign order in the returned results (exempt first).
+    return [...exemptResults, ...due.map((c) => resultsById.get(c.id) ?? skip(c, "GLOBAL_CYCLE_LIMIT_REACHED"))];
   }
 
   /**
