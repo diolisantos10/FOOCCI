@@ -63,10 +63,11 @@ describe("CrmAgentRepertoireService — o agente cresce o repertório (PREVIEW)"
     expect(r.added).toHaveLength(2);
     expect(r.sent).toBe(false);
     expect(r.meta).toEqual({ created: 2, existed: 0, failed: 0 });
-    // escreveu o pool preservando o resto do config
+    // escreveu no BALDE DO AGENTE, preservando o resto do config (e as 5 do lojista)
     const written = db.campaign.update.mock.calls[0][0].data.scheduleConfig;
     expect(written.mode).toBe("RECURRING");
-    expect(written.messagePool.custom).toHaveLength(2);
+    expect(written.messagePool.agent).toHaveLength(2);
+    expect(written.messagePool.custom).toBeUndefined(); // não mexeu no balde do lojista
     expect(provisionPoolTemplates).toHaveBeenCalledWith("r1", "c1");
   });
 

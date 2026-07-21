@@ -35,11 +35,12 @@ export interface CampaignProposal {
   sent: false;
 }
 
-/** Textos das frases já ativas na campanha (pool + a mensagem base). */
+/** Textos das frases já existentes na campanha (todos os baldes + a mensagem base). */
 function existingPhrases(campaign: { message: string | null; scheduleConfig: unknown }): string[] {
   const out: string[] = [];
   const pool = parseMessagePool(campaign.scheduleConfig);
   for (const c of pool?.custom ?? []) if (c.text?.trim()) out.push(c.text.trim());
+  for (const c of pool?.agent ?? []) if (c.text?.trim()) out.push(c.text.trim());
   if (campaign.message?.trim()) out.push(campaign.message.trim());
   return [...new Set(out)];
 }
@@ -140,7 +141,7 @@ export interface CommitResult {
   campaignId: string;
   added: string[];
   skipped: Array<{ phrase: string; reason: string }>;
-  poolCustomCount: number;
+  poolAgentCount: number;
   meta: { created: number; existed: number; failed: number } | null;
   note: string;
   sent: false; // invariante: adicionar ao pool + submeter à Meta NUNCA envia ao cliente
@@ -173,13 +174,17 @@ export async function commitProposals(
     .catch(() => null);
 
   if (!campaign) {
-    return { ok: false, campaignId, added: [], skipped: [], poolCustomCount: 0, meta: null, note: "campanha não encontrada", sent: false };
+    return { ok: false, campaignId, added: [], skipped: [], poolAgentCount: 0, meta: null, note: "campanha não encontrada", sent: false };
   }
 
   const hasCoupon = Boolean(campaign.couponCode);
   const pool = parseMessagePool(campaign.scheduleConfig) ?? {};
-  const custom: CustomPhrase[] = [...(pool.custom ?? [])];
-  const existingKeys = new Set(custom.map((c) => phraseKey(c.text)));
+  // Balde do AGENTE (separado das 5 do lojista, que ficam intocadas).
+  const agentPhrases: CustomPhrase[] = [...(pool.agent ?? [])];
+  // Dedupe contra TODOS os baldes (não repetir o que já existe em qualquer lugar).
+  const existingKeys = new Set(
+    [...(pool.custom ?? []), ...agentPhrases].map((c) => phraseKey(c.text)),
+  );
 
   const added: string[] = [];
   const skipped: Array<{ phrase: string; reason: string }> = [];
@@ -189,19 +194,19 @@ export async function commitProposals(
     const key = phraseKey(p.trim());
     if (existingKeys.has(key)) { skipped.push({ phrase: p, reason: "já existe no pool" }); continue; }
     existingKeys.add(key);
-    custom.push({ id: key, text: p.trim(), on: true });
+    agentPhrases.push({ id: key, text: p.trim(), on: true });
     added.push(p.trim());
   }
 
   if (added.length === 0) {
-    return { ok: true, campaignId, added: [], skipped, poolCustomCount: custom.length, meta: null, note: "nada novo a adicionar", sent: false };
+    return { ok: true, campaignId, added: [], skipped, poolAgentCount: agentPhrases.length, meta: null, note: "nada novo a adicionar", sent: false };
   }
 
-  // Preserva o resto do scheduleConfig; só atualiza o messagePool.
+  // Preserva o resto do scheduleConfig E as 5 do lojista; só cresce o balde do agente.
   const baseConfig = (campaign.scheduleConfig && typeof campaign.scheduleConfig === "object")
     ? (campaign.scheduleConfig as Record<string, unknown>)
     : {};
-  const nextConfig = { ...baseConfig, messagePool: { ...(pool ?? {}), custom } };
+  const nextConfig = { ...baseConfig, messagePool: { ...(pool ?? {}), agent: agentPhrases } };
 
   await prisma.campaign.update({ where: { id: campaignId }, data: { scheduleConfig: nextConfig as never } });
 
@@ -213,7 +218,7 @@ export async function commitProposals(
     campaignId,
     added,
     skipped,
-    poolCustomCount: custom.length,
+    poolAgentCount: agentPhrases.length,
     meta: prov ? { created: prov.created, existed: prov.existed, failed: prov.failed } : null,
     note: `+${added.length} frase(s) no pool; submetidas à Meta (aprovação pendente). Só rodam após aprovadas.`,
     sent: false,

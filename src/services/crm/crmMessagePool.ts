@@ -31,13 +31,18 @@ export interface CustomPhrase {
 export interface MessagePoolConfig {
   selected?: string[];
   custom?:   CustomPhrase[];
+  /** Frases criadas pelo AGENTE de CRM — balde separado das 5 do lojante. */
+  agent?:    CustomPhrase[];
 }
+
+/** Teto das frases do agente (folgado — a Meta aguenta muito; o lojista fica nas 5). */
+export const MAX_AGENT_PHRASES = 50;
 
 export interface PoolPhrase {
   /** Stable identity for stats: generateMessageFingerprint(text). */
   key:    string;
   text:   string;
-  source: "catalog" | "custom" | "fallback";
+  source: "catalog" | "custom" | "agent" | "fallback";
 }
 
 /** variantKey for any phrase text (what executions record). */
@@ -85,8 +90,19 @@ export function parseMessagePool(scheduleConfig: unknown): MessagePoolConfig | n
         .filter((c) => c.id && c.text.trim())
         .slice(0, MAX_CUSTOM_PHRASES)
     : undefined;
-  if (!selected?.length && !custom?.length) return null;
-  return { selected, custom };
+  const agent = Array.isArray((o as { agent?: unknown }).agent)
+    ? ((o as { agent: unknown[] }).agent)
+        .filter((c): c is { id?: unknown; text?: unknown; on?: unknown } => !!c && typeof c === "object")
+        .map((c) => ({
+          id:   typeof c.id === "string" ? c.id : "",
+          text: typeof c.text === "string" ? c.text : "",
+          on:   c.on !== false,
+        }))
+        .filter((c) => c.id && c.text.trim())
+        .slice(0, MAX_AGENT_PHRASES)
+    : undefined;
+  if (!selected?.length && !custom?.length && !agent?.length) return null;
+  return { selected, custom, agent };
 }
 
 /**
@@ -114,6 +130,14 @@ export function listPoolCandidates(
     seen.add(key);
     out.push({ key, text: withCouponLine(c.text, hasCoupon), source: "custom" });
   }
+  // Frases do agente entram nos candidatos SEMPRE (para serem submetidas à Meta),
+  // mas a ROTAÇÃO delas é controlada em resolveActivePhrases (parkeadas até ativar).
+  for (const c of pool?.agent ?? []) {
+    const key = phraseKey(c.text);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, text: withCouponLine(c.text, hasCoupon), source: "agent" });
+  }
   return out;
 }
 
@@ -125,7 +149,7 @@ export function listPoolCandidates(
 export function resolveActivePhrases(
   campaign: { templateId: string | null; message: string },
   pool:     MessagePoolConfig | null,
-  opts:     { hasCoupon?: boolean } = {},
+  opts:     { hasCoupon?: boolean; includeAgent?: boolean } = {},
 ): PoolPhrase[] {
   const active: PoolPhrase[] = [];
   if (pool) {
@@ -134,6 +158,13 @@ export function resolveActivePhrases(
       if (cand.source === "catalog" && selected.has(cand.key)) active.push(cand);
       if (cand.source === "custom") {
         const c = pool.custom?.find((x) => phraseKey(x.text) === cand.key);
+        if (c && c.on !== false) active.push(cand);
+      }
+      // Frases do agente só ROTAM quando a campanha está ativada pro agente
+      // (includeAgent). Por padrão ficam ESTACIONADAS — aprovadas na Meta, prontas,
+      // mas fora do rodízio — pra não diluir o aprendizado com dados crus.
+      if (cand.source === "agent" && opts.includeAgent) {
+        const c = pool.agent?.find((x) => phraseKey(x.text) === cand.key);
         if (c && c.on !== false) active.push(cand);
       }
     }
