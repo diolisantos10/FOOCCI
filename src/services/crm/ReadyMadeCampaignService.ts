@@ -41,6 +41,9 @@ export interface ReadyMadeConfig {
 }
 
 const ACTIVE_STATUSES = ["ACTIVE", "SCHEDULED"];
+/// Terminal rows are HISTORY — never reused/edited; a new interaction creates a
+/// fresh row with the catalog defaults (fixes "Cancelada" cards opening uneditable).
+const TERMINAL_STATUSES = ["SENT", "COMPLETED", "CANCELLED"];
 
 /**
  * Ready-made campaigns replace the legacy CRMAutomation engine. When one is turned
@@ -149,7 +152,11 @@ export class ReadyMadeCampaignService {
       select:  { id: true, templateId: true, status: true, message: true, scheduleConfig: true },
     });
     const byTemplate = new Map<string, (typeof rows)[number]>();
-    for (const r of rows) if (r.templateId && !byTemplate.has(r.templateId)) byTemplate.set(r.templateId, r);
+    for (const r of rows) {
+      if (!r.templateId || byTemplate.has(r.templateId)) continue;
+      if (TERMINAL_STATUSES.includes(r.status)) continue; // dead row — fresh one on next use
+      byTemplate.set(r.templateId, r);
+    }
 
     const config = await getConfig(restaurantId);
 
@@ -243,7 +250,7 @@ export class ReadyMadeCampaignService {
       // if a Campaign row was created via Configurar, resume it too.
       await setConfig(restaurantId, { cartRecoveryEnabled: true });
       const row = await prisma.campaign.findFirst({
-        where: { restaurantId, templateId: rm.id }, orderBy: { createdAt: "desc" }, select: { id: true },
+        where: { restaurantId, templateId: rm.id, status: { notIn: TERMINAL_STATUSES as never[] } }, orderBy: { createdAt: "desc" }, select: { id: true },
       });
       if (row) await prisma.campaign.update({ where: { id: row.id }, data: { status: "ACTIVE" as never } });
       return { ok: true, campaignId: row?.id ?? null };
@@ -255,7 +262,7 @@ export class ReadyMadeCampaignService {
     // Turning ON is a status flip only — it never touches the content, so any edits
     // the owner saved while it was off are preserved.
     const existing = await prisma.campaign.findFirst({
-      where:   { restaurantId, templateId: rm.id },
+      where:   { restaurantId, templateId: rm.id, status: { notIn: TERMINAL_STATUSES as never[] } },
       orderBy: { createdAt: "desc" },
       select:  { id: true, status: true },
     });
@@ -350,7 +357,7 @@ export class ReadyMadeCampaignService {
     const payload = buildReadyMadeCampaignPayload(rm, overrides);
 
     const existing = await prisma.campaign.findFirst({
-      where:   { restaurantId, templateId: rm.id },
+      where:   { restaurantId, templateId: rm.id, status: { notIn: TERMINAL_STATUSES as never[] } },
       orderBy: { createdAt: "desc" },
       select:  { id: true },
     });

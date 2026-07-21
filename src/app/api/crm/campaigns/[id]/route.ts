@@ -322,8 +322,12 @@ export async function PATCH(
       };
     }
 
-    if (isDraftOrScheduled) {
+    // Audience may also change while PAUSED (nothing is sending) — needed by the
+    // unified modal's Público selector for custom campaigns born paused.
+    if (isDraftOrScheduled || campaign.status === "PAUSED") {
       if (body.targetSegment?.trim()) updateData.targetSegment = body.targetSegment.trim();
+    }
+    if (isDraftOrScheduled) {
       if (body.scheduledAt !== undefined) {
         updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
         updateData.status      = body.scheduledAt ? "SCHEDULED" : "DRAFT";

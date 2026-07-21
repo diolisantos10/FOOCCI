@@ -1954,6 +1954,11 @@ function CampaignManageModal({
   const [savingName,  setSavingName]  = useState(false);
   const [nameSaved,   setNameSaved]   = useState(false);
 
+  // Edit – público-alvo (custom campaigns only)
+  const [editSegment,   setEditSegment]   = useState("TODOS");
+  const [savingSegment, setSavingSegment] = useState(false);
+  const [segmentSaved,  setSegmentSaved]  = useState(false);
+
   // Edit – message pool (which phrases rotate) + the new-phrase composer.
   // msgText doubles as the composer input; poolCustom holds the owner's phrases.
   const [msgText,   setMsgText]   = useState("");
@@ -2005,6 +2010,7 @@ function CampaignManageModal({
         setMsgText("");
         setComposing(false);
         setEditName(d.name ?? "");
+        setEditSegment(d.targetSegment ?? "TODOS");
         // Phrase pool: use the stored pool; legacy campaigns (no pool yet) start
         // with the phrase actually running — the catalog variant matching
         // campaign.message, or the message itself as an initial custom phrase.
@@ -2151,6 +2157,22 @@ function CampaignManageModal({
         setTimeout(() => setNameSaved(false), 3000);
       }
     } finally { setSavingName(false); }
+  }
+
+  async function handleSaveSegment() {
+    if (!detail || editSegment === (detail.targetSegment ?? "TODOS")) return;
+    setSavingSegment(true);
+    try {
+      const res = await fetch(`/api/crm/campaigns/${detail.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetSegment: editSegment }),
+      });
+      if (res.ok) {
+        setDetail((p) => p ? { ...p, targetSegment: editSegment } : p);
+        setSegmentSaved(true);
+        setTimeout(() => setSegmentSaved(false), 3000);
+      }
+    } finally { setSavingSegment(false); }
   }
 
   /** Persists the phrase pool (selected catalog variants + custom phrases). */
@@ -2459,6 +2481,37 @@ function CampaignManageModal({
                           </button>
                         </div>
                         {nameSaved && <p className="mt-1.5 text-xs font-semibold text-green-600">✓ Nome atualizado!</p>}
+                      </div>
+                    )}
+
+                    {/* Público-alvo — só campanhas personalizadas (as fixas têm público próprio) */}
+                    {canEdit && !isFixedCampaign(detail.templateId) && (
+                      <div className="rounded-2xl border border-line bg-[#FAFAF8] p-4">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">Público-alvo</p>
+                        <div className="flex gap-2">
+                          <select
+                            value={editSegment}
+                            onChange={(e) => setEditSegment(e.target.value)}
+                            className="flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-300 focus:outline-none"
+                          >
+                            <option value="TODOS">Todos os clientes</option>
+                            <option value="QUENTE">Clientes quentes</option>
+                            <option value="MORNO">Clientes mornos</option>
+                            <option value="FRIO">Clientes frios</option>
+                            <option value="VIP">VIPs (Ouro/Diamante)</option>
+                            <option value="PRIMEIRO_PEDIDO">Fizeram só 1 pedido</option>
+                            <option value="SEM_PEDIDOS">Cadastrados sem compra</option>
+                            <option value="RECORRENTES">Recorrentes (2+ pedidos)</option>
+                          </select>
+                          <button
+                            onClick={handleSaveSegment}
+                            disabled={savingSegment || editSegment === (detail.targetSegment ?? "TODOS")}
+                            className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-40"
+                          >
+                            {savingSegment ? "…" : "Salvar"}
+                          </button>
+                        </div>
+                        {segmentSaved && <p className="mt-1.5 text-xs font-semibold text-green-600">✓ Público atualizado!</p>}
                       </div>
                     )}
                   </div>
@@ -4333,6 +4386,37 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .catch(() => {});
   }
 
+  // "Criar minha campanha" opens the SAME unified manage modal as everything else:
+  // create a paused custom campaign with safe defaults, then open Gerenciar on it.
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  async function handleCreateCustomCampaign() {
+    if (creatingCampaign) return;
+    setCreatingCampaign(true);
+    try {
+      const res = await fetch("/api/crm/campaigns", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:            "Nova campanha",
+          targetSegment:   "TODOS",
+          messageTemplate: "Oi, {nome}! 😊 Tem novidade no {restaurante} esperando por você: {link_cardapio}",
+          scheduleConfig:  { mode: "RECURRING", weekdays: [0, 1, 2, 3, 4, 5, 6], timeWindow: { start: "11:00", end: "20:00" }, dailyLimit: 30 },
+        }),
+      });
+      if (!res.ok) return;
+      const json = await res.json() as { data?: { campaignId?: string; id?: string } };
+      const id = json.data?.campaignId ?? json.data?.id;
+      if (!id) return;
+      // Born paused: the owner configures público/frases/agenda first, then Retomar.
+      await fetch(`/api/crm/campaigns/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "pause" }),
+      }).catch(() => {});
+      refreshCampaigns();
+      setReadyMadeReload((n) => n + 1);
+      openManage(id, "overview");
+    } finally { setCreatingCampaign(false); }
+  }
+
   useEffect(() => {
     const range = crmPeriodRange(period, customFrom, customTo);
     const qs = range ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}` : "";
@@ -4569,13 +4653,14 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             {resettingMetrics ? "Limpando…" : "🧹 Limpar métricas"}
           </button>
           <button
-            onClick={() => setSelectedTemplate(BLANK_CAMPAIGN_TEMPLATE)}
-            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
+            onClick={() => void handleCreateCustomCampaign()}
+            disabled={creatingCampaign}
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-60"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Criar minha campanha
+            {creatingCampaign ? "Criando…" : "Criar minha campanha"}
           </button>
         </div>
       </div>
