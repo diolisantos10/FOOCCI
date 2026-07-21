@@ -1790,7 +1790,7 @@ const INTENT_LABELS: Record<AnalyticsIntent, string> = {
 
 const CONFIDENCE_CONFIG: Record<"LOW" | "MEDIUM" | "HIGH", { label: string; cls: string }> = {
   HIGH:   { label: "Alta confiança",   cls: "bg-green-100 text-green-700"  },
-  MEDIUM: { label: "Média confiança",  cls: "bg-yellow-100 text-yellow-700" },
+  MEDIUM: { label: "Média confiança",  cls: "bg-amber-100 text-amber-700" },
   LOW:    { label: "Baixa confiança",  cls: "bg-[#F4F4F2] text-ink2"    },
 };
 

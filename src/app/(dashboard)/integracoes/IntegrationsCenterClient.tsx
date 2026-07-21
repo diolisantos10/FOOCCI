@@ -163,7 +163,7 @@ function StatusBadge({ status }: { status: IntegrationStatus }) {
     );
   if (status === "configured")
     return (
-      <span className="flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-semibold text-yellow-700">
+      <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
         <span className="h-1.5 w-1.5 rounded-full bg-yellow-400" />
         Não conectado
       </span>
@@ -1186,7 +1186,7 @@ function SaiposTempSecretTester() {
           value={tempSecret}
           autoComplete="off"
           onChange={(e) => setTempSecret(e.target.value)}
-          className="flex-1 rounded-xl border border-amber-200 bg-paper px-3 py-2 text-sm placeholder:text-muted focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 transition"
+          className="flex-1 rounded-xl border border-amber-200 bg-paper px-3 py-2 text-sm placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
         />
         <button
           type="button"
@@ -1591,7 +1591,7 @@ function SummaryChip({
   const cls = {
     gray:   "bg-[#F4F4F2] text-ink2",
     green:  "bg-green-100 text-green-700",
-    yellow: "bg-yellow-100 text-yellow-700",
+    yellow: "bg-amber-100 text-amber-700",
     red:    "bg-red-100 text-red-600",
   }[color];
 

@@ -123,7 +123,7 @@ const INTERACTION_META: Record<InteractionItem["type"], { icon: string; iconBg: 
 
 const STATUS_META: Record<string, { dot: string; badge: string; label: string }> = {
   PENDING:          { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-700",   label: "Pendente"      },
-  AWAITING_PAYMENT: { dot: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700", label: "Ag. pagamento" },
+  AWAITING_PAYMENT: { dot: "bg-yellow-400", badge: "bg-amber-100 text-amber-700", label: "Ag. pagamento" },
   CONFIRMED:        { dot: "bg-blue-400",   badge: "bg-blue-100 text-blue-700",     label: "Confirmado"    },
   PREPARING:        { dot: "bg-brand-400", badge: "bg-brand-100 text-brand-700", label: "Preparando"    },
   READY:            { dot: "bg-teal-400",   badge: "bg-teal-100 text-teal-700",     label: "Pronto"        },
@@ -541,7 +541,7 @@ function HeaderSection({
   ];
 
   return (
-    <div className="border-b border-[#E5E5E5] bg-paper px-6 py-5">
+    <div className="border-b border-line2 bg-paper px-6 py-5">
       {/* Breadcrumb + actions */}
       <div className="mb-4 flex items-center gap-2 text-sm text-muted">
         <Link href="/customers" className="transition-colors hover:text-ink2">
@@ -667,7 +667,7 @@ function HeaderSection({
 
 function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="border-b border-[#E5E5E5] bg-paper px-6">
+    <div className="border-b border-line2 bg-paper px-6">
       <div className="flex">
         {TABS.map((t) => (
           <button

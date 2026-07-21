@@ -142,13 +142,13 @@ const sc = brandSecondaryColor || "#128c7e";
 
 ## 8. Inconsistências conhecidas (drift a corrigir — não ampliar)
 
-1. **Cor de ação fragmentada em ≥4 tons:** brand‑laranja vs **indigo** (`bg-indigo-600` em Integrações/CRM/pagamento — 360×/60 arquivos) vs amber vs green/blue. → convergir tudo pra `brand`.
-2. **Anel de foco em 5 acentos** (orange/indigo/brand/purple/amber). → um só: **brand**.
-3. **Mesmo botão, raios diferentes** (`rounded` / `-lg` / `-xl` / `-2xl`). → botão = `rounded-xl`.
-4. **Token vs hex literal** pro mesmo valor (`border-line2` vs `border-[#E5E5E5]`; `bg-paper` vs `bg-white`; `#F4F4F2`/`#FAFAF8` soltos). → usar token.
-5. **Duas escalas neutras** (`ink/ink2/muted` vs `gray-*` cru no `TopBar` e nos preços da loja). → tokens.
-6. **Overlay/z‑index de modal sem padrão** (`bg-ink/45` vs `black/30|40|50|60`; `z-50` vs `z-[100]` vs `z-40/60`). → padrão `ConfirmDialog`.
-7. **Dois tons de "aviso"** no mesmo conjunto de badge (`amber` vs `yellow`). → só `amber`.
+1. ~~**Cor de ação fragmentada em ≥4 tons:** brand‑laranja vs **indigo** (`bg-indigo-600` em Integrações/CRM/pagamento) vs amber vs green/blue.~~ ✅ **resolvido** — indigo/roxo/violeta → `brand` (commit ebf8789).
+2. ~~**Anel de foco em 5 acentos** (orange/indigo/brand/purple/amber).~~ ✅ **resolvido** — todo `focus:`/`focus-visible:` (amber/blue/orange) convergido pra **brand** no painel.
+3. **Mesmo botão, raios diferentes** (`rounded` / `-lg` / `-xl` / `-2xl`). → botão = `rounded-xl`. *(pendente — precisa distinguir botão de outros elementos arredondados; fazer por tela.)*
+4. **Token vs hex literal** pro mesmo valor. → usar token. ✅ **parcial** — `border-[#E5E5E5]` → `border-line2` feito; falta `bg-white`→`bg-paper` e os neutros soltos `#F4F4F2`/`#FAFAF8` (sem token equivalente hoje — precisa criar token antes).
+5. **Duas escalas neutras** (`ink/ink2/muted` vs `gray-*` cru no `TopBar` e nos preços da loja). → tokens. *(pendente — `gray-*` é semântico em muitos lugares; requer revisão caso a caso, não sweep cego.)*
+6. **Overlay/z‑índice de modal sem padrão** (`bg-ink/45` vs `black/30|40|50|60`; `z-50` vs `z-[100]` vs `z-40/60`). → padrão `ConfirmDialog`. *(pendente — mexer em z‑índice afeta empilhamento; fazer por componente.)*
+7. ~~**Dois tons de "aviso"** no mesmo conjunto de badge (`amber` vs `yellow`).~~ ✅ **resolvido** — família de aviso (`yellow-50/100/200/600/700/800`) → `amber`; estrelas/pins (`yellow-400/500`) permanecem amarelo (semântica diferente).
 8. **Kit de UI subadotado** — `components/ui` importado por só 4 arquivos; telas grandes reimplementam tudo inline (raiz de 1–6). → migrar telas pro kit aos poucos.
 9. **Pesos de fonte não embarcados** — `font-medium/bold/extrabold` (~1.660 usos) viram faux‑bold; só 400/600 existem. → carregar +pesos ou padronizar 400/600.
 10. **Largura de conteúdo do painel não padronizada** (`max-w-7xl…2xl`). → definir default.

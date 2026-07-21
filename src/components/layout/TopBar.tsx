@@ -110,7 +110,7 @@ export function TopBar({ title }: TopBarProps) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <header className="flex h-14 items-center justify-between border-b border-[#E5E5E5] bg-white px-6">
+    <header className="flex h-14 items-center justify-between border-b border-line2 bg-white px-6">
       {/* Left: hamburger (mobile) + brand / page breadcrumb */}
       <div className="flex items-center gap-2">
         {/* Hamburger — mobile only */}
@@ -185,10 +185,10 @@ export function TopBar({ title }: TopBarProps) {
                 <img
                   src={restaurant.logoUrl}
                   alt={restaurant.name ?? "Restaurante"}
-                  className="h-7 w-7 shrink-0 rounded-lg border border-[#E5E5E5] object-cover"
+                  className="h-7 w-7 shrink-0 rounded-lg border border-line2 object-cover"
                 />
               ) : (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#E5E5E5] bg-[#FAFAF8] text-[12px] font-bold text-gray-600">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line2 bg-[#FAFAF8] text-[12px] font-bold text-gray-600">
                   {(restaurant.name ?? "?").charAt(0).toUpperCase()}
                 </div>
               )}
@@ -253,7 +253,7 @@ export function TopBar({ title }: TopBarProps) {
               <select
                 value={modalReason}
                 onChange={(e) => setModalReason(e.target.value)}
-                className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+                className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 {PAUSE_REASONS.map((r) => (
                   <option key={r} value={r}>{r}</option>
@@ -264,7 +264,7 @@ export function TopBar({ title }: TopBarProps) {
               <select
                 value={modalResume ?? ""}
                 onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
-                className="mb-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+                className="mb-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 {AUTO_RESUME_OPTIONS.map((o) => (
                   <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>
@@ -279,7 +279,7 @@ export function TopBar({ title }: TopBarProps) {
                     max={480}
                     value={modalCustomMinutes}
                     onChange={(e) => setModalCustomMinutes(Math.max(1, Math.min(480, Number(e.target.value) || 60)))}
-                    className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+                    className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                   <span className="text-sm text-gray-600">minutos</span>
                 </div>

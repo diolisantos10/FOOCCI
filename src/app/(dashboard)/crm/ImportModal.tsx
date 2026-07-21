@@ -616,7 +616,7 @@ function PreviewStep({
         )}
 
         {importable === 0 && (
-          <p className="rounded-xl bg-yellow-50 border border-yellow-100 px-4 py-3 text-sm text-yellow-700">
+          <p className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-700">
             Nenhum pedido novo para importar.
           </p>
         )}
@@ -668,7 +668,7 @@ function PreviewStep({
       )}
 
       {importCount === 0 && (
-        <p className="rounded-xl bg-yellow-50 border border-yellow-100 px-4 py-3 text-sm text-yellow-700">
+        <p className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-700">
           Nenhum dado válido encontrado para importar.
         </p>
       )}
@@ -1088,7 +1088,7 @@ function UniversalPreviewStep({
 }) {
   const scoreColor =
     result.qualityScore >= 70 ? "text-green-700" :
-    result.qualityScore >= 40 ? "text-yellow-600" :
+    result.qualityScore >= 40 ? "text-amber-600" :
     "text-red-600";
 
   const stats = [
@@ -1121,7 +1121,7 @@ function UniversalPreviewStep({
         </div>
       )}
       {result.validationWarnings.length > 0 && (
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700 space-y-1">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 space-y-1">
           {result.validationWarnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
         </div>
       )}

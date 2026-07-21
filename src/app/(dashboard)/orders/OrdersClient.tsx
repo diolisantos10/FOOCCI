@@ -237,7 +237,7 @@ const DELAY_THRESHOLD = 20;
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; border: string; badge: string }> = {
   PENDING:          { label: "Novo",            border: "border-l-amber-400",  badge: "bg-amber-50 text-amber-700"   },
-  AWAITING_PAYMENT: { label: "Aguardando Pix",  border: "border-l-yellow-400", badge: "bg-yellow-50 text-yellow-700" },
+  AWAITING_PAYMENT: { label: "Aguardando Pix",  border: "border-l-yellow-400", badge: "bg-amber-50 text-amber-700" },
   CONFIRMED:        { label: "Confirmado",      border: "border-l-blue-400",   badge: "bg-blue-50 text-blue-600"     },
   PREPARING:        { label: "Preparando",      border: "border-l-brand-400",  badge: "bg-brand-50 text-brand-600"   },
   READY:            { label: "Pronto",          border: "border-l-teal-400",   badge: "bg-teal-50 text-teal-700"     },
@@ -439,7 +439,7 @@ function customerTemperature(lastOrderAt: string | null | undefined): { label: s
   if (!lastOrderAt) return null;
   const days = Math.floor((Date.now() - new Date(lastOrderAt).getTime()) / 86_400_000);
   if (days <= 30)  return { label: "Quente", color: "text-brand-700 bg-brand-50" };
-  if (days <= 60)  return { label: "Morno",  color: "text-yellow-700 bg-yellow-50" };
+  if (days <= 60)  return { label: "Morno",  color: "text-amber-700 bg-amber-50" };
   return                  { label: "Frio",   color: "text-sky-700 bg-sky-50"       };
 }
 
@@ -2205,7 +2205,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
             onChange={(e) => setManualConfirmReason(e.target.value)}
             placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
             rows={2}
-            className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink2 placeholder:text-muted focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
           {manualConfirmError && (
             <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>

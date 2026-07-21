@@ -191,7 +191,7 @@ function ClassificacaoClientes() {
           <div className="flex flex-wrap gap-2">
             {[
               { label: "Quente",  desc: `0–${seg.hotMaxDays} dias`,                    color: "bg-green-100 text-green-700" },
-              { label: "Morno",   desc: `${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias`, color: "bg-yellow-100 text-yellow-700" },
+              { label: "Morno",   desc: `${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias`, color: "bg-amber-100 text-amber-700" },
               { label: "Frio",    desc: `${frio}–${seg.lostMinDays - 1} dias`,         color: "bg-blue-100 text-blue-700" },
               { label: "Perdido", desc: `${perdido}+ dias`,                            color: "bg-red-100 text-red-700" },
             ].map((s) => (

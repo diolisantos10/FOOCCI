@@ -41,7 +41,7 @@ const STATUS_CONFIG: Record<
 > = {
   DRAFT:     { label: "Rascunho",  bg: "bg-[#F4F4F2]",   text: "text-ink2"  },
   ACTIVE:    { label: "Ativa",     bg: "bg-green-100",  text: "text-green-700" },
-  PAUSED:    { label: "Pausada",   bg: "bg-yellow-100", text: "text-yellow-700"},
+  PAUSED:    { label: "Pausada",   bg: "bg-amber-100", text: "text-amber-700"},
   SCHEDULED: { label: "Agendada", bg: "bg-blue-100",   text: "text-blue-700"  },
   EXPIRED:   { label: "Encerrada", bg: "bg-red-50",     text: "text-red-600"   },
 };
@@ -1329,7 +1329,7 @@ function PromotionCard({
             onClick={onToggleStatus}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
               isActive
-                ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                ? "bg-amber-100 text-amber-700 hover:bg-yellow-200"
                 : "bg-green-100 text-green-700 hover:bg-green-200"
             }`}
           >

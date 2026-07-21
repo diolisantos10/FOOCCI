@@ -83,7 +83,7 @@ function ToolBadge({ tc }: { tc: ToolCall }) {
     suggest_upsell:  tc.success ? "bg-brand-50 text-brand-600 border-brand-100" : "bg-red-50 text-red-600 border-red-100",
     remove_item:     tc.success ? "bg-[#F4F4F2] text-ink2 border-line2" : "bg-red-50 text-red-600 border-red-100",
     confirm_order:   tc.success ? "bg-green-100 text-green-800 border-green-200" : "bg-red-50 text-red-600 border-red-100",
-    handoff_to_human:"bg-yellow-50 text-yellow-700 border-yellow-100",
+    handoff_to_human:"bg-amber-50 text-amber-700 border-amber-100",
   };
   const icon  = icons[tc.name]  ?? "🔧";
   const color = colors[tc.name] ?? "bg-[#F4F4F2] text-ink2 border-line2";

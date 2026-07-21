@@ -514,8 +514,8 @@ export function ManualOrderModal({
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
-  const inputCls  = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100";
-  const selectCls = "w-full rounded-lg border border-gray-200 px-2 py-2 text-sm text-gray-700 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-100";
+  const inputCls  = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100";
+  const selectCls = "w-full rounded-lg border border-gray-200 px-2 py-2 text-sm text-gray-700 focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-100";
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -659,7 +659,7 @@ export function ManualOrderModal({
                 <label className="block text-xs font-medium text-gray-700 mb-1">Observações de preparo/entrega</label>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
                   placeholder="Ex: sem cream cheese, trocar molho, ponto da carne, referência de entrega…"
-                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100" />
+                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100" />
               </div>
             </>
           )}
@@ -771,7 +771,7 @@ export function ManualOrderModal({
                 </div>
               )}
               {isQuoteAuthorized(quote) && quote?.calculationStatus === "manual" && (
-                <p className="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
                   Modo manual — confirme o frete com o cliente.
                 </p>
               )}

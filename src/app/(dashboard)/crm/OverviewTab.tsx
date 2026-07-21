@@ -22,7 +22,7 @@ export type DateFilterPreset = "today" | "week7" | "week" | "total" | "month" | 
 
 const PRIORITY_STYLE: Record<ActionPriority, { dot: string; badge: string; label: string; border: string; bg: string }> = {
   HIGH:   { dot: "bg-red-500",    badge: "bg-red-50 text-red-700",       label: "Alta",  border: "border-red-100",    bg: "bg-red-50/30"     },
-  MEDIUM: { dot: "bg-yellow-400", badge: "bg-yellow-50 text-yellow-700", label: "Média", border: "border-line",   bg: "bg-[#FAFAF8]/50"    },
+  MEDIUM: { dot: "bg-yellow-400", badge: "bg-amber-50 text-amber-700", label: "Média", border: "border-line",   bg: "bg-[#FAFAF8]/50"    },
   LOW:    { dot: "bg-line2",   badge: "bg-[#FAFAF8] text-muted",     label: "Baixa", border: "border-line",   bg: "bg-[#FAFAF8]/30"    },
 };
 
@@ -451,7 +451,7 @@ export function KPICard({
 }) {
   const accentClass = {
     green:  "text-green-700",
-    yellow: "text-yellow-600",
+    yellow: "text-amber-600",
     red:    "text-red-600",
     blue:   "text-blue-700",
     brand:  "text-brand-700",
@@ -722,7 +722,7 @@ function RevenueBlock({
 
 const TOP_SEGMENT_BADGE: Record<TopCustomerSegment, { label: string; cls: string }> = {
   QUENTE:      { label: "Quente",   cls: "bg-green-50 text-green-700"  },
-  MORNO:       { label: "Morno",    cls: "bg-yellow-50 text-yellow-700" },
+  MORNO:       { label: "Morno",    cls: "bg-amber-50 text-amber-700" },
   FRIO:        { label: "Frio",     cls: "bg-red-50 text-red-600"      },
   PERDIDO:     { label: "Perdido",  cls: "bg-[#F4F4F2] text-muted"   },
   SEM_PEDIDOS: { label: "Sem pedidos", cls: "bg-[#F4F4F2] text-muted" },

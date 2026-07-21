@@ -63,7 +63,7 @@ interface Toast {
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
   PENDING:           { label: "Pendente",          color: "bg-[#F4F4F2] text-ink2",   dot: "bg-muted" },
   PROCESSING:        { label: "Processando",        color: "bg-blue-100 text-blue-700",   dot: "bg-blue-500" },
-  READY:             { label: "Pronta para revisão",color: "bg-yellow-100 text-yellow-700",dot:"bg-yellow-500" },
+  READY:             { label: "Pronta para revisão",color: "bg-amber-100 text-amber-700",dot:"bg-yellow-500" },
   FAILED:            { label: "Falhou",             color: "bg-red-100 text-red-600",     dot: "bg-red-500" },
   APPROVED:          { label: "Aprovada",           color: "bg-green-100 text-green-700", dot: "bg-green-500" },
   REJECTED:          { label: "Rejeitada",          color: "bg-brand-100 text-brand-700",dot:"bg-brand-500" },
@@ -613,7 +613,7 @@ export function EnhancementClient({
         <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
           <StatCard label="Total"       value={jobs.length}                      color="text-ink" onClick={() => setStatusFilter("all")}                active={statusFilter === "all"} />
           <StatCard label="Processando" value={statusCounts["PROCESSING"] ?? 0}  color="text-blue-600" onClick={() => setStatusFilter("PROCESSING")}         active={statusFilter === "PROCESSING"} />
-          <StatCard label="Prontas"     value={statusCounts["READY"] ?? 0}       color="text-yellow-600" onClick={() => setStatusFilter("READY")}             active={statusFilter === "READY"} />
+          <StatCard label="Prontas"     value={statusCounts["READY"] ?? 0}       color="text-amber-600" onClick={() => setStatusFilter("READY")}             active={statusFilter === "READY"} />
           <StatCard label="Aprovadas"   value={statusCounts["APPROVED"] ?? 0}    color="text-green-600" onClick={() => setStatusFilter("APPROVED")}           active={statusFilter === "APPROVED"} />
           <StatCard label="Rejeitadas"  value={statusCounts["REJECTED"] ?? 0}    color="text-brand-600" onClick={() => setStatusFilter("REJECTED")}          active={statusFilter === "REJECTED"} />
           <StatCard label="Falhas"      value={statusCounts["FAILED"] ?? 0}      color="text-red-600" onClick={() => setStatusFilter("FAILED")}               active={statusFilter === "FAILED"} />

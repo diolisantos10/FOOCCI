@@ -377,7 +377,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
 
         {/* Manual slug override */}
         <input
-          className="w-40 rounded bg-ink px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-ink2 focus:ring-1 focus:ring-amber-500"
+          className="w-40 rounded bg-ink px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-ink2 focus:ring-1 focus:ring-brand-500"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
           placeholder="outro slug…"
@@ -557,7 +557,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
             </div>
             <div className="mt-2 flex gap-1.5">
               <input
-                className="flex-1 rounded bg-ink px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-ink2 focus:ring-1 focus:ring-amber-500"
+                className="flex-1 rounded bg-ink px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-ink2 focus:ring-1 focus:ring-brand-500"
                 value={typedMessage}
                 onChange={(e) => setTypedMessage(e.target.value)}
                 placeholder="Mensagem do usuário (ON_USER_MESSAGE)…"

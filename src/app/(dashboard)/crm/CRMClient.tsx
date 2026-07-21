@@ -837,7 +837,7 @@ const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; tex
   SUGGESTED_TEMPLATE: { label: "Sugerida",          bg: "bg-brand-100",   text: "text-brand-700"  },
   DRAFT:              { label: "Rascunho",           bg: "bg-[#F4F4F2]",    text: "text-ink2"   },
   READY_TO_CONFIGURE: { label: "Pronta p/ configurar", bg: "bg-green-100", text: "text-green-700" },
-  COMING_SOON:        { label: "Em breve",           bg: "bg-yellow-100",  text: "text-yellow-700" },
+  COMING_SOON:        { label: "Em breve",           bg: "bg-amber-100",  text: "text-amber-700" },
   NEEDS_DATA:         { label: "Precisa de dados",   bg: "bg-[#F4F4F2]",    text: "text-muted"   },
 };
 
@@ -1534,7 +1534,7 @@ const CAMPAIGN_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   ACTIVE:    { bg: "bg-green-100",  text: "text-green-700"  },
   SENDING:   { bg: "bg-blue-100",   text: "text-blue-700"   },
   SENT:      { bg: "bg-green-100",  text: "text-green-700"  },
-  PAUSED:    { bg: "bg-yellow-100", text: "text-yellow-700" },
+  PAUSED:    { bg: "bg-amber-100", text: "text-amber-700" },
   COMPLETED: { bg: "bg-green-100",  text: "text-green-700"  },
   CANCELLED: { bg: "bg-red-100",    text: "text-red-600"    },
 };
@@ -1642,7 +1642,7 @@ function CampaignReviewModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-line shrink-0">
           <div>
             <h2 className="text-base font-bold text-ink">Revisar e enviar</h2>
-            <p className={`text-xs mt-0.5 ${active.length > effectiveMax ? "text-yellow-600 font-semibold" : "text-muted"}`}>
+            <p className={`text-xs mt-0.5 ${active.length > effectiveMax ? "text-amber-600 font-semibold" : "text-muted"}`}>
               {active.length} destinatário{active.length !== 1 ? "s" : ""}
               {active.length > effectiveMax
                 ? effectiveMax === 0
@@ -1707,8 +1707,8 @@ function CampaignReviewModal({
 
             {/* Daily cap warning */}
             {active.length > effectiveMax && (
-              <div className="border-b border-yellow-100 bg-yellow-50 px-5 py-3 flex items-center justify-between gap-3 shrink-0">
-                <p className="text-xs text-yellow-800">
+              <div className="border-b border-amber-100 bg-amber-50 px-5 py-3 flex items-center justify-between gap-3 shrink-0">
+                <p className="text-xs text-amber-800">
                   ⚠️ <strong>Limite diário:</strong> {active.length} destinatários — capacidade restante hoje: {effectiveMax === 0 ? "nenhuma (limite atingido)" : effectiveMax}. Remova manualmente ou aplique o limite automático.
                 </p>
                 {effectiveMax > 0 && (
@@ -2315,7 +2315,7 @@ function CampaignManageModal({
                     ) : (
                       <button
                         onClick={async () => { await onCampaignAction(detail.id, "pause"); setDetail((p) => p ? { ...p, status: "PAUSED" } : p); onCampaignUpdated?.(detail.id, { status: "PAUSED" }); }}
-                        className="rounded-xl bg-yellow-50 px-3 py-1.5 text-xs font-semibold text-yellow-700 hover:bg-yellow-100 transition-colors"
+                        className="rounded-xl bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
                       >Pausar</button>
                     )}
                     <button
@@ -3403,7 +3403,7 @@ type ScheduleCfg = {
 
 function getOperationalStatus(c: CampaignHistoryRow): { text: string; color: string; dot: string } {
   const cfg = c.scheduleConfig as ScheduleCfg | null;
-  if (c.status === "PAUSED")  return { text: "Campanha pausada — aguardando retomada", color: "text-yellow-700", dot: "bg-yellow-400" };
+  if (c.status === "PAUSED")  return { text: "Campanha pausada — aguardando retomada", color: "text-amber-700", dot: "bg-yellow-400" };
   if (c.status === "SENDING") {
     const sent    = c.totalSent;
     const pending = c.pendingCount ?? 0;

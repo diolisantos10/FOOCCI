@@ -894,7 +894,7 @@ function SortableItemRow({
           {item.hasActivePromo && (
             <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
               item.promoActiveToday === false
-                ? "bg-yellow-100 text-yellow-700"
+                ? "bg-amber-100 text-amber-700"
                 : "bg-green-100 text-green-700"
             }`}>
               {item.promoActiveToday === false ? "Promo programada" : "Promo ativa"}
@@ -2933,7 +2933,7 @@ function EditItemModal({
                               value={newOption.name}
                               onChange={(e) => { setOptionError(""); setNewOption((f) => ({ ...f, name: e.target.value })); }}
                               placeholder="Nome da opção (ex: Cru, Flambado)"
-                              className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 ${optionError && !newOption.name.trim() ? "border-red-400" : "border-line2"}`}
+                              className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400 ${optionError && !newOption.name.trim() ? "border-red-400" : "border-line2"}`}
                             />
                             <div className="relative w-28">
                               <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-muted">R$</span>
@@ -2944,7 +2944,7 @@ function EditItemModal({
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                className="w-full rounded-lg border border-line2 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                className="w-full rounded-lg border border-line2 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                               />
                             </div>
                           </div>
@@ -2953,7 +2953,7 @@ function EditItemModal({
                             value={newOption.portion}
                             onChange={(e) => setNewOption((f) => ({ ...f, portion: e.target.value }))}
                             placeholder="Porção (ex: 100g) — opcional"
-                            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                           />
                           {optionError && <p className="text-[11px] text-red-600">{optionError}</p>}
                           <div className="flex gap-2">
@@ -2997,7 +2997,7 @@ function EditItemModal({
                   value={newGroup.name}
                   onChange={(e) => setNewGroup((f) => ({ ...f, name: e.target.value }))}
                   placeholder='Nome (ex: "Escolha seus 2 temakis")'
-                  className="w-full rounded-lg border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  className="w-full rounded-lg border border-line2 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
                 <div className="flex gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5">
@@ -3006,7 +3006,7 @@ function EditItemModal({
                       type="checkbox"
                       checked={newGroup.required}
                       onChange={(e) => setNewGroup((f) => ({ ...f, required: e.target.checked }))}
-                      className="h-4 w-4 rounded border-line2 text-blue-500 focus:ring-blue-400"
+                      className="h-4 w-4 rounded border-line2 text-blue-500 focus:ring-brand-400"
                     />
                     <label htmlFor="og-required" className="text-xs text-ink2">Obrigatório</label>
                   </div>
@@ -3017,7 +3017,7 @@ function EditItemModal({
                       onChange={(e) => setNewGroup((f) => ({ ...f, minSelect: e.target.value }))}
                       type="number"
                       min="0"
-                      className="w-14 rounded-lg border border-line2 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      className="w-14 rounded-lg border border-line2 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
                   <div className="flex items-center gap-1">
@@ -3027,7 +3027,7 @@ function EditItemModal({
                       onChange={(e) => setNewGroup((f) => ({ ...f, maxSelect: e.target.value }))}
                       type="number"
                       min="1"
-                      className="w-14 rounded-lg border border-line2 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      className="w-14 rounded-lg border border-line2 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                     />
                   </div>
                 </div>

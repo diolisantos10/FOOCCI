@@ -211,7 +211,7 @@ export function AISimulatorClient() {
                   disabled={state === "running"}
                   className="px-3 py-2 bg-paper border border-line2 text-ink2 text-sm rounded-lg
                              hover:border-line2 disabled:opacity-50 disabled:cursor-not-allowed
-                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                             focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 >
                   {SCENARIO_PRESETS.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
@@ -288,7 +288,7 @@ export function AISimulatorClient() {
 
 const CLASS_CONFIG: Record<ConversationClass, { label: string; color: string; bg: string }> = {
   high_conversion: { label: "Alta conversão",  color: "text-green-700",  bg: "bg-green-50 border-green-200"  },
-  low_conversion:  { label: "Baixa conversão", color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
+  low_conversion:  { label: "Baixa conversão", color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
   abandoned:       { label: "Abandonada",      color: "text-red-700",    bg: "bg-red-50 border-red-200"       },
   high_ticket:     { label: "Ticket alto",     color: "text-blue-700",   bg: "bg-blue-50 border-blue-200"     },
   low_ticket:      { label: "Ticket baixo",    color: "text-brand-700", bg: "bg-brand-50 border-brand-200" },
@@ -511,7 +511,7 @@ function ConversationRow({
   const scoreBg = conv.score >= 70
     ? "bg-green-100 text-green-700"
     : conv.score >= 50
-    ? "bg-yellow-100 text-yellow-700"
+    ? "bg-amber-100 text-amber-700"
     : "bg-red-100 text-red-700";
 
   return (
@@ -742,7 +742,7 @@ function PromptLabPanel() {
             placeholder='Ex: "cliente indeciso que nunca comeu aqui" ou "cliente com pressa, quer algo barato"'
             rows={3}
             className="w-full px-3 py-2.5 border border-line2 rounded-lg text-sm text-ink
-                       placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-blue-500
+                       placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand-500
                        focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
           />
         </div>
@@ -836,7 +836,7 @@ function PromptLabPanel() {
 function SummaryCard({ report }: { report: SimulationReport }) {
   const scoreColor = report.overallScore >= 70
     ? "text-green-600" : report.overallScore >= 50
-    ? "text-yellow-600" : "text-red-600";
+    ? "text-amber-600" : "text-red-600";
 
   const safeBadge = report.safeToTest
     ? { bg: "bg-green-100 text-green-700 border-green-200", label: "SIM — pronto para teste com cliente real" }
@@ -1080,7 +1080,7 @@ function ScenarioCard({
 }) {
   const statusConfig = {
     passed:  { bg: "bg-green-50 border-green-200",  badge: "bg-green-100 text-green-700",  icon: "✅" },
-    warning: { bg: "bg-yellow-50 border-yellow-200", badge: "bg-yellow-100 text-yellow-700", icon: "⚠️" },
+    warning: { bg: "bg-amber-50 border-amber-200", badge: "bg-amber-100 text-amber-700", icon: "⚠️" },
     failed:  { bg: "bg-red-50 border-red-200",      badge: "bg-red-100 text-red-700",      icon: "❌" },
   }[result.status];
 

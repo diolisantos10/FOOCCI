@@ -1461,7 +1461,7 @@ interface StatusMeta {
 // Soft -50 badges mirroring the Pedidos board (OrdersClient STATUS_CONFIG).
 const STATUS_META: Record<string, StatusMeta> = {
   PENDING:          { label: "Aguardando",        badge: "bg-amber-50 border-amber-100 text-amber-700"   },
-  AWAITING_PAYMENT: { label: "Aguard. pagamento", badge: "bg-yellow-50 border-yellow-100 text-yellow-700" },
+  AWAITING_PAYMENT: { label: "Aguard. pagamento", badge: "bg-amber-50 border-amber-100 text-amber-700" },
   CONFIRMED:        { label: "Confirmado",        badge: "bg-blue-50 border-blue-100 text-blue-600"      },
   PREPARING:        { label: "Em preparo",        badge: "bg-brand-50 border-brand-100 text-brand-600"   },
   READY:            { label: "Pronto",            badge: "bg-teal-50 border-teal-100 text-teal-700"      },
@@ -1612,8 +1612,8 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
       </div>
 
       {status === "AWAITING_PAYMENT" && (
-        <div className="border-t border-yellow-100 bg-yellow-50 px-3 py-2">
-          <p className="text-[11px] font-semibold text-yellow-800">
+        <div className="border-t border-amber-100 bg-amber-50 px-3 py-2">
+          <p className="text-[11px] font-semibold text-amber-800">
             ⏳ Pix ainda não aprovado — aguardando confirmação do pagamento
           </p>
           {isManagerOrOwner && (
@@ -1673,7 +1673,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
               Use apenas se você verificou o pagamento no painel do Mercado Pago.
               Esta ação marca o pedido como pago e o envia para produção.
             </p>
-            <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Pedido {formatOrderNumber(order.orderNumber, order.id)} · R$ {parseFloat(order.total).toFixed(2).replace(".", ",")}
             </div>
             <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink2">
@@ -1690,7 +1690,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
               onChange={(e) => setManualConfirmReason(e.target.value)}
               placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
               rows={2}
-              className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-xs text-ink2 placeholder:text-muted focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+              className="mt-2 w-full resize-none rounded-xl border border-line2 px-3 py-2 text-xs text-ink2 placeholder:text-muted focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             {manualConfirmError && (
               <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>

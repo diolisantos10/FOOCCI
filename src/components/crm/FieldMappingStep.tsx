@@ -205,7 +205,7 @@ export function FieldMappingStep({
         </div>
       )}
       {validation.warnings.length > 0 && (
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           {validation.warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
         </div>
       )}
@@ -262,7 +262,7 @@ export function FieldMappingStep({
                   {/* Canonical field selector */}
                   <td className="px-4 py-2">
                     <select
-                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                       value={m.canonicalKey}
                       onChange={(e) => setMapping(m.sourceHeader, e.target.value)}
                     >
@@ -320,7 +320,7 @@ export function FieldMappingStep({
               placeholder="Nome do template…"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             <button
               className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"

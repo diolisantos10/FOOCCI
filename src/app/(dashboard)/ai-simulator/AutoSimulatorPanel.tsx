@@ -391,7 +391,7 @@ export function AutoSimulatorPanel() {
             value={config?.intervalMinutes ?? 60}
             disabled={savingCfg || isRunning}
             onChange={(e) => void patchConfig({ intervalMinutes: Number(e.target.value) })}
-            className="px-2 py-1 border border-line2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
+            className="px-2 py-1 border border-line2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-40"
           >
             {[15, 30, 60, 120, 240].map((m) => (
               <option key={m} value={m}>{m} min</option>
@@ -406,7 +406,7 @@ export function AutoSimulatorPanel() {
             value={config?.scenarioCount ?? 10}
             disabled={savingCfg || isRunning}
             onChange={(e) => void patchConfig({ scenarioCount: Number(e.target.value) })}
-            className="px-2 py-1 border border-line2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
+            className="px-2 py-1 border border-line2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-40"
           >
             {[5, 10, 20].map((n) => (
               <option key={n} value={n}>{n}</option>

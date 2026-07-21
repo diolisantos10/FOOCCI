@@ -35,7 +35,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT:            "bg-[#F4F4F2] text-ink2",
-  STRATEGY_PENDING: "bg-yellow-50 text-yellow-700",
+  STRATEGY_PENDING: "bg-amber-50 text-amber-700",
   STRATEGY_DONE:    "bg-blue-50 text-blue-700",
   PROPOSAL_READY:   "bg-brand-50 text-brand-600",
   ACTIVE:           "bg-green-50 text-green-700",
