@@ -309,6 +309,72 @@ export function MigracaoTab() {
         </div>
       </div>
 
+      {/* ── Mérito do CRM — quem trouxe os clientes de volta ─────────────────── */}
+      <div className="rounded-2xl border border-line bg-paper shadow-sm">
+        <div className="border-b border-line px-6 py-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Mérito do CRM</h3>
+          <p className="mt-1 text-sm text-muted">Quem trouxe os clientes de volta no período.</p>
+        </div>
+
+        {loading ? (
+          <p className="px-6 py-10 text-center text-sm text-muted">Carregando…</p>
+        ) : !data || data.reactivations === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-muted">Nenhuma reativação neste período ainda.</p>
+        ) : (() => {
+          const att = data.attribution;
+          const pct = data.reactivations > 0 ? Math.round((att.attributed / data.reactivations) * 100) : 0;
+          return (
+            <div>
+              {/* Placar — três números, bem espaçados */}
+              <div className="grid grid-cols-1 divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <div className="px-6 py-5 text-center">
+                  <p className="text-3xl font-bold tabular-nums text-ink">{data.reactivations.toLocaleString("pt-BR")}</p>
+                  <p className="mt-1 text-xs text-muted">clientes voltaram</p>
+                </div>
+                <div className="px-6 py-5 text-center">
+                  <p className="text-3xl font-bold tabular-nums text-emerald-700">{pct}%</p>
+                  <p className="mt-1 text-xs text-muted">trazidos pelo CRM ({att.attributed.toLocaleString("pt-BR")})</p>
+                </div>
+                <div className="px-6 py-5 text-center">
+                  <p className="text-3xl font-bold tabular-nums text-green-700">
+                    R$ {att.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">receita dos retornos</p>
+                </div>
+              </div>
+
+              {/* Uma linha por campanha — nome à esquerda, números à direita */}
+              <div className="divide-y divide-line border-t border-line">
+                {att.byCampaign.map((c) => (
+                  <div key={c.campaignId} className="flex items-center justify-between gap-4 px-6 py-4">
+                    <p className="min-w-0 truncate text-sm font-semibold text-ink">📣 {c.campaignName}</p>
+                    <div className="flex shrink-0 items-center gap-5 text-sm tabular-nums">
+                      <span className="font-semibold text-ink">
+                        {c.customers.toLocaleString("pt-BR")} {c.customers === 1 ? "cliente" : "clientes"}
+                      </span>
+                      {c.couponsUsed > 0 && (
+                        <span className="text-muted">🎟️ {c.couponsUsed.toLocaleString("pt-BR")}</span>
+                      )}
+                      {c.revenue > 0 && (
+                        <span className="text-green-700">R$ {c.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {att.organic > 0 && (
+                  <div className="flex items-center justify-between gap-4 px-6 py-4">
+                    <p className="text-sm text-muted">🚶 Voltaram sozinhos (sem campanha)</p>
+                    <span className="shrink-0 text-sm tabular-nums text-muted">
+                      {att.organic.toLocaleString("pt-BR")} {att.organic === 1 ? "cliente" : "clientes"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Movimentações detalhadas (setas) */}
       <div className="rounded-2xl border border-line bg-paper shadow-sm">
         <div className="border-b border-line px-4 py-3">

@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  customer:         { findMany: vi.fn() },
-  order:            { groupBy: vi.fn() },
-  crmBaseExclusion: { findMany: vi.fn() },
+  customer:          { findMany: vi.fn() },
+  order:             { groupBy: vi.fn() },
+  crmBaseExclusion:  { findMany: vi.fn() },
+  campaignExecution: { findMany: vi.fn() },
+  customerCoupon:    { findMany: vi.fn() },
+  campaign:          { findMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 // Fixed cutoffs so day math is deterministic: QUENTE ≤30, MORNO ≤60, FRIO <120, else PERDIDO.
@@ -21,6 +24,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.order.groupBy.mockResolvedValue([]);
   db.crmBaseExclusion.findMany.mockResolvedValue([]);
+  db.campaignExecution.findMany.mockResolvedValue([]);
+  db.customerCoupon.findMany.mockResolvedValue([]);
+  db.campaign.findMany.mockResolvedValue([]);
 });
 
 describe("CrmBaseMigrationService — base movement reconstruction", () => {
@@ -94,6 +100,39 @@ describe("CrmBaseMigrationService — base movement reconstruction", () => {
     expect(res.days).toBe(10);
     expect(res.transitions).toEqual([{ from: "QUENTE", to: "MORNO", count: 1 }]);
     expect(res.reactivations).toBe(0);
+  });
+
+  it("credits reactivations to the converting campaign; the rest count as organic", async () => {
+    // Two reactivations (ordered 2 days ago; previous orders made them FRIO at ref)
+    // plus one stable customer. c1 converted from campaign A; c2 has no conversion.
+    db.customer.findMany.mockResolvedValue([
+      { id: "c1", lastOrderAt: daysAgo(2),  importedLastOrderAt: null },
+      { id: "c2", lastOrderAt: daysAgo(3),  importedLastOrderAt: null },
+      { id: "c3", lastOrderAt: daysAgo(20), importedLastOrderAt: null },
+    ]);
+    db.order.groupBy.mockResolvedValue([
+      { customerId: "c1", _max: { createdAt: daysAgo(80) } },
+      { customerId: "c2", _max: { createdAt: daysAgo(90) } },
+    ]);
+    db.campaignExecution.findMany.mockResolvedValue([
+      { customerId: "c1", campaignId: "campA", revenue: 80 },
+    ]);
+    db.customerCoupon.findMany.mockResolvedValue([
+      { sourceCampaignId: "campA" },
+    ]);
+    db.campaign.findMany.mockResolvedValue([
+      { id: "campA", name: "Recuperar frios" },
+    ]);
+
+    const res = await CrmBaseMigrationService.getMigration(R, { days: 7, now: NOW });
+
+    expect(res.reactivations).toBe(2);
+    expect(res.attribution.attributed).toBe(1);
+    expect(res.attribution.organic).toBe(1);
+    expect(res.attribution.revenue).toBe(80);
+    expect(res.attribution.byCampaign).toEqual([
+      { campaignId: "campA", campaignName: "Recuperar frios", customers: 1, couponsUsed: 1, revenue: 80 },
+    ]);
   });
 
   it("aggregates exclusions from the log by reason and prior segment", async () => {

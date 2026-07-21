@@ -59,6 +59,24 @@ export interface MigrationResult {
   transitions: MigrationTransition[];
   /** Customers who moved to a MORE-recent base (ordered again). */
   reactivations: number;
+  /** Who gets the credit for the reactivations — campaign-driven vs organic. */
+  attribution: {
+    /** Reactivated customers whose comeback order converted from a campaign. */
+    attributed: number;
+    /** Reactivated customers with no campaign conversion — came back on their own. */
+    organic:    number;
+    /** Revenue of the campaign-driven comeback orders. */
+    revenue:    number;
+    byCampaign: Array<{
+      campaignId:   string;
+      campaignName: string;
+      /** Customers this campaign brought back up the ladder. */
+      customers:    number;
+      /** Coupons from this campaign redeemed by reactivated customers in the window. */
+      couponsUsed:  number;
+      revenue:      number;
+    }>;
+  };
   /** Customers whose first-ever order landed in the window (SEM_PEDIDOS → active). */
   newActive:   number;
   exclusions: {
@@ -140,6 +158,7 @@ export class CrmBaseMigrationService {
     const matrix = new Map<string, number>(); // `${from}->${to}` → count
     let reactivations = 0;
     let newActive     = 0;
+    const reactivatedIds: string[] = []; // customers who climbed — fed to attribution
 
     const key = (f: BaseSegment, t: BaseSegment) => `${f}->${t}`;
 
@@ -152,7 +171,7 @@ export class CrmBaseMigrationService {
 
       matrix.set(key(segRef, segNow), (matrix.get(key(segRef, segNow)) ?? 0) + 1);
 
-      if (RECENCY_RANK[segNow] > RECENCY_RANK[segRef]) reactivations++;
+      if (RECENCY_RANK[segNow] > RECENCY_RANK[segRef]) { reactivations++; reactivatedIds.push(c.id); }
       if (segRef === "SEM_PEDIDOS" && segNow !== "SEM_PEDIDOS") newActive++;
     }
 
@@ -177,6 +196,80 @@ export class CrmBaseMigrationService {
       .filter((t) => t.from !== t.to && t.count > 0)
       .sort((a, b) => b.count - a.count);
 
+    // ── Attribution: who gets the credit for each reactivation ────────────────
+    // A reactivated customer whose comeback converted from a campaign (execution
+    // marked converted inside the window) is credited to that campaign — latest
+    // conversion wins. No conversion on file → they came back on their own.
+    const attribution: MigrationResult["attribution"] = {
+      attributed: 0, organic: reactivations, revenue: 0, byCampaign: [],
+    };
+    if (reactivatedIds.length > 0) {
+      try {
+        const [execs, coupons] = await Promise.all([
+          prisma.campaignExecution.findMany({
+            where: {
+              restaurantId,
+              customerId:  { in: reactivatedIds },
+              converted:   true,
+              convertedAt: { gte: ref, lte: end },
+            },
+            orderBy: { convertedAt: "desc" },
+            select:  { customerId: true, campaignId: true, revenue: true },
+          }),
+          prisma.customerCoupon.findMany({
+            where: {
+              restaurantId,
+              customerId:       { in: reactivatedIds },
+              status:           "USED" as never,
+              usedAt:           { gte: ref, lte: end },
+              sourceCampaignId: { not: null },
+            },
+            select: { sourceCampaignId: true },
+          }),
+        ]);
+
+        const creditedByCustomer = new Map<string, { campaignId: string; revenue: number }>();
+        for (const e of execs) {
+          if (!creditedByCustomer.has(e.customerId)) {
+            creditedByCustomer.set(e.customerId, { campaignId: e.campaignId, revenue: Number(e.revenue ?? 0) });
+          }
+        }
+        const couponsByCampaign = new Map<string, number>();
+        for (const c of coupons) {
+          couponsByCampaign.set(c.sourceCampaignId!, (couponsByCampaign.get(c.sourceCampaignId!) ?? 0) + 1);
+        }
+
+        const perCampaign = new Map<string, { customers: number; revenue: number }>();
+        for (const { campaignId, revenue } of creditedByCustomer.values()) {
+          const row = perCampaign.get(campaignId) ?? { customers: 0, revenue: 0 };
+          row.customers += 1;
+          row.revenue   += revenue;
+          perCampaign.set(campaignId, row);
+        }
+
+        const allIds = [...new Set([...perCampaign.keys(), ...couponsByCampaign.keys()])];
+        const names  = allIds.length > 0
+          ? await prisma.campaign.findMany({ where: { id: { in: allIds } }, select: { id: true, name: true } })
+          : [];
+        const nameOf = new Map(names.map((n) => [n.id, n.name]));
+
+        attribution.byCampaign = allIds
+          .map((id) => ({
+            campaignId:   id,
+            campaignName: nameOf.get(id) ?? "Campanha",
+            customers:    perCampaign.get(id)?.customers ?? 0,
+            couponsUsed:  couponsByCampaign.get(id) ?? 0,
+            revenue:      perCampaign.get(id)?.revenue ?? 0,
+          }))
+          .sort((a, b) => b.customers - a.customers || b.couponsUsed - a.couponsUsed);
+        attribution.attributed = creditedByCustomer.size;
+        attribution.organic    = Math.max(0, reactivations - creditedByCustomer.size);
+        attribution.revenue    = [...creditedByCustomer.values()].reduce((s, v) => s + v.revenue, 0);
+      } catch (e) {
+        console.warn("[CrmBaseMigration] attribution failed", e);
+      }
+    }
+
     // Exclusions from the log (only accrues going forward).
     const exclusionRows = await prisma.crmBaseExclusion.findMany({
       where:  { restaurantId, createdAt: { gte: ref, lte: end } },
@@ -199,6 +292,7 @@ export class CrmBaseMigrationService {
       flows,
       transitions,
       reactivations,
+      attribution,
       newActive,
       exclusions: {
         invalidPhoneDeleted,
