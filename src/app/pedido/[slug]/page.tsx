@@ -16,7 +16,8 @@ import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
-import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
+import { channelPrice } from "@/services/menu/MenuPricingService";
+import { PEDIDO_ITEM_SELECT, mapPedidoItem } from "@/services/menu/pedidoMenuItem";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 import { getPublicSiteUrl } from "@/lib/public-url";
 
@@ -307,32 +308,7 @@ export default async function PedidoPage({
       items: {
         where: { isActive: true, isAvailable: true, showInDelivery: true },
         orderBy: { sortOrder: "asc" },
-        select: {
-          id: true, name: true, price: true,
-          priceDelivery: true, priceDineIn: true, priceIfood: true,
-          description: true, imageUrl: true,
-          hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
-          variants: {
-            where: { isAvailable: true },
-            orderBy: { sortOrder: "asc" },
-            select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, portion: true },
-          },
-          extras: {
-            where: { isAvailable: true },
-            orderBy: { name: "asc" },
-            select: { id: true, name: true, price: true, portion: true, quantity: true },
-          },
-          optionGroups: {
-            orderBy: { sortOrder: "asc" },
-            include: {
-              options: {
-                where: { isAvailable: true },
-                orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-                select: { id: true, name: true, price: true, portion: true },
-              },
-            },
-          },
-        },
+        select: PEDIDO_ITEM_SELECT,
       },
       placements: {
         where: { item: { isActive: true, isAvailable: true, showInDelivery: true } },
@@ -395,29 +371,7 @@ export default async function PedidoPage({
     ...c.placements.map((p) => ({ id: p.item.id, categoryId: p.item.categoryId, price: channelPrice(p.item, "DELIVERY") })),
   ]);
   const promoMap = buildPromotionMap(allRawItems, activePromotions);
-
-  function mapPedidoItem(i: typeof rawCategories[0]["items"][0]) {
-    const promo = promoMap.get(i.id) ?? null;
-    return {
-      id: i.id,
-      name: i.name,
-      // Delivery channel: use priceDelivery when set, else base price.
-      price: channelPrice(i, "DELIVERY"),
-      description: i.description ?? null,
-      imageUrl: i.imageUrl ?? null,
-      hasVariants: i.hasVariants,
-      ingredients: i.ingredients ?? null,
-      servingSize: i.servingSize ?? null,
-      portionInfo: i.portionInfo ?? null,
-      promotion: promo,
-      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: resolveVariantPrice(i, v, "DELIVERY"), portion: v.portion ?? null })),
-      extras: i.extras.map((e) => ({ id: e.id, name: e.name, price: Number(e.price), portion: e.portion ?? null, quantity: e.quantity })),
-      optionGroups: i.optionGroups.map((g) => ({
-        id: g.id, name: g.name, required: g.required, minSelect: g.minSelect, maxSelect: g.maxSelect,
-        options: g.options.map((o) => ({ id: o.id, name: o.name, price: Number(o.price), portion: o.portion ?? null })),
-      })),
-    };
-  }
+  const toPedidoItem = (i: typeof rawCategories[0]["items"][0]) => mapPedidoItem(i, promoMap.get(i.id) ?? null);
 
   const categories = rawCategories
     .map((c) => {
@@ -427,7 +381,7 @@ export default async function PedidoPage({
       const ordered = [...c.items].sort((a, b) => rankOf(a.id) - rankOf(b.id));
       return {
         id: c.id, name: c.name, description: c.description ?? null, imageUrl: c.imageUrl ?? null,
-        items: ordered.map(mapPedidoItem),
+        items: ordered.map(toPedidoItem),
       };
     })
     .filter((c) => c.items.length > 0);
@@ -458,6 +412,33 @@ export default async function PedidoPage({
   }
 
   const allCategories = [...virtualCategories, ...categories];
+
+  // ── "Comprar novamente" pool (W3) ────────────────────────────────────────────
+  // Full menu-item objects for the identified customer's repeatable items, resolved
+  // INDEPENDENTLY of category visibility (getRepeatableOrder validates the ITEM's
+  // flags, not its home category's). This lets the client render the "Comprar
+  // novamente" section even for items whose home category is hidden from the
+  // delivery menu — the case that broke once cross-category placements stopped
+  // bleeding into categories. The client augments this pool via the repeat-order API.
+  let repeatMenuItems: ReturnType<typeof toPedidoItem>[] = [];
+  if (repeatOrder && repeatOrder.items.length > 0) {
+    const repeatIds = [...new Set(repeatOrder.items.map((i) => i.menuItemId).filter((id): id is string => !!id))];
+    if (repeatIds.length > 0) {
+      try {
+        const rows = await prisma.menuItem.findMany({
+          where: {
+            id: { in: repeatIds },
+            isActive: true, isAvailable: true, showInDelivery: true,
+            category: { restaurantId: restaurant.id },
+          },
+          select: PEDIDO_ITEM_SELECT,
+        });
+        repeatMenuItems = rows.map(toPedidoItem);
+      } catch (err) {
+        console.error("[pedido/page] repeat-pool fetch failed (non-fatal)", err);
+      }
+    }
+  }
 
   const ga4Id = brandConfig?.ga4MeasurementId ?? null;
   const gtmId = brandConfig?.gtmId ?? null;
@@ -533,6 +514,7 @@ gtag('config', '${ga4Id}');
         pausedUntil={isOrderingPaused && pausedUntil ? pausedUntil.toISOString() : null}
         recoveryCart={recoveryCart.length > 0 ? recoveryCart : undefined}
         repeatOrder={repeatOrder}
+        repeatMenuItems={repeatMenuItems}
       />
     </>
   );

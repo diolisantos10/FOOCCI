@@ -14,6 +14,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRepeatableOrder, getRepeatableItemsForCustomer } from "@/services/order/RepeatOrderService";
+import { PEDIDO_ITEM_SELECT, mapPedidoItem } from "@/services/menu/pedidoMenuItem";
+import { channelPrice } from "@/services/menu/MenuPricingService";
+import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 
 export async function GET(
   req:    NextRequest,
@@ -54,7 +57,38 @@ export async function GET(
       verifiedCustomerId ? getRepeatableOrder(restaurant.id, verifiedCustomerId) : Promise.resolve(null),
       getRepeatableItemsForCustomer({ restaurantId: restaurant.id, customerId: verifiedCustomerId, phone }),
     ]);
-    return NextResponse.json({ ok: true, repeatOrder, repeatItems });
+
+    // Full menu-item objects for every repeatable id, resolved INDEPENDENTLY of the
+    // item's home-category visibility, so the client renders each "Comprar novamente"
+    // card (detail sheet, add-to-cart) exactly like a normal product — even when the
+    // item's home category is hidden from the delivery menu. Mirrors the SSR pool in
+    // /pedido/[slug]/page.tsx so both population paths behave identically.
+    const repeatIds = [...new Set([
+      ...(repeatOrder?.items ?? []).map((i) => i.menuItemId),
+      ...repeatItems.map((i) => i.menuItemId),
+    ].filter((id): id is string => !!id))];
+
+    let repeatMenuItems: ReturnType<typeof mapPedidoItem>[] = [];
+    if (repeatIds.length > 0) {
+      const [rows, activePromotions] = await Promise.all([
+        prisma.menuItem.findMany({
+          where: {
+            id: { in: repeatIds },
+            isActive: true, isAvailable: true, showInDelivery: true,
+            category: { restaurantId: restaurant.id },
+          },
+          select: { ...PEDIDO_ITEM_SELECT, categoryId: true },
+        }),
+        getActiveMenuPromotions(restaurant.id, "DELIVERY"),
+      ]);
+      const promoMap = buildPromotionMap(
+        rows.map((i) => ({ id: i.id, categoryId: i.categoryId, price: channelPrice(i, "DELIVERY") })),
+        activePromotions,
+      );
+      repeatMenuItems = rows.map((i) => mapPedidoItem(i, promoMap.get(i.id) ?? null));
+    }
+
+    return NextResponse.json({ ok: true, repeatOrder, repeatItems, repeatMenuItems });
   } catch (err) {
     console.error("[GET /api/pedido/[slug]/repeat-order]", err);
     return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });

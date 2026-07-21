@@ -424,6 +424,13 @@ interface Props {
   recoveryCart?: Array<{ id: string; name: string; price: number; qty: number }>;
   /** Validated last-order payload for the "Pedir novamente" module (W3). */
   repeatOrder?: RepeatOrderPayload;
+  /**
+   * Full menu-item objects for the customer's repeatable items, resolved on the
+   * server INDEPENDENTLY of category visibility. Seeds the "Comprar novamente"
+   * pool so the section renders even when a repeat item's home category is hidden
+   * from the delivery menu (the client fetch augments this pool).
+   */
+  repeatMenuItems?: MenuItem[];
   /** Whether online Pix ("Pagar agora") is available/configured. Defaults to true (current behavior). */
   pixOnlineEnabled?: boolean;
   /** Show the online "Cartão de crédito" option — true only when SumUp is active. */
@@ -2358,6 +2365,7 @@ export function PedidoClient({
   pausedUntil = null,
   recoveryCart,
   repeatOrder,
+  repeatMenuItems: repeatMenuItemsProp,
   pixOnlineEnabled = true,
   cardOnlineEnabled = false,
 }: Props) {
@@ -3292,6 +3300,11 @@ export function PedidoClient({
   const [repeatItemIds, setRepeatItemIds] = useState<string[]>(
     () => (repeatOrder?.items ?? []).map((i) => i.menuItemId).filter((id): id is string => !!id),
   );
+  // Full menu-item objects for repeatable items, resolved on the SERVER independently
+  // of category visibility (see /services/menu/pedidoMenuItem). Seeded from SSR and
+  // augmented by the fetch below, so a repeat item whose home category is hidden from
+  // the delivery menu still resolves to a real card instead of vanishing.
+  const [repeatPool, setRepeatPool] = useState<MenuItem[]>(() => repeatMenuItemsProp ?? []);
   const repeatFetchedRef = useRef(false);
   useEffect(() => {
     if (!REPEAT_ORDER_UI_ENABLED) return; // standby — no repeat-order fetch
@@ -3303,26 +3316,39 @@ export function PedidoClient({
     const qs = cid ? `customerId=${encodeURIComponent(cid)}` : `phone=${encodeURIComponent(ph!)}`;
     fetch(`/api/pedido/${slug}/repeat-order?${qs}`)
       .then((r) => r.json())
-      .then((d: { repeatItems?: Array<{ menuItemId: string }> }) => {
+      .then((d: { repeatItems?: Array<{ menuItemId: string }>; repeatMenuItems?: MenuItem[] }) => {
         const ids = (d.repeatItems ?? []).map((i) => i.menuItemId);
+        // Merge server-resolved full objects into the pool BEFORE swapping ids, so
+        // every id resolves to a card regardless of its home-category visibility.
+        if (d.repeatMenuItems && d.repeatMenuItems.length > 0) {
+          setRepeatPool((prev) => {
+            const merged = new Map(prev.map((i) => [i.id, i]));
+            for (const it of d.repeatMenuItems!) merged.set(it.id, it);
+            return [...merged.values()];
+          });
+        }
         if (ids.length > 0) setRepeatItemIds(ids);
         if (process.env.NODE_ENV !== "production") {
-          console.info("[repeat-order] fetched", { received: ids.length, via: cid ? "customerId" : "phone" });
+          console.info("[repeat-order] fetched", { received: ids.length, pool: d.repeatMenuItems?.length ?? 0, via: cid ? "customerId" : "phone" });
         }
       })
       .catch(() => { /* non-fatal — repeat section just won't appear */ });
   }, [entryPhase, resolvedCustomerId, effectiveCustomerPhone, slug]);
 
-  // Map repeatable ids → live MenuItem objects (drops anything not in the menu).
+  // Map repeatable ids → MenuItem objects. Lookup pool = the visible menu UNION plus
+  // the server-resolved repeat pool (which includes items whose home category is
+  // hidden), so the "Comprar novamente" section never silently drops a valid item.
   const repeatMenuItems = useMemo(() => {
     if (repeatItemIds.length === 0) return [];
-    const byId = new Map(categories.flatMap((c) => c.items).map((i) => [i.id, i]));
+    const byId = new Map<string, MenuItem>();
+    for (const c of categories) for (const i of c.items) byId.set(i.id, i);
+    for (const i of repeatPool) byId.set(i.id, i); // server pool wins (visibility-agnostic)
     const mapped = repeatItemIds.map((id) => byId.get(id)).filter((x): x is MenuItem => !!x);
     if (process.env.NODE_ENV !== "production" && repeatItemIds.length > 0 && mapped.length === 0) {
       console.info("[repeat-order] no ids matched the live menu", { ids: repeatItemIds.length, menuItems: byId.size });
     }
     return mapped;
-  }, [repeatItemIds, categories]);
+  }, [repeatItemIds, categories, repeatPool]);
 
   // Categories shown in the UI: prepend the virtual "Pedir de novo" when there is
   // real history. This is what tabs + currentCategoryItems read from.
