@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Create Campaign — ops dispatcher for /api/cron/crm/create-custom-campaign
+#
+# Creates (or updates, idempotent by restaurant+name) a CUSTOM recurring
+# campaign remotely, optionally ACTIVE right away. Used for ops provisioning
+# and, later, by the CRM agent.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Create Campaign
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_slug:
+        description: "Restaurant slug"
+        required: true
+        default: "sushi-cazza"
+        type: string
+      name:
+        description: "Campaign name (idempotency key per restaurant)"
+        required: true
+        type: string
+      message:
+        description: "Message ({nome}, {restaurante}, {link_cardapio}…)"
+        required: true
+        type: string
+      weekdays:
+        description: "Weekdays CSV (0=Dom … 6=Sáb)"
+        required: false
+        default: "0,1,2,3,4,5,6"
+        type: string
+      window_start:
+        description: "Send window start (HH:MM)"
+        required: false
+        default: "11:00"
+        type: string
+      window_end:
+        description: "Send window end (HH:MM)"
+        required: false
+        default: "20:00"
+        type: string
+      daily_limit:
+        description: "Daily limit"
+        required: false
+        default: "40"
+        type: string
+      activate:
+        description: "Activate immediately?"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+jobs:
+  create-campaign:
+    name: "Create/Update Campaign"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Build request body
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/crm/create-custom-campaign" >> "$GITHUB_OUTPUT"
+
+          WEEKDAYS_JSON=$(echo "${{ inputs.weekdays }}" | python3 -c "import sys,json; print(json.dumps([int(x) for x in sys.stdin.read().strip().split(',') if x.strip()!='']))")
+          python3 - <<PY > /tmp/request.json
+          import json
+          print(json.dumps({
+            "slug":        """${{ inputs.restaurant_slug }}""".strip(),
+            "name":        """${{ inputs.name }}""".strip(),
+            "message":     """${{ inputs.message }}""",
+            "weekdays":    ${WEEKDAYS_JSON},
+            "timeWindow":  {"start": "${{ inputs.window_start }}", "end": "${{ inputs.window_end }}"},
+            "dailyLimit":  int("${{ inputs.daily_limit }}"),
+            "activate":    "${{ inputs.activate }}" == "true",
+          }))
+          PY
+          echo "Body:"; cat /tmp/request.json
+
+      - name: "POST create-custom-campaign"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          set +e
+          curl --connect-timeout 20 --max-time 60 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/request.json \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+          echo "← curl exit   : $CURL_EXIT"
+          echo "← HTTP Status : $HTTP_STATUS"
+          echo "← Response:"
+          cat /tmp/response.json || echo "(no body)"
+          if [ "$CURL_EXIT" -ne 0 ]; then exit "$CURL_EXIT"; fi
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then exit 1; fi
