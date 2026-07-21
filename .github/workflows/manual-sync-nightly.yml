@@ -37,6 +37,9 @@ on:
 
 permissions:
   contents: write
+  # id-token é exigido pela claude-code-action quando ela precisa negociar
+  # token via OIDC (fallback). Sem isso o job morre antes de chegar na IA.
+  id-token: write
 
 jobs:
   sync-manual:
@@ -67,10 +70,23 @@ jobs:
           git config user.name "foocci-manual-bot"
           git config user.email "manual-bot@users.noreply.github.com"
 
+      # Falha cedo, com instrução clara, se o segredo ainda não foi cadastrado —
+      # melhor que o erro críptico de OIDC que aparece sem ele.
+      - name: Checar segredo ANTHROPIC_API_KEY
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::Segredo ANTHROPIC_API_KEY não configurado. Vá em GitHub → Settings → Secrets and variables → Actions → New repository secret, crie ANTHROPIC_API_KEY com a chave do console.anthropic.com e rode este workflow de novo."
+            exit 1
+          fi
+          echo "✓ ANTHROPIC_API_KEY presente."
+
       - name: Claude — executar o playbook do manual
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             Você é o robô noturno do manual do Foocci (Manual Sync Nightly).
 
