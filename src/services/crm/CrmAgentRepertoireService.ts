@@ -13,8 +13,10 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { proposePhrase, type ProposePhraseResult } from "@/services/crm/CrmPhraseProposer";
-import { parseMessagePool } from "@/services/crm/crmMessagePool";
+import { proposePhrase, PHRASE_ANGLES, type ProposePhraseResult } from "@/services/crm/CrmPhraseProposer";
+import { parseMessagePool, phraseKey, type CustomPhrase } from "@/services/crm/crmMessagePool";
+import { detectSpamLanguage, impliesDiscount } from "@/services/crm/MessageVariationService";
+import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 /** Teto de frases ativas por campanha (rodízio saudável p/ o agente aprender rápido). */
 export const TARGET_PHRASES_PER_CAMPAIGN = 8;
@@ -78,6 +80,7 @@ export async function proposeForCampaign(input: ProposeForCampaignInput): Promis
       targetSegment: campaign.targetSegment ?? undefined,
       existingPhrases: avoid,
       winningExample: input.winningExample,
+      angle: PHRASE_ANGLES[(existing.length + i) % PHRASE_ANGLES.length], // ângulo distinto por frase
     });
     if (r.phrase) {
       proposals.push({ phrase: r.phrase, clean: r.clean, blockedReasons: r.blockedReasons });
@@ -100,6 +103,119 @@ export async function proposeForCampaign(input: ProposeForCampaignInput): Promis
     note,
     committed: false,
     submittedToMeta: false,
+    sent: false,
+  };
+}
+
+// ── Grow: propor + commit + submeter, em um passo ───────────────────────────────
+
+export interface GrowResult {
+  ok: boolean;
+  campaignId: string;
+  name?: string;
+  proposedClean: number;
+  commit: CommitResult | null;
+  error?: string;
+}
+
+/** Propõe frases novas p/ a campanha e já submete as limpas à Meta. Nunca envia. */
+export async function growAndSubmit(input: ProposeForCampaignInput): Promise<GrowResult> {
+  const proposal = await proposeForCampaign(input);
+  if ("ok" in proposal && proposal.ok === false) {
+    return { ok: false, campaignId: input.campaignId, proposedClean: 0, commit: null, error: proposal.error };
+  }
+  const p = proposal as CampaignProposal;
+  const clean = p.proposals.filter((x) => x.clean).map((x) => x.phrase);
+  if (clean.length === 0) {
+    return { ok: true, campaignId: p.campaignId, name: p.name, proposedClean: 0, commit: null };
+  }
+  const commit = await commitProposals(input.restaurantId, input.campaignId, clean);
+  return { ok: commit.ok, campaignId: p.campaignId, name: p.name, proposedClean: clean.length, commit };
+}
+
+// ── Commit + submissão à Meta ────────────────────────────────────────────────────
+
+export interface CommitResult {
+  ok: boolean;
+  campaignId: string;
+  added: string[];
+  skipped: Array<{ phrase: string; reason: string }>;
+  poolCustomCount: number;
+  meta: { created: number; existed: number; failed: number } | null;
+  note: string;
+  sent: false; // invariante: adicionar ao pool + submeter à Meta NUNCA envia ao cliente
+}
+
+/** Piso de segurança reaplicado no commit (defesa em profundidade). */
+function screenClean(phrase: string, hasCoupon: boolean): string | null {
+  const t = phrase.trim();
+  if (!t) return "vazia";
+  if (detectSpamLanguage(t).length) return "linguagem inadequada";
+  if (!hasCoupon && impliesDiscount(t)) return "desconto sem cupom";
+  return null;
+}
+
+/**
+ * Adiciona frases (limpas) ao pool da campanha e SUBMETE à Meta pra aprovação.
+ * Nunca envia ao cliente — a frase só roda depois que a Meta aprovar (e sob as
+ * travas de segurança). Idempotente: mesma frase = mesmo id (fingerprint), sem duplicar.
+ */
+export async function commitProposals(
+  restaurantId: string,
+  campaignId: string,
+  phrases: string[],
+): Promise<CommitResult> {
+  const campaign = await prisma.campaign
+    .findFirst({
+      where: { id: campaignId, restaurantId },
+      select: { id: true, couponCode: true, scheduleConfig: true },
+    })
+    .catch(() => null);
+
+  if (!campaign) {
+    return { ok: false, campaignId, added: [], skipped: [], poolCustomCount: 0, meta: null, note: "campanha não encontrada", sent: false };
+  }
+
+  const hasCoupon = Boolean(campaign.couponCode);
+  const pool = parseMessagePool(campaign.scheduleConfig) ?? {};
+  const custom: CustomPhrase[] = [...(pool.custom ?? [])];
+  const existingKeys = new Set(custom.map((c) => phraseKey(c.text)));
+
+  const added: string[] = [];
+  const skipped: Array<{ phrase: string; reason: string }> = [];
+  for (const p of phrases) {
+    const bad = screenClean(p, hasCoupon);
+    if (bad) { skipped.push({ phrase: p, reason: bad }); continue; }
+    const key = phraseKey(p.trim());
+    if (existingKeys.has(key)) { skipped.push({ phrase: p, reason: "já existe no pool" }); continue; }
+    existingKeys.add(key);
+    custom.push({ id: key, text: p.trim(), on: true });
+    added.push(p.trim());
+  }
+
+  if (added.length === 0) {
+    return { ok: true, campaignId, added: [], skipped, poolCustomCount: custom.length, meta: null, note: "nada novo a adicionar", sent: false };
+  }
+
+  // Preserva o resto do scheduleConfig; só atualiza o messagePool.
+  const baseConfig = (campaign.scheduleConfig && typeof campaign.scheduleConfig === "object")
+    ? (campaign.scheduleConfig as Record<string, unknown>)
+    : {};
+  const nextConfig = { ...baseConfig, messagePool: { ...(pool ?? {}), custom } };
+
+  await prisma.campaign.update({ where: { id: campaignId }, data: { scheduleConfig: nextConfig as never } });
+
+  // Submete o pool (novas frases inclusas) pra aprovação da Meta.
+  const prov = await provisionPoolTemplates(restaurantId, campaignId).catch(() => null);
+
+  return {
+    ok: true,
+    campaignId,
+    added,
+    skipped,
+    poolCustomCount: custom.length,
+    meta: prov ? { created: prov.created, existed: prov.existed, failed: prov.failed } : null,
+    note: `+${added.length} frase(s) no pool; submetidas à Meta (aprovação pendente). Só rodam após aprovadas.`,
     sent: false,
   };
 }

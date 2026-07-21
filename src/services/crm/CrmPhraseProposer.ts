@@ -30,7 +30,19 @@ export interface ProposePhraseInput {
   winningExample?: string;
   /** Segmento-alvo (ex.: "FRIO", "VIP") — dá contexto sem PII. */
   targetSegment?: string;
+  /** Ângulo/gancho desta frase (ex.: "curiosidade", "prova social") — p/ diversidade. */
+  angle?: string;
 }
+
+/** Ângulos distintos p/ um rodízio variado — cada frase ataca por um caminho. */
+export const PHRASE_ANGLES = [
+  "emocional/saudade — carinho, sentimos falta",
+  "curiosidade — desperta interesse, uma pergunta ou gancho intrigante",
+  "novidade/benefício — o que há de bom esperando por ele",
+  "prova social — muita gente pedindo/aprovando",
+  "convite direto e acolhedor — chamada simples e calorosa",
+  "urgência leve — um empurrãozinho gentil pra agir hoje, sem pressão agressiva",
+] as const;
 
 export interface ProposePhraseResult {
   ok: boolean;
@@ -74,6 +86,7 @@ export async function proposePhrase(input: ProposePhraseInput): Promise<ProposeP
   const sanitizedInput = [
     "Escreva UMA frase-modelo de campanha de CRM (WhatsApp), curta, no tom da marca, para ser aprovada como template.",
     `Objetivo: ${input.objective}.`,
+    input.angle ? `ÂNGULO desta frase (siga-o, seja distinto de outras abordagens): ${input.angle}.` : "",
     input.targetSegment ? `Público: clientes do segmento ${input.targetSegment}.` : "",
     "Use marcadores quando fizer sentido: {nome}, {link_cardapio}. Não invente preço/produto/promoção.",
     couponLine,
