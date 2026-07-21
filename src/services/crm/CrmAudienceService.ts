@@ -264,6 +264,20 @@ export class CrmAudienceService {
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
+      // ── Indique um amigo — everyone who already ordered ──────────────────────
+      case "indique-amigo": {
+        const cond      = { OR: [{ totalOrders: { gte: 1 } }, { importedOrderCount: { gte: 1 } }] };
+        const segWhere  = { restaurantId, isGuest: false, ...cond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...cond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { lastOrderAt: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, cond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
       // ── Subiu de nível — leveled up within the last ~7 days ───────────────────
       case "subiu-de-nivel": {
         const since    = new Date(ts.getTime() - 7 * 86_400_000);

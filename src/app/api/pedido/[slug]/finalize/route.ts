@@ -113,6 +113,8 @@ const bodySchema = z.object({
   trafficMedium:    z.string().max(100).optional(),
   trafficCampaign:  z.string().max(100).optional(),
   trafficContent:   z.string().max(100).optional(),
+  // "Indique um amigo": customerId of the referrer, captured from the ?ref link.
+  referrerId:       z.string().max(64).optional(),
 });
 
 // ── Idempotency ───────────────────────────────────────────────────────────────
@@ -204,6 +206,7 @@ export async function POST(
     paymentMode, paymentMethodSub, onlineMethod, changeFor, customerPhone, customerId: incomingCustomerId,
     clientDeliveryFee, couponCode, customerCouponId,
     trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
+    referrerId,
   } = parsed.data;
 
   // ── Validate cart against DB (prevent price tampering) ────────
@@ -574,6 +577,16 @@ export async function POST(
 
     orderId    = result.orderId;
     customerId = result.customerId;
+
+    // "Indique um amigo": if this checkout carried a referral link, validate and
+    // reward both sides. Fire-and-forget — a referral hiccup never breaks checkout.
+    if (referrerId) {
+      void import("@/services/crm/ReferralService")
+        .then(({ ReferralService }) =>
+          ReferralService.processFirstOrderReferral({ restaurantId, customerId, orderId, referrerId }),
+        )
+        .catch((e) => console.warn("[finalize] referral processing failed", e));
+    }
   } catch (err) {
     if (err instanceof Error && err.message === "COUPON_ALREADY_USED") {
       return NextResponse.json({ error: "Cupom já utilizado por este cliente" }, { status: 400 });

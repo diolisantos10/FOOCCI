@@ -1039,6 +1039,22 @@ model CRMContactLedger {
 /// panel can show "how many left for lack of contact" over a period. Written when
 /// the runner deletes a dead lead (invalid/unreachable number, no history) or
 /// retires a contactable=false customer that still has order history.
+/// "Indique um amigo": created when a NEW customer places their first order
+/// through a referrer's personal link (?ref=customerId). Both sides are then
+/// rewarded with the campaign coupon. A customer can only ever be referred once.
+model Referral {
+  id                 String   @id @default(cuid())
+  restaurantId       String
+  referrerCustomerId String // soft reference — who shared the link
+  referredCustomerId String   @unique // soft reference — the new customer (once ever)
+  orderId            String? // the first order that validated the referral
+  createdAt          DateTime @default(now())
+
+  @@index([restaurantId, referrerCustomerId])
+  @@index([restaurantId, createdAt])
+  @@map("referrals")
+}
+
 model CrmBaseExclusion {
   id           String   @id @default(cuid())
   restaurantId String

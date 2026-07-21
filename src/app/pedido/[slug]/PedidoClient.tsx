@@ -2532,6 +2532,16 @@ export function PedidoClient({
       firstSeenAt: new Date().toISOString(),
     }));
 
+    // "Indique um amigo": a ?ref=<customerId> link marks who referred this visitor.
+    // Persisted in localStorage (30-day validity) so the friend can order later and
+    // the referrer still gets the credit at checkout.
+    const ref = sp.get("ref");
+    if (ref) {
+      try {
+        localStorage.setItem(`foocci-ref-${slug}`, JSON.stringify({ ref, at: new Date().toISOString() }));
+      } catch { /* storage unavailable — referral simply won't track */ }
+    }
+
     // A "visita" (para o KPI de conversão) NÃO é registrada aqui. Uma abertura
     // anônima não conta — só conta quem passa da tela de telefone (obrigatória).
     // Esse registro é feito no servidor, em /api/qr/[slug]/identify, que é o
@@ -2540,6 +2550,18 @@ export function PedidoClient({
     // desistências nem contar em dobro.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Referrer captured from a ?ref link — valid for 30 days after the click. */
+  function getReferrerId(): string | undefined {
+    try {
+      const raw = localStorage.getItem(`foocci-ref-${slug}`);
+      if (!raw) return undefined;
+      const { ref, at } = JSON.parse(raw) as { ref?: string; at?: string };
+      if (!ref) return undefined;
+      if (at && Date.now() - new Date(at).getTime() > 30 * 86_400_000) return undefined;
+      return ref;
+    } catch { return undefined; }
+  }
 
   function getUtm(): {
     source?: string; medium?: string; campaign?: string; content?: string;
@@ -4364,6 +4386,7 @@ export function PedidoClient({
           trafficMedium:   utm.medium  || undefined,
           trafficCampaign: utm.campaign || undefined,
           trafficContent:  utm.content  || undefined,
+          referrerId:      getReferrerId(),
         }),
       });
       const data = await res.json();

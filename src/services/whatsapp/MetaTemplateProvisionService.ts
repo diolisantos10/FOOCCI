@@ -46,6 +46,7 @@ export const TEMPLATE_CONFIG: Record<string, TemplateConfig> = {
   "subiu-de-nivel":      { name: "subiu_de_nivel",            category: "MARKETING", footer: true  },
   "quase-no-proximo-nivel": { name: "quase_proximo_nivel",    category: "MARKETING", footer: true  },
   "mimo-mensal-nivel":   { name: "mimo_mensal_nivel",         category: "MARKETING", footer: true  },
+  "indique-amigo":       { name: "indique_amigo",             category: "MARKETING", footer: true  },
   "carrinho-abandonado": { name: "carrinho_abandonado",       category: "UTILITY",   footer: false },
   "siga-redes":          { name: "siga_redes",                category: "MARKETING", footer: true  },
 };

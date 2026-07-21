@@ -342,6 +342,23 @@ export const READY_MADE_CAMPAIGNS: ReadyMadeCampaign[] = [
     editable:    ["message", "coupon"],
   },
   {
+    id:          "indique-amigo",
+    emoji:       "🤝",
+    name:        "Indique um amigo",
+    tagline:     "Cliente indica, o amigo pede — os dois ganham cupom",
+    description: "Cada cliente recebe o próprio link de indicação. Quando um amigo NOVO faz o primeiro pedido por esse link, os dois ganham a recompensa automaticamente na carteira. Boca a boca virando máquina de aquisição.",
+    objective:   "Transformar clientes satisfeitos em canal de aquisição",
+    engine:      "RECURRING",
+    targetSegment: "indique-amigo",
+    priority:    "GENERIC_PROMO",
+    defaultMessage:
+      "Oi, {nome}! 🤝 Indica o {restaurante} pra um amigo e os dois ganham {cupom}! É só ele fazer o primeiro pedido pelo seu link: {link_indicacao}",
+    defaultCoupon: { type: "PERCENTAGE", value: 10 },
+    schedule:    { weekdays: ALL_WEEK, timeWindow: LUNCH_DINNER, dailyLimit: 30 },
+    recontactDays: 60, // remind the base of their link every ~2 months
+    editable:    ["message", "schedule", "dailyLimit", "coupon"],
+  },
+  {
     id:          "siga-redes",
     emoji:       "📸",
     name:        "Siga nas redes",
@@ -454,6 +471,13 @@ export const READY_MADE_MESSAGE_VARIANTS: Record<string, string[]> = {
     "{nome}, obrigado por ser tão presente! 🙏 Você ganhou {cupom} de VIP, válido até {validade} em pedidos online: {link_cardapio}",
     "Oi, {nome}! ✨ Aproveite seu presente de VIP: você ganhou {cupom}! Use até {validade}, só pelo nosso link: {link_cardapio}",
   ],
+  "indique-amigo": [
+    "Oi, {nome}! 🤝 Indica o {restaurante} pra um amigo e os dois ganham {cupom}! É só ele fazer o primeiro pedido pelo seu link: {link_indicacao}",
+    "{nome}, bora ganhar cupom? 🎁 Chama um amigo pro {restaurante}: ele pede pelo seu link e VOCÊS DOIS ganham {cupom}: {link_indicacao}",
+    "Oi, {nome}! Conhece alguém que ia amar o {restaurante}? Manda seu link: no primeiro pedido do seu amigo, cada um ganha {cupom}! {link_indicacao}",
+    "{nome}, seu link de indicação tá valendo prêmio! 🤝 Amigo novo pediu por ele = {cupom} pra você e pra ele: {link_indicacao}",
+    "Oi, {nome}! 💛 Comida boa a gente divide: indica o {restaurante} e ganhem juntos — {cupom} pra cada um no primeiro pedido do amigo: {link_indicacao}",
+  ],
   "siga-redes": [
     "Oi, {nome}! 😊 Tá curtindo o {restaurante}? Então segue a gente no Instagram pra não perder novidade e promoção: {instagram}",
     "{nome}, a gente posta prato novo e promoção primeiro no Instagram 📸 Bora seguir? {instagram}",
@@ -533,6 +557,7 @@ export const READY_MADE_TIMING: Record<string, ReadyMadeTiming> = {
   "quase-no-proximo-nivel": { summary: "Enviada a quem está a até 20% do próximo nível (máx. 1×/mês).", fromSegmentation: false },
   "mimo-mensal-nivel":   { summary: "Enviada 1× por mês aos clientes Prata, Ouro e Diamante.",          fromSegmentation: false },
   "cupom-vencendo":      { summary: "Enviada a quem tem cupom ativo vencendo nos próximos dias.",       fromSegmentation: false },
+  "indique-amigo":       { summary: "Enviada a quem já pediu, com o link pessoal de indicação.",        fromSegmentation: false },
   "carrinho-abandonado": { summary: "Enviada poucos minutos após o cliente abandonar um pedido.",       fromSegmentation: false },
   "siga-redes":          { summary: "Enviada aos clientes, convidando a seguir suas redes sociais.",     fromSegmentation: false },
 };

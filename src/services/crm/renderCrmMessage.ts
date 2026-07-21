@@ -24,6 +24,8 @@ export interface RenderCustomer {
   name:         string;
   tier?:        string | null;
   lastOrderAt?: string | null;
+  /** Customer id — powers the personal referral link ({link_indicacao}). */
+  id?:          string | null;
 }
 
 export interface RenderContext {
@@ -94,6 +96,7 @@ export const KNOWN_CRM_VARIABLES = [
   "validade",
   "proximo_nivel",
   "falta_proximo_nivel",
+  "link_indicacao",
 ] as const;
 
 /**
@@ -152,6 +155,11 @@ export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext
     falta_proximo_nivel:   typeof ctx.nextTierMissing === "number" && ctx.nextTierMissing > 0
       ? `R$ ${Math.ceil(ctx.nextTierMissing).toLocaleString("pt-BR")}`
       : "",
+    // Personal referral link: menu URL + ?ref=<customerId>. Without an id it
+    // falls back to the plain menu link (still a valid CTA, just untracked).
+    link_indicacao:        customer.id
+      ? `${ctx.pedidoUrl}${ctx.pedidoUrl.includes("?") ? "&" : "?"}ref=${encodeURIComponent(customer.id)}`
+      : ctx.pedidoUrl,
   };
 }
 

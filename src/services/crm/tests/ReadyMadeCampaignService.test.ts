@@ -35,9 +35,9 @@ describe("parseReadyMadeConfig", () => {
 });
 
 describe("getStates", () => {
-  it("returns all 15 catalog entries, inactive by default", async () => {
+  it("returns all 16 catalog entries, inactive by default", async () => {
     const states = await ReadyMadeCampaignService.getStates("r1");
-    expect(states).toHaveLength(15);
+    expect(states).toHaveLength(16);
     // Recurring ones inactive (no campaign rows); cart ON by default.
     const bday = states.find((s) => s.id === "aniversariantes")!;
     expect(bday.active).toBe(false);

@@ -97,6 +97,7 @@ const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "recorrente-sumido":  "RECORRENTE_SUMIDO",
   "aniversariantes":    "ANIVERSARIANTES",
   "cupom-vencendo":     "CUPOM_VENCENDO",
+  "indique-amigo":      "INDICACAO",
   "subiu-de-nivel":     "SUBIU_DE_NIVEL",
   "quase-no-proximo-nivel": "QUASE_PROXIMO_NIVEL",
   "mimo-mensal-nivel":  "MIMO_MENSAL_NIVEL",
@@ -258,6 +259,18 @@ export async function resolveAudience(
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
     }
+
+    case "INDICACAO":
+      // Anyone who has already ordered (native or imported) — happy customers are
+      // the ones worth arming with their personal referral link.
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          OR: [{ totalOrders: { gte: 1 } }, { importedOrderCount: { gte: 1 } }],
+        },
+        orderBy: { lastOrderAt: "desc" },
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
 
     case "SUBIU_DE_NIVEL": {
       // Customers who moved UP a tier within the last `triggerDays` days — the

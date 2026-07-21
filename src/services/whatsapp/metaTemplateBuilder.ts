@@ -29,6 +29,7 @@ const KNOWN_TOKENS = [
   "validade",
   "proximo_nivel",
   "falta_proximo_nivel",
+  "link_indicacao",
 ] as const;
 
 export type KnownToken = (typeof KNOWN_TOKENS)[number];
@@ -82,6 +83,7 @@ const DEFAULT_EXAMPLES: Record<KnownToken, string> = {
   validade:              "31/12",
   proximo_nivel:         "Ouro",
   falta_proximo_nivel:   "R$ 80",
+  link_indicacao:        "https://foocci.com.br?ref=abc123",
 };
 
 /**
