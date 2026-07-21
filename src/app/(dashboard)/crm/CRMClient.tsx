@@ -6587,7 +6587,7 @@ export function CRMClient({
   // ── Overview stats with date filter ────────────────────────────────────────
   const [currentStats, setCurrentStats] = useState<OverviewStats>(overviewStats);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [datePreset, setDatePreset] = useState<DateFilterPreset>("total");
+  const [datePreset, setDatePreset] = useState<DateFilterPreset>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo,   setCustomTo]   = useState("");
   const [revenueSummary, setRevenueSummary] = useState<{
@@ -6703,6 +6703,13 @@ export function CRMClient({
       setTopCustomersLoading(false);
     }
   }
+
+  // Default view is HOJE — the server-rendered stats are all-time, so load
+  // today's numbers on mount to match the selected chip.
+  useEffect(() => {
+    void handleDateChange("today");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Automações recorrentes agora vivem dentro de Campanhas (campanha recorrente).
   // A aba separada foi removida da navegação; o backend de automações segue

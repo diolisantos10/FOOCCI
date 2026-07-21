@@ -922,7 +922,6 @@ export function OverviewTab({
     { id: "week",   label: "Esta semana"    },
     { id: "month",  label: "Este mês"       },
     { id: "year",   label: "Este ano"       },
-    { id: "total",  label: "Total"          },
     { id: "custom", label: "Personalizado"  },
   ];
 
