@@ -518,7 +518,7 @@ function Skeleton() {
 function SourceBadge({ source }: { source: "foocci" }) {
   void source;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
+    <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-500">
       📋 Pedidos Foocci
     </span>
   );
@@ -665,7 +665,7 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
   const { summary, cohorts, insights, limitations } = data;
 
   return (
-    <div className="rounded-xl border border-purple-100 bg-paper p-5 shadow-sm space-y-4">
+    <div className="rounded-xl border border-brand-100 bg-paper p-5 shadow-sm space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-lg">🔄</span>
         <h3 className="text-sm font-bold text-ink">Retenção de clientes</h3>
@@ -682,9 +682,9 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
             { label: "Retorno 60d", val: `${summary.avgRetention60d.toFixed(1)}%` },
             { label: "Retorno 90d", val: `${summary.avgRetention90d.toFixed(1)}%` },
           ].map((k) => (
-            <div key={k.label} className="rounded-xl bg-purple-50 p-3 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-500">{k.label}</p>
-              <p className="mt-0.5 text-xl font-bold text-purple-800">{k.val}</p>
+            <div key={k.label} className="rounded-xl bg-brand-50 p-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-500">{k.label}</p>
+              <p className="mt-0.5 text-xl font-bold text-brand-700">{k.val}</p>
             </div>
           ))}
         </div>
@@ -726,7 +726,7 @@ function RetentionPanel({ data, loading }: { data: RetentionReport | null; loadi
       {insights.length > 0 && (
         <ul className="space-y-1">
           {insights.map((ins, i) => (
-            <li key={i} className="text-xs text-purple-700">• {ins}</li>
+            <li key={i} className="text-xs text-brand-600">• {ins}</li>
           ))}
         </ul>
       )}
@@ -845,7 +845,7 @@ const SEVERITY_STYLE: Record<InsightSeverity, {
   INFO:        { border: "border-blue-200",   bg: "bg-blue-50",   badge: "bg-blue-100",   badgeText: "text-blue-700",   icon: "💡" },
   WARNING:     { border: "border-amber-200",  bg: "bg-amber-50",  badge: "bg-amber-100",  badgeText: "text-amber-700",  icon: "⚠️" },
   CRITICAL:    { border: "border-red-200",    bg: "bg-red-50",    badge: "bg-red-100",    badgeText: "text-red-700",    icon: "🚨" },
-  OPPORTUNITY: { border: "border-indigo-200", bg: "bg-indigo-50", badge: "bg-indigo-100", badgeText: "text-indigo-700", icon: "🎯" },
+  OPPORTUNITY: { border: "border-brand-200", bg: "bg-brand-50", badge: "bg-brand-100", badgeText: "text-brand-600", icon: "🎯" },
 };
 
 const SEVERITY_LABEL: Record<InsightSeverity, string> = {
@@ -873,7 +873,7 @@ function AgentInsightCard({ insight }: { insight: AgentInsight }) {
       {insight.ctaLabel && insight.ctaTarget && (
         <a
           href={insight.ctaTarget}
-          className="mt-auto inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors w-fit"
+          className="mt-auto inline-flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 transition-colors w-fit"
         >
           {insight.ctaLabel}
           <span>→</span>
@@ -934,10 +934,10 @@ function ComparisonRow({ comparison }: { comparison: PeriodComparison }) {
 function AgentSkeleton() {
   return (
     <div className="animate-pulse space-y-4 py-2">
-      <div className="h-4 w-3/4 rounded bg-indigo-100" />
-      <div className="h-4 w-1/2 rounded bg-indigo-100" />
+      <div className="h-4 w-3/4 rounded bg-brand-100" />
+      <div className="h-4 w-1/2 rounded bg-brand-100" />
       <div className="grid grid-cols-3 gap-3">
-        {[1, 2, 3].map((i) => <div key={i} className="h-32 rounded-xl bg-indigo-100" />)}
+        {[1, 2, 3].map((i) => <div key={i} className="h-32 rounded-xl bg-brand-100" />)}
       </div>
     </div>
   );
@@ -945,7 +945,7 @@ function AgentSkeleton() {
 
 function QuestionBoxPlaceholder() {
   return (
-    <div className="rounded-xl border border-dashed border-indigo-200 bg-paper p-4">
+    <div className="rounded-xl border border-dashed border-brand-200 bg-paper p-4">
       <div className="flex items-center gap-2 mb-2">
         <span className="text-base">💬</span>
         <p className="text-sm font-semibold text-ink2">Pergunte ao Gerente Comercial IA</p>
@@ -1125,9 +1125,9 @@ function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loadi
 
 function AgentPanel({ data, loading }: { data: AgentReport | null; loading: boolean }) {
   return (
-    <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-6 space-y-5">
+    <div className="rounded-xl border-2 border-brand-100 bg-gradient-to-br from-brand-50/60 to-white p-6 space-y-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xl shadow-sm">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-xl shadow-sm">
           🧠
         </div>
         <div>
@@ -1145,7 +1145,7 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
       )}
 
       {!loading && data && !data.hasData && (
-        <div className="rounded-xl border border-dashed border-indigo-200 bg-paper p-6 text-center">
+        <div className="rounded-xl border border-dashed border-brand-200 bg-paper p-6 text-center">
           <p className="text-2xl mb-2">📊</p>
           <p className="text-sm text-muted max-w-md mx-auto">{data.summary}</p>
           {data.dataQuality === "NONE" && (
@@ -1158,8 +1158,8 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
 
       {!loading && data && data.hasData && (
         <>
-          <div className="rounded-xl bg-paper border border-indigo-100 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400 mb-2">Resumo executivo</p>
+          <div className="rounded-xl bg-paper border border-brand-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-400 mb-2">Resumo executivo</p>
             <p className="text-sm text-ink2 leading-relaxed">{data.summary}</p>
           </div>
 
@@ -1456,7 +1456,7 @@ function TabProdutos({ data, loading }: {
             data={data!.topProducts as unknown as Record<string, number | string>[]}
             valueKey="revenue"
             labelKey="name"
-            color="bg-indigo-500"
+            color="bg-brand-500"
           />
         </Card>
 
@@ -1561,7 +1561,7 @@ function TabCategorias({ data, loading }: {
               <div key={cat.name} className="flex items-center gap-3 text-xs">
                 <span className="w-28 shrink-0 truncate text-right text-ink2">{cat.name}</span>
                 <div className="flex-1 rounded-full bg-[#F4F4F2] h-2.5">
-                  <div className="bg-violet-500 h-2.5 rounded-full" style={{ width: `${cat.share}%` }} />
+                  <div className="bg-brand-500 h-2.5 rounded-full" style={{ width: `${cat.share}%` }} />
                 </div>
                 <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(cat.revenue)}</span>
                 <span className="w-12 shrink-0 text-right text-muted">{fmtPct(cat.share)}</span>
@@ -1830,9 +1830,9 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-5 py-4">
-        <p className="text-sm font-semibold text-indigo-800">Analista de Dados</p>
-        <p className="mt-0.5 text-xs text-indigo-600">
+      <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-5 py-4">
+        <p className="text-sm font-semibold text-brand-700">Analista de Dados</p>
+        <p className="mt-0.5 text-xs text-brand-500">
           Faça uma pergunta sobre o seu negócio. As respostas são baseadas nos dados reais do período selecionado — sem invenções.
         </p>
       </div>
@@ -1847,7 +1847,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
               type="button"
               disabled={loading}
               onClick={() => { setQuestion(q); void ask(q); }}
-              className="rounded-full border border-indigo-200 bg-paper px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+              className="rounded-full border border-brand-200 bg-paper px-3 py-1.5 text-xs text-brand-600 hover:bg-brand-50 disabled:opacity-50 transition-colors"
             >
               {q}
             </button>
@@ -1863,13 +1863,13 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
           onKeyDown={(e) => { if (e.key === "Enter") void ask(question); }}
           placeholder="Digite sua pergunta sobre o negócio…"
           disabled={loading}
-          className="flex-1 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"
+          className="flex-1 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
         />
         <button
           type="button"
           disabled={loading || !question.trim()}
           onClick={() => void ask(question)}
-          className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          className="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
         >
           {loading ? (
             <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -1890,7 +1890,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
 
           {/* Intent + confidence header */}
           <div className="flex flex-wrap items-center gap-2 px-5 py-3">
-            <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+            <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-[11px] font-semibold text-brand-600">
               {INTENT_LABELS[answer.intent] ?? answer.intent}
             </span>
             {conf && (
@@ -1932,7 +1932,7 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
               <ul className="space-y-1.5">
                 {answer.recommendedActions.map((a, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-ink2">
-                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">{i + 1}</span>
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-500">{i + 1}</span>
                     {a}
                   </li>
                 ))}
@@ -2119,7 +2119,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
               onClick={() => setActiveTab(tab.id)}
               className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? "border-indigo-600 text-indigo-600"
+                  ? "border-brand-500 text-brand-500"
                   : "border-transparent text-muted hover:text-ink hover:border-line2"
               }`}
             >
@@ -2138,7 +2138,7 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
               onClick={() => handlePreset(p.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 preset === p.id
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-brand-500 text-white"
                   : "bg-paper border border-line2 text-ink2 hover:bg-[#F4F4F2]"
               }`}
             >

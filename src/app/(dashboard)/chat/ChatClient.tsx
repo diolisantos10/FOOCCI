@@ -110,7 +110,7 @@ function getStatusBadge(conv: ConvSummary): StatusBadge {
   if (!conv.aiEnabled && conv.status === "HUMANO_ASSUMIU")
     return { label: "Humano assumiu", cls: "bg-blue-100 text-blue-700 border-blue-200" };
   if (conv.status === "AI_ATENDENDO" || conv.aiEnabled)
-    return { label: "IA atendendo",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
+    return { label: "IA atendendo",   cls: "bg-brand-100 text-brand-600 border-brand-200" };
   if (conv.status === "RESOLVED")
     return { label: "Finalizada",     cls: "bg-[#F4F4F2] text-muted border-line2" };
   if (conv.unreadCount > 0)
@@ -637,7 +637,7 @@ function ChatBubble({
   const bubbleCls = isCustomer
     ? "rounded-bl-sm bg-paper text-ink border border-line"
     : isAI
-    ? "rounded-br-sm bg-purple-500 text-white"
+    ? "rounded-br-sm bg-brand-500 text-white"
     : "rounded-br-sm bg-brand-500 text-white";
 
   const senderLabel = isCustomer

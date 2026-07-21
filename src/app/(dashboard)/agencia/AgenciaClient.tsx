@@ -37,7 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
   DRAFT:            "bg-[#F4F4F2] text-ink2",
   STRATEGY_PENDING: "bg-yellow-50 text-yellow-700",
   STRATEGY_DONE:    "bg-blue-50 text-blue-700",
-  PROPOSAL_READY:   "bg-purple-50 text-purple-700",
+  PROPOSAL_READY:   "bg-brand-50 text-brand-600",
   ACTIVE:           "bg-green-50 text-green-700",
   COMPLETED:        "bg-green-100 text-green-800",
   CANCELLED:        "bg-red-50 text-red-600",
@@ -266,7 +266,7 @@ export function AgenciaClient({ projects: initial, restaurantName }: Props) {
                       {STATUS_LABELS[p.status] ?? p.status}
                     </span>
                     {p.strategySession && (
-                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-600">
+                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-500">
                         Strategy Room ✓
                       </span>
                     )}
@@ -286,7 +286,7 @@ export function AgenciaClient({ projects: initial, restaurantName }: Props) {
                 <div className="shrink-0 text-right">
                   <p className="text-[10px] text-muted">{new Date(p.createdAt).toLocaleDateString("pt-BR")}</p>
                   {p.strategySession && (
-                    <p className="text-[10px] text-indigo-400 mt-0.5">
+                    <p className="text-[10px] text-brand-400 mt-0.5">
                       Gerado {new Date(p.strategySession.generatedAt).toLocaleDateString("pt-BR")}
                     </p>
                   )}

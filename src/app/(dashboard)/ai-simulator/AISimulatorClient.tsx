@@ -196,7 +196,7 @@ export function AISimulatorClient() {
                   disabled={state === "running"}
                   className="px-3 py-2 bg-paper border border-line2 text-ink2 text-sm rounded-lg
                              hover:border-line2 disabled:opacity-50 disabled:cursor-not-allowed
-                             focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                             focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 >
                   {TEST_DEPTH_PRESETS.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
@@ -533,7 +533,7 @@ function ConversationRow({
         <span>Turnos: <strong className="text-ink2">{conv.turns}</strong></span>
         <span>Upsell: <strong className="text-ink2">{conv.upsellAttempts} tentativa{conv.upsellAttempts !== 1 ? "s" : ""}, {conv.upsellAccepted} aceita{conv.upsellAccepted !== 1 ? "s" : ""}</strong></span>
         {conv.drinkAttempted   && <span className="text-blue-600">✓ bebida</span>}
-        {conv.dessertAttempted && <span className="text-purple-600">✓ sobremesa</span>}
+        {conv.dessertAttempted && <span className="text-brand-500">✓ sobremesa</span>}
       </div>
 
       {conv.preview && (

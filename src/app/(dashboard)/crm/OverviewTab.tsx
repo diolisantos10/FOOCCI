@@ -456,7 +456,7 @@ export function KPICard({
     blue:   "text-blue-700",
     brand:  "text-brand-700",
     gray:   "text-ink2",
-    purple: "text-purple-700",
+    purple: "text-brand-600",
   }[accent ?? "brand"] ?? "text-brand-700";
 
   return (
@@ -690,10 +690,10 @@ function RevenueBlock({
               <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
               <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
             </div>
-            <div className="rounded-xl bg-purple-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Converteram</p>
-              <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-purple-400 mt-0.5">
+            <div className="rounded-xl bg-brand-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-500 mb-1">Converteram</p>
+              <p className="text-lg font-extrabold text-brand-600">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-brand-400 mt-0.5">
                 {revenueSummary.totalResponded > 0
                   ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas`
                   : `${revenueSummary.totalResponded} responderam`}

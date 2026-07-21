@@ -275,8 +275,8 @@ function SimpleQRPanel({
 
       {qrState === "creating" && (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 text-sm text-indigo-700">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-4 text-sm text-brand-600">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
             Recriando instância e capturando QR…
           </div>
           <p className="text-center text-[11px] text-muted">
@@ -337,16 +337,16 @@ function SimpleQRPanel({
       )}
 
       {qrState === "pairing" && qrPairingCode && (
-        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 space-y-3">
-          <p className="text-xs font-semibold text-indigo-800">
+        <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4 space-y-3">
+          <p className="text-xs font-semibold text-brand-700">
             Use o código de pareamento no WhatsApp do restaurante:
           </p>
-          <div className="rounded-xl border border-indigo-200 bg-paper px-4 py-3 text-center">
-            <span className="font-mono text-2xl font-bold tracking-widest text-indigo-700">
+          <div className="rounded-xl border border-brand-200 bg-paper px-4 py-3 text-center">
+            <span className="font-mono text-2xl font-bold tracking-widest text-brand-600">
               {qrPairingCode}
             </span>
           </div>
-          <ol className="space-y-0.5 text-[11px] text-indigo-700 list-decimal list-inside">
+          <ol className="space-y-0.5 text-[11px] text-brand-600 list-decimal list-inside">
             <li>Abra o WhatsApp no celular</li>
             <li>Toque em Configurações → Aparelhos conectados</li>
             <li>Toque em &ldquo;Conectar com número de telefone&rdquo;</li>
@@ -355,7 +355,7 @@ function SimpleQRPanel({
           <button
             type="button"
             onClick={() => void handleCreateQR()}
-            className="w-full rounded-xl border border-indigo-200 bg-paper px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
+            className="w-full rounded-xl border border-brand-200 bg-paper px-3 py-2 text-xs font-medium text-brand-600 hover:bg-brand-50 transition"
           >
             Gerar novo código
           </button>
@@ -1514,7 +1514,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     type="button"
                     onClick={() => void handleEventDiag()}
                     disabled={eventDiagLoading}
-                    className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-xs font-medium text-brand-600 hover:bg-brand-100 disabled:opacity-50 transition"
                   >
                     {eventDiagLoading ? "Diagnosticando eventos…" : "Diagnóstico de eventos"}
                   </button>
@@ -1658,14 +1658,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                       <div>
                         <label className="mb-1.5 block text-sm font-medium text-ink2">Nome da instância</label>
                         <input type="text" value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="sushicazza"
-                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${instanceNameErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${instanceNameErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"}`}
                         />
                         <FieldError msg={instanceNameErr} />
                       </div>
                       <div>
                         <label className="mb-1.5 block text-sm font-medium text-ink2">URL do servidor Evolution</label>
                         <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evo.seuservidor.com"
-                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${baseUrlErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${baseUrlErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"}`}
                         />
                         {loadedBaseUrlErr && !baseUrlErr && (
                           <div className="mt-1 flex items-start gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2.5 py-2">
@@ -1680,7 +1680,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         {f.apiKeyPreview && <p className="mb-1 text-xs text-muted">Atual: <span className="font-mono font-semibold text-ink2">{f.apiKeyPreview}</span></p>}
                         <input type="password" name="apiKey" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
                           placeholder={f.apiKeyPreview ? "Nova chave — deixe em branco para manter" : "Cole sua API Key"}
-                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${apiKeyErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${apiKeyErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-line2 focus:border-brand-400 focus:ring-brand-100"}`}
                         />
                         <FieldError msg={apiKeyErr} />
                       </div>
@@ -1689,7 +1689,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         {f.webhookSecretPreview && <p className="mb-1 text-xs text-muted">Atual: <span className="font-mono font-semibold text-ink2">{f.webhookSecretPreview}</span></p>}
                         <input type="password" name="webhookSecret" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)}
                           placeholder={f.webhookSecretPreview ? "Novo secret — deixe em branco para manter" : "Cole o Webhook Secret"}
-                          className="w-full rounded-xl border border-line2 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                          className="w-full rounded-xl border border-line2 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
                         />
                         <p className="mt-1 text-xs text-muted">Usado para autenticar as mensagens recebidas.</p>
                       </div>
@@ -1698,7 +1698,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         <p className="break-all font-mono text-[10px] text-muted">{webhookUrl}</p>
                       </div>
                       <div className="flex items-center gap-3 pt-1">
-                        <button type="submit" disabled={saving} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+                        <button type="submit" disabled={saving} className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
                           {saving ? "Salvando…" : "Salvar credenciais"}
                         </button>
                         <button type="button" onClick={() => void handleTest()} disabled={testing || view?.status === "unconfigured" || !view}
@@ -1809,13 +1809,13 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     </div>
 
                     {/* Deep probe */}
-                    <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-4 space-y-3">
+                    <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-4 space-y-3">
                       <div>
-                        <p className="text-xs font-semibold text-purple-700">Diagnóstico Profundo (~35 s)</p>
-                        <p className="mt-0.5 text-xs text-purple-600">Cria instância temporária para determinar se o problema de QR é específico desta instância ou server-wide.</p>
+                        <p className="text-xs font-semibold text-brand-600">Diagnóstico Profundo (~35 s)</p>
+                        <p className="mt-0.5 text-xs text-brand-500">Cria instância temporária para determinar se o problema de QR é específico desta instância ou server-wide.</p>
                       </div>
                       <button type="button" onClick={() => void handleDeepProbe()} disabled={deepProbing || !isConfigured}
-                        className="rounded-xl border border-purple-200 bg-paper px-4 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-40 transition">
+                        className="rounded-xl border border-brand-200 bg-paper px-4 py-2 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 transition">
                         {deepProbing ? "Analisando… (~35 s)" : "Executar diagnóstico profundo"}
                       </button>
                       {deepResult && (
@@ -1823,7 +1823,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                           <div className={`rounded-lg border px-3 py-2.5 text-xs font-semibold ${deepResult.verdictCode === "instance_specific" ? "border-amber-200 bg-amber-50 text-amber-800" : deepResult.verdictCode === "server_wide" ? "border-red-200 bg-red-50 text-red-800" : "border-line2 bg-[#FAFAF8] text-ink2"}`}>
                             {deepResult.verdict}
                           </div>
-                          <div className="rounded-lg border border-purple-200 bg-paper px-3 py-2 text-[11px] text-ink2 whitespace-pre-wrap">
+                          <div className="rounded-lg border border-brand-200 bg-paper px-3 py-2 text-[11px] text-ink2 whitespace-pre-wrap">
                             <span className="font-semibold">Recomendação: </span>{deepResult.recommendation}
                           </div>
                           <div className="rounded-lg border border-line bg-[#FAFAF8] px-3 py-2 text-[11px] font-mono space-y-0.5 text-ink2">

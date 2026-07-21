@@ -1798,7 +1798,7 @@ export function AgentePage() {
                     <StatCard emoji="🌡️" label="Clientes mornos"     value={s.overview.mornoCustomers}    desc="31–60 dias sem comprar"         bg="bg-amber-50 border-amber-100"   color="text-amber-700"  />
                     <StatCard emoji="👑" label="Clientes VIP"        value={s.overview.vipCustomers}      desc="Ouro + Diamante"                bg="bg-cyan-50 border-cyan-100"     color="text-cyan-700"   />
                     <StatCard emoji="📣" label="Campanhas ativas"    value={s.campaigns.activeCount}      desc="Ativas, agendadas ou em pausa"  bg="bg-green-50 border-green-100"   color="text-green-700"  />
-                    <StatCard emoji="🔄" label="Automações ativas"   value={s.automations.enabledCount}   desc="Disparos automáticos ligados"   bg="bg-purple-50 border-purple-100" color="text-purple-700" />
+                    <StatCard emoji="🔄" label="Automações ativas"   value={s.automations.enabledCount}   desc="Disparos automáticos ligados"   bg="bg-brand-50 border-brand-100" color="text-brand-600" />
                     <StatCard emoji="🎂" label="Aniversariantes"     value={s.overview.birthdayThisMonth} desc="Neste mês"                      bg="bg-rose-50 border-rose-100"     color="text-rose-700"   />
                   </div>
                 </Section>

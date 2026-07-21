@@ -75,16 +75,16 @@ function calcDistanceFee(km: number, baseFee: number, perKm: number, includedKm:
 
 const ZONE_BAR_COLORS = [
   "bg-brand-400",
-  "bg-violet-500",
-  "bg-purple-500",
+  "bg-brand-500",
+  "bg-brand-500",
   "bg-fuchsia-500",
   "bg-pink-400",
 ];
 
 const ZONE_BG_COLORS = [
   "bg-brand-50",
-  "bg-violet-50",
-  "bg-purple-50",
+  "bg-brand-50",
+  "bg-brand-50",
   "bg-fuchsia-50",
   "bg-pink-50",
 ];

@@ -82,7 +82,7 @@ function resolveSenderLabel(msg: {
 function resolveSenderBadgeCls(senderType: string | null): string {
   if (senderType === "AI") return "bg-orange-50 border border-orange-200 text-orange-600";
   if (senderType === "HUMAN_EXTERNAL") return "bg-teal-50 border border-teal-200 text-teal-700";
-  if (senderType === "CRM") return "bg-violet-50 border border-violet-200 text-violet-700";
+  if (senderType === "CRM") return "bg-fuchsia-50 border border-fuchsia-200 text-fuchsia-700";
   return "bg-gray-700 border border-gray-600 text-white";
 }
 
@@ -192,8 +192,8 @@ describe("C — CRM actor label variants", () => {
     expect(label).toBe("CRM");
   });
 
-  it("CRM badge uses violet style", () => {
-    expect(resolveSenderBadgeCls("CRM")).toContain("violet");
+  it("CRM badge uses a distinct (fuchsia) style", () => {
+    expect(resolveSenderBadgeCls("CRM")).toContain("fuchsia");
   });
 
   it("HUMAN senderType unaffected — still 'Operador · WhatsApp'", () => {

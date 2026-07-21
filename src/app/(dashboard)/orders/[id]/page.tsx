@@ -269,8 +269,8 @@ export default async function OrderDetailPage({
 
         {/* Saipos POS integration */}
         {(order.saiposStatus || order.saiposSentAt || order.saiposError) && (
-          <div className="rounded-xl border border-violet-100 bg-paper p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-violet-400">
+          <div className="rounded-xl border border-brand-100 bg-paper p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-400">
               Saipos PDV
             </h2>
 

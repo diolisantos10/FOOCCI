@@ -665,7 +665,7 @@ const SEGMENT_BADGE: Record<string, { bg: string; text: string; label: string }>
   QUENTE:      { bg: "bg-red-100",    text: "text-red-700",    label: "Quente"   },
   MORNO:       { bg: "bg-amber-100",  text: "text-amber-700",  label: "Morno"    },
   FRIO:        { bg: "bg-blue-100",   text: "text-blue-700",   label: "Frio"     },
-  PERDIDO:     { bg: "bg-purple-100", text: "text-purple-700", label: "Perdido"  },
+  PERDIDO:     { bg: "bg-brand-100", text: "text-brand-600", label: "Perdido"  },
   SEM_PEDIDOS: { bg: "bg-[#F4F4F2]",   text: "text-muted",   label: "Sem pedidos" },
 };
 
@@ -1831,7 +1831,7 @@ const EXEC_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   PENDING:   { bg: "bg-[#F4F4F2]",   text: "text-ink2"  },
   SENT:      { bg: "bg-blue-50",    text: "text-blue-700"  },
   DELIVERED: { bg: "bg-blue-100",   text: "text-blue-700"  },
-  READ:      { bg: "bg-indigo-50",  text: "text-indigo-700"},
+  READ:      { bg: "bg-brand-50",  text: "text-brand-600"},
   FAILED:    { bg: "bg-red-50",     text: "text-red-600"   },
   CONVERTED: { bg: "bg-green-50",   text: "text-green-700" },
 };
@@ -2345,7 +2345,7 @@ function CampaignManageModal({
                     {/* Badges */}
                     <div className="flex flex-wrap gap-2">
                       {sc && <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>{CAMPAIGN_STATUS_LABELS[detail.status] ?? detail.status}</span>}
-                      {isRecurring && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">Recorrente</span>}
+                      {isRecurring && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-600">Recorrente</span>}
                       {detail.objective && <span className="rounded-full bg-line2 px-2 py-0.5 text-[10px] font-semibold text-ink2">{OBJECTIVE_LABELS[detail.objective] ?? detail.objective}</span>}
                       {detail.targetSegment && <span className="rounded-full bg-line2 px-2 py-0.5 text-[10px] font-semibold text-ink2">{SEGMENT_LABELS[detail.targetSegment] ?? detail.targetSegment}</span>}
                     </div>
@@ -2381,7 +2381,7 @@ function CampaignManageModal({
                         {[
                           { label: "Audiência",   value: detail.totalAudience,  color: "text-ink" },
                           { label: "Enviados",    value: detail.totalSent,      color: "text-blue-700" },
-                          { label: "Respostas",   value: detail.totalResponded, color: "text-indigo-700" },
+                          { label: "Respostas",   value: detail.totalResponded, color: "text-brand-600" },
                           { label: "Tx. Resp.",   value: responseRate ? `${responseRate}%` : "—", color: responseRate ? "text-green-700" : "text-muted" },
                           { label: "Pedidos",     value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-muted" },
                           { label: "Falhas reais", value: detail.eligibility?.providerFailures ?? detail.totalFailed, color: (detail.eligibility?.providerFailures ?? detail.totalFailed) > 0 ? "text-red-600" : "text-muted" },
@@ -2422,7 +2422,7 @@ function CampaignManageModal({
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Programação recorrente</p>
                         <div className="flex flex-wrap gap-1">
                           {(cfg.weekdays ?? []).map((d) => (
-                            <span key={d} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">{WEEKDAY_LABELS_PT[d] ?? `D${d}`}</span>
+                            <span key={d} className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-600">{WEEKDAY_LABELS_PT[d] ?? `D${d}`}</span>
                           ))}
                         </div>
                         {cfg.timeWindow && <p className="text-ink2"><span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}{cfg.timezone ? ` (${cfg.timezone})` : ""}</p>}
@@ -2837,7 +2837,7 @@ function CampaignManageModal({
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Configuração atual</p>
                       <div className="flex flex-wrap gap-1">
                         {(cfg?.weekdays ?? []).map((d) => (
-                          <span key={d} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">{WEEKDAY_LABELS_PT[d] ?? `D${d}`}</span>
+                          <span key={d} className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-600">{WEEKDAY_LABELS_PT[d] ?? `D${d}`}</span>
                         ))}
                       </div>
                       {cfg?.timeWindow && <p className="text-ink2"><span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}</p>}
@@ -2923,7 +2923,7 @@ function CampaignManageModal({
                           {/* Current cycle — only for recurring campaigns with lastRunAt */}
                           {isRecurring && cycle && (
                             <div>
-                              <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-purple-500">Último ciclo</p>
+                              <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-brand-500">Último ciclo</p>
                               {detail.lastRunAt && (
                                 <p className="mb-2 text-[9px] text-muted">Desde {new Date(detail.lastRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                               )}
@@ -2933,7 +2933,7 @@ function CampaignManageModal({
                                   { label: "Bloqueados",           value: cycle.blockedSafety,  color: cycle.blockedSafety > 0 ? "text-amber-600" : "text-muted" },
                                   { label: "Falhas",               value: cycle.failedProvider, color: cycle.failedProvider > 0 ? "text-red-600" : "text-muted" },
                                 ].map((m) => (
-                                  <div key={m.label} className="rounded-xl border border-purple-100 bg-purple-50/40 px-2 py-3 text-center">
+                                  <div key={m.label} className="rounded-xl border border-brand-100 bg-brand-50/40 px-2 py-3 text-center">
                                     <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
                                     <p className="mt-1.5 text-[9px] text-muted leading-tight">{m.label}</p>
                                   </div>
@@ -3026,12 +3026,12 @@ function CampaignManageModal({
                                         ))}
                                       </div>
                                       <p className="mt-1.5 text-[10px] text-muted">
-                                        <strong className="text-violet-700">{el.recoverableFailures}</strong> podem ser reenviadas depois · <strong>{el.permanentFailures}</strong> precisam de correção.
+                                        <strong className="text-brand-600">{el.recoverableFailures}</strong> podem ser reenviadas depois · <strong>{el.permanentFailures}</strong> precisam de correção.
                                       </p>
                                     </div>
                                   )}
                                   <RecoverableReprocessPanel campaignId={detail.id} onDone={reloadDetail} />
-                                  <p className="rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700">
+                                  <p className="rounded-lg bg-brand-50 px-3 py-2 text-[10px] text-brand-600">
                                     Um <strong>ciclo</strong> é cada execução do robô de campanhas. No <strong>modo seguro WhatsApp Web</strong>, o Foocci envia até <strong>{detail.safeSend?.maxPerCycle ?? 5} mensagens por ciclo</strong> para evitar travamentos e reduzir risco de bloqueio.
                                   </p>
                                   {detail.budget?.enabled && (
@@ -3058,23 +3058,23 @@ function CampaignManageModal({
                                     </div>
                                   )}
                                   {el.recoverableFailures > 0 && (
-                                    <div className="rounded-xl border border-violet-200 bg-paper px-3 py-2.5">
+                                    <div className="rounded-xl border border-brand-200 bg-paper px-3 py-2.5">
                                       <div className="flex items-center justify-between gap-2">
-                                        <p className="text-[11px] font-semibold text-violet-800">{el.recoverableFailures} falha(s) recuperável(is) — pode reenviar depois.</p>
+                                        <p className="text-[11px] font-semibold text-brand-700">{el.recoverableFailures} falha(s) recuperável(is) — pode reenviar depois.</p>
                                         <button
                                           type="button"
                                           disabled={loadingPlan}
                                           onClick={() => loadReprocessPlan(detail.id)}
-                                          className="rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                                          className="rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
                                         >
                                           {loadingPlan ? "Preparando…" : showReprocess ? "Atualizar preview" : "Preparar reenvio"}
                                         </button>
                                       </div>
                                       {showReprocess && reprocessPlan && (
-                                        <div className="mt-2.5 rounded-lg bg-violet-50 px-3 py-2.5">
-                                          <p className="text-[12px] font-bold text-violet-900">Reprocessar falhas recuperáveis?</p>
-                                          <p className="mt-1 text-[10px] text-violet-700">O Foocci vai reenviar apenas para clientes com falha temporária, removendo duplicados e respeitando o limite de {reprocessPlan.batchLimit} por ciclo.</p>
-                                          <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-violet-800 sm:grid-cols-4">
+                                        <div className="mt-2.5 rounded-lg bg-brand-50 px-3 py-2.5">
+                                          <p className="text-[12px] font-bold text-brand-800">Reprocessar falhas recuperáveis?</p>
+                                          <p className="mt-1 text-[10px] text-brand-600">O Foocci vai reenviar apenas para clientes com falha temporária, removendo duplicados e respeitando o limite de {reprocessPlan.batchLimit} por ciclo.</p>
+                                          <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-brand-700 sm:grid-cols-4">
                                             <div><span className="font-bold">{reprocessPlan.recoverableExecutions}</span> recuperáveis</div>
                                             <div><span className="font-bold">{reprocessPlan.duplicatesRemoved}</span> duplicados removidos</div>
                                             <div><span className="font-bold">{reprocessPlan.eligibleToReprocess}</span> elegíveis</div>
@@ -3085,9 +3085,9 @@ function CampaignManageModal({
                                           </p>
                                           {reprocessPlan.nextBatch.length > 0 && (
                                             <div className="mt-2 space-y-0.5">
-                                              <p className="text-[9px] font-bold uppercase tracking-widest text-violet-500">Próximo lote</p>
+                                              <p className="text-[9px] font-bold uppercase tracking-widest text-brand-500">Próximo lote</p>
                                               {reprocessPlan.nextBatch.map((b, i) => (
-                                                <p key={i} className="text-[10px] text-violet-700">{b.customerName || "—"} · {b.maskedPhone} · {b.reason}</p>
+                                                <p key={i} className="text-[10px] text-brand-600">{b.customerName || "—"} · {b.maskedPhone} · {b.reason}</p>
                                               ))}
                                             </div>
                                           )}
@@ -3097,13 +3097,13 @@ function CampaignManageModal({
                                               disabled={!reprocessPlan.safeToSend}
                                               title={reprocessPlan.safeToSend ? "Disparo ao vivo será habilitado na próxima etapa" : reprocessPlan.message}
                                               onClick={() => alert("Pré-visualização apenas. O disparo ao vivo ainda não está habilitado — será ligado na próxima etapa, mediante confirmação.")}
-                                              className="rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                              className="rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
                                               Reprocessar {reprocessPlan.nextBatch.length} agora
                                             </button>
-                                            <button type="button" onClick={() => setShowReprocess(false)} className="rounded-lg border border-violet-200 px-3 py-1.5 text-[11px] font-semibold text-violet-700">Fechar</button>
+                                            <button type="button" onClick={() => setShowReprocess(false)} className="rounded-lg border border-brand-200 px-3 py-1.5 text-[11px] font-semibold text-brand-600">Fechar</button>
                                           </div>
-                                          <p className="mt-1.5 text-[9px] text-violet-500">{reprocessPlan.message} · Pré-visualização read-only — nada é enviado nesta etapa.</p>
+                                          <p className="mt-1.5 text-[9px] text-brand-500">{reprocessPlan.message} · Pré-visualização read-only — nada é enviado nesta etapa.</p>
                                         </div>
                                       )}
                                     </div>
@@ -3234,12 +3234,12 @@ function CampaignManageModal({
                               <strong className="text-amber-700">{detail.performance.blockedSafety}</strong> bloqueio(s) de segurança (não é falha — voltam a ser elegíveis quando a janela expira) ·
                               <strong className="text-red-600"> {detail.performance.failedProvider}</strong> falha(s) real(is) de envio.
                             </p>
-                            <div className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-800">
+                            <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-[10px] text-brand-700">
                               <p>
                                 <strong>{detail.performance.recoverableLater ?? 0}</strong> falha(s) temporária(s) podem ser reenviadas depois ·
                                 <strong> {detail.performance.skipped ?? 0}</strong> ignorada(s) (telefone inválido / não elegível — não reenviar).
                               </p>
-                              <p className="mt-1 text-violet-600">Modo seguro WhatsApp Web: até 5 envios por ciclo. Falhas temporárias (Evolution 5xx, timeout) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e 400 não são reenviados automaticamente.</p>
+                              <p className="mt-1 text-brand-500">Modo seguro WhatsApp Web: até 5 envios por ciclo. Falhas temporárias (Evolution 5xx, timeout) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e 400 não são reenviados automaticamente.</p>
                             </div>
                             {detail.performance.reasonGroups.some((g) => g.category === "BLOCKED_WEEKLY_LIMIT") && (
                               <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
@@ -3369,7 +3369,7 @@ type CampaignTipo = "Única" | "Agendada" | "Recorrente";
 const TIPO_BADGE: Record<CampaignTipo, string> = {
   "Única":      "bg-[#F4F4F2] text-ink2",
   "Agendada":   "bg-amber-50 text-amber-700",
-  "Recorrente": "bg-purple-50 text-purple-700",
+  "Recorrente": "bg-brand-50 text-brand-600",
 };
 
 /** Execution type: recurring (automation) vs scheduled-once vs single send. */
@@ -3461,7 +3461,7 @@ function CampaignPerformanceSummary({ campaigns }: { campaigns: CampaignHistoryR
   const kpis = [
     { label: "Campanhas",  value: String(active.length),                              color: "text-brand-700" },
     { label: "Enviados",   value: totalSent      > 0 ? String(totalSent)      : "—",  color: "text-blue-700" },
-    { label: "Respostas",  value: totalResponded > 0 ? String(totalResponded) : "—",  color: "text-indigo-700" },
+    { label: "Respostas",  value: totalResponded > 0 ? String(totalResponded) : "—",  color: "text-brand-600" },
     { label: "Tx. Resp.",  value: avgRate ? `${avgRate}%` : "—",                      color: avgRate ? "text-green-700" : "text-muted" },
     { label: "Pedidos",    value: totalConverted > 0 ? String(totalConverted) : "—",  color: totalConverted > 0 ? "text-green-700" : "text-muted" },
     { label: "Receita",    value: totalRevenue   > 0 ? `R$ ${totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: totalRevenue > 0 ? "text-green-700" : "text-muted" },
@@ -3507,7 +3507,7 @@ function ActiveCampaignCard({
   const kpis = [
     { label: "Audiência",  value: c.totalAudience  > 0 ? c.totalAudience  : "—", color: "text-ink" },
     { label: "Enviados",   value: c.totalSent > 0 ? c.totalSent : isSending ? 0 : "—", color: c.totalSent > 0 ? "text-blue-700" : isSending ? "text-blue-400" : "text-muted" },
-    { label: "Respostas",  value: c.totalResponded  > 0 ? c.totalResponded  : "—", color: c.totalResponded > 0 ? "text-indigo-700" : "text-muted" },
+    { label: "Respostas",  value: c.totalResponded  > 0 ? c.totalResponded  : "—", color: c.totalResponded > 0 ? "text-brand-600" : "text-muted" },
     { label: "Tx. Resp.",  value: responseRate ? `${responseRate}%` : "—",          color: responseRate ? "text-green-700" : "text-muted" },
     { label: "Pedidos",    value: c.totalConverted  > 0 ? c.totalConverted  : "—", color: c.totalConverted > 0 ? "text-green-700" : "text-muted" },
     { label: "Receita",    value: Number(c.totalRevenue) > 0 ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: Number(c.totalRevenue) > 0 ? "text-green-700" : "text-muted" },
@@ -3524,7 +3524,7 @@ function ActiveCampaignCard({
             <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
               {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isRecurring ? "bg-purple-50 text-purple-700" : "bg-[#F4F4F2] text-ink2"}`}>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isRecurring ? "bg-brand-50 text-brand-600" : "bg-[#F4F4F2] text-ink2"}`}>
               {isRecurring ? "Recorrente" : "Pontual"}
             </span>
             {c.targetSegment && (
@@ -3817,7 +3817,7 @@ function CampanhasAtivasSection({
                     {(() => {
                       const aud = audiences?.[c.id];
                       return aud != null && aud > 0
-                        ? <span className="font-semibold text-indigo-600">{aud}</span>
+                        ? <span className="font-semibold text-brand-500">{aud}</span>
                         : <span className="text-muted">{aud === 0 ? "0" : "—"}</span>;
                     })()}
                   </td>
@@ -3914,7 +3914,7 @@ function CampanhasAtivasSection({
           <tfoot>
             <tr className="border-t-2 border-line bg-[#FAFAF8] font-bold text-ink">
               <td className="py-2.5 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted" colSpan={4}>Totais ({shown.length})</td>
-              <td className="py-2.5 px-2 text-right tabular-nums text-indigo-600">{totals.audience > 0 ? totals.audience : "—"}</td>
+              <td className="py-2.5 px-2 text-right tabular-nums text-brand-500">{totals.audience > 0 ? totals.audience : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.revenue > 0 ? brl(totals.revenue) : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-blue-700">{totals.sent > 0 ? totals.sent : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-ink2">{totals.dailyLimit > 0 ? `${totals.dailyLimit}/dia` : "—"}</td>
@@ -5172,7 +5172,7 @@ function WhatsAppSendModal({
                 rows={5}
                 maxLength={4096}
                 placeholder="Digite a mensagem…"
-                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none transition"
+                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none transition"
               />
               <p className="text-right text-xs text-muted">{message.length}/4096</p>
             </>
@@ -5309,7 +5309,7 @@ function CustomersTab({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar cliente por nome ou telefone…"
-          className="w-full rounded-xl border border-line2 bg-paper py-2.5 pl-10 pr-10 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+          className="w-full rounded-xl border border-line2 bg-paper py-2.5 pl-10 pr-10 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
         />
         {search && (
           <button
@@ -6927,14 +6927,14 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
   if (!plan || (plan.distinctRecipients === 0 && plan.recoverableExecutions === 0)) return null;
 
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-3 py-3 space-y-2">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-violet-700">Reenvio de falhas recuperáveis</p>
+    <div className="rounded-xl border border-brand-200 bg-brand-50/50 px-3 py-3 space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-brand-600">Reenvio de falhas recuperáveis</p>
       <div className="flex flex-wrap gap-1.5 text-[10px]">
-        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Recuperáveis: {plan.distinctRecipients}</span>
+        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-brand-600 border border-brand-200">Recuperáveis: {plan.distinctRecipients}</span>
         {plan.duplicatesRemoved > 0 && (
           <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-muted border border-line2">Duplicados removidos: {plan.duplicatesRemoved}</span>
         )}
-        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-violet-700 border border-violet-200">Próximo lote: {n}</span>
+        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold text-brand-600 border border-brand-200">Próximo lote: {n}</span>
         <span className={`rounded-full px-2 py-0.5 font-semibold border ${connected ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"}`}>
           {connected ? "WhatsApp conectado" : "WhatsApp desconectado"}
         </span>
@@ -6944,7 +6944,7 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
         type="button"
         disabled={!canSend}
         onClick={() => void handleReprocess()}
-        className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        className="rounded-xl bg-brand-500 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
       >
         {sending ? "Reprocessando…" : `Reprocessar ${n} agora`}
       </button>

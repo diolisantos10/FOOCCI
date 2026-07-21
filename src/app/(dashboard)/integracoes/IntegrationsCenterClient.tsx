@@ -48,7 +48,7 @@ const INTEGRATIONS: {
     name:          "Instagram",
     description:   "Receba e responda mensagens do Instagram Direct pela Central de Atendimento.",
     icon:          "📷",
-    color:         "bg-gradient-to-br from-purple-500 to-pink-500",
+    color:         "bg-gradient-to-br from-[#F58529] via-[#DD2A7B] to-[#8134AF]",
     configureHref: "/integracoes/instagram",
   },
   {
@@ -93,7 +93,7 @@ const INTEGRATIONS: {
     name:        "Saipos",
     description: "PDV e gestão de pedidos — envio automático de pedidos ao caixa e atualizações de status em tempo real.",
     icon:        "🖥️",
-    color:       "bg-violet-600",
+    color:       "bg-brand-500",
   },
   {
     provider:    "sumup",
@@ -202,7 +202,7 @@ function IntegrationCard({
 
   return (
     <div className={`rounded-2xl border bg-paper shadow-sm transition-all hover:shadow-md ${
-      selected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-line"
+      selected ? "border-brand-400 ring-2 ring-brand-100" : "border-line"
     }`}>
       <button
         type="button"
@@ -239,7 +239,7 @@ function IntegrationCard({
         <div className="border-t border-line px-5 py-2.5">
           <Link
             href={meta.configureHref}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+            className="text-xs font-medium text-brand-500 hover:text-brand-700 transition-colors"
           >
             Configurar →
           </Link>
@@ -267,7 +267,7 @@ function SecretField({
         value={value}
         autoComplete="off"
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
       />
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
@@ -289,7 +289,7 @@ function TextField({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
       />
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
@@ -309,7 +309,7 @@ function SelectField({
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -486,7 +486,7 @@ function WhatsAppForm({
       </div>
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
           {saving ? "Salvando…" : "Salvar"}
         </button>
       </div>
@@ -545,7 +545,7 @@ function StoneForm({
       />
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
           {saving ? "Salvando…" : "Salvar"}
         </button>
       </div>
@@ -628,7 +628,7 @@ function MercadoPagoForm({
       />
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
           {saving ? "Salvando…" : "Salvar"}
         </button>
       </div>
@@ -712,7 +712,7 @@ function SumUpForm({
       />
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
           {saving ? "Salvando…" : "Salvar"}
         </button>
       </div>
@@ -759,7 +759,7 @@ function OpenAIForm({
         <button
           type="submit"
           disabled={saving}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
+          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition"
         >
           {saving ? "Salvando…" : "Salvar"}
         </button>
@@ -781,7 +781,7 @@ function CheckboxField({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-line2 accent-violet-600"
+        className="mt-0.5 h-4 w-4 rounded border-line2 accent-brand-500"
       />
       <div>
         <label htmlFor={name} className="text-sm font-medium text-ink2 cursor-pointer">{label}</label>
@@ -880,7 +880,7 @@ function SaiposForm({
     });
   };
 
-  const inputCls = "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
+  const inputCls = "w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
   const errCls   = "mt-1 text-xs text-red-500";
 
   return (
@@ -892,12 +892,12 @@ function SaiposForm({
         onClick={() => setIsActive((v) => !v)}
         className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition ${
           isActive
-            ? "border-violet-200 bg-violet-50"
+            ? "border-brand-200 bg-brand-50"
             : "border-line2 bg-[#FAFAF8]"
         }`}
       >
         <div className="text-left">
-          <p className={`text-sm font-semibold ${isActive ? "text-violet-800" : "text-ink2"}`}>
+          <p className={`text-sm font-semibold ${isActive ? "text-brand-700" : "text-ink2"}`}>
             Ativar integração Saipos
           </p>
           <p className="mt-0.5 text-xs text-muted">
@@ -908,7 +908,7 @@ function SaiposForm({
         </div>
         {/* Toggle pill */}
         <div className={`relative ml-4 h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
-          isActive ? "bg-violet-600" : "bg-line2"
+          isActive ? "bg-brand-500" : "bg-line2"
         }`}>
           <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-paper shadow transition-transform duration-200 ${
             isActive ? "translate-x-5" : "translate-x-0"
@@ -1021,7 +1021,7 @@ function SaiposForm({
           }}
           rows={5}
           spellCheck={false}
-          className="w-full max-w-full resize-none rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
+          className="w-full max-w-full resize-none rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
         />
         {errors.paymentMappings
           ? <p className={errCls}>{errors.paymentMappings}</p>
@@ -1032,14 +1032,14 @@ function SaiposForm({
       </div>
 
       {/* Webhook URL — min-w-0 on flex container prevents URL from forcing overflow */}
-      <div className="min-w-0 overflow-hidden rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
-        <p className="text-xs font-medium text-violet-800">URL do webhook para configurar no Saipos:</p>
+      <div className="min-w-0 overflow-hidden rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
+        <p className="text-xs font-medium text-brand-700">URL do webhook para configurar no Saipos:</p>
         <div className="mt-1.5 flex min-w-0 items-start gap-2">
-          <p className="min-w-0 flex-1 break-all font-mono text-xs text-violet-700">{webhookUrl}</p>
+          <p className="min-w-0 flex-1 break-all font-mono text-xs text-brand-600">{webhookUrl}</p>
           <button
             type="button"
             onClick={handleCopy}
-            className="shrink-0 rounded-lg border border-violet-200 bg-paper px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50 transition"
+            className="shrink-0 rounded-lg border border-brand-200 bg-paper px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 transition"
           >
             {copied ? "Copiado!" : "Copiar"}
           </button>
@@ -1060,7 +1060,7 @@ function SaiposForm({
 
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
-          className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50 transition">
+          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
           {saving ? "Salvando…" : "Salvar"}
         </button>
       </div>

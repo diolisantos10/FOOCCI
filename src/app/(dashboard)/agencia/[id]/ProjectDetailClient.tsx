@@ -49,7 +49,7 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   DRAFT:            "bg-[#F4F4F2] text-ink2",
   STRATEGY_DONE:    "bg-blue-50 text-blue-700",
-  PROPOSAL_READY:   "bg-purple-50 text-purple-700",
+  PROPOSAL_READY:   "bg-brand-50 text-brand-600",
   ACTIVE:           "bg-green-50 text-green-700",
   COMPLETED:        "bg-green-100 text-green-800",
   CANCELLED:        "bg-red-50 text-red-600",
@@ -153,23 +153,23 @@ function SpecialistCard({ data }: { data: SpecialistOutput }) {
 
 function SynthesisSection({ synthesis }: { synthesis: StrategySynthesis }) {
   return (
-    <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5 space-y-4">
+    <div className="rounded-xl border border-brand-200 bg-brand-50 p-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-xl">🧬</span>
-        <h3 className="text-sm font-bold text-indigo-900">Síntese Estratégica — Recomendação Final</h3>
+        <h3 className="text-sm font-bold text-brand-800">Síntese Estratégica — Recomendação Final</h3>
       </div>
 
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Melhor Direção Estratégica</p>
-        <p className="text-sm text-indigo-900">{synthesis.bestStrategicDirection}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-brand-500 mb-1">Melhor Direção Estratégica</p>
+        <p className="text-sm text-brand-800">{synthesis.bestStrategicDirection}</p>
       </div>
 
       {synthesis.recommendedServices.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-2">Serviços Recomendados para a Proposta</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-brand-500 mb-2">Serviços Recomendados para a Proposta</p>
           <div className="flex flex-wrap gap-2">
             {synthesis.recommendedServices.map((s) => (
-              <span key={s} className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">{s}</span>
+              <span key={s} className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700">{s}</span>
             ))}
           </div>
         </div>
@@ -177,10 +177,10 @@ function SynthesisSection({ synthesis }: { synthesis: StrategySynthesis }) {
 
       {synthesis.proposalImplications.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Implicações para a Proposta</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-brand-500 mb-1">Implicações para a Proposta</p>
           <ul className="space-y-1">
             {synthesis.proposalImplications.map((imp, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-indigo-800">
+              <li key={i} className="flex items-start gap-2 text-sm text-brand-700">
                 <span className="mt-0.5 shrink-0">→</span>
                 {imp}
               </li>
@@ -191,10 +191,10 @@ function SynthesisSection({ synthesis }: { synthesis: StrategySynthesis }) {
 
       {synthesis.risksToMention.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Riscos a Mencionar na Proposta</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-brand-500 mb-1">Riscos a Mencionar na Proposta</p>
           <ul className="space-y-1">
             {synthesis.risksToMention.map((r, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-indigo-800">
+              <li key={i} className="flex items-start gap-2 text-sm text-brand-700">
                 <span className="mt-0.5 shrink-0 text-amber-500">⚠</span>
                 {r}
               </li>
@@ -203,9 +203,9 @@ function SynthesisSection({ synthesis }: { synthesis: StrategySynthesis }) {
         </div>
       )}
 
-      <div className="rounded-lg bg-paper border border-indigo-200 p-3">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Próxima Ação para o PM</p>
-        <p className="text-sm font-medium text-indigo-900">{synthesis.nextActionForPM}</p>
+      <div className="rounded-lg bg-paper border border-brand-200 p-3">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-brand-500 mb-1">Próxima Ação para o PM</p>
+        <p className="text-sm font-medium text-brand-800">{synthesis.nextActionForPM}</p>
       </div>
     </div>
   );
@@ -286,7 +286,7 @@ export function ProjectDetailClient({ project }: { project: Project }) {
           >
             {t === "brief" ? "Brief" : "Strategy Room"}
             {t === "strategy" && session && (
-              <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600">✓</span>
+              <span className="ml-1.5 rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold text-brand-500">✓</span>
             )}
           </button>
         ))}
@@ -330,7 +330,7 @@ export function ProjectDetailClient({ project }: { project: Project }) {
             <button
               onClick={generateStrategy}
               disabled={generating}
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
             >
               {generating
                 ? "Gerando estratégia…"
@@ -352,7 +352,7 @@ export function ProjectDetailClient({ project }: { project: Project }) {
               <p className="mt-1 text-xs text-muted mb-4">Vá ao brief e clique em &ldquo;Gerar Strategy Room&rdquo;.</p>
               <button
                 onClick={() => setTab("brief")}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
               >
                 Ir ao Brief →
               </button>

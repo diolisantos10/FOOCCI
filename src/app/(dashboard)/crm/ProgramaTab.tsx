@@ -232,7 +232,7 @@ function TierSettingsForm({
                       step={50}
                       value={form[row.spendKey]}
                       onChange={(e) => set(row.spendKey, e.target.value)}
-                      className="w-28 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                      className="w-28 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -242,7 +242,7 @@ function TierSettingsForm({
                       step={1}
                       value={form[row.ordersKey]}
                       onChange={(e) => set(row.ordersKey, e.target.value)}
-                      className="w-20 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                      className="w-20 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
                       placeholder="0 = off"
                     />
                   </td>
@@ -261,7 +261,7 @@ function TierSettingsForm({
         <button
           type="submit"
           disabled={saving}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
         >
           {saving ? "Salvando…" : "Salvar configurações"}
         </button>
@@ -343,7 +343,7 @@ function BenefitsPanel({
         </div>
         <button
           onClick={() => setAdding((v) => !v)}
-          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+          className="text-[11px] font-semibold text-brand-500 hover:text-brand-700"
         >
           + Adicionar
         </button>
@@ -388,13 +388,13 @@ function BenefitsPanel({
       </div>
 
       {adding && (
-        <div className="mt-3 space-y-2 rounded-lg border border-indigo-100 bg-paper p-3">
+        <div className="mt-3 space-y-2 rounded-lg border border-brand-100 bg-paper p-3">
           <input
             type="text"
             placeholder="Título do benefício"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
             maxLength={120}
           />
           <input
@@ -402,7 +402,7 @@ function BenefitsPanel({
             placeholder="Descrição (opcional)"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
             maxLength={300}
           />
           {error && <p className="text-[10px] text-red-600">{error}</p>}
@@ -410,7 +410,7 @@ function BenefitsPanel({
             <button
               onClick={handleAdd}
               disabled={saving || !title.trim()}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
             >
               {saving ? "Salvando…" : "Salvar"}
             </button>
@@ -517,7 +517,7 @@ function RecommendedActions() {
                 <li key={action.label}>
                   <button
                     onClick={() => goToAcoes(action.objective, action.segment)}
-                    className="w-full rounded-lg border border-white bg-paper px-3 py-2 text-left text-xs font-medium text-ink2 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                    className="w-full rounded-lg border border-white bg-paper px-3 py-2 text-left text-xs font-medium text-ink2 shadow-sm hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600 transition-colors"
                   >
                     {action.label} →
                   </button>
@@ -558,7 +558,7 @@ function RecalculateButton({ onDone }: { onDone: () => void }) {
       <button
         onClick={handleClick}
         disabled={loading}
-        className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+        className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-600 hover:bg-brand-100 disabled:opacity-50"
       >
         {loading ? "Recalculando…" : "🔄 Recalcular níveis"}
       </button>
@@ -633,7 +633,7 @@ export function ProgramaTab() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-purple-50 px-5 py-5">
+      <div className="rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-brand-50 px-5 py-5">
         <div className="flex items-center gap-3 mb-1.5">
           <span className="text-3xl">🤝</span>
           <div>
@@ -642,7 +642,7 @@ export function ProgramaTab() {
           </div>
         </div>
         {!loading && totalCustomers > 0 && (
-          <p className="text-xs text-indigo-600 font-medium mt-2">
+          <p className="text-xs text-brand-500 font-medium mt-2">
             {totalCustomers} clientes ativos classificados em 4 níveis
           </p>
         )}

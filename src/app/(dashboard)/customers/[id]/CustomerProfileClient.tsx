@@ -127,7 +127,7 @@ const STATUS_META: Record<string, { dot: string; badge: string; label: string }>
   CONFIRMED:        { dot: "bg-blue-400",   badge: "bg-blue-100 text-blue-700",     label: "Confirmado"    },
   PREPARING:        { dot: "bg-brand-400", badge: "bg-brand-100 text-brand-700", label: "Preparando"    },
   READY:            { dot: "bg-teal-400",   badge: "bg-teal-100 text-teal-700",     label: "Pronto"        },
-  OUT_FOR_DELIVERY: { dot: "bg-purple-400", badge: "bg-purple-100 text-purple-700", label: "Em entrega"    },
+  OUT_FOR_DELIVERY: { dot: "bg-brand-400", badge: "bg-brand-100 text-brand-600", label: "Em entrega"    },
   DELIVERED:        { dot: "bg-green-500",  badge: "bg-green-100 text-green-700",   label: "Entregue"      },
   CANCELLED:        { dot: "bg-line2",   badge: "bg-[#F4F4F2] text-muted",     label: "Cancelado"     },
 };
@@ -153,7 +153,7 @@ const TAG_STYLES: Record<CustomerTag["color"], { chip: string }> = {
   green:  { chip: "bg-green-50 text-green-700 border border-green-200"   },
   red:    { chip: "bg-red-50 text-red-700 border border-red-200"         },
   blue:   { chip: "bg-blue-50 text-blue-700 border border-blue-200"      },
-  purple: { chip: "bg-purple-50 text-purple-700 border border-purple-200"},
+  purple: { chip: "bg-brand-50 text-brand-600 border border-brand-200"},
   teal:   { chip: "bg-teal-50 text-teal-700 border border-teal-200"      },
   orange: { chip: "bg-brand-50 text-brand-700 border border-brand-200"},
   rose:   { chip: "bg-rose-50 text-rose-700 border border-rose-200"      },
@@ -170,7 +170,7 @@ const SEGMENT_CONFIG: Record<string, { label: string; emoji: string; bg: string;
   QUENTE:      { label: "Quente",      emoji: "🔥", bg: "bg-red-50",    text: "text-red-700"    },
   MORNO:       { label: "Morno",       emoji: "🌡️", bg: "bg-amber-50",  text: "text-amber-700"  },
   FRIO:        { label: "Frio",        emoji: "🥶", bg: "bg-blue-50",    text: "text-blue-700"   },
-  PERDIDO:     { label: "Perdido",     emoji: "👻", bg: "bg-purple-50",  text: "text-purple-700" },
+  PERDIDO:     { label: "Perdido",     emoji: "👻", bg: "bg-brand-50",  text: "text-brand-600" },
   SEM_PEDIDOS: { label: "Sem pedidos", emoji: "💤", bg: "bg-[#F4F4F2]",   text: "text-muted"   },
 };
 
@@ -628,7 +628,7 @@ function HeaderSection({
 
       {/* Imported data notice */}
       {usingImported && (
-        <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
+        <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-600">
           <span>📦</span>
           <span>Métricas baseadas em histórico importado (Saipos/Nemo) — não representa pedidos individuais no Foocci</span>
         </div>

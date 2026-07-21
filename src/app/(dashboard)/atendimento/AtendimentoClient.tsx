@@ -279,7 +279,7 @@ function getCrmBadge(c: ConvSummary): { label: string; cls: string } | null {
   }
   return {
     label: specific ?? "CRM enviado",
-    cls:   "bg-violet-50 text-violet-600",
+    cls:   "bg-brand-50 text-brand-500",
   };
 }
 
@@ -1221,7 +1221,7 @@ export function AtendimentoClient({
                                 📱 WhatsApp
                               </span>
                             ) : conv.channel === "QR_AGENT" || conv.channel === "WEB_AGENT" ? (
-                              <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-violet-600">
+                              <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[9px] font-bold leading-none text-brand-500">
                                 📋 Cardápio
                               </span>
                             ) : conv.channel === "MANUAL" ? (
@@ -1465,7 +1465,7 @@ const STATUS_META: Record<string, StatusMeta> = {
   CONFIRMED:        { label: "Confirmado",        badge: "bg-blue-50 border-blue-100 text-blue-600"      },
   PREPARING:        { label: "Em preparo",        badge: "bg-brand-50 border-brand-100 text-brand-600"   },
   READY:            { label: "Pronto",            badge: "bg-teal-50 border-teal-100 text-teal-700"      },
-  OUT_FOR_DELIVERY: { label: "Em entrega",        badge: "bg-violet-50 border-violet-100 text-violet-600" },
+  OUT_FOR_DELIVERY: { label: "Em entrega",        badge: "bg-brand-50 border-brand-100 text-brand-500" },
 };
 
 const DELAYED_META: StatusMeta = {
@@ -2355,7 +2355,7 @@ function MessageBubble({
     : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
   const senderBadgeCls = isOutbound
     ? (isCrmMsg
-        ? "bg-violet-50 text-violet-600"
+        ? "bg-fuchsia-50 text-fuchsia-700"
         : msg.senderType === "AI"
         ? (msgSource === "PEDIDO_TEXTO"
             ? "bg-sky-50 text-sky-700"
@@ -2364,7 +2364,7 @@ function MessageBubble({
           ? "bg-teal-50 text-teal-700"
           : "bg-ink text-white")
     : (msg.senderType === "CUSTOMER_CARDAPIO"
-        ? "bg-violet-50 text-violet-600"
+        ? "bg-brand-50 text-brand-500"
         : "bg-green-50 text-green-700");
 
   // WhatsApp media arrives as an encrypted `.enc` URL the browser cannot open.

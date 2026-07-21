@@ -22,7 +22,7 @@ const TONE_OPTIONS: { value: string; label: string; description: string }[] = [
 
 const STYLE_COLORS: Record<string, string> = {
   FRIENDLY:  "bg-green-500",
-  PLAYFUL:   "bg-purple-500",
+  PLAYFUL:   "bg-brand-500",
   DIRECT:    "bg-blue-500",
   EMOTIONAL: "bg-pink-500",
   PREMIUM:   "bg-amber-500",

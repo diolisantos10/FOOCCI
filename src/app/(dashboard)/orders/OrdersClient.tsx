@@ -241,7 +241,7 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; border: string; badge:
   CONFIRMED:        { label: "Confirmado",      border: "border-l-blue-400",   badge: "bg-blue-50 text-blue-600"     },
   PREPARING:        { label: "Preparando",      border: "border-l-brand-400",  badge: "bg-brand-50 text-brand-600"   },
   READY:            { label: "Pronto",          border: "border-l-teal-400",   badge: "bg-teal-50 text-teal-700"     },
-  OUT_FOR_DELIVERY: { label: "Em entrega",      border: "border-l-violet-400", badge: "bg-violet-50 text-violet-600" },
+  OUT_FOR_DELIVERY: { label: "Em entrega",      border: "border-l-brand-400", badge: "bg-brand-50 text-brand-500" },
   DELIVERED:        { label: "Entregue",        border: "border-l-green-400",  badge: "bg-green-50 text-green-700"   },
   CANCELLED:        { label: "Cancelado",       border: "border-l-line2",      badge: "bg-[#F4F4F2] text-muted"      },
 };
@@ -431,7 +431,7 @@ function customerTierDisplay(tier: string): { label: string; icon: string; color
 
 function customerTag(totalOrders: number, spend: number): { label: string; color: string } {
   if (totalOrders <= 1) return { label: "Novo",       color: "text-emerald-700 bg-emerald-50" };
-  if (spend >= 800)     return { label: "VIP",        color: "text-purple-700 bg-purple-50"   };
+  if (spend >= 800)     return { label: "VIP",        color: "text-brand-600 bg-brand-50"   };
   return                       { label: "Recorrente", color: "text-blue-700 bg-blue-50"       };
 }
 

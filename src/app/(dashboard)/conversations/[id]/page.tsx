@@ -57,7 +57,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   OPEN: "bg-blue-100 text-blue-700",
-  BOT: "bg-purple-100 text-purple-700",
+  BOT: "bg-brand-100 text-brand-600",
   HUMAN: "bg-yellow-100 text-yellow-800",
   RESOLVED: "bg-[#F4F4F2] text-ink2",
 };

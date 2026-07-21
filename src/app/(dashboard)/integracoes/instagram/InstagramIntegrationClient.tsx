@@ -229,7 +229,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
                   </p>
                 </div>
                 <button disabled={!c.hasInstagram || saving} onClick={() => selectPageId(c.pageId)}
-                  className="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-40">
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-40">
                   Conectar esta Página
                 </button>
               </div>
@@ -297,7 +297,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <p>Último Direct recebido: <b>{fmtDate(view?.lastWebhookAt ?? null)}</b></p>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={runTest} disabled={testing} className="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50">{testing ? "Testando…" : "Rodar diagnóstico"}</button>
+            <button onClick={runTest} disabled={testing} className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50">{testing ? "Testando…" : "Rodar diagnóstico"}</button>
             {canEdit && view?.mode !== "REPLY_ONLY" && <button onClick={() => save({ mode: "REPLY_ONLY" }, "Resposta manual ativada.")} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Ativar resposta manual</button>}
             {canEdit && <button onClick={() => save({ paused: !view?.paused })} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">{view?.paused ? "Despausar" : "Pausar"}</button>}
             {canEdit && <button onClick={disconnect} disabled={saving} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-paper">Desconectar</button>}
@@ -420,7 +420,7 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             {view?.tokenConfigured && !replaceToken ? (
               <div className="mt-1 flex items-center gap-2">
                 <span className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Token configurado ✓</span>
-                {canEdit && <button onClick={() => setReplaceToken(true)} className="text-sm text-purple-600 hover:underline">Substituir token</button>}
+                {canEdit && <button onClick={() => setReplaceToken(true)} className="text-sm text-brand-500 hover:underline">Substituir token</button>}
               </div>
             ) : (
               <input type="password" value={pageToken} onChange={(e) => setPageToken(e.target.value)} disabled={!canEdit}

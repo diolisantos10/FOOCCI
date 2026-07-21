@@ -16,7 +16,7 @@ const SEG_STYLE: Record<BaseSegment, { dot: string; text: string; bg: string }> 
   MORNO:       { dot: "bg-amber-500",  text: "text-amber-700",  bg: "bg-amber-50" },
   FRIO:        { dot: "bg-sky-500",    text: "text-sky-700",    bg: "bg-sky-50" },
   PERDIDO:     { dot: "bg-zinc-500",   text: "text-zinc-700",   bg: "bg-zinc-100" },
-  SEM_PEDIDOS: { dot: "bg-violet-400", text: "text-violet-700", bg: "bg-violet-50" },
+  SEM_PEDIDOS: { dot: "bg-brand-400", text: "text-brand-600", bg: "bg-brand-50" },
 };
 
 /** Recency ladder — higher = closer to buying. Used to tell climbs from drops. */
@@ -124,9 +124,9 @@ export function MigracaoTab() {
           </p>
           <p className="text-[10px] text-muted">voltaram a pedir</p>
         </div>
-        <div className="rounded-xl bg-violet-50 p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">Novos ativos</p>
-          <p className="mt-1 text-2xl font-extrabold text-violet-700">
+        <div className="rounded-xl bg-brand-50 p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-500">Novos ativos</p>
+          <p className="mt-1 text-2xl font-extrabold text-brand-600">
             {loading ? "…" : (data?.newActive ?? 0).toLocaleString("pt-BR")}
           </p>
           <p className="text-[10px] text-muted">1º pedido no período</p>

@@ -979,16 +979,16 @@ function SaiposNemoPreviewStep({
         {v2Error && <p className="mt-1.5 text-xs text-red-600">{v2Error}</p>}
       </div>
 
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
-        <p className="text-xs font-bold text-indigo-700 mb-1">Dataset V2 Importável</p>
-        <p className="text-xs text-indigo-600 mb-2">
+      <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
+        <p className="text-xs font-bold text-brand-600 mb-1">Dataset V2 Importável</p>
+        <p className="text-xs text-brand-500 mb-2">
           Gere uma planilha compatível com o parser (Clientes_Master, Sem_Telefone, Produtos_Agregados, Endereços) com categorias V2 normalizadas. Pode ser enviada ao preview-compiled para segunda revisão.
         </p>
         <button
           type="button"
           onClick={handleDownloadV2Importavel}
           disabled={v2ImportavelLoading || loading}
-          className="rounded-lg border border-indigo-200 bg-paper px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+          className="rounded-lg border border-brand-200 bg-paper px-3 py-1.5 text-xs font-semibold text-brand-600 hover:bg-brand-50 disabled:opacity-50"
         >
           {v2ImportavelLoading ? "Gerando…" : "⬇ Gerar V2 Importável"}
         </button>
@@ -1147,7 +1147,7 @@ function UniversalPreviewStep({
                   <span className="w-36 shrink-0 text-xs text-ink2 truncate">{f.label}</span>
                   <div className="flex-1 h-1.5 rounded-full bg-line2 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-indigo-500"
+                      className="h-full rounded-full bg-brand-500"
                       style={{ width: `${f.percent}%` }}
                     />
                   </div>
@@ -1158,7 +1158,7 @@ function UniversalPreviewStep({
         </div>
       )}
 
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+      <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-xs text-brand-600">
         A importação universal será disponibilizada em breve. Por ora, use este mapeamento para verificar a qualidade dos dados.
       </div>
 

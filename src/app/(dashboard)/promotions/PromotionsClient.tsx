@@ -1057,7 +1057,7 @@ function PromotionMetricsDrawer({
                   {TYPE_LABELS[promotion.type] ?? promotion.type}
                 </span>
                 {promotion.couponCode && (
-                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-purple-700">
+                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-brand-600">
                     {promotion.couponCode}
                   </span>
                 )}
@@ -1237,7 +1237,7 @@ function PromotionCard({
               {TYPE_LABELS[promotion.type] ?? promotion.type}
             </span>
             {promotion.couponCode && (
-              <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-purple-700">
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-brand-600">
                 {promotion.couponCode}
               </span>
             )}

@@ -1793,7 +1793,7 @@ function NewItemModal({
                         if (typeof window !== "undefined") localStorage.setItem("foocci_menu_ai_expanded", String(n));
                         return n;
                       })}
-                      className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-purple-600 hover:text-purple-800 transition-colors"
+                      className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand-500 hover:text-brand-700 transition-colors"
                     >
                       <span>Avançado / IA</span>
                       <svg className={`h-3 w-3 transition-transform ${aiExpanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
@@ -1812,7 +1812,7 @@ function NewItemModal({
                           <select
                             value={form.tagFunil}
                             onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
-                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                           >
                             <option value="">— Não definido —</option>
                             <option value="Entrada">Entrada</option>
@@ -1828,7 +1828,7 @@ function NewItemModal({
                             value={form.perfilPaladar}
                             onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
                             placeholder="ex: umami, cremoso, cítrico"
-                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                           />
                         </div>
 
@@ -1838,7 +1838,7 @@ function NewItemModal({
                             value={form.harmonizacaoSugerida}
                             onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
                             placeholder="ex: Água Tônica, Cerveja Heineken"
-                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                           />
                         </div>
 
@@ -1848,7 +1848,7 @@ function NewItemModal({
                             value={form.alergenosDetalhados}
                             onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
                             placeholder="ex: glúten, lactose, frutos do mar"
-                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                           />
                         </div>
 
@@ -1859,7 +1859,7 @@ function NewItemModal({
                             value={form.storytellingIA}
                             onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
                             placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
-                            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                           />
                         </div>
                       </div>
@@ -3301,7 +3301,7 @@ function EditItemModal({
                 if (typeof window !== "undefined") localStorage.setItem("foocci_menu_ai_expanded", String(n));
                 return n;
               })}
-              className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-purple-600 hover:text-purple-800 transition-colors"
+              className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-brand-500 hover:text-brand-700 transition-colors"
             >
               <span>Avançado / IA</span>
               <svg className={`h-3 w-3 transition-transform ${aiExpanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
@@ -3320,7 +3320,7 @@ function EditItemModal({
                   <select
                     value={form.tagFunil}
                     onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
-                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   >
                     <option value="">— Não definido —</option>
                     <option value="Entrada">Entrada</option>
@@ -3336,7 +3336,7 @@ function EditItemModal({
                     value={form.perfilPaladar}
                     onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
                     placeholder="ex: umami, cremoso, cítrico, levemente picante"
-                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
@@ -3346,7 +3346,7 @@ function EditItemModal({
                     value={form.harmonizacaoSugerida}
                     onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
                     placeholder="ex: Água Tônica, Cerveja Heineken"
-                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
@@ -3356,7 +3356,7 @@ function EditItemModal({
                     value={form.alergenosDetalhados}
                     onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
                     placeholder="ex: glúten, lactose, frutos do mar, amendoim"
-                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
                   />
                 </div>
 
@@ -3367,7 +3367,7 @@ function EditItemModal({
                     value={form.storytellingIA}
                     onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
                     placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
-                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+                    className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none"
                   />
                 </div>
               </div>

@@ -67,7 +67,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
   FAILED:            { label: "Falhou",             color: "bg-red-100 text-red-600",     dot: "bg-red-500" },
   APPROVED:          { label: "Aprovada",           color: "bg-green-100 text-green-700", dot: "bg-green-500" },
   REJECTED:          { label: "Rejeitada",          color: "bg-brand-100 text-brand-700",dot:"bg-brand-500" },
-  LOW_SOURCE_QUALITY:{ label: "Baixa qualidade",    color: "bg-purple-100 text-purple-700",dot:"bg-purple-500" },
+  LOW_SOURCE_QUALITY:{ label: "Baixa qualidade",    color: "bg-brand-100 text-brand-600",dot:"bg-brand-500" },
   NEEDS_NEW_PHOTO:   { label: "Precisa nova foto",  color: "bg-pink-100 text-pink-700",   dot: "bg-pink-500" },
 };
 
