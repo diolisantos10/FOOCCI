@@ -67,6 +67,8 @@ export class CustomerCouponService {
     const hasCoupon = !!input.coupon && (
       input.coupon.type === "CUSTOM"
         ? !!input.coupon.description?.trim()
+        : input.coupon.type === "FREE_SHIPPING"
+        ? true // the benefit is the delivery fee itself; value is only a cost estimate
         : input.coupon.value > 0
     );
     if (!hasCoupon) return { granted: false, reason: "NO_COUPON" };
@@ -229,9 +231,12 @@ export class CustomerCouponService {
     });
     return rows.map((r) => {
       // CUSTOM = a manual reward (the discount is fulfilled by hand, not in the total).
-      const isCustom = r.discountType === "CUSTOM";
+      const isCustom       = r.discountType === "CUSTOM";
+      const isFreeShipping = r.discountType === "FREE_SHIPPING";
       const label = isCustom
         ? (r.description?.trim() || "Recompensa")
+        : isFreeShipping
+        ? "Frete grátis"
         : r.discountType === "PERCENTAGE"
         ? `${Number(r.discountValue)}% OFF`
         : `R$ ${Number(r.discountValue)} OFF`;
@@ -239,7 +244,9 @@ export class CustomerCouponService {
         id:            r.id,
         code:          r.couponCode,
         discountType:  r.discountType,
-        discountValue: isCustom ? 0 : (r.discountValue != null ? Number(r.discountValue) : 0),
+        // FREE_SHIPPING's stored value is only a cost estimate — the real discount
+        // (the delivery fee) is computed at checkout.
+        discountValue: isCustom || isFreeShipping ? 0 : (r.discountValue != null ? Number(r.discountValue) : 0),
         description:   r.description ?? null,
         isReward:      isCustom,
         label,

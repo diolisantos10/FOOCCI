@@ -92,7 +92,7 @@ export interface RecurringScheduleConfig {
   /** Event-based campaigns: days after the event to target (review, 2nd purchase). */
   triggerDays?:   number;
   /** Card-defined coupon granted to each recipient's wallet on send. */
-  coupon?:        { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string; validityDays?: number } | null;
+  coupon?:        { type: "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING"; value: number; description?: string; validityDays?: number } | null;
   endCondition:   "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   endDate?:       string | null;                // "YYYY-MM-DD"
   maxTotal?:      number | null;
@@ -1188,7 +1188,7 @@ export class ScheduledCampaignRunnerService {
     runOpts: {
       abortOnInstanceCollapse?: boolean;
       /** Card-defined coupon to credit to each customer's wallet on a successful send. */
-      coupon?: { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string; validityDays?: number } | null;
+      coupon?: { type: "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING"; value: number; description?: string; validityDays?: number } | null;
       /** Days the granted coupon stays valid. */
       couponValidityDays?: number | null;
     } = {},
@@ -1292,7 +1292,7 @@ export class ScheduledCampaignRunnerService {
         for (const r of rows) {
           if (expiringCouponByCustomer.has(r.customerId)) continue; // keep the soonest
           expiringCouponByCustomer.set(r.customerId, {
-            type:        r.discountType === "PERCENTAGE" || r.discountType === "FIXED" ? r.discountType : "CUSTOM",
+            type:        r.discountType === "PERCENTAGE" || r.discountType === "FIXED" || r.discountType === "FREE_SHIPPING" ? r.discountType : "CUSTOM",
             value:       Number(r.discountValue ?? 0),
             description: r.description ?? undefined,
             expiresAt:   r.expiresAt,

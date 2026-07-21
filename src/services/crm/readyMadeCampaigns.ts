@@ -24,10 +24,10 @@
 export type ReadyMadeEngine = "RECURRING" | "CART_RECOVERY";
 
 /** A coupon defined directly in a campaign card (no separate Promoções area). */
-export type CouponType = "PERCENTAGE" | "FIXED" | "CUSTOM";
+export type CouponType = "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING";
 export interface ReadyMadeCoupon {
   type:  CouponType;
-  value: number; // % for PERCENTAGE, R$ for FIXED, estimated R$ cost for CUSTOM
+  value: number; // % for PERCENTAGE, R$ for FIXED, estimated R$ cost for CUSTOM/FREE_SHIPPING
   /** CUSTOM reward text, e.g. "sobremesa grátis". */
   description?: string;
   /** Days the coupon stays valid after being credited. Omitted → 30-day default. */
@@ -44,7 +44,8 @@ export const COUPON_FIXED_OPTIONS   = [10, 20, 30, 40, 50] as const;
 /** Owner-facing label for a coupon, e.g. "20% OFF" / "R$ 10 OFF" / "sobremesa grátis". */
 export function couponLabel(c: ReadyMadeCoupon | null | undefined): string {
   if (!c) return "Sem cupom";
-  if (c.type === "CUSTOM") return c.description?.trim() || "Recompensa";
+  if (c.type === "CUSTOM")        return c.description?.trim() || "Recompensa";
+  if (c.type === "FREE_SHIPPING") return "Frete grátis";
   return c.type === "PERCENTAGE" ? `${c.value}% OFF` : `R$ ${c.value} OFF`;
 }
 

@@ -462,7 +462,11 @@ export async function POST(
   // ACTIVE, unexpired). Mutually exclusive with a typed promo code.
   if (customerCouponId?.trim() && incomingCustomerId && !isGuestIdentifier(phone)) {
     const wc = await CustomerCouponService.findRedeemable(restaurantId, incomingCustomerId, customerCouponId.trim());
-    if (wc) {
+    if (wc && wc.discountType === "FREE_SHIPPING" && (deliveryMethod !== "delivery" || deliveryFeeAmount <= 0)) {
+      // Frete grátis only makes sense on a delivery WITH a fee — on pickup (or
+      // zero fee) the coupon is NOT consumed; it stays in the wallet for later.
+      console.info("[finalize] frete-grátis coupon not applicable (pickup/no fee) — kept in wallet", { customerCouponId });
+    } else if (wc) {
       // CUSTOM = a manual reward ("sobremesa grátis") — the stored value is only a
       // cost estimate for the budget, never a money discount. Still redeemed (marked
       // used) so the customer can't reuse it; the restaurant fulfils it by hand.
@@ -470,6 +474,8 @@ export async function POST(
         ? Math.min((subtotal * wc.discountValue) / 100, subtotal)
         : wc.discountType === "FIXED"
         ? Math.min(wc.discountValue, orderTotal)
+        : wc.discountType === "FREE_SHIPPING"
+        ? deliveryFeeAmount
         : 0;
       discountAmount = Math.round(discountAmount * 100) / 100;
       redeemedWalletCouponId = wc.id;

@@ -39,7 +39,7 @@ export interface RenderContext {
   /** Campaign coupon — drives {cupom}, e.g. "20% de desconto" / "sobremesa grátis".
    *  `expiresAt` (a wallet coupon's REAL expiry, e.g. the cupom-vencendo campaign)
    *  wins over validityDays when resolving {validade}. */
-  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null; validityDays?: number | null; expiresAt?: Date | string | null } | null;
+  coupon?:         { type: "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING"; value: number; description?: string | null; validityDays?: number | null; expiresAt?: Date | string | null } | null;
   /** Next-tier nudge ("Quase no próximo nível"): the tier the customer is chasing
    *  and how much spend is missing — both resolved per recipient by the runner. */
   nextTierLabel?:   string | null;
@@ -49,13 +49,15 @@ export interface RenderContext {
 /** True when the coupon actually carries a benefit (drives {cupom}/{validade}). */
 function couponHasBenefit(coupon: RenderContext["coupon"]): boolean {
   if (!coupon) return false;
+  if (coupon.type === "FREE_SHIPPING") return true; // benefit is the fee itself
   return coupon.type === "CUSTOM" ? !!coupon.description?.trim() : coupon.value > 0;
 }
 
 /** Owner-facing coupon phrasing for use inside a message ("20% de desconto"). */
 export function couponMessageLabel(coupon: RenderContext["coupon"]): string {
   if (!couponHasBenefit(coupon)) return "";
-  if (coupon!.type === "CUSTOM") return coupon!.description!.trim();
+  if (coupon!.type === "CUSTOM")        return coupon!.description!.trim();
+  if (coupon!.type === "FREE_SHIPPING") return "frete grátis";
   return coupon!.type === "PERCENTAGE" ? `${coupon!.value}% de desconto` : `R$ ${coupon!.value} de desconto`;
 }
 

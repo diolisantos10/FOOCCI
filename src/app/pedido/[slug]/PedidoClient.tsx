@@ -4534,9 +4534,12 @@ export function PedidoClient({
       ? computeEffectiveFee(sub, resolvedDeliveryFee, freeDeliveryAbove)
       : 0;
     // A CUSTOM reward ("sobremesa grátis") never discounts the total — it's fulfilled
-    // by the restaurant. It still occupies the coupon slot so it's marked used.
+    // by the restaurant. FREE_SHIPPING discounts exactly the delivery fee (server
+    // recomputes; on pickup it's kept in the wallet, not consumed).
     const discountAmount = w.isReward
       ? 0
+      : w.discountType === "FREE_SHIPPING"
+      ? Math.round(fee * 100) / 100
       : w.discountType === "PERCENTAGE"
       ? Math.round(Math.min((sub * w.discountValue) / 100, sub) * 100) / 100
       : Math.round(Math.min(w.discountValue, sub + fee) * 100) / 100;

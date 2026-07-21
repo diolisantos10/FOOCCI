@@ -2700,10 +2700,11 @@ function CampaignManageModal({
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="w-24 text-sm font-bold text-ink">{label}</span>
                                   {([
-                                    { t: null,         lbl: "Sem" },
-                                    { t: "PERCENTAGE", lbl: "%" },
-                                    { t: "FIXED",      lbl: "R$" },
-                                    { t: "CUSTOM",     lbl: "Brinde" },
+                                    { t: null,            lbl: "Sem" },
+                                    { t: "PERCENTAGE",    lbl: "%" },
+                                    { t: "FIXED",         lbl: "R$" },
+                                    { t: "FREE_SHIPPING", lbl: "Frete" },
+                                    { t: "CUSTOM",        lbl: "Brinde" },
                                   ] as { t: CouponType | null; lbl: string }[]).map((opt) => (
                                     <button
                                       key={opt.lbl}
@@ -2711,6 +2712,8 @@ function CampaignManageModal({
                                         opt.t === null ? null
                                         : opt.t === "CUSTOM"
                                         ? { type: "CUSTOM", value: c?.type === "CUSTOM" ? c.value : 0, description: c?.description ?? "", validityDays: c?.validityDays ?? 30 }
+                                        : opt.t === "FREE_SHIPPING"
+                                        ? { type: "FREE_SHIPPING", value: c?.type === "FREE_SHIPPING" ? c.value : 8, validityDays: c?.validityDays ?? 30 }
                                         : { type: opt.t, value: c && c.type === opt.t ? c.value : (opt.t === "PERCENTAGE" ? 10 : 15), validityDays: c?.validityDays ?? 30 }
                                       )}
                                       className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${(c?.type ?? null) === opt.t ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
@@ -2766,10 +2769,11 @@ function CampaignManageModal({
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">Cupom de desconto (opcional)</p>
                         <div className="flex flex-wrap gap-2">
                           {([
-                            { key: null,         label: "Sem cupom" },
-                            { key: "PERCENTAGE", label: "Porcentagem" },
-                            { key: "FIXED",      label: "Valor em R$" },
-                            { key: "CUSTOM",     label: "Recompensa" },
+                            { key: null,            label: "Sem cupom" },
+                            { key: "PERCENTAGE",    label: "Porcentagem" },
+                            { key: "FIXED",         label: "Valor em R$" },
+                            { key: "FREE_SHIPPING", label: "Frete grátis" },
+                            { key: "CUSTOM",        label: "Recompensa" },
                           ] as { key: CouponType | null; label: string }[]).map((opt) => {
                             const activeOpt = (coupon?.type ?? null) === opt.key;
                             return (
@@ -2780,6 +2784,8 @@ function CampaignManageModal({
                                     ? null
                                     : opt.key === "CUSTOM"
                                     ? { type: "CUSTOM", value: coupon?.type === "CUSTOM" ? coupon.value : 0, description: coupon?.description ?? "", validityDays: coupon?.validityDays }
+                                    : opt.key === "FREE_SHIPPING"
+                                    ? { type: "FREE_SHIPPING", value: coupon?.type === "FREE_SHIPPING" ? coupon.value : 8, validityDays: coupon?.validityDays }
                                     : { type: opt.key, value: (opt.key === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS)[1], validityDays: coupon?.validityDays }
                                 )}
                                 className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${activeOpt ? "border-brand-400 bg-brand-50 text-ink" : "border-line bg-white text-ink2 hover:bg-[#FAFAF8]"}`}
@@ -2788,7 +2794,19 @@ function CampaignManageModal({
                           })}
                         </div>
 
-                        {coupon && coupon.type !== "CUSTOM" && (
+                        {coupon && coupon.type === "FREE_SHIPPING" && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="number" min={0} max={1000}
+                              value={coupon.value}
+                              onChange={(e) => setCoupon({ ...coupon, value: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                              className="w-28 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink focus:border-brand-400 focus:outline-none"
+                            />
+                            <span className="text-xs text-muted">custo estimado do frete (R$), só p/ orçamento</span>
+                          </div>
+                        )}
+
+                        {coupon && coupon.type !== "CUSTOM" && coupon.type !== "FREE_SHIPPING" && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {(coupon.type === "PERCENTAGE" ? COUPON_PERCENT_OPTIONS : COUPON_FIXED_OPTIONS).map((v) => (
                               <button

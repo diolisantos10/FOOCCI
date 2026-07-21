@@ -460,7 +460,7 @@ export class OrderDraftRecoverySendService {
         const cartRow    = cartRowByRestaurant.get(draft.restaurantId);
         const cartCfg    = cartCfgByRestaurant.get(draft.restaurantId);
         const rowCoupon  = (cartRow?.scheduleConfig as { coupon?: unknown } | null)?.coupon as
-          | { type: "PERCENTAGE" | "FIXED" | "CUSTOM"; value: number; description?: string | null }
+          | { type: "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING"; value: number; description?: string | null }
           | null | undefined;
         const cartCoupon = rowCoupon ?? cartCfg?.cartRecoveryCoupon ?? null;
         // Message pool: rotate over the phrases the owner selected in the manage
