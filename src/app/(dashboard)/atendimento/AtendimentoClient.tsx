@@ -49,7 +49,7 @@ type ConvStatus =
 
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT" | "INSTAGRAM_COMMENT";
 
-type StatusFilter  = "ALL" | "AI_OFF" | "WAITING" | "STAFF" | "CRM" | "RESOLVED";
+type StatusFilter  = "ALL" | "AI_OFF" | "WAITING" | "STAFF" | "CRM" | "INSTAGRAM" | "RESOLVED";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
 interface ActiveOrderItem {
@@ -176,6 +176,7 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "WAITING",     label: "Aguardando" },
   { id: "STAFF",       label: "Staff"      },
   { id: "CRM",         label: "CRM"        },
+  { id: "INSTAGRAM",   label: "📷 Instagram" },
   { id: "RESOLVED",    label: "Resolvidas" },
 ];
 
@@ -720,6 +721,9 @@ export function AtendimentoClient({
       // permanently AI-locked. They live here, OUT of the human queue, and only
       // leave when the owner reclassifies them back to "Cliente".
       items = items.filter((c) => c.aiLocked === true);
+    } else if (statusFilter === "INSTAGRAM") {
+      // Only Instagram (Direct + comentários). Client-side over the loaded window.
+      items = items.filter((c) => c.channel === "INSTAGRAM_DIRECT" || c.channel === "INSTAGRAM_COMMENT");
     } else if (statusFilter !== "RESOLVED") {
       // "Todas": hide CRM outbound-only — they don't need human attention.
       // Conversations where the customer replied (hasCustomerReplied=true OR any
@@ -2336,8 +2340,12 @@ function MessageBubble({
 
   const isOutbound  = msg.direction === "OUTBOUND";
   const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
-  const msgSource   = msg.metadata?.source; // "CARDAPIO" | "WHATSAPP" | undefined
+  const msgSource   = msg.metadata?.source; // "CARDAPIO" | "WHATSAPP" | "INSTAGRAM_DIRECT" | "INSTAGRAM_COMMENT" | undefined
   const crmCtx      = msg.metadata?.contextType as string | undefined;
+  // Instagram is tagged only via metadata.source (the bubble has no channel prop);
+  // without this branch IG messages fell through to the "WhatsApp" default label.
+  const isIg        = msgSource === "INSTAGRAM_DIRECT" || msgSource === "INSTAGRAM_COMMENT";
+  const igSfx       = msgSource === "INSTAGRAM_COMMENT" ? "Instagram comentário" : "Instagram";
   // CRM outbound is stored with senderType "AI" (+ CRM metadata) or "CRM"; either
   // way it must read as a campaign/automation, never as the IA Waiter agent.
   const isCrmMsg    = isOutbound && (msg.senderType === "CRM" || crmCtx === "CRM_CAMPAIGN" || crmCtx === "CRM_AUTOMATION");
@@ -2350,9 +2358,9 @@ function MessageBubble({
            :                              "IA · WhatsApp")
         : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
         : msg.senderType === "HUMAN"
-          ? (msgSource === "CARDAPIO" ? "Operador · Cardápio" : "Operador · WhatsApp")
+          ? (msgSource === "CARDAPIO" ? "Operador · Cardápio" : isIg ? `Operador · ${igSfx}` : "Operador · WhatsApp")
           : "Operador")
-    : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
+    : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : isIg ? `${customerName} · ${igSfx}` : `${customerName} · WhatsApp`);
   const senderBadgeCls = isOutbound
     ? (isCrmMsg
         ? "bg-fuchsia-50 text-fuchsia-700"
@@ -2362,9 +2370,11 @@ function MessageBubble({
             : "bg-brand-50 text-brand-600")
         : msg.senderType === "HUMAN_EXTERNAL"
           ? "bg-teal-50 text-teal-700"
+          : isIg ? "bg-pink-50 text-pink-700"
           : "bg-ink text-white")
     : (msg.senderType === "CUSTOMER_CARDAPIO"
         ? "bg-brand-50 text-brand-500"
+        : isIg ? "bg-pink-50 text-pink-700"
         : "bg-green-50 text-green-700");
 
   // WhatsApp media arrives as an encrypted `.enc` URL the browser cannot open.

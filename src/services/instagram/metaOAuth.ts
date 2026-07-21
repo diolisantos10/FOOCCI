@@ -97,6 +97,26 @@ export interface MetaGraph {
   listPages(userAccessToken: string): Promise<PageCandidate[]>;
 }
 
+/**
+ * Exchanges a short-lived user token (~1–2h) for a long-lived one (~60 days) via
+ * `grant_type=fb_exchange_token`. Returns null on any failure so the caller can
+ * fall back to the short-lived token (connection still works, just briefly).
+ */
+async function exchangeForLongLivedToken(shortToken: string, creds: MetaAppCreds): Promise<string | null> {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`
+    + `?grant_type=fb_exchange_token`
+    + `&client_id=${encodeURIComponent(creds.appId)}`
+    + `&client_secret=${encodeURIComponent(creds.appSecret)}`
+    + `&fb_exchange_token=${encodeURIComponent(shortToken)}`;
+  try {
+    const res = await fetch(url);
+    const body = (await res.json().catch(() => ({}))) as { access_token?: string };
+    return res.ok && body.access_token ? body.access_token : null;
+  } catch {
+    return null;
+  }
+}
+
 export const realMetaGraph: MetaGraph = {
   async exchangeCode({ code, redirectUri, creds }) {
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`
@@ -109,7 +129,12 @@ export const realMetaGraph: MetaGraph = {
     if (!res.ok || body.error || !body.access_token) {
       throw new Error(body.error?.message ?? `Troca de código falhou (HTTP ${res.status})`);
     }
-    return { accessToken: body.access_token };
+    // The code grant returns a SHORT-lived user token; the Page tokens derived
+    // from it (via me/accounts) inherit that ~1–2h lifetime and the connection
+    // dies almost immediately. Upgrade to a long-lived user token first so the
+    // derived Page tokens are long-lived (~60 days) too.
+    const longLived = await exchangeForLongLivedToken(body.access_token, creds);
+    return { accessToken: longLived ?? body.access_token };
   },
   async listPages(userAccessToken) {
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/me/accounts`

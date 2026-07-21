@@ -207,6 +207,17 @@ export async function recordWebhookError(restaurantId: string, message: string):
     .catch(() => undefined);
 }
 
+/**
+ * Flags "reconnect needed" on the config (e.g. Meta token expired: OAuthException
+ * 190 on a send). Sets lastError so the Integrations status card reads "error" and
+ * prompts a reconnect, instead of the operator's replies failing silently.
+ */
+export async function flagReconnectNeeded(restaurantId: string): Promise<void> {
+  await prisma.instagramChannelConfig
+    .update({ where: { restaurantId }, data: { lastError: "Reconexão necessária — o acesso ao Instagram expirou. Reconecte a conta." } })
+    .catch(() => undefined);
+}
+
 /** Verify-token check for the Meta webhook GET handshake (per-config). */
 export function verifyTokenMatches(row: InstagramConfigRow | null, presented: string): boolean {
   if (!row?.verifyTokenHash || !presented) return false;

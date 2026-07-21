@@ -61,4 +61,7 @@ export interface InstagramSendResult {
   error: string | null;
   /** Why nothing was sent, in operator language. */
   reason: string | null;
+  /** True when Meta rejected the token (OAuthException / code 190) — the channel
+   *  service uses this to flag "reconnect needed" instead of failing silently. */
+  authError?: boolean;
 }

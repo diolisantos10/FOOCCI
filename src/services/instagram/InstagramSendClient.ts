@@ -50,11 +50,13 @@ export async function sendInstagramText(input: SendTextInput): Promise<Instagram
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipient: { id: input.recipientId }, message: { text: input.text } }),
     });
-    const body = (await res.json().catch(() => ({}))) as { message_id?: string; error?: { message?: string } };
+    const body = (await res.json().catch(() => ({}))) as { message_id?: string; error?: { message?: string; code?: number; type?: string } };
     if (!res.ok || body.error) {
+      const authError = body.error?.code === 190 || body.error?.type === "OAuthException";
       return { ok: false, sent: false, dryRun: false, externalMessageId: null,
         error: (body.error?.message ?? `HTTP ${res.status}`).slice(0, 300),
-        reason: "Falha ao enviar pelo Instagram." };
+        reason: authError ? "Reconexão necessária — o acesso ao Instagram expirou." : "Falha ao enviar pelo Instagram.",
+        authError };
     }
     return { ok: true, sent: true, dryRun: false, externalMessageId: body.message_id ?? null, error: null, reason: null };
   } catch (err) {
@@ -99,11 +101,13 @@ export async function replyToInstagramComment(input: ReplyCommentInput): Promise
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: input.text }),
     });
-    const body = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+    const body = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string; code?: number; type?: string } };
     if (!res.ok || body.error) {
+      const authError = body.error?.code === 190 || body.error?.type === "OAuthException";
       return { ok: false, sent: false, dryRun: false, externalMessageId: null,
         error: (body.error?.message ?? `HTTP ${res.status}`).slice(0, 300),
-        reason: "Falha ao responder o comentário no Instagram." };
+        reason: authError ? "Reconexão necessária — o acesso ao Instagram expirou." : "Falha ao responder o comentário no Instagram.",
+        authError };
     }
     return { ok: true, sent: true, dryRun: false, externalMessageId: body.id ?? null, error: null, reason: null };
   } catch (err) {

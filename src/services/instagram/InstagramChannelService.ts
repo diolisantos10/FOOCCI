@@ -13,6 +13,7 @@ import {
   decryptPageToken,
   recordWebhookReceived,
   recordWebhookError,
+  flagReconnectNeeded,
   type InstagramConfigRow,
 } from "./InstagramConfigService";
 import { normalizeInstagramPayload, normalizeInstagramComments } from "./InstagramWebhookParser";
@@ -394,6 +395,8 @@ export async function sendManualReply(
   });
   // Replying IS acknowledging — a human answer silences the handoff alarm.
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now, handoffAlarmAckAt: now } }).catch(() => undefined);
+  // Expired/invalid token (OAuthException 190) → surface "reconnect needed".
+  if (!send.ok && send.authError) await flagReconnectNeeded(restaurantId);
 
   return { ok: send.ok, send, messageId: message.id, reason: send.reason };
 }
@@ -462,6 +465,8 @@ export async function sendCommentReply(
   });
   // Replying IS acknowledging — a human answer silences the handoff alarm.
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now, handoffAlarmAckAt: now } }).catch(() => undefined);
+  // Expired/invalid token (OAuthException 190) → surface "reconnect needed".
+  if (!send.ok && send.authError) await flagReconnectNeeded(restaurantId);
 
   return { ok: send.ok, send, messageId: message.id, reason: send.reason };
 }
