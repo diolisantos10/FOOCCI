@@ -233,7 +233,10 @@ export async function handleInstagramLoginCallback(
       facebookPageId: null,
       pageAccessToken: profile.longLivedToken, // encrypted before storage
       mode: "RECEIVE_ONLY",
-      scope: "TEST_ACCOUNT_ONLY",
+      // Receive from all customers by default — a fresh connection dropping every
+      // DM (TEST_ACCOUNT_ONLY + empty allowlist) reads as "broken". The panel has a
+      // one-click "Restringir a conta de teste" to narrow it back when needed.
+      scope: "RESTAURANT_WIDE",
       enabled: true,
       paused: false,
       metadata: {

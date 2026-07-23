@@ -294,11 +294,14 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             )}
             <p>Instagram: <b>{view?.instagramUsername ? "@" + view.instagramUsername : (view?.instagramBusinessAccountId ?? "—")}</b></p>
             <p>Modo: <b>{MODE_LABEL[view?.mode ?? "RECEIVE_ONLY"]}</b></p>
+            <p>Recebimento: <b>{view?.scope === "RESTAURANT_WIDE" ? "Todos os clientes" : "Só conta de teste"}</b></p>
             <p>Último Direct recebido: <b>{fmtDate(view?.lastWebhookAt ?? null)}</b></p>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={runTest} disabled={testing} className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50">{testing ? "Testando…" : "Rodar diagnóstico"}</button>
             {canEdit && view?.mode !== "REPLY_ONLY" && <button onClick={() => save({ mode: "REPLY_ONLY" }, "Resposta manual ativada.")} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Ativar resposta manual</button>}
+            {canEdit && view?.scope !== "RESTAURANT_WIDE" && <button onClick={() => save({ scope: "RESTAURANT_WIDE" }, "Pronto — recebendo DMs de todos os clientes.")} disabled={saving} className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Receber de todos os clientes</button>}
+            {canEdit && view?.scope === "RESTAURANT_WIDE" && <button onClick={() => save({ scope: "TEST_ACCOUNT_ONLY" }, "Restrito à conta de teste.")} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Restringir a conta de teste</button>}
             {canEdit && <button onClick={() => save({ paused: !view?.paused })} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">{view?.paused ? "Despausar" : "Pausar"}</button>}
             {canEdit && <button onClick={disconnect} disabled={saving} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-paper">Desconectar</button>}
             <Link href="/atendimento" className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Abrir Central de Atendimento</Link>
