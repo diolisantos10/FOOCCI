@@ -24,6 +24,7 @@ import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, RevenueBlock, type DateFilterPreset } from "./OverviewTab";
 import CrmAgentPanel from "./CrmAgentPanel";
+import CrmCampaignAI from "./CrmCampaignAI";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
 import { ConversoesTab } from "./ConversoesTab";
 import { MigracaoTab } from "./MigracaoTab";
@@ -4783,6 +4784,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
       )}
+
+      {/* ── Criar campanha com IA (texto ou voz) ─────────────────────────────── */}
+      <CrmCampaignAI onCreated={() => setReadyMadeReload((n) => n + 1)} />
 
       {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
       <ReadyMadeCampaignsSection
