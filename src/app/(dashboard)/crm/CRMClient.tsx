@@ -23,6 +23,7 @@ import { ReadyMadeCampaignsSection, type ReadyMadeState } from "./ReadyMadeCampa
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, RevenueBlock, type DateFilterPreset } from "./OverviewTab";
+import CrmAgentPanel from "./CrmAgentPanel";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
 import { ConversoesTab } from "./ConversoesTab";
 import { MigracaoTab } from "./MigracaoTab";
@@ -6602,21 +6603,8 @@ function CrmConfiguracoes() {
         </p>
       </CfgCard>
 
-      {/* G — IA de mensagens (futuro) */}
-      <div className="rounded-2xl border border-dashed border-line2 p-5">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 text-lg">🤖</span>
-          <div>
-            <p className="text-sm font-semibold text-ink2">
-              Mensagens dinâmicas por IA
-              <span className="ml-2 rounded-full bg-line2 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted">em breve</span>
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              Em breve, o Agente CRM poderá variar mensagens automaticamente para evitar repetição e aumentar o engajamento.
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* G — Agente de CRM (a IA de mensagens, ao vivo) */}
+      <CrmAgentPanel />
 
       {/* Save */}
       <div className="flex justify-end pt-2">
