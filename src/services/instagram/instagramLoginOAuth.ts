@@ -136,19 +136,36 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
       throw new Error(shortBody.error_message ?? `Troca de código falhou (HTTP ${shortRes.status})`);
     }
 
-    // 2) short-lived → long-lived (60-day) token.
+    // 2) short-lived → long-lived (60-day) token. RETRY: a transient failure here used to
+    //    silently fall back to the 1h short token, which then died in ~1h and killed
+    //    inbound DMs. Retry a few times before accepting the short token.
     const longUrl = `${IG_GRAPH}/access_token?grant_type=ig_exchange_token`
       + `&client_secret=${encodeURIComponent(creds.appSecret)}`
       + `&access_token=${encodeURIComponent(shortToken)}`;
-    const longRes = await fetch(longUrl);
-    const longBody = (await longRes.json().catch(() => ({}))) as {
-      access_token?: string; expires_in?: number; error?: { message?: string };
-    };
-    const longToken = longBody.access_token ?? shortToken;
-    const expiresIn = typeof longBody.expires_in === "number" ? longBody.expires_in : null;
-    // TEMP DIAG [ig-oauth]: a failed long-lived exchange silently falls back to the 1h
-    // short token (which then dies in ~1h). Log the outcome so we catch that.
-    console.log(`[ig-oauth] longLived ok=${longRes.ok} status=${longRes.status} gotLong=${!!longBody.access_token} expiresIn=${expiresIn ?? "null"} err=${longBody.error?.message ?? "none"}`);
+    let longToken = shortToken;
+    let expiresIn: number | null = null;
+    let lastErr = "none";
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const longRes = await fetch(longUrl);
+      const longBody = (await longRes.json().catch(() => ({}))) as {
+        access_token?: string; expires_in?: number; error?: { message?: string };
+      };
+      if (longBody.access_token) {
+        longToken  = longBody.access_token;
+        expiresIn  = typeof longBody.expires_in === "number" ? longBody.expires_in : null;
+        console.log(`[ig-oauth] longLived OK attempt=${attempt} expiresIn=${expiresIn ?? "null"}`);
+        break;
+      }
+      lastErr = longBody.error?.message ?? `HTTP ${longRes.status}`;
+      console.warn(`[ig-oauth] longLived FAILED attempt=${attempt} err=${lastErr}`);
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 700 * attempt));
+    }
+    // If every attempt failed we keep the short token so the connection still forms, but
+    // its (short) expiry is recorded so the refresh cron / health check flags it fast.
+    if (expiresIn === null && longToken === shortToken) {
+      expiresIn = 3600; // short-lived tokens last ~1h — record it, don't pretend it's 60 days
+      console.error(`[ig-oauth] LONG-LIVED EXCHANGE FAILED — stored SHORT token (dies in ~1h). lastErr=${lastErr}`);
+    }
 
     // 3) profile — canonical account id (matches webhook entry[].id) + @username.
     let username: string | null = null;
@@ -164,6 +181,30 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
     return { igUserId, username, longLivedToken: longToken, expiresInSeconds: expiresIn };
   },
 };
+
+/**
+ * Refresh a long-lived Instagram user token (GET /refresh_access_token). Instagram
+ * long-lived tokens last ~60 days and can be refreshed once they are ≥24h old and not
+ * yet expired — each refresh extends them another 60 days. A cron calls this before
+ * expiry so the connection never silently dies (the root cause of the earlier outage).
+ */
+export async function refreshInstagramLongLivedToken(
+  token: string,
+): Promise<{ ok: boolean; token?: string; expiresInSeconds?: number | null; error?: string }> {
+  try {
+    const url = `${IG_GRAPH}/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url);
+    const body = (await res.json().catch(() => ({}))) as {
+      access_token?: string; expires_in?: number; error?: { message?: string };
+    };
+    if (!res.ok || !body.access_token) {
+      return { ok: false, error: body.error?.message ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, token: body.access_token, expiresInSeconds: typeof body.expires_in === "number" ? body.expires_in : null };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "refresh failed" };
+  }
+}
 
 // ── Start ──────────────────────────────────────────────────────────────────────
 export interface StartResult {
