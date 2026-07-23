@@ -27,12 +27,16 @@ export async function POST(req: NextRequest) {
       if (!body.restaurantId) return badRequest("restaurantId é obrigatório para liberar o número.");
       const cfg = await MetaConfigService.getResolved(body.restaurantId);
       if (!cfg) return badRequest("Sem config Meta para este restaurante.");
-      const dereg = await deregisterPhoneNumber(cfg.accessToken, cfg.phoneNumberId);
+      // Target an explicit phoneNumberId when given (the config may point to the wrong
+      // number, e.g. the +1 test number). The token is WABA-wide, so it works for any of
+      // the WABA's numbers.
+      const targetPhoneId = body.phoneNumberId?.trim() || cfg.phoneNumberId;
+      const dereg = await deregisterPhoneNumber(cfg.accessToken, targetPhoneId);
       await prisma.metaWhatsAppConfig.updateMany({
         where: { restaurantId: body.restaurantId },
         data:  { connectionStatus: dereg.ok ? "DISCONNECTED" : "ERROR", lastError: dereg.error ?? null },
       });
-      return ok({ deregistered: dereg.ok, error: dereg.error ?? null, phone: cfg.displayPhoneNumber, raw: dereg.raw ?? null });
+      return ok({ deregistered: dereg.ok, error: dereg.error ?? null, targetPhoneId, raw: dereg.raw ?? null });
     }
 
     const pin  = (body.pin ?? "").trim();
