@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
       code?: string; accessToken?: string; wabaId?: string; phoneNumberId?: string;
-      displayPhoneNumber?: string; businessId?: string; configId?: string;
+      displayPhoneNumber?: string; businessId?: string; configId?: string; coexistence?: boolean;
     };
     if (!body.wabaId || !body.phoneNumberId) {
       return badRequest("Não foi possível identificar o número WhatsApp. Tente novamente ou fale com o suporte Foocci.");
@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
       configId:           body.configId ?? null,
       accessToken,
       tokenExpiresAt:     expiresAt,
+      // Coexistence numbers are already registered on the phone — persist the flag so
+      // the register endpoint refuses to evict them.
+      coexistence:        body.coexistence === true,
     });
 
     // Best-effort health check — credentials are already saved. A transient failure

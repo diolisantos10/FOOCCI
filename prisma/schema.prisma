@@ -1353,6 +1353,11 @@ model MetaWhatsAppConfig {
 
   metaCrmEnabled     Boolean  @default(false) // when true, CRM campaigns route through Meta Cloud API
 
+  // Coexistence: the number is ALSO live on the WhatsApp Business App (phone). Onboarded
+  // via Embedded Signup with featureType=whatsapp_business_app_onboarding; it must NEVER
+  // be /register-ed (a normal register would evict it from the phone).
+  coexistence        Boolean  @default(false)
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

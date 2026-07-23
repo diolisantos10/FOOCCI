@@ -30,6 +30,7 @@ interface MetaPublic {
   lastError: string | null;
   qualityRating: string | null;
   metaCrmEnabled: boolean;
+  coexistence?: boolean;
 }
 interface StatusResp {
   featureEnabled: boolean;
@@ -82,6 +83,9 @@ export function MetaProviderCard() {
 
   const appId    = process.env.NEXT_PUBLIC_META_APP_ID;
   const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
+  // Coexistence config (Business App number → Cloud API, keeping it on the phone).
+  // Falls back to the standard config when a dedicated one isn't set.
+  const coexistenceConfigId = process.env.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID || configId;
 
   const load = useCallback(() => {
     fetch("/api/integracoes/whatsapp/meta/status")
@@ -143,6 +147,57 @@ export function MetaProviderCard() {
         load();
       } else {
         flash(false, j?.data?.error ?? j?.error ?? "Não foi possível concluir a conexão. Tente novamente.");
+      }
+    } catch {
+      flash(false, "Não foi possível iniciar a conexão. Tente novamente.");
+    } finally { setBusy(null); }
+  }
+
+  // ── Coexistence: connect a number that stays on the WhatsApp Business App (phone) ──
+  // Launches Embedded Signup with featureType=whatsapp_business_app_onboarding. The
+  // merchant scans a QR in the Business App; the number is added to the Cloud API
+  // WITHOUT being registered/evicted from the phone. Finalizes via /connect with
+  // coexistence:true (skips /register).
+  async function connectCoexistence() {
+    if (!appId || !coexistenceConfigId) {
+      flash(false, "Precisa de autorização da Foocci para ativar. Fale com o suporte Foocci.");
+      return;
+    }
+    setBusy("coexistence");
+    try {
+      let assets: { phoneNumberId?: string; wabaId?: string } = {};
+      const listener = (ev: MessageEvent) => {
+        if (typeof ev.data !== "string") return;
+        try {
+          const d = JSON.parse(ev.data);
+          // Coexistence emits the same WA_EMBEDDED_SIGNUP envelope with the linked assets.
+          if (d?.type === "WA_EMBEDDED_SIGNUP" && d?.data) {
+            assets = { phoneNumberId: d.data.phone_number_id, wabaId: d.data.waba_id };
+          }
+        } catch { /* ignore non-JSON messages */ }
+      };
+      window.addEventListener("message", listener);
+
+      const sdkLoaded = await loadFbSdk(appId);
+      if (!sdkLoaded) {
+        window.removeEventListener("message", listener);
+        flash(false, "Não foi possível carregar o serviço da Meta. Verifique sua conexão e tente novamente.");
+        return;
+      }
+      const code = await fbLogin(coexistenceConfigId, "whatsapp_business_app_onboarding");
+      window.removeEventListener("message", listener);
+
+      if (!code) { flash(false, "Conexão cancelada."); return; }
+      const res = await fetch("/api/integracoes/whatsapp/meta/connect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, ...assets, coexistence: true }),
+      });
+      const j = await res.json().catch(() => null);
+      if (res.ok && j?.data?.connected) {
+        flash(true, "Número conectado em modo Coexistência — segue no celular e no bot ao mesmo tempo.");
+        load(); loadDiag();
+      } else {
+        flash(false, j?.data?.error ?? j?.error ?? "Não foi possível concluir a coexistência. Confirme que o número está no WhatsApp Business e tente de novo.");
       }
     } catch {
       flash(false, "Não foi possível iniciar a conexão. Tente novamente.");
@@ -335,6 +390,11 @@ export function MetaProviderCard() {
           ) : metaConnected ? (
             <>
               <p className="mt-1 text-xs text-green-700">✓ Conectado{meta?.displayPhoneNumber ? ` · ${meta.displayPhoneNumber}` : ""}</p>
+              {meta?.coexistence && (
+                <span className="mt-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                  Coexistência · número segue no celular
+                </span>
+              )}
               {meta?.tokenExpiringSoon && (
                 <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
                   ⚠ Autorização expira em breve{meta.tokenExpiresAt ? ` (${new Date(meta.tokenExpiresAt).toLocaleDateString("pt-BR")})` : ""}. Reconecte o WhatsApp antes dessa data para não perder o envio de mensagens.
@@ -424,6 +484,24 @@ export function MetaProviderCard() {
                 className="mt-3 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                 {busy === "connect" ? "Conectando…" : "Conectar WhatsApp oficial da Meta"}
               </button>
+
+              {/* Coexistence — keep the number on the phone AND connect the bot. */}
+              <div className="mt-4 rounded-lg border border-line2 bg-[#FAFAF8] p-3">
+                <p className="text-[11px] font-semibold text-ink2">Manter o número no celular (Coexistência)</p>
+                <p className="mt-0.5 text-[10px] text-muted">
+                  Use quando o restaurante quer continuar respondendo pelo WhatsApp no aparelho e, ao mesmo
+                  tempo, deixar o bot/CRM atender no mesmo número. O histórico dos últimos 6 meses é sincronizado.
+                </p>
+                <ul className="mt-2 space-y-0.5 text-[10px] text-muted">
+                  <li>• O número precisa já estar ativo no <strong>WhatsApp Business</strong> (app verde) há pelo menos 7 dias.</li>
+                  <li>• App atualizado (v2.24.17+) e câmera para ler o QR Code.</li>
+                  <li>• Ao clicar, escolha “conectar sua conta do WhatsApp Business” e leia o QR no aparelho.</li>
+                </ul>
+                <button type="button" disabled={busy === "coexistence"} onClick={connectCoexistence}
+                  className="mt-2 rounded-lg border border-green-600 bg-white px-3 py-1.5 text-[11px] font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50">
+                  {busy === "coexistence" ? "Abrindo Meta…" : "Conectar número que está no celular"}
+                </button>
+              </div>
 
               {/* Support-only manual connect (Integrar com API path). Gate ?suporte=1. */}
               {supportMode && (
@@ -585,15 +663,19 @@ function loadFbSdk(appId: string): Promise<boolean> {
   });
 }
 
-function fbLogin(configId: string): Promise<string | null> {
+function fbLogin(configId: string, featureType?: string): Promise<string | null> {
   return new Promise((resolve) => {
     if (!window.FB) { resolve(null); return; }
+    const extras: Record<string, unknown> = { setup: {} };
+    // Coexistence: launches the "connect your existing WhatsApp Business App" flow
+    // (QR scan in the app) instead of the standard WABA selection.
+    if (featureType) extras.featureType = featureType;
     window.FB.login(
       (resp: unknown) => {
         const code = (resp as { authResponse?: { code?: string } })?.authResponse?.code ?? null;
         resolve(code);
       },
-      { config_id: configId, response_type: "code", override_default_response_type: true, extras: { setup: {} } },
+      { config_id: configId, response_type: "code", override_default_response_type: true, extras },
     );
   });
 }

@@ -63,6 +63,19 @@ const ACTIVE_STATUSES: ConversationStatus[] = [
 async function processMetaWebhook(payload: unknown): Promise<void> {
   const norm = normalizeMetaWebhook(payload);
 
+  // Coexistence events (history / app-state sync / message echoes) start arriving once a
+  // number is onboarded via Business App Onboarding. We don't ingest them yet — log their
+  // arrival so the real payload shape can be validated against a live event before we wire
+  // echoes (the agent's phone-sent replies) into the Central. Safe + additive.
+  try {
+    const body = payload as { entry?: Array<{ changes?: Array<{ field?: string }> }> };
+    const coex = (body?.entry ?? [])
+      .flatMap((e) => e.changes ?? [])
+      .map((c) => c.field)
+      .filter((f): f is string => f === "history" || f === "smb_app_state_sync" || f === "smb_message_echoes");
+    if (coex.length) console.info(`[webhook/meta/whatsapp] coexistence event(s): ${coex.join(",")}`);
+  } catch { /* best-effort — never block the webhook */ }
+
   // Delivery statuses → update the matching OUTBOUND message.
   for (const s of norm.statuses) {
     const failed = s.status === "failed";

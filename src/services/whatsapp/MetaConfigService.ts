@@ -19,6 +19,7 @@ export interface MetaConfigInput {
   accessToken:         string;        // plaintext — encrypted here
   tokenExpiresAt?:     Date | null;
   webhookVerifyToken?: string;        // plaintext — generated if absent
+  coexistence?:        boolean;       // true = number is also live on the Business App (phone)
 }
 
 /** Server-only resolved config with DECRYPTED secrets. Never send to a client. */
@@ -31,6 +32,7 @@ export interface MetaConfigResolved {
   accessToken:        string;  // decrypted
   webhookVerifyToken: string;  // decrypted
   connectionStatus:   string;
+  coexistence:        boolean;
 }
 
 /** Client-safe view — masked token, no decryptable secrets. */
@@ -49,6 +51,7 @@ export interface MetaConfigPublic {
   qualityRating:      string | null;
   messagingLimit:     string | null;
   metaCrmEnabled:     boolean;
+  coexistence:        boolean;
 }
 
 export function generateVerifyToken(): string {
@@ -71,6 +74,9 @@ export const MetaConfigService = {
       webhookVerifyToken: verifyTokenEnc,
       connectionStatus:   "CONNECTED",
       lastError:          null,
+      // Only touch the coexistence flag when the caller states it, so a plain
+      // token-refresh upsert never silently clears it.
+      ...(input.coexistence !== undefined ? { coexistence: input.coexistence } : {}),
     };
     await prisma.metaWhatsAppConfig.upsert({
       where:  { restaurantId: input.restaurantId },
@@ -115,6 +121,7 @@ export const MetaConfigService = {
       qualityRating:      cfg.qualityRating,
       messagingLimit:     cfg.messagingLimit,
       metaCrmEnabled:     cfg.metaCrmEnabled,
+      coexistence:        cfg.coexistence,
     };
   },
 
@@ -150,6 +157,7 @@ export const MetaConfigService = {
 function resolve(cfg: {
   restaurantId: string; wabaId: string; phoneNumberId: string; displayPhoneNumber: string | null;
   businessId: string | null; accessToken: string; webhookVerifyToken: string; connectionStatus: string;
+  coexistence?: boolean;
 }): MetaConfigResolved {
   return {
     restaurantId:       cfg.restaurantId,
@@ -160,5 +168,6 @@ function resolve(cfg: {
     accessToken:        decrypt(cfg.accessToken),
     webhookVerifyToken: decrypt(cfg.webhookVerifyToken),
     connectionStatus:   cfg.connectionStatus,
+    coexistence:        cfg.coexistence ?? false,
   };
 }

@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
   if (!checkAdminRequest(req)) return unauthorized();
   try {
     const body = (await req.json().catch(() => ({}))) as {
-      pin?: string; restaurantId?: string; phoneNumberId?: string; displayPhoneNumber?: string; deregister?: boolean;
+      pin?: string; restaurantId?: string; phoneNumberId?: string; displayPhoneNumber?: string;
+      deregister?: boolean; force?: boolean;
     };
 
     // DEREGISTER path: free the number from the Cloud API so it can go to the WhatsApp
@@ -65,6 +66,12 @@ export async function POST(req: NextRequest) {
     for (const row of rows) {
       const cfg = await MetaConfigService.getResolved(row.restaurantId);
       if (!cfg) { results.push({ restaurantId: row.restaurantId, skipped: "no config" }); continue; }
+      // A Coexistence number is live on the phone (WhatsApp Business App). A /register
+      // would evict it from the phone — refuse unless force:true is explicitly passed.
+      if (cfg.coexistence && !body.force) {
+        results.push({ restaurantId: row.restaurantId, phone: cfg.displayPhoneNumber, skipped: "coexistence — register would remove the number from the phone (pass force:true to override)" });
+        continue;
+      }
       const reg = await registerPhoneNumber(cfg.accessToken, cfg.phoneNumberId, pin);
       const sub = await subscribeAppToWaba(cfg.accessToken, cfg.wabaId);
       results.push({
