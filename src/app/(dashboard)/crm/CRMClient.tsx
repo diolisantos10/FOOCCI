@@ -22,7 +22,7 @@ const isFixedCampaign = (templateId: string | null | undefined): boolean =>
 import { ReadyMadeCampaignsSection, type ReadyMadeState } from "./ReadyMadeCampaignsSection";
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
-import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
+import { OverviewTab, RevenueBlock, type DateFilterPreset } from "./OverviewTab";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
 import { ConversoesTab } from "./ConversoesTab";
 import { MigracaoTab } from "./MigracaoTab";
@@ -4479,6 +4479,21 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .catch(() => {});
   }, [readyMadeReload, period, customFrom, customTo]);
 
+  // Financial result of the campaigns for the selected period — the chart at the
+  // top so the owner sees, at a glance, how much money the CRM is making them.
+  const [revSummary, setRevSummary] = useState<Parameters<typeof RevenueBlock>[0]["revenueSummary"]>(null);
+  const [revLoading, setRevLoading] = useState(true);
+  useEffect(() => {
+    const range = crmPeriodRange(period, customFrom, customTo);
+    const qs = range ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}` : "";
+    setRevLoading(true);
+    fetch(`/api/crm/revenue-summary${qs}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setRevSummary(json.data ?? null))
+      .catch(() => setRevSummary(null))
+      .finally(() => setRevLoading(false));
+  }, [readyMadeReload, period, customFrom, customTo]);
+
   // Per-campaign eligible audience for TODAY (independent of the period filter — it's
   // always "how many clients are in this segment right now"). Recomputed on every reload.
   useEffect(() => {
@@ -4683,49 +4698,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         </div>
       </div>
 
-      {/* ── Limite global de envio (o teto de mensagens/dia de TODAS as campanhas) ── */}
-      {sendLimit && (
-        <div className="space-y-2 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-base">📤</span>
-            <p className="text-xs text-ink2">
-              <span className="font-bold text-brand-700">
-                Limite total de envio: {sendLimit.manual
-                  ? (sendLimit.cap > 0 ? `${sendLimit.cap} msgs/dia` : "sem limite")
-                  : `${sendLimit.safe} msgs/dia`}
-              </span>
-              {" · "}
-              {sendLimit.manual
-                ? "definido por você (controle manual) — some os limites por campanha abaixo."
-                : "modo seguro: ajustado automaticamente ao canal conectado. Ligue o controle manual em Configurações para mudar."}
-            </p>
-          </div>
-          {/* Como o limite diário é repartido entre as campanhas */}
-          <div className="flex flex-wrap items-center gap-1.5 pl-7">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Distribuição:</span>
-            {([
-              { id: "AUDIENCE", label: "🎯 Por audiência", title: "Reparte o limite diário proporcionalmente ao tamanho da audiência de cada campanha — segmentos maiores recebem mais envios, automaticamente" },
-              { id: "EQUAL",    label: "Igual para todas", title: "Divide o limite diário em partes iguais entre as campanhas ativas" },
-              { id: "MANUAL",   label: "Manual (Limite/dia)", title: "Cada campanha usa o próprio Limite/dia configurado na aba Agendamento" },
-            ] as { id: string; label: string; title: string }[]).map((opt) => (
-              <button
-                key={opt.id}
-                title={opt.title}
-                onClick={() => void saveDistributionMode(opt.id)}
-                disabled={savingDist}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-60 ${
-                  distMode === opt.id ? "bg-brand-600 text-white" : "bg-white text-ink2 hover:bg-line2"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-            {savingDist && <span className="text-[10px] text-muted">salvando…</span>}
-          </div>
-        </div>
-      )}
-
-      {/* ── Filtro de período (números da tabela por período) ────────────────── */}
+      {/* ── Régua de período (controla o gráfico financeiro E a tabela abaixo) ── */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Período:</span>
         {CRM_PERIODS.map((p) => (
@@ -4747,6 +4720,50 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
               className="rounded-lg border border-line bg-paper px-2 py-1 text-xs text-ink focus:border-brand-400 focus:outline-none" />
           </span>
+        )}
+      </div>
+
+      {/* ── Resultado financeiro (protagonista) + limite (quadradinho ao lado) ── */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+        <div className="min-w-0 flex-1">
+          <RevenueBlock revenueSummary={revSummary} revenueSummaryLoading={revLoading} />
+        </div>
+
+        {sendLimit && (
+          <div className="flex shrink-0 flex-col rounded-2xl border border-brand-100 bg-brand-50/40 p-4 lg:w-60">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">📤 Limite de envio</p>
+            <p className="mt-1.5 text-2xl font-extrabold leading-none text-brand-700">
+              {sendLimit.manual
+                ? (sendLimit.cap > 0 ? sendLimit.cap.toLocaleString("pt-BR") : "∞")
+                : sendLimit.safe.toLocaleString("pt-BR")}
+            </p>
+            <p className="text-[11px] text-muted">mensagens/dia</p>
+            <p className="mt-1 text-[10px] leading-snug text-muted">
+              {sendLimit.manual ? "controle manual" : "modo seguro (automático)"}
+            </p>
+
+            <div className="mt-auto pt-3">
+              <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Distribuição</p>
+              <div className="flex flex-col gap-1">
+                {([
+                  { id: "AUDIENCE", label: "🎯 Por audiência" },
+                  { id: "EQUAL",    label: "Igual p/ todas" },
+                  { id: "MANUAL",   label: "Manual" },
+                ] as { id: string; label: string }[]).map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => void saveDistributionMode(opt.id)}
+                    disabled={savingDist}
+                    className={`rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition-colors disabled:opacity-60 ${
+                      distMode === opt.id ? "bg-brand-600 text-white" : "bg-white text-ink2 hover:bg-line2"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

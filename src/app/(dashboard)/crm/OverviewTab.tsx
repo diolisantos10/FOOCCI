@@ -587,7 +587,7 @@ function RevenueChart({
 
 // ── Revenue block (chart protagonist + summary cards) ────────────────────────
 
-function RevenueBlock({
+export function RevenueBlock({
   revenueSummary,
   revenueSummaryLoading,
 }: {
