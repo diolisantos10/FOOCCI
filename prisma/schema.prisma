@@ -2361,6 +2361,14 @@ model TierSettings {
   id           String @id @default(cuid())
   restaurantId String @unique
 
+  /// Master switch: the whole relationship program (tiers, benefits, tier
+  /// campaigns, customer-facing badge) is inert until the owner turns it on.
+  programEnabled Boolean @default(false)
+
+  /// Rolling window (months) of sales that counts toward the tier. 0 = vitalício
+  /// (lifetime). Reclassified daily so a customer who stops buying slides down.
+  classificationWindowMonths Int @default(0)
+
   /// PRATA thresholds (OR logic — either is enough to qualify)
   silverMinSpend  Decimal @default(300) @db.Decimal(10, 2)
   silverMinOrders Int     @default(0) // 0 = spend-only
@@ -2390,6 +2398,11 @@ model TierBenefit {
   description  String?
   isActive     Boolean  @default(true)
   sortOrder    Int      @default(0)
+  /// Physical restaurant gift (e.g. a branded mug) handed to customers who reach
+  /// this tier — tracked against a real stock so the owner never over-promises.
+  isPhysicalGift Boolean @default(false)
+  stockTotal     Int? // null = untracked; a number = physical units available
+  stockUsed      Int     @default(0) // units already delivered to customers
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

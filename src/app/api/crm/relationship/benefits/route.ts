@@ -10,9 +10,11 @@ import { RelationshipProgramService } from "@/services/crm/RelationshipProgramSe
 const VALID_TIERS = ["BRONZE", "PRATA", "OURO", "DIAMANTE"] as const;
 
 const createSchema = z.object({
-  tier:        z.enum(VALID_TIERS),
-  title:       z.string().min(1).max(120),
-  description: z.string().max(300).optional(),
+  tier:           z.enum(VALID_TIERS),
+  title:          z.string().min(1).max(120),
+  description:    z.string().max(300).optional(),
+  isPhysicalGift: z.boolean().optional(),
+  stockTotal:     z.number().int().min(0).nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {

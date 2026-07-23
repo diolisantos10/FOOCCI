@@ -24,6 +24,10 @@ import { isTierUp } from "./crm-helpers";
 export type TierKey = "BRONZE" | "PRATA" | "OURO" | "DIAMANTE";
 
 export interface TierSettingsInput {
+  /** Master switch — the program is inert until turned on. */
+  programEnabled:   boolean;
+  /** Rolling window of sales that counts (months). 0 = vitalício (lifetime). */
+  classificationWindowMonths: number;
   silverMinSpend:   number;
   silverMinOrders:  number;
   goldMinSpend:     number;
@@ -33,6 +37,8 @@ export interface TierSettingsInput {
 }
 
 export const DEFAULT_SETTINGS: TierSettingsInput = {
+  programEnabled:   false,
+  classificationWindowMonths: 0,
   silverMinSpend:   300,
   silverMinOrders:  0,
   goldMinSpend:     800,
@@ -40,6 +46,9 @@ export const DEFAULT_SETTINGS: TierSettingsInput = {
   diamondMinSpend:  2000,
   diamondMinOrders: 0,
 };
+
+/** Allowed classification windows (months). 0 = vitalício. */
+export const CLASSIFICATION_WINDOWS = [0, 3, 6, 12] as const;
 
 export interface TierStats {
   tier:          TierKey;
@@ -77,6 +86,8 @@ export interface ProgramOverview {
 
 function settingsToInput(s: TierSettings): TierSettingsInput {
   return {
+    programEnabled:   s.programEnabled,
+    classificationWindowMonths: s.classificationWindowMonths,
     silverMinSpend:   Number(s.silverMinSpend),
     silverMinOrders:  s.silverMinOrders,
     goldMinSpend:     Number(s.goldMinSpend),
@@ -139,26 +150,26 @@ export class RelationshipProgramService {
     restaurantId: string,
     input: TierSettingsInput,
   ): Promise<TierSettingsInput> {
+    const window = CLASSIFICATION_WINDOWS.includes(input.classificationWindowMonths as never)
+      ? input.classificationWindowMonths : 0;
+    const fields = {
+      programEnabled:             !!input.programEnabled,
+      classificationWindowMonths: window,
+      silverMinSpend:   input.silverMinSpend,
+      silverMinOrders:  input.silverMinOrders,
+      goldMinSpend:     input.goldMinSpend,
+      goldMinOrders:    input.goldMinOrders,
+      diamondMinSpend:  input.diamondMinSpend,
+      diamondMinOrders: input.diamondMinOrders,
+    };
     const row = await prisma.tierSettings.upsert({
       where:  { restaurantId },
-      update: {
-        silverMinSpend:   input.silverMinSpend,
-        silverMinOrders:  input.silverMinOrders,
-        goldMinSpend:     input.goldMinSpend,
-        goldMinOrders:    input.goldMinOrders,
-        diamondMinSpend:  input.diamondMinSpend,
-        diamondMinOrders: input.diamondMinOrders,
-      },
-      create: {
-        restaurantId,
-        silverMinSpend:   input.silverMinSpend,
-        silverMinOrders:  input.silverMinOrders,
-        goldMinSpend:     input.goldMinSpend,
-        goldMinOrders:    input.goldMinOrders,
-        diamondMinSpend:  input.diamondMinSpend,
-        diamondMinOrders: input.diamondMinOrders,
-      },
+      update: fields,
+      create: { restaurantId, ...fields },
     });
+    // Thresholds/window changed → reclassify now so the levels are immediately
+    // correct (the daily cron keeps them fresh afterwards).
+    await this.recalculateTiers(restaurantId).catch(() => {});
     return settingsToInput(row);
   }
 
@@ -166,6 +177,7 @@ export class RelationshipProgramService {
 
   static async recalculateTiers(restaurantId: string): Promise<{ updated: number }> {
     const settings = await this.getSettings(restaurantId);
+    const now = new Date();
 
     const customers = await prisma.customer.findMany({
       where:  { restaurantId, isGuest: false },
@@ -175,18 +187,43 @@ export class RelationshipProgramService {
       },
     });
 
+    // Rolling window: spend/orders are the sum of DELIVERED orders within the last
+    // N months (not lifetime). Computed once for the whole restaurant, then joined
+    // per customer. Window 0 = vitalício (keep the lifetime totals).
+    const windowSpend = new Map<string, { spend: number; orders: number }>();
+    if (settings.classificationWindowMonths > 0) {
+      const since = new Date(now.getTime());
+      since.setMonth(since.getMonth() - settings.classificationWindowMonths);
+      const grouped = await prisma.order.groupBy({
+        by:    ["customerId"],
+        where: { restaurantId, createdAt: { gte: since }, status: { notIn: ["CANCELLED"] as never[] } },
+        _sum:  { total: true },
+        _count: { _all: true },
+      });
+      for (const g of grouped) {
+        if (g.customerId) windowSpend.set(g.customerId, { spend: Number(g._sum.total ?? 0), orders: g._count._all });
+      }
+    }
+
     let updated = 0;
-    const now = new Date();
-    // Batch updates in chunks of 100
     for (let i = 0; i < customers.length; i += 100) {
       const chunk = customers.slice(i, i + 100);
       await Promise.all(
         chunk.map((c) => {
-          // Use imported historical spend when no real Foocci spend exists yet
-          const realSpend   = Number(c.totalSpend);
-          const realOrders  = c.totalOrders;
-          const effSpend    = realSpend  > 0 ? realSpend  : Number(c.importedTotalSpent  ?? 0);
-          const effOrders   = realOrders > 0 ? realOrders : (c.importedOrderCount ?? 0);
+          let effSpend: number;
+          let effOrders: number;
+          if (settings.classificationWindowMonths > 0) {
+            // Windowed: only sales inside the window count (imported history has no
+            // dated orders, so it's excluded from windowed classification).
+            const w = windowSpend.get(c.id);
+            effSpend  = w?.spend  ?? 0;
+            effOrders = w?.orders ?? 0;
+          } else {
+            const realSpend  = Number(c.totalSpend);
+            const realOrders = c.totalOrders;
+            effSpend  = realSpend  > 0 ? realSpend  : Number(c.importedTotalSpent ?? 0);
+            effOrders = realOrders > 0 ? realOrders : (c.importedOrderCount ?? 0);
+          }
           const tier = computeTierWithSettings(effSpend, effOrders, settings);
           return prisma.customer.update({
             where: { id: c.id },
@@ -339,15 +376,17 @@ export class RelationshipProgramService {
 
   static async createBenefit(
     restaurantId: string,
-    input: { tier: TierKey; title: string; description?: string },
+    input: { tier: TierKey; title: string; description?: string; isPhysicalGift?: boolean; stockTotal?: number | null },
   ) {
     return prisma.tierBenefit.create({
       data: {
         restaurantId,
-        tier:        input.tier,
-        title:       input.title,
-        description: input.description ?? null,
-        isActive:    true,
+        tier:           input.tier,
+        title:          input.title,
+        description:    input.description ?? null,
+        isActive:       true,
+        isPhysicalGift: !!input.isPhysicalGift,
+        stockTotal:     input.isPhysicalGift ? (input.stockTotal ?? null) : null,
       },
     });
   }
@@ -355,7 +394,7 @@ export class RelationshipProgramService {
   static async updateBenefit(
     id: string,
     restaurantId: string,
-    input: Partial<{ title: string; description: string | null; isActive: boolean }>,
+    input: Partial<{ title: string; description: string | null; isActive: boolean; isPhysicalGift: boolean; stockTotal: number | null }>,
   ) {
     return prisma.tierBenefit.updateMany({
       where: { id, restaurantId },
@@ -365,5 +404,22 @@ export class RelationshipProgramService {
 
   static async deleteBenefit(id: string, restaurantId: string) {
     return prisma.tierBenefit.deleteMany({ where: { id, restaurantId } });
+  }
+
+  /**
+   * Register that N physical gifts were handed to customers — decrements stock.
+   * Guarded so stockUsed never exceeds stockTotal. Returns the new counters.
+   */
+  static async registerGiftDelivery(id: string, restaurantId: string, qty = 1) {
+    const b = await prisma.tierBenefit.findFirst({
+      where:  { id, restaurantId, isPhysicalGift: true },
+      select: { stockTotal: true, stockUsed: true },
+    });
+    if (!b) return { ok: false as const, error: "Brinde não encontrado." };
+    const delta   = Math.max(1, Math.floor(qty));
+    const cap      = b.stockTotal ?? Number.MAX_SAFE_INTEGER;
+    const newUsed  = Math.min(cap, b.stockUsed + delta);
+    await prisma.tierBenefit.update({ where: { id }, data: { stockUsed: newUsed } });
+    return { ok: true as const, stockUsed: newUsed, stockTotal: b.stockTotal };
   }
 }

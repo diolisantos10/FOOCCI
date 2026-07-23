@@ -19,6 +19,9 @@ type Benefit = {
   description: string | null;
   isActive:    boolean;
   sortOrder:   number;
+  isPhysicalGift?: boolean;
+  stockTotal?: number | null;
+  stockUsed?:  number;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -230,7 +233,7 @@ function TierSettingsForm({
                       type="number"
                       min={0}
                       step={50}
-                      value={form[row.spendKey]}
+                      value={Number(form[row.spendKey])}
                       onChange={(e) => set(row.spendKey, e.target.value)}
                       className="w-28 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
                     />
@@ -240,7 +243,7 @@ function TierSettingsForm({
                       type="number"
                       min={0}
                       step={1}
-                      value={form[row.ordersKey]}
+                      value={Number(form[row.ordersKey])}
                       onChange={(e) => set(row.ordersKey, e.target.value)}
                       className="w-20 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
                       placeholder="0 = off"
@@ -297,8 +300,13 @@ function BenefitsPanel({
   const [adding, setAdding]   = useState(false);
   const [title,  setTitle]    = useState("");
   const [desc,   setDesc]     = useState("");
+  const [isGift, setIsGift]   = useState(false);
+  const [stock,  setStock]    = useState("");
   const [saving, setSaving]   = useState(false);
   const [error,  setError]    = useState<string | null>(null);
+  // Local mirror so the stock counter updates instantly on "entreguei".
+  const [localBenefits, setLocalBenefits] = useState(benefits);
+  useEffect(() => { setLocalBenefits(benefits); }, [benefits]);
 
   async function handleAdd() {
     if (!title.trim()) return;
@@ -307,16 +315,31 @@ function BenefitsPanel({
       const res  = await fetch("/api/crm/relationship/benefits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, title: title.trim(), description: desc.trim() || undefined }),
+        body: JSON.stringify({
+          tier, title: title.trim(), description: desc.trim() || undefined,
+          isPhysicalGift: isGift,
+          stockTotal: isGift && stock.trim() ? Math.max(0, parseInt(stock, 10) || 0) : null,
+        }),
       });
       const json = await res.json() as { data?: Benefit; error?: string };
       if (!res.ok || json.error) { setError(json.error ?? "Erro"); return; }
       onAdded(json.data!);
-      setTitle(""); setDesc(""); setAdding(false);
+      setTitle(""); setDesc(""); setIsGift(false); setStock(""); setAdding(false);
     } catch {
       setError("Falha de rede.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Register a physical-gift delivery — decrements stock (server-guarded).
+  async function handleDeliver(id: string) {
+    const res = await fetch(`/api/crm/relationship/benefits/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deliverQty: 1 }),
+    });
+    if (res.ok) {
+      setLocalBenefits((prev) => prev.map((b) => b.id === id ? { ...b, stockUsed: (b.stockUsed ?? 0) + 1 } : b));
     }
   }
 
@@ -362,29 +385,49 @@ function BenefitsPanel({
       )}
 
       <div className="space-y-1.5">
-        {benefits.map((b) => (
-          <div key={b.id} className={`flex items-start justify-between gap-2 rounded-lg border bg-paper px-3 py-2 ${b.isActive ? "border-line2" : "border-line opacity-50"}`}>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-ink truncate">{b.title}</p>
-              {b.description && <p className="text-[10px] text-muted truncate">{b.description}</p>}
+        {localBenefits.map((b) => {
+          const remaining = b.isPhysicalGift && b.stockTotal != null ? Math.max(0, b.stockTotal - (b.stockUsed ?? 0)) : null;
+          return (
+            <div key={b.id} className={`rounded-lg border bg-paper px-3 py-2 ${b.isActive ? "border-line2" : "border-line opacity-50"}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-ink truncate">
+                    {b.isPhysicalGift && "🎁 "}{b.title}
+                  </p>
+                  {b.description && <p className="text-[10px] text-muted truncate">{b.description}</p>}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    onClick={() => handleToggle(b.id, b.isActive)}
+                    className={`text-[10px] font-medium ${b.isActive ? "text-green-600" : "text-muted"}`}
+                    title={b.isActive ? "Ativo" : "Inativo"}
+                  >
+                    {b.isActive ? "✓ Ativo" : "Inativo"}
+                  </button>
+                  <button onClick={() => handleDelete(b.id)} className="text-[10px] text-red-400 hover:text-red-600">✕</button>
+                </div>
+              </div>
+
+              {/* Estoque do brinde físico + registrar entrega */}
+              {b.isPhysicalGift && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-line pt-1.5">
+                  <p className="text-[10px] text-muted">
+                    {b.stockTotal != null
+                      ? <>Estoque: <strong className={remaining === 0 ? "text-red-600" : "text-ink2"}>{remaining}</strong> de {b.stockTotal} · {(b.stockUsed ?? 0)} entregues</>
+                      : <>Entregues: <strong className="text-ink2">{b.stockUsed ?? 0}</strong> (estoque não controlado)</>}
+                  </p>
+                  <button
+                    onClick={() => void handleDeliver(b.id)}
+                    disabled={remaining === 0}
+                    className="rounded-lg bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40"
+                  >
+                    {remaining === 0 ? "Esgotado" : "− Entreguei 1"}
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                onClick={() => handleToggle(b.id, b.isActive)}
-                className={`text-[10px] font-medium ${b.isActive ? "text-green-600" : "text-muted"}`}
-                title={b.isActive ? "Ativo" : "Inativo"}
-              >
-                {b.isActive ? "✓ Ativo" : "Inativo"}
-              </button>
-              <button
-                onClick={() => handleDelete(b.id)}
-                className="text-[10px] text-red-400 hover:text-red-600"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {adding && (
@@ -405,6 +448,22 @@ function BenefitsPanel({
             className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
             maxLength={300}
           />
+          {/* Brinde físico + estoque */}
+          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-ink2">
+            <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} className="accent-brand-500" />
+            🎁 É um brinde físico (ex.: caneca, camiseta)
+          </label>
+          {isGift && (
+            <div className="flex items-center gap-2 pl-5">
+              <input
+                type="number" min={0} placeholder="quantidade"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                className="w-24 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
+              />
+              <span className="text-[10px] text-muted">unidades em estoque (vazio = não controlar)</span>
+            </div>
+          )}
           {error && <p className="text-[10px] text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button
@@ -617,6 +676,23 @@ export function ProgramaTab() {
     void loadAll();
   }, []);
 
+  // Save the WHOLE settings object (toggle + window + thresholds) — the PUT
+  // endpoint requires the full shape and reclassifies immediately on the server.
+  const [savingProgram, setSavingProgram] = useState(false);
+  const saveFullSettings = useCallback(async (next: TierSettingsInput) => {
+    setSettings(next); // optimistic
+    setSavingProgram(true);
+    try {
+      const res  = await fetch("/api/crm/relationship/settings", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const json = await res.json() as { data?: TierSettingsInput };
+      if (json.data) { setSettings(json.data); setSettingsLoaded(true); }
+      void loadOverview(); // tiers changed on the server
+    } finally { setSavingProgram(false); }
+  }, [loadOverview]);
+
   // Benefits helpers
   function handleBenefitAdded(b: Benefit) {
     setBenefits((prev) => [...prev, b]);
@@ -650,6 +726,58 @@ export function ProgramaTab() {
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {/* 0. Liga/desliga do programa (a primeira decisão do lojista) */}
+      {!loading && (
+        <div className={`rounded-2xl border p-5 transition-colors ${settings.programEnabled ? "border-emerald-200 bg-emerald-50/50" : "border-line bg-paper"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-ink">
+                {settings.programEnabled ? "Programa de relacionamento ATIVO ✅" : "Programa de relacionamento desativado"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                {settings.programEnabled
+                  ? "Os níveis são recalculados diariamente e as campanhas de nível podem rodar."
+                  : "Ligue para começar a classificar clientes em níveis e liberar as campanhas de fidelidade."}
+              </p>
+            </div>
+            <button
+              onClick={() => void saveFullSettings({ ...settings, programEnabled: !settings.programEnabled })}
+              disabled={savingProgram}
+              aria-label={settings.programEnabled ? "Desativar programa" : "Ativar programa"}
+              className={`shrink-0 relative inline-flex h-8 w-14 items-center rounded-full transition-colors disabled:opacity-50 ${settings.programEnabled ? "bg-emerald-500" : "bg-gray-300"}`}
+            >
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${settings.programEnabled ? "translate-x-7" : "translate-x-1"}`} />
+            </button>
+          </div>
+
+          {/* Janela de classificação — de quanto tempo de venda conta pro nível */}
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Contar vendas dos últimos</p>
+            <p className="mb-2 text-xs text-muted">Quanto tempo de compras conta para classificar o cliente. Fora da janela, ele escorrega de nível.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { m: 0,  label: "Vitalício" },
+                { m: 3,  label: "3 meses" },
+                { m: 6,  label: "6 meses" },
+                { m: 12, label: "1 ano" },
+              ] as { m: number; label: string }[]).map((opt) => (
+                <button
+                  key={opt.m}
+                  onClick={() => void saveFullSettings({ ...settings, classificationWindowMonths: opt.m })}
+                  disabled={savingProgram}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-60 ${
+                    settings.classificationWindowMonths === opt.m ? "bg-brand-600 text-white" : "bg-[#F4F4F2] text-ink2 hover:bg-line2"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {savingProgram && <span className="self-center text-[10px] text-muted">salvando…</span>}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 1. Resumo dos níveis */}

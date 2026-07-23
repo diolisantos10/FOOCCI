@@ -257,6 +257,22 @@ jobs:
             exit 1
           fi
 
+      # Daily tier reclassification for the relationship program (rolling window).
+      # Best-effort — a reclassify hiccup must not fail the automations job.
+      - name: "POST /api/cron/crm/reclassify-tiers"
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          BASE_URL:    ${{ secrets.FOOCCI_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          URL="${BASE_URL%/}/api/cron/crm/reclassify-tiers"
+          echo "→ Reclassify tiers: $URL"
+          curl --connect-timeout 20 --max-time 180 -sS \
+            -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' || echo "::warning::reclassify-tiers call failed (non-blocking)"
+
   # ── Job 3: Cart Recovery ─────────────────────────────────────────────────────
   #
   # PRIMARY runner: CartRecoveryScheduler (src/services/order/CartRecoveryScheduler.ts)

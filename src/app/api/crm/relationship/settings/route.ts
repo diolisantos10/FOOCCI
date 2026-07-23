@@ -8,6 +8,8 @@ import { getTenantContext } from "@/lib/tenant";
 import { RelationshipProgramService } from "@/services/crm/RelationshipProgramService";
 
 const bodySchema = z.object({
+  programEnabled:             z.boolean(),
+  classificationWindowMonths: z.number().int().min(0).max(12),
   silverMinSpend:   z.number().min(0),
   silverMinOrders:  z.number().int().min(0),
   goldMinSpend:     z.number().min(0),

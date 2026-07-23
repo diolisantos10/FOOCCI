@@ -8,9 +8,13 @@ import { getTenantContext } from "@/lib/tenant";
 import { RelationshipProgramService } from "@/services/crm/RelationshipProgramService";
 
 const patchSchema = z.object({
-  title:       z.string().min(1).max(120).optional(),
-  description: z.string().max(300).nullable().optional(),
-  isActive:    z.boolean().optional(),
+  title:          z.string().min(1).max(120).optional(),
+  description:    z.string().max(300).nullable().optional(),
+  isActive:       z.boolean().optional(),
+  isPhysicalGift: z.boolean().optional(),
+  stockTotal:     z.number().int().min(0).nullable().optional(),
+  /** When set, registers deliveries of the physical gift (decrements stock). */
+  deliverQty:     z.number().int().min(1).max(1000).optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -27,7 +31,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
-    await RelationshipProgramService.updateBenefit(params.id, ctx.restaurantId, parsed.data);
+    const { deliverQty, ...fields } = parsed.data;
+    // Registering a delivery decrements the physical stock (guarded server-side).
+    if (deliverQty) {
+      const r = await RelationshipProgramService.registerGiftDelivery(params.id, ctx.restaurantId, deliverQty);
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    }
+    if (Object.keys(fields).length > 0) {
+      await RelationshipProgramService.updateBenefit(params.id, ctx.restaurantId, fields);
+    }
     return NextResponse.json({ data: { ok: true } });
   } catch (err) {
     console.error("[PATCH /api/crm/relationship/benefits/:id]", err);
