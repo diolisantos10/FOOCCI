@@ -322,6 +322,11 @@ model MenuItem {
   // ── CMV / precificação ────────────────────────────────────────────────
   cost                  Decimal? @db.Decimal(10, 2) // unit cost (CMV por item) — edited on /precificacao; null = not informed yet
   imageUrl              String?
+  // Carrossel de fotos (opt-in por item). imageUrl continua sendo a CAPA (thumbnails,
+  // cards, WhatsApp/agente, OG, exports). `images` é o conjunto extra mostrado só na
+  // ficha do produto quando carouselEnabled = true; ordem do array = ordem do carrossel.
+  images                String[] @default([])
+  carouselEnabled       Boolean  @default(false)
   sortOrder             Int      @default(0)
   isActive              Boolean  @default(true)
   // Availability + channel control

@@ -46,6 +46,9 @@ export const createMenuItemSchema = z.object({
   priceDineIn:   channelPriceField,
   priceIfood:    channelPriceField,
   imageUrl: z.string().nullable().optional().or(z.literal("")),
+  // Carrossel de fotos (opt-in). imageUrl = capa; images = fotos extras da ficha.
+  images: z.array(z.string().min(1)).max(8).optional(),
+  carouselEnabled: z.boolean().optional(),
   sortOrder: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
   isAvailable: z.boolean().default(true),

@@ -71,6 +71,8 @@ type Item = {
   priceDineIn?:   number | null;
   priceIfood?:    number | null;
   imageUrl: string | null;
+  images: string[];
+  carouselEnabled: boolean;
   isActive: boolean;
   sortOrder: number;
   isAvailable: boolean;
@@ -284,6 +286,84 @@ function ImageUpload({
       <p className="text-[11px] text-muted">
         Recomendado: imagem quadrada (1:1). O recorte é automático.
       </p>
+      {error && <InlineError message={error} />}
+    </div>
+  );
+}
+
+// ── MultiImageUpload — fotos extras do carrossel (ordem = ordem do array) ──────
+function MultiImageUpload({
+  values,
+  onChange,
+  max = 8,
+}: {
+  values: string[];
+  onChange: (urls: string[]) => void;
+  max?: number;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList) {
+    const room = max - values.length;
+    if (room <= 0) { setError(`Máximo de ${max} fotos.`); return; }
+    setError("");
+    setUploading(true);
+    const uploaded: string[] = [];
+    try {
+      for (const file of Array.from(files).slice(0, room)) {
+        if (!UPLOAD_ALLOWED_TYPES.includes(file.type)) { setError("Tipo não permitido (JPG, PNG ou WebP)."); continue; }
+        if (file.size > UPLOAD_MAX_BYTES) { setError("Alguma foto passa de 5 MB."); continue; }
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/menu/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Erro no upload.");
+        uploaded.push(data.data.url);
+      }
+      if (uploaded.length) onChange([...values, ...uploaded].slice(0, max));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao enviar imagens.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= values.length) return;
+    const next = [...values];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {values.map((url, i) => (
+            <div key={`${url}-${i}`} className="relative">
+              <div className="h-20 w-20 overflow-hidden rounded-lg border border-line2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`Foto ${i + 1}`} className="h-full w-full object-cover object-center" />
+              </div>
+              <button type="button" onClick={() => onChange(values.filter((_, idx) => idx !== i))}
+                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600">×</button>
+              <div className="absolute bottom-0.5 left-0.5 flex gap-0.5">
+                {i > 0 && <button type="button" onClick={() => move(i, -1)} className="flex h-4 w-4 items-center justify-center rounded bg-ink/60 text-[10px] leading-none text-white">‹</button>}
+                {i < values.length - 1 && <button type="button" onClick={() => move(i, 1)} className="flex h-4 w-4 items-center justify-center rounded bg-ink/60 text-[10px] leading-none text-white">›</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
+        onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ""; }} />
+      <button type="button" disabled={uploading || values.length >= max} onClick={() => inputRef.current?.click()}
+        className="text-xs text-brand-600 hover:text-brand-700 disabled:opacity-50">
+        {uploading ? <Spinner /> : `Adicionar fotos (${values.length}/${max})`}
+      </button>
       {error && <InlineError message={error} />}
     </div>
   );
@@ -813,6 +893,8 @@ function SortableItemRow({
         ingredients:          raw.ingredients          ?? null,
         price:                Number(raw.price),
         imageUrl:             raw.imageUrl             ?? null,
+        images:               raw.images               ?? [],
+        carouselEnabled:      raw.carouselEnabled      ?? false,
         isActive:             raw.isActive,
         sortOrder:            raw.sortOrder            ?? 0,
         isAvailable:          raw.isAvailable,
@@ -1507,6 +1589,8 @@ type NewItemForm = {
   description: string;
   price: string;
   imageUrl: string | null;
+  images: string[];
+  carouselEnabled: boolean;
   showInDelivery: boolean;
   showInDineIn: boolean;
   servingSize: number | null;
@@ -1536,6 +1620,8 @@ function NewItemModal({
     description: "",
     price: "",
     imageUrl: null,
+    images: [],
+    carouselEnabled: false,
     showInDelivery: true,
     showInDineIn: true,
     servingSize: null,
@@ -1561,6 +1647,8 @@ function NewItemModal({
       description: "",
       price: "",
       imageUrl: null,
+      images: [],
+      carouselEnabled: false,
       showInDelivery: true,
       showInDineIn: true,
       servingSize: null,
@@ -1605,6 +1693,8 @@ function NewItemModal({
           description: form.description.trim() || undefined,
           price,
           imageUrl: form.imageUrl || undefined,
+          images: form.images,
+          carouselEnabled: form.carouselEnabled,
           showInDelivery: form.showInDelivery,
           showInDineIn: form.showInDineIn,
           servingSize: form.servingSize ?? undefined,
@@ -1666,6 +1756,12 @@ function NewItemModal({
                   <div className="space-y-1">
                     <label className="block text-xs font-medium text-ink2">Imagem</label>
                     <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
+                    {/* Carrossel de fotos (opcional, por produto) */}
+                    <div className="mt-2 space-y-1.5 border-t border-line pt-2">
+                      <label className="block text-xs font-medium text-ink2">Mais fotos (carrossel)</label>
+                      <MultiImageUpload values={form.images} onChange={(imgs) => setForm((f) => ({ ...f, images: imgs }))} />
+                      <ToggleSwitch label="Mostrar como carrossel na ficha" checked={form.carouselEnabled} onChange={() => setForm((f) => ({ ...f, carouselEnabled: !f.carouselEnabled }))} />
+                    </div>
                   </div>
 
                   {/* Canais de venda */}
@@ -2238,6 +2334,8 @@ type EditModalForm = {
   priceDineIn:   string;
   priceIfood:    string;
   imageUrl: string | null;
+  images: string[];
+  carouselEnabled: boolean;
   showInDelivery: boolean;
   showInDineIn: boolean;
   hasVariants: boolean;
@@ -2279,6 +2377,8 @@ function EditItemModal({
     priceDineIn:   "",
     priceIfood:    "",
     imageUrl: null,
+    images: [],
+    carouselEnabled: false,
     showInDelivery: false,
     showInDineIn: false,
     hasVariants: false,
@@ -2342,6 +2442,8 @@ function EditItemModal({
       priceDineIn:   item.priceDineIn   != null ? String(item.priceDineIn)   : "",
       priceIfood:    item.priceIfood    != null ? String(item.priceIfood)    : "",
       imageUrl: item.imageUrl ?? null,
+      images: item.images ?? [],
+      carouselEnabled: item.carouselEnabled ?? false,
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
@@ -2631,6 +2733,12 @@ function EditItemModal({
                   value={form.imageUrl}
                   onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
                 />
+                {/* Carrossel de fotos (opcional, por produto) */}
+                <div className="mt-2 space-y-1.5 border-t border-line pt-2">
+                  <label className="block text-xs font-medium text-ink2">Mais fotos (carrossel)</label>
+                  <MultiImageUpload values={form.images} onChange={(imgs) => setForm((f) => ({ ...f, images: imgs }))} />
+                  <ToggleSwitch label="Mostrar como carrossel na ficha" checked={form.carouselEnabled} onChange={() => setForm((f) => ({ ...f, carouselEnabled: !f.carouselEnabled }))} />
+                </div>
               </div>
 
               {/* Canais de venda */}
@@ -3798,6 +3906,8 @@ export function MenuManager({
       priceDelivery: patch.priceDelivery.trim() === "" ? null : parseFloat(patch.priceDelivery),
       priceDineIn:   patch.priceDineIn.trim()   === "" ? null : parseFloat(patch.priceDineIn),
       imageUrl: patch.imageUrl,
+      images: patch.images,
+      carouselEnabled: patch.carouselEnabled,
       showInDelivery: patch.showInDelivery,
       showInDineIn: patch.showInDineIn,
       hasVariants: patch.hasVariants,

@@ -74,6 +74,8 @@ export default async function MenuPage() {
       priceDineIn:   item.priceDineIn   != null ? Number(item.priceDineIn)   : null,
       priceIfood:    item.priceIfood    != null ? Number(item.priceIfood)    : null,
       imageUrl: item.imageUrl,
+      images: item.images,
+      carouselEnabled: item.carouselEnabled,
       isActive: item.isActive,
       sortOrder: item.sortOrder,
       isAvailable: item.isAvailable,

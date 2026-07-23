@@ -104,6 +104,8 @@ export async function POST(
         ingredients:          source.ingredients,
         price:                new Decimal(source.price.toString()),
         imageUrl:             source.imageUrl,
+        images:               source.images,
+        carouselEnabled:      source.carouselEnabled,
         sortOrder:            newSortOrder,
         isActive:             source.isActive,
         isAvailable:          source.isAvailable,

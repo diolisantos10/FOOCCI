@@ -34,7 +34,7 @@ import type { ResolvedPromotion } from "@/services/promotions/productPromotionRe
 export const PEDIDO_ITEM_SELECT = {
   id: true, name: true, price: true,
   priceDelivery: true, priceDineIn: true, priceIfood: true,
-  description: true, imageUrl: true,
+  description: true, imageUrl: true, images: true, carouselEnabled: true,
   hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
   variants: {
     where: { isAvailable: true },
@@ -74,6 +74,9 @@ export function mapPedidoItem(i: PedidoItemRow, promo: ResolvedPromotion | null)
     price: channelPrice(i, "DELIVERY"),
     description: i.description ?? null,
     imageUrl: i.imageUrl ?? null,
+    // Carrossel: só as fotos extras da ficha; capa segue no imageUrl.
+    images: i.images ?? [],
+    carouselEnabled: i.carouselEnabled === true,
     hasVariants: i.hasVariants,
     ingredients: i.ingredients ?? null,
     servingSize: i.servingSize ?? null,
