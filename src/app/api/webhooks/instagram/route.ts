@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
       handleWebhookEvent(payload),
       handleCommentWebhookEvent(payload),
     ]);
+    // TEMP DIAG [ig-wh]: why an inbound DM did/didn't land in the central. No PII/content.
+    console.log(`[ig-wh] dm{resolved:${dm.resolved} persisted:${dm.persisted} nonMsg:${dm.skippedNonMessage} notAllow:${dm.skippedNotAllowlisted} dup:${dm.skippedDuplicates}} comments{persisted:${comments.persisted}}`);
     // Safe summary only — no message content, no PII, no token.
     return NextResponse.json({
       ok: true,
