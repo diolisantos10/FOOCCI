@@ -3,6 +3,9 @@ builder = "NIXPACKS"
 buildCommand = "npm run build"
 
 [deploy]
+# Robust pre-deploy migration (retry-on-lock) — overrides the dashboard's plain
+# `migrate deploy` that fails when two deploys race. See scripts/migrate-deploy.sh.
+preDeployCommand = "bash scripts/migrate-deploy.sh"
 startCommand = "bash scripts/start-production.sh"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
