@@ -1118,21 +1118,10 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* 6. Oportunidades de receita (compact) */}
-      {actions.length > 0 && (
-        <CompactOpportunitiesSection
-          actions={actions}
-          onNavigateToTab={onNavigateToTab ?? (() => {})}
-        />
-      )}
-
-      {/* 7. Configurações pendentes (bottom) */}
-      {actions.length > 0 && (
-        <ConfigAlertsSection
-          actions={actions}
-          onNavigateToTab={onNavigateToTab ?? (() => {})}
-        />
-      )}
+      {/* "Oportunidades de receita" e "Configurações pendentes" foram removidas da
+          Visão Geral: as campanhas fixas (recuperar perdidos/frios/mornos, VIP,
+          aniversário, etc.) já rodam sozinhas e perpetuamente, então sugerir
+          "criar campanha" para o que já é automático não faz mais sentido. */}
 
     </div>
   );
