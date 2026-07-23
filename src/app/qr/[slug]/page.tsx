@@ -136,9 +136,11 @@ export default async function QRMenuPage({
 
   const categories = rawCategories
     .map((c) => {
-      const ownIds = new Set(c.items.map((i) => i.id));
-      const placedItems = c.placements.map((p) => p.item).filter((i) => !ownIds.has(i.id));
-      return { id: c.id, name: c.name, description: c.description ?? null, items: [...c.items, ...placedItems].map(mapQrItem) };
+      // Category shows ONLY its own products — cross-category placements no longer
+      // bleed to the end (mirrors the /pedido delivery menu, fixed in 2e20a51).
+      // Combos that "contain" a category item need a proper combo-content model,
+      // not placements; until then the category stays clean.
+      return { id: c.id, name: c.name, description: c.description ?? null, items: c.items.map(mapQrItem) };
     })
     .filter((c) => c.items.length > 0);
 
