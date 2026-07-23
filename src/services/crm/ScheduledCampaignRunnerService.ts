@@ -28,6 +28,7 @@ import {
 import { getSegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "./CustomerSegmentService";
 import { CrmAudienceService } from "./CrmAudienceService";
+import { isAgentActive } from "./CrmAgentActivation";
 import {
   getReadyMadeCampaign, resolveTierCoupon, TIER_COUPON_CAMPAIGN_IDS,
   type TierCouponsConfig,
@@ -1247,10 +1248,13 @@ export class ScheduledCampaignRunnerService {
     // A campaign that grants a coupon must SAY so — phrases without {cupom} get the
     // prize line appended (withCouponLine). Identity/stats stay on the base text.
     const hasCoupon = !!runOpts.coupon;
+    // Interruptor do agente: só quando a campanha está ativada é que as frases do
+    // agente entram no rodízio. Desligado (padrão) = elas ficam estacionadas.
+    const includeAgent = isAgentActive(campaign.scheduleConfig);
     const activePhrases = resolveActivePhrases(
       { templateId: campaign.templateId, message: campaign.message },
       parseMessagePool(campaign.scheduleConfig),
-      { hasCoupon },
+      { hasCoupon, includeAgent },
     );
     const fallbackPhrase: PoolPhrase = {
       key: phraseKey(campaign.message), text: withCouponLine(campaign.message, hasCoupon), source: "fallback",

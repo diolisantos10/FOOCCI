@@ -46,6 +46,7 @@ import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { parseReadyMadeConfig } from "@/services/crm/ReadyMadeCampaignService";
 import { parseMessagePool, resolveActivePhrases, pickPhrase, readPhraseMetaTemplates } from "@/services/crm/crmMessagePool";
+import { isAgentActive } from "@/services/crm/CrmAgentActivation";
 import { sendMetaCrmMessage } from "@/services/crm/metaCrmSend";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
@@ -470,7 +471,7 @@ export class OrderDraftRecoverySendService {
           ? pickPhrase(resolveActivePhrases(
               { templateId: "carrinho-abandonado", message: cartRow.message ?? "" },
               parseMessagePool(cartRow.scheduleConfig),
-              { hasCoupon: !!cartCoupon },
+              { hasCoupon: !!cartCoupon, includeAgent: isAgentActive(cartRow.scheduleConfig) },
             ))
           : null;
         const customMsg  = drawn?.text?.trim() || cartCfg?.cartRecoveryMessage?.trim();
