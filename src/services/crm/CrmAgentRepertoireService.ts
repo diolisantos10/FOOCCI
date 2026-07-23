@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { proposePhrase, PHRASE_ANGLES, type ProposePhraseResult } from "@/services/crm/CrmPhraseProposer";
 import { parseMessagePool, phraseKey, type CustomPhrase } from "@/services/crm/crmMessagePool";
 import { detectSpamLanguage, impliesDiscount } from "@/services/crm/MessageVariationService";
+import { championOfCampaign } from "@/services/crm/CrmChampionDetector";
 import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 /** Teto de frases ativas por campanha (rodízio saudável p/ o agente aprender rápido). */
@@ -58,11 +59,19 @@ export async function proposeForCampaign(input: ProposeForCampaignInput): Promis
   const campaign = await prisma.campaign
     .findFirst({
       where: { id: input.campaignId, restaurantId: input.restaurantId },
-      select: { id: true, name: true, objective: true, targetSegment: true, couponCode: true, message: true, scheduleConfig: true },
+      select: { id: true, name: true, objective: true, targetSegment: true, couponCode: true, message: true, scheduleConfig: true, templateId: true },
     })
     .catch(() => null);
 
   if (!campaign) return { ok: false, error: "campanha não encontrada neste restaurante" };
+
+  // Aprendizado AUTOMÁTICO: se ninguém passou uma campeã, o agente descobre a
+  // desta campanha sozinho e imita o padrão dela.
+  let winningExample = input.winningExample;
+  if (!winningExample) {
+    const champ = await championOfCampaign(campaign).catch(() => null);
+    if (champ) winningExample = champ.phrase;
+  }
 
   const existing = existingPhrases(campaign);
   const slotsLeft = Math.max(0, TARGET_PHRASES_PER_CAMPAIGN - existing.length);
@@ -80,7 +89,7 @@ export async function proposeForCampaign(input: ProposeForCampaignInput): Promis
       hasCoupon,
       targetSegment: campaign.targetSegment ?? undefined,
       existingPhrases: avoid,
-      winningExample: input.winningExample,
+      winningExample,
       angle: PHRASE_ANGLES[(existing.length + i) % PHRASE_ANGLES.length], // ângulo distinto por frase
     });
     if (r.phrase) {
