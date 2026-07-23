@@ -21,6 +21,23 @@ export function isAgentActive(scheduleConfig: unknown): boolean {
   return (scheduleConfig as { agentActive?: unknown }).agentActive === true;
 }
 
+/** Master switch do restaurante: o Agente de CRM está LIGADO? (default: sim.) */
+export async function isAgentGloballyEnabled(restaurantId: string): Promise<boolean> {
+  const r = await prisma.restaurant
+    .findUnique({ where: { id: restaurantId }, select: { crmAgentEnabled: true } })
+    .catch(() => null);
+  return r?.crmAgentEnabled !== false; // ausente/erro → tratado como ligado (comportamento padrão)
+}
+
+/** Liga/desliga o Agente de CRM no restaurante inteiro (rodar o CRM na mão). */
+export async function setAgentGloballyEnabled(
+  restaurantId: string,
+  enabled: boolean,
+): Promise<{ ok: boolean; enabled: boolean }> {
+  await prisma.restaurant.update({ where: { id: restaurantId }, data: { crmAgentEnabled: enabled } }).catch(() => null);
+  return { ok: true, enabled };
+}
+
 /** Liga/desliga o agente numa campanha, preservando o resto do scheduleConfig. */
 export async function setAgentActive(
   restaurantId: string,

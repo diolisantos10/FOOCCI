@@ -10,7 +10,7 @@ import { getTenantId } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { findChampions } from "@/services/crm/CrmChampionDetector";
 import { replayShadow } from "@/services/crm/CrmShadowReplayService";
-import { isAgentActive } from "@/services/crm/CrmAgentActivation";
+import { isAgentActive, isAgentGloballyEnabled } from "@/services/crm/CrmAgentActivation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,8 @@ export async function GET() {
   try { restaurantId = getTenantId(); }
   catch { return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }); }
 
-  const [champions, shadow, campaigns] = await Promise.all([
+  const [globallyEnabled, champions, shadow, campaigns] = await Promise.all([
+    isAgentGloballyEnabled(restaurantId).catch(() => true),
     findChampions(restaurantId).catch(() => ({ champions: [] })),
     replayShadow(restaurantId).catch(() => ({ campaigns: [], summary: { campaignsAnalyzed: 0, optimizing: 0, exploring: 0, avgProjectedLiftPct: null } })),
     prisma.campaign
@@ -34,8 +35,9 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    globallyEnabled,
     status: {
-      mode: activeCount > 0 ? "ATIVO" : "APRENDIZ",
+      mode: !globallyEnabled ? "DESLIGADO" : activeCount > 0 ? "ATIVO" : "APRENDIZ",
       activeCampaigns: activeCount,
       totalCampaigns: activation.length,
       championsFound: champions.champions.length,

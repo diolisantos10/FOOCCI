@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantId } from "@/lib/tenant";
-import { setAgentActive, panicDisableAll } from "@/services/crm/CrmAgentActivation";
+import { setAgentActive, panicDisableAll, setAgentGloballyEnabled } from "@/services/crm/CrmAgentActivation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,8 +16,13 @@ export async function POST(req: NextRequest) {
   try { restaurantId = getTenantId(); }
   catch { return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }); }
 
-  const body = (await req.json().catch(() => ({}))) as { campaignId?: string; active?: boolean; panic?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { campaignId?: string; active?: boolean; panic?: boolean; masterEnabled?: boolean };
 
+  // Master switch: liga/desliga o agente no restaurante inteiro (CRM na mão).
+  if (typeof body.masterEnabled === "boolean") {
+    const r = await setAgentGloballyEnabled(restaurantId, body.masterEnabled);
+    return NextResponse.json(r);
+  }
   if (body.panic === true) {
     const r = await panicDisableAll(restaurantId);
     return NextResponse.json({ ok: true, panic: true, disabled: r.disabled });

@@ -28,7 +28,7 @@ import {
 import { getSegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "./CustomerSegmentService";
 import { CrmAudienceService } from "./CrmAudienceService";
-import { isAgentActive } from "./CrmAgentActivation";
+import { isAgentActive, isAgentGloballyEnabled } from "./CrmAgentActivation";
 import {
   getReadyMadeCampaign, resolveTierCoupon, TIER_COUPON_CAMPAIGN_IDS,
   type TierCouponsConfig,
@@ -1248,9 +1248,12 @@ export class ScheduledCampaignRunnerService {
     // A campaign that grants a coupon must SAY so — phrases without {cupom} get the
     // prize line appended (withCouponLine). Identity/stats stay on the base text.
     const hasCoupon = !!runOpts.coupon;
-    // Interruptor do agente: só quando a campanha está ativada é que as frases do
-    // agente entram no rodízio. Desligado (padrão) = elas ficam estacionadas.
-    const includeAgent = isAgentActive(campaign.scheduleConfig);
+    // Interruptor do agente: só quando a campanha está ativada E o master switch do
+    // restaurante está ligado é que as frases do agente entram no rodízio. Desligado
+    // (padrão) = elas ficam estacionadas. Só consulta o master quando a campanha está ativa.
+    const includeAgent = isAgentActive(campaign.scheduleConfig)
+      ? await isAgentGloballyEnabled(campaign.restaurantId)
+      : false;
     const activePhrases = resolveActivePhrases(
       { templateId: campaign.templateId, message: campaign.message },
       parseMessagePool(campaign.scheduleConfig),

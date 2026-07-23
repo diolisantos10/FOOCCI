@@ -31,6 +31,8 @@ model Restaurant {
   description String?
   timezone    String   @default("America/Sao_Paulo")
   isActive    Boolean  @default(true)
+  // Master switch do Agente de CRM. false = CRM roda 100% na mão (sem IA).
+  crmAgentEnabled Boolean @default(true)
   plan        Plan     @default(STARTER)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

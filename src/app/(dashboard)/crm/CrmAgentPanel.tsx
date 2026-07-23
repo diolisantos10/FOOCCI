@@ -13,7 +13,8 @@ interface ShadowCampaign { campaignId: string; name: string; mode: "EXPLORING" |
 interface Activation { campaignId: string; name: string; agentActive: boolean }
 interface AgentData {
   ok: boolean;
-  status: { mode: "ATIVO" | "APRENDIZ"; activeCampaigns: number; totalCampaigns: number; championsFound: number };
+  globallyEnabled: boolean;
+  status: { mode: "ATIVO" | "APRENDIZ" | "DESLIGADO"; activeCampaigns: number; totalCampaigns: number; championsFound: number };
   champions: Champion[];
   shadow: { optimizing: number; exploring: number; avgProjectedLiftPct: number | null };
   shadowCampaigns: ShadowCampaign[];
@@ -79,6 +80,20 @@ export default function CrmAgentPanel() {
     }
   };
 
+  const setMaster = async (enabled: boolean) => {
+    setBusyId("master");
+    try {
+      await fetch("/api/crm/agent/activation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ masterEnabled: enabled }),
+      });
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const panic = async () => {
     setBusyId("panic");
     try {
@@ -100,12 +115,18 @@ export default function CrmAgentPanel() {
     return <div className="rounded-2xl border border-line bg-paper p-5 text-sm text-muted">{err ?? "Agente indisponível."}</div>;
   }
 
+  const off = !data.globallyEnabled;
   const learning = data.status.mode === "APRENDIZ";
   const liftByCampaign = new Map(data.shadowCampaigns.map((s) => [s.campaignId, s]));
+  const statusPill = off
+    ? { cls: "bg-[#F4F4F2] text-ink2", label: "Desligado" }
+    : learning
+      ? { cls: "bg-amber-50 text-amber-700", label: "Aprendendo" }
+      : { cls: "bg-green-50 text-green-700", label: "Ativo" };
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Cabeçalho + status */}
+      {/* Cabeçalho + status + master switch */}
       <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -117,18 +138,29 @@ export default function CrmAgentPanel() {
               </p>
             </div>
           </div>
-          <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${learning ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
-            {learning ? "Aprendendo" : "Ativo"}
+          <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${statusPill.cls}`}>
+            {statusPill.label}
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Stat n={learning ? "Aprendiz" : "Ativo"} label="Modo agora" />
-          <Stat n={`${data.status.activeCampaigns}/${data.status.totalCampaigns}`} label="Campanhas ativadas" />
-          <Stat n={data.status.championsFound} label="Frases campeãs achadas" />
+        {/* Master switch: liga/desliga a IA toda (rodar o CRM na mão) */}
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5">
+          <div>
+            <p className="text-xs font-semibold text-ink">Inteligência do CRM</p>
+            <p className="mt-0.5 text-[11px] text-muted">{off ? "Desligada — você está rodando o CRM na mão." : "Ligada — o agente trabalha nos bastidores."}</p>
+          </div>
+          <Toggle on={data.globallyEnabled} busy={busyId === "master"} onClick={() => setMaster(off)} />
         </div>
 
-        {learning && (
+        {!off && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Stat n={learning ? "Aprendiz" : "Ativo"} label="Modo agora" />
+            <Stat n={`${data.status.activeCampaigns}/${data.status.totalCampaigns}`} label="Campanhas ativadas" />
+            <Stat n={data.status.championsFound} label="Frases campeãs achadas" />
+          </div>
+        )}
+
+        {!off && learning && (
           <p className="mt-3 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 text-xs text-ink2">
             🌱 <span className="font-semibold">Modo aprendiz:</span> o agente está observando suas campanhas e acumulando dados.
             Nada que ele criou vai ao cliente ainda — você liga campanha por campanha quando quiser.
@@ -137,7 +169,7 @@ export default function CrmAgentPanel() {
       </div>
 
       {/* Frases campeãs */}
-      {data.champions.length > 0 && (
+      {!off && data.champions.length > 0 && (
         <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
           <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-ink2">🏆 Frases campeãs</p>
           <p className="mt-0.5 text-xs text-muted">As que mais convertem — o agente aprende com elas pra criar novas parecidas.</p>
@@ -158,6 +190,7 @@ export default function CrmAgentPanel() {
       )}
 
       {/* Campanhas: ganho projetado + interruptor */}
+      {!off && (
       <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -206,6 +239,7 @@ export default function CrmAgentPanel() {
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }
