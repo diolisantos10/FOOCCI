@@ -2,24 +2,29 @@
 
 /**
  * GlobalAlertEngine — owns the new-order and human-attention alarm SOUNDS.
- * Mounted once in the dashboard shell, so it exists on every screen, but it
- * follows ONE simple rule (owner's request, 2026-07-14):
+ * Mounted once in the dashboard shell, so it exists on every screen and rings
+ * from ANY of them (Início, Pedidos, Atendimento, CRM, Cardápio…). It follows
+ * ONE rule (owner's request, 2026-07-23):
  *
- *   Each alarm only sounds on the tab that is BOTH visible/foreground AND showing
- *   that alarm's own screen.
- *     • ORDER sound  → only while you are looking at Pedidos (/orders).
- *     • ATENDIMENTO sound (customer needs a human) → only while you are looking at
- *       the Central de Conversas (/atendimento).
+ *   An alarm sounds on the FOREGROUND tab whenever — and only when — its own
+ *   real signal is present:
+ *     • ORDER sound       → a new order just arrived and nobody has handled it yet
+ *       (pendingActionOrderIds: PENDING/CONFIRMED inside its sound window).
+ *     • ATENDIMENTO sound → a customer is waiting for a human and no operator has
+ *       taken over (pendingHumanRequestIds: status HUMAN, not acked, not stale).
+ *   The two are independent: neither, one, or BOTH can ring at the same time.
+ *   Nothing else rings — no "tudo com tudo".
  *
- * Why "visible" matters: sound reaches your ears no matter which tab plays it, so
- * the ONLY way to stop an alarm bleeding onto a screen where it does not belong is
- * to play it exclusively while its own screen is the one in front. On any other
- * screen (Início, CRM, Cardápio…), or when the browser is in the background, both
- * alarms stay silent. Orders are never lost — the kitchen ticket still prints.
+ * Why FOREGROUND (document.visibilityState) still gates: the engine runs once per
+ * open tab, so if the owner keeps Foocci open in several tabs, only the tab they
+ * are actually looking at rings — that is what keeps ONE alarm from playing two or
+ * three times at once (the old "apita em várias telas" bleed). It deliberately does
+ * NOT gate on WHICH screen you are on: that over-correction (2026-07-14) is exactly
+ * what forced the owner to keep the Pedidos tab open to hear anything.
  *
- * This deliberately drops the old app-wide "ring everywhere / elect one leader"
- * machinery (tab locks, cross-tab messaging, device lease): that is exactly what
- * made the same sound bleed onto two or three unrelated screens.
+ * Precision lives in the selectors (order-alert / handoff-alert): each signal is
+ * bounded to a sound window and honours acknowledgement, so a stale or handled item
+ * silences itself. Orders are never lost — the kitchen ticket still prints.
  *
  * Renders nothing. Honors Configurações → Sons e alertas (master + per-alarm
  * toggles), refreshed on mount and live via "foocci:sound-settings-changed".
@@ -51,10 +56,6 @@ const ORDER_POLL_MS   = 8_000;
 const HUMAN_POLL_MS   = 10_000;
 const OVERDUE_POLL_MS = 60_000;
 
-/** Each alarm's home screen (route prefix). */
-const ORDERS_SCREEN      = "/orders";
-const ATENDIMENTO_SCREEN = "/atendimento";
-
 /** Shape of an order row from GET /api/orders (only the fields the alarm needs). */
 interface RawOrderRow {
   id: string;
@@ -81,22 +82,17 @@ export function GlobalAlertEngine() {
   // own base poll then steps aside.
   const handoffDrivenRef = useRef(false);
 
-  // Which screen this tab is on + whether it's the foreground tab. Both gate the
-  // sound (see the rule in the header).
-  const isVisibleRef        = useRef(true);
-  const isOrdersScreenRef   = useRef(false);
-  const isAtendimentoScreenRef = useRef(false);
+  // Whether THIS tab is the foreground tab — the only gate on the sound now
+  // (see the rule in the header). Which screen you are on no longer matters.
+  const isVisibleRef = useRef(true);
 
   // Re-evaluate the alarms immediately when the route or visibility changes
   // (assigned inside the setup effect; called from the route/visibility effects).
   const reevalRef = useRef<() => void>(() => {});
 
-  // Keep the screen flags current and re-evaluate the moment the route changes,
-  // so switching INTO Pedidos starts the order sound and switching OUT stops it
-  // without waiting for the next poll tick.
+  // Re-poll the moment the route changes, so a freshly-opened screen reflects the
+  // current alarm state right away instead of waiting for the next poll tick.
   useEffect(() => {
-    isOrdersScreenRef.current      = !!pathname && pathname.startsWith(ORDERS_SCREEN);
-    isAtendimentoScreenRef.current = !!pathname && pathname.startsWith(ATENDIMENTO_SCREEN);
     reevalRef.current();
   }, [pathname]);
 
@@ -170,14 +166,17 @@ export function GlobalAlertEngine() {
     // alarm would re-ring the order that was just accepted.
     const resolvedOrderIds = new Set<string>();
 
-    // ── The two rules, in one place ──────────────────────────────────────────
-    const canRingOrder   = () => isVisibleRef.current && isOrdersScreenRef.current;
-    const canRingHandoff = () => isVisibleRef.current && isAtendimentoScreenRef.current;
+    // ── The rule, in one place ───────────────────────────────────────────────
+    // Ring on ANY screen, gated only by this tab being in the foreground. Which
+    // screen you are on no longer matters — the signal itself (a pending order /
+    // a waiting customer) is what decides, exactly as Configurações → Sons says.
+    const canRingOrder   = () => isVisibleRef.current;
+    const canRingHandoff = () => isVisibleRef.current;
     const safeOrderSync = (ids: string[]) =>
       orderController.sync(canRingOrder() ? ids.filter((id) => !resolvedOrderIds.has(id)) : []);
     const safeHandoffSync = (ids: string[]) => handoffController.sync(canRingHandoff() ? ids : []);
 
-    // ── ORDER poll — only while you are looking at Pedidos ───────────────────
+    // ── ORDER poll — runs on any screen while this tab is in the foreground ──
     const pollOrders = () => {
       if (!canRingOrder() || !soundEnabledRef.current || !newOrderSoundEnabledRef.current) {
         safeOrderSync([]);
@@ -200,7 +199,7 @@ export function GlobalAlertEngine() {
         .catch(() => { /* keep last state; next poll retries */ });
     };
 
-    // ── HANDOFF poll — only while you are looking at Central de Conversas ────
+    // ── HANDOFF poll — runs on any screen while this tab is in the foreground ─
     let overdueIds: string[] = [];
     const pollHuman = () => {
       if (!canRingHandoff()) { safeHandoffSync([]); return; }
