@@ -146,6 +146,9 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
     };
     const longToken = longBody.access_token ?? shortToken;
     const expiresIn = typeof longBody.expires_in === "number" ? longBody.expires_in : null;
+    // TEMP DIAG [ig-oauth]: a failed long-lived exchange silently falls back to the 1h
+    // short token (which then dies in ~1h). Log the outcome so we catch that.
+    console.log(`[ig-oauth] longLived ok=${longRes.ok} status=${longRes.status} gotLong=${!!longBody.access_token} expiresIn=${expiresIn ?? "null"} err=${longBody.error?.message ?? "none"}`);
 
     // 3) profile — canonical account id (matches webhook entry[].id) + @username.
     let username: string | null = null;
