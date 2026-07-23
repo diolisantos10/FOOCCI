@@ -11,9 +11,11 @@ import { useCallback, useEffect, useState } from "react";
 interface Champion { campaignId: string; campaignName: string; phrase: string; liftVsAvg: number; sent: number }
 interface ShadowCampaign { campaignId: string; name: string; mode: "EXPLORING" | "OPTIMIZING"; projectedLiftPct: number | null; phrases: number }
 interface Activation { campaignId: string; name: string; agentActive: boolean }
+interface BriefingNote { kind: "WIN" | "OPPORTUNITY"; emoji: string; title: string; detail: string }
 interface AgentData {
   ok: boolean;
   globallyEnabled: boolean;
+  briefing: BriefingNote[];
   status: { mode: "ATIVO" | "APRENDIZ" | "DESLIGADO"; activeCampaigns: number; totalCampaigns: number; championsFound: number };
   champions: Champion[];
   shadow: { optimizing: number; exploring: number; avgProjectedLiftPct: number | null };
@@ -167,6 +169,24 @@ export default function CrmAgentPanel() {
           </p>
         )}
       </div>
+
+      {/* O recado do agente — só aparece quando ele tem algo que se destaca */}
+      {!off && data.briefing.length > 0 && (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+          <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-brand-600">📣 Recado do agente</p>
+          <div className="mt-3 flex flex-col gap-2">
+            {data.briefing.map((n, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-xl border border-line bg-paper px-3 py-2.5">
+                <span className="mt-0.5 text-base">{n.emoji}</span>
+                <div>
+                  <p className="text-xs font-semibold text-ink">{n.title}</p>
+                  <p className="mt-0.5 text-[11px] text-ink2">{n.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Frases campeãs */}
       {!off && data.champions.length > 0 && (

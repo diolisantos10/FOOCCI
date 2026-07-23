@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { findChampions } from "@/services/crm/CrmChampionDetector";
 import { replayShadow } from "@/services/crm/CrmShadowReplayService";
 import { isAgentActive, isAgentGloballyEnabled } from "@/services/crm/CrmAgentActivation";
+import { composeBriefing } from "@/services/crm/CrmAgentBriefing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,9 +34,15 @@ export async function GET() {
   const activation = campaigns.map((c) => ({ campaignId: c.id, name: c.name, agentActive: isAgentActive(c.scheduleConfig) }));
   const activeCount = activation.filter((a) => a.agentActive).length;
 
+  // O "recado do agente": só fala quando há algo que se destaca (senão, vazio).
+  const briefing = globallyEnabled
+    ? composeBriefing({ champions: champions.champions, shadowCampaigns: shadow.campaigns, activation })
+    : [];
+
   return NextResponse.json({
     ok: true,
     globallyEnabled,
+    briefing,
     status: {
       mode: !globallyEnabled ? "DESLIGADO" : activeCount > 0 ? "ATIVO" : "APRENDIZ",
       activeCampaigns: activeCount,
