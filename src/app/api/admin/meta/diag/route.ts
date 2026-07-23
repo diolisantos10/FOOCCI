@@ -42,6 +42,9 @@ export async function GET(req: NextRequest) {
       const subscribed = await graph(`${cfg.wabaId}/subscribed_apps`, cfg.accessToken);
       const phone      = await graph(`${cfg.phoneNumberId}?fields=display_phone_number,verified_name,code_verification_status,quality_rating,platform_type,throughput,webhook_configuration`, cfg.accessToken);
       const wabaInfo   = await graph(`${cfg.wabaId}?fields=id,name,timezone_id,message_template_namespace`, cfg.accessToken);
+      // All phone numbers still attached to this WABA — lets us see if a "freed" number is
+      // in fact still held here (which blocks re-registering it on the WhatsApp Business app).
+      const wabaPhones = await graph(`${cfg.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,platform_type,account_mode,code_verification_status,name_status`, cfg.accessToken);
 
       // Does subscribed_apps include OUR app id?
       const subApps = (subscribed as { data?: Array<{ whatsapp_business_api_data?: { id?: string; name?: string } }> })?.data ?? [];
@@ -59,6 +62,7 @@ export async function GET(req: NextRequest) {
         subscribedRaw:     subscribed,
         phone,
         wabaInfo,
+        wabaPhones,
       });
     }
 
