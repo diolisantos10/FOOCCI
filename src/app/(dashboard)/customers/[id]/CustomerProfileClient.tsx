@@ -48,6 +48,18 @@ interface Props {
   averageTicket: number | null;
   intelligence: CustomerIntelligenceReport;
   nextBestAction: NextBestAction | null;
+  coupons: CustomerCouponItem[];
+}
+
+/** A coupon in the customer's wallet, for the restaurant to consult. */
+export interface CustomerCouponItem {
+  id:        string;
+  code:      string;
+  label:     string; // "20% OFF" / "Frete grátis" / "sobremesa grátis"
+  status:    "ACTIVE" | "USED" | "EXPIRED";
+  grantedAt: string;
+  expiresAt: string | null;
+  usedAt:    string | null;
 }
 
 export interface InteractionItem {
@@ -689,6 +701,51 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
 // ─── AddressList ──────────────────────────────────────────────────────────────
 
+/** The customer's coupon wallet — so the restaurant can consult it on the phone. */
+function CouponWallet({ coupons }: { coupons: CustomerCouponItem[] }) {
+  if (coupons.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line2 bg-paper px-4 py-6">
+        <span className="text-xl">🎟️</span>
+        <p className="mt-2 text-xs font-medium text-muted">Nenhum cupom na carteira</p>
+      </div>
+    );
+  }
+  const active = coupons.filter((c) => c.status === "ACTIVE").length;
+  const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
+  const badge: Record<CustomerCouponItem["status"], { label: string; cls: string }> = {
+    ACTIVE:  { label: "Disponível", cls: "bg-emerald-50 text-emerald-700" },
+    USED:    { label: "Usado",      cls: "bg-gray-100 text-gray-500" },
+    EXPIRED: { label: "Vencido",    cls: "bg-red-50 text-red-500" },
+  };
+  return (
+    <div className="space-y-2">
+      {active > 0 && (
+        <p className="text-[11px] text-muted"><strong className="text-emerald-700">{active}</strong> disponível{active !== 1 ? "eis" : ""} para usar</p>
+      )}
+      {coupons.map((c) => {
+        const b = badge[c.status];
+        return (
+          <div key={c.id} className={`rounded-xl border border-line2 bg-paper px-3 py-2 ${c.status !== "ACTIVE" ? "opacity-60" : ""}`}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-bold text-ink">🎁 {c.label}</p>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${b.cls}`}>{b.label}</span>
+            </div>
+            <p className="mt-0.5 text-[10px] text-muted">
+              {c.status === "USED"
+                ? <>Usado em {fmt(c.usedAt)}</>
+                : c.status === "EXPIRED"
+                ? <>Venceu em {fmt(c.expiresAt)}</>
+                : <>Válido até {c.expiresAt ? fmt(c.expiresAt) : "sem prazo"}</>}
+              {" · código "}<span className="font-mono text-ink2">{c.code}</span>
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AddressList({ addresses }: { addresses: AddressItem[] }) {
   if (addresses.length === 0) {
     return (
@@ -975,6 +1032,7 @@ function OverviewTab({
   averageTicket,
   intelligence,
   nextBestAction,
+  coupons,
 }: {
   behavior: BehaviorData;
   insights: InsightItem[];
@@ -988,6 +1046,7 @@ function OverviewTab({
   averageTicket: number | null;
   intelligence: CustomerIntelligenceReport;
   nextBestAction: NextBestAction | null;
+  coupons: CustomerCouponItem[];
 }) {
   const hasImported = document !== null || financialBalance !== null || importedOrderCount !== null || importedTotalSpent !== null || importedLastOrderAt !== null || averageTicket !== null || notes !== null;
 
@@ -1014,6 +1073,10 @@ function OverviewTab({
 
         <Section title="Inteligência do cliente" icon="🧠">
           <IntelligenceSection intel={intelligence} />
+        </Section>
+
+        <Section title="Cupons do cliente" icon="🎟️">
+          <CouponWallet coupons={coupons} />
         </Section>
 
         <Section title="Endereços" icon="📍">
@@ -1522,6 +1585,7 @@ export default function CustomerProfileClient({
   averageTicket,
   intelligence,
   nextBestAction,
+  coupons,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -1616,7 +1680,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="mx-auto max-w-7xl p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} intelligence={intelligence} nextBestAction={nextBestAction} />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} intelligence={intelligence} nextBestAction={nextBestAction} coupons={coupons} />}
         {activeTab === "history"      && <HistoryTab orders={orders} onOrderClick={setSelectedOrder} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab tags={tags} />}

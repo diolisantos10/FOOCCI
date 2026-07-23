@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag, AddressItem } from "./CustomerProfileClient";
+import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag, AddressItem, CustomerCouponItem } from "./CustomerProfileClient";
 import { CustomerIntelligenceService } from "@/services/crm/CustomerIntelligenceService";
 import type { CustomerIntelligenceReport } from "@/services/crm/CustomerIntelligenceService";
 import { CustomerIntelligenceSnapshotService } from "@/services/crm/CustomerIntelligenceSnapshotService";
@@ -526,6 +526,33 @@ export default async function CustomerDetailPage({
   ).catch(() => null);
   const nextBestAction: NextBestAction | null = snapshot?.nextBestAction ?? null;
 
+  // Coupons in the customer's wallet — the restaurant needs to consult them (only
+  // the customer used to see them on login). Most-recent first, active before used.
+  const couponRows = await prisma.customerCoupon.findMany({
+    where:  { customerId: customer.id, restaurantId: customer.restaurantId },
+    orderBy: { grantedAt: "desc" },
+    take:    50,
+    select: {
+      id: true, couponCode: true, discountType: true, discountValue: true, description: true,
+      status: true, grantedAt: true, expiresAt: true, usedAt: true,
+    },
+  }).catch(() => []);
+  const now = new Date();
+  const coupons: CustomerCouponItem[] = couponRows.map((c) => ({
+    id:          c.id,
+    code:        c.couponCode,
+    label:       c.discountType === "CUSTOM"        ? (c.description?.trim() || "Recompensa")
+               : c.discountType === "FREE_SHIPPING" ? "Frete grátis"
+               : c.discountType === "PERCENTAGE"    ? `${Number(c.discountValue)}% OFF`
+               : `R$ ${Number(c.discountValue)} OFF`,
+    status:      c.status === "USED" ? "USED"
+               : (c.expiresAt && c.expiresAt < now) ? "EXPIRED"
+               : "ACTIVE",
+    grantedAt:   c.grantedAt.toISOString(),
+    expiresAt:   c.expiresAt?.toISOString() ?? null,
+    usedAt:      c.usedAt?.toISOString() ?? null,
+  }));
+
   return (
     <>
       <TopBar title={customer.name} />
@@ -558,6 +585,7 @@ export default async function CustomerDetailPage({
         averageTicket={customer.averageTicket !== null ? Number(customer.averageTicket) : null}
         intelligence={intelligence}
         nextBestAction={nextBestAction}
+        coupons={coupons}
       />
     </>
   );
