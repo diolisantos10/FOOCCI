@@ -286,12 +286,14 @@ const DEFAULT_BENEFITS: Record<TierKey, Array<{ title: string; description: stri
 function BenefitsPanel({
   tier,
   benefits,
+  rewards,
   onAdded,
   onDeleted,
   onToggled,
 }: {
   tier:      TierKey;
   benefits:  Benefit[];
+  rewards:   Array<{ tier: TierKey; label: string; source: string }>;
   onAdded:   (b: Benefit) => void;
   onDeleted: (id: string) => void;
   onToggled: (id: string, active: boolean) => void;
@@ -372,7 +374,19 @@ function BenefitsPanel({
         </button>
       </div>
 
-      {benefits.length === 0 && !adding && (
+      {/* Cupons que ESTE nível já ganha, puxados das campanhas de fidelidade */}
+      {rewards.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {rewards.map((r, i) => (
+            <div key={i} className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2">
+              <p className="text-xs font-semibold text-emerald-800">🎁 {r.label}</p>
+              <p className="text-[10px] text-emerald-600">via campanha “{r.source}”</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {benefits.length === 0 && rewards.length === 0 && !adding && (
         <div className="space-y-1">
           {DEFAULT_BENEFITS[tier].map((d) => (
             <div key={d.title} className="rounded-lg border border-dashed border-line2 bg-paper px-3 py-2 opacity-50">
@@ -634,6 +648,7 @@ export function ProgramaTab() {
   const [error,       setError]       = useState<string | null>(null);
   const [tiers,       setTiers]       = useState<TierStats[]>([]);
   const [closeList,   setCloseList]   = useState<CloseToNextTierCustomer[]>([]);
+  const [tierRewards, setTierRewards] = useState<Array<{ tier: TierKey; label: string; source: string }>>([]);
   const [settings,    setSettings]    = useState<TierSettingsInput>(DEFAULT_SETTINGS);
   const [benefits,    setBenefits]    = useState<Benefit[]>([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -641,10 +656,11 @@ export function ProgramaTab() {
   const loadOverview = useCallback(async () => {
     try {
       const res  = await fetch("/api/crm/relationship/overview");
-      const json = await res.json() as { data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[] }; error?: string };
+      const json = await res.json() as { data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[]; tierRewards?: Array<{ tier: TierKey; label: string; source: string }> }; error?: string };
       if (res.ok && json.data) {
         setTiers(json.data.tiers);
         setCloseList(json.data.closeToNextTier);
+        setTierRewards(json.data.tierRewards ?? []);
       }
     } catch { /* non-fatal */ }
   }, []);
@@ -659,11 +675,11 @@ export function ProgramaTab() {
           fetch("/api/crm/relationship/benefits"),
         ]);
         const [ovJson, sJson, bJson] = await Promise.all([
-          ovRes.json() as Promise<{ data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[] }; error?: string }>,
+          ovRes.json() as Promise<{ data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[]; tierRewards?: Array<{ tier: TierKey; label: string; source: string }> }; error?: string }>,
           sRes.json()  as Promise<{ data?: TierSettingsInput; error?: string }>,
           bRes.json()  as Promise<{ data?: Benefit[]; error?: string }>,
         ]);
-        if (ovJson.data) { setTiers(ovJson.data.tiers); setCloseList(ovJson.data.closeToNextTier); }
+        if (ovJson.data) { setTiers(ovJson.data.tiers); setCloseList(ovJson.data.closeToNextTier); setTierRewards(ovJson.data.tierRewards ?? []); }
         if (sJson.data)  { setSettings(sJson.data); setSettingsLoaded(true); }
         if (bJson.data)  setBenefits(bJson.data);
       } catch (err) {
@@ -825,7 +841,7 @@ export function ProgramaTab() {
       {/* 3. Benefícios por nível */}
       <Section
         title="Benefícios por nível"
-        subtitle="Configure o que cada nível oferece. Uso interno por enquanto — visibilidade pública em breve."
+        subtitle="🎁 = cupons que cada nível já ganha (vêm das campanhas de fidelidade). Adicione outros benefícios internos abaixo."
       >
         {loading ? <Skeleton rows={4} /> : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -834,6 +850,7 @@ export function ProgramaTab() {
                 key={tier}
                 tier={tier}
                 benefits={benefits.filter((b) => b.tier === tier)}
+                rewards={tierRewards.filter((r) => r.tier === tier)}
                 onAdded={handleBenefitAdded}
                 onDeleted={handleBenefitDeleted}
                 onToggled={handleBenefitToggled}

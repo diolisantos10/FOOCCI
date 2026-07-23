@@ -18,6 +18,10 @@
 import { prisma } from "@/lib/prisma";
 import type { TierSettings } from "@prisma/client";
 import { isTierUp } from "./crm-helpers";
+import {
+  TIER_COUPON_CAMPAIGN_IDS, resolveTierCoupon, couponLabel,
+  type ReadyMadeCoupon, type TierCouponsConfig,
+} from "./readyMadeCampaigns";
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
@@ -77,9 +81,19 @@ export interface CloseToNextTierCustomer {
   missingOrders: number; // how many more orders needed (0 if spend path is closer)
 }
 
+/** A reward the customer ALREADY earns at a tier, pulled from the live fidelity
+ *  campaigns (Mimo mensal / Subiu de nível) — not free text. */
+export interface TierReward {
+  tier:   TierKey;
+  label:  string; // "10% OFF" · "Frete grátis" · "sobremesa grátis"
+  source: string; // owner-facing origin, e.g. "Mimo mensal"
+}
+
 export interface ProgramOverview {
   tiers:           TierStats[];
   closeToNextTier: CloseToNextTierCustomer[];
+  /** Coupon rewards per tier that the fidelity campaigns already grant. */
+  tierRewards:     TierReward[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -362,7 +376,35 @@ export class RelationshipProgramService {
     // Sort: closest to next tier first (smallest missingSpend)
     closeList.sort((a, b) => a.missingSpend - b.missingSpend);
 
-    return { tiers, closeToNextTier: closeList.slice(0, 10) };
+    const tierRewards = await this.getTierRewards(restaurantId);
+    return { tiers, closeToNextTier: closeList.slice(0, 10), tierRewards };
+  }
+
+  /**
+   * Coupon rewards the customer ALREADY earns per tier — read live from the
+   * fidelity campaigns' scheduleConfig.tierCoupons (Mimo mensal / Subiu de nível),
+   * so the Benefícios panel reflects what's really granted, not free text.
+   */
+  static async getTierRewards(restaurantId: string): Promise<TierReward[]> {
+    const rows = await prisma.campaign.findMany({
+      where:   { restaurantId, templateId: { in: [...TIER_COUPON_CAMPAIGN_IDS] }, status: { notIn: ["SENT", "COMPLETED", "CANCELLED"] as never[] } },
+      orderBy: { createdAt: "desc" },
+      select:  { templateId: true, scheduleConfig: true },
+    }).catch(() => []);
+
+    const SOURCE: Record<string, string> = { "mimo-mensal-nivel": "Mimo mensal", "subiu-de-nivel": "Ao subir de nível" };
+    const seen = new Set<string>();
+    const out: TierReward[] = [];
+    for (const r of rows) {
+      if (!r.templateId || seen.has(r.templateId)) continue; // newest row per campaign
+      seen.add(r.templateId);
+      const cfg = (r.scheduleConfig as { coupon?: ReadyMadeCoupon | null; tierCoupons?: TierCouponsConfig } | null);
+      for (const tier of ["PRATA", "OURO", "DIAMANTE"] as const) {
+        const coupon = resolveTierCoupon(cfg?.tierCoupons, tier, cfg?.coupon ?? null);
+        if (coupon) out.push({ tier, label: couponLabel(coupon), source: SOURCE[r.templateId] ?? r.templateId });
+      }
+    }
+    return out;
   }
 
   // ── Benefits ───────────────────────────────────────────────────────────────
