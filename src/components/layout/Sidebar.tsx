@@ -88,7 +88,7 @@ export function Sidebar() {
       {/* Mobile overlay — tap outside to close */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-ink/45 lg:hidden"
           onClick={close}
           aria-hidden="true"
         />

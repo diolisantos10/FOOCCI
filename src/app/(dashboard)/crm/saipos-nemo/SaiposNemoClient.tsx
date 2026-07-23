@@ -504,7 +504,7 @@ export function SaiposNemoClient() {
 
       {/* Importing spinner */}
       {step === "importing" && loading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45">
           <div className="rounded-2xl bg-paper p-8 shadow-2xl text-center space-y-3">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-line2 border-t-brand-500" />
             <p className="text-sm font-semibold text-ink2">Importando clientes e dados de vendas…</p>

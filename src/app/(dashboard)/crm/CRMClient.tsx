@@ -431,7 +431,7 @@ function CreateActionModal({
   const VARIABLE_HINTS = ["{nome}", "{restaurante}", "{ultimo_pedido}", "{produto_favorito}"];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/45 p-4" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-2xl bg-paper shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
@@ -1011,7 +1011,7 @@ function ActionConfigDrawer({
   const rc = READINESS_CONFIG[template.readiness];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/45 p-4" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-2xl bg-paper shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
@@ -1633,7 +1633,7 @@ function CampaignReviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/45 p-4" onClick={onClose}>
       <div
         className="w-full max-w-2xl rounded-2xl bg-paper shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
@@ -2284,7 +2284,7 @@ function CampaignManageModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 bg-ink/45 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal card */}
       <div className="relative min-h-full flex items-start justify-center p-0 sm:p-4 sm:py-6">
@@ -5245,7 +5245,7 @@ function WhatsAppSendModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/45 px-4 pb-4 sm:pb-0"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="w-full max-w-md rounded-2xl bg-paper shadow-xl">

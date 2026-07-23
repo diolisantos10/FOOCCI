@@ -1282,7 +1282,7 @@ function DetailPanel({
     <>
       {/* Mobile overlay */}
       <div
-        className="fixed inset-0 z-20 bg-black/30 lg:hidden"
+        className="fixed inset-0 z-20 bg-ink/45 lg:hidden"
         onClick={onClose}
         aria-hidden="true"
       />

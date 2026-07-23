@@ -386,7 +386,7 @@ function PromoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4" onClick={onClose}>
       <div
         className="relative w-full max-w-sm rounded-xl bg-paper shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -623,7 +623,7 @@ function CategoryPromoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4" onClick={onClose}>
       <div
         className="relative w-full max-w-sm rounded-xl bg-paper shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -1641,7 +1641,7 @@ function NewItemModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4" onClick={onClose}>
         <div
           className="relative flex flex-col w-full max-w-5xl rounded-xl bg-paper shadow-2xl overflow-hidden"
           style={{ maxHeight: "92vh" }}
@@ -2595,7 +2595,7 @@ function EditItemModal({
     <>
       {/* Backdrop + centering container */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4"
         onClick={onClose}
       >
         {/* Modal panel */}
@@ -3521,7 +3521,7 @@ function BulkPriceModal({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-ink/45" onClick={onClose} />
 
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

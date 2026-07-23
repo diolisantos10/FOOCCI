@@ -555,7 +555,7 @@ export default function CustomersClient({
 
       {/* ── Edit modal ────────────────────────────────────────────────────── */}
       {editTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-xl">
             <h2 className="mb-4 text-lg font-bold text-ink">Editar cliente</h2>
             <div className="space-y-3">
@@ -610,7 +610,7 @@ export default function CustomersClient({
 
       {/* ── Delete confirm modal ──────────────────────────────────────────── */}
       {delTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-xl">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-2xl">
               🗑️

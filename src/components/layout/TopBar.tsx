@@ -118,7 +118,7 @@ export function TopBar({ title }: TopBarProps) {
           type="button"
           onClick={toggleSidebar}
           aria-label="Abrir menu"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 lg:hidden"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink lg:hidden"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -129,7 +129,7 @@ export function TopBar({ title }: TopBarProps) {
         <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-7 w-7 rounded-lg lg:hidden" />
         {title && (
           <>
-            <span className="text-sm font-semibold text-gray-700 sm:text-gray-500">{title}</span>
+            <span className="text-sm font-semibold text-ink2 sm:text-muted">{title}</span>
           </>
         )}
       </div>
@@ -166,7 +166,7 @@ export function TopBar({ title }: TopBarProps) {
               type="button"
               onClick={() => { setModalReason(PAUSE_REASONS[0]!); setModalResume(60); setModalCustomMinutes(60); setShowPauseModal(true); }}
               title="Pausar pedidos de emergência"
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-orange-50 hover:text-orange-700 border border-transparent hover:border-orange-200"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-orange-50 hover:text-orange-700 border border-transparent hover:border-orange-200"
             >
               <span>⏸</span>
               <span className="hidden sm:inline">Pausar pedidos</span>
@@ -188,23 +188,23 @@ export function TopBar({ title }: TopBarProps) {
                   className="h-7 w-7 shrink-0 rounded-lg border border-line2 object-cover"
                 />
               ) : (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line2 bg-[#FAFAF8] text-[12px] font-bold text-gray-600">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line2 bg-[#FAFAF8] text-[12px] font-bold text-ink2">
                   {(restaurant.name ?? "?").charAt(0).toUpperCase()}
                 </div>
               )}
-              <span className="hidden max-w-[150px] truncate text-[13px] font-bold text-gray-900 lg:block">
+              <span className="hidden max-w-[150px] truncate text-[13px] font-bold text-ink lg:block">
                 {restaurant.name ?? "Restaurante"}
               </span>
             </div>
           )}
           {/* Logged-in user */}
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[12px] font-bold text-white">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-white">
               {(session?.user?.name ?? "?").charAt(0).toUpperCase()}
             </div>
             <div className="hidden leading-tight lg:block">
-              <p className="max-w-[120px] truncate text-[12.5px] font-semibold text-gray-900">{session?.user?.name ?? "—"}</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{session?.user?.role}</p>
+              <p className="max-w-[120px] truncate text-[12.5px] font-semibold text-ink">{session?.user?.name ?? "—"}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">{session?.user?.role}</p>
             </div>
           </div>
         </div>
@@ -220,7 +220,7 @@ export function TopBar({ title }: TopBarProps) {
             window.location.href = "/login";
           }}
           aria-label="Sair"
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-[#F4F4F2] hover:text-ink"
         >
           <span className="hidden sm:inline">Sair</span>
           <span className="text-gray-300">↗</span>
@@ -235,36 +235,36 @@ export function TopBar({ title }: TopBarProps) {
           : null;
         return (
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/45"
             onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
           >
             <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl mx-4">
               <div className="mb-4 flex items-start gap-3">
                 <span className="text-2xl">⏸</span>
                 <div>
-                  <h2 className="text-base font-bold text-gray-900">Pausar pedidos</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <h2 className="text-base font-bold text-ink">Pausar pedidos</h2>
+                  <p className="text-xs text-muted mt-0.5">
                     Todos os canais (cardápio online, WhatsApp) vão bloquear novos pedidos imediatamente.
                   </p>
                 </div>
               </div>
 
-              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Motivo</label>
+              <label className="mb-1.5 block text-xs font-semibold text-ink2">Motivo</label>
               <select
                 value={modalReason}
                 onChange={(e) => setModalReason(e.target.value)}
-                className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className="mb-4 w-full rounded-xl border border-line2 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 {PAUSE_REASONS.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
 
-              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Retomar automaticamente</label>
+              <label className="mb-1.5 block text-xs font-semibold text-ink2">Retomar automaticamente</label>
               <select
                 value={modalResume ?? ""}
                 onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
-                className="mb-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className="mb-3 w-full rounded-xl border border-line2 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 {AUTO_RESUME_OPTIONS.map((o) => (
                   <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>
@@ -279,9 +279,9 @@ export function TopBar({ title }: TopBarProps) {
                     max={480}
                     value={modalCustomMinutes}
                     onChange={(e) => setModalCustomMinutes(Math.max(1, Math.min(480, Number(e.target.value) || 60)))}
-                    className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    className="w-24 rounded-xl border border-line2 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
-                  <span className="text-sm text-gray-600">minutos</span>
+                  <span className="text-sm text-ink2">minutos</span>
                 </div>
               )}
 
@@ -290,7 +290,7 @@ export function TopBar({ title }: TopBarProps) {
                   ⏰ Reabrirá automaticamente às <strong>{reopenAt}</strong>
                 </p>
               ) : (
-                <p className="mb-5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                <p className="mb-5 rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-muted">
                   Pausa indefinida — reative manualmente quando quiser.
                 </p>
               )}
@@ -299,7 +299,7 @@ export function TopBar({ title }: TopBarProps) {
                 <button
                   type="button"
                   onClick={() => setShowPauseModal(false)}
-                  className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                  className="flex-1 rounded-xl border border-line2 px-4 py-2 text-sm font-medium text-ink2 transition-colors hover:bg-canvas"
                 >
                   Cancelar
                 </button>

@@ -125,7 +125,7 @@ export function ReviewRequestModal({
   const blockers = decision?.eligible === false ? decision.reasons : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-2xl bg-paper p-5 shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}

@@ -576,7 +576,7 @@ export function EnhancementClient({
       {/* Batch confirmation dialog */}
       {showBatchConfirm && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/45"
           onClick={(e) => { if (e.target === e.currentTarget) setShowBatchConfirm(false); }}
         >
           <div className="mx-4 w-full max-w-sm rounded-2xl bg-paper p-6 shadow-2xl">
