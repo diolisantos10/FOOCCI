@@ -9,6 +9,7 @@ const db = vi.hoisted(() => ({
   restaurantKnowledgeItem: { findMany: vi.fn() },
   agentLibrarySource: { count: vi.fn() },
   waiterResultEvidence: { count: vi.fn() },
+  deliveryZone: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -44,6 +45,7 @@ beforeEach(() => {
   db.restaurantKnowledgeItem.findMany.mockResolvedValue([]);
   db.agentLibrarySource.count.mockResolvedValue(3);
   db.waiterResultEvidence.count.mockResolvedValue(7);
+  db.deliveryZone.findMany.mockResolvedValue([]);
 });
 
 afterEach(() => {
