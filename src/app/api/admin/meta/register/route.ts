@@ -12,14 +12,29 @@ import { checkAdminRequest } from "@/lib/admin-auth";
 import { ok, unauthorized, badRequest, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
-import { registerPhoneNumber, subscribeAppToWaba } from "@/services/whatsapp/MetaOnboardingService";
+import { registerPhoneNumber, deregisterPhoneNumber, subscribeAppToWaba } from "@/services/whatsapp/MetaOnboardingService";
 
 export async function POST(req: NextRequest) {
   if (!checkAdminRequest(req)) return unauthorized();
   try {
     const body = (await req.json().catch(() => ({}))) as {
-      pin?: string; restaurantId?: string; phoneNumberId?: string; displayPhoneNumber?: string;
+      pin?: string; restaurantId?: string; phoneNumberId?: string; displayPhoneNumber?: string; deregister?: boolean;
     };
+
+    // DEREGISTER path: free the number from the Cloud API so it can go to the WhatsApp
+    // Business App (Coexistence prerequisite). Marks the config DISCONNECTED — no PIN needed.
+    if (body.deregister) {
+      if (!body.restaurantId) return badRequest("restaurantId é obrigatório para liberar o número.");
+      const cfg = await MetaConfigService.getResolved(body.restaurantId);
+      if (!cfg) return badRequest("Sem config Meta para este restaurante.");
+      const dereg = await deregisterPhoneNumber(cfg.accessToken, cfg.phoneNumberId);
+      await prisma.metaWhatsAppConfig.updateMany({
+        where: { restaurantId: body.restaurantId },
+        data:  { connectionStatus: dereg.ok ? "DISCONNECTED" : "ERROR", lastError: dereg.error ?? null },
+      });
+      return ok({ deregistered: dereg.ok, error: dereg.error ?? null, phone: cfg.displayPhoneNumber, raw: dereg.raw ?? null });
+    }
+
     const pin  = (body.pin ?? "").trim();
     if (!/^\d{6}$/.test(pin)) return badRequest("Informe um PIN de 6 dígitos.");
 

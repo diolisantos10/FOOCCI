@@ -138,6 +138,32 @@ export async function registerPhoneNumber(
   }
 }
 
+/**
+ * Deregister a phone number from the WhatsApp Cloud API (POST /{phoneNumberId}/deregister).
+ * FREES the number so it can be used elsewhere — e.g. registered on the WhatsApp Business
+ * App (the prerequisite for Coexistence). After this, the Cloud API stops delivering
+ * inbound webhooks for the number until it is registered again.
+ */
+export async function deregisterPhoneNumber(
+  accessToken:   string,
+  phoneNumberId: string,
+): Promise<{ ok: boolean; error?: string; raw?: unknown }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${phoneNumberId}/deregister`), {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    });
+    const json: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = (json as { error?: { message?: string } }).error?.message;
+      return { ok: false, error: maskGraphResponse(err ?? "Falha ao liberar o número da Cloud API."), raw: json };
+    }
+    return { ok: true, raw: json };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
 export async function fetchPhoneDetails(
   accessToken:   string,
   phoneNumberId: string,
