@@ -23,6 +23,7 @@ import {
   type NotificationItem,
 } from "./useNotifications";
 import { HELP_OPEN_EVENT, type HelpOpenDetail, type HelpTab } from "./events";
+import SupportTechChat from "./SupportTechChat";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -381,6 +382,9 @@ export function HelpWidget() {
         <TabButton active={tab === "ajuda"} onClick={() => setTab("ajuda")}>
           💬 Ajuda
         </TabButton>
+        <TabButton active={tab === "tecnica"} onClick={() => setTab("tecnica")}>
+          🛠️ Técnica
+        </TabButton>
         <TabButton active={tab === "avisos"} onClick={() => setTab("avisos")} badge={unreadCount}>
           🔔 Avisos
         </TabButton>
@@ -498,6 +502,8 @@ export function HelpWidget() {
             </button>
           </form>
         </>
+      ) : tab === "tecnica" ? (
+        <SupportTechChat />
       ) : (
         <NotificationsTab
           notifs={notifs}

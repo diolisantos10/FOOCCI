@@ -6,7 +6,7 @@
 
 export const HELP_OPEN_EVENT = "foocci:help-open";
 
-export type HelpTab = "ajuda" | "avisos";
+export type HelpTab = "ajuda" | "avisos" | "tecnica";
 
 export interface HelpOpenDetail {
   tab: HelpTab;
