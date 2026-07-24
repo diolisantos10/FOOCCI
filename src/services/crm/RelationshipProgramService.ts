@@ -20,6 +20,7 @@ import type { TierSettings } from "@prisma/client";
 import { isTierUp } from "./crm-helpers";
 import {
   TIER_COUPON_CAMPAIGN_IDS, resolveTierCoupon, couponLabel,
+  getReadyMadeCampaign, buildReadyMadeCampaignPayload,
   type ReadyMadeCoupon, type TierCouponsConfig,
 } from "./readyMadeCampaigns";
 
@@ -405,6 +406,57 @@ export class RelationshipProgramService {
       }
     }
     return out;
+  }
+
+  /**
+   * Set (or clear) the coupon a tier earns — right from the Programa panel. Writes
+   * to the "Mimo mensal por nível" campaign's scheduleConfig.tierCoupons (the
+   * recurring reward = what the tier "has right to"), creating the campaign PAUSED
+   * if it doesn't exist yet. Delivery still requires activating that campaign in
+   * Campanhas; the panel makes that clear. Returns whether the campaign is active.
+   */
+  static async setTierCoupon(
+    restaurantId: string,
+    tier: "PRATA" | "OURO" | "DIAMANTE",
+    coupon: ReadyMadeCoupon | null,
+  ): Promise<{ ok: true; campaignActive: boolean } | { ok: false; error: string }> {
+    const rm = getReadyMadeCampaign("mimo-mensal-nivel");
+    if (!rm) return { ok: false, error: "Campanha de fidelidade não encontrada." };
+
+    let row = await prisma.campaign.findFirst({
+      where:   { restaurantId, templateId: "mimo-mensal-nivel", status: { notIn: ["SENT", "COMPLETED", "CANCELLED"] as never[] } },
+      orderBy: { createdAt: "desc" },
+      select:  { id: true, scheduleConfig: true, status: true },
+    });
+
+    if (!row) {
+      const payload = buildReadyMadeCampaignPayload(rm);
+      const created = await prisma.campaign.create({
+        data: {
+          restaurantId,
+          name:           payload.name,
+          message:        payload.messageTemplate,
+          objective:      payload.objective,
+          channel:        payload.channel,
+          targetSegment:  payload.targetSegment,
+          templateId:     payload.templateId,
+          status:         "PAUSED" as never, // configured but not sending until the owner turns it on
+          scheduleConfig: payload.scheduleConfig as object,
+        },
+        select: { id: true, scheduleConfig: true, status: true },
+      });
+      row = created;
+    }
+
+    const cfg = ((row.scheduleConfig as Record<string, unknown>) ?? {});
+    const tierCoupons = { ...((cfg.tierCoupons as Record<string, unknown>) ?? {}) };
+    if (coupon) tierCoupons[tier] = coupon; else delete tierCoupons[tier];
+    await prisma.campaign.update({
+      where: { id: row.id },
+      data:  { scheduleConfig: { ...cfg, tierCoupons } as object },
+    });
+
+    return { ok: true, campaignActive: ["ACTIVE", "SCHEDULED"].includes(row.status) };
   }
 
   // ── Benefits ───────────────────────────────────────────────────────────────

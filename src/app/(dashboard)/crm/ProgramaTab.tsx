@@ -283,6 +283,8 @@ const DEFAULT_BENEFITS: Record<TierKey, Array<{ title: string; description: stri
   DIAMANTE: [{ title: "Benefícios VIP e ofertas personalizadas",     description: "Experiência exclusiva para clientes top" }],
 };
 
+type CouponType = "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING";
+
 function BenefitsPanel({
   tier,
   benefits,
@@ -290,6 +292,7 @@ function BenefitsPanel({
   onAdded,
   onDeleted,
   onToggled,
+  onRewardsChanged,
 }: {
   tier:      TierKey;
   benefits:  Benefit[];
@@ -297,15 +300,50 @@ function BenefitsPanel({
   onAdded:   (b: Benefit) => void;
   onDeleted: (id: string) => void;
   onToggled: (id: string, active: boolean) => void;
+  onRewardsChanged: () => void;
 }) {
   const m = TIER_META[tier];
+  const canHaveCoupon = tier !== "BRONZE"; // Bronze is the entry level — no reward
   const [adding, setAdding]   = useState(false);
+  const [mode,   setMode]     = useState<"text" | "coupon">("text");
   const [title,  setTitle]    = useState("");
   const [desc,   setDesc]     = useState("");
   const [isGift, setIsGift]   = useState(false);
   const [stock,  setStock]    = useState("");
   const [saving, setSaving]   = useState(false);
   const [error,  setError]    = useState<string | null>(null);
+  // Coupon composer (Mimo mensal reward for this tier)
+  const [cType,  setCType]    = useState<CouponType>("PERCENTAGE");
+  const [cValue, setCValue]   = useState("10");
+  const [cDesc,  setCDesc]    = useState("");
+
+  async function handleSaveCoupon() {
+    setSaving(true); setError(null);
+    try {
+      const coupon = cType === "CUSTOM"
+        ? { type: "CUSTOM", value: 0, description: cDesc.trim() || "Recompensa", validityDays: 30 }
+        : cType === "FREE_SHIPPING"
+        ? { type: "FREE_SHIPPING", value: Math.max(0, parseInt(cValue, 10) || 0), validityDays: 30 }
+        : { type: cType, value: Math.max(1, parseInt(cValue, 10) || 1), validityDays: 30 };
+      const res = await fetch("/api/crm/relationship/tier-coupon", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, coupon }),
+      });
+      const json = await res.json() as { data?: { campaignActive: boolean }; error?: string };
+      if (!res.ok || json.error) { setError(json.error ?? "Erro"); return; }
+      onRewardsChanged();
+      setAdding(false); setMode("text"); setCDesc("");
+    } catch { setError("Falha de rede."); }
+    finally { setSaving(false); }
+  }
+
+  async function handleRemoveReward() {
+    const res = await fetch("/api/crm/relationship/tier-coupon", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier, coupon: null }),
+    });
+    if (res.ok) onRewardsChanged();
+  }
   // Local mirror so the stock counter updates instantly on "entreguei".
   const [localBenefits, setLocalBenefits] = useState(benefits);
   useEffect(() => { setLocalBenefits(benefits); }, [benefits]);
@@ -378,9 +416,20 @@ function BenefitsPanel({
       {rewards.length > 0 && (
         <div className="mb-2 space-y-1">
           {rewards.map((r, i) => (
-            <div key={i} className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2">
-              <p className="text-xs font-semibold text-emerald-800">🎁 {r.label}</p>
-              <p className="text-[10px] text-emerald-600">via campanha “{r.source}”</p>
+            <div key={i} className="flex items-start justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-emerald-800">🎁 {r.label}</p>
+                <p className="text-[10px] text-emerald-600">via campanha “{r.source}”</p>
+              </div>
+              {r.source === "Mimo mensal" && (
+                <button
+                  onClick={() => void handleRemoveReward()}
+                  className="shrink-0 text-[10px] text-red-400 hover:text-red-600"
+                  title="Remover cupom deste nível"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -446,54 +495,133 @@ function BenefitsPanel({
 
       {adding && (
         <div className="mt-3 space-y-2 rounded-lg border border-brand-100 bg-paper p-3">
-          <input
-            type="text"
-            placeholder="Título do benefício"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
-            maxLength={120}
-          />
-          <input
-            type="text"
-            placeholder="Descrição (opcional)"
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
-            maxLength={300}
-          />
-          {/* Brinde físico + estoque */}
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-ink2">
-            <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} className="accent-brand-500" />
-            🎁 É um brinde físico (ex.: caneca, camiseta)
-          </label>
-          {isGift && (
-            <div className="flex items-center gap-2 pl-5">
-              <input
-                type="number" min={0} placeholder="quantidade"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                className="w-24 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
-              />
-              <span className="text-[10px] text-muted">unidades em estoque (vazio = não controlar)</span>
+          {/* Seletor de modo: benefício em texto ou cupom real (sincroniza com Mimo mensal) */}
+          {canHaveCoupon && (
+            <div className="flex gap-1 rounded-lg bg-[#FAFAF8] p-0.5">
+              <button
+                onClick={() => setMode("text")}
+                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${mode === "text" ? "bg-paper text-ink shadow-sm" : "text-muted"}`}
+              >
+                Texto
+              </button>
+              <button
+                onClick={() => setMode("coupon")}
+                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${mode === "coupon" ? "bg-paper text-ink shadow-sm" : "text-muted"}`}
+              >
+                🎟️ Cupom
+              </button>
             </div>
           )}
-          {error && <p className="text-[10px] text-red-600">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              onClick={handleAdd}
-              disabled={saving || !title.trim()}
-              className="rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
-            >
-              {saving ? "Salvando…" : "Salvar"}
-            </button>
-            <button
-              onClick={() => { setAdding(false); setTitle(""); setDesc(""); setError(null); }}
-              className="rounded-lg border border-line2 px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8]"
-            >
-              Cancelar
-            </button>
-          </div>
+
+          {mode === "coupon" && canHaveCoupon ? (
+            <>
+              <div className="flex flex-wrap gap-1">
+                {([
+                  { k: "PERCENTAGE",    label: "%" },
+                  { k: "FIXED",         label: "R$" },
+                  { k: "FREE_SHIPPING", label: "Frete grátis" },
+                  { k: "CUSTOM",        label: "Brinde/livre" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.k}
+                    onClick={() => setCType(opt.k)}
+                    className={`rounded-lg border px-2 py-1 text-[11px] font-medium ${cType === opt.k ? "border-brand-400 bg-brand-50 text-brand-700" : "border-line2 text-ink2"}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {cType === "PERCENTAGE" && (
+                <div className="flex items-center gap-2">
+                  <input type="number" min={1} max={100} value={cValue} onChange={(e) => setCValue(e.target.value)}
+                    className="w-24 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none" />
+                  <span className="text-[11px] text-ink2">% de desconto</span>
+                </div>
+              )}
+              {cType === "FIXED" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-ink2">R$</span>
+                  <input type="number" min={1} value={cValue} onChange={(e) => setCValue(e.target.value)}
+                    className="w-24 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none" />
+                  <span className="text-[11px] text-ink2">de desconto</span>
+                </div>
+              )}
+              {cType === "CUSTOM" && (
+                <input type="text" placeholder="Descreva o mimo (ex.: sobremesa grátis)" value={cDesc} onChange={(e) => setCDesc(e.target.value)}
+                  className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none" maxLength={80} />
+              )}
+              <p className="text-[10px] text-muted">
+                O cliente recebe este cupom todo mês pela campanha <strong>Mimo mensal</strong>. Validade de 30 dias.
+              </p>
+              {error && <p className="text-[10px] text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => void handleSaveCoupon()}
+                  disabled={saving}
+                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {saving ? "Salvando…" : "Salvar cupom"}
+                </button>
+                <button
+                  onClick={() => { setAdding(false); setMode("text"); setError(null); }}
+                  className="rounded-lg border border-line2 px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8]"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <input
+                type="text"
+                placeholder="Título do benefício"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
+                maxLength={120}
+              />
+              <input
+                type="text"
+                placeholder="Descrição (opcional)"
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
+                maxLength={300}
+              />
+              {/* Brinde físico + estoque */}
+              <label className="flex cursor-pointer items-center gap-2 text-[11px] text-ink2">
+                <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} className="accent-brand-500" />
+                🎁 É um brinde físico (ex.: caneca, camiseta)
+              </label>
+              {isGift && (
+                <div className="flex items-center gap-2 pl-5">
+                  <input
+                    type="number" min={0} placeholder="quantidade"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    className="w-24 rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-muted">unidades em estoque (vazio = não controlar)</span>
+                </div>
+              )}
+              {error && <p className="text-[10px] text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAdd}
+                  disabled={saving || !title.trim()}
+                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {saving ? "Salvando…" : "Salvar"}
+                </button>
+                <button
+                  onClick={() => { setAdding(false); setTitle(""); setDesc(""); setError(null); }}
+                  className="rounded-lg border border-line2 px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8]"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -854,6 +982,7 @@ export function ProgramaTab() {
                 onAdded={handleBenefitAdded}
                 onDeleted={handleBenefitDeleted}
                 onToggled={handleBenefitToggled}
+                onRewardsChanged={loadOverview}
               />
             ))}
           </div>
