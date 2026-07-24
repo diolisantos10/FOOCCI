@@ -18,6 +18,7 @@ import { metaWebhookVerifyToken, metaAppSecret } from "@/services/whatsapp/metaF
 import { verifyMetaChallenge, validateMetaSignature, normalizeMetaWebhook } from "@/services/whatsapp/providers/metaWebhook";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "@/services/whatsapp/brain/WhatsAppBrainRuntimeService";
+import { isSupportPhoneNumberId, handleInboundSupport } from "@/services/support/SupportWhatsAppService";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -95,6 +96,17 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
   // Inbound customer messages → Central de Conversas.
   for (const m of norm.messages) {
     if (!m.phoneNumberId) continue;
+
+    // Número DEDICADO do Agente de TI: desvia ANTES do fluxo de restaurante — a
+    // equipe fala com o suporte técnico, não com o garçom. Gated: se o número de
+    // suporte não estiver configurado, isSupportPhoneNumberId é sempre false e o
+    // fluxo abaixo segue idêntico (aditivo, zero risco). Shadow-safe: só diagnostica.
+    if (isSupportPhoneNumberId(m.phoneNumberId)) {
+      void handleInboundSupport({ fromPhone: m.fromPhone, text: m.text ?? null, isText: m.type === "text" })
+        .catch((err) => console.error("[webhook/meta/whatsapp] support dispatch failed", err));
+      continue;
+    }
+
     const cfg = await MetaConfigService.getByPhoneNumberId(m.phoneNumberId);
     if (!cfg) { console.warn(`[webhook/meta/whatsapp] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched`); continue; }
 

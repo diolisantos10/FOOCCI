@@ -92,6 +92,22 @@ Nomeadas `Support*` (o slug do agente é `suporte-tecnico`):
 > o schema (e evitar risco de migração/deploy), o agente vive em `GENERAL`. Uma
 > área dedicada é uma migração futura, quando for revisado.
 
+## 4b. Canal WhatsApp (número dedicado) — ✅ código no ar, aguarda o número
+
+Decisão do dono: **número dedicado de suporte** (a equipe manda pro número, o
+agente de TI responde por ele). Divisão honesta:
+- **Código (feito):** `SupportWhatsAppService.ts` + enxerto no webhook
+  `webhooks/meta/whatsapp/route.ts`. Quando chega mensagem no `phone_number_id`
+  do suporte, desvia ANTES do fluxo de restaurante → `reasonSupportIncident` →
+  responde pelo número de suporte. **Gated** (sem `SUPPORT_META_PHONE_NUMBER_ID`
+  + `SUPPORT_META_ACCESS_TOKEN` = nada muda, zero risco). **Shadow-safe** (só
+  diagnostica). Foto/mídia → pede texto por ora (visão é fase futura). +7 testes.
+- **Provisão (equipe, fora do código):** registrar/verificar/aprovar um número
+  dedicado na Meta sob a WABA → pegar `phone_number_id` + token, e apontar o
+  webhook. É o item mais demorado (verificação Meta).
+- **Config para ligar:** `SUPPORT_META_PHONE_NUMBER_ID`, `SUPPORT_META_ACCESS_TOKEN`,
+  `SUPPORT_PILOT_RESTAURANT_ID` (piloto) e opcional `SUPPORT_PHONE_RESTAURANT_MAP`.
+
 ## 5. Fases
 
 - **Fase 0 (feita, no ar):** esqueleto no molde, tudo em SOMBRA. O agente
