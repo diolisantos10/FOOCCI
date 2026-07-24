@@ -47,7 +47,7 @@ type ConvStatus =
   | "AI_ATENDENDO"
   | "HUMANO_ASSUMIU";
 
-type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT" | "INSTAGRAM_COMMENT";
+type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL" | "INSTAGRAM_DIRECT" | "INSTAGRAM_COMMENT" | "MESSENGER";
 
 type StatusFilter  = "ALL" | "AI_OFF" | "WAITING" | "STAFF" | "CRM" | "INSTAGRAM" | "RESOLVED";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
@@ -168,6 +168,7 @@ const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
   MANUAL:            { label: "Manual",       icon: "✍️"  },
   INSTAGRAM_DIRECT:  { label: "Instagram DM", icon: "📷"  },
   INSTAGRAM_COMMENT: { label: "Instagram comentário", icon: "💬" },
+  MESSENGER:         { label: "Messenger",    icon: "💬"  },
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
@@ -1758,6 +1759,8 @@ export function ThreadPanel({
   // posted under the original comment on the post (not a private DM).
   const isInstagramComment = thread.channel === "INSTAGRAM_COMMENT";
   const isInstagram        = thread.channel === "INSTAGRAM_DIRECT" || isInstagramComment;
+  // Messenger is a text-only DM channel (same reply treatment as Instagram DM).
+  const isMessenger        = thread.channel === "MESSENGER";
   // Pending human request: customer asked for a human and NO operator has assumed
   // yet (status HUMAN). Escalation turns aiEnabled off, so this used to fall into
   // "human handling" and only offered "Devolver para IA" — the bug. This is the
@@ -2079,8 +2082,8 @@ export function ThreadPanel({
 
           {/* Input row */}
           <div className="flex items-end gap-2">
-            {/* Instagram (DM and comments) is text-only — no attachments. */}
-            {!isInstagram && (
+            {/* Instagram (DM and comments) and Messenger are text-only — no attachments. */}
+            {!isInstagram && !isMessenger && (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}

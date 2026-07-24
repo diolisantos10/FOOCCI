@@ -35,10 +35,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Read the RAW body for signature verification.
   const rawBody = await req.text();
-  const appSecret = process.env.INSTAGRAM_APP_SECRET ?? null;
   const signature = req.headers.get("x-hub-signature-256");
 
-  if (!verifyInstagramSignature(rawBody, signature, appSecret)) {
+  // Instagram DMs (object:"instagram") are signed by the Instagram app; Facebook Messenger
+  // (object:"page") is signed by the Meta/Facebook app. Both can arrive on this endpoint,
+  // so accept a signature that matches ANY of our configured app secrets. HMAC comparison
+  // stays constant-time per candidate; an attacker still can't forge either secret.
+  const candidateSecrets = [
+    process.env.INSTAGRAM_APP_SECRET,
+    process.env.META_APP_SECRET,
+    process.env.FACEBOOK_APP_SECRET,
+  ].filter((s): s is string => !!s);
+
+  const signatureOk = candidateSecrets.some((secret) => verifyInstagramSignature(rawBody, signature, secret));
+  if (!signatureOk) {
     return new NextResponse("Invalid signature", { status: 403 });
   }
 

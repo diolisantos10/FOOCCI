@@ -117,6 +117,24 @@ async function exchangeForLongLivedToken(shortToken: string, creds: MetaAppCreds
   }
 }
 
+/**
+ * Subscribes a Facebook Page to Messenger webhook fields so inbound Page DMs are
+ * delivered to our webhook (POST /{page-id}/subscribed_apps). Uses the Page access
+ * token. Best-effort: returns false on any failure (the caller treats it as non-fatal).
+ */
+async function subscribePageToMessenger(pageId: string, pageAccessToken: string): Promise<boolean> {
+  try {
+    const url = `https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/subscribed_apps`
+      + `?subscribed_fields=${encodeURIComponent("messages,messaging_postbacks,message_echoes")}`
+      + `&access_token=${encodeURIComponent(pageAccessToken)}`;
+    const res = await fetch(url, { method: "POST" });
+    const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: unknown };
+    return res.ok && body.success !== false;
+  } catch {
+    return false;
+  }
+}
+
 export const realMetaGraph: MetaGraph = {
   async exchangeCode({ code, redirectUri, creds }) {
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`
@@ -296,7 +314,12 @@ export async function selectPage(
     return { ok: false, view: null, reason: err instanceof Error ? err.message.slice(0, 200) : "Falha ao buscar a Página." };
   }
   if (!page || !page.pageAccessToken) return { ok: false, view: null, reason: "Não consegui obter o acesso desta Página." };
-  if (!page.hasInstagram || !page.instagramBusinessAccountId) {
+
+  // The Facebook/Messenger flow (returnPlatform="facebook") connects a Page for Messenger
+  // DMs and does NOT require a linked Instagram account. The Instagram flow still does.
+  const platform = (row as { returnPlatform?: string | null }).returnPlatform ?? "instagram";
+  const isMessenger = platform === "facebook";
+  if (!isMessenger && (!page.hasInstagram || !page.instagramBusinessAccountId)) {
     return { ok: false, view: null, reason: "Esta Página não possui Instagram profissional conectado." };
   }
 
@@ -313,9 +336,15 @@ export async function selectPage(
       connectedAt: new Date().toISOString(),
       facebookPageName: page.pageName,
       instagramUsername: page.instagramUsername,
+      platform,
     },
   });
   if (!result.ok) return { ok: false, view: null, reason: result.error ?? "Não foi possível salvar a configuração." };
+
+  // Subscribe the Page to Messenger webhook fields so inbound DMs reach our webhook.
+  // Best-effort: a failure must NOT block the connection (it can be re-run / set in the
+  // Meta App Dashboard). Instagram-linked Pages benefit from this too.
+  try { await subscribePageToMessenger(page.pageId, page.pageAccessToken); } catch { /* non-fatal */ }
 
   // Consume the state and wipe the stored user token.
   await prisma.metaOAuthState.update({

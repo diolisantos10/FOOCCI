@@ -14,10 +14,12 @@ export const INSTAGRAM_MODES: InstagramMode[] = ["DISABLED", "RECEIVE_ONLY", "RE
 export type InstagramScope = "TEST_ACCOUNT_ONLY" | "RESTAURANT_WIDE";
 export const INSTAGRAM_SCOPES: InstagramScope[] = ["TEST_ACCOUNT_ONLY", "RESTAURANT_WIDE"];
 
-/** A normalized inbound Instagram message (channel-agnostic shape). */
+/** A normalized inbound Instagram/Messenger message (channel-agnostic shape). */
 export interface NormalizedInstagramMessage {
-  channel: "INSTAGRAM_DIRECT";
-  instagramAccountId: string | null; // recipient business/page account id
+  // "MESSENGER" when the webhook object is "page" (Facebook Page DM); the message shape
+  // is identical, only the channel tag and downstream labeling differ.
+  channel: "INSTAGRAM_DIRECT" | "MESSENGER";
+  instagramAccountId: string | null; // recipient business/page account id (Page id for Messenger)
   pageId: string | null;
   senderId: string; // IGSID — the customer's scoped user id
   recipientId: string | null;

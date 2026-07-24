@@ -61,3 +61,35 @@ describe("normalizeInstagramComments", () => {
     expect(normalizeInstagramPayload(commentPayload({ id: "c1", from: { id: "u" }, text: "hi" }))).toHaveLength(0); // comment is not a DM
   });
 });
+
+describe("normalizeInstagramPayload — channel tagging", () => {
+  const PAGE = "9988776655"; // Facebook Page id (entry[].id for Messenger)
+
+  it("tags an Instagram DM (object:instagram) as INSTAGRAM_DIRECT", () => {
+    const out = normalizeInstagramPayload({
+      object: "instagram",
+      entry: [{ id: BIZ, messaging: [{ sender: { id: "cust_1" }, recipient: { id: BIZ }, message: { mid: "m1", text: "oi" } }] }],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.channel).toBe("INSTAGRAM_DIRECT");
+    expect(out[0]!.text).toBe("oi");
+  });
+
+  it("tags a Facebook Messenger DM (object:page) as MESSENGER with the same shape", () => {
+    const out = normalizeInstagramPayload({
+      object: "page",
+      entry: [{ id: PAGE, messaging: [{ sender: { id: "psid_1" }, recipient: { id: PAGE }, message: { mid: "mid.42", text: "olá" } }] }],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ channel: "MESSENGER", senderId: "psid_1", pageId: PAGE, text: "olá" });
+  });
+
+  it("tags a Messenger echo/delivery event with the MESSENGER channel too", () => {
+    const echo = normalizeInstagramPayload({
+      object: "page",
+      entry: [{ id: PAGE, messaging: [{ sender: { id: PAGE }, recipient: { id: "psid_1" }, message: { mid: "mid.echo", text: "resposta", is_echo: true } }] }],
+    });
+    expect(echo[0]!.channel).toBe("MESSENGER");
+    expect(echo[0]!.isEcho).toBe(true);
+  });
+});

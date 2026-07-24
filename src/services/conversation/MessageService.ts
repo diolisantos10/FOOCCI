@@ -106,27 +106,30 @@ export class MessageService {
 
     const now = new Date();
 
-    // Instagram Direct: route the manual reply through the Instagram channel
-    // service (mode-gated, dry-run aware, persists the outbound itself). Never
-    // falls into the internal-only bucket below. WhatsApp path is untouched.
-    if (conv.channel === "INSTAGRAM_DIRECT") {
+    // Instagram Direct & Facebook Messenger: route the manual reply through the same
+    // channel service (mode-gated, dry-run aware, persists the outbound itself). Both
+    // send via the Graph Messaging API (POST /me/messages) — Messenger with the Page
+    // token, Instagram with its own base. Never falls into the internal-only bucket
+    // below. WhatsApp path is untouched.
+    if (conv.channel === "INSTAGRAM_DIRECT" || conv.channel === "MESSENGER") {
+      const label = conv.channel === "MESSENGER" ? "Messenger" : "Instagram";
       if (input.type !== "TEXT") {
-        return serviceFail("Instagram v1 suporta apenas resposta de texto.", 400);
+        return serviceFail(`${label} suporta apenas resposta de texto.`, 400);
       }
       const identity = await prisma.customerChannelIdentity.findFirst({
-        where: { restaurantId, channel: "INSTAGRAM_DIRECT", customerId: conv.customerId ?? undefined },
+        where: { restaurantId, channel: conv.channel, customerId: conv.customerId ?? undefined },
         select: { externalUserId: true },
         orderBy: { updatedAt: "desc" },
       });
       if (!identity) {
-        return serviceFail("Conversa do Instagram sem identidade vinculada — não é possível responder.", 422);
+        return serviceFail(`Conversa do ${label} sem identidade vinculada — não é possível responder.`, 422);
       }
       const result = await sendInstagramManualReply(restaurantId, conversationId, identity.externalUserId, input.content);
       if (!result.ok) {
         // Operational (not a crash): surface the reason; the outbound was persisted as pending/failed.
-        return serviceFail(result.reason ?? "Não foi possível enviar pelo Instagram.", 502);
+        return serviceFail(result.reason ?? `Não foi possível enviar pelo ${label}.`, 502);
       }
-      return serviceOk({ id: result.messageId, _channel: "INSTAGRAM_DIRECT", _dryRun: result.send.dryRun });
+      return serviceOk({ id: result.messageId, _channel: conv.channel, _dryRun: result.send.dryRun });
     }
 
     // Instagram comments: the reply is PUBLIC, posted under the original comment

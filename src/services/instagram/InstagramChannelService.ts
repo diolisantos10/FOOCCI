@@ -23,6 +23,11 @@ import type { NormalizedInstagramMessage, NormalizedInstagramComment, InstagramS
 const IG: Channel = "INSTAGRAM_DIRECT";
 const IGC: Channel = "INSTAGRAM_COMMENT";
 
+/** Human label for a DM channel (used for customer/conversation names). */
+function channelLabel(channel: Channel): string {
+  return channel === "MESSENGER" ? "Messenger" : "Instagram";
+}
+
 export interface WebhookHandleResult {
   ok: boolean;
   resolved: boolean; // a config matched the account id
@@ -46,17 +51,19 @@ export async function upsertInstagramCustomerIdentity(
   config: InstagramConfigRow,
   msg: NormalizedInstagramMessage,
 ): Promise<{ customerId: string; identityId: string }> {
+  // Instagram DM or Messenger — the channel travels on the normalized message.
+  const channel = msg.channel;
   const existing = await prisma.customerChannelIdentity.findUnique({
-    where: { restaurantId_channel_externalUserId: { restaurantId: config.restaurantId, channel: IG, externalUserId: msg.senderId } },
+    where: { restaurantId_channel_externalUserId: { restaurantId: config.restaurantId, channel, externalUserId: msg.senderId } },
   });
 
   let customerId = existing?.customerId ?? null;
   if (!customerId) {
-    // No phone for Instagram — create a phone-less Customer linked via identity.
+    // No phone for IG/Messenger — create a phone-less Customer linked via identity.
     const customer = await prisma.customer.create({
       data: {
         restaurantId: config.restaurantId,
-        name: `Instagram ${msg.senderId.slice(-6)}`,
+        name: `${channelLabel(channel)} ${msg.senderId.slice(-6)}`,
         phone: null,
         crmContactable: false, // no valid phone → excluded from WhatsApp campaigns
         contactStatus: "SEM_TELEFONE",
@@ -67,8 +74,8 @@ export async function upsertInstagramCustomerIdentity(
   }
 
   const identity = await prisma.customerChannelIdentity.upsert({
-    where: { restaurantId_channel_externalUserId: { restaurantId: config.restaurantId, channel: IG, externalUserId: msg.senderId } },
-    create: { restaurantId: config.restaurantId, customerId, channel: IG, externalUserId: msg.senderId },
+    where: { restaurantId_channel_externalUserId: { restaurantId: config.restaurantId, channel, externalUserId: msg.senderId } },
+    create: { restaurantId: config.restaurantId, customerId, channel, externalUserId: msg.senderId },
     update: { customerId },
     select: { id: true },
   });
@@ -76,16 +83,17 @@ export async function upsertInstagramCustomerIdentity(
   return { customerId, identityId: identity.id };
 }
 
-/** Finds an open/recent Instagram conversation for this sender, or creates one. */
+/** Finds an open/recent IG/Messenger conversation for this sender, or creates one. */
 export async function findOrCreateConversation(
   config: InstagramConfigRow,
   customerId: string,
   senderId: string,
+  channel: Channel = IG,
 ): Promise<string> {
   const existing = await prisma.conversation.findFirst({
     where: {
       restaurantId: config.restaurantId,
-      channel: IG,
+      channel,
       customerId,
       status: { in: ["OPEN", "HUMAN", "HUMANO_ASSUMIU", "AI_ATENDENDO"] },
     },
@@ -98,11 +106,11 @@ export async function findOrCreateConversation(
     data: {
       restaurantId: config.restaurantId,
       customerId,
-      channel: IG,
+      channel,
       status: "OPEN",
-      aiEnabled: false, // v1: manual only — AI never auto-replies on Instagram
+      aiEnabled: false, // v1: manual only — AI never auto-replies on IG/Messenger
       contextType: "INBOUND",
-      customerName: `Instagram ${senderId.slice(-6)}`,
+      customerName: `${channelLabel(channel)} ${senderId.slice(-6)}`,
     },
     select: { id: true },
   });
@@ -146,7 +154,7 @@ export async function persistInboundMessage(
         sentAt: now,
         externalMessageId: msg.messageId,
         externalStatus: "delivered",
-        metadata: { source: "INSTAGRAM_DIRECT", rawType: msg.rawType, attachments: msg.attachments } as object,
+        metadata: { source: msg.channel, rawType: msg.rawType, attachments: msg.attachments } as object,
       },
     }),
     prisma.conversation.update({
@@ -197,7 +205,7 @@ export async function handleWebhookEvent(payload: unknown): Promise<WebhookHandl
 
     try {
       const { customerId } = await upsertInstagramCustomerIdentity(config, msg);
-      const conversationId = await findOrCreateConversation(config, customerId, msg.senderId);
+      const conversationId = await findOrCreateConversation(config, customerId, msg.senderId, msg.channel);
       const persisted = await persistInboundMessage(config, conversationId, msg);
       if (persisted) base.persisted++;
       else base.skippedDuplicates++;

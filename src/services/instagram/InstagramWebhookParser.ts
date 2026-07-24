@@ -62,6 +62,10 @@ export function normalizeInstagramPayload(payload: unknown): NormalizedInstagram
   const root = payload as { object?: string; entry?: unknown[] } | null;
   if (!root || !Array.isArray(root.entry)) return out;
 
+  // Facebook Messenger arrives as object:"page" with the SAME entry[].messaging[] shape.
+  // Tag it MESSENGER so downstream persists/labels it as a Messenger conversation.
+  const channel: NormalizedInstagramMessage["channel"] = root.object === "page" ? "MESSENGER" : "INSTAGRAM_DIRECT";
+
   for (const entryRaw of root.entry) {
     const entry = entryRaw as { id?: string; messaging?: unknown[] };
     const accountId = typeof entry.id === "string" ? entry.id : null;
@@ -78,9 +82,9 @@ export function normalizeInstagramPayload(payload: unknown): NormalizedInstagram
       const timestamp = typeof ev.timestamp === "number" ? ev.timestamp : Date.now();
 
       // Non-message events — classified, no inbound persisted.
-      if (ev.delivery) { out.push(stub("delivery", accountId, senderId, recipientId, timestamp)); continue; }
-      if (ev.read) { out.push(stub("read", accountId, senderId, recipientId, timestamp)); continue; }
-      if (ev.reaction) { out.push(stub("reaction", accountId, senderId, recipientId, timestamp, ev.reaction.mid)); continue; }
+      if (ev.delivery) { out.push(stub("delivery", accountId, senderId, recipientId, timestamp, undefined, channel)); continue; }
+      if (ev.read) { out.push(stub("read", accountId, senderId, recipientId, timestamp, undefined, channel)); continue; }
+      if (ev.reaction) { out.push(stub("reaction", accountId, senderId, recipientId, timestamp, ev.reaction.mid, channel)); continue; }
 
       const msg = ev.message;
       if (!msg || !senderId) continue; // unknown/unsupported event — ignored
@@ -91,7 +95,7 @@ export function normalizeInstagramPayload(payload: unknown): NormalizedInstagram
         isEcho ? "echo" : msg.text ? "text" : attachments.length > 0 ? "attachment" : "unsupported";
 
       out.push({
-        channel: "INSTAGRAM_DIRECT",
+        channel,
         instagramAccountId: accountId,
         pageId: accountId,
         senderId,
@@ -165,9 +169,10 @@ function stub(
   recipientId: string | null,
   timestamp: number,
   mid?: string,
+  channel: NormalizedInstagramMessage["channel"] = "INSTAGRAM_DIRECT",
 ): NormalizedInstagramMessage {
   return {
-    channel: "INSTAGRAM_DIRECT",
+    channel,
     instagramAccountId: accountId,
     pageId: accountId,
     senderId: senderId ?? "unknown",
