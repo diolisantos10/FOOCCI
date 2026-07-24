@@ -251,7 +251,7 @@ type CampaignDetail = {
 type CampaignBudgetSnapshot = {
   enabled: boolean;
   providerMode: "EVOLUTION_WEB" | "META_CLOUD";
-  distributionMode: "EQUAL" | "PRIORITY" | "MANUAL";
+  distributionMode: "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
   globalDailyUsed?: number;
   globalDailyLimit?: number;
   globalCycleLimit?: number;
@@ -4514,7 +4514,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // How the daily budget is split across campaigns (EQUAL | AUDIENCE | MANUAL) —
   // saved through the full raw safety config (the PATCH replaces the whole object).
   const [safetyRaw, setSafetyRaw]   = useState<Record<string, unknown> | null>(null);
-  const [distMode, setDistMode]     = useState<string>("EQUAL");
+  const [distMode, setDistMode]     = useState<string>("AUDIENCE");
   const [savingDist, setSavingDist] = useState(false);
   useEffect(() => {
     fetch("/api/settings/crm-safety")
@@ -4527,7 +4527,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           safe:   data.warmup?.safeDailyLimit ?? 0,
         });
         setSafetyRaw(data);
-        setDistMode((data.crmWhatsAppSafety as { distributionMode?: string } | undefined)?.distributionMode ?? "EQUAL");
+        setDistMode((data.crmWhatsAppSafety as { distributionMode?: string } | undefined)?.distributionMode ?? "AUDIENCE");
       })
       .catch(() => {});
   }, [readyMadeReload]);

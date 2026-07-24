@@ -71,7 +71,8 @@ describe("CRMWhatsAppBudgetPlanner", () => {
 
   it("(4) a campaign with no eligible recipients hands its slot to the others", () => {
     const plan = CRMWhatsAppBudgetPlanner.plan({
-      config:            cfg({ globalDailyLimit: 50, globalCycleLimit: 5 }),
+      // EQUAL-mode semantics: an empty campaign reports NO_ELIGIBLE_RECIPIENTS.
+      config:            cfg({ globalDailyLimit: 50, globalCycleLimit: 5, distributionMode: "EQUAL" }),
       globalSentToday:   0,
       instanceConnected: true,
       campaigns:         [

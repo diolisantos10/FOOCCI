@@ -109,7 +109,10 @@ export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
   globalDailyLimit:               50, // Evolution Web default — keep the number safe
   globalCycleLimit:               5,  // total across ALL campaigns per cron run
   minMinutesBetweenCycles:        10,
-  distributionMode:               "EQUAL",
+  // AUDIENCE by default: split the day's budget proportionally to each campaign's
+  // eligible audience. This is the only mode that bypasses the per-campaign 200/day
+  // clamp, so a single big campaign can use the full daily budget (Meta 900).
+  distributionMode:               "AUDIENCE",
   stopOnInstanceDisconnected:     true,
   pauseOnFailureRatePercent:      50,
   maxConsecutiveProviderFailures: 3,

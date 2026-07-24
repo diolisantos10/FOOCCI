@@ -880,7 +880,7 @@ export class ScheduledCampaignRunnerService {
       return {
         enabled:          false,
         providerMode:     budget?.providerMode ?? "EVOLUTION_WEB",
-        distributionMode: budget?.distributionMode ?? "EQUAL",
+        distributionMode: budget?.distributionMode ?? "AUDIENCE",
       };
     }
 

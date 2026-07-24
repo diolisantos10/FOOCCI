@@ -215,6 +215,8 @@ export default function MarketingSettingsPage() {
                   label="Distribuição do limite"
                   hint={budget.distributionMode === "MANUAL"
                     ? "Manual: cada campanha usa o próprio limite diário configurado nela. Os limites globais continuam valendo."
+                    : budget.distributionMode === "AUDIENCE"
+                    ? "Por audiência: divide o orçamento do dia proporcional ao tamanho do público de cada campanha — usa todo o limite disponível."
                     : "Como o orçamento diário é dividido entre as campanhas ativas."}
                 >
                   <select
@@ -222,6 +224,7 @@ export default function MarketingSettingsPage() {
                     onChange={(e) => setBudget("distributionMode", e.target.value as CRMWhatsAppBudgetConfig["distributionMode"])}
                     className={INPUT}
                   >
+                    <option value="AUDIENCE">Por audiência (recomendado)</option>
                     <option value="EQUAL">Igualitária entre campanhas</option>
                     <option value="PRIORITY">Por prioridade</option>
                     <option value="MANUAL">Manual (limite de cada campanha)</option>
