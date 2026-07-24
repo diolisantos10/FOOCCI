@@ -26,6 +26,9 @@ export interface FailureMode {
   subsystem: string;
   /** Como o usuário costuma DESCREVER o sintoma (linguagem do lojista). */
   symptom: string;
+  /** Palavras/expressões-gatilho curadas — o casamento primário e mais confiável.
+   *  Uma delas no relato já indica este modo (ver matchFailureModes). */
+  triggers: string[];
   /** A causa provável, em termos técnicos. */
   likelyCause: string;
   /** Sinais que CONFIRMAM esta causa (o agente exige sinal antes de concluir). */
@@ -81,13 +84,48 @@ export const SUBSYSTEMS: readonly SubsystemInfo[] = [
     impact: "Se trava, campanhas param de sair ou ficam presas em envio.",
     signals: ["job de campanha zumbi", "execuções presas em PENDING/SENDING"],
   },
+  {
+    key: "printing",
+    name: "Impressão de comandas (Carteiro)",
+    impact: "Se cai, as comandas não saem na cozinha/caixa e o pedido não é preparado.",
+    signals: [
+      "Configurações → Impressoras mostra 'Carteiro conectado'?",
+      "print agent lastSeenAt < 30s (online)",
+      "estação (Cozinha/Caixa) com impressora escolhida",
+    ],
+  },
 ];
 
 export const FAILURE_MODES: readonly FailureMode[] = [
   {
+    key: "printer_not_printing",
+    subsystem: "printing",
+    symptom: "As comandas não estão saindo na impressora da cozinha/caixa.",
+    triggers: [
+      "impressora", "impressão", "imprimir", "imprime", "não imprime", "não sai comanda",
+      "comanda", "comandas", "carteiro", "não sai o pedido na cozinha", "papel",
+    ],
+    likelyCause: "Carteiro (programa no PC) desconectado, estação sem impressora escolhida, ou a impressora física offline (papel/energia/cabo).",
+    confirmingSignals: ["Configurações → Impressoras: 'Carteiro conectado'?", "estação com impressora selecionada?"],
+    runbook: [
+      "Em Configurações → Impressoras, veja se o topo mostra 'Carteiro conectado'.",
+      "Se NÃO conectado: abra o programa Carteiro no computador da cozinha (Windows) e confirme que está rodando; se preciso, pareie de novo com o código da tela.",
+      "Se conectado: no cartão '1. Impressora de cada estação', confirme que a estação (Cozinha/Caixa) tem uma impressora escolhida e clique em 🖨️ Testar.",
+      "Cheque o básico da impressora física: ligada, com papel, cabo/USB conectado.",
+      "Se o teste sai mas o pedido não: revise o cartão '2. Para onde vai cada categoria' (mapeamento categoria → estação).",
+      "Reimprima o pedido pelo botão 🖨️ Reimprimir.",
+    ],
+    remediationAction: null, // impressão local depende de hardware/PC do restaurante — orienta e escala.
+    severity: "HIGH",
+  },
+  {
     key: "meta_inbound_stopped",
     subsystem: "whatsapp_meta",
     symptom: "Os pedidos/mensagens pararam de chegar no WhatsApp, mas dá pra enviar.",
+    triggers: [
+      "não chega", "pararam de chegar", "não recebo", "não estou recebendo",
+      "mensagens não chegam", "pedidos não chegam", "não caem os pedidos", "sumiram as mensagens",
+    ],
     likelyCause: "Webhook de entrada do Meta dessinscrito ou fila de entrada presa.",
     confirmingSignals: ["/api/admin/meta/diag mostra subscribed_apps vazio ou phone sem inbound"],
     runbook: [
@@ -103,6 +141,7 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "evolution_disconnected",
     subsystem: "whatsapp_evolution",
     symptom: "O WhatsApp (não-oficial) caiu / apareceu como desconectado.",
+    triggers: ["desconectou", "desconectado", "caiu o whatsapp", "qr code", "qrcode", "reconectar", "instância", "evolution", "pedindo qr", "aparelho desconectou"],
     likelyCause: "Instância Evolution em estado 'close' — sessão caiu.",
     confirmingSignals: ["/api/evolution/status = close"],
     runbook: [
@@ -117,6 +156,7 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "db_connection_exhaustion",
     subsystem: "database",
     symptom: "O sistema todo ficou fora do ar / erro ao abrir qualquer tela.",
+    triggers: ["fora do ar", "não abre", "tudo travado", "sistema caiu", "nenhuma tela", "erro em tudo", "too many clients", "site caiu", "não carrega nada"],
     likelyCause: "Exaustão de conexões do Postgres ('too many clients already').",
     confirmingSignals: ["/api/health db = unreachable", "logs com 'too many clients'"],
     runbook: [
@@ -131,6 +171,7 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "migration_stuck_p3009",
     subsystem: "deploy_migrations",
     symptom: "A versão nova não sobe / deploy falhando repetidamente.",
+    triggers: ["deploy", "não sobe", "versão nova", "atualização não", "p3009", "deploy falhando", "build falhou"],
     likelyCause: "Migração travada (P3009) bloqueando o preDeploy.",
     confirmingSignals: ["deploy FAILED com P3009", "migrate-deploy.sh em retry"],
     runbook: [
@@ -145,6 +186,7 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "ai_key_invalid",
     subsystem: "ai_brain",
     symptom: "As IAs pararam de responder direito / respostas genéricas.",
+    triggers: ["ia parou", "respostas genéricas", "não responde direito", "fallback", "agente bobo", "atendente burro", "ia sem sentido", "respostas ruins"],
     likelyCause: "OPENAI_API_KEY ausente ou inválida — Brain em fallback.",
     confirmingSignals: ["/api/health openaiKey = false", "401 Incorrect API key nos logs"],
     runbook: [
@@ -159,6 +201,7 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "campaign_queue_stuck",
     subsystem: "campaign_queue",
     symptom: "As campanhas não estão saindo / travadas.",
+    triggers: ["campanha não sai", "campanha travada", "não está enviando", "envio parado", "campanha presa", "não disparou a campanha"],
     likelyCause: "Job de campanha zumbi ou execuções presas em SENDING.",
     confirmingSignals: ["execuções antigas ainda em PENDING/SENDING"],
     runbook: [
@@ -194,20 +237,26 @@ export function buildKnowledgeMapContext(): string {
   ].join("\n");
 }
 
-/** Sobreposição mínima de palavras para considerar um modo de falha (evita que
- *  uma única palavra genérica — "pedidos", "banco" — force um diagnóstico). */
+/** Pontuação mínima para considerar um modo de falha. Um gatilho curado vale 2
+ *  (basta um pra casar); a sobreposição de palavras do sintoma é secundária. */
 const MIN_MATCH_SCORE = 2;
+const TRIGGER_WEIGHT = 2;
 
-/** Acha o(s) modo(s) de falha cujo sintoma casa com o relato (heurística por palavra-chave).
- *  Conservador de propósito: na dúvida NÃO casa — o agente prefere pedir mais
- *  informação a inventar uma causa. */
+/** Acha o(s) modo(s) de falha que casam com o relato.
+ *
+ *  Sinal PRIMÁRIO: palavras-gatilho curadas (específicas por falha) — uma já casa.
+ *  Sinal secundário: sobreposição de palavras do próprio sintoma (desempate).
+ *  Conservador de propósito: sem gatilho e sem sobreposição suficiente, NÃO casa —
+ *  o agente prefere pedir detalhe a inventar causa (e nunca troca a pergunta do
+ *  usuário por um sinal de sistema sem relação). */
 export function matchFailureModes(report: string): FailureMode[] {
   const t = report.toLowerCase();
   const hits: Array<{ m: FailureMode; score: number }> = [];
   for (const m of FAILURE_MODES) {
-    const words = `${m.symptom} ${m.likelyCause}`.toLowerCase().match(/[a-zà-ú]{4,}/g) ?? [];
-    const uniq = [...new Set(words)];
-    const score = uniq.filter((w) => t.includes(w)).length;
+    const triggerHits = m.triggers.filter((g) => t.includes(g.toLowerCase())).length;
+    const words = m.symptom.toLowerCase().match(/[a-zà-ú]{4,}/g) ?? [];
+    const wordScore = [...new Set(words)].filter((w) => t.includes(w)).length;
+    const score = triggerHits * TRIGGER_WEIGHT + wordScore;
     if (score >= MIN_MATCH_SCORE) hits.push({ m, score });
   }
   return hits.sort((a, b) => b.score - a.score).map((h) => h.m);

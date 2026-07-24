@@ -61,6 +61,30 @@ describe("SupportIncidentReasoner — diagnostica, explica, escala (shadow-safe)
     expect(d.note).toMatch(/IA indisponível/i);
   });
 
+  it("REGRESSÃO: impressora com webhook de pagamento ausente → aponta IMPRESSÃO, não pagamento", async () => {
+    // O bug: MP_WEBHOOK_SECRET ausente sequestrava o diagnóstico de qualquer
+    // relato. Agora é opcional (não derruba a saúde) e o relato de impressora
+    // ancora no subsistema certo.
+    delete process.env.MP_WEBHOOK_SECRET;
+    reasonAsAgent.mockResolvedValue(llmOutcome("Parece a impressão de comandas. Veja se o Carteiro está conectado em Configurações → Impressoras."));
+    const d = await reasonSupportIncident({ restaurantId: "r1", report: "a impressora não está imprimindo os pedidos", now: NOW });
+
+    expect(d.classification).toBe("INCIDENT");
+    expect(d.suspectedSubsystem).toBe("printing");
+    expect(d.runbook.join(" ")).toMatch(/carteiro/i);
+    expect(d.executed).toBe(false);
+  });
+
+  it("relato sem relação + integração opcional ausente + infra ok → pede detalhe, não inventa incidente", async () => {
+    delete process.env.MP_WEBHOOK_SECRET;
+    reasonAsAgent.mockResolvedValue(llmOutcome("Me conta mais: qual tela, quando começou?"));
+    const d = await reasonSupportIncident({ restaurantId: "r1", report: "estou com uma dúvida esquisita aqui", now: NOW });
+
+    expect(d.classification).toBe("NEEDS_MORE_INFO");
+    expect(d.suspectedSubsystem).toBeNull();
+    expect(d.escalate).toBe(true);
+  });
+
   it("relato vazio pede mais informação", async () => {
     const d = await reasonSupportIncident({ restaurantId: "r1", report: "  ", now: NOW });
     expect(d.classification).toBe("NEEDS_MORE_INFO");

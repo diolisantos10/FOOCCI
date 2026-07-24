@@ -87,8 +87,11 @@ export async function reasonSupportIncident(input: SupportReasonInput): Promise<
   const modes = matchFailureModes(report);
   const top = modes[0] ?? null;
 
+  // INCIDENTE só quando um modo de falha casou com o RELATO, ou quando a infra
+  // CRÍTICA está caída (snap.healthy já ignora integração opcional ausente). Sem
+  // isso, pedimos detalhe — nunca fabricamos incidente a partir de sinal de fundo.
   const classification: IncidentClassification =
-    top || !snap.healthy ? "INCIDENT" : "NO_INCIDENT_DETECTED";
+    top || !snap.healthy ? "INCIDENT" : "NEEDS_MORE_INFO";
 
   const action = findAction(top?.remediationAction);
   const plan = planRemediation(top?.remediationAction, currentMode());
@@ -100,14 +103,17 @@ export async function reasonSupportIncident(input: SupportReasonInput): Promise<
     buildKnowledgeMapContext(),
     "",
     top
-      ? `HIPÓTESE MAIS PROVÁVEL (determinística, do mapa): [${top.subsystem}] ${top.symptom} — ${top.likelyCause}. Severidade ${top.severity}. Ação candidata: ${top.remediationAction ?? "nenhuma (escalar)"}.`
-      : "Nenhum modo de falha conhecido casou com o relato — não afirme causa sem sinal.",
+      ? `HIPÓTESE MAIS PROVÁVEL (determinística, do mapa): [${top.subsystem}] ${top.symptom} — ${top.likelyCause}. Severidade ${top.severity}. Ação candidata: ${top.remediationAction ?? "nenhuma (escalar)"}.\nRUNBOOK sugerido:\n${top.runbook.map((s, i) => `${i + 1}. ${s}`).join("\n")}`
+      : "Nenhum modo de falha conhecido casou com o relato. NÃO afirme causa sem sinal e NÃO troque o assunto por um sinal de sistema sem relação — foque no que o usuário descreveu e peça os detalhes que faltam.",
   ].join("\n");
 
   const sanitizedInput = [
     `RELATO DO USUÁRIO: "${report}"`,
-    "Explique ao lojista, em português claro e calmo, o que provavelmente está acontecendo e o próximo passo.",
-    "Use SOMENTE os sinais e o mapa fornecidos. Se os sinais não sustentam uma causa, diga que precisa de mais informação e escale — não adivinhe.",
+    "Responda EXATAMENTE o problema do relato — nunca troque o assunto por outro.",
+    "Explique ao lojista, em português claro e calmo, o que provavelmente está acontecendo e o próximo passo prático.",
+    "Se houver um runbook para a hipótese, guie pelos primeiros passos dele em linguagem simples.",
+    "Os SINAIS DO SISTEMA são contexto de FUNDO: só cite um se ele tiver relação direta com o relato. Um item opcional ausente NÃO é a causa de um problema sobre outro assunto.",
+    "Se nada explica o relato, diga com honestidade que precisa de mais detalhes (qual tela, quando começou, o que aparece) e escale — não adivinhe.",
     "Nunca exponha segredo/token. Nunca prometa que resolveu sem confirmação.",
   ].join(" ");
 
