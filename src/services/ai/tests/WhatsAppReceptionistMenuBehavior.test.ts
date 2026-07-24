@@ -563,6 +563,55 @@ describe("buildLooseAddressReply — address with no order session", () => {
   });
 });
 
+// ── Per-option phrase override (opt.message overrides ANY flow's default) ─────
+
+describe("buildFlowReply — per-option phrase override", () => {
+  it("order: uses opt.message instead of orderPreMessage, still appends the URL", () => {
+    const opt: MenuOption = { id: "o", label: "Fazer pedido", flow: "order", message: "Bora pedir? 🍣" };
+    const reply = buildFlowReply(opt, makeCtx());
+    expect(reply).toContain("Bora pedir? 🍣");
+    expect(reply).not.toContain("Clique no link");                          // default gone
+    expect(reply).toContain("https://foocci.com.br/pedido/sushi-cazza");    // action preserved
+  });
+
+  it("handoff: uses opt.message instead of handoffMessage", () => {
+    const opt: MenuOption = { id: "h", label: "Falar com atendente", flow: "handoff", message: "Já te transfiro! 👋" };
+    expect(buildFlowReply(opt, makeCtx())).toBe("Já te transfiro! 👋");
+  });
+
+  it("menu: uses opt.message as the lead-in, still appends the URL", () => {
+    const opt: MenuOption = { id: "m", label: "Cardápio", flow: "menu", message: "Deu fome? Olha só 👇" };
+    const reply = buildFlowReply(opt, makeCtx());
+    expect(reply).toContain("Deu fome? Olha só 👇");
+    expect(reply).not.toContain("Aqui está nosso cardápio");
+    expect(reply).toContain("https://foocci.com.br/pedido/sushi-cazza");
+  });
+
+  it("promotions: uses opt.message as the lead-in, still appends the URL", () => {
+    const opt: MenuOption = { id: "p", label: "Promoções", flow: "promotions", message: "Ofertas da semana 🔥" };
+    const reply = buildFlowReply(opt, makeCtx());
+    expect(reply).toContain("Ofertas da semana 🔥");
+    expect(reply).toContain("https://foocci.com.br/pedido/sushi-cazza");
+  });
+
+  it("text_order: uses opt.message instead of the built-in confirmation", () => {
+    const opt: MenuOption = { id: "t", label: "Já sei o que quero", flow: "text_order", message: "Manda aí o que vai querer 📝" };
+    expect(buildFlowReply(opt, makeCtx())).toBe("Manda aí o que vai querer 📝");
+  });
+
+  it("blank/whitespace message falls back to the flow default", () => {
+    const opt: MenuOption = { id: "h", label: "Atendente", flow: "handoff", message: "   " };
+    expect(buildFlowReply(opt, makeCtx())).toBe("Estou chamando um atendente, aguarde um momento 🤝");
+  });
+
+  it("closed store ignores the custom order phrase (safety)", () => {
+    const opt: MenuOption = { id: "o", label: "Fazer pedido", flow: "order", message: "Bora pedir agora!" };
+    const reply = buildFlowReply(opt, makeCtx({ isCurrentlyOpen: false, closedMessage: "Estamos fechados." }));
+    expect(reply).toContain("Estamos fechados.");
+    expect(reply).not.toContain("Bora pedir agora!");
+  });
+});
+
 // ── New flow types (text_order / rodizio / club) ──────────────────────────────
 
 describe("buildFlowReply — text_order flow", () => {

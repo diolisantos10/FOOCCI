@@ -19,7 +19,7 @@ const menuOptionFields = {
   id:      z.string().min(1),
   label:   z.string().min(1, "Rótulo obrigatório").max(60),
   flow:    z.enum(FLOW_TYPES),
-  message: z.string().max(500).optional(),  // only used when flow = 'custom'
+  message: z.string().max(500).optional(),  // per-option reply text; overrides the default of ANY flow (blank = flow default)
 };
 
 export const subMenuOptionSchema = z.object(menuOptionFields);

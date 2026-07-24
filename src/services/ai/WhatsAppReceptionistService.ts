@@ -425,9 +425,21 @@ export function buildClubReply(_ctx: ReplyContext): string {
   );
 }
 
-/** Builds the reply for a specific selected menu option (by number or label). */
+/**
+ * Builds the reply for a specific selected menu option (by number or label).
+ *
+ * A per-option custom phrase (`opt.message`) overrides the DEFAULT text of ANY
+ * flow — not only `custom`. The flow's FUNCTIONAL part is always preserved: the
+ * cardápio link is still appended, the handoff is still triggered by the caller,
+ * and the closed-store handling still wins (a custom "faça seu pedido" phrase must
+ * never be sent while the store is closed). Blank/absent `message` → the flow's
+ * built-in default, exactly as before. This is what lets the owner reword every
+ * option from Agentes → WhatsApp without touching the back-end.
+ */
 export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
   const { orderPreMessage, pedidoUrl, handoffMessage } = ctx;
+  // Owner-defined phrase for THIS option, if any. Overrides only the text.
+  const phrase = opt.message?.trim() || null;
   switch (opt.flow) {
     case "order":
       if (!ctx.isCurrentlyOpen) {
@@ -438,7 +450,7 @@ export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
       }
       // Double newline so the URL sits on its own paragraph — WhatsApp renders a rich
       // link preview card which looks cleaner than an inline long URL.
-      return pedidoUrl ? `${orderPreMessage}\n\n${pedidoUrl}` : orderPreMessage;
+      return pedidoUrl ? `${phrase ?? orderPreMessage}\n\n${pedidoUrl}` : (phrase ?? orderPreMessage);
     case "handoff":
       if (!ctx.isCurrentlyOpen) {
         const base = ctx.closedMessage ?? "No momento estamos fechados.";
@@ -449,26 +461,23 @@ export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
           (menuList ? `\n\nEnquanto isso, posso te ajudar:${menuList}` : "")
         );
       }
-      return handoffMessage;
+      return phrase ?? handoffMessage;
     case "menu":
-      return pedidoUrl
-        ? `Aqui está nosso cardápio:\n\n${pedidoUrl}`
-        : "Entre em contato com a loja para acessar o cardápio.";
+      if (!pedidoUrl) return phrase ?? "Entre em contato com a loja para acessar o cardápio.";
+      return `${phrase ?? "Aqui está nosso cardápio:"}\n\n${pedidoUrl}`;
     case "promotions":
-      return pedidoUrl
-        ? `Confira nossas promoções atuais:\n\n${pedidoUrl}`
-        : "Entre em contato com a loja para saber sobre nossas promoções.";
+      if (!pedidoUrl) return phrase ?? "Entre em contato com a loja para saber sobre nossas promoções.";
+      return `${phrase ?? "Confira nossas promoções atuais:"}\n\n${pedidoUrl}`;
     case "custom":
-      if (opt.message?.trim()) return opt.message.trim();
-      return ctx.hoursText ?? ctx.welcomeMessage;
+      return phrase ?? (ctx.hoursText ?? ctx.welcomeMessage);
     case "text_order":
-      return buildTextOrderConfirmationReply();
+      return phrase ?? buildTextOrderConfirmationReply();
     case "rodizio":
-      return buildRodizioReply(ctx);
+      return phrase ?? buildRodizioReply(ctx);
     case "club":
-      return buildClubReply(ctx);
+      return phrase ?? buildClubReply(ctx);
     default:
-      return ctx.welcomeMessage;
+      return phrase ?? ctx.welcomeMessage;
   }
 }
 

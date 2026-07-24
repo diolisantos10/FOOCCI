@@ -522,16 +522,25 @@ function OptionCard({
           aria-label="Remover opção">✕</button>
       </div>
       <p className="pl-8 text-xs text-muted">{flow.icon} {flow.desc}</p>
-      {option.flow === "custom" && (
+      {option.flow !== "submenu" && (
         <div className="pl-8">
           <textarea
             value={option.message ?? ""}
             onChange={(e) => onChange({ message: e.target.value })}
             rows={2}
             maxLength={500}
-            placeholder="Mensagem enviada ao cliente ao selecionar esta opção…"
+            placeholder={
+              option.flow === "custom"
+                ? "Mensagem enviada ao cliente ao selecionar esta opção…"
+                : "Frase de resposta (opcional) — em branco usa o texto padrão desta ação."
+            }
             className="w-full resize-none rounded-lg border border-line2 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+          {option.flow !== "custom" && (
+            <p className="mt-1 text-[11px] text-muted">
+              A ação continua igual (ex.: link do cardápio, transferência) — isto troca só o texto que o cliente recebe.
+            </p>
+          )}
         </div>
       )}
       {option.flow === "submenu" && (
@@ -867,12 +876,15 @@ export function AgentePage() {
   const activeAgent = AGENT_TABS.find((a) => a.id === activeTab)!;
 
   const previewOpt      = menuOptions.find((o) => o.id === previewOptId) ?? null;
+  // A per-option phrase (opt.message) overrides the default text of ANY flow —
+  // mirrors buildFlowReply on the server so the preview matches what's sent.
+  const previewPhrase   = previewOpt?.message?.trim() || null;
   const previewResponse = previewOpt == null ? "" :
-    previewOpt.flow === "order"      ? [agentForm.orderPreMessage, agentForm.menuUrl].filter(Boolean).join("\n") :
-    previewOpt.flow === "handoff"    ? agentForm.handoffMessage :
-    previewOpt.flow === "menu"       ? (agentForm.menuUrl ? `Aqui está nosso cardápio:\n${agentForm.menuUrl}` : "Cardápio em configuração…") :
-    previewOpt.flow === "promotions" ? "Aqui estão nossas promoções ativas! 🎁" :
-    (previewOpt.message ?? "(mensagem personalizada)");;
+    previewOpt.flow === "order"      ? [previewPhrase ?? agentForm.orderPreMessage, agentForm.menuUrl].filter(Boolean).join("\n") :
+    previewOpt.flow === "handoff"    ? (previewPhrase ?? agentForm.handoffMessage) :
+    previewOpt.flow === "menu"       ? `${previewPhrase ?? "Aqui está nosso cardápio:"}${agentForm.menuUrl ? `\n${agentForm.menuUrl}` : ""}` :
+    previewOpt.flow === "promotions" ? `${previewPhrase ?? "Confira nossas promoções atuais:"}${agentForm.menuUrl ? `\n${agentForm.menuUrl}` : ""}` :
+    (previewPhrase ?? "(mensagem personalizada)");
 
   return (
     <div className="mx-auto max-w-2xl p-6">
