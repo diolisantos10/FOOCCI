@@ -85,7 +85,21 @@ export const runCrmGateForBrain: BrainQualityGateRunner = async () => {
   };
 };
 
+/** Gate do Suporte Técnico: prova que o freio de mão da escada de ação segura —
+ *  em sombra nada executa, ação fora do catálogo nunca é reconhecida — com P0=0. */
+export const runSupportGateForBrain: BrainQualityGateRunner = async () => {
+  const { runSupportBrainDiagnostic } = await import("@/services/support/SupportBrainDiagnostic");
+  const diag = runSupportBrainDiagnostic();
+  return {
+    passed: diag.status === "PASS" && diag.p0 === 0,
+    p0Count: diag.p0,
+    reason: diag.status === "PASS" ? `diagnóstico PASS (${diag.passed}/${diag.total})` : `diagnóstico FAIL (${diag.passed}/${diag.total}, p0=${diag.p0})`,
+    ranAt: new Date().toISOString(),
+  };
+};
+
 // Gates built-in registrados na carga do módulo.
 registerQualityGate("waiter", runWaiterGateForBrain);
 registerQualityGate("whatsapp", runWhatsAppGateForBrain);
 registerQualityGate("crm", runCrmGateForBrain);
+registerQualityGate("suporte-tecnico", runSupportGateForBrain);

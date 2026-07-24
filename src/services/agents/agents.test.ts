@@ -36,6 +36,7 @@ describe("Agent registry (code-defined defaults)", () => {
       "integration",
       "branding",
       "analytics-product",
+      "suporte-tecnico",
     ]) {
       expect(slugs).toContain(expected);
     }
@@ -55,8 +56,8 @@ describe("Agent registry (code-defined defaults)", () => {
     }
   });
 
-  it("the fully-defined agents (Waiter, CRM, WhatsApp) are ACTIVE; the rest are DRAFT placeholders", () => {
-    const ACTIVE_SLUGS = new Set(["waiter", "crm", "whatsapp"]);
+  it("the fully-defined agents (Waiter, CRM, WhatsApp, Suporte) are ACTIVE; the rest are DRAFT placeholders", () => {
+    const ACTIVE_SLUGS = new Set(["waiter", "crm", "whatsapp", "suporte-tecnico"]);
     for (const profile of getDefaultAgentProfiles()) {
       if (ACTIVE_SLUGS.has(profile.slug)) expect(profile.status).toBe("ACTIVE");
       else expect(profile.status).toBe("DRAFT");
