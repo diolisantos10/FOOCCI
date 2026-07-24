@@ -20,6 +20,9 @@ const SRC_ROOT = join(__dirname, "..", ".."); // src/
 const ALLOWED = new Set<string>([
   "lib/openai.ts",
   "services/brain/engines/OpenAIEngineAdapter.ts",
+  // Transcrição (voz→texto, Whisper) é um adapter de engine legítimo: não é chat,
+  // não passa pelo dispatcher callStructuredJson (que só faz system+user texto).
+  "services/brain/engines/TranscriptionAdapter.ts",
 ]);
 
 /** Dívida pré-lei, CONGELADA. Remover itens = progresso; adicionar = proibido.

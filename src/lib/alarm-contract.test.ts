@@ -77,16 +77,17 @@ describe("alarm contract — sound is bounded (sound window ≠ visual window)",
     expect(engine).toContain("resolvedOrderIds");
   });
 
-  it("each alarm rings ONLY on its own visible screen (order→Pedidos, handoff→Atendimento)", () => {
-    // The rule that ends the cross-screen bleed: sound = visible tab AND its home
-    // screen. Both gates must be present and both alarms must use them.
+  it("each alarm rings on any FOREGROUND tab, gated only by visibility (owner's request, 2026-07-23)", () => {
+    // The rule that ends the cross-screen bleed WITHOUT muting off-screen tabs:
+    // sound = this tab is in the foreground. Which screen you are on no longer
+    // gates (the 2026-07-14 per-screen over-correction is gone — it forced the
+    // owner to keep Pedidos open to hear anything). Both alarms use the visibility
+    // gate, and neither is pinned to a specific route anymore.
     expect(engine).toContain("isVisibleRef");
-    expect(engine).toContain("isOrdersScreenRef");
-    expect(engine).toContain("isAtendimentoScreenRef");
     expect(engine).toContain("canRingOrder");
     expect(engine).toContain("canRingHandoff");
-    expect(engine).toContain('"/orders"');
-    expect(engine).toContain('"/atendimento"');
+    expect(engine).not.toContain("isOrdersScreenRef");
+    expect(engine).not.toContain("isAtendimentoScreenRef");
   });
 
   it("the old app-wide leader machinery that bled sound across screens is gone", () => {
