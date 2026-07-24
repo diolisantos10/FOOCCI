@@ -6,10 +6,11 @@
  *   Cozinha / Copa → comanda resumida com APENAS os itens roteados para aquela
  *                    estação (categoria → estação, em MenuCategory.printStationKeys).
  *
- * Routing rules:
+ * Routing rules (honor the panel — never spray, never lose a ticket):
  *   - An item prints on every kitchen station its category is mapped to.
- *   - Fail-safe: an item whose category is unmapped (or mapped only to stations
- *     without a printer) prints on ALL kitchen printers — a ticket is never lost.
+ *   - Mapped ONLY to the caixa/cupom → no kitchen comanda (the nota already lists it).
+ *   - Unmapped, or mapped only to a kitchen without a printer → the DEFAULT kitchen
+ *     (the first kitchen with a printer, by position) — one ticket, never all of them.
  *   - Stations without an assigned printer are skipped.
  *
  * Idempotent: an atomic `printQueuedAt` stamp guarantees one enqueue per order.
@@ -147,13 +148,33 @@ export class PrintQueueService {
     const catToStations = new Map<string, string[]>();
     for (const c of categories) catToStations.set(c.id, c.printStationKeys ?? []);
 
-    const kitchenKeys = printable.filter((s) => !CASHIER_STATION_KEYS.has(s.key)).map((s) => s.key);
+    // A printer assigned to a cashier station prints ONLY the full nota — never a
+    // kitchen comanda. Computed first so kitchen routing can steer clear of it.
+    const cashierPrinters = new Set(
+      printable.filter((s) => CASHIER_STATION_KEYS.has(s.key)).map((s) => s.printerName!.trim()),
+    );
 
-    // Which kitchen stations should this item print on?
+    // Kitchens a comanda can actually land on: not a cashier station, and not sitting
+    // on a printer the caixa already owns. The first one (lowest position) is the
+    // "estação padrão" — where items whose category has no kitchen fall, ONE ticket
+    // each, never a copy on every printer.
+    const kitchenKeys = printable
+      .filter((s) => !CASHIER_STATION_KEYS.has(s.key) && !cashierPrinters.has(s.printerName!.trim()))
+      .map((s) => s.key);
+    const defaultKitchen = kitchenKeys[0] ?? null;
+
+    // Which kitchen(s) should this item print on? Honors what the panel configured:
+    //   • mapped to real kitchen(s)   → exactly those, and only those
+    //   • mapped ONLY to caixa/cupom  → nothing (the caixa nota already lists it)
+    //   • unmapped, or mapped only to a printerless kitchen → the estação padrão
+    // Never sprays to every kitchen; never silently drops an item on the floor.
     const stationsForItem = (categoryId: string | null): string[] => {
       const mapped = categoryId ? (catToStations.get(categoryId) ?? []) : [];
-      const valid = mapped.filter((k) => kitchenKeys.includes(k));
-      return valid.length > 0 ? valid : kitchenKeys; // fail-safe: never lose a ticket
+      const validKitchens = mapped.filter((k) => kitchenKeys.includes(k));
+      if (validKitchens.length > 0) return validKitchens;
+      const cashierOnly = mapped.length > 0 && mapped.every((k) => CASHIER_STATION_KEYS.has(k));
+      if (cashierOnly) return [];
+      return defaultKitchen ? [defaultKitchen] : [];
     };
 
     const title = `Pedido ${formatOrderNumber(order.orderNumber, order.id)}`;
@@ -162,11 +183,6 @@ export class PrintQueueService {
       printerName: string; title: string; body: string;
     }> = [];
 
-    // A printer assigned to a cashier station prints ONLY the full nota — never
-    // a kitchen comanda — and only one nota even if CAIXA + CUPOM share it.
-    const cashierPrinters = new Set(
-      printable.filter((s) => CASHIER_STATION_KEYS.has(s.key)).map((s) => s.printerName!.trim()),
-    );
     const cashierDone = new Set<string>();
 
     for (const station of printable) {
