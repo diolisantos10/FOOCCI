@@ -28,6 +28,22 @@ componentes são escritos à mão. Ícones = **emoji** + SVG custom (`components
 
 ---
 
+## Referências visuais — o norte estético
+
+> Direção aprovada pelo dono (2026-07-24). Não copiar pixel a pixel — **absorver os princípios** e mirar nesse nível de acabamento em toda tela.
+
+**Painel (admin) → Linear · Stripe · Vercel**
+- **Linear** — hierarquia impecável e foco: **uma** ação principal clara por tela, densidade sem ruído, tudo rápido e direto.
+- **Stripe (Dashboard)** — muita informação com calma: tabelas legíveis, **números alinhados** (`tabular-nums`), estados de vazio/erro bem tratados, cor usada com parcimônia.
+- **Vercel** — minimalismo premium: neutro + **1 acento**, espaçamento generoso, tipografia como protagonista.
+- **O que puxar pro Foocci:** ~90% neutro + 10% laranja (já é o princípio), 1 ação primária por tela, respiro, dados sempre legíveis.
+
+**Loja (cliente, no celular) → iFood · Rappi**
+- **iFood / Rappi** — o padrão que o cliente brasileiro **já conhece** pra pedir comida: foto do prato em destaque, preço claro, botão de adicionar sempre à mão, carrinho e checkout curtos, tudo pensado pro polegar (**mobile-first**).
+- **O que puxar pro Foocci:** fluxo de pedir curto e óbvio, CTA sempre visível, foto + preço com destaque, zero fricção no celular.
+
+---
+
 ## 1. Cores
 
 ### Tokens semânticos (use ESTES — `tailwind.config.ts`)
@@ -125,6 +141,17 @@ const sc = brandSecondaryColor || "#128c7e";
 ## 6. Bibliotecas & utilitários
 - Sem lib de UI/ícones. `cn/clsx/tailwind-merge` **não** instalados — há um helper local `cx(...parts)` em `components/ui/index.tsx`. Use‑o (ou template‑literal) — não adicione lib nova sem motivo.
 - Presentes: `@dnd-kit/*` (drag‑and‑drop do menu), `qrcode`, `zod`, `sharp`, `date-fns`.
+- **Decisão — kit único (2026-07-24):** **não** adotar `shadcn/ui`. O `@/components/ui` é a **fonte única** de componentes e deve crescer (mais consistência, sem migração em massa). Se faltar um primitivo que exige acessibilidade de teclado (menu suspenso, dialog), adicionar **só aquela peça** (via Radix) sob demanda — nunca o sistema inteiro.
+
+---
+
+## 6.1 Estados obrigatórios (toda tela com dados trata os 3)
+
+Nenhuma tela pode "quebrar" ou ficar em branco quando faltam dados. Se a tela mostra algo que vem do servidor, ela **só está pronta** depois de tratar:
+
+1. **Carregando (loading)** — enquanto busca, mostrar **skeleton** (`bg-line2 animate-pulse rounded-xl`) ou um "Carregando…" discreto (`text-sm text-muted`). Nunca tela branca nem "pulo" de layout.
+2. **Vazio (empty state)** — quando ainda não há nada (0 pedidos, 0 produtos): mensagem amigável **+ o próximo passo** (um botão que ensina o que fazer). Ex.: *"Nenhum pedido ainda. Compartilhe seu cardápio pra receber o primeiro."* + `[Ver link]`.
+3. **Erro** — quando a busca falha: dizer **o que houve + como resolver** + botão **"Tentar de novo"**. Sem jargão, sem tela morta.
 
 ---
 
@@ -137,6 +164,9 @@ const sc = brandSecondaryColor || "#128c7e";
 6. Peso de fonte: **400 / 600** (reais).
 7. Reaproveite **`@/components/ui`** antes de escrever primitivo inline.
 8. Modal = padrão do `ConfirmDialog` (`bg-ink/45`, `z-50`, `rounded-2xl`).
+9. **Estados**: tela com dados do servidor trata **loading / vazio / erro** (seção 6.1).
+10. **Responsivo**: conferir em **375px (celular) / tablet / desktop** — a maioria acessa pelo celular. Tirar screenshot dos 3 antes de dar como pronta.
+11. **Referências**: a tela está no nível de Linear/Stripe/Vercel (painel) ou iFood/Rappi (loja)?
 
 ---
 

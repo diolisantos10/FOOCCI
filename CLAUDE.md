@@ -21,4 +21,13 @@ Ao trabalhar em UI:
   únicos embarcados).
 - Reaproveite o kit **`@/components/ui`** antes de reescrever primitivos inline.
 - Ao tocar numa tela, **corrija** o drift listado no fim do `DESIGN.md` — nunca amplie.
+
+### Regras permanentes de UI (não pular)
+
+1. **Seguir o `DESIGN.md`** em toda tela, componente ou estilo (detalhado acima). O `DESIGN.md` inclui as **Referências** (norte estético: Linear/Stripe/Vercel no painel, iFood/Rappi na loja) e os **Estados obrigatórios** (§6.1).
+
+2. **Responsivo obrigatório.** Toda tela criada ou alterada é conferida em **3 tamanhos** — **celular (375px)**, **tablet (~768px)** e **desktop (~1280px)** — tirando um **screenshot de cada** com o Playwright. A maioria acessa pelo **celular**, então ele é prioridade; nada de layout que só funciona no monitor.
+   > Nesta execução (web), o Playwright já vem **pré-instalado** (mesmo motor do Playwright MCP): renderizo a página nos 3 tamanhos e comparo. No Claude Code de desktop, usar o Playwright MCP (`"usa o playwright mcp"`).
+
+3. **Auto-revisão obrigatória.** Após qualquer mudança visual: tirar screenshot e **se autoavaliar de 0 a 10** em **hierarquia, tipografia, espaçamento e consistência**. Só apresentar ao dono quando estiver **8+ em todos os quatro** — se algo ficar abaixo, **iterar sozinho** antes de mostrar. Tratar sempre os 3 **Estados obrigatórios** (loading / vazio / erro) antes de considerar a tela pronta.
 </content>
