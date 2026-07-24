@@ -19,8 +19,26 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
       pin?: string; restaurantId?: string; phoneNumberId?: string; displayPhoneNumber?: string;
-      deregister?: boolean; force?: boolean;
+      deregister?: boolean; force?: boolean; activate?: boolean; enableCrm?: boolean;
     };
+
+    // ACTIVATE path: make Meta the live provider (bot replies + manual sends) and,
+    // optionally, route CRM campaigns through Meta. Used right after registering the
+    // real number so the assistant actually answers on it. No PIN needed.
+    if (body.activate) {
+      if (!body.restaurantId) return badRequest("restaurantId é obrigatório para ativar.");
+      await prisma.restaurant.update({
+        where: { id: body.restaurantId },
+        data:  { whatsappProvider: "META_CLOUD_API" },
+      });
+      if (body.enableCrm) {
+        await prisma.metaWhatsAppConfig.updateMany({
+          where: { restaurantId: body.restaurantId },
+          data:  { metaCrmEnabled: true },
+        });
+      }
+      return ok({ activated: true, provider: "META_CLOUD_API", crmViaMeta: body.enableCrm === true });
+    }
 
     // DEREGISTER path: free the number from the Cloud API so it can go to the WhatsApp
     // Business App (Coexistence prerequisite). Marks the config DISCONNECTED — no PIN needed.

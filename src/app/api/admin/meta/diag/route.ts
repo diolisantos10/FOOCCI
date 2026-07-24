@@ -39,6 +39,18 @@ export async function GET(req: NextRequest) {
       const cfg = await MetaConfigService.getResolved(row.restaurantId);
       if (!cfg) continue;
 
+      // Runtime routing flags: which provider actually sends (bot replies + manual) and
+      // whether CRM campaigns route through Meta. A CONNECTED Meta number still won't
+      // reply if the restaurant's provider is EVOLUTION.
+      const rest = await prisma.restaurant.findUnique({
+        where:  { id: row.restaurantId },
+        select: { whatsappProvider: true },
+      });
+      const cfgRow = await prisma.metaWhatsAppConfig.findUnique({
+        where:  { restaurantId: row.restaurantId },
+        select: { metaCrmEnabled: true, coexistence: true },
+      });
+
       const subscribed = await graph(`${cfg.wabaId}/subscribed_apps`, cfg.accessToken);
       const phone      = await graph(`${cfg.phoneNumberId}?fields=display_phone_number,verified_name,code_verification_status,quality_rating,platform_type,throughput,webhook_configuration`, cfg.accessToken);
       const wabaInfo   = await graph(`${cfg.wabaId}?fields=id,name,timezone_id,message_template_namespace`, cfg.accessToken);
@@ -53,6 +65,9 @@ export async function GET(req: NextRequest) {
       out.push({
         restaurantId:      row.restaurantId,
         connectionStatus:  cfg.connectionStatus,
+        whatsappProvider:  rest?.whatsappProvider ?? null,
+        metaCrmEnabled:    cfgRow?.metaCrmEnabled ?? false,
+        coexistence:       cfgRow?.coexistence ?? false,
         wabaId_masked:     mask(cfg.wabaId),
         phoneNumberId_masked: mask(cfg.phoneNumberId),
         displayPhoneNumber: cfg.displayPhoneNumber,
