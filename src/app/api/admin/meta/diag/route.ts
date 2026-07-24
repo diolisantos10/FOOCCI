@@ -57,6 +57,12 @@ export async function GET(req: NextRequest) {
       // All phone numbers still attached to this WABA — lets us see if a "freed" number is
       // in fact still held here (which blocks re-registering it on the WhatsApp Business app).
       const wabaPhones = await graph(`${cfg.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,platform_type,account_mode,code_verification_status,name_status`, cfg.accessToken);
+      // Approved templates gate business-initiated (outside-24h) CRM sends. Summarize by status.
+      const templatesRaw = await graph(`${cfg.wabaId}/message_templates?fields=name,status,category,language&limit=200`, cfg.accessToken);
+      const tData = (templatesRaw as { data?: Array<{ name?: string; status?: string; category?: string }> })?.data ?? [];
+      const templatesByStatus: Record<string, number> = {};
+      for (const t of tData) { const s = t.status ?? "UNKNOWN"; templatesByStatus[s] = (templatesByStatus[s] ?? 0) + 1; }
+      const approvedTemplates = tData.filter((t) => t.status === "APPROVED").map((t) => ({ name: t.name, category: t.category }));
 
       // Does subscribed_apps include OUR app id?
       const subApps = (subscribed as { data?: Array<{ whatsapp_business_api_data?: { id?: string; name?: string } }> })?.data ?? [];
@@ -78,6 +84,9 @@ export async function GET(req: NextRequest) {
         phone,
         wabaInfo,
         wabaPhones,
+        templatesByStatus,
+        approvedTemplateCount: approvedTemplates.length,
+        approvedTemplates,
       });
     }
 
