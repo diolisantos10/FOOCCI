@@ -12,9 +12,21 @@ interface Champion { campaignId: string; campaignName: string; phrase: string; l
 interface ShadowCampaign { campaignId: string; name: string; mode: "EXPLORING" | "OPTIMIZING"; projectedLiftPct: number | null; phrases: number }
 interface Activation { campaignId: string; name: string; agentActive: boolean }
 interface BriefingNote { kind: "WIN" | "OPPORTUNITY"; emoji: string; title: string; detail: string }
+interface WeeklyRecap {
+  hasActivity: boolean;
+  sent: number;
+  converted: number;
+  conversionRatePct: number | null;
+  revenue: number;
+  campaigns: number;
+  trend: "UP" | "DOWN" | "FLAT" | "NEW" | null;
+  headline: string;
+  subline: string | null;
+}
 interface AgentData {
   ok: boolean;
   globallyEnabled: boolean;
+  recap: WeeklyRecap | null;
   briefing: BriefingNote[];
   status: { mode: "ATIVO" | "APRENDIZ" | "DESLIGADO"; activeCampaigns: number; totalCampaigns: number; championsFound: number };
   champions: Champion[];
@@ -170,21 +182,39 @@ export default function CrmAgentPanel() {
         )}
       </div>
 
-      {/* O recado do agente — só aparece quando ele tem algo que se destaca */}
-      {!off && data.briefing.length > 0 && (
+      {/* O recado do agente — o RESUMO da semana aparece sempre; os DESTAQUES
+          (campeã/oportunidade) só quando há algo notável. */}
+      {!off && (data.recap || data.briefing.length > 0) && (
         <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
           <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-brand-600">📣 Recado do agente</p>
-          <div className="mt-3 flex flex-col gap-2">
-            {data.briefing.map((n, i) => (
-              <div key={i} className="flex items-start gap-2.5 rounded-xl border border-line bg-paper px-3 py-2.5">
-                <span className="mt-0.5 text-base">{n.emoji}</span>
-                <div>
-                  <p className="text-xs font-semibold text-ink">{n.title}</p>
-                  <p className="mt-0.5 text-[11px] text-ink2">{n.detail}</p>
+
+          {data.recap && (
+            <div className="mt-3 rounded-xl border border-line bg-paper px-3.5 py-3">
+              <p className="text-[13px] font-semibold text-ink">{data.recap.headline}</p>
+              {data.recap.subline && <p className="mt-1 text-[11.5px] text-ink2">{data.recap.subline}</p>}
+              {data.recap.hasActivity && (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <Stat n={data.recap.sent} label="Enviadas (7d)" />
+                  <Stat n={data.recap.converted} label="Converteram" />
+                  <Stat n={data.recap.conversionRatePct != null ? `${data.recap.conversionRatePct}%` : "—"} label="Conversão" />
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          )}
+
+          {data.briefing.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              {data.briefing.map((n, i) => (
+                <div key={i} className="flex items-start gap-2.5 rounded-xl border border-line bg-paper px-3 py-2.5">
+                  <span className="mt-0.5 text-base">{n.emoji}</span>
+                  <div>
+                    <p className="text-xs font-semibold text-ink">{n.title}</p>
+                    <p className="mt-0.5 text-[11px] text-ink2">{n.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

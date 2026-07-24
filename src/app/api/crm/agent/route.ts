@@ -12,6 +12,7 @@ import { findChampions } from "@/services/crm/CrmChampionDetector";
 import { replayShadow } from "@/services/crm/CrmShadowReplayService";
 import { isAgentActive, isAgentGloballyEnabled } from "@/services/crm/CrmAgentActivation";
 import { composeBriefing } from "@/services/crm/CrmAgentBriefing";
+import { buildWeeklyRecap } from "@/services/crm/CrmWeeklyRecap";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,13 +23,14 @@ export async function GET() {
   try { restaurantId = getTenantId(); }
   catch { return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }); }
 
-  const [globallyEnabled, champions, shadow, campaigns] = await Promise.all([
+  const [globallyEnabled, champions, shadow, campaigns, recap] = await Promise.all([
     isAgentGloballyEnabled(restaurantId).catch(() => true),
     findChampions(restaurantId).catch(() => ({ champions: [] })),
     replayShadow(restaurantId).catch(() => ({ campaigns: [], summary: { campaignsAnalyzed: 0, optimizing: 0, exploring: 0, avgProjectedLiftPct: null } })),
     prisma.campaign
       .findMany({ where: { restaurantId }, select: { id: true, name: true, scheduleConfig: true }, orderBy: { updatedAt: "desc" }, take: 100 })
       .catch(() => [] as Array<{ id: string; name: string; scheduleConfig: unknown }>),
+    buildWeeklyRecap(restaurantId).catch(() => null),
   ]);
 
   const activation = campaigns.map((c) => ({ campaignId: c.id, name: c.name, agentActive: isAgentActive(c.scheduleConfig) }));
@@ -42,6 +44,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     globallyEnabled,
+    recap,
     briefing,
     status: {
       mode: !globallyEnabled ? "DESLIGADO" : activeCount > 0 ? "ATIVO" : "APRENDIZ",
