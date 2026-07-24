@@ -14,7 +14,8 @@ import {
   HANDOFF_ALERT_ASSET,
   writeSoundPref,
 } from "@/lib/sound-prefs";
-import { playAlertAudio } from "@/lib/sound-player";
+import { playAlertAudio, armAlertAudio } from "@/lib/sound-player";
+import { markAudioArmed } from "@/lib/audio-gate";
 import type { AlertLoopDiagnostics } from "@/lib/alert-loop";
 
 // New-order alert uses the official Foocci order sound. The test button below
@@ -148,6 +149,7 @@ export default function SonsPage() {
     if (!audio) return;
     try {
       await playAlertAudio(audio, 100); // volume travado em 100%
+      markAudioArmed(); // testing here arms audio for the whole session, everywhere
       try { localStorage.setItem(SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
       setTestMsg("✓ Som de pedidos tocou com sucesso.");
       setAudioBlocked(false);
@@ -171,6 +173,7 @@ export default function SonsPage() {
     if (!audio) return;
     try {
       await playAlertAudio(audio, 100); // volume travado em 100%
+      markAudioArmed(); // testing here arms audio for the whole session, everywhere
       try { localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date().toISOString()); } catch { /* ignore */ }
       setTestMsg("✓ Som de atendimento tocou com sucesso.");
       setAudioBlocked(false);
@@ -190,17 +193,14 @@ export default function SonsPage() {
   }
 
   function unlockAudio() {
-    try {
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      setAudioBlocked(false);
-      setTestMsg("Áudio desbloqueado. Clique em Testar para confirmar.");
-      setTimeout(() => setTestMsg(null), 4000);
-    } catch { /* ignore */ }
+    // Arms the shared context AND unlocks the actual alert elements, then flips the
+    // app-wide gate so the "ativar som" bar disappears everywhere at once.
+    armAlertAudio(() =>
+      [orderAudioRef.current, handoffAudioRef.current].filter(Boolean) as HTMLAudioElement[],
+    );
+    setAudioBlocked(false);
+    setTestMsg("Áudio ativado neste dispositivo. Clique em Testar para confirmar.");
+    setTimeout(() => setTestMsg(null), 4000);
   }
 
   if (loading) {
@@ -271,7 +271,10 @@ export default function SonsPage() {
           onChange={(v) => patch({ soundEnabled: v })}
         />
         <p className="mt-3 text-xs text-muted">
-          Se o navegador bloquear o áudio, clique em &ldquo;Testar som&rdquo; uma vez neste computador para reautorizar.
+          O som se ativa sozinho no primeiro clique que você der dentro do Foocci (entrar, abrir um menu,
+          aceitar um pedido). Se por acaso ainda estiver bloqueado quando um pedido chegar, aparece uma
+          barra <strong>&ldquo;Toque para ativar o som&rdquo;</strong> na própria tela — um toque e pronto,
+          vale o dia inteiro. Não precisa mais vir aqui testar toda manhã.
         </p>
       </PageCard>
 
@@ -440,11 +443,13 @@ export default function SonsPage() {
       <PageCard>
         <SectionHeading title="Sobre o áudio no navegador" />
         <p className="text-sm text-ink2">
-          Navegadores modernos bloqueiam o áudio automático até o usuário interagir com a página.
-          Se os sons pararem de funcionar após recarregar, clique em qualquer lugar do Foocci uma vez
-          (ou use os botões <strong>Testar</strong> acima) para reautorizar. Esta tela controla as
-          configurações — os alertas tocam sozinhos em qualquer tela do Foocci que estiver aberta,
-          não precisa estar em Pedidos ou Atendimento.
+          Por segurança, todo navegador bloqueia áudio automático até você interagir com a página uma
+          vez. O Foocci aproveita <strong>qualquer</strong> interação natural — entrar no painel, abrir
+          um menu, aceitar um pedido, teclar — para liberar o som na hora, sem você perceber. Se um
+          pedido chegar antes de qualquer clique, aparece uma barra <strong>&ldquo;Toque para ativar o
+          som&rdquo;</strong> no topo da tela em que você estiver: um toque libera para a sessão inteira.
+          Depois de liberado, os alertas tocam sozinhos em qualquer tela do Foocci que estiver aberta em
+          primeiro plano — não precisa ficar na tela de Pedidos nem voltar aqui para testar todo dia.
         </p>
       </PageCard>
     </div>

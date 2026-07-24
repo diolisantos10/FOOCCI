@@ -14,6 +14,8 @@
  * volume go through the gain node.
  */
 
+import { markAudioArmed } from "./audio-gate";
+
 export const MAX_VOLUME = 400;
 
 /** Per-theme loudness multipliers applied on top of the saved volume. */
@@ -53,6 +55,31 @@ export function clampVolume(v: number): number {
   return Math.max(0, Math.min(MAX_VOLUME, Math.round(v)));
 }
 
+// ── Shared, long-lived AudioContext ──────────────────────────────────────────
+// ONE context for the whole tab, reused by every play AND by the arming path.
+// Unlocking it once (on any user gesture) keeps every later alert audible — even
+// after the tab has sat in the background all day, because we resume() it the
+// instant the tab comes back to the foreground. The old code spun up a throwaway
+// context per element, so the gesture that unlocked one never helped the next.
+let sharedCtx: AudioContext | null = null;
+
+export function getSharedAudioContext(): AudioContext | null {
+  const Ctor = getAudioContextCtor();
+  if (!Ctor) return null;
+  if (!sharedCtx) {
+    try { sharedCtx = new Ctor(); } catch { sharedCtx = null; }
+  }
+  return sharedCtx;
+}
+
+/** Resume the shared context if the browser suspended it (e.g. tab was backgrounded). */
+export async function resumeSharedAudioContext(): Promise<void> {
+  const ctx = sharedCtx;
+  if (ctx && ctx.state === "suspended") {
+    try { await ctx.resume(); } catch { /* needs a gesture — the arming path covers it */ }
+  }
+}
+
 /**
  * Play an alert at the given volume percentage (0–200).
  * Rejects with DOMException "NotAllowedError" when the browser blocks
@@ -82,7 +109,8 @@ export async function playAlertAudio(audio: HTMLAudioElement, volumePercent: num
 
   let wiring = existing;
   if (!wiring) {
-    const ctx = new Ctor();
+    const ctx = getSharedAudioContext();
+    if (!ctx) { audio.volume = Math.min(1, v); await audio.play(); return; }
     const source = ctx.createMediaElementSource(audio);
     const gain = ctx.createGain();
     source.connect(gain);
@@ -106,58 +134,74 @@ export async function playAlertAudio(audio: HTMLAudioElement, volumePercent: num
 }
 
 /**
- * Installs a one-time pointerdown listener on window that silently unlocks
- * browser autoplay policy without any visible UI.
+ * Arms audio for the whole tab, from inside a user gesture:
+ *  1. Resumes the shared AudioContext (Web Audio autoplay rule).
+ *  2. Plays each provided element at volume 0 then pauses — lifts the
+ *     HTMLMediaElement autoplay lock so later real plays resolve.
+ *  3. Flips the arming gate so the "ativar som" prompt disappears.
  *
- * On the first user interaction:
- *  1. Resumes (or creates) an AudioContext to satisfy Web Audio autoplay rules.
- *  2. Plays each provided audio element at volume 0 then immediately pauses,
- *     which satisfies the HTMLMediaElement autoplay policy in browsers that
- *     require a user gesture before play() resolves.
- *
- * After the first interaction the listener removes itself — it runs at most once.
- * Failures are silently swallowed; the operational code already handles the case
- * where play() rejects (falls back to beep or logs internally).
+ * MUST run inside a gesture (click / key / touch) — the browser's hard rule.
+ * We don't fight it; we just make the gesture be ANY natural interaction.
+ * Safe to call repeatedly; failures are swallowed (the loop handles a reject).
  */
-export function installSilentUnlock(getAudioElements: () => HTMLAudioElement[]): void {
-  if (typeof window === "undefined") return;
-
-  let done = false;
-
-  const handler = () => {
-    if (done) return;
-    done = true;
-    window.removeEventListener("pointerdown", handler, { capture: true });
-
-    const Ctor = getAudioContextCtor();
-    if (Ctor) {
-      try {
-        // Re-use a shared context if one was already wired, otherwise create one
-        const ctx = new Ctor();
-        if (ctx.state === "suspended") {
-          void ctx.resume().catch(() => {});
-        }
-        // Play a 1-sample silent buffer — resolves immediately
+export function armAlertAudio(getAudioElements: () => HTMLAudioElement[], onArmed?: () => void): void {
+  const Ctor = getAudioContextCtor();
+  if (Ctor) {
+    try {
+      const ctx = getSharedAudioContext();
+      if (ctx) {
+        if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+        // A 1-sample silent buffer resolves immediately and warms the context.
         const buf = ctx.createBuffer(1, 1, 22050);
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(ctx.destination);
         src.start(0);
-      } catch { /* ignore */ }
-    }
+      }
+    } catch { /* ignore */ }
+  }
 
-    for (const audio of getAudioElements()) {
-      try {
-        const saved = audio.volume;
-        audio.volume = 0;
-        void audio.play().then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-          audio.volume = saved;
-        }).catch(() => { audio.volume = saved; });
-      } catch { /* ignore */ }
-    }
+  for (const audio of getAudioElements()) {
+    try {
+      const saved = audio.volume;
+      audio.volume = 0;
+      void audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = saved;
+      }).catch(() => { audio.volume = saved; });
+    } catch { /* ignore */ }
+  }
+
+  markAudioArmed();
+  onArmed?.();
+}
+
+/**
+ * Installs capture-phase listeners so the FIRST natural interaction anywhere in
+ * the app — a click, a key, or a tap — arms audio (see armAlertAudio). This is
+ * the fix for "the sound only works after I go press Testar": the old hook armed
+ * only on `pointerdown`, so a keyboard user (or someone who never clicked INSIDE
+ * Foocci before the first order) stayed muted. Runs the arm at most once, then
+ * removes every listener. Returns a cleanup fn.
+ */
+export function installGlobalAudioArming(
+  getAudioElements: () => HTMLAudioElement[],
+  onArmed?: () => void,
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  const EVENTS: (keyof WindowEventMap)[] = ["pointerdown", "mousedown", "touchstart", "keydown", "click"];
+  let done = false;
+
+  const handler = () => {
+    if (done) return;
+    done = true;
+    for (const ev of EVENTS) window.removeEventListener(ev, handler, { capture: true });
+    armAlertAudio(getAudioElements, onArmed);
   };
 
-  window.addEventListener("pointerdown", handler, { capture: true, once: true });
+  for (const ev of EVENTS) window.addEventListener(ev, handler, { capture: true, passive: true });
+  return () => {
+    for (const ev of EVENTS) window.removeEventListener(ev, handler, { capture: true });
+  };
 }
