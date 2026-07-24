@@ -66,29 +66,41 @@ Ações seguras/reversíveis que cobrem os incidentes mais comuns:
 - Revalidar/refrescar token de integração expirado (sem expor o segredo).
 - Forçar um novo health-check e reportar.
 
-## 4. Peças a construir (o esqueleto)
+## 4. Peças construídas (o esqueleto — Fase 0 ✅ no ar)
 
-1. `src/services/support/TechAgentProfile.ts` — ficha padrão.
-2. `src/services/support/TechKnowledgeAdapter.ts` — mapa do sistema + sinais
-   read-only + catálogo de modos de falha/runbooks.
-3. `src/services/support/TechIncidentReasoner.ts` — `reasonTechIncident()` via
-   `reasonAsAgent("suporte-tecnico")`: recebe o relato, classifica, diagnostica,
-   propõe. Shadow-safe (`executed: false`).
-4. `src/services/support/TechRemediationLadder.ts` — a máquina da escada de ação
-   + a allowlist (começa vazia/sombra) + o executor governado.
-5. `src/services/support/TechQualityGate.ts` — registrado como
-   `runTechGateForBrain`.
-6. `src/app/api/support/tech/route.ts` — endpoint (tenant auth), texto ou voz.
-7. UI: aba/balão **"Ajuda técnica"** reaproveitando o widget de ajuda existente.
-8. Testes de cada peça (diagnóstico determinístico, gate, escada em sombra).
+Nomeadas `Support*` (o slug do agente é `suporte-tecnico`):
+
+1. ✅ `src/services/support/SupportAgentProfile.ts` — ficha/constituição +
+   `buildSupportProfileDirective()`. Registrada em `defaultAgentProfiles.ts`
+   (slug `suporte-tecnico`, área `GENERAL` — ver nota abaixo).
+2. ✅ `src/services/support/SupportKnowledgeMap.ts` — mapa do sistema + modos de
+   falha conhecidos + runbooks; casamento sintoma→falha conservador (≥2 palavras).
+3. ✅ `src/services/support/SupportSystemProbe.ts` — sinais read-only (banco +
+   presença de config crítica); nunca expõe valor de segredo.
+4. ✅ `src/services/support/SupportIncidentReasoner.ts` — `reasonSupportIncident()`
+   via `reasonAsAgent("suporte-tecnico")`. Classificação determinística +
+   explicação da IA + plano governado. `executed: false` invariante.
+5. ✅ `src/services/support/SupportRemediationLadder.ts` — escada de ação + catálogo
+   de ações reversíveis/idempotentes, TODAS desabilitadas na Fase 0.
+6. ✅ `src/services/support/SupportBrainDiagnostic.ts` + registro do gate
+   (`registerQualityGate("suporte-tecnico", ...)`) — prova P0=0 do freio de mão.
+7. ✅ `src/app/api/support/tech/route.ts` — endpoint (tenant), texto ou voz.
+8. ✅ UI: aba **"🛠️ Técnica"** no `HelpWidget` (`SupportTechChat.tsx`).
+9. ✅ Testes: 17 (mapa, escada, diagnostic, reasoner). tsc + lint limpos.
+
+> **Nota (área do enum):** não há `SUPPORT`/`TECH` em `AgentArea`. Para NÃO tocar
+> o schema (e evitar risco de migração/deploy), o agente vive em `GENERAL`. Uma
+> área dedicada é uma migração futura, quando for revisado.
 
 ## 5. Fases
 
-- **Fase 0 (esta noite):** esqueleto no molde, tudo em SOMBRA. O agente
-  diagnostica + explica + sugere; **não executa** nada em produção. Revisável.
-- **Fase 1 (após revisão):** ligar a allowlist mínima em ALLOWLIST, com auditoria
-  e limites — uma ação por vez, observando.
-- **Fase 2 (com confiança):** ampliar allowlist + subir a escada por tipo de ação.
+- **Fase 0 (feita, no ar):** esqueleto no molde, tudo em SOMBRA. O agente
+  diagnostica + explica + sugere; **não executa** nada em produção.
+- **Fase 1 (após sua revisão):** implementar os executores da allowlist mínima
+  (reprocessar webhook, reconectar Evolution, reenfileirar campanha) + ligar a
+  escada para `ALLOWLIST`, com auditoria e limites — uma ação por vez, observando.
+- **Fase 2 (com confiança):** ampliar allowlist + subir a escada por tipo de ação
+  + persistir o modo da escada por restaurante (hoje é hard-coded SHADOW).
 
 ## 6. Riscos e como o esqueleto os contém
 
