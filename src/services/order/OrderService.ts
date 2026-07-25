@@ -16,6 +16,7 @@ import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import { OrderNotificationService } from "@/services/order/OrderNotificationService";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
+import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
 
 export type OrderWithDetails = Order & {
   items: OrderItem[];
@@ -176,6 +177,10 @@ export class OrderService {
       // Enqueue station print jobs for the Carteiro (idempotent, internal guard).
       PrintQueueService.maybeEnqueueOrder(restaurantId, orderId).catch((e) =>
         console.error("[print] updateStatus enqueue failed:", e)
+      );
+      // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
+      FiscalEmissionService.maybeEmitForOrder(restaurantId, orderId).catch((e) =>
+        console.error("[fiscal] updateStatus emit failed:", e)
       );
     }
 

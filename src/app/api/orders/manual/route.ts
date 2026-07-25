@@ -23,6 +23,7 @@ import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { geocodeAddress, type LatLng } from "@/lib/geocoding";
 import { isQuoteStatusBlocked } from "@/lib/delivery-authorization";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
+import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
 
 const itemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -430,6 +431,10 @@ export async function POST(req: NextRequest) {
   // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
   PrintQueueService.maybeEnqueueOrder(restaurantId, order.id).catch((e) =>
     console.error("[print] manual order enqueue failed:", e),
+  );
+  // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
+  FiscalEmissionService.maybeEmitForOrder(restaurantId, order.id).catch((e) =>
+    console.error("[fiscal] manual order emit failed:", e),
   );
 
   const displayNumber = formatOrderNumber(order.orderNumber, order.id);
