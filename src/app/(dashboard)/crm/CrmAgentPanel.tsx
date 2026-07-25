@@ -23,9 +23,19 @@ interface WeeklyRecap {
   headline: string;
   subline: string | null;
 }
+interface DailyCohort { sent: number; converted: number; revenue: number; campaigns: number }
+interface DailyOverview {
+  agentName: string;
+  yesterday: DailyCohort;
+  weekToDate: DailyCohort;
+  rescues: number;
+  retrospective: string[];
+  nextActions: string[];
+}
 interface AgentData {
   ok: boolean;
   globallyEnabled: boolean;
+  daily: DailyOverview | null;
   recap: WeeklyRecap | null;
   briefing: BriefingNote[];
   status: { mode: "ATIVO" | "APRENDIZ" | "DESLIGADO"; activeCampaigns: number; totalCampaigns: number; championsFound: number };
@@ -140,6 +150,38 @@ export default function CrmAgentPanel() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 1º módulo: o diário do agente — retrospecto de ontem/semana + próximas
+          ações. Sempre visível (o resultado das campanhas existe com a IA on ou off). */}
+      {data.daily && (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-brand-600">
+              🗞️ {data.daily.agentName} — seu diário
+            </p>
+            <span className="text-[11px] text-muted">ontem · semana</span>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-line bg-paper px-3.5 py-3">
+            <ul className="flex flex-col gap-1.5">
+              {data.daily.retrospective.map((l, i) => (
+                <li key={i} className="text-[13px] leading-snug text-ink">• {l}</li>
+              ))}
+            </ul>
+
+            {data.daily.nextActions.length > 0 && (
+              <div className="mt-3 border-t border-line pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-ink2">🎯 Próximas ações</p>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {data.daily.nextActions.map((a, i) => (
+                    <li key={i} className="text-[12.5px] leading-snug text-ink2">→ {a}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Cabeçalho + status + master switch */}
       <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
         <div className="flex items-start justify-between gap-3">

@@ -13,6 +13,7 @@ import { replayShadow } from "@/services/crm/CrmShadowReplayService";
 import { isAgentActive, isAgentGloballyEnabled } from "@/services/crm/CrmAgentActivation";
 import { composeBriefing } from "@/services/crm/CrmAgentBriefing";
 import { buildWeeklyRecap } from "@/services/crm/CrmWeeklyRecap";
+import { buildDailyOverview } from "@/services/crm/CrmDailyOverview";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,18 @@ export async function GET() {
   const activation = campaigns.map((c) => ({ campaignId: c.id, name: c.name, agentActive: isAgentActive(c.scheduleConfig) }));
   const activeCount = activation.filter((a) => a.agentActive).length;
 
+  // Diário do agente (1º módulo): retrospecto de ontem/semana + próximas ações,
+  // derivadas das campeãs e das campanhas otimizando. Read-only.
+  const daily = await buildDailyOverview(restaurantId, {
+    agentName: "Recado",
+    nextActions: {
+      champions: champions.champions,
+      shadow: shadow.summary,
+      activeCount,
+      totalCampaigns: activation.length,
+    },
+  }).catch(() => null);
+
   // O "recado do agente": só fala quando há algo que se destaca (senão, vazio).
   const briefing = globallyEnabled
     ? composeBriefing({ champions: champions.champions, shadowCampaigns: shadow.campaigns, activation })
@@ -44,6 +57,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     globallyEnabled,
+    daily,
     recap,
     briefing,
     status: {
