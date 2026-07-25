@@ -23,6 +23,7 @@ const GROUPS: Group[] = [
       { href: "/settings/delivery",  label: "Entrega",    icon: "🛵" },
       { href: "/settings/operation", label: "Operação",   icon: "⏰" },
       { href: "/settings/payments",     label: "Pagamentos",  icon: "💳" },
+      { href: "/settings/notas-fiscais", label: "Notas Fiscais", icon: "🧾" },
       { href: "/settings/impressoras", label: "Impressoras", icon: "🖨️" },
       { href: "/settings/sons",       label: "Sons e alertas", icon: "🔔" },
     ],
