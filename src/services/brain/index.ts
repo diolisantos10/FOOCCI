@@ -144,3 +144,18 @@ export {
   type Atendimento,
   type ModoDeAtendimento,
 } from "./oficina/AtendenteDeFoto";
+export {
+  forjarPromptDeTexto,
+  forjarOpcoesDeTexto,
+  detectarTipoDeTexto,
+  type PedidoDeTexto,
+  type PromptDeTexto,
+  type TipoDeTexto,
+} from "./oficina/ForjaDeTexto";
+export {
+  atender,
+  lerMeio,
+  type Meio,
+  type PedidoNaPorta,
+  type RespostaDaPorta,
+} from "./oficina/PortaDaOficina";
