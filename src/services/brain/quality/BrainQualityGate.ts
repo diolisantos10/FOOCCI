@@ -73,14 +73,24 @@ export const runWhatsAppGateForBrain: BrainQualityGateRunner = async () => {
 };
 
 /** Gate do CRM: diagnóstico hermético do piso de segurança (sem oferta inventada,
- *  sem spam, sem repetição) com P0=0 — mesmo molde do WhatsApp. */
+ *  sem spam, sem repetição) com P0=0 — mais a BATERIA ADVERSARIAL (injeção de
+ *  desconto, vigilância/LGPD, urgência, quase-duplicata). Promoção só sobe se o
+ *  piso segurar tanto o caminho feliz quanto os ataques. Mesmo molde do WhatsApp. */
 export const runCrmGateForBrain: BrainQualityGateRunner = async () => {
-  const { runCrmBrainDiagnostic } = await import("@/services/crm/CrmBrainDiagnostic");
+  const [{ runCrmBrainDiagnostic }, { runCrmAdversarialProbes }] = await Promise.all([
+    import("@/services/crm/CrmBrainDiagnostic"),
+    import("@/services/crm/CrmAdversarialProbes"),
+  ]);
   const diag = runCrmBrainDiagnostic();
+  const probes = runCrmAdversarialProbes();
+  const passed = diag.status === "PASS" && diag.p0 === 0 && probes.status === "PASS" && probes.leaks === 0;
+  const p0Count = diag.p0 + probes.leaks;
   return {
-    passed: diag.status === "PASS" && diag.p0 === 0,
-    p0Count: diag.p0,
-    reason: diag.status === "PASS" ? `diagnóstico PASS (${diag.passed}/${diag.total})` : `diagnóstico FAIL (${diag.passed}/${diag.total}, p0=${diag.p0})`,
+    passed,
+    p0Count,
+    reason: passed
+      ? `diagnóstico PASS (${diag.passed}/${diag.total}) + probes adversariais PASS (${probes.passed}/${probes.total})`
+      : `piso REPROVADO — diagnóstico ${diag.passed}/${diag.total} (p0=${diag.p0}), probes ${probes.passed}/${probes.total} (vazamentos=${probes.leaks})`,
     ranAt: new Date().toISOString(),
   };
 };
