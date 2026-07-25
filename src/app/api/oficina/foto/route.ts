@@ -1,22 +1,26 @@
 /**
- * POST /api/oficina/foto — o pedido do cliente vira foto de alto nível.
+ * POST /api/oficina/foto — o pedido vira COMANDO de foto de altíssimo nível.
  *
- * Um endpoint só, o caminho inteiro:
- *   pedido em português → política → prompt forjado → [imagem gerada]
+ * A Oficina é a especialista em prompt do Brain. Ela entrega o comando pronto;
+ * QUEM EXECUTA é o projeto que chamou. O Foocci não produz imagem — ele é canal
+ * de vendas, o marketing dele é feito pela agência. Então aqui a resposta para
+ * em "toma o comando", e é de propósito.
+ *
+ *   pedido em português → política → comando forjado
  *
  * Body:
  *   pedido        string   obrigatório — "foto do nosso hambúrguer"
  *   detalhes?     string   o que é verdade sobre o assunto (ingredientes, cores)
  *   cenario?      string   onde a cena acontece
  *   formato?      string   "4:5" | "9:16" | "1:1" …
- *   opcoes?       number   quantas variações forjar (1–10, padrão 3)
+ *   opcoes?       number   quantas variações forjar (1–12, padrão 3)
  *   categoria?    "prato" | "ambiente" | "grafismo" | "pessoa"  (padrão: prato)
  *   temMidiaPropria? boolean  o cliente já tem foto disso?
- *   autorizadoPor?   string   QUEM do restaurante pediu a imagem gerada
- *   gerar?        boolean  false (padrão) = só devolve os prompts
+ *   autorizadoPor?   string   QUEM do cliente pediu a imagem gerada
  *
- * Sem `gerar`, é grátis e instantâneo: devolve os comandos prontos pra colar em
- * qualquer gerador. Com `gerar: true`, executa a PRIMEIRA opção e devolve a URL.
+ * Grátis e instantâneo quando o pedido nomeia o assunto (nenhuma IA é chamada).
+ * Pedido amplo monta uma pauta, e aí sim a IA entra — uma vez, pra achar QUAIS
+ * fotos servem ao objetivo.
  *
  * A regra de ouro continua valendo — só que a autorização entra como um campo
  * do pedido, não como um fluxo de tela. Quem responde por ela é quem preenche.
@@ -29,9 +33,8 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
 import { atenderPedidoDeFoto } from "@/services/brain/oficina/AtendenteDeFoto";
 import { decidirImagem, SELO_ILUSTRATIVO } from "@/services/brain/oficina/PoliticaDeImagem";
-import { gerarFoto, geradorConfigurado } from "@/services/imageEnhancement/GeradorDeFoto";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const schema = z.object({
   pedido:          z.string().min(2, "pedido é obrigatório"),
@@ -47,7 +50,6 @@ const schema = z.object({
   categoria:       z.enum(["prato", "ambiente", "grafismo", "pessoa"]).optional(),
   temMidiaPropria: z.boolean().optional(),
   autorizadoPor:   z.string().optional(),
-  gerar:           z.boolean().optional(),
   restaurantId:    z.string().optional(),
 });
 
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   const {
     pedido, detalhes, cenario, formato, opcoes = 3,
-    categoria = "prato", temMidiaPropria = false, autorizadoPor, gerar = false,
+    categoria = "prato", temMidiaPropria = false, autorizadoPor,
   } = parsed.data;
 
   const restaurantId = ctx?.restaurantId ?? parsed.data.restaurantId;
@@ -128,26 +130,5 @@ export async function POST(req: NextRequest) {
     prompts: forjados.map((f) => ({ prompt: f.prompt, negativo: f.negativo, receita: f.receita })),
   };
 
-  if (!gerar) return ok({ ...base, gerada: null });
-
-  if (!geradorConfigurado()) {
-    return ok({ ...base, gerada: null, erroDaGeracao: "Chave da OpenAI não configurada — os prompts acima seguem válidos para colar em qualquer gerador." });
-  }
-
-  try {
-    const primeiro = forjados[0];
-    if (!primeiro) return badRequest("nenhum comando foi forjado");
-
-    const r = await gerarFoto(primeiro.prompt, restaurantId, formato);
-    return ok({
-      ...base,
-      gerada: r.ok ? { url: r.url, modelo: r.modelo, tamanho: r.tamanho } : null,
-      ...(r.ok ? {} : { erroDaGeracao: r.erro }),
-      // Ninguém aqui sabe olhar um pixel: quem aprova é gente.
-      precisaAprovacaoHumana: r.ok,
-    });
-  } catch (err) {
-    console.error("[POST /api/oficina/foto]", err);
-    return serverError();
-  }
+  return ok(base);
 }
