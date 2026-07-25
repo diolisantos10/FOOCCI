@@ -108,8 +108,25 @@ export const runSupportGateForBrain: BrainQualityGateRunner = async () => {
   };
 };
 
+/** Gate da Oficina: prova que as travas seguram — sem verdade não passa, número
+ *  inventado é barrado, peça genérica é barrada, e o anti-mesmice não repete
+ *  escondido. Hermético (sem banco, sem IA), com P0=0. */
+export const runOficinaGateForBrain: BrainQualityGateRunner = async () => {
+  const { runOficinaDiagnostic } = await import("@/services/brain/oficina/OficinaDiagnostic");
+  const diag = runOficinaDiagnostic();
+  return {
+    passed: diag.status === "PASS" && diag.p0 === 0,
+    p0Count: diag.p0,
+    reason: diag.status === "PASS"
+      ? `diagnóstico PASS (${diag.passed}/${diag.total})`
+      : `diagnóstico FAIL (${diag.passed}/${diag.total}, p0=${diag.p0})`,
+    ranAt: new Date().toISOString(),
+  };
+};
+
 // Gates built-in registrados na carga do módulo.
 registerQualityGate("waiter", runWaiterGateForBrain);
 registerQualityGate("whatsapp", runWhatsAppGateForBrain);
 registerQualityGate("crm", runCrmGateForBrain);
 registerQualityGate("suporte-tecnico", runSupportGateForBrain);
+registerQualityGate("oficina", runOficinaGateForBrain);

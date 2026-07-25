@@ -16,7 +16,12 @@ export interface Manual {
   dominio: string;
   /** Termos proibidos. Comparação sem acento e sem caixa. */
   listaNegra: string[];
-  /** Chaves que a `verdade` precisa trazer — sem elas a IA vai inventar. */
+  /**
+   * Chaves que a `verdade` precisa trazer — sem elas a IA vai inventar.
+   * Use as chaves do `truthSources` do snapshot (products, prices, hours, …),
+   * que é o que o TruthSource entrega. Exigir chave que a fonte nunca emite
+   * trava toda peça do domínio.
+   */
   verdadeExigida: string[];
   /** Entram em TODA ficha do domínio, além das proibições do pedido. */
   proibicoesPadrao: string[];
@@ -76,7 +81,8 @@ export const manualRestaurante: Manual = {
     "imperdível",
     "clique agora",
   ],
-  verdadeExigida: ["restaurante"],
+  // o cardápio é o mínimo: sem ele não existe peça de restaurante ancorada
+  verdadeExigida: ["products"],
   proibicoesPadrao: [
     "inventar item que não está no cardápio",
     "prometer prazo, preço ou desconto que não veio da verdade",

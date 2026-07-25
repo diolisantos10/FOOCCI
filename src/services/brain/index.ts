@@ -90,3 +90,22 @@ export {
   type Manual,
 } from "./oficina/HouseManual";
 export { variar, assinar, semear, totalDeCombinacoes, type Eixo, type Variacao } from "./oficina/Variator";
+export { criticarResultado, type CriticaResultadoOpts } from "./oficina/OutputCritic";
+export { buscarVerdade, snapshotParaVerdade, type VerdadeBuscada } from "./oficina/TruthSource";
+export { criarReescritor } from "./oficina/Reescritor";
+export {
+  chaveDeMemoria,
+  getAssinaturaMemory,
+  setAssinaturaMemory,
+  resetAssinaturaMemory,
+  JANELA_PADRAO,
+  type AssinaturaMemory,
+} from "./oficina/AssinaturaMemory";
+export {
+  rodarEsteira,
+  forjarComando,
+  type EsteiraInput,
+  type EsteiraResult,
+  type ModoDaEsteira,
+} from "./oficina/OficinaPipeline";
+export { runOficinaDiagnostic, type OficinaDiagnosticResult } from "./oficina/OficinaDiagnostic";

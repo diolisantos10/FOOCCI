@@ -121,9 +121,15 @@ export async function forjar(input: ForjarInput): Promise<ForjaResult> {
   while (!nota.aprovado && input.reescrever && voltas < maxVoltas) {
     voltas++;
     const reescrita = await input.reescrever(ficha, nota);
-    // A assinatura é da Oficina, não do reescritor: ele pode melhorar o texto,
-    // mas não pode furar o anti-mesmice trocando os eixos por conta própria.
-    ficha = { ...reescrita, eixos: ficha.eixos, assinatura: assinar(ficha.eixos) };
+    // O reescritor só manda na REDAÇÃO. `eixos` é da Oficina (senão ele fura o
+    // anti-mesmice) e `verdade` é do banco (senão ele inventaria fato só pra
+    // passar no crítico — que é exatamente o que a Oficina existe pra impedir).
+    ficha = {
+      ...reescrita,
+      verdade:    ficha.verdade,
+      eixos:      ficha.eixos,
+      assinatura: assinar(ficha.eixos),
+    };
     nota = criticar(ficha, manual, corte);
   }
 

@@ -20,7 +20,7 @@ function fichaBoa(over: Partial<Ficha> = {}): Ficha {
     publico:    "quem já pediu nos últimos 60 dias",
     tom:        "direto e caloroso, sem gíria",
     formato:    "WhatsApp, 1 linha",
-    verdade:    { restaurante: "Boteco do Zé", prato: "picanha de quinta" },
+    verdade:    { products: "picanha de quinta, burger do chef", restaurante: "Boteco do Zé" },
     proibicoes: [...manualRestaurante.proibicoesPadrao],
     eixos:      { abertura: "fato concreto" },
     assinatura: "abertura:fato concreto",
@@ -123,9 +123,9 @@ describe("PromptCritic", () => {
   });
 
   it("reprova quando falta o fato obrigatório do domínio", () => {
-    const nota = criticar(fichaBoa({ verdade: { prato: "picanha" } }), manualRestaurante);
+    const nota = criticar(fichaBoa({ verdade: { restaurante: "Boteco do Zé" } }), manualRestaurante);
     expect(nota.aprovado).toBe(false);
-    expect(nota.motivos.join(" ")).toMatch(/restaurante/);
+    expect(nota.motivos.join(" ")).toMatch(/products/);
   });
 
   it("reprova clichê da lista negra", () => {
@@ -164,7 +164,7 @@ describe("PromptCritic", () => {
 describe("OficinaService", () => {
   const base: ForjarInput = {
     pedido,
-    verdade: { restaurante: "Boteco do Zé", prato: "picanha de quinta" },
+    verdade: { products: "picanha de quinta" },
     rascunho: {
       publico: "quem já pediu nos últimos 60 dias",
       tom:     "direto e caloroso, sem gíria",
@@ -235,7 +235,7 @@ describe("OficinaService", () => {
     const texto = renderizar(ficha);
     expect(texto).toMatch(/^OBJETIVO: /m);
     expect(texto).toMatch(/VERDADE \(fatos do banco/);
-    expect(texto).toMatch(/- restaurante: Boteco do Zé/);
+    expect(texto).toMatch(/- products: picanha de quinta/);
     expect(texto).toMatch(/NÃO FAÇA:/);
   });
 
