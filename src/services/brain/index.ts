@@ -127,3 +127,12 @@ export {
   type EsteiraDeImagemInput,
   type EsteiraDeImagemResult,
 } from "./oficina/EsteiraDeImagem";
+export {
+  forjarPromptDeFoto,
+  forjarOpcoesDeFoto,
+  detectarTipo,
+  limparPedido,
+  type PedidoDeFoto,
+  type PromptDeFoto,
+  type TipoDeFoto,
+} from "./oficina/ForjaDeFoto";
