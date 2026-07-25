@@ -12,6 +12,8 @@ import { criticar } from "./PromptCritic";
 import { criticarResultado } from "./OutputCritic";
 import { manualRestaurante } from "./HouseManual";
 import { totalDeCombinacoes, variar, type Eixo } from "./Variator";
+import { decidirImagem } from "./PoliticaDeImagem";
+import { montarFicha } from "./OficinaService";
 import type { Ficha } from "./OficinaTypes";
 
 export interface OficinaCheck {
@@ -109,6 +111,80 @@ export function runOficinaDiagnostic(): OficinaDiagnosticResult {
   // ── P0: repertório esgotado é ANUNCIADO, não escondido ────────────────────
   const esgotou = variar(eixos, vistas, 0);
   check("esgotamento é anunciado", true, esgotou.esgotado, `esgotado=${esgotou.esgotado}`);
+
+  // ── P0: a REGRA DE OURO da imagem ─────────────────────────────────────────
+  // "Nunca inventar. Trabalhar com o insumo que o cliente traz, a não ser que
+  //  seja solicitado pelo próprio cliente — caso ele não tenha mídia."
+  const agora = new Date("2026-07-25T12:00:00Z");
+  const autorizado = { por: "dono", em: "2026-07-24T10:00:00Z", escopo: "gerar imagem do Burger do Chef" };
+
+  const semFotoSemPedido = decidirImagem({
+    categoria: "prato", temMidiaPropria: false, escopoPedido: "Burger do Chef", agora,
+  });
+  check(
+    "prato sem foto e sem pedido do lojista é bloqueado",
+    true,
+    semFotoSemPedido.caminho === "bloqueado" && !!semFotoSemPedido.saida,
+    `caminho=${semFotoSemPedido.caminho}`,
+  );
+
+  const comFoto = decidirImagem({
+    categoria: "prato", temMidiaPropria: true, escopoPedido: "Burger do Chef",
+    autorizacao: autorizado, agora,
+  });
+  check(
+    "tendo foto, o insumo do cliente ganha até de uma autorização",
+    true,
+    comFoto.caminho === "realce",
+    `caminho=${comFoto.caminho}`,
+  );
+
+  const comPedido = decidirImagem({
+    categoria: "prato", temMidiaPropria: false, escopoPedido: "Burger do Chef",
+    autorizacao: autorizado, agora,
+  });
+  check(
+    "geração autorizada de prato exige selo de ilustrativa",
+    true,
+    comPedido.caminho === "geracao" && comPedido.exigeSelo,
+    `caminho=${comPedido.caminho} selo=${comPedido.exigeSelo}`,
+  );
+
+  const outroPrato = decidirImagem({
+    categoria: "prato", temMidiaPropria: false, escopoPedido: "Picanha na Chapa",
+    autorizacao: autorizado, agora,
+  });
+  check(
+    "autorização de um prato não libera outro",
+    true,
+    outroPrato.caminho === "bloqueado",
+    `caminho=${outroPrato.caminho}`,
+  );
+
+  const pessoa = decidirImagem({
+    categoria: "pessoa", temMidiaPropria: false, escopoPedido: "cliente sorrindo",
+    autorizacao: { por: "dono", em: "2026-07-24T10:00:00Z", escopo: "cliente sorrindo" }, agora,
+  });
+  check(
+    "pessoa nunca é gerada, nem com autorização",
+    true,
+    pessoa.caminho === "bloqueado",
+    `caminho=${pessoa.caminho}`,
+  );
+
+  const fichaDeImagem = montarFicha(
+    {
+      pedido: { agentId: "social", medium: "imagem", intencao: "post do burger", dominio: "restaurante" },
+      verdade: { products: "Burger do Chef" },
+    },
+    manualRestaurante,
+  ).ficha;
+  check(
+    "ficha de imagem carrega as proibições da regra de ouro",
+    true,
+    fichaDeImagem.proibicoes.some((p) => p.includes("como foto real")),
+    `proibicoes=${fichaDeImagem.proibicoes.length}`,
+  );
 
   // ── Caminho feliz: ficha boa passa e peça ancorada passa ──────────────────
   const boa = criticar(fichaBase(), manualRestaurante);

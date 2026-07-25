@@ -111,3 +111,13 @@ export {
 } from "./oficina/OficinaPipeline";
 export { runOficinaDiagnostic, type OficinaDiagnosticResult } from "./oficina/OficinaDiagnostic";
 export { auditarPeca, type AuditoriaInput, type Auditoria } from "./oficina/AuditorDePeca";
+export {
+  decidirImagem,
+  autorizacaoCobre,
+  SELO_ILUSTRATIVO,
+  VALIDADE_DA_AUTORIZACAO_DIAS,
+  type CategoriaVisual,
+  type AutorizacaoDoLojista,
+  type DecisaoDeImagem,
+  type CaminhoDaImagem,
+} from "./oficina/PoliticaDeImagem";

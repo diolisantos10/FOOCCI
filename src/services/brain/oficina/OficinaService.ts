@@ -48,7 +48,11 @@ export function montarFicha(input: ForjarInput, manual: Manual): { ficha: Ficha;
   const semente = semear(pedido.dominio, pedido.agentId, pedido.intencao);
   const variacao = variar(grade, usadas, semente);
 
-  const proibicoes = [...new Set([...(rascunho.proibicoes ?? []), ...manual.proibicoesPadrao])];
+  const proibicoes = [...new Set([
+    ...(rascunho.proibicoes ?? []),
+    ...manual.proibicoesPadrao,
+    ...(manual.proibicoesPorMedium?.[pedido.medium] ?? []),
+  ])];
 
   return {
     ficha: {

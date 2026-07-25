@@ -25,6 +25,8 @@ export interface Manual {
   verdadeExigida: string[];
   /** Entram em TODA ficha do domínio, além das proibições do pedido. */
   proibicoesPadrao: string[];
+  /** Proibições que só valem para um meio (ex.: as da regra de ouro de imagem). */
+  proibicoesPorMedium?: Partial<Record<Medium, string[]>>;
   /** Eixos que o Variador gira, por meio. */
   eixosPorMedium: Partial<Record<Medium, { nome: string; opcoes: string[] }[]>>;
 }
@@ -88,6 +90,16 @@ export const manualRestaurante: Manual = {
     "prometer prazo, preço ou desconto que não veio da verdade",
     "superlativo sobre a comida ('o melhor da cidade')",
   ],
+  // A regra de ouro chega ao prompt por aqui. A PoliticaDeImagem decide SE pode
+  // gerar; estas linhas garantem que, quando pode, a peça não se disfarce de
+  // foto real do lugar.
+  proibicoesPorMedium: {
+    imagem: [
+      "apresentar imagem gerada como foto real do prato ou do local",
+      "alterar o prato da foto do restaurante (nada some, nada aparece)",
+      "inventar louça, guarnição ou porção que não está na foto original",
+    ],
+  },
   eixosPorMedium: {
     texto: [
       { nome: "abertura",  opcoes: ["fato concreto", "pergunta direta", "convite", "notícia do dia"] },
