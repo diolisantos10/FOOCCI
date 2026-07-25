@@ -142,11 +142,24 @@ export const parseAddons = parseTicketAddons;
 const BIG_ON  = "\x1d\x21\x01";
 const BIG_OFF = "\x1d\x21\x00";
 
-// ESC/POS feed-to-cutter + full cut (GS V 65 0). Ends every ticket so the
-// printer cuts right after the content instead of spooling a long blank tail
-// and running consecutive tickets together on one strip. The printer auto-feeds
-// the print-head→cutter gap, so only a small margin (2 lines) is added above.
-const CUT = "\x1d\x56\x41\x00";
+// ── Perfil universal de impressão (o dono não configura NADA) ─────────────────
+// Duas queixas comuns e o motivo:
+//   • "apagada" → térmica sai fina no padrão. Negrito (ESC E) + double-strike
+//     (ESC G) reforçam cada ponto → texto bem mais escuro/legível. Modelos que
+//     não suportam double-strike simplesmente ignoram (inofensivo).
+//   • "guias grudadas" → o corte antigo (GS V 65, função B) é IGNORADO por muitas
+//     impressoras, então nada cortava. A função A (GS V 0) é a MAIS compatível;
+//     como ela não auto-avança, avançamos o vão cabeça→serrilha na mão.
+const INIT         = "\x1b\x40"; // reset — limpa estado de um job anterior (evita bagunça)
+const EMPHASIS_ON  = "\x1b\x45\x01\x1b\x47\x01"; // negrito + double-strike
+const EMPHASIS_OFF = "\x1b\x45\x00\x1b\x47\x00";
+const FEED_TO_CUT  = "\n\n\n\n\n\n"; // avança o vão cabeça->serrilha (função A não auto-avança)
+const CUT          = "\x1d\x56\x00"; // corte total (função A, universal)
+
+/** Envelopa o corpo no perfil universal: reset + ênfase + conteúdo + avanço + corte. */
+function finalizeTicket(body: string): string {
+  return INIT + EMPHASIS_ON + body + EMPHASIS_OFF + FEED_TO_CUT + CUT;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   DELIVERY: "ENTREGA",
@@ -238,7 +251,7 @@ export function renderKitchenTicketText(args: {
   }
   L.push(rule("="));
   L.push(center(ascii(restaurantName).toUpperCase()));
-  return L.join("\n") + "\n\n" + CUT;
+  return finalizeTicket(L.join("\n"));
 }
 
 // ── Cashier ticket ────────────────────────────────────────────────────────────
@@ -328,5 +341,5 @@ export function renderCashierTicketText(args: {
   L.push(rule("="));
   L.push(center(ascii(restaurantName).toUpperCase()));
   L.push(center("Foocci"));
-  return L.join("\n") + "\n\n" + CUT;
+  return finalizeTicket(L.join("\n"));
 }

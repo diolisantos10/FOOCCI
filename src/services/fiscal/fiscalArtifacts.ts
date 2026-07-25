@@ -13,7 +13,11 @@ import { prisma } from "@/lib/prisma";
 import { uploadToS3 } from "@/lib/s3";
 import type { FiscalDocument } from "@prisma/client";
 
-const CUT = "\x1d\x56\x41\x00"; // ESC/POS: corta o papel (mesmo byte usado nas comandas)
+// Mesmo perfil universal das comandas: negrito (escurece) + corte função A (universal).
+const INIT = "\x1b\x40";
+const EMPHASIS_ON = "\x1b\x45\x01\x1b\x47\x01";
+const EMPHASIS_OFF = "\x1b\x45\x00\x1b\x47\x00";
+const CUT = "\n\n\n\n\n\n\x1d\x56\x00"; // avanço + corte total (função A)
 const RULE = "-".repeat(48);
 
 /** Corpo (texto/ESC-POS) da DANFCE para a térmica de 48 colunas. Pure. */
@@ -37,7 +41,7 @@ export function renderDanfceBody(doc: FiscalDocument): string {
   L.push("Consumidor: leia o QR da NFC-e no");
   L.push("app da SEFAZ usando a chave acima.");
   L.push("");
-  return L.join("\n") + "\n" + CUT;
+  return INIT + EMPHASIS_ON + L.join("\n") + EMPHASIS_OFF + CUT;
 }
 
 /** Enfileira a impressão da DANFCE no caixa (CAIXA/CUPOM). No-op sem impressora. */

@@ -26,7 +26,7 @@ describe("renderDanfceBody", () => {
     expect(body).toContain("http://consulta/x");
     // chave agrupada de 4 em 4
     expect(body).toContain("3333 3333");
-    // termina com o corte ESC/POS
-    expect(body.endsWith("\x1d\x56\x41\x00")).toBe(true);
+    // termina com o corte ESC/POS (função A, universal)
+    expect(body.endsWith("\x1d\x56\x00")).toBe(true);
   });
 });
