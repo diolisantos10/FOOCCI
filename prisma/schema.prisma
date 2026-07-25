@@ -4479,7 +4479,9 @@ model FiscalConfig {
   // ── Credenciais do gateway (GRAVADAS CIFRADAS) ────────────────────────────
   providerTokenHomologacao String?
   providerTokenProducao    String?
-  // Certificado A1 fica no gateway; guardamos só referência/validade p/ avisar.
+  // O A1 é enviado pelo LOJISTA no painel; a Foocci registra a empresa dele no
+  // gateway (conta-mãe) e guarda só a referência + validade p/ avisar.
+  gatewayCompanyRef        String? // ref da empresa no gateway após subir o certificado
   certificadoNome          String?
   certificadoValidadeAte   DateTime?
 

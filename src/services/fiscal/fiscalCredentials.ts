@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt, maskSecret } from "@/lib/crypto";
 import type { FiscalConfig } from "@prisma/client";
 import type { FiscalEnvironment } from "./providers/types";
+import { getPlatformFiscalToken } from "./fiscalPlatform";
 
 export { maskSecret };
 
@@ -45,7 +46,8 @@ export async function getFiscalConfig(restaurantId: string): Promise<FiscalConfi
 
   const ambiente: FiscalEnvironment = config.environment === "PRODUCAO" ? "PRODUCAO" : "HOMOLOGACAO";
   const encToken = ambiente === "PRODUCAO" ? config.providerTokenProducao : config.providerTokenHomologacao;
-  const providerToken = decryptFiscalSecret(encToken);
+  // Conta-mãe: se o lojista não tem token próprio, usa o token-mestre da Foocci.
+  const providerToken = decryptFiscalSecret(encToken) ?? getPlatformFiscalToken(ambiente);
 
   const cscToken = decryptFiscalSecret(config.cscToken);
   const csc = config.cscId && cscToken ? { id: config.cscId, token: cscToken } : null;

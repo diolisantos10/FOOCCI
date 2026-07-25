@@ -146,4 +146,35 @@ export interface FiscalProvider {
   cancel(referenceId: string, justificativa: string): Promise<FiscalCancelResult>;
   /** Cheap credential/connectivity check for the painel. */
   testConnection(): Promise<FiscalConnectionResult>;
+  /**
+   * Register/update the emitter company (+ A1 certificate) at the gateway.
+   * Modelo conta-mãe: usado com o token-mestre da Foocci; cria a "empresa" do
+   * lojista sob a conta parceiro da Foocci.
+   */
+  registerCompany(reg: FiscalCompanyRegistration): Promise<FiscalCompanyResult>;
+}
+
+/** Dados da empresa emitente + certificado A1 enviados ao gateway. */
+export interface FiscalCompanyRegistration {
+  cnpj: string;
+  inscricaoEstadual: string;
+  razaoSocial: string;
+  nomeFantasia?: string;
+  regime: FiscalRegime;
+  endereco: FiscalEndereco;
+  email?: string;
+  /** Conteúdo do .pfx/.p12 em base64. */
+  certificadoBase64: string;
+  certificadoSenha: string;
+  habilitaNfce?: boolean;
+  csc?: { id: string; token: string };
+}
+
+export interface FiscalCompanyResult {
+  ok: boolean;
+  companyRef?: string; // referência da empresa no gateway
+  certificadoNome?: string;
+  certificadoValidadeAte?: string; // ISO-8601
+  message: string;
+  raw?: unknown;
 }

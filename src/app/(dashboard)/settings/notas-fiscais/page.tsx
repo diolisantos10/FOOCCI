@@ -39,6 +39,9 @@ interface FiscalView {
   hasCscToken: boolean;
   hasProviderTokenHomologacao: boolean;
   hasProviderTokenProducao: boolean;
+  certificadoNome: string | null;
+  certificadoValidadeAte: string | null;
+  certificateRegistered: boolean;
   defaultNcm: string;
   defaultCfop: string;
   defaultCsosn: string;
@@ -54,6 +57,9 @@ interface FiscalView {
 export default function NotasFiscaisPage() {
   const [v, setV] = useState<FiscalView | null>(null);
   const [secrets, setSecrets] = useState({ cscToken: "", providerTokenHomologacao: "", providerTokenProducao: "" });
+  const [cert, setCert] = useState({ fileBase64: "", fileName: "", senha: "" });
+  const [certBusy, setCertBusy] = useState(false);
+  const [certMsg, setCertMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -136,6 +142,40 @@ export default function NotasFiscaisPage() {
     });
     setTestMsg(res.ok ? (res.data as { ok: boolean; message: string }) : { ok: false, message: "Falha ao testar." });
     setTesting(false);
+  }
+
+  function onCertFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = String(reader.result).split(",")[1] ?? "";
+      setCert((c) => ({ ...c, fileBase64: b64, fileName: f.name }));
+    };
+    reader.readAsDataURL(f);
+  }
+
+  async function uploadCert() {
+    if (!cert.fileBase64) {
+      setCertMsg({ ok: false, text: "Escolha o arquivo .pfx." });
+      return;
+    }
+    if (!cert.senha) {
+      setCertMsg({ ok: false, text: "Informe a senha do certificado." });
+      return;
+    }
+    setCertBusy(true);
+    setCertMsg(null);
+    const res = await apiFetch("/api/settings/fiscal/certificate", "POST", cert);
+    if (res.ok) {
+      setCertMsg({ ok: true, text: "Certificado enviado e registrado." });
+      setCert({ fileBase64: "", fileName: "", senha: "" });
+      const reload = await apiFetch("/api/settings/fiscal");
+      if (reload.ok) setV(reload.data as FiscalView);
+    } else {
+      setCertMsg({ ok: false, text: (res.data as { error?: string })?.error ?? "Falha ao enviar." });
+    }
+    setCertBusy(false);
   }
 
   if (loading || !v) return <p className="py-8 text-sm text-muted">Carregando…</p>;
@@ -286,9 +326,65 @@ export default function NotasFiscaisPage() {
         </div>
       </PageCard>
 
-      {/* Gateway */}
+      {/* Certificado A1 */}
       <PageCard>
-        <SectionHeading title="Conexão com o gateway" subtitle="Token da sua conta no Focus NFe. O certificado A1 fica lá; o Foocci só chama a API." />
+        <SectionHeading
+          title="Certificado digital A1"
+          subtitle="Suba o certificado A1 (.pfx) da sua empresa. Ele é registrado com segurança e usado para assinar as suas notas."
+        />
+        {v.certificateRegistered ? (
+          <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            ✓ Certificado ativo{v.certificadoNome ? `: ${v.certificadoNome}` : ""}.
+            {v.certificadoValidadeAte ? ` Válido até ${new Date(v.certificadoValidadeAte).toLocaleDateString("pt-BR")}.` : ""}
+            <span className="mt-0.5 block text-xs text-green-600">Envie um novo arquivo abaixo para substituir.</span>
+          </div>
+        ) : (
+          <p className="mb-4 text-sm text-muted">Nenhum certificado enviado ainda.</p>
+        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Arquivo do certificado (.pfx)">
+            <input
+              type="file"
+              accept=".pfx,.p12"
+              onChange={onCertFile}
+              className="block w-full text-sm text-ink2 file:mr-3 file:rounded-xl file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
+            />
+            {cert.fileName && <p className="mt-1 text-xs text-muted">{cert.fileName}</p>}
+          </Field>
+          <Field label="Senha do certificado">
+            <input
+              type="password"
+              className={INPUT}
+              value={cert.senha}
+              onChange={(e) => setCert((c) => ({ ...c, senha: e.target.value }))}
+              placeholder="senha do arquivo .pfx"
+            />
+          </Field>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void uploadCert()}
+            disabled={certBusy}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition"
+          >
+            {certBusy ? "Enviando…" : "Enviar certificado"}
+          </button>
+          {certMsg && (
+            <span className={`text-sm ${certMsg.ok ? "text-green-700" : "text-red-600"}`}>
+              {certMsg.ok ? "✓ " : "✗ "}
+              {certMsg.text}
+            </span>
+          )}
+        </div>
+      </PageCard>
+
+      {/* Gateway (avançado) */}
+      <PageCard>
+        <SectionHeading
+          title="Conexão com o gateway (avançado)"
+          subtitle="A Foocci já cuida da conexão pela conta-mãe. Preencha um token só se você tem uma conta própria no gateway."
+        />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Token — Homologação" hint={v.hasProviderTokenHomologacao ? "Salvo. Deixe em branco para manter." : undefined}>
             <input

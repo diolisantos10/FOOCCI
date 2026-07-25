@@ -13,12 +13,12 @@
 
 import { prisma } from "@/lib/prisma";
 import type { FiscalConfig } from "@prisma/client";
-import { encryptFiscalSecret } from "./fiscalCredentials";
-import { validateForEmit } from "./nfceBuilder";
+import { encryptFiscalSecret, decryptFiscalSecret, getFiscalConfig } from "./fiscalCredentials";
+import { validateForEmit, parseRegime } from "./nfceBuilder";
 import { buildFiscalProvider } from "./FiscalProviderRouter";
-import { getFiscalConfig } from "./fiscalCredentials";
+import { getPlatformFiscalToken } from "./fiscalPlatform";
 import type { UpsertFiscalConfigInput, TestFiscalConnectionInput } from "@/validators/fiscal";
-import type { FiscalEnvironment } from "./providers/types";
+import type { FiscalEnvironment, FiscalCompanyRegistration } from "./providers/types";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -49,6 +49,9 @@ export interface FiscalConfigView {
   hasCscToken: boolean;
   hasProviderTokenHomologacao: boolean;
   hasProviderTokenProducao: boolean;
+  certificadoNome: string | null;
+  certificadoValidadeAte: string | null;
+  certificateRegistered: boolean;
   defaultNcm: string;
   defaultCfop: string;
   defaultCsosn: string;
@@ -91,6 +94,9 @@ function toView(config: FiscalConfig, prefilledFromStore = false): FiscalConfigV
     hasCscToken: Boolean(config.cscToken),
     hasProviderTokenHomologacao: Boolean(config.providerTokenHomologacao),
     hasProviderTokenProducao: Boolean(config.providerTokenProducao),
+    certificadoNome: config.certificadoNome,
+    certificadoValidadeAte: config.certificadoValidadeAte ? config.certificadoValidadeAte.toISOString() : null,
+    certificateRegistered: Boolean(config.gatewayCompanyRef),
     defaultNcm: s(config.defaultNcm),
     defaultCfop: s(config.defaultCfop),
     defaultCsosn: s(config.defaultCsosn),
@@ -136,6 +142,7 @@ async function suggestFromStore(restaurantId: string): Promise<FiscalConfig> {
     cscToken: null,
     providerTokenHomologacao: null,
     providerTokenProducao: null,
+    gatewayCompanyRef: null,
     certificadoNome: null,
     certificadoValidadeAte: null,
     defaultNcm: null,
@@ -227,6 +234,83 @@ export const FiscalConfigService = {
       return { ok: true, data: result };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : "Erro ao testar conexão" };
+    }
+  },
+
+  /**
+   * Sobe o certificado A1 do lojista e registra a empresa dele no gateway usando
+   * a conta-mãe da Foocci (token-mestre). Guarda a referência + validade.
+   */
+  async uploadCertificate(
+    restaurantId: string,
+    input: { fileBase64: string; fileName: string; senha: string },
+  ): Promise<Result<{ certificadoNome: string; certificadoValidadeAte: string | null; message: string }>> {
+    try {
+      const config = await prisma.fiscalConfig.findUnique({ where: { restaurantId } });
+      if (!config) return { ok: false, error: "Preencha e salve os dados fiscais antes de subir o certificado." };
+
+      // O registro da empresa exige identidade + endereço (não o CSOSN).
+      const need: [string | null, string][] = [
+        [config.cnpj, "CNPJ"],
+        [config.inscricaoEstadual, "Inscrição Estadual"],
+        [config.razaoSocial, "Razão social"],
+        [config.fiscalLogradouro, "Logradouro"],
+        [config.fiscalNumero, "Número"],
+        [config.fiscalBairro, "Bairro"],
+        [config.fiscalMunicipio, "Município"],
+        [config.fiscalMunicipioIbge, "Código IBGE"],
+        [config.fiscalUf, "UF"],
+        [config.fiscalCep, "CEP"],
+      ];
+      const missing = need.filter(([v]) => !v?.trim()).map(([, l]) => l);
+      if (missing.length) return { ok: false, error: `Complete antes: ${missing.join(", ")}.` };
+
+      const ambiente: FiscalEnvironment = config.environment === "PRODUCAO" ? "PRODUCAO" : "HOMOLOGACAO";
+      const masterToken = getPlatformFiscalToken(ambiente);
+      if (!masterToken) {
+        return { ok: false, error: "A conta-mãe da Foocci no gateway ainda não está configurada (token-mestre ausente)." };
+      }
+      const provider = buildFiscalProvider(config.provider === "DISABLED" ? "FOCUS_NFE" : config.provider, masterToken, ambiente);
+      if (!provider) return { ok: false, error: "Emissor não suportado." };
+
+      const cscToken = decryptFiscalSecret(config.cscToken);
+      const reg: FiscalCompanyRegistration = {
+        cnpj: config.cnpj!.trim(),
+        inscricaoEstadual: config.inscricaoEstadual!.trim(),
+        razaoSocial: config.razaoSocial!.trim(),
+        nomeFantasia: config.nomeFantasia ?? undefined,
+        regime: parseRegime(config.regimeTributario),
+        endereco: {
+          logradouro: config.fiscalLogradouro!.trim(),
+          numero: config.fiscalNumero!.trim(),
+          complemento: config.fiscalComplemento ?? undefined,
+          bairro: config.fiscalBairro!.trim(),
+          municipio: config.fiscalMunicipio!.trim(),
+          municipioIbge: config.fiscalMunicipioIbge!.trim(),
+          uf: config.fiscalUf!.trim(),
+          cep: config.fiscalCep!.trim(),
+        },
+        certificadoBase64: input.fileBase64,
+        certificadoSenha: input.senha,
+        habilitaNfce: true,
+        csc: config.cscId && cscToken ? { id: config.cscId, token: cscToken } : undefined,
+      };
+
+      const result = await provider.registerCompany(reg);
+      if (!result.ok) return { ok: false, error: result.message };
+
+      const parsed = result.certificadoValidadeAte ? new Date(result.certificadoValidadeAte) : null;
+      const validade = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      await prisma.fiscalConfig.update({
+        where: { restaurantId },
+        data: { gatewayCompanyRef: result.companyRef ?? null, certificadoNome: input.fileName, certificadoValidadeAte: validade },
+      });
+      return {
+        ok: true,
+        data: { certificadoNome: input.fileName, certificadoValidadeAte: validade?.toISOString() ?? null, message: result.message },
+      };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Erro ao subir o certificado" };
     }
   },
 };

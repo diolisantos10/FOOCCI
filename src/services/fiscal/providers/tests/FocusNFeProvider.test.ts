@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { FocusNFeProvider, mapPayloadToFocus, mapFocusStatus } from "../FocusNFeProvider";
-import type { FiscalNFCePayload, FiscalPagamentoTipo } from "../types";
+import { FocusNFeProvider, mapPayloadToFocus, mapFocusStatus, buildEmpresaPayload } from "../FocusNFeProvider";
+import type { FiscalNFCePayload, FiscalPagamentoTipo, FiscalCompanyRegistration } from "../types";
 
 function basePayload(overrides: Partial<FiscalNFCePayload> = {}): FiscalNFCePayload {
   return {
@@ -218,5 +218,77 @@ describe("FocusNFeProvider — HTTP surface", () => {
     fetchMock.mockResolvedValueOnce(mockRes(404, { codigo: "nao_encontrado" }));
     const good = await new FocusNFeProvider("GOOD", "HOMOLOGACAO").testConnection();
     expect(good.ok).toBe(true);
+  });
+});
+
+function baseReg(over: Partial<FiscalCompanyRegistration> = {}): FiscalCompanyRegistration {
+  return {
+    cnpj: "07504505000132",
+    inscricaoEstadual: "123456789",
+    razaoSocial: "Restaurante Teste LTDA",
+    nomeFantasia: "Foocci Sushi",
+    regime: "SIMPLES_NACIONAL",
+    endereco: {
+      logradouro: "Rua X",
+      numero: "100",
+      bairro: "Centro",
+      municipio: "São Paulo",
+      municipioIbge: "3550308",
+      uf: "SP",
+      cep: "01000000",
+    },
+    certificadoBase64: "QkFTRTY0",
+    certificadoSenha: "senha123",
+    habilitaNfce: true,
+    csc: { id: "000001", token: "CSC-SECRET" },
+    ...over,
+  };
+}
+
+describe("buildEmpresaPayload", () => {
+  it("maps regime, IBGE, certificate and CSC", () => {
+    const b = buildEmpresaPayload(baseReg());
+    expect(b.regime_tributario).toBe(1); // Simples
+    expect(b.codigo_municipio).toBe("3550308");
+    expect(b.arquivo_certificado_base64).toBe("QkFTRTY0");
+    expect(b.senha_certificado).toBe("senha123");
+    expect(b.habilita_nfce).toBe(true);
+    expect(b.csc_nfce).toBe("CSC-SECRET");
+    expect(b.id_csc_nfce).toBe("000001");
+    expect(b.cnpj).toBe("07504505000132");
+  });
+
+  it("uses regime code 3 for regime normal and omits CSC when absent", () => {
+    const b = buildEmpresaPayload(baseReg({ regime: "REGIME_NORMAL", csc: undefined }));
+    expect(b.regime_tributario).toBe(3);
+    expect(b.csc_nfce).toBeUndefined();
+  });
+});
+
+describe("FocusNFeProvider.registerCompany", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("POSTs to /v2/empresas and returns the company ref + validade", async () => {
+    fetchMock.mockResolvedValue(mockRes(200, { id: 42, certificado_valido_ate: "2027-01-01" }));
+    const res = await new FocusNFeProvider("MASTER", "HOMOLOGACAO").registerCompany(baseReg());
+    expect(res.ok).toBe(true);
+    expect(res.companyRef).toBe("42");
+    expect(res.certificadoValidadeAte).toBe("2027-01-01");
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://homologacao.focusnfe.com.br/v2/empresas");
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe("Basic " + Buffer.from("MASTER:").toString("base64"));
+  });
+
+  it("surfaces a gateway error as ok:false", async () => {
+    fetchMock.mockResolvedValue(mockRes(422, { mensagem: "certificado inválido" }));
+    const res = await new FocusNFeProvider("MASTER", "HOMOLOGACAO").registerCompany(baseReg());
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("certificado inválido");
   });
 });

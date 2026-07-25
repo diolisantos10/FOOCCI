@@ -27,6 +27,9 @@ import type {
   FiscalStatus,
   FiscalEnvironment,
   FiscalPagamentoTipo,
+  FiscalCompanyRegistration,
+  FiscalCompanyResult,
+  FiscalRegime,
 } from "./types";
 
 const BASE_URLS: Record<FiscalEnvironment, string> = {
@@ -107,6 +110,41 @@ export function mapPayloadToFocus(p: FiscalNFCePayload): Record<string, unknown>
   if (p.informacoesAdicionais) nota.informacoes_adicionais_contribuinte = p.informacoesAdicionais;
 
   return nota;
+}
+
+/** CRT → código de regime tributário do Focus (1=Simples, 2=excesso, 3=Normal). */
+const REGIME_FOCUS: Record<FiscalRegime, number> = {
+  SIMPLES_NACIONAL: 1,
+  SIMPLES_EXCESSO: 2,
+  REGIME_NORMAL: 3,
+};
+
+/** Vendor-neutral company registration → Focus /v2/empresas body. Pure — testado. */
+export function buildEmpresaPayload(reg: FiscalCompanyRegistration): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    nome: reg.razaoSocial,
+    nome_fantasia: reg.nomeFantasia,
+    inscricao_estadual: reg.inscricaoEstadual,
+    cnpj: reg.cnpj,
+    regime_tributario: REGIME_FOCUS[reg.regime] ?? 1,
+    email: reg.email,
+    logradouro: reg.endereco.logradouro,
+    numero: reg.endereco.numero,
+    complemento: reg.endereco.complemento,
+    bairro: reg.endereco.bairro,
+    municipio: reg.endereco.municipio,
+    cep: reg.endereco.cep,
+    uf: reg.endereco.uf,
+    codigo_municipio: reg.endereco.municipioIbge,
+    arquivo_certificado_base64: reg.certificadoBase64,
+    senha_certificado: reg.certificadoSenha,
+    habilita_nfce: reg.habilitaNfce ?? true,
+  };
+  if (reg.csc) {
+    body.csc_nfce = reg.csc.token;
+    body.id_csc_nfce = reg.csc.id;
+  }
+  return body;
 }
 
 /** Focus status string → normalized FiscalStatus. */
@@ -257,5 +295,37 @@ export class FocusNFeProvider implements FiscalProvider {
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, message: `Falha de conexão: ${msg}` };
     }
+  }
+
+  async registerCompany(reg: FiscalCompanyRegistration): Promise<FiscalCompanyResult> {
+    const body = buildEmpresaPayload(reg);
+    let res: Response;
+    try {
+      res = await fetch(`${this.base()}/v2/empresas`, {
+        method: "POST",
+        headers: { Authorization: this.authHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      return { ok: false, message: `Falha de conexão com o gateway: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    const json = (await res.json().catch(() => ({}))) as FocusResponse & {
+      id?: string | number;
+      certificado_valido_ate?: string;
+    };
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: json.mensagem ?? json.erros?.[0]?.mensagem ?? `Falha ao registrar empresa (HTTP ${res.status}).`,
+        raw: json,
+      };
+    }
+    return {
+      ok: true,
+      companyRef: json.id != null ? String(json.id) : reg.cnpj,
+      certificadoValidadeAte: json.certificado_valido_ate,
+      message: "Certificado registrado no gateway.",
+      raw: json,
+    };
   }
 }
