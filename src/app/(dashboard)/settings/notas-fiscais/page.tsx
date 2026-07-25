@@ -218,7 +218,6 @@ export default function NotasFiscaisPage() {
             <Field label="Emissor (gateway)" hint="Serviço homologado que assina e transmite a nota.">
               <select className={SELECT} value={v.provider} onChange={(e) => upd("provider", e.target.value)}>
                 <option value="DISABLED">Desligado</option>
-                <option value="NUVEM_FISCAL">Nuvem Fiscal</option>
                 <option value="FOCUS_NFE">Focus NFe</option>
               </select>
             </Field>
