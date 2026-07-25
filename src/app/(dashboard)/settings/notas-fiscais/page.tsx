@@ -184,6 +184,14 @@ export default function NotasFiscaisPage() {
 
   return (
     <form onSubmit={save} className="space-y-5">
+      <div className="flex flex-wrap justify-end gap-4">
+        <a href="/settings/notas-fiscais/cardapio" className="text-sm text-brand-600 hover:underline">
+          Fiscal do cardápio →
+        </a>
+        <a href="/settings/notas-fiscais/historico" className="text-sm text-brand-600 hover:underline">
+          Histórico de notas →
+        </a>
+      </div>
       <Feedback success={success} error={error} onDismiss={() => setError(null)} />
 
       {v.prefilledFromStore && (

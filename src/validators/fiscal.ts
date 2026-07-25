@@ -54,6 +54,27 @@ export const upsertFiscalConfigSchema = z.object({
 
 export type UpsertFiscalConfigInput = z.infer<typeof upsertFiscalConfigSchema>;
 
+// ── Campos fiscais do cardápio (edição em lote por categoria/item) ────────────
+const fiscalRow = {
+  ncm: str(8),
+  cest: str(7),
+  cfop: str(4),
+  csosn: str(4),
+  cst: str(3),
+  origem: str(1),
+  unidade: str(6),
+};
+
+export const updateMenuFiscalSchema = z.object({
+  categories: z.array(z.object({ id: z.string().min(1), ...fiscalRow })).max(500).optional(),
+  items: z
+    .array(z.object({ id: z.string().min(1), ...fiscalRow, icmsAliquota: z.number().min(0).max(100).nullable().optional() }))
+    .max(1000)
+    .optional(),
+});
+
+export type UpdateMenuFiscalInput = z.infer<typeof updateMenuFiscalSchema>;
+
 export const testFiscalConnectionSchema = z.object({
   provider: z.enum(["FOCUS_NFE"]).optional(),
   environment: z.enum(["HOMOLOGACAO", "PRODUCAO"]).optional(),
