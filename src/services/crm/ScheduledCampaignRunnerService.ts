@@ -1182,6 +1182,7 @@ export class ScheduledCampaignRunnerService {
       id: string; restaurantId: string; name: string; status: string;
       message: string; templateId: string | null; targetSegment: string | null;
       objective: string | null; audienceConfig: unknown; scheduleConfig?: unknown;
+      couponCode?: string | null;
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig,
@@ -1370,6 +1371,11 @@ export class ScheduledCampaignRunnerService {
     let consecutiveInstanceFailures = 0;
     const INSTANCE_COLLAPSE_THRESHOLD = 5;
     const unreachableIds: string[] = []; // numbers that can't receive WhatsApp (retire/delete)
+    // Shadow do cérebro do CRM (Dia 3): coleta os clientes que RECEBERAM o disparo
+    // por sorteio para, após o envio, perguntar ao agente o que ELE comporia e
+    // registrar a evidência da escada por-agente. OFF por padrão; nunca envia.
+    const crmShadowEnabled = process.env.CRM_BRAIN_SHADOW_ENABLED === "true";
+    const crmShadowSentIds: string[] = [];
 
     for (const customer of customers) {
       // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
@@ -1637,6 +1643,7 @@ export class ScheduledCampaignRunnerService {
 
         sent++;
         consecutiveInstanceFailures = 0; // a success proves the session is alive
+        if (crmShadowEnabled) crmShadowSentIds.push(customer.id);
 
         // Coupon wallet: if this campaign grants a card-defined coupon, credit it to
         // the customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
@@ -1772,6 +1779,13 @@ export class ScheduledCampaignRunnerService {
       }
     }
 
+    // Shadow do cérebro do CRM: SEMPRE após os envios reais (nunca os atrasa nem
+    // arrisca). Best-effort — falha aqui não afeta o resultado do disparo.
+    if (crmShadowEnabled && crmShadowSentIds.length > 0) {
+      await this._runCrmShadow(campaign.restaurantId, crmShadowSentIds, campaign.couponCode ?? null)
+        .catch((e) => console.warn(`[CrmShadow] pass failed`, { campaignId: campaign.id, error: e instanceof Error ? e.message : String(e) }));
+    }
+
     // Single campaign counter update after batch. totalFailed counts REAL send
     // failures only — safety blocks are derived from BLOCKED executions, not here.
     if (sent > 0 || failed > 0 || blocked > 0 || skipped > 0) {
@@ -1786,6 +1800,50 @@ export class ScheduledCampaignRunnerService {
     }
 
     return { sent, failed, blocked, skipped, aborted };
+  }
+
+  /**
+   * Shadow do cérebro do CRM (Dia 3) — NÃO envia nada.
+   *
+   * Para uma AMOSTRA dos clientes que acabaram de receber o disparo por sorteio,
+   * pergunta ao agente (reasonCrmMessage → portão reasonAsAgent("crm")) o que ELE
+   * teria composto, ancorado na verdade do cliente/restaurante, e registra a
+   * evidência (agentId="crm") que a escada POR-AGENTE consome — separada da do
+   * recepcionista. Best-effort e sempre APÓS o envio real: nunca atrasa, nunca
+   * arrisca uma mensagem. Amostra limitada (CRM_BRAIN_SHADOW_SAMPLE, padrão 3)
+   * para conter custo de LLM. Gated por CRM_BRAIN_SHADOW_ENABLED (OFF padrão).
+   */
+  private static async _runCrmShadow(
+    restaurantId: string,
+    sentCustomerIds: string[],
+    couponCode: string | null,
+  ): Promise<void> {
+    const sampleSize = Math.max(1, Math.min(Number(process.env.CRM_BRAIN_SHADOW_SAMPLE ?? 3) || 3, 10));
+    const sample = sentCustomerIds.slice(0, sampleSize);
+    const [{ reasonCrmMessage }, { recordShadowOutcome }] = await Promise.all([
+      import("./CrmAgentReasoner"),
+      import("@/services/brain/runtime/BrainShadowEvidenceService"),
+    ]);
+    for (const customerId of sample) {
+      try {
+        const r = await reasonCrmMessage({ restaurantId, customerId, couponCode: couponCode ?? undefined });
+        if (!r.ok || !r.message) continue; // cliente sumiu / motor degradou: nada a registrar
+        await recordShadowOutcome({
+          restaurantId,
+          conversationId: `crm:${customerId}`,
+          agentId: "crm",
+          intent: r.objective ?? r.nbaAction ?? "crm-outbound",
+          reasoningMode: r.reasoningMode ?? "FALLBACK",
+          engine: "crm-agent",
+          confidence: r.confidence ?? 0,
+          coherence: r.coherence ?? "NEEDS_REVIEW",
+          wouldEscalate: false, // outbound de CRM não escala
+          wouldReply: r.message,
+        });
+      } catch (err) {
+        console.warn(`[CrmShadow] sample failed`, { customerId, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
   }
 
   /**

@@ -75,7 +75,7 @@ export async function runFreeFormGates(
   // Evidência de sombra: o Brain só sobe de degrau com desempenho PROVADO em
   // tráfego real (amostras suficientes + coerência PASS acima do mínimo).
   const required = SHADOW_EVIDENCE[stage];
-  const stats = await getShadowStats(restaurantId);
+  const stats = await getShadowStats(restaurantId, { agentId: "whatsapp" });
   const shadowEvidence = stats.llmSamples >= required.minSamples && stats.coherencePassRate >= required.minPassRate;
   if (!shadowEvidence) {
     notes.push(

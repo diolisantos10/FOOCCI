@@ -4365,6 +4365,10 @@ model BrainShadowLog {
   restaurantId   String
   conversationId String
 
+  // Agente que produziu o raciocínio em sombra. Nulo = recepcionista (whatsapp),
+  // preservando a semântica das linhas antigas antes da escada por-agente.
+  agentId String?
+
   intent        String
   reasoningMode String // LLM | FALLBACK
   engine        String // "OPENAI:gpt-4o-mini" etc. (sem segredos)
@@ -4378,6 +4382,7 @@ model BrainShadowLog {
   createdAt DateTime @default(now())
 
   @@index([restaurantId, createdAt])
+  @@index([restaurantId, agentId, createdAt])
   @@map("brain_shadow_logs")
 }
 

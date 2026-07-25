@@ -13,6 +13,8 @@ import { prisma } from "@/lib/prisma";
 export interface ShadowOutcomeRecord {
   restaurantId: string;
   conversationId: string;
+  /** Agente que raciocinou em sombra. Omitido = recepcionista (whatsapp). */
+  agentId?: string;
   intent: string;
   reasoningMode: string;
   engine: string;
@@ -36,7 +38,11 @@ const REPLY_SAMPLE_CHARS = 200;
 export async function recordShadowOutcome(record: ShadowOutcomeRecord): Promise<void> {
   try {
     await prisma.brainShadowLog.create({
-      data: { ...record, wouldReply: record.wouldReply.slice(0, REPLY_SAMPLE_CHARS) },
+      data: {
+        ...record,
+        agentId: record.agentId ?? "whatsapp",
+        wouldReply: record.wouldReply.slice(0, REPLY_SAMPLE_CHARS),
+      },
     });
   } catch (err) {
     // Evidência é best-effort — nunca quebra o atendimento.
@@ -44,12 +50,23 @@ export async function recordShadowOutcome(record: ShadowOutcomeRecord): Promise<
   }
 }
 
-export async function getShadowStats(restaurantId: string, sinceDays = 7): Promise<ShadowStats> {
+export async function getShadowStats(
+  restaurantId: string,
+  opts: { agentId?: string; sinceDays?: number } = {},
+): Promise<ShadowStats> {
+  const sinceDays = opts.sinceDays ?? 7;
   const empty: ShadowStats = { samples: 0, llmSamples: 0, coherencePassRate: 0, avgConfidence: 0, escalationRate: 0, sinceDays };
   try {
     const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    // Escada por-agente: cada agente lê SÓ a própria evidência. Para o
+    // recepcionista ("whatsapp"), casa também as linhas antigas (agentId nulo).
+    const agentFilter = opts.agentId
+      ? opts.agentId === "whatsapp"
+        ? { OR: [{ agentId: "whatsapp" }, { agentId: null }] }
+        : { agentId: opts.agentId }
+      : {};
     const rows = await prisma.brainShadowLog.findMany({
-      where: { restaurantId, createdAt: { gte: since } },
+      where: { restaurantId, createdAt: { gte: since }, ...agentFilter },
       select: { reasoningMode: true, coherence: true, confidence: true, wouldEscalate: true },
     });
     if (!rows.length) return empty;
