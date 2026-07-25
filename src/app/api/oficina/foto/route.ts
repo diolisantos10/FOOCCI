@@ -27,7 +27,7 @@ import { z } from "zod";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
-import { forjarOpcoesDeFoto } from "@/services/brain/oficina/ForjaDeFoto";
+import { atenderPedidoDeFoto } from "@/services/brain/oficina/AtendenteDeFoto";
 import { decidirImagem, SELO_ILUSTRATIVO } from "@/services/brain/oficina/PoliticaDeImagem";
 import { gerarFoto, geradorConfigurado } from "@/services/imageEnhancement/GeradorDeFoto";
 
@@ -38,7 +38,12 @@ const schema = z.object({
   detalhes:        z.string().optional(),
   cenario:         z.string().optional(),
   formato:         z.string().optional(),
-  opcoes:          z.number().int().min(1).max(10).optional(),
+  opcoes:          z.number().int().min(1).max(12).optional(),
+  negocio:         z.string().optional(),
+  ofertas:         z.array(z.string()).optional(),
+  publico:         z.string().optional(),
+  insumos:         z.array(z.string()).optional(),
+  modo:            z.enum(["direto", "pauta"]).optional(),
   categoria:       z.enum(["prato", "ambiente", "grafismo", "pessoa"]).optional(),
   temMidiaPropria: z.boolean().optional(),
   autorizadoPor:   z.string().optional(),
@@ -92,21 +97,34 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 3. Forja os comandos. Grátis, instantâneo, sem IA.
-  const forjados = forjarOpcoesDeFoto(
-    {
-      pedido,
-      ...(detalhes !== undefined ? { detalhes } : {}),
-      ...(cenario  !== undefined ? { cenario }  : {}),
-      ...(formato  !== undefined ? { formato }  : {}),
-    },
-    opcoes,
-  );
+  // 3. A porta única lê o pedido e decide: comando direto ou pauta de fotos.
+  const atendimento = await atenderPedidoDeFoto({
+    texto: pedido,
+    quantos: opcoes,
+    ...(parsed.data.negocio !== undefined ? { negocio: parsed.data.negocio } : {}),
+    ...(parsed.data.ofertas !== undefined ? { ofertas: parsed.data.ofertas } : {}),
+    ...(parsed.data.publico !== undefined ? { publico: parsed.data.publico } : {}),
+    ...(parsed.data.insumos !== undefined ? { insumos: parsed.data.insumos } : {}),
+    ...(parsed.data.modo    !== undefined ? { modo: parsed.data.modo }       : {}),
+    ...(detalhes !== undefined ? { detalhes } : {}),
+    ...(cenario  !== undefined ? { cenario }  : {}),
+    ...(formato  !== undefined ? { formato }  : {}),
+  });
+
+  const forjados = atendimento.modo === "direto"
+    ? (atendimento.opcoes ?? [])
+    : (atendimento.pauta ?? []).map((i) => i.comando);
 
   const base = {
     decisao,
+    modo: atendimento.modo,
+    leitura: atendimento.leitura,
+    ...(atendimento.reserva ? { pautaDeReserva: true } : {}),
     tipoDetectado: forjados[0]?.tipo,
     ...(decisao.exigeSelo ? { selo: SELO_ILUSTRATIVO } : {}),
+    ...(atendimento.modo === "pauta"
+      ? { pauta: (atendimento.pauta ?? []).map((i) => ({ ...i.conceito, prompt: i.comando.prompt })) }
+      : {}),
     prompts: forjados.map((f) => ({ prompt: f.prompt, negativo: f.negativo, receita: f.receita })),
   };
 

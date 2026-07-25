@@ -136,3 +136,11 @@ export {
   type PromptDeFoto,
   type TipoDeFoto,
 } from "./oficina/ForjaDeFoto";
+export { montarPauta, type PedidoDePauta, type Pauta, type ConceitoDeFoto, type ItemDaPauta } from "./oficina/PautaDeFotos";
+export {
+  atenderPedidoDeFoto,
+  lerPedido,
+  type PedidoAberto,
+  type Atendimento,
+  type ModoDeAtendimento,
+} from "./oficina/AtendenteDeFoto";

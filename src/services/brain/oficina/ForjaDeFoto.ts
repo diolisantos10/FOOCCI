@@ -18,7 +18,8 @@
 
 export type TipoDeFoto =
   | "comida" | "bebida" | "produto" | "retrato" | "ambiente"
-  | "fachada" | "paisagem" | "urbano" | "animal" | "bastidor" | "generico";
+  | "fachada" | "paisagem" | "urbano" | "animal" | "bastidor"
+  | "procedimento" | "detalhe" | "generico";
 
 interface Preset {
   /** Como a cena é enquadrada — entra no meio da frase. */
@@ -174,6 +175,46 @@ const PRESETS: Record<TipoDeFoto, Preset> = {
     textura: ["mãos com marcas de trabalho, avental sujo de verdade, movimento com leve arrasto"],
     evitar: ["cozinha impecável de propaganda"],
   },
+  procedimento: {
+    enquadramento: [
+      "por cima do ombro do profissional, mostrando as mãos em ação",
+      "de lado, o profissional e o cliente no mesmo quadro",
+      "close nas mãos e no instrumento, rosto fora de foco",
+      "vista do cliente deitado, perspectiva de quem recebe o cuidado",
+    ],
+    luz: [
+      "luz clínica suave, difusa, sem sombra dura no rosto",
+      "luz de janela lateral filtrada por cortina, ambiente calmo",
+      "luz de trabalho focada na área tratada, resto em penumbra suave",
+    ],
+    lente: ["50 mm", "85 mm", "35 mm", "macro 100 mm"],
+    profundidade: [
+      "profundidade rasa, foco nas mãos, ambiente sugerido",
+      "foco no ponto do procedimento, o resto cedendo",
+    ],
+    textura: [
+      "luvas com brilho real, produto de textura visível, pele com poros naturais",
+      "mãos firmes com movimento sutil, gotícula de produto, toalha levemente amassada",
+      "pele real, sem alisamento — a naturalidade é o que passa confiança",
+    ],
+    evitar: ["pele de plástico sem poro", "sorriso de propaganda antiga", "equipamento sem nenhum sinal de uso"],
+  },
+  detalhe: {
+    enquadramento: [
+      "close extremo, o assunto preenchendo o quadro",
+      "recorte parcial, cortando o assunto de propósito",
+      "detalhe de textura em ângulo rasante",
+    ],
+    luz: [
+      "luz rasante revelando o relevo",
+      "luz difusa aproximando o olho da textura",
+      "contraluz suave marcando o contorno",
+    ],
+    lente: ["macro 100 mm", "85 mm", "macro 60 mm"],
+    profundidade: ["profundidade muito rasa, só um plano nítido", "foco preciso num ponto, resto dissolvido"],
+    textura: ["microtextura visível, imperfeições reais preservadas", "brilho irregular, poeira ou umidade honesta da cena"],
+    evitar: ["superfície limpa demais para ser real"],
+  },
   generico: {
     enquadramento: ["enquadramento natural, na altura dos olhos", "levemente de lado, dando volume à cena"],
     luz: ["luz natural difusa, direção clara", "luz lateral de fim de tarde"],
@@ -201,6 +242,8 @@ const PISTAS: [TipoDeFoto, string[]][] = [
   ["produto",  ["produto", "embalagem", "delivery", "caixa", "sacola", "garrafa", "rótulo", "rotulo", "kit"]],
   ["ambiente", ["salão", "salao", "ambiente", "interior", "mesa posta", "decoração", "decoracao", "espaço", "espaco", "balcão", "balcao"]],
   ["fachada",  ["fachada", "frente da loja", "entrada", "letreiro", "vitrine", "exterior"]],
+  ["procedimento", ["procedimento", "tratamento", "limpeza de pele", "atendimento", "sessão", "sessao", "aplicação", "aplicacao", "massagem", "consulta", "corte de cabelo", "manicure", "estética", "estetica", "clínica", "clinica", "cliente sendo atendido"]],
+  ["detalhe",      ["detalhe", "textura", "close", "macro", "de perto", "acabamento"]],
   ["bastidor", ["cozinha", "bastidor", "preparo", "fazendo", "mão na massa", "mao na massa", "chapa", "forno", "produção", "producao"]],
   ["animal",   ["cachorro", "gato", "pet", "animal", "bicho"]],
   ["paisagem", ["paisagem", "praia", "montanha", "campo", "natureza", "pôr do sol", "por do sol", "amanhecer"]],
