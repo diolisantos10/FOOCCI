@@ -17,6 +17,7 @@ import { getSumUpCheckout } from "@/lib/sumup";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
+import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
 
 const LOG = "[sumup-confirm]";
 
@@ -100,6 +101,10 @@ export async function confirmSumUpPayment(loc: CardPaymentLocator): Promise<Conf
   if (orderNeedsStatusAdvance) {
     PrintQueueService.maybeEnqueueOrder(order.restaurantId, order.id).catch((e) =>
       console.error("[print] sumup confirm enqueue failed:", e),
+    );
+    // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
+    FiscalEmissionService.maybeEmitForOrder(order.restaurantId, order.id).catch((e) =>
+      console.error("[fiscal] sumup confirm emit failed:", e),
     );
   }
 

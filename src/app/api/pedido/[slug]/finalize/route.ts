@@ -43,6 +43,7 @@ import { resolveItemUpsell } from "@/lib/upsell-attribution";
 import { createOrderRecord } from "@/services/checkout/CheckoutFinalizationService";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
+import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -833,6 +834,10 @@ export async function POST(
   // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
   PrintQueueService.maybeEnqueueOrder(restaurantId, orderId).catch((e) =>
     console.error("[print] finalize enqueue failed:", e),
+  );
+  // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
+  FiscalEmissionService.maybeEmitForOrder(restaurantId, orderId).catch((e) =>
+    console.error("[fiscal] finalize emit failed:", e),
   );
 
   return NextResponse.json({ orderId, confirmed: true });

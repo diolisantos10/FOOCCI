@@ -33,7 +33,8 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AlertLoopController } from "@/lib/alert-loop";
-import { playAlertAudio, installSilentUnlock } from "@/lib/sound-player";
+import { playAlertAudio, installGlobalAudioArming, resumeSharedAudioContext } from "@/lib/sound-player";
+import { markAudioArmed } from "@/lib/audio-gate";
 import {
   ORDER_ALERT_ASSET,
   HANDOFF_ALERT_ASSET,
@@ -112,21 +113,30 @@ export function GlobalAlertEngine() {
     loadSettings();
     window.addEventListener("foocci:sound-settings-changed", loadSettings);
 
-    // ── Audio elements + silent-unlock on the FIRST click anywhere in the app ─
+    // ── Audio elements + arm on the FIRST interaction (click/key/tap) app-wide ─
     const orderAudio = new Audio(ORDER_ALERT_ASSET);
     orderAudio.preload = "auto";
     orderAudioRef.current = orderAudio;
     const handoffAudio = new Audio(HANDOFF_ALERT_ASSET);
     handoffAudio.preload = "auto";
     handoffAudioRef.current = handoffAudio;
-    installSilentUnlock(() => [orderAudio, handoffAudio]);
+    // First natural interaction anywhere in the app (click / key / tap) arms audio;
+    // the moment it's armed we re-check so an order already waiting rings at once.
+    const disposeArming = installGlobalAudioArming(
+      () => [orderAudio, handoffAudio],
+      () => reevalRef.current(),
+    );
 
     isVisibleRef.current =
       typeof document === "undefined" ? true : document.visibilityState === "visible";
 
     // ── Controllers ──────────────────────────────────────────────────────────
     const orderController = new AlertLoopController({
-      play: async (vol) => { const a = orderAudioRef.current; if (a) await playAlertAudio(a, vol); },
+      play: async (vol) => {
+        const a = orderAudioRef.current; if (!a) return;
+        await playAlertAudio(a, vol);
+        markAudioArmed(); // a real alert just played → the autoplay lock is lifted
+      },
       getVolume:       () => 100,
       isRepeatEnabled: () => repeatOrderRef.current || soundThemeRef.current === "URGENT",
       assetPath:       ORDER_ALERT_ASSET,
@@ -144,7 +154,11 @@ export function GlobalAlertEngine() {
       },
     });
     const handoffController = new AlertLoopController({
-      play: async (vol) => { const a = handoffAudioRef.current; if (a) await playAlertAudio(a, vol); },
+      play: async (vol) => {
+        const a = handoffAudioRef.current; if (!a) return;
+        await playAlertAudio(a, vol);
+        markAudioArmed(); // a real alert just played → the autoplay lock is lifted
+      },
       getVolume:       () => 100,
       isRepeatEnabled: () => repeatHandoffRef.current,
       assetPath:       HANDOFF_ALERT_ASSET,
@@ -239,6 +253,9 @@ export function GlobalAlertEngine() {
     // ── Visibility: foreground/background of THIS tab ────────────────────────
     const onVisibility = () => {
       isVisibleRef.current = typeof document === "undefined" ? true : document.visibilityState === "visible";
+      // A backgrounded tab gets its AudioContext suspended; wake it the moment we
+      // return so the next alert isn't silently swallowed by a dormant context.
+      if (isVisibleRef.current) void resumeSharedAudioContext();
       reeval(); // start/stop the relevant sound the instant you focus/leave the tab
     };
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
@@ -275,6 +292,7 @@ export function GlobalAlertEngine() {
       window.removeEventListener("foocci:handoff-resolved", onHandoffResolved);
       window.removeEventListener("foocci:order-resolved", onOrderResolved);
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
+      disposeArming();
       reevalRef.current = () => {};
       orderController.dispose();
       handoffController.dispose();

@@ -277,6 +277,26 @@ export default function ImpressorasPage() {
 
   if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
 
+  // "Estação padrão" — must mirror PrintQueueService: the first enabled kitchen (not
+  // Caixa/Cupom) that has a printer of its own (not one the caixa already uses). Any
+  // category left without a station lands here — one comanda, never sprayed to all.
+  const cashierPrinterNames = new Set(
+    stations
+      .filter((s) => (s.key === "CAIXA" || s.key === "CUPOM") && s.printerName?.trim())
+      .map((s) => s.printerName!.trim()),
+  );
+  const defaultKitchen =
+    [...stations]
+      .filter(
+        (s) =>
+          s.enabled &&
+          !!s.printerName?.trim() &&
+          s.key !== "CAIXA" &&
+          s.key !== "CUPOM" &&
+          !cashierPrinterNames.has(s.printerName!.trim()),
+      )
+      .sort((a, b) => a.position - b.position)[0] ?? null;
+
   return (
     <div className="space-y-5">
       <Feedback success={success} error={error} onDismiss={() => setError(null)} />
@@ -402,6 +422,21 @@ export default function ImpressorasPage() {
           title="2. Para onde vai cada categoria"
           subtitle="Em qual(is) estação(ões) cada categoria imprime. Pode adicionar mais de uma — para pratos que saem em duas cozinhas."
         />
+        {/* Where do categories with no station chosen go? Make the default explicit —
+            this is exactly what used to surprise owners ("não segue o painel"). */}
+        {defaultKitchen ? (
+          <p className="mb-3 rounded-xl border border-line2 bg-[#FAFAF8] px-4 py-3 text-sm text-ink2">
+            💡 Categoria <strong>sem estação escolhida</strong> imprime na estação padrão:{" "}
+            <strong className="text-ink">{defaultKitchen.name}</strong>{" "}
+            <span className="text-muted">(a primeira cozinha com impressora)</span>. Escolha uma
+            estação para direcionar — e ela sai <strong>só</strong> onde você mandar.
+          </p>
+        ) : (
+          <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            ⚠️ Nenhuma cozinha tem impressora própria ainda. Defina a impressora de uma cozinha na
+            seção <strong>1</strong> acima — senão as comandas não têm para onde ir.
+          </p>
+        )}
         {categories.length === 0 ? (
           <p className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3 text-sm text-muted">
             Você ainda não tem categorias no cardápio. Cadastre no <strong>Cardápio</strong> e elas aparecem aqui.
@@ -410,7 +445,14 @@ export default function ImpressorasPage() {
           <div className="space-y-2">
             {categories.map((c) => (
               <div key={c.id} className="rounded-xl border border-line2 bg-[#FAFAF8] p-3">
-                <p className="text-sm font-medium text-ink">{c.name}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium text-ink">{c.name}</p>
+                  {c.printStationKeys.filter((k) => k.trim()).length === 0 && (
+                    <span className="rounded-full border border-line2 bg-paper px-2 py-0.5 text-xs text-muted">
+                      → {defaultKitchen ? `${defaultKitchen.name} (padrão)` : "sem destino"}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-2 space-y-2">
                   {c.printStationKeys.map((key, idx) => (
                     <div key={idx} className="flex items-center gap-2">

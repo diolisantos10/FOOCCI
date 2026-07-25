@@ -21,21 +21,21 @@ generator client {
 // ═══════════════════════════════════════════
 
 model Restaurant {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  phone       String?
-  email       String?
-  logoUrl     String?
-  address     String?
-  description String?
-  timezone    String   @default("America/Sao_Paulo")
-  isActive    Boolean  @default(true)
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  phone           String?
+  email           String?
+  logoUrl         String?
+  address         String?
+  description     String?
+  timezone        String   @default("America/Sao_Paulo")
+  isActive        Boolean  @default(true)
   // Master switch do Agente de CRM. false = CRM roda 100% na mão (sem IA).
-  crmAgentEnabled Boolean @default(true)
-  plan        Plan     @default(STARTER)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  crmAgentEnabled Boolean  @default(true)
+  plan            Plan     @default(STARTER)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Emergency store pause — overrides business hours
   isOrderingPaused     Boolean   @default(false)
@@ -58,61 +58,63 @@ model Restaurant {
   allowWhatsAppProviderFallback Boolean @default(false)
   fallbackProvider              String  @default("EVOLUTION")
 
-  users                  User[]
-  customers              Customer[]
-  menuCategories         MenuCategory[]
-  orders                 Order[]
-  orderDrafts            OrderDraft[]
-  campaigns              Campaign[]
-  conversations          Conversation[]
-  helpThreads            HelpThread[]
-  offers                 Offer[]
-  customerSegments       CustomerSegment[]
-  aiLogs                 AIInteractionLog[]
-  evolutionConfig        EvolutionConfig?
-  metaWhatsAppConfig     MetaWhatsAppConfig?
-  metaMessageTemplates   MetaMessageTemplate[]
-  brandConfig            RestaurantBrandConfig?
-  agentConfig            WhatsAppAgentConfig?
-  deliveryConfig         DeliveryConfig?
-  deliveryZones          DeliveryZone[]
-  businessHours          BusinessHours[]
-  paymentSettings        PaymentSettings?
-  storePolicies          StorePolicies?
-  storeProfile           StoreProfile?
-  integrationConfigs     IntegrationConfig[]
-  promotions             Promotion[]
-  customerCoupons        CustomerCoupon[]
-  crmAutomations         CRMAutomation[]
-  crmCustomActions       CRMCustomAction[]
-  crmActionLogs          CRMActionLog[]
-  crmProfile             RestaurantCRMProfile?
-  autoSimulatorConfig    AutoSimulatorConfig?
-  simulationRuns         SimulationRun[]
-  trackingLinks          TrackingLink[]
-  importJobs             ImportJob[]
-  importMappingTemplates ImportMappingTemplate[]
-  tierSettings           TierSettings?
-  tierBenefits           TierBenefit[]
-  onboardingStatus       RestaurantOnboardingStatus?
-  productSalesAggregates ProductSalesAggregate[]
-  customerDataSignals    CustomerDataSignal[]
-  knowledgeItems         RestaurantKnowledgeItem[]
-  orderEditLogs          OrderEditLog[]
-  agentProfileOverrides  RestaurantAgentProfileOverride[]
-  agencyProjects         AgencyProject[]
-  waOrderingSessions     WhatsAppOrderingSession[]
-  waTextOrderingConfig   WhatsAppTextOrderingConfig?
-  soundSettings          RestaurantSoundSettings?
-  printStations          PrintStation[]
-  printAgent             PrintAgent?
-  printJobs              PrintJob[]
+  users                   User[]
+  customers               Customer[]
+  menuCategories          MenuCategory[]
+  orders                  Order[]
+  orderDrafts             OrderDraft[]
+  campaigns               Campaign[]
+  conversations           Conversation[]
+  helpThreads             HelpThread[]
+  offers                  Offer[]
+  customerSegments        CustomerSegment[]
+  aiLogs                  AIInteractionLog[]
+  evolutionConfig         EvolutionConfig?
+  metaWhatsAppConfig      MetaWhatsAppConfig?
+  metaMessageTemplates    MetaMessageTemplate[]
+  brandConfig             RestaurantBrandConfig?
+  agentConfig             WhatsAppAgentConfig?
+  deliveryConfig          DeliveryConfig?
+  deliveryZones           DeliveryZone[]
+  businessHours           BusinessHours[]
+  paymentSettings         PaymentSettings?
+  storePolicies           StorePolicies?
+  storeProfile            StoreProfile?
+  integrationConfigs      IntegrationConfig[]
+  promotions              Promotion[]
+  customerCoupons         CustomerCoupon[]
+  crmAutomations          CRMAutomation[]
+  crmCustomActions        CRMCustomAction[]
+  crmActionLogs           CRMActionLog[]
+  crmProfile              RestaurantCRMProfile?
+  autoSimulatorConfig     AutoSimulatorConfig?
+  simulationRuns          SimulationRun[]
+  trackingLinks           TrackingLink[]
+  importJobs              ImportJob[]
+  importMappingTemplates  ImportMappingTemplate[]
+  tierSettings            TierSettings?
+  tierBenefits            TierBenefit[]
+  onboardingStatus        RestaurantOnboardingStatus?
+  productSalesAggregates  ProductSalesAggregate[]
+  customerDataSignals     CustomerDataSignal[]
+  knowledgeItems          RestaurantKnowledgeItem[]
+  orderEditLogs           OrderEditLog[]
+  agentProfileOverrides   RestaurantAgentProfileOverride[]
+  agencyProjects          AgencyProject[]
+  waOrderingSessions      WhatsAppOrderingSession[]
+  waTextOrderingConfig    WhatsAppTextOrderingConfig?
+  soundSettings           RestaurantSoundSettings?
+  printStations           PrintStation[]
+  printAgent              PrintAgent?
+  printJobs               PrintJob[]
   googleIntegrationConfig GoogleIntegrationConfig?
-  apiKeys                ApiKey[]
-  waMenuLinks            WaMenuLink[]
-  pricingConfig          RestaurantPricingConfig?
-  priceChangeLogs        PriceChangeLog[]
-  ingredients            Ingredient[]
+  apiKeys                 ApiKey[]
+  waMenuLinks             WaMenuLink[]
+  pricingConfig           RestaurantPricingConfig?
+  priceChangeLogs         PriceChangeLog[]
+  ingredients             Ingredient[]
+  fiscalConfig            FiscalConfig?
+  fiscalDocuments         FiscalDocument[]
 
   @@map("restaurants")
 }
@@ -283,24 +285,32 @@ model CustomerPreference {
 // ═══════════════════════════════════════════
 
 model MenuCategory {
-  id             String     @id @default(cuid())
-  restaurantId   String
-  name           String
-  description    String?
-  imageUrl       String?
+  id               String     @id @default(cuid())
+  restaurantId     String
+  name             String
+  description      String?
+  imageUrl         String?
   // Markup multiplier override for /precificacao (null = use the restaurant's
   // global markup from RestaurantPricingConfig). Sector practice: pratos
   // 2,5–3× · bebidas/sobremesas 4–5×.
-  markupOverride Decimal?   @db.Decimal(6, 3)
-  sortOrder      Int        @default(0)
-  isActive       Boolean    @default(true)
-  isAvailable    Boolean    @default(true) // false = category temporarily unavailable (does not modify item flags)
-  showInDelivery Boolean    @default(true) // false = category hidden from delivery channel
-  showInDineIn   Boolean    @default(true) // false = category hidden from QR dine-in menu
-  source         MenuSource @default(MANUAL) // tracks whether created manually or via external integration
-  printStationKeys String[] @default([]) // routing: which print station(s) this category's items print at — can be several (same dish in two kitchens)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  markupOverride   Decimal?   @db.Decimal(6, 3)
+  sortOrder        Int        @default(0)
+  isActive         Boolean    @default(true)
+  isAvailable      Boolean    @default(true) // false = category temporarily unavailable (does not modify item flags)
+  showInDelivery   Boolean    @default(true) // false = category hidden from delivery channel
+  showInDineIn     Boolean    @default(true) // false = category hidden from QR dine-in menu
+  source           MenuSource @default(MANUAL) // tracks whether created manually or via external integration
+  printStationKeys String[]   @default([]) // routing: which print station(s) this category's items print at — can be several (same dish in two kitchens)
+  // ── Fiscal (NFC-e) — defaults por categoria; item sobrepõe, config global é o fallback ──
+  fiscalNcm        String? // NCM (8 díg). Ex.: refeições prontas 21069090
+  fiscalCest       String? // CEST (ST), quando aplicável
+  fiscalCfop       String? // CFOP da operação (ex.: 5102)
+  fiscalCsosn      String? // Simples Nacional (ex.: 102, 500)
+  fiscalCst        String? // Regime normal (ICMS)
+  fiscalOrigem     String? // origem da mercadoria (0=nacional)
+  fiscalUnidade    String? // unidade comercial (ex.: UN)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items      MenuItem[]
@@ -347,6 +357,15 @@ model MenuItem {
   storytellingIA        String? // curated narrative to use when customer asks "what makes it special"
   // ── Saipos POS integration ────────────────────────────────────────────
   saiposIntegrationCode String? // codigo_saipos — PDV code sent as integration_code in Saipos orders
+  // ── Fiscal (NFC-e) — override por item; herda da categoria e depois do default global ──
+  fiscalNcm             String? // NCM (8 díg)
+  fiscalCest            String? // CEST (ST) quando aplicável
+  fiscalCfop            String? // CFOP da operação
+  fiscalCsosn           String? // Simples Nacional (CSOSN)
+  fiscalCst             String? // Regime normal (CST ICMS)
+  fiscalOrigem          String? // origem (0=nacional)
+  fiscalUnidade         String? // unidade comercial
+  fiscalIcmsAliquota    Decimal? @db.Decimal(6, 3) // alíquota ICMS % (regime normal)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -415,23 +434,23 @@ model MenuItemVariant {
 // `autoRepriceMode`. Every applied change is audited in PriceChangeLog.
 
 enum AutoRepriceMode {
-  OFF     // page only shows ideal prices; nothing ever changes on its own
+  OFF // page only shows ideal prices; nothing ever changes on its own
   SUGGEST // change → pending suggestion; lojista applies with 1 click (default)
-  AUTO    // change → price applied immediately, within maxAutoChangePct guardrail
+  AUTO // change → price applied immediately, within maxAutoChangePct guardrail
 }
 
 enum PriceRounding {
-  NONE      // exact value, 2 decimal places
+  NONE // exact value, 2 decimal places
   ENDING_90 // round UP to the next price ending in ,90 (default)
   ENDING_99 // round UP to the next price ending in ,99
 }
 
 enum PriceChangeSource {
-  MANUAL    // price typed directly by the lojista
-  APPLIED   // lojista applied a suggested price (individual or bulk)
-  AUTO      // applied by AutoRepriceMode.AUTO after a cost/assumption change
+  MANUAL // price typed directly by the lojista
+  APPLIED // lojista applied a suggested price (individual or bulk)
+  AUTO // applied by AutoRepriceMode.AUTO after a cost/assumption change
   COST_EDIT // cost updated (price untouched) — kept for a complete audit trail
-  RECIPE    // cost recomputed from the ingredient ficha (recipe lines)
+  RECIPE // cost recomputed from the ingredient ficha (recipe lines)
 }
 
 // Catálogo de insumos do restaurante (aba Insumos em /precificacao).
@@ -505,19 +524,19 @@ model RestaurantPricingConfig {
 }
 
 model PriceChangeLog {
-  id           String  @id @default(cuid())
-  restaurantId String
+  id              String            @id @default(cuid())
+  restaurantId    String
   // Intentionally NOT a FK to MenuItem: the audit trail must survive item
   // deletion. itemName is denormalized for the same reason.
-  menuItemId   String
-  itemName     String
-  oldPrice     Decimal? @db.Decimal(10, 2)
-  newPrice     Decimal? @db.Decimal(10, 2)
-  oldCost      Decimal? @db.Decimal(10, 2)
-  newCost      Decimal? @db.Decimal(10, 2)
-  source       PriceChangeSource
+  menuItemId      String
+  itemName        String
+  oldPrice        Decimal?          @db.Decimal(10, 2)
+  newPrice        Decimal?          @db.Decimal(10, 2)
+  oldCost         Decimal?          @db.Decimal(10, 2)
+  newCost         Decimal?          @db.Decimal(10, 2)
+  source          PriceChangeSource
   changedByUserId String?
-  createdAt    DateTime @default(now())
+  createdAt       DateTime          @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -639,12 +658,13 @@ model Order {
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  restaurant      Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer        Customer       @relation(fields: [customerId], references: [id])
-  orderDraft      OrderDraft?    @relation(fields: [orderDraftId], references: [id])
-  deliveryAddress Address?       @relation(fields: [deliveryAddressId], references: [id])
+  restaurant      Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  orderDraft      OrderDraft?     @relation(fields: [orderDraftId], references: [id])
+  deliveryAddress Address?        @relation(fields: [deliveryAddressId], references: [id])
   items           OrderItem[]
   payment         Payment?
+  fiscalDocument  FiscalDocument?
   editLogs        OrderEditLog[]
 
   @@unique([restaurantId, orderNumber])
@@ -1333,34 +1353,34 @@ model EvolutionConfig {
 // ═══════════════════════════════════════════
 
 model MetaWhatsAppConfig {
-  id                 String  @id @default(cuid())
-  restaurantId       String  @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
-  wabaId             String  // WhatsApp Business Account id
+  wabaId             String // WhatsApp Business Account id
   phoneNumberId      String  @unique // Graph API phone_number_id — routes inbound webhooks
   displayPhoneNumber String? // human-readable connected number
   businessId         String? // Meta Business (portfolio) id
   configId           String? // Embedded Signup configuration id (if used)
 
-  accessToken        String  // AES-256-GCM encrypted long-lived/system-user token
+  accessToken        String // AES-256-GCM encrypted long-lived/system-user token
   tokenExpiresAt     DateTime?
-  webhookVerifyToken String  // AES-256-GCM encrypted per-restaurant verify token
+  webhookVerifyToken String // AES-256-GCM encrypted per-restaurant verify token
 
-  connectionStatus   String   @default("PENDING") // PENDING | CONNECTED | ERROR | DISCONNECTED
-  lastHealthCheckAt  DateTime?
-  lastError          String?
-  qualityRating      String?  // GREEN | YELLOW | RED (when available)
-  messagingLimit     String?  // TIER_1K | TIER_10K | ... (when available)
+  connectionStatus  String    @default("PENDING") // PENDING | CONNECTED | ERROR | DISCONNECTED
+  lastHealthCheckAt DateTime?
+  lastError         String?
+  qualityRating     String? // GREEN | YELLOW | RED (when available)
+  messagingLimit    String? // TIER_1K | TIER_10K | ... (when available)
 
-  metaCrmEnabled     Boolean  @default(false) // when true, CRM campaigns route through Meta Cloud API
+  metaCrmEnabled Boolean @default(false) // when true, CRM campaigns route through Meta Cloud API
 
   // Coexistence: the number is ALSO live on the WhatsApp Business App (phone). Onboarded
   // via Embedded Signup with featureType=whatsapp_business_app_onboarding; it must NEVER
   // be /register-ed (a normal register would evict it from the phone).
-  coexistence        Boolean  @default(false)
+  coexistence Boolean @default(false)
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1372,20 +1392,20 @@ model MetaWhatsAppConfig {
 // OUTSIDE the 24h customer-service window must use an APPROVED template; this is the
 // minimal registry CRM/automation can resolve a template from. Additive, Meta-only.
 model MetaMessageTemplate {
-  id               String  @id @default(cuid())
-  restaurantId     String
+  id           String @id @default(cuid())
+  restaurantId String
 
-  templateName     String  // Meta-registered name, e.g. "order_update"
-  languageCode     String  @default("pt_BR")
-  category         String  @default("UTILITY") // UTILITY | MARKETING | AUTHENTICATION
-  status           String  @default("PENDING") // PENDING | APPROVED | REJECTED | DISABLED
-  bodyVariables    Int     @default(0) // number of {{n}} placeholders in the body
+  templateName       String // Meta-registered name, e.g. "order_update"
+  languageCode       String  @default("pt_BR")
+  category           String  @default("UTILITY") // UTILITY | MARKETING | AUTHENTICATION
+  status             String  @default("PENDING") // PENDING | APPROVED | REJECTED | DISABLED
+  bodyVariables      Int     @default(0) // number of {{n}} placeholders in the body
   mappedCampaignType String? // optional: CRM campaign type this template fulfils
-  rejectedReason   String? // Meta's reason when status = REJECTED (shown to the owner)
-  metaTemplateId   String? // Meta's template id — enables zero-gap edits of an approved template
+  rejectedReason     String? // Meta's reason when status = REJECTED (shown to the owner)
+  metaTemplateId     String? // Meta's template id — enables zero-gap edits of an approved template
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1456,10 +1476,10 @@ model IntegrationConfig {
 // ═══════════════════════════════════════════
 
 model GoogleIntegrationConfig {
-  id           String  @id @default(cuid())
-  restaurantId String  @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
-  connected    Boolean @default(false)
+  connected Boolean @default(false)
 
   // OAuth tokens (AES-256-GCM encrypted ciphertext — never plaintext)
   accessTokenEncrypted  String?
@@ -1868,7 +1888,7 @@ model RestaurantSoundSettings {
   humanAttentionSoundEnabled       Boolean @default(true)
   soundVolume                      Int     @default(100) // 0–400; 100 = padrão, >100 = reforço via Web Audio
   repeatNewOrderSoundUntilAccepted Boolean @default(true) // new-order alert repeats until accepted (P0: reliable)
-  repeatHumanAttentionUntilSeen    Boolean @default(true)  // human-attention alarm repeats until assumed/resolved (P0)
+  repeatHumanAttentionUntilSeen    Boolean @default(true) // human-attention alarm repeats until assumed/resolved (P0)
   soundTheme                       String  @default("DEFAULT") // DEFAULT | SOFT | URGENT
 
   // Cross-DEVICE alarm lease (not just cross-tab — Web Locks alone only dedupes
@@ -1920,18 +1940,18 @@ model PrintStation {
 //  a real dropdown. `lastSeenAt` drives the online/offline badge.
 
 model PrintAgent {
-  id               String     @id @default(cuid())
-  restaurantId     String     @unique
-  pairingCode      String     @unique // short code the owner types into the Carteiro (single-use; rotates on pair)
-  token            String?    @unique // durable agent secret, issued after pairing
+  id               String    @id @default(cuid())
+  restaurantId     String    @unique
+  pairingCode      String    @unique // short code the owner types into the Carteiro (single-use; rotates on pair)
+  token            String?   @unique // durable agent secret, issued after pairing
   reportedPrinters String[] // printers the agent last saw on the PC
   agentVersion     String?
   lastSeenAt       DateTime?
   // Opt-in: emit ESC/POS double-height codes on kitchen item lines ("letras
   // grandes"). OFF by default — only enable if the printer accepts raw ESC/POS.
-  kitchenLargeFont Boolean    @default(false)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  kitchenLargeFont Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -2095,7 +2115,7 @@ model Promotion {
   channel           PromotionChannel @default(ALL)
 
   // Coupon
-  couponCode String?
+  couponCode         String?
   // When granted to a customer's wallet, the coupon stays valid this many days from
   // the grant. Null = fall back to endsAt, else a 30-day default.
   couponValidityDays Int?
@@ -2121,7 +2141,7 @@ model Promotion {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant    Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   walletEntries CustomerCoupon[]
 
   @@index([restaurantId])
@@ -2134,18 +2154,18 @@ model CustomerCoupon {
   id               String               @id @default(cuid())
   restaurantId     String
   customerId       String
-  promotionId      String?              // legacy link; new card-defined coupons are self-contained
-  couponCode       String               // short reference label (auto)
+  promotionId      String? // legacy link; new card-defined coupons are self-contained
+  couponCode       String // short reference label (auto)
   // Self-contained reward (card-defined). PERCENTAGE (value = %), FIXED (value = R$),
   // or CUSTOM (a physical gift; description holds the text, no auto-discount).
-  discountType     String?              // "PERCENTAGE" | "FIXED" | "CUSTOM"
+  discountType     String? // "PERCENTAGE" | "FIXED" | "CUSTOM"
   discountValue    Decimal?             @db.Decimal(10, 2)
-  description      String?              // CUSTOM reward text, e.g. "sobremesa grátis"
+  description      String? // CUSTOM reward text, e.g. "sobremesa grátis"
   costEstimate     Decimal?             @db.Decimal(10, 2) // estimated R$ cost, for the monthly coupon budget
   status           CustomerCouponStatus @default(ACTIVE)
   grantedAt        DateTime             @default(now())
-  expiresAt        DateTime?            // null = never expires
-  sourceCampaignId String?              // which campaign credited it
+  expiresAt        DateTime? // null = never expires
+  sourceCampaignId String? // which campaign credited it
   usedAt           DateTime?
   usedOrderId      String?
   createdAt        DateTime             @default(now())
@@ -2404,20 +2424,20 @@ model TierSettings {
 
 /// Custom benefits per tier, configured by the restaurant.
 model TierBenefit {
-  id           String   @id @default(cuid())
-  restaurantId String
-  tier         String // BRONZE | PRATA | OURO | DIAMANTE
-  title        String
-  description  String?
-  isActive     Boolean  @default(true)
-  sortOrder    Int      @default(0)
+  id             String   @id @default(cuid())
+  restaurantId   String
+  tier           String // BRONZE | PRATA | OURO | DIAMANTE
+  title          String
+  description    String?
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
   /// Physical restaurant gift (e.g. a branded mug) handed to customers who reach
   /// this tier — tracked against a real stock so the owner never over-promises.
-  isPhysicalGift Boolean @default(false)
+  isPhysicalGift Boolean  @default(false)
   stockTotal     Int? // null = untracked; a number = physical units available
-  stockUsed      Int     @default(0) // units already delivered to customers
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  stockUsed      Int      @default(0) // units already delivered to customers
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -4288,7 +4308,7 @@ model MetaOAuthState {
   userId                   String
   state                    String   @unique
   status                   String   @default("PENDING") // PENDING | AWAITING_SELECTION | CONSUMED
-  returnPlatform           String?  // "instagram" | "facebook" — where to redirect after callback
+  returnPlatform           String? // "instagram" | "facebook" — where to redirect after callback
   userAccessTokenEncrypted String? // AES-256-GCM — short-lived user token, never plaintext
   candidates               Json? // [{ pageId, pageName, instagramBusinessAccountId?, instagramUsername?, hasInstagram }]
   error                    String?
@@ -4433,4 +4453,136 @@ model RestaurantExperience {
   @@index([restaurantId, agentId, sourceAt])
   @@index([restaurantId, intent])
   @@map("restaurant_experiences")
+}
+
+// ═══════════════════════════════════════════
+//  FISCAL — Emissão de Nota Fiscal (NFC-e, modelo 65)
+// ═══════════════════════════════════════════
+//
+// OPCIONAL por loja (enabled). O lojista que já emite no manager dele deixa
+// desligado; quem quer emitir direto no Foocci liga aqui. A emissão real passa
+// por um GATEWAY fiscal homologado (primeiro: Focus NFe) — o Foocci monta o
+// payload e chama a API REST; o gateway assina com o certificado A1 e transmite
+// à SEFAZ. Segredos (CSC, tokens do gateway) são gravados CIFRADOS.
+model FiscalConfig {
+  id           String @id @default(cuid())
+  restaurantId String @unique
+
+  // Liga/desliga a emissão pelo Foocci (o "opcional" pedido pelo dono).
+  enabled     Boolean @default(false)
+  // Emissor: "DISABLED" | "FOCUS_NFE" (espaço p/ outros gateways).
+  provider    String  @default("DISABLED")
+  // "HOMOLOGACAO" (teste SEFAZ) | "PRODUCAO". Começa sempre em homologação.
+  environment String  @default("HOMOLOGACAO")
+
+  // ── Identificação fiscal do emitente ────────────────────────────────────
+  cnpj               String?
+  inscricaoEstadual  String?
+  inscricaoMunicipal String?
+  razaoSocial        String?
+  nomeFantasia       String?
+  cnae               String?
+  // CRT: "SIMPLES_NACIONAL" (1) | "SIMPLES_EXCESSO" (2) | "REGIME_NORMAL" (3)
+  regimeTributario   String  @default("SIMPLES_NACIONAL")
+
+  // ── Endereço fiscal (estruturado; a SEFAZ exige o código IBGE do município) ─
+  fiscalLogradouro    String?
+  fiscalNumero        String?
+  fiscalComplemento   String?
+  fiscalBairro        String?
+  fiscalMunicipio     String?
+  fiscalMunicipioIbge String? // código IBGE 7 díg (obrigatório na NFC-e)
+  fiscalUf            String? // sigla do estado (regras/CSC são por UF)
+  fiscalCep           String?
+
+  // ── NFC-e ────────────────────────────────────────────────────────────────
+  serie         Int     @default(1)
+  proximoNumero Int     @default(1) // próximo nº; incrementado atômico na emissão
+  cscId         String? // idToken do CSC (SEFAZ do estado)
+  cscToken      String? // CSC (segredo) — GRAVADO CIFRADO
+
+  // ── Credenciais do gateway (GRAVADAS CIFRADAS) ────────────────────────────
+  providerTokenHomologacao String?
+  providerTokenProducao    String?
+  // O A1 é enviado pelo LOJISTA no painel; a Foocci registra a empresa dele no
+  // gateway (conta-mãe) e guarda só a referência + validade p/ avisar.
+  gatewayCompanyRef        String? // ref da empresa no gateway após subir o certificado
+  certificadoNome          String?
+  certificadoValidadeAte   DateTime?
+
+  // ── Defaults fiscais (fallback quando o produto/categoria não define) ──────
+  defaultNcm     String? // ex.: 21069090 (preparações alimentícias)
+  defaultCfop    String? // ex.: 5102
+  defaultCsosn   String? // Simples — ex.: 102 ou 500
+  defaultCst     String? // Regime normal
+  defaultOrigem  String  @default("0")
+  defaultUnidade String  @default("UN")
+
+  // ── Saúde da conexão (mostrado no painel) ─────────────────────────────────
+  lastTestedAt    DateTime?
+  lastTestOk      Boolean?
+  lastTestMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("fiscal_configs")
+}
+
+// Livro de notas — um registro por pedido, que caminha pelos status abaixo.
+model FiscalDocument {
+  id           String @id @default(cuid())
+  restaurantId String
+  orderId      String @unique
+
+  modelo   String               @default("65") // 65 = NFC-e
+  status   FiscalDocumentStatus @default(PENDENTE)
+  ambiente String // HOMOLOGACAO | PRODUCAO (snapshot no momento da emissão)
+
+  serie       Int?
+  numero      Int?
+  chave       String? @unique // chave de acesso (44 díg) quando autorizada
+  protocolo   String? // protocolo de autorização da SEFAZ
+  providerRef String? // id da nota no gateway (p/ consultar status)
+
+  qrCodeData  String? // conteúdo do QR Code da NFC-e
+  urlConsulta String? // URL de consulta pela chave
+  xmlUrl      String? // XML autorizado arquivado (S3)
+  danfceUrl   String? // DANFCE (PDF) arquivado (S3)
+
+  valorTotal      Decimal? @db.Decimal(10, 2) // snapshot do total
+  cpfDestinatario String? // "CPF na nota" (opcional)
+
+  rejeicaoCodigo String? // código da rejeição SEFAZ
+  rejeicaoMotivo String? // motivo legível
+
+  emitidaAt                 DateTime?
+  canceladaAt               DateTime?
+  cancelamentoJustificativa String?
+  cancelamentoProtocolo     String?
+
+  attempts  Int     @default(0)
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, status])
+  @@index([providerRef])
+  @@map("fiscal_documents")
+}
+
+enum FiscalDocumentStatus {
+  PENDENTE // criada, ainda não transmitida
+  PROCESSANDO // enviada ao gateway/SEFAZ, aguardando autorização
+  AUTORIZADA // autorizada pela SEFAZ
+  REJEITADA // rejeitada (ver rejeicaoCodigo/Motivo) — corrigir e reemitir
+  CANCELADA // cancelada após autorização
+  CONTINGENCIA // emitida offline, pendente de transmissão
+  ERRO // falha de transporte/gateway — retryable
 }

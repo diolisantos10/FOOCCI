@@ -30,6 +30,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { PrintQueueService } from "@/services/print/PrintQueueService";
+import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
 
 const LOG = "[mp-webhook]";
 
@@ -95,6 +96,10 @@ export async function confirmMpPayment(
   if (orderNeedsStatusAdvance) {
     PrintQueueService.maybeEnqueueOrder(order.restaurantId, order.id).catch((e) =>
       console.error("[print] mp webhook enqueue failed:", e),
+    );
+    // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
+    FiscalEmissionService.maybeEmitForOrder(order.restaurantId, order.id).catch((e) =>
+      console.error("[fiscal] mp webhook emit failed:", e),
     );
   }
 
