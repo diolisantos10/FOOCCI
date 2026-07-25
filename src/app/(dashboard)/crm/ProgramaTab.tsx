@@ -303,12 +303,11 @@ function BenefitsPanel({
   onRewardsChanged: () => void;
 }) {
   const m = TIER_META[tier];
-  const canHaveCoupon = tier !== "BRONZE"; // Bronze is the entry level — no reward
+  // Every tier can carry any reward — the owner decides what (if anything) each gives.
   const [adding, setAdding]   = useState(false);
-  const [mode,   setMode]     = useState<"text" | "coupon">("text");
+  const [mode,   setMode]     = useState<"coupon" | "gift" | "text">("coupon");
   const [title,  setTitle]    = useState("");
   const [desc,   setDesc]     = useState("");
-  const [isGift, setIsGift]   = useState(false);
   const [stock,  setStock]    = useState("");
   const [saving, setSaving]   = useState(false);
   const [error,  setError]    = useState<string | null>(null);
@@ -332,7 +331,7 @@ function BenefitsPanel({
       const json = await res.json() as { data?: { campaignActive: boolean }; error?: string };
       if (!res.ok || json.error) { setError(json.error ?? "Erro"); return; }
       onRewardsChanged();
-      setAdding(false); setMode("text"); setCDesc("");
+      setAdding(false); setMode("coupon"); setCDesc("");
     } catch { setError("Falha de rede."); }
     finally { setSaving(false); }
   }
@@ -350,6 +349,7 @@ function BenefitsPanel({
 
   async function handleAdd() {
     if (!title.trim()) return;
+    const gift = mode === "gift";
     setSaving(true); setError(null);
     try {
       const res  = await fetch("/api/crm/relationship/benefits", {
@@ -357,14 +357,14 @@ function BenefitsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tier, title: title.trim(), description: desc.trim() || undefined,
-          isPhysicalGift: isGift,
-          stockTotal: isGift && stock.trim() ? Math.max(0, parseInt(stock, 10) || 0) : null,
+          isPhysicalGift: gift,
+          stockTotal: gift && stock.trim() ? Math.max(0, parseInt(stock, 10) || 0) : null,
         }),
       });
       const json = await res.json() as { data?: Benefit; error?: string };
       if (!res.ok || json.error) { setError(json.error ?? "Erro"); return; }
       onAdded(json.data!);
-      setTitle(""); setDesc(""); setIsGift(false); setStock(""); setAdding(false);
+      setTitle(""); setDesc(""); setStock(""); setAdding(false); setMode("coupon");
     } catch {
       setError("Falha de rede.");
     } finally {
@@ -495,32 +495,31 @@ function BenefitsPanel({
 
       {adding && (
         <div className="mt-3 space-y-2 rounded-lg border border-brand-100 bg-paper p-3">
-          {/* Seletor de modo: benefício em texto ou cupom real (sincroniza com Mimo mensal) */}
-          {canHaveCoupon && (
-            <div className="flex gap-1 rounded-lg bg-[#FAFAF8] p-0.5">
+          {/* O que este nível vai dar — o lojista escolhe. Disponível em TODAS as faixas. */}
+          <div className="flex gap-1 rounded-lg bg-[#FAFAF8] p-0.5">
+            {([
+              { k: "coupon", label: "🎟️ Cupom" },
+              { k: "gift",   label: "🎁 Brinde" },
+              { k: "text",   label: "📝 Texto" },
+            ] as const).map((opt) => (
               <button
-                onClick={() => setMode("text")}
-                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${mode === "text" ? "bg-paper text-ink shadow-sm" : "text-muted"}`}
+                key={opt.k}
+                onClick={() => { setMode(opt.k); setError(null); }}
+                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${mode === opt.k ? "bg-paper text-ink shadow-sm" : "text-muted"}`}
               >
-                Texto
+                {opt.label}
               </button>
-              <button
-                onClick={() => setMode("coupon")}
-                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${mode === "coupon" ? "bg-paper text-ink shadow-sm" : "text-muted"}`}
-              >
-                🎟️ Cupom
-              </button>
-            </div>
-          )}
+            ))}
+          </div>
 
-          {mode === "coupon" && canHaveCoupon ? (
+          {mode === "coupon" && (
             <>
               <div className="flex flex-wrap gap-1">
                 {([
                   { k: "PERCENTAGE",    label: "%" },
                   { k: "FIXED",         label: "R$" },
                   { k: "FREE_SHIPPING", label: "Frete grátis" },
-                  { k: "CUSTOM",        label: "Brinde/livre" },
+                  { k: "CUSTOM",        label: "Mimo livre" },
                 ] as const).map((opt) => (
                   <button
                     key={opt.k}
@@ -563,18 +562,20 @@ function BenefitsPanel({
                   {saving ? "Salvando…" : "Salvar cupom"}
                 </button>
                 <button
-                  onClick={() => { setAdding(false); setMode("text"); setError(null); }}
+                  onClick={() => { setAdding(false); setMode("coupon"); setError(null); }}
                   className="rounded-lg border border-line2 px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8]"
                 >
                   Cancelar
                 </button>
               </div>
             </>
-          ) : (
+          )}
+
+          {mode !== "coupon" && (
             <>
               <input
                 type="text"
-                placeholder="Título do benefício"
+                placeholder={mode === "gift" ? "Nome do brinde (ex.: caneca, camiseta)" : "Título do benefício"}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
@@ -588,13 +589,8 @@ function BenefitsPanel({
                 className="w-full rounded-lg border border-line2 px-2 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
                 maxLength={300}
               />
-              {/* Brinde físico + estoque */}
-              <label className="flex cursor-pointer items-center gap-2 text-[11px] text-ink2">
-                <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} className="accent-brand-500" />
-                🎁 É um brinde físico (ex.: caneca, camiseta)
-              </label>
-              {isGift && (
-                <div className="flex items-center gap-2 pl-5">
+              {mode === "gift" && (
+                <div className="flex items-center gap-2">
                   <input
                     type="number" min={0} placeholder="quantidade"
                     value={stock}
@@ -614,7 +610,7 @@ function BenefitsPanel({
                   {saving ? "Salvando…" : "Salvar"}
                 </button>
                 <button
-                  onClick={() => { setAdding(false); setTitle(""); setDesc(""); setError(null); }}
+                  onClick={() => { setAdding(false); setTitle(""); setDesc(""); setStock(""); setMode("coupon"); setError(null); }}
                   className="rounded-lg border border-line2 px-3 py-1.5 text-[11px] font-medium text-ink2 hover:bg-[#FAFAF8]"
                 >
                   Cancelar

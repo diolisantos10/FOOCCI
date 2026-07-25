@@ -319,14 +319,25 @@ export async function resolveAudience(
       }) as Row[]);
     }
 
-    case "MIMO_MENSAL_NIVEL":
-      // Everyone who already climbed the ladder (Prata+) — the monthly perk pool.
-      // "Monthly" is enforced by the campaign's recontactDays window (30).
+    case "MIMO_MENSAL_NIVEL": {
+      // Which levels get a monthly mimo is the OWNER's call: send only to tiers that
+      // have a reward configured in the campaign's tierCoupons (set from the Benefícios
+      // panel — any tier, Bronze included). No config yet → legacy Prata+ default, so
+      // existing setups keep working. "Monthly" is enforced by recontactDays (30).
+      const mimoCamp = await prisma.campaign.findFirst({
+        where:   { restaurantId: rid, templateId: "mimo-mensal-nivel", status: { notIn: ["SENT", "COMPLETED", "CANCELLED"] as never[] } },
+        orderBy: { createdAt: "desc" },
+        select:  { scheduleConfig: true },
+      });
+      const tierCoupons = (mimoCamp?.scheduleConfig as { tierCoupons?: Record<string, unknown> } | null)?.tierCoupons ?? {};
+      const configured  = Object.keys(tierCoupons).filter((k) => tierCoupons[k]);
+      const targetTiers = configured.length > 0 ? configured : ["PRATA", "OURO", "DIAMANTE"];
       return serialize(await prisma.customer.findMany({
-        where:   { ...baseWhere, tier: { in: ["PRATA", "OURO", "DIAMANTE"] } },
+        where:   { ...baseWhere, tier: { in: targetTiers } },
         orderBy: [{ tier: "desc" }, { totalSpend: "desc" }],
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
+    }
 
     case "CUPOM_VENCENDO": {
       // Customers holding an ACTIVE (unused) coupon that expires within the next

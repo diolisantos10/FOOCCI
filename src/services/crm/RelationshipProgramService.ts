@@ -437,8 +437,14 @@ export class RelationshipProgramService {
       if (!r.templateId || seen.has(r.templateId)) continue; // newest row per campaign
       seen.add(r.templateId);
       const cfg = (r.scheduleConfig as { coupon?: ReadyMadeCoupon | null; tierCoupons?: TierCouponsConfig } | null);
-      for (const tier of ["PRATA", "OURO", "DIAMANTE"] as const) {
-        const coupon = resolveTierCoupon(cfg?.tierCoupons, tier, cfg?.coupon ?? null);
+      for (const tier of ["BRONZE", "PRATA", "OURO", "DIAMANTE"] as const) {
+        // "Subir de nível" never lands on Bronze (the entry tier), so it earns no
+        // reward from that campaign — only the monthly mimo can reward Bronze.
+        if (tier === "BRONZE" && r.templateId === "subiu-de-nivel") continue;
+        // Bronze must NOT inherit the fallback base coupon (that's the Prata+ default);
+        // only an EXPLICIT per-tier coupon counts for Bronze.
+        const fallback = tier === "BRONZE" ? null : (cfg?.coupon ?? null);
+        const coupon   = resolveTierCoupon(cfg?.tierCoupons, tier, fallback);
         if (coupon) out.push({ tier, label: couponLabel(coupon), source: SOURCE[r.templateId] ?? r.templateId });
       }
     }
@@ -454,7 +460,7 @@ export class RelationshipProgramService {
    */
   static async setTierCoupon(
     restaurantId: string,
-    tier: "PRATA" | "OURO" | "DIAMANTE",
+    tier: "BRONZE" | "PRATA" | "OURO" | "DIAMANTE",
     coupon: ReadyMadeCoupon | null,
   ): Promise<{ ok: true; campaignActive: boolean } | { ok: false; error: string }> {
     const rm = getReadyMadeCampaign("mimo-mensal-nivel");

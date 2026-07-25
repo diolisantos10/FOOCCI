@@ -120,6 +120,35 @@ describe("getOverview — stats use the SAME basis as classification", () => {
   });
 });
 
+describe("getTierRewards — coupons per tier, Bronze included", () => {
+  it("shows a Bronze coupon set via Mimo mensal", async () => {
+    db.campaign.findMany.mockResolvedValue([
+      { templateId: "mimo-mensal-nivel", scheduleConfig: { tierCoupons: { BRONZE: { type: "PERCENTAGE", value: 5 } } } },
+    ]);
+    const rewards = await RelationshipProgramService.getTierRewards(R);
+    const bronze = rewards.find((r) => r.tier === "BRONZE");
+    expect(bronze).toBeTruthy();
+    expect(bronze!.source).toBe("Mimo mensal");
+  });
+
+  it("does NOT give Bronze a reward from 'subiu-de-nivel' (never lands on Bronze)", async () => {
+    db.campaign.findMany.mockResolvedValue([
+      { templateId: "subiu-de-nivel", scheduleConfig: { coupon: { type: "PERCENTAGE", value: 10 } } },
+    ]);
+    const rewards = await RelationshipProgramService.getTierRewards(R);
+    expect(rewards.find((r) => r.tier === "BRONZE")).toBeUndefined();
+  });
+
+  it("Bronze does not inherit the fallback base coupon", async () => {
+    db.campaign.findMany.mockResolvedValue([
+      { templateId: "mimo-mensal-nivel", scheduleConfig: { coupon: { type: "PERCENTAGE", value: 10 } } }, // fallback only
+    ]);
+    const rewards = await RelationshipProgramService.getTierRewards(R);
+    expect(rewards.find((r) => r.tier === "BRONZE")).toBeUndefined(); // Prata+ get it, Bronze doesn't
+    expect(rewards.find((r) => r.tier === "OURO")).toBeTruthy();
+  });
+});
+
 describe("DEFAULT_SETTINGS", () => {
   it("ships the program OFF and vitalício by default", () => {
     expect(DEFAULT_SETTINGS.programEnabled).toBe(false);
