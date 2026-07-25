@@ -110,3 +110,4 @@ export {
   type ModoDaEsteira,
 } from "./oficina/OficinaPipeline";
 export { runOficinaDiagnostic, type OficinaDiagnosticResult } from "./oficina/OficinaDiagnostic";
+export { auditarPeca, type AuditoriaInput, type Auditoria } from "./oficina/AuditorDePeca";

@@ -1473,7 +1473,7 @@ export class ScheduledCampaignRunnerService {
     // por sorteio para, após o envio, perguntar ao agente o que ELE comporia e
     // registrar a evidência da escada por-agente. OFF por padrão; nunca envia.
     const crmShadowEnabled = process.env.CRM_BRAIN_SHADOW_ENABLED === "true";
-    const crmShadowSentIds: string[] = [];
+    const crmShadowSentIds: { customerId: string; messageText: string }[] = [];
 
     for (const customer of customers) {
       // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
@@ -1780,7 +1780,7 @@ export class ScheduledCampaignRunnerService {
 
         sent++;
         consecutiveInstanceFailures = 0; // a success proves the session is alive
-        if (crmShadowEnabled) crmShadowSentIds.push(customer.id);
+        if (crmShadowEnabled) crmShadowSentIds.push({ customerId: customer.id, messageText });
 
         // Coupon wallet: if this campaign grants a card-defined coupon, credit it to
         // the customer (iFood-style). Idempotent + best-effort — a coupon hiccup must
@@ -1952,7 +1952,7 @@ export class ScheduledCampaignRunnerService {
    */
   private static async _runCrmShadow(
     restaurantId: string,
-    sentCustomerIds: string[],
+    sentCustomerIds: { customerId: string; messageText: string }[],
     couponCode: string | null,
   ): Promise<void> {
     const sampleSize = Math.max(1, Math.min(Number(process.env.CRM_BRAIN_SHADOW_SAMPLE ?? 3) || 3, 10));
@@ -1961,7 +1961,7 @@ export class ScheduledCampaignRunnerService {
       import("./CrmAgentReasoner"),
       import("@/services/brain/runtime/BrainShadowEvidenceService"),
     ]);
-    for (const customerId of sample) {
+    for (const { customerId, messageText } of sample) {
       try {
         const r = await reasonCrmMessage({ restaurantId, customerId, couponCode: couponCode ?? undefined });
         if (!r.ok || !r.message) continue; // cliente sumiu / motor degradou: nada a registrar
@@ -1977,9 +1977,76 @@ export class ScheduledCampaignRunnerService {
           wouldEscalate: false, // outbound de CRM não escala
           wouldReply: r.message,
         });
+
+        // Sombra da Oficina: julga as DUAS mensagens (a que saiu por sorteio e a
+        // que o agente teria mandado) pelo mesmo critério. Não produz nada e não
+        // gasta IA — o crítico é determinístico. É a medição barata que diz se a
+        // Oficina acrescenta algo antes de a gente trocar o que já funciona.
+        await this._auditarComOficina(restaurantId, customerId, messageText, r.message)
+          .catch((e) => console.warn(`[OficinaShadow] audit failed`, { customerId, error: e instanceof Error ? e.message : String(e) }));
       } catch (err) {
         console.warn(`[CrmShadow] sample failed`, { customerId, error: err instanceof Error ? err.message : String(err) });
       }
+    }
+  }
+
+  /**
+   * Auditoria da Oficina sobre o par (sorteio × agente) — NÃO envia nada e NÃO
+   * gasta IA. Gated por CRM_OFICINA_SHADOW_ENABLED (OFF padrão), independente da
+   * flag do shadow do CRM: dá pra medir a Oficina sem mexer no resto.
+   *
+   * Guarda como evidência com agentId "oficina-sorteio" e "oficina-agente", pra
+   * a comparação sair direto do relatório de sombra que já existe. `confidence`
+   * carrega a nota normalizada (0–1) e `coherence` o veredito.
+   *
+   * Amostra sem verdade disponível é DESCARTADA: julgar peça sem base de
+   * comparação produziria "genérico" por falta de dado, e o número mentiria.
+   */
+  private static async _auditarComOficina(
+    restaurantId: string,
+    customerId: string,
+    mensagemSorteada: string,
+    mensagemDoAgente: string,
+  ): Promise<void> {
+    if (process.env.CRM_OFICINA_SHADOW_ENABLED !== "true") return;
+
+    const [{ auditarPeca }, { recordShadowOutcome }] = await Promise.all([
+      import("@/services/brain/oficina/AuditorDePeca"),
+      import("@/services/brain/runtime/BrainShadowEvidenceService"),
+    ]);
+
+    const candidatos: { rotulo: string; peca: string }[] = [
+      { rotulo: "oficina-sorteio", peca: mensagemSorteada },
+      { rotulo: "oficina-agente",  peca: mensagemDoAgente },
+    ];
+
+    for (const { rotulo, peca } of candidatos) {
+      const auditoria = await auditarPeca({
+        businessType: "RESTAURANT",
+        businessId:   restaurantId,
+        dominio:      "restaurante",
+        agentId:      "crm",
+        intencao:     "mensagem de recuperação de cliente",
+        peca,
+        formato:      "WhatsApp, 1 linha",
+      });
+
+      // Sem verdade não há juízo honesto — melhor não registrar do que registrar
+      // um número que parece medição e não é.
+      if (auditoria.fatosDisponiveis === 0) continue;
+
+      await recordShadowOutcome({
+        restaurantId,
+        conversationId: `crm:${customerId}`,
+        agentId:        rotulo,
+        intent:         auditoria.nota.aprovado ? "aprovada" : (auditoria.nota.motivos[0] ?? "reprovada"),
+        reasoningMode:  "DETERMINISTIC",
+        engine:         "oficina-critic",
+        confidence:     auditoria.nota.score / 10,
+        coherence:      auditoria.nota.aprovado ? "PASS" : "FAIL",
+        wouldEscalate:  false,
+        wouldReply:     peca,
+      });
     }
   }
 
