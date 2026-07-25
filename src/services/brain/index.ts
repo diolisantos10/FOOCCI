@@ -98,6 +98,7 @@ export {
   getAssinaturaMemory,
   setAssinaturaMemory,
   resetAssinaturaMemory,
+  resolverMemoria,
   JANELA_PADRAO,
   type AssinaturaMemory,
 } from "./oficina/AssinaturaMemory";

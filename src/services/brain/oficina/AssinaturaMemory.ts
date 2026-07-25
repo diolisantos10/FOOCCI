@@ -47,21 +47,42 @@ class MemoriaEmProcesso implements AssinaturaMemory {
   }
 }
 
-const padrao = new MemoriaEmProcesso();
-let atual: AssinaturaMemory = padrao;
+const emProcesso = new MemoriaEmProcesso();
+let explicita: AssinaturaMemory | null = null;
 
+/** Override explícito — ganha de tudo. Usado por teste e por wiring especial. */
 export function setAssinaturaMemory(memory: AssinaturaMemory): void {
-  atual = memory;
+  explicita = memory;
 }
 
+/** A memória corrente sem resolver a de produção (síncrono). */
 export function getAssinaturaMemory(): AssinaturaMemory {
-  return atual;
+  return explicita ?? emProcesso;
 }
 
-/** Volta pra memória em processo, zerada. Para testes. */
+/** Volta pra memória em processo, zerada, sem override. Para testes. */
 export function resetAssinaturaMemory(): void {
-  padrao.limpar();
-  atual = padrao;
+  emProcesso.limpar();
+  explicita = null;
+}
+
+/**
+ * Resolve quem guarda a janela: override explícito > processo (em teste) >
+ * banco (produção). O import da versão Prisma é preguiçoso de propósito, pra
+ * teste de unidade não arrastar banco.
+ *
+ * Prisma indisponível cai na memória de processo: perder variedade é ruim, não
+ * conseguir gerar a peça é pior.
+ */
+export async function resolverMemoria(): Promise<AssinaturaMemory> {
+  if (explicita) return explicita;
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) return emProcesso;
+  try {
+    const { prismaAssinaturaMemory } = await import("./PrismaAssinaturaMemory");
+    return prismaAssinaturaMemory;
+  } catch {
+    return emProcesso;
+  }
 }
 
 /**

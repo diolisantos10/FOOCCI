@@ -21,7 +21,7 @@ import { criticarResultado } from "./OutputCritic";
 import { buscarVerdade } from "./TruthSource";
 import {
   chaveDeMemoria,
-  getAssinaturaMemory,
+  resolverMemoria,
   JANELA_PADRAO,
 } from "./AssinaturaMemory";
 
@@ -79,7 +79,7 @@ function resumirMotivos(nota: Nota): string {
 export async function rodarEsteira(input: EsteiraInput): Promise<EsteiraResult> {
   const modo = input.modo ?? "sombra";
   const janela = input.janela ?? JANELA_PADRAO;
-  const memory = getAssinaturaMemory();
+  const memory = await resolverMemoria();
   const chave = chaveDeMemoria(input.businessId, input.pedido.agentId, input.pedido.intencao);
 
   // 1. A verdade primeiro — é o que faz a peça deixar de ser genérica.
