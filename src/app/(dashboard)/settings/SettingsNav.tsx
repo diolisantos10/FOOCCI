@@ -75,8 +75,8 @@ export default function SettingsNav() {
         ))}
       </nav>
 
-      {/* Mobile: horizontal tab strip */}
-      <nav className="flex overflow-x-auto border-b border-line bg-paper px-2 py-1.5 scrollbar-hide lg:hidden">
+      {/* Mobile: horizontal tab strip (faixa de altura fixa no topo, não encolhe) */}
+      <nav className="flex shrink-0 overflow-x-auto border-b border-line bg-paper px-2 py-1.5 scrollbar-hide lg:hidden">
         {GROUPS.flatMap((g) => g.items).map((item) => {
           const active = pathname === item.href;
           return (
