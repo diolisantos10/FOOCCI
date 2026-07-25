@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
         SimulationJobStore.complete(restaurantId, report);
         send({ type: "report", report });
       } catch (err) {
-        const msg = String(err);
+        // Mostra a mensagem amigável do pré-voo (sem o prefixo "Error:"); só cai
+        // no String(err) técnico quando é uma falha inesperada de verdade.
+        const msg = err instanceof Error ? err.message : String(err);
         SimulationJobStore.fail(restaurantId, msg);
         console.error("[POST /api/ai-simulator/run]", err);
         send({ type: "error", message: msg });
