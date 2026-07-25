@@ -15,8 +15,9 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma, type FiscalDocument } from "@prisma/client";
 import { getFiscalConfig } from "./fiscalCredentials";
+import { enqueueDanfcePrint, mirrorFiscalArtifacts } from "./fiscalArtifacts";
 import { buildFiscalProvider } from "./FiscalProviderRouter";
 import { buildNFCePayload, validateForEmit, type NFCeBuildItem } from "./nfceBuilder";
 import type { FiscalEmitResult } from "./providers/types";
@@ -237,7 +238,8 @@ export const FiscalEmissionService = {
 
 /** Persist a provider emit/status result onto the FiscalDocument. */
 async function persistResult(docId: string, result: FiscalEmitResult): Promise<void> {
-  await prisma.fiscalDocument.update({
+  const prev = await prisma.fiscalDocument.findUnique({ where: { id: docId }, select: { status: true } });
+  const doc = await prisma.fiscalDocument.update({
     where: { id: docId },
     data: {
       status: result.status,
@@ -256,4 +258,28 @@ async function persistResult(docId: string, result: FiscalEmitResult): Promise<v
       lastError: result.status === "ERRO" ? (result.rejeicao?.motivo ?? "Erro na emissão") : null,
     },
   });
+  // Transição para AUTORIZADA (uma vez só): imprime a DANFCE e arquiva no S3.
+  if (result.status === "AUTORIZADA" && prev?.status !== "AUTORIZADA") {
+    void onFiscalAuthorized(doc);
+  }
+}
+
+/** Efeitos best-effort na autorização — nunca quebram a emissão. */
+async function onFiscalAuthorized(doc: FiscalDocument): Promise<void> {
+  try {
+    await enqueueDanfcePrint(doc.restaurantId, doc);
+  } catch (err) {
+    console.error("[fiscal] DANFCE print", err);
+  }
+  try {
+    const mirrored = await mirrorFiscalArtifacts(doc);
+    if (mirrored.xmlUrl || mirrored.danfceUrl) {
+      await prisma.fiscalDocument.update({
+        where: { id: doc.id },
+        data: { xmlUrl: mirrored.xmlUrl ?? doc.xmlUrl, danfceUrl: mirrored.danfceUrl ?? doc.danfceUrl },
+      });
+    }
+  } catch (err) {
+    console.error("[fiscal] S3 mirror", err);
+  }
 }
