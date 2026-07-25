@@ -68,6 +68,12 @@ import {
   crmAbPicksAgent,
   agentMessagePassesFloor,
 } from "./CrmAgentPilotService";
+import {
+  selectPhraseWeights,
+  pickWeighted,
+  type PhraseStat,
+  type PhraseWeight,
+} from "./CrmPhraseSelector";
 import { CustomerCouponService } from "./CustomerCouponService";
 import { readDedupePolicy, readOverridePolicy } from "./crmDedupePolicy";
 import { generateMessageFingerprint } from "./messageFingerprint";
@@ -1420,6 +1426,36 @@ export class ScheduledCampaignRunnerService {
     const crmPilot = await getCrmPilotConfig(campaign.restaurantId).catch(() => null);
     const crmPilotActive = !!crmPilot && crmPilot.mode !== "SHADOW_ONLY" && !crmPilot.paused && !metaProvider;
 
+    // ── Escolha inteligente da frase (bandit paciente) ────────────────────────
+    // Substitui o sorteio uniforme por uma escolha ponderada pela conversão JÁ
+    // MEDIDA por frase (CrmPhraseSelector). Meta-safe: pondera SÓ o pool ativo
+    // (que, no path Meta, já é só template aprovado). Paciente: enquanto a campanha
+    // não junta baseline (100 envios) o seletor devolve pesos uniformes = sorteio.
+    // Qualquer erro na leitura de stats → uniforme. Nunca cria/edita texto.
+    const selectorPool = metaProvider ? metaPhrases : activePhrases;
+    const phraseByKey = new Map<string, PoolPhrase>();
+    let phraseWeights: PhraseWeight[] | null = null;
+    if (selectorPool.length > 1) {
+      for (const p of selectorPool) if (p.key) phraseByKey.set(p.key, p);
+      const keys = [...phraseByKey.keys()];
+      try {
+        const [sentRows, convRows] = await Promise.all([
+          prisma.campaignExecution.groupBy({
+            by: ["variantKey"], where: { campaignId: campaign.id, status: "SENT" as never, variantKey: { in: keys } }, _count: { _all: true },
+          }),
+          prisma.campaignExecution.groupBy({
+            by: ["variantKey"], where: { campaignId: campaign.id, converted: true, variantKey: { in: keys } }, _count: { _all: true },
+          }),
+        ]);
+        const sentBy = new Map(sentRows.map((r) => [r.variantKey, r._count._all]));
+        const convBy = new Map(convRows.map((r) => [r.variantKey, r._count._all]));
+        const statList: PhraseStat[] = keys.map((k) => ({ key: k, sent: sentBy.get(k) ?? 0, converted: convBy.get(k) ?? 0 }));
+        phraseWeights = selectPhraseWeights(keys, statList).weights;
+      } catch (e) {
+        console.warn(`[CrmPhraseSelector] stats indisponíveis — mantendo sorteio`, { campaignId: campaign.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     let sent        = 0;
     let failed      = 0; // REAL send failures (provider/Evolution) only
     let blocked     = 0; // safety blocks — never counted as failures
@@ -1565,10 +1601,18 @@ export class ScheduledCampaignRunnerService {
 
       // Draw this recipient's phrase. Meta path rotates only over phrases whose
       // template is approved; anything else keeps the legacy single-phrase flow.
-      const phrase = (metaProvider
+      // Escolha ponderada pela conversão (bandit) quando há pesos; senão sorteio.
+      const drawUniform = (): PoolPhrase => (metaProvider
         ? (pickPhrase(metaPhrases) ?? fallbackPhrase)
         : (pickPhrase(activePhrases) ?? fallbackPhrase));
-      // Sorteio = controle. variantKey identifica o braço do A/B (frase vs agente).
+      let phrase: PoolPhrase;
+      if (phraseWeights && phraseWeights.length) {
+        const key = pickWeighted(phraseWeights, Math.random());
+        phrase = (key ? phraseByKey.get(key) : undefined) ?? drawUniform();
+      } else {
+        phrase = drawUniform();
+      }
+      // Sorteio/escolha = controle. variantKey identifica o braço do A/B (frase vs agente).
       // Never grant a silent coupon: campaign-level coupons already had the prize line
       // appended at resolution, but per-recipient coupons (tier rewards, cupom-vencendo)
       // are only known here. withCouponLine is idempotent — it won't double-append when
