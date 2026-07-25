@@ -121,3 +121,9 @@ export {
   type DecisaoDeImagem,
   type CaminhoDaImagem,
 } from "./oficina/PoliticaDeImagem";
+export {
+  rodarEsteiraDeImagem,
+  renderizarComandoDeImagem,
+  type EsteiraDeImagemInput,
+  type EsteiraDeImagemResult,
+} from "./oficina/EsteiraDeImagem";

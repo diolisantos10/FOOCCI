@@ -14,6 +14,7 @@ import { manualRestaurante } from "./HouseManual";
 import { totalDeCombinacoes, variar, type Eixo } from "./Variator";
 import { decidirImagem } from "./PoliticaDeImagem";
 import { montarFicha } from "./OficinaService";
+import { renderizarComandoDeImagem } from "./EsteiraDeImagem";
 import type { Ficha } from "./OficinaTypes";
 
 export interface OficinaCheck {
@@ -184,6 +185,22 @@ export function runOficinaDiagnostic(): OficinaDiagnosticResult {
     true,
     fichaDeImagem.proibicoes.some((p) => p.includes("como foto real")),
     `proibicoes=${fichaDeImagem.proibicoes.length}`,
+  );
+
+  const comandoComSelo = renderizarComandoDeImagem(fichaDeImagem, true);
+  const comandoSemSelo = renderizarComandoDeImagem(fichaDeImagem, false);
+  check(
+    "comando de imagem gerada declara o selo de ilustrativa",
+    true,
+    comandoComSelo.includes("SELO OBRIGATÓRIO") && !comandoSemSelo.includes("SELO OBRIGATÓRIO"),
+    `comSelo=${comandoComSelo.includes("SELO OBRIGATÓRIO")} semSelo=${comandoSemSelo.includes("SELO OBRIGATÓRIO")}`,
+  );
+
+  check(
+    "comando de imagem manda retratar só a verdade",
+    true,
+    comandoSemSelo.includes("retrate só isto"),
+    `tamanho=${comandoSemSelo.length}`,
   );
 
   // ── Caminho feliz: ficha boa passa e peça ancorada passa ──────────────────
