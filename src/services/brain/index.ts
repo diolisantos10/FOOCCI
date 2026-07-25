@@ -76,3 +76,17 @@ export { reasonViaBrain } from "./reasoning/WaiterBrainReasoningAdapter";
 export * from "./training/BrainTrainingContract";
 export * from "./quality/BrainQualityGate";
 export * from "./evidence/BrainEvidenceContract";
+
+// oficina (Fatia 1 — a fábrica de perguntas: pedido cru → ficha → juiz → comando)
+export * from "./oficina/OficinaTypes";
+export { forjar, montarFicha, renderizar, type ForjarInput, type ForjaResult } from "./oficina/OficinaService";
+export { criticar, CORTE_PADRAO } from "./oficina/PromptCritic";
+export {
+  registerManual,
+  resolveManual,
+  registeredDominios,
+  violacoes,
+  manualRestaurante,
+  type Manual,
+} from "./oficina/HouseManual";
+export { variar, assinar, semear, totalDeCombinacoes, type Eixo, type Variacao } from "./oficina/Variator";
