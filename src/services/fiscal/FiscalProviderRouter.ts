@@ -9,6 +9,7 @@
 
 import type { FiscalProvider, FiscalEnvironment } from "./providers/types";
 import { FocusNFeProvider } from "./providers/FocusNFeProvider";
+import { NuvemFiscalProvider } from "./providers/NuvemFiscalProvider";
 import { getFiscalConfig } from "./fiscalCredentials";
 
 /**
@@ -24,6 +25,8 @@ export function buildFiscalProvider(
   switch (providerName) {
     case "FOCUS_NFE":
       return new FocusNFeProvider(token, ambiente);
+    case "NUVEM_FISCAL":
+      return new NuvemFiscalProvider(token, ambiente);
     default:
       return null;
   }
@@ -40,5 +43,5 @@ export async function resolveFiscalProvider(restaurantId: string): Promise<Fisca
 
 /** Which gateways are wired (for diagnostics/UI). */
 export function knownFiscalProviders(): string[] {
-  return ["FOCUS_NFE"];
+  return ["FOCUS_NFE", "NUVEM_FISCAL"];
 }

@@ -266,11 +266,12 @@ export const FiscalConfigService = {
       if (missing.length) return { ok: false, error: `Complete antes: ${missing.join(", ")}.` };
 
       const ambiente: FiscalEnvironment = config.environment === "PRODUCAO" ? "PRODUCAO" : "HOMOLOGACAO";
-      const masterToken = getPlatformFiscalToken(ambiente);
+      const effectiveProvider = config.provider === "DISABLED" ? "FOCUS_NFE" : config.provider;
+      const masterToken = getPlatformFiscalToken(effectiveProvider, ambiente);
       if (!masterToken) {
         return { ok: false, error: "A conta-mãe da Foocci no gateway ainda não está configurada (token-mestre ausente)." };
       }
-      const provider = buildFiscalProvider(config.provider === "DISABLED" ? "FOCUS_NFE" : config.provider, masterToken, ambiente);
+      const provider = buildFiscalProvider(effectiveProvider, masterToken, ambiente);
       if (!provider) return { ok: false, error: "Emissor não suportado." };
 
       const cscToken = decryptFiscalSecret(config.cscToken);

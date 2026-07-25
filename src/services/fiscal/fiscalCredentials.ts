@@ -47,7 +47,7 @@ export async function getFiscalConfig(restaurantId: string): Promise<FiscalConfi
   const ambiente: FiscalEnvironment = config.environment === "PRODUCAO" ? "PRODUCAO" : "HOMOLOGACAO";
   const encToken = ambiente === "PRODUCAO" ? config.providerTokenProducao : config.providerTokenHomologacao;
   // Conta-mãe: se o lojista não tem token próprio, usa o token-mestre da Foocci.
-  const providerToken = decryptFiscalSecret(encToken) ?? getPlatformFiscalToken(ambiente);
+  const providerToken = decryptFiscalSecret(encToken) ?? getPlatformFiscalToken(config.provider, ambiente);
 
   const cscToken = decryptFiscalSecret(config.cscToken);
   const csc = config.cscId && cscToken ? { id: config.cscId, token: cscToken } : null;

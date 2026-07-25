@@ -11,7 +11,7 @@ const str = (max: number) => z.string().trim().max(max).optional();
 
 export const upsertFiscalConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  provider: z.enum(["DISABLED", "FOCUS_NFE"]).optional(),
+  provider: z.enum(["DISABLED", "FOCUS_NFE", "NUVEM_FISCAL"]).optional(),
   environment: z.enum(["HOMOLOGACAO", "PRODUCAO"]).optional(),
   regimeTributario: z.enum(["SIMPLES_NACIONAL", "SIMPLES_EXCESSO", "REGIME_NORMAL"]).optional(),
 
@@ -76,7 +76,7 @@ export const updateMenuFiscalSchema = z.object({
 export type UpdateMenuFiscalInput = z.infer<typeof updateMenuFiscalSchema>;
 
 export const testFiscalConnectionSchema = z.object({
-  provider: z.enum(["FOCUS_NFE"]).optional(),
+  provider: z.enum(["FOCUS_NFE", "NUVEM_FISCAL"]).optional(),
   environment: z.enum(["HOMOLOGACAO", "PRODUCAO"]).optional(),
   token: z.string().trim().max(200).optional(), // omitido → usa o token salvo
 });
