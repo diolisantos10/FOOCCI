@@ -61,6 +61,13 @@ import {
   type CRMWhatsAppSafetyConfig,
 } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
+import { reasonCrmMessage } from "./CrmAgentReasoner";
+import {
+  getCrmPilotConfig,
+  resolveCrmPilotAccess,
+  crmAbPicksAgent,
+  agentMessagePassesFloor,
+} from "./CrmAgentPilotService";
 import { CustomerCouponService } from "./CustomerCouponService";
 import { readDedupePolicy, readOverridePolicy } from "./crmDedupePolicy";
 import { generateMessageFingerprint } from "./messageFingerprint";
@@ -1358,6 +1365,14 @@ export class ScheduledCampaignRunnerService {
       evolutionAvailable: true,
     });
 
+    // ── Piloto do Agente de CRM (escada + A/B) ────────────────────────────────
+    // Em ALLOWLIST/WIDE, uma fatia dos destinatários ELEGÍVEIS recebe a mensagem
+    // COMPOSTA pelo agente em vez do sorteio; o resto é o grupo de controle. Só no
+    // path Evolution (Meta cold exige template aprovado). SHADOW_ONLY/paused (o
+    // default) desliga tudo — o envio segue byte-a-byte igual a hoje.
+    const crmPilot = await getCrmPilotConfig(campaign.restaurantId).catch(() => null);
+    const crmPilotActive = !!crmPilot && crmPilot.mode !== "SHADOW_ONLY" && !crmPilot.paused && !metaProvider;
+
     let sent        = 0;
     let failed      = 0; // REAL send failures (provider/Evolution) only
     let blocked     = 0; // safety blocks — never counted as failures
@@ -1506,7 +1521,33 @@ export class ScheduledCampaignRunnerService {
       const phrase = (metaProvider
         ? (pickPhrase(metaPhrases) ?? fallbackPhrase)
         : (pickPhrase(activePhrases) ?? fallbackPhrase));
-      const messageText = personalizeMessage(phrase.text, customer, recipientCtx);
+      // Sorteio = controle. variantKey identifica o braço do A/B (frase vs agente).
+      let messageText = personalizeMessage(phrase.text, customer, recipientCtx);
+      let variantKey: string | null = phrase.key || null;
+
+      // Prova A/B: telefone elegível + bucket determinístico → tenta a mensagem do
+      // agente. Degrada seguro — qualquer falha/reprovação mantém o sorteio. O piso
+      // determinístico (sem desconto inventado, sem spam) é a última trava.
+      if (crmPilotActive && crmPilot && resolveCrmPilotAccess(crmPilot, customer.phone).allowed && crmAbPicksAgent(customer.id, crmPilot.abTestPercent)) {
+        try {
+          const decided = await reasonCrmMessage({
+            restaurantId: campaign.restaurantId,
+            customerId:   customer.id,
+            couponCode:   campaign.couponCode ?? undefined,
+          });
+          const backedByCoupon = Boolean(campaign.couponCode) || Boolean(recipientCoupon);
+          if (
+            decided.ok && decided.passedCritic && decided.message &&
+            (decided.confidence ?? 0) >= crmPilot.minConfidence &&
+            agentMessagePassesFloor(decided.message, backedByCoupon)
+          ) {
+            messageText = decided.message;
+            variantKey  = "agent:crm";
+          }
+        } catch (e) {
+          console.warn(`[CrmPilot] agent compose failed — mantendo sorteio`, { customerId: customer.id, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
 
       if (!messageText.trim()) {
         const unresolved = (phrase.text.match(/\{[^}]+\}/g) ?? []).join(", ");
@@ -1518,7 +1559,7 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
-            variantKey:    phrase.key || null,
+            variantKey,
             status:        "FAILED",
             failedReason:  unresolved
               ? `Mensagem vazia após substituição de variáveis (não resolvidas: ${unresolved})`
@@ -1602,7 +1643,7 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText,
-            variantKey:    phrase.key || null,
+            variantKey,
             status:        "SENT",
             sentAt:        now,
           },
@@ -1674,7 +1715,7 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
-            variantKey:    phrase.key || null,
+            variantKey,
             status:        "FAILED",
             failedReason:  errMsg,
             errorMessage:  errorCode,

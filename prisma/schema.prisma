@@ -4386,6 +4386,26 @@ model BrainShadowLog {
   @@map("brain_shadow_logs")
 }
 
+/// Piloto do Agente de CRM — a escada governada do reasoner de CRM, espelhando a
+/// do recepcionista (BrainFreeFormConfig) mas por agente. Sem linha = SHADOW_ONLY
+/// = produção atual (só sorteio; o agente observa). Promoção/rollback só via
+/// governança (gates + confirm). abTestPercent controla o split agente-vs-sorteio
+/// entre os destinatários ELEGÍVEIS (allowlist/wide).
+model CrmAgentPilotConfig {
+  id                String   @id @default(cuid())
+  restaurantId      String   @unique
+  mode              String   @default("SHADOW_ONLY") // SHADOW_ONLY | ALLOWLIST | RESTAURANT_WIDE
+  allowlistedPhones Json     @default("[]")
+  paused            Boolean  @default(false)
+  minConfidence     Float    @default(0.6)
+  abTestPercent     Int      @default(100) // % dos elegíveis que recebem a msg do agente (resto = sorteio/controle)
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("crm_agent_pilot_configs")
+}
+
 /// Cofre de Experiências — o arquivo PROTEGIDO (sem PII) de interações reais de
 /// cliente, por restaurante e por AGENTE. É o insumo que otimiza TODAS as IAs:
 /// padrões de pergunta, o que os clientes mais querem, onde o agente escala.
