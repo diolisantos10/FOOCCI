@@ -11,10 +11,15 @@ import { RelationshipProgramService } from "@/services/crm/RelationshipProgramSe
 
 const couponSchema = z.object({
   type:         z.enum(["PERCENTAGE", "FIXED", "CUSTOM", "FREE_SHIPPING"]),
-  value:        z.number().min(0),
+  value:        z.number().min(0).max(100000),
   description:  z.string().max(80).optional(),
   validityDays: z.number().int().min(1).max(365).optional(),
-});
+}).refine(
+  // A percentage discount can never exceed 100%. (UI already caps this; the API
+  // must too, so a crafted request can't create a 500% coupon.)
+  (c) => c.type !== "PERCENTAGE" || c.value <= 100,
+  { message: "Desconto percentual não pode passar de 100%", path: ["value"] },
+);
 
 const bodySchema = z.object({
   tier:   z.enum(["PRATA", "OURO", "DIAMANTE"]),

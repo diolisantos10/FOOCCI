@@ -90,6 +90,7 @@ const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
   "quente-esfriando":   "QUENTE_ESFRIANDO",
   "cadastro-sem-compra":"SEM_PEDIDOS",
   "recuperar-frios":    "FRIO",
+  "recuperar-perdidos": "PERDIDO",
   "reativar-mornos":    "MORNO",
   "segunda-compra":     "PRIMEIRO_PEDIDO",
   "clientes-vip":       "VIP",
@@ -188,6 +189,22 @@ export async function resolveAudience(
           OR: [
             { lastOrderAt: { gte: cutoffs.warmCutoff, lt: cutoffs.hotCutoff } },
             { lastOrderAt: null, importedLastOrderAt: { gte: cutoffs.warmCutoff, lt: cutoffs.hotCutoff } },
+          ],
+        },
+        orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+        take: MAX_AUDIENCE, select: baseSelect,
+      }) as Row[]);
+
+    case "PERDIDO":
+      // Effective last order older than lostMinDays — the "lost" tier. Mirrors the
+      // preview (CrmAudienceService "recuperar-perdidos"). Without this case the
+      // segment fell through to default:TODOS and blasted the whole base.
+      return serialize(await prisma.customer.findMany({
+        where: {
+          ...baseWhere,
+          OR: [
+            { lastOrderAt: { lt: cutoffs.lostCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { lt: cutoffs.lostCutoff } },
           ],
         },
         orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],

@@ -26,6 +26,7 @@ const safety = vi.hoisted(() => ({
   getSafetyConfig: vi.fn(), getTodayGlobalSendCount: vi.fn(() => 0), getWeekGlobalSendCount: vi.fn(() => 0),
   checkQuietHours: vi.fn(() => null), checkWeekendBlock: vi.fn(() => null),
   randomDelayMs: vi.fn(() => 0), isBirthdayCampaign: vi.fn(() => false),
+  BUDGET_EXEMPT_TEMPLATE_IDS: ["aniversariantes"],
 }));
 const contact = vi.hoisted(() => ({
   ContactSafetyService: { buildGlobalContext: vi.fn(() => ({})), assertSendable: vi.fn(), applyInboundOptOut: vi.fn() },

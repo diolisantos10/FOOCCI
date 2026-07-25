@@ -12,6 +12,14 @@ export async function POST(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
+    // The master toggle must actually pause the program: don't reclassify when it's OFF.
+    const settings = await RelationshipProgramService.getSettings(ctx.restaurantId);
+    if (!settings.programEnabled) {
+      return NextResponse.json(
+        { error: "Programa de relacionamento está desativado. Ative-o para recalcular os níveis." },
+        { status: 409 },
+      );
+    }
     const result = await RelationshipProgramService.recalculateTiers(ctx.restaurantId);
     return NextResponse.json({ data: result });
   } catch (err) {

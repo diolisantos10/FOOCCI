@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   customer:     { findMany: vi.fn(), update: vi.fn(async () => ({})) },
   order:        { groupBy: vi.fn() },
   tierBenefit:  { findFirst: vi.fn(), update: vi.fn(async () => ({})) },
+  $executeRaw:  vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -62,25 +63,31 @@ describe("recalculateTiers — rolling classification window", () => {
 });
 
 describe("registerGiftDelivery — physical stock guard", () => {
-  it("decrements stock and never exceeds the total", async () => {
-    db.tierBenefit.findFirst.mockResolvedValue({ stockTotal: 10, stockUsed: 4 });
+  // The increment is now a single atomic UPDATE (LEAST/COALESCE caps at stockTotal
+  // in SQL) — so these assert the wrapper: the raw statement runs and the returned
+  // counters come from the post-update row.
+  it("runs the atomic update and returns the new counters", async () => {
+    db.$executeRaw.mockResolvedValue(1);
+    db.tierBenefit.findFirst.mockResolvedValue({ stockTotal: 10, stockUsed: 7 });
     const r = await RelationshipProgramService.registerGiftDelivery("b1", R, 3);
+    expect(db.$executeRaw).toHaveBeenCalled();
     expect(r.ok).toBe(true);
-    expect(db.tierBenefit.update.mock.calls[0][0].data.stockUsed).toBe(7);
+    expect(r.ok && r.stockUsed).toBe(7);
   });
 
-  it("caps at stockTotal (can't over-deliver)", async () => {
-    db.tierBenefit.findFirst.mockResolvedValue({ stockTotal: 5, stockUsed: 4 });
+  it("reflects the stockTotal cap enforced by the DB", async () => {
+    db.$executeRaw.mockResolvedValue(1);
+    db.tierBenefit.findFirst.mockResolvedValue({ stockTotal: 5, stockUsed: 5 });
     const r = await RelationshipProgramService.registerGiftDelivery("b1", R, 10);
     expect(r.ok).toBe(true);
-    expect(db.tierBenefit.update.mock.calls[0][0].data.stockUsed).toBe(5);
+    expect(r.ok && r.stockUsed).toBe(5);
   });
 
-  it("returns an error when the gift doesn't exist", async () => {
-    db.tierBenefit.findFirst.mockResolvedValue(null);
+  it("returns an error when the gift doesn't exist (0 rows updated)", async () => {
+    db.$executeRaw.mockResolvedValue(0);
     const r = await RelationshipProgramService.registerGiftDelivery("nope", R);
     expect(r.ok).toBe(false);
-    expect(db.tierBenefit.update).not.toHaveBeenCalled();
+    expect(db.tierBenefit.findFirst).not.toHaveBeenCalled();
   });
 });
 

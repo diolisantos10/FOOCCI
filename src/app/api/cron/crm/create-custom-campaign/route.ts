@@ -59,9 +59,12 @@ async function submitCustomTemplate(restaurantId: string, campaignId: string, me
   const prevCampaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { audienceConfig: true } });
   const prev = (prevCampaign?.audienceConfig && typeof prevCampaign.audienceConfig === "object")
     ? (prevCampaign.audienceConfig as Record<string, unknown>) : {};
+  // Preserve any per-phrase mappings already on the campaign — merge, don't clobber.
+  const prevTemplates = (prev.metaTemplates && typeof prev.metaTemplates === "object")
+    ? (prev.metaTemplates as Record<string, unknown>) : {};
   await prisma.campaign.update({
     where: { id: campaignId },
-    data:  { audienceConfig: { ...prev, metaTemplates: { [key]: { name: tplName, language: "pt_BR", params: built.paramTokens, submittedMessage: message } } } as never },
+    data:  { audienceConfig: { ...prev, metaTemplates: { ...prevTemplates, [key]: { name: tplName, language: "pt_BR", params: built.paramTokens, submittedMessage: message } } } as never },
   });
   return { submitted: tplName, alreadyExisted: !!res.alreadyExists };
 }

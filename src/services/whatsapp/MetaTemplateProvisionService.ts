@@ -243,7 +243,21 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
     if (phrases.every((p) => mapped[p.key]?.submittedMessage === p.text)) return [];
     return [{ campaign, config, phrases }];
   });
-  if (work.length === 0) return { ok: true, created: 0, existed: 0, failed: 0, items: [] };
+  if (work.length === 0) {
+    // Nothing new to submit — but a template submitted earlier may have been
+    // APPROVED (or REJECTED) on Meta since the last run. Without a re-sync it would
+    // stay PENDING locally forever, kept out of the rotation → the phrase falls to a
+    // freeform send Meta rejects. So when any local template is still PENDING, pull
+    // fresh statuses. Cheap-guarded: no PENDING rows → no Graph call.
+    let pendingCount = 0;
+    try {
+      pendingCount = await prisma.metaMessageTemplate.count({ where: { restaurantId, status: "PENDING" } });
+    } catch { pendingCount = 0; } // absent table/mock → skip the re-sync
+    if (pendingCount > 0) {
+      await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
+    }
+    return { ok: true, created: 0, existed: 0, failed: 0, items: [] };
+  }
 
   await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
   const existingNames = new Set((await MetaTemplateService.list(restaurantId)).map((t) => t.templateName));

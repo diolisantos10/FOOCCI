@@ -183,8 +183,12 @@ export class RelationshipProgramService {
       create: { restaurantId, ...fields },
     });
     // Thresholds/window changed → reclassify now so the levels are immediately
-    // correct (the daily cron keeps them fresh afterwards).
-    await this.recalculateTiers(restaurantId).catch(() => {});
+    // correct (the daily cron keeps them fresh afterwards). Only when the program is
+    // ON: with it OFF we don't touch classifications — the toggle must actually pause
+    // the program, not silently keep reclassifying in the background.
+    if (fields.programEnabled) {
+      await this.recalculateTiers(restaurantId).catch(() => {});
+    }
     return settingsToInput(row);
   }
 
@@ -505,15 +509,21 @@ export class RelationshipProgramService {
    * Guarded so stockUsed never exceeds stockTotal. Returns the new counters.
    */
   static async registerGiftDelivery(id: string, restaurantId: string, qty = 1) {
+    const delta = Math.max(1, Math.floor(qty));
+    // Atomic increment bounded by stockTotal in a SINGLE statement. Postgres locks
+    // the row per UPDATE, so concurrent deliveries can't lose an update (the old
+    // read-then-write could: two reads of 5 both wrote 6). LEAST(...) caps at
+    // stockTotal; COALESCE keeps untracked stock (null) unbounded.
+    const rows = await prisma.$executeRaw`
+      UPDATE "tier_benefits"
+      SET "stockUsed" = LEAST(COALESCE("stockTotal", "stockUsed" + ${delta}), "stockUsed" + ${delta})
+      WHERE "id" = ${id} AND "restaurantId" = ${restaurantId} AND "isPhysicalGift" = true
+    `;
+    if (rows === 0) return { ok: false as const, error: "Brinde não encontrado." };
     const b = await prisma.tierBenefit.findFirst({
-      where:  { id, restaurantId, isPhysicalGift: true },
+      where:  { id, restaurantId },
       select: { stockTotal: true, stockUsed: true },
     });
-    if (!b) return { ok: false as const, error: "Brinde não encontrado." };
-    const delta   = Math.max(1, Math.floor(qty));
-    const cap      = b.stockTotal ?? Number.MAX_SAFE_INTEGER;
-    const newUsed  = Math.min(cap, b.stockUsed + delta);
-    await prisma.tierBenefit.update({ where: { id }, data: { stockUsed: newUsed } });
-    return { ok: true as const, stockUsed: newUsed, stockTotal: b.stockTotal };
+    return { ok: true as const, stockUsed: b?.stockUsed ?? 0, stockTotal: b?.stockTotal ?? null };
   }
 }

@@ -147,6 +147,14 @@ export const EVOLUTION_WEB_MAX_PER_RUN = 5;
  */
 export const META_CLOUD_MAX_PER_RUN = 40;
 
+/**
+ * Ready-made campaigns that belong to the relationship program. They may only send
+ * while the program's master toggle (TierSettings.programEnabled) is ON.
+ */
+export const RELATIONSHIP_PROGRAM_TEMPLATE_IDS = [
+  "subiu-de-nivel", "quase-no-proximo-nivel", "mimo-mensal-nivel",
+] as const;
+
 /** True when the restaurant sends CRM through the official Meta Cloud API. */
 async function isMetaCrmActive(restaurantId: string): Promise<boolean> {
   try {
@@ -409,7 +417,14 @@ export class ScheduledCampaignRunnerService {
       return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason: weekendReason, completed: false };
     }
 
-    if (safety.dailyGlobalCap > 0) {
+    // Budget-exempt campaigns (e.g. aniversariantes) must never be blocked by the
+    // global caps: birthdays are time-critical and their sends aren't even counted
+    // in getTodayGlobalSendCount. Without this, once NON-exempt volume reaches the
+    // daily cap the birthday campaign would be blocked too — breaking the exemption.
+    const budgetExempt = !!campaign.templateId &&
+      (BUDGET_EXEMPT_TEMPLATE_IDS as readonly string[]).includes(campaign.templateId);
+
+    if (!budgetExempt && safety.dailyGlobalCap > 0) {
       const globalToday = await getTodayGlobalSendCount(campaign.restaurantId);
       if (globalToday >= safety.dailyGlobalCap) {
         const reason = `Cap global diário atingido (${globalToday}/${safety.dailyGlobalCap})`;
@@ -420,7 +435,7 @@ export class ScheduledCampaignRunnerService {
 
     // Optional restaurant weekly cap — OFF by default (weeklyGlobalCap = 0).
     // Only enforced when the owner explicitly sets it in Settings.
-    if (safety.weeklyGlobalCap > 0) {
+    if (!budgetExempt && safety.weeklyGlobalCap > 0) {
       const globalWeek = await getWeekGlobalSendCount(campaign.restaurantId);
       if (globalWeek >= safety.weeklyGlobalCap) {
         const reason = `Cap global semanal atingido (${globalWeek}/${safety.weeklyGlobalCap})`;
@@ -625,10 +640,34 @@ export class ScheduledCampaignRunnerService {
       },
     });
 
-    const due = candidates.filter((c) => {
+    let due = candidates.filter((c) => {
       const cfg = c.scheduleConfig as RecurringScheduleConfig | null;
       return cfg?.mode === "RECURRING" && this.isCampaignDueNow(c);
     });
+
+    // Relationship-program campaigns must NOT send while the program is turned OFF.
+    // The master toggle has to actually pause them — not only skip the daily
+    // reclassify cron. A restaurant with no TierSettings row counts as OFF (schema
+    // default programEnabled=false), so these never fire until the owner opts in.
+    const relRestaurants = [...new Set(
+      due.filter((c) => c.templateId && (RELATIONSHIP_PROGRAM_TEMPLATE_IDS as readonly string[]).includes(c.templateId))
+         .map((c) => c.restaurantId),
+    )];
+    if (relRestaurants.length > 0) {
+      const rows = await prisma.tierSettings.findMany({
+        where:  { restaurantId: { in: relRestaurants } },
+        select: { restaurantId: true, programEnabled: true },
+      });
+      const enabledById = new Map(rows.map((r) => [r.restaurantId, r.programEnabled]));
+      const programOff = new Set(relRestaurants.filter((rid) => !enabledById.get(rid)));
+      if (programOff.size > 0) {
+        due = due.filter((c) => !(
+          c.templateId &&
+          (RELATIONSHIP_PROGRAM_TEMPLATE_IDS as readonly string[]).includes(c.templateId) &&
+          programOff.has(c.restaurantId)
+        ));
+      }
+    }
 
     // The budget is per-restaurant, so orchestrate each restaurant's due set on its own.
     const byRestaurant = new Map<string, typeof due>();
@@ -643,7 +682,11 @@ export class ScheduledCampaignRunnerService {
       const safety = await getSafetyConfig(rid);
       const budget = safety.crmWhatsAppSafety;
 
-      if (budget?.enabled && budget.providerMode === "EVOLUTION_WEB") {
+      // Orchestrate whenever the budget is enabled — the daily/cycle limits, circuit
+      // breaker and interval gate must apply on BOTH providers. (Previously this was
+      // keyed to providerMode==="EVOLUTION_WEB"; a persisted "META_CLOUD" would have
+      // silently fallen through to the legacy path with no budget at all.)
+      if (budget?.enabled) {
         // Minimum interval between cycles: if the CRM produced execution activity
         // more recently than the configured spacing, this run waits for the next
         // tick. Dry runs still preview normally.
@@ -857,6 +900,10 @@ export class ScheduledCampaignRunnerService {
       globalSent  += res.sent;
 
       if (!breakerTripped) {
+        // NB: cycleFailed is the CUMULATIVE failure count for this cycle, not a run of
+        // consecutive failures. The breaker trips on total failures ≥ the configured
+        // threshold — intentionally conservative (pauses the cycle sooner), despite the
+        // config field being named maxConsecutiveProviderFailures.
         const verdict = evaluateCircuitBreaker({ providerFailures: cycleFailed, sent: cycleSent }, budget);
         if (verdict.tripped) breakerTripped = true;
       }
@@ -883,7 +930,7 @@ export class ScheduledCampaignRunnerService {
     focusCampaignId: string,
   ): Promise<BudgetSnapshot> {
     const budget = (await getSafetyConfig(restaurantId)).crmWhatsAppSafety;
-    if (!budget?.enabled || budget.providerMode !== "EVOLUTION_WEB") {
+    if (!budget?.enabled) {
       return {
         enabled:          false,
         providerMode:     budget?.providerMode ?? "EVOLUTION_WEB",
@@ -1001,7 +1048,7 @@ export class ScheduledCampaignRunnerService {
     const perRunCap = (await isMetaCrmActive(ctx.restaurantId)) ? META_CLOUD_MAX_PER_RUN : EVOLUTION_WEB_MAX_PER_RUN;
     let cap = perRunCap;
     let budgetExhausted = false;
-    if (budget?.enabled && budget.providerMode === "EVOLUTION_WEB") {
+    if (budget?.enabled) {
       const remainingDaily = budget.globalDailyLimit > 0
         ? Math.max(0, budget.globalDailyLimit - await getTodayGlobalSendCount(ctx.restaurantId))
         : Number.MAX_SAFE_INTEGER;
@@ -1522,7 +1569,12 @@ export class ScheduledCampaignRunnerService {
         ? (pickPhrase(metaPhrases) ?? fallbackPhrase)
         : (pickPhrase(activePhrases) ?? fallbackPhrase));
       // Sorteio = controle. variantKey identifica o braço do A/B (frase vs agente).
-      let messageText = personalizeMessage(phrase.text, customer, recipientCtx);
+      // Never grant a silent coupon: campaign-level coupons already had the prize line
+      // appended at resolution, but per-recipient coupons (tier rewards, cupom-vencendo)
+      // are only known here. withCouponLine is idempotent — it won't double-append when
+      // the phrase already announces {cupom}.
+      const recipientHasCoupon = !!recipientCtx.coupon || !!recipientCoupon;
+      let messageText = personalizeMessage(withCouponLine(phrase.text, recipientHasCoupon), customer, recipientCtx);
       let variantKey: string | null = phrase.key || null;
 
       // Prova A/B: telefone elegível + bucket determinístico → tenta a mensagem do
