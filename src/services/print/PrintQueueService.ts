@@ -128,6 +128,7 @@ export class PrintQueueService {
             complement:   order.deliveryAddress.complement,
             neighborhood: order.deliveryAddress.neighborhood,
             city:         order.deliveryAddress.city,
+            zipCode:      order.deliveryAddress.zipCode,
           }
         : null,
       payment: order.payment

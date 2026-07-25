@@ -196,7 +196,7 @@ export interface TicketOrder {
   customerPhone: string | null;
   address: {
     street: string; number: string; complement: string | null;
-    neighborhood: string; city: string;
+    neighborhood: string; city: string; zipCode?: string | null;
   } | null;
   payment: { method: string; amount: unknown; status: string | null; changeFor?: unknown } | null;
 }
@@ -286,6 +286,7 @@ export function renderCashierTicketText(args: {
     if (l1) L.push(l1);
     const l2 = ascii([a.city, a.neighborhood].filter(Boolean).join(" - "));
     if (l2) L.push(l2);
+    if (a.zipCode) L.push(`CEP: ${ascii(a.zipCode)}`);
   }
 
   // Obs block

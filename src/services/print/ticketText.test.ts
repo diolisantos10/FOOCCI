@@ -19,7 +19,7 @@ const baseOrder: TicketOrder = {
   estimatedAt: new Date("2026-06-24T22:13:00Z"), // 19:13 in America/Sao_Paulo
   customerName: "Fabíola Aguiar",
   customerPhone: "(11) 98888-7777",
-  address: { street: "R. Deocasta Aguilera", number: "215", complement: "Casa", neighborhood: "Jardim Medina", city: "Poá" },
+  address: { street: "R. Deocasta Aguilera", number: "215", complement: "Casa", neighborhood: "Jardim Medina", city: "Poá", zipCode: "08557-500" },
   payment: { method: "ONLINE", amount: 163.7, status: "PAID" },
 };
 
@@ -97,6 +97,7 @@ describe("cashier ticket", () => {
     expect(txt).toContain("Telefone: (11) 98888-7777");
     expect(txt).toContain("R. Deocasta Aguilera, 215, Casa");
     expect(txt).toContain("Poa - Jardim Medina");
+    expect(txt).toContain("CEP: 08557-500");
     expect(txt).toContain("Obs: Pago Online");
     expect(txt).toContain("Entrega para as: 19:13");
   });
