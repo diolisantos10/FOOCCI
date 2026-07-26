@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   customer:     { findMany: vi.fn(), update: vi.fn(async () => ({})) },
   order:        { groupBy: vi.fn() },
   tierBenefit:  { findFirst: vi.fn(), update: vi.fn(async () => ({})) },
+  campaign:     { findMany: vi.fn(async () => []) },
   $executeRaw:  vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -88,6 +89,63 @@ describe("registerGiftDelivery — physical stock guard", () => {
     const r = await RelationshipProgramService.registerGiftDelivery("nope", R);
     expect(r.ok).toBe(false);
     expect(db.tierBenefit.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("getOverview — stats use the SAME basis as classification", () => {
+  const overviewCustomer = (over: Partial<Record<string, unknown>> = {}) => ({
+    id: "c1", name: "Maria", phone: "5511999", tier: "PRATA",
+    totalSpend: 5000, totalOrders: 40, lastOrderAt: null, segment: "QUENTE",
+    importedTotalSpent: null, importedOrderCount: null, ...over,
+  });
+
+  it("windowed (6m): tier revenue reflects windowed sales, not lifetime", async () => {
+    db.tierSettings.findUnique.mockResolvedValue(settingsRow({ classificationWindowMonths: 6 }));
+    db.customer.findMany.mockResolvedValue([overviewCustomer()]); // lifetime 5000
+    db.order.groupBy.mockResolvedValue([{ customerId: "c1", _sum: { total: 350 }, _count: { _all: 3 } }]);
+
+    const ov = await RelationshipProgramService.getOverview(R);
+    const prata = ov.tiers.find((t) => t.tier === "PRATA")!;
+    expect(prata.totalRevenue).toBe(350); // windowed, NOT lifetime 5000
+    expect(prata.avgOrders).toBe(3);
+  });
+
+  it("vitalício (window 0): tier revenue is the lifetime total", async () => {
+    db.tierSettings.findUnique.mockResolvedValue(settingsRow({ classificationWindowMonths: 0 }));
+    db.customer.findMany.mockResolvedValue([overviewCustomer()]);
+    const ov = await RelationshipProgramService.getOverview(R);
+    const prata = ov.tiers.find((t) => t.tier === "PRATA")!;
+    expect(prata.totalRevenue).toBe(5000);
+    expect(db.order.groupBy).not.toHaveBeenCalled();
+  });
+});
+
+describe("getTierRewards — coupons per tier, Bronze included", () => {
+  it("shows a Bronze coupon set via Mimo mensal", async () => {
+    db.campaign.findMany.mockResolvedValue([
+      { templateId: "mimo-mensal-nivel", scheduleConfig: { tierCoupons: { BRONZE: { type: "PERCENTAGE", value: 5 } } } },
+    ]);
+    const rewards = await RelationshipProgramService.getTierRewards(R);
+    const bronze = rewards.find((r) => r.tier === "BRONZE");
+    expect(bronze).toBeTruthy();
+    expect(bronze!.source).toBe("Mimo mensal");
+  });
+
+  it("does NOT give Bronze a reward from 'subiu-de-nivel' (never lands on Bronze)", async () => {
+    db.campaign.findMany.mockResolvedValue([
+      { templateId: "subiu-de-nivel", scheduleConfig: { coupon: { type: "PERCENTAGE", value: 10 } } },
+    ]);
+    const rewards = await RelationshipProgramService.getTierRewards(R);
+    expect(rewards.find((r) => r.tier === "BRONZE")).toBeUndefined();
+  });
+
+  it("Bronze does not inherit the fallback base coupon", async () => {
+    db.campaign.findMany.mockResolvedValue([
+      { templateId: "mimo-mensal-nivel", scheduleConfig: { coupon: { type: "PERCENTAGE", value: 10 } } }, // fallback only
+    ]);
+    const rewards = await RelationshipProgramService.getTierRewards(R);
+    expect(rewards.find((r) => r.tier === "BRONZE")).toBeUndefined(); // Prata+ get it, Bronze doesn't
+    expect(rewards.find((r) => r.tier === "OURO")).toBeTruthy();
   });
 });
 

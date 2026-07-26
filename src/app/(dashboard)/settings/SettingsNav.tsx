@@ -23,6 +23,7 @@ const GROUPS: Group[] = [
       { href: "/settings/delivery",  label: "Entrega",    icon: "🛵" },
       { href: "/settings/operation", label: "Operação",   icon: "⏰" },
       { href: "/settings/payments",     label: "Pagamentos",  icon: "💳" },
+      { href: "/settings/notas-fiscais", label: "Notas Fiscais", icon: "🧾" },
       { href: "/settings/impressoras", label: "Impressoras", icon: "🖨️" },
       { href: "/settings/sons",       label: "Sons e alertas", icon: "🔔" },
     ],
@@ -74,8 +75,8 @@ export default function SettingsNav() {
         ))}
       </nav>
 
-      {/* Mobile: horizontal tab strip */}
-      <nav className="flex overflow-x-auto border-b border-line bg-paper px-2 py-1.5 scrollbar-hide lg:hidden">
+      {/* Mobile: horizontal tab strip (faixa de altura fixa no topo, não encolhe) */}
+      <nav className="flex shrink-0 overflow-x-auto border-b border-line bg-paper px-2 py-1.5 scrollbar-hide lg:hidden">
         {GROUPS.flatMap((g) => g.items).map((item) => {
           const active = pathname === item.href;
           return (

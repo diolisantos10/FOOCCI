@@ -206,23 +206,10 @@ export class RelationshipProgramService {
       },
     });
 
-    // Rolling window: spend/orders are the sum of DELIVERED orders within the last
-    // N months (not lifetime). Computed once for the whole restaurant, then joined
-    // per customer. Window 0 = vitalício (keep the lifetime totals).
-    const windowSpend = new Map<string, { spend: number; orders: number }>();
-    if (settings.classificationWindowMonths > 0) {
-      const since = new Date(now.getTime());
-      since.setMonth(since.getMonth() - settings.classificationWindowMonths);
-      const grouped = await prisma.order.groupBy({
-        by:    ["customerId"],
-        where: { restaurantId, createdAt: { gte: since }, status: { notIn: ["CANCELLED"] as never[] } },
-        _sum:  { total: true },
-        _count: { _all: true },
-      });
-      for (const g of grouped) {
-        if (g.customerId) windowSpend.set(g.customerId, { spend: Number(g._sum.total ?? 0), orders: g._count._all });
-      }
-    }
+    // Rolling window: spend/orders are the sum of orders within the last N months
+    // (not lifetime). Computed once for the whole restaurant, then joined per
+    // customer. Window 0 = vitalício (keep the lifetime totals).
+    const windowSpend = await this.windowedSpendMap(restaurantId, settings.classificationWindowMonths);
 
     let updated = 0;
     for (let i = 0; i < customers.length; i += 100) {
@@ -260,6 +247,53 @@ export class RelationshipProgramService {
     return { updated };
   }
 
+  // ── Windowed classification helpers ────────────────────────────────────────
+
+  /**
+   * Rolling-window spend/orders per customer for the last N months. Empty map when
+   * windowMonths ≤ 0 (vitalício), so callers fall back to lifetime totals. This is
+   * the SINGLE source used by both classification (recalculateTiers) and the overview
+   * stats, so the numbers shown always match the basis a customer was classified on.
+   */
+  private static async windowedSpendMap(
+    restaurantId: string,
+    windowMonths: number,
+  ): Promise<Map<string, { spend: number; orders: number }>> {
+    const map = new Map<string, { spend: number; orders: number }>();
+    if (windowMonths <= 0) return map;
+    const since = new Date();
+    since.setMonth(since.getMonth() - windowMonths);
+    const grouped = await prisma.order.groupBy({
+      by:     ["customerId"],
+      where:  { restaurantId, createdAt: { gte: since }, status: { notIn: ["CANCELLED"] as never[] } },
+      _sum:   { total: true },
+      _count: { _all: true },
+    });
+    for (const g of grouped) {
+      if (g.customerId) map.set(g.customerId, { spend: Number(g._sum.total ?? 0), orders: g._count._all });
+    }
+    return map;
+  }
+
+  /** Effective spend/orders for a customer: windowed sales when a window is active,
+   *  else lifetime totals (imported history as fallback when there's no Foocci data). */
+  private static effectiveSpendOrders(
+    c: { id: string; totalSpend: unknown; totalOrders: number; importedTotalSpent: unknown; importedOrderCount: number | null },
+    windowMonths: number,
+    windowMap: Map<string, { spend: number; orders: number }>,
+  ): { spend: number; orders: number } {
+    if (windowMonths > 0) {
+      const w = windowMap.get(c.id);
+      return { spend: w?.spend ?? 0, orders: w?.orders ?? 0 };
+    }
+    const realSpend  = Number(c.totalSpend);
+    const realOrders = c.totalOrders;
+    return {
+      spend:  realSpend  > 0 ? realSpend  : Number(c.importedTotalSpent ?? 0),
+      orders: realOrders > 0 ? realOrders : (c.importedOrderCount ?? 0),
+    };
+  }
+
   // ── Tier overview stats ────────────────────────────────────────────────────
 
   static async getOverview(restaurantId: string): Promise<ProgramOverview> {
@@ -281,6 +315,10 @@ export class RelationshipProgramService {
       },
     });
 
+    // Same window as classification, so the revenue/orders shown match the basis a
+    // customer was actually classified on (vitalício → lifetime; 3/6/12m → windowed).
+    const windowMap = await this.windowedSpendMap(restaurantId, settings.classificationWindowMonths);
+
     // ── Tier stats ──────────────────────────────────────────────────────────
     const tierBuckets: Record<TierKey, { revenue: number; orders: number; count: number }> = {
       BRONZE:   { revenue: 0, orders: 0, count: 0 },
@@ -290,11 +328,8 @@ export class RelationshipProgramService {
     };
 
     for (const c of customers) {
-      const tier      = (c.tier as TierKey) in tierBuckets ? (c.tier as TierKey) : "BRONZE";
-      const realSpend = Number(c.totalSpend);
-      const effSpend  = realSpend > 0 ? realSpend : Number(c.importedTotalSpent ?? 0);
-      const realOrds  = c.totalOrders;
-      const effOrders = realOrds > 0 ? realOrds : (c.importedOrderCount ?? 0);
+      const tier = (c.tier as TierKey) in tierBuckets ? (c.tier as TierKey) : "BRONZE";
+      const { spend: effSpend, orders: effOrders } = this.effectiveSpendOrders(c, settings.classificationWindowMonths, windowMap);
       tierBuckets[tier].count   += 1;
       tierBuckets[tier].revenue += effSpend;
       tierBuckets[tier].orders  += effOrders;
@@ -342,11 +377,9 @@ export class RelationshipProgramService {
       const next = nextTier(currentTierKey);
       if (!next) continue; // already DIAMANTE
 
-      // Use effective spend/orders (imported as fallback when no real Foocci data)
-      const realSpend  = Number(c.totalSpend);
-      const realOrders = c.totalOrders;
-      const spend      = realSpend  > 0 ? realSpend  : Number(c.importedTotalSpent  ?? 0);
-      const orders     = realOrders > 0 ? realOrders : (c.importedOrderCount ?? 0);
+      // Windowed spend when a window is active, else lifetime (imported fallback) —
+      // so "falta R$X pro próximo nível" is measured on the same basis as the tier.
+      const { spend, orders } = this.effectiveSpendOrders(c, settings.classificationWindowMonths, windowMap);
 
       let nextMinSpend  = 0;
       let nextMinOrders = 0;
@@ -404,8 +437,14 @@ export class RelationshipProgramService {
       if (!r.templateId || seen.has(r.templateId)) continue; // newest row per campaign
       seen.add(r.templateId);
       const cfg = (r.scheduleConfig as { coupon?: ReadyMadeCoupon | null; tierCoupons?: TierCouponsConfig } | null);
-      for (const tier of ["PRATA", "OURO", "DIAMANTE"] as const) {
-        const coupon = resolveTierCoupon(cfg?.tierCoupons, tier, cfg?.coupon ?? null);
+      for (const tier of ["BRONZE", "PRATA", "OURO", "DIAMANTE"] as const) {
+        // "Subir de nível" never lands on Bronze (the entry tier), so it earns no
+        // reward from that campaign — only the monthly mimo can reward Bronze.
+        if (tier === "BRONZE" && r.templateId === "subiu-de-nivel") continue;
+        // Bronze must NOT inherit the fallback base coupon (that's the Prata+ default);
+        // only an EXPLICIT per-tier coupon counts for Bronze.
+        const fallback = tier === "BRONZE" ? null : (cfg?.coupon ?? null);
+        const coupon   = resolveTierCoupon(cfg?.tierCoupons, tier, fallback);
         if (coupon) out.push({ tier, label: couponLabel(coupon), source: SOURCE[r.templateId] ?? r.templateId });
       }
     }
@@ -421,7 +460,7 @@ export class RelationshipProgramService {
    */
   static async setTierCoupon(
     restaurantId: string,
-    tier: "PRATA" | "OURO" | "DIAMANTE",
+    tier: "BRONZE" | "PRATA" | "OURO" | "DIAMANTE",
     coupon: ReadyMadeCoupon | null,
   ): Promise<{ ok: true; campaignActive: boolean } | { ok: false; error: string }> {
     const rm = getReadyMadeCampaign("mimo-mensal-nivel");

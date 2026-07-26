@@ -113,6 +113,8 @@ model Restaurant {
   pricingConfig           RestaurantPricingConfig?
   priceChangeLogs         PriceChangeLog[]
   ingredients             Ingredient[]
+  fiscalConfig            FiscalConfig?
+  fiscalDocuments         FiscalDocument[]
 
   @@map("restaurants")
 }
@@ -299,6 +301,14 @@ model MenuCategory {
   showInDineIn     Boolean    @default(true) // false = category hidden from QR dine-in menu
   source           MenuSource @default(MANUAL) // tracks whether created manually or via external integration
   printStationKeys String[]   @default([]) // routing: which print station(s) this category's items print at — can be several (same dish in two kitchens)
+  // ── Fiscal (NFC-e) — defaults por categoria; item sobrepõe, config global é o fallback ──
+  fiscalNcm        String? // NCM (8 díg). Ex.: refeições prontas 21069090
+  fiscalCest       String? // CEST (ST), quando aplicável
+  fiscalCfop       String? // CFOP da operação (ex.: 5102)
+  fiscalCsosn      String? // Simples Nacional (ex.: 102, 500)
+  fiscalCst        String? // Regime normal (ICMS)
+  fiscalOrigem     String? // origem da mercadoria (0=nacional)
+  fiscalUnidade    String? // unidade comercial (ex.: UN)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -347,6 +357,15 @@ model MenuItem {
   storytellingIA        String? // curated narrative to use when customer asks "what makes it special"
   // ── Saipos POS integration ────────────────────────────────────────────
   saiposIntegrationCode String? // codigo_saipos — PDV code sent as integration_code in Saipos orders
+  // ── Fiscal (NFC-e) — override por item; herda da categoria e depois do default global ──
+  fiscalNcm             String? // NCM (8 díg)
+  fiscalCest            String? // CEST (ST) quando aplicável
+  fiscalCfop            String? // CFOP da operação
+  fiscalCsosn           String? // Simples Nacional (CSOSN)
+  fiscalCst             String? // Regime normal (CST ICMS)
+  fiscalOrigem          String? // origem (0=nacional)
+  fiscalUnidade         String? // unidade comercial
+  fiscalIcmsAliquota    Decimal? @db.Decimal(6, 3) // alíquota ICMS % (regime normal)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -639,12 +658,13 @@ model Order {
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  restaurant      Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer        Customer       @relation(fields: [customerId], references: [id])
-  orderDraft      OrderDraft?    @relation(fields: [orderDraftId], references: [id])
-  deliveryAddress Address?       @relation(fields: [deliveryAddressId], references: [id])
+  restaurant      Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  orderDraft      OrderDraft?     @relation(fields: [orderDraftId], references: [id])
+  deliveryAddress Address?        @relation(fields: [deliveryAddressId], references: [id])
   items           OrderItem[]
   payment         Payment?
+  fiscalDocument  FiscalDocument?
   editLogs        OrderEditLog[]
 
   @@unique([restaurantId, orderNumber])
@@ -4455,4 +4475,136 @@ model OficinaAssinatura {
   @@unique([chave, assinatura], name: "oficina_assinatura_unica")
   @@index([chave, createdAt])
   @@map("oficina_assinaturas")
+}
+
+// ═══════════════════════════════════════════
+//  FISCAL — Emissão de Nota Fiscal (NFC-e, modelo 65)
+// ═══════════════════════════════════════════
+//
+// OPCIONAL por loja (enabled). O lojista que já emite no manager dele deixa
+// desligado; quem quer emitir direto no Foocci liga aqui. A emissão real passa
+// por um GATEWAY fiscal homologado (primeiro: Focus NFe) — o Foocci monta o
+// payload e chama a API REST; o gateway assina com o certificado A1 e transmite
+// à SEFAZ. Segredos (CSC, tokens do gateway) são gravados CIFRADOS.
+model FiscalConfig {
+  id           String @id @default(cuid())
+  restaurantId String @unique
+
+  // Liga/desliga a emissão pelo Foocci (o "opcional" pedido pelo dono).
+  enabled     Boolean @default(false)
+  // Emissor: "DISABLED" | "FOCUS_NFE" (espaço p/ outros gateways).
+  provider    String  @default("DISABLED")
+  // "HOMOLOGACAO" (teste SEFAZ) | "PRODUCAO". Começa sempre em homologação.
+  environment String  @default("HOMOLOGACAO")
+
+  // ── Identificação fiscal do emitente ────────────────────────────────────
+  cnpj               String?
+  inscricaoEstadual  String?
+  inscricaoMunicipal String?
+  razaoSocial        String?
+  nomeFantasia       String?
+  cnae               String?
+  // CRT: "SIMPLES_NACIONAL" (1) | "SIMPLES_EXCESSO" (2) | "REGIME_NORMAL" (3)
+  regimeTributario   String  @default("SIMPLES_NACIONAL")
+
+  // ── Endereço fiscal (estruturado; a SEFAZ exige o código IBGE do município) ─
+  fiscalLogradouro    String?
+  fiscalNumero        String?
+  fiscalComplemento   String?
+  fiscalBairro        String?
+  fiscalMunicipio     String?
+  fiscalMunicipioIbge String? // código IBGE 7 díg (obrigatório na NFC-e)
+  fiscalUf            String? // sigla do estado (regras/CSC são por UF)
+  fiscalCep           String?
+
+  // ── NFC-e ────────────────────────────────────────────────────────────────
+  serie         Int     @default(1)
+  proximoNumero Int     @default(1) // próximo nº; incrementado atômico na emissão
+  cscId         String? // idToken do CSC (SEFAZ do estado)
+  cscToken      String? // CSC (segredo) — GRAVADO CIFRADO
+
+  // ── Credenciais do gateway (GRAVADAS CIFRADAS) ────────────────────────────
+  providerTokenHomologacao String?
+  providerTokenProducao    String?
+  // O A1 é enviado pelo LOJISTA no painel; a Foocci registra a empresa dele no
+  // gateway (conta-mãe) e guarda só a referência + validade p/ avisar.
+  gatewayCompanyRef        String? // ref da empresa no gateway após subir o certificado
+  certificadoNome          String?
+  certificadoValidadeAte   DateTime?
+
+  // ── Defaults fiscais (fallback quando o produto/categoria não define) ──────
+  defaultNcm     String? // ex.: 21069090 (preparações alimentícias)
+  defaultCfop    String? // ex.: 5102
+  defaultCsosn   String? // Simples — ex.: 102 ou 500
+  defaultCst     String? // Regime normal
+  defaultOrigem  String  @default("0")
+  defaultUnidade String  @default("UN")
+
+  // ── Saúde da conexão (mostrado no painel) ─────────────────────────────────
+  lastTestedAt    DateTime?
+  lastTestOk      Boolean?
+  lastTestMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("fiscal_configs")
+}
+
+// Livro de notas — um registro por pedido, que caminha pelos status abaixo.
+model FiscalDocument {
+  id           String @id @default(cuid())
+  restaurantId String
+  orderId      String @unique
+
+  modelo   String               @default("65") // 65 = NFC-e
+  status   FiscalDocumentStatus @default(PENDENTE)
+  ambiente String // HOMOLOGACAO | PRODUCAO (snapshot no momento da emissão)
+
+  serie       Int?
+  numero      Int?
+  chave       String? @unique // chave de acesso (44 díg) quando autorizada
+  protocolo   String? // protocolo de autorização da SEFAZ
+  providerRef String? // id da nota no gateway (p/ consultar status)
+
+  qrCodeData  String? // conteúdo do QR Code da NFC-e
+  urlConsulta String? // URL de consulta pela chave
+  xmlUrl      String? // XML autorizado arquivado (S3)
+  danfceUrl   String? // DANFCE (PDF) arquivado (S3)
+
+  valorTotal      Decimal? @db.Decimal(10, 2) // snapshot do total
+  cpfDestinatario String? // "CPF na nota" (opcional)
+
+  rejeicaoCodigo String? // código da rejeição SEFAZ
+  rejeicaoMotivo String? // motivo legível
+
+  emitidaAt                 DateTime?
+  canceladaAt               DateTime?
+  cancelamentoJustificativa String?
+  cancelamentoProtocolo     String?
+
+  attempts  Int     @default(0)
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, status])
+  @@index([providerRef])
+  @@map("fiscal_documents")
+}
+
+enum FiscalDocumentStatus {
+  PENDENTE // criada, ainda não transmitida
+  PROCESSANDO // enviada ao gateway/SEFAZ, aguardando autorização
+  AUTORIZADA // autorizada pela SEFAZ
+  REJEITADA // rejeitada (ver rejeicaoCodigo/Motivo) — corrigir e reemitir
+  CANCELADA // cancelada após autorização
+  CONTINGENCIA // emitida offline, pendente de transmissão
+  ERRO // falha de transporte/gateway — retryable
 }

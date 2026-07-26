@@ -22,7 +22,7 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "0.2.1";
+const VERSION = "0.3.0";
 const PORT = 9999;
 const HOST = "127.0.0.1";
 const DEFAULT_BASE_URL = "https://foocci.com.br";
@@ -89,8 +89,62 @@ function listPrinters() {
   });
 }
 
-// ── Impressão: manda um texto qualquer pra uma impressora ─────────────────────
-function printText(printerName, text) {
+// ── Impressão RAW (ESC/POS) ───────────────────────────────────────────────────
+// Antes: Out-Printer (GDI). O Windows re-desenhava o texto como documento e
+// DESCARTAVA os comandos ESC/POS (negrito, corte) — saía apagado e sem cortar.
+// Agora: mandamos os BYTES CRUS pra impressora via spooler com datatype RAW
+// (winspool WritePrinter). Assim o negrito/corte que vêm do FOOCCI valem.
+
+const RAW_PRINT_PS1 = [
+  "param([string]$PrinterName,[string]$FilePath)",
+  "$ErrorActionPreference='Stop'",
+  "$src=@'",
+  "using System;using System.Runtime.InteropServices;",
+  "public class FoocciRaw{",
+  " [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]",
+  " public struct DI{[MarshalAs(UnmanagedType.LPWStr)]public string n;[MarshalAs(UnmanagedType.LPWStr)]public string o;[MarshalAs(UnmanagedType.LPWStr)]public string t;}",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"OpenPrinterW\",SetLastError=true,CharSet=CharSet.Unicode)] public static extern bool OpenPrinter(string s,out IntPtr h,IntPtr d);",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"ClosePrinter\",SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"StartDocPrinterW\",SetLastError=true,CharSet=CharSet.Unicode)] public static extern int StartDocPrinter(IntPtr h,int l,ref DI di);",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"EndDocPrinter\",SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"StartPagePrinter\",SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h);",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"EndPagePrinter\",SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h);",
+  " [DllImport(\"winspool.Drv\",EntryPoint=\"WritePrinter\",SetLastError=true)] public static extern bool WritePrinter(IntPtr h,byte[] b,int c,out int w);",
+  " public static void Send(string p,byte[] d){IntPtr h;if(!OpenPrinter(p,out h,IntPtr.Zero))throw new Exception(\"OpenPrinter falhou\");try{DI di=new DI();di.n=\"FOOCCI\";di.t=\"RAW\";if(StartDocPrinter(h,1,ref di)==0)throw new Exception(\"StartDocPrinter falhou\");try{if(!StartPagePrinter(h))throw new Exception(\"StartPagePrinter falhou\");int w;if(!WritePrinter(h,d,d.Length,out w))throw new Exception(\"WritePrinter falhou\");EndPagePrinter(h);}finally{EndDocPrinter(h);}}finally{ClosePrinter(h);}}",
+  "}",
+  "'@",
+  "Add-Type -TypeDefinition $src -Language CSharp",
+  "$bytes=[System.IO.File]::ReadAllBytes($FilePath)",
+  "[FoocciRaw]::Send($PrinterName,$bytes)",
+].join("\r\n");
+
+function printRaw(printerName, buf) {
+  return new Promise((resolve, reject) => {
+    const stamp = Date.now() + "-" + Math.floor(Math.random() * 1e6);
+    const dataFile = path.join(os.tmpdir(), "foocci-raw-" + stamp + ".prn");
+    const psFile = path.join(os.tmpdir(), "foocci-raw-" + stamp + ".ps1");
+    try {
+      fs.writeFileSync(dataFile, buf);
+      fs.writeFileSync(psFile, RAW_PRINT_PS1, { encoding: "utf8" });
+    } catch (e) {
+      return reject(e);
+    }
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", psFile, "-PrinterName", String(printerName), "-FilePath", dataFile],
+      { windowsHide: true },
+      (perr, _stdout, pstderr) => {
+        try { fs.unlinkSync(dataFile); } catch { /* ignore */ }
+        try { fs.unlinkSync(psFile); } catch { /* ignore */ }
+        if (perr) return reject(new Error(parseLines(pstderr).join(" ") || perr.message));
+        resolve();
+      },
+    );
+  });
+}
+
+// Fallback (modo antigo, GDI) — só se o RAW falhar, pra nunca deixar de imprimir.
+function printViaOutPrinter(printerName, text) {
   return new Promise((resolve, reject) => {
     const tmp = path.join(os.tmpdir(), "foocci-carteiro-" + Date.now() + ".txt");
     fs.writeFile(tmp, String(text), { encoding: "utf8" }, (werr) => {
@@ -108,6 +162,16 @@ function printText(printerName, text) {
         },
       );
     });
+  });
+}
+
+// Manda o cupom pra impressora: RAW (ESC/POS) primeiro; se falhar, cai no GDI.
+function printText(printerName, text) {
+  // latin1 preserva os bytes de controle ESC/POS (0x1b/0x1d/…) como 1 byte cada.
+  const buf = Buffer.from(String(text), "latin1");
+  return printRaw(printerName, buf).catch((rawErr) => {
+    console.log("  (aviso) impressao RAW falhou (" + (rawErr && rawErr.message) + ") — tentando modo texto…");
+    return printViaOutPrinter(printerName, text);
   });
 }
 

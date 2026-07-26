@@ -7,6 +7,10 @@
 import { describe, it, expect } from "vitest";
 import { renderKitchenTicketText, renderCashierTicketText, ascii, TICKET_WIDTH, type TicketOrder, type TicketItem } from "./ticketText";
 
+// Remove os códigos de controle ESC/POS (reset/negrito/corte) pra medir a largura
+// VISÍVEL — essas bytes não ocupam colunas na impressora.
+const strip = (s: string) => s.replace(/\x1b\x40|\x1b[\x45\x47][\x00\x01]|\x1d[\x21\x56][\x00-\xff]/g, "");
+
 const baseOrder: TicketOrder = {
   id: "ord_1", orderNumber: 131, type: "DELIVERY",
   subtotal: 158.7, deliveryFee: 5, discount: 0, total: 163.7,
@@ -15,7 +19,7 @@ const baseOrder: TicketOrder = {
   estimatedAt: new Date("2026-06-24T22:13:00Z"), // 19:13 in America/Sao_Paulo
   customerName: "Fabíola Aguiar",
   customerPhone: "(11) 98888-7777",
-  address: { street: "R. Deocasta Aguilera", number: "215", complement: "Casa", neighborhood: "Jardim Medina", city: "Poá" },
+  address: { street: "R. Deocasta Aguilera", number: "215", complement: "Casa", neighborhood: "Jardim Medina", city: "Poá", zipCode: "08557-500" },
   payment: { method: "ONLINE", amount: 163.7, status: "PAID" },
 };
 
@@ -56,7 +60,7 @@ describe("kitchen ticket", () => {
   });
 
   it("never exceeds the paper width", () => {
-    for (const line of txt.split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
+    for (const line of strip(txt).split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
   });
 
   it("emits ESC/POS double-height on item lines only when largeFont is on", () => {
@@ -70,9 +74,9 @@ describe("kitchen ticket", () => {
   });
 
   it("ends with the ESC/POS feed + full-cut command (no long blank tail)", () => {
-    expect(txt.endsWith("\x1d\x56\x41\x00")).toBe(true); // GS V 65 0
+    expect(txt.endsWith("\x1d\x56\x00")).toBe(true); // GS V 0 (função A, universal)
     // only a small margin before the cut — never a huge blank spool
-    expect(txt).not.toMatch(/\n{5,}/);
+    expect(txt).not.toMatch(/\n{8,}/); // avanço p/ a serrilha, sem spool gigante
   });
 });
 
@@ -93,6 +97,7 @@ describe("cashier ticket", () => {
     expect(txt).toContain("Telefone: (11) 98888-7777");
     expect(txt).toContain("R. Deocasta Aguilera, 215, Casa");
     expect(txt).toContain("Poa - Jardim Medina");
+    expect(txt).toContain("CEP: 08557-500");
     expect(txt).toContain("Obs: Pago Online");
     expect(txt).toContain("Entrega para as: 19:13");
   });
@@ -108,12 +113,12 @@ describe("cashier ticket", () => {
   });
 
   it("never exceeds the paper width", () => {
-    for (const line of txt.split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
+    for (const line of strip(txt).split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
   });
 
   it("ends with the ESC/POS feed + full-cut command", () => {
-    expect(txt.endsWith("\x1d\x56\x41\x00")).toBe(true); // GS V 65 0
-    expect(txt).not.toMatch(/\n{5,}/);
+    expect(txt.endsWith("\x1d\x56\x00")).toBe(true); // GS V 0 (função A, universal)
+    expect(txt).not.toMatch(/\n{8,}/); // avanço p/ a serrilha, sem spool gigante
   });
 });
 
@@ -149,6 +154,6 @@ describe("cashier ticket — troco (dinheiro)", () => {
   });
 
   it("troco lines never exceed the paper width", () => {
-    for (const line of render(cashOrder).split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
+    for (const line of strip(render(cashOrder)).split("\n")) expect(line.length).toBeLessThanOrEqual(TICKET_WIDTH);
   });
 });

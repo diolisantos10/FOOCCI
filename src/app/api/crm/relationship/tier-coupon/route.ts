@@ -22,7 +22,7 @@ const couponSchema = z.object({
 );
 
 const bodySchema = z.object({
-  tier:   z.enum(["PRATA", "OURO", "DIAMANTE"]),
+  tier:   z.enum(["BRONZE", "PRATA", "OURO", "DIAMANTE"]),
   coupon: couponSchema.nullable(),
 });
 

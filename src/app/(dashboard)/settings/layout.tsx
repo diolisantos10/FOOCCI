@@ -8,8 +8,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div className="flex h-full flex-col">
       <TopBar title="Centro de Controle" />
 
-      {/* Body: sidebar + content */}
-      <div className="flex flex-1 min-h-0">
+      {/* Body: no mobile empilha (faixa de abas em cima + conteúdo embaixo);
+          no desktop vira sidebar + conteúdo lado a lado. */}
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         <SettingsNav />
 
         {/* Content area */}

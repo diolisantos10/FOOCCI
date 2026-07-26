@@ -12,6 +12,7 @@ import { OrderTicket } from "@/components/print/OrderTicket";
 import { buildStoreInfo, TICKET_PRINT_CSS } from "@/lib/print-ticket";
 import { ItemReplacementButton } from "@/components/orders/ItemReplacementButton";
 import { OrderEditLogBanner } from "@/components/orders/OrderEditLogBanner";
+import { OrderFiscalPanel } from "@/components/orders/OrderFiscalPanel";
 
 export const metadata = { title: "Pedido" };
 
@@ -76,6 +77,28 @@ export default async function OrderDetailPage({
   });
   const restaurantName = restaurant?.name ?? "Restaurante";
   const storeInfo = restaurant ? buildStoreInfo(restaurant, restaurant.storeProfile) : undefined;
+
+  // Nota fiscal (NFC-e): painel só aparece se a loja habilitou emissão OU já há nota.
+  const [fiscalConfig, fiscalDoc] = await Promise.all([
+    prisma.fiscalConfig.findUnique({ where: { restaurantId: order.restaurantId }, select: { enabled: true } }),
+    prisma.fiscalDocument.findFirst({ where: { orderId: order.id, restaurantId: order.restaurantId } }),
+  ]);
+  const showFiscal = Boolean(fiscalConfig?.enabled || fiscalDoc);
+  const fiscalDocForClient = fiscalDoc
+    ? {
+        status: fiscalDoc.status,
+        serie: fiscalDoc.serie,
+        numero: fiscalDoc.numero,
+        chave: fiscalDoc.chave,
+        danfceUrl: fiscalDoc.danfceUrl,
+        urlConsulta: fiscalDoc.urlConsulta,
+        qrCodeData: fiscalDoc.qrCodeData,
+        rejeicaoMotivo: fiscalDoc.rejeicaoMotivo,
+        lastError: fiscalDoc.lastError,
+        emitidaAt: fiscalDoc.emitidaAt ? fiscalDoc.emitidaAt.toISOString() : null,
+        canceladaAt: fiscalDoc.canceladaAt ? fiscalDoc.canceladaAt.toISOString() : null,
+      }
+    : null;
 
   const canEdit = ["OWNER", "MANAGER"].includes(session.user.role);
   const orderTotalNum = Number(order.total);
@@ -345,6 +368,8 @@ export default async function OrderDetailPage({
             </div>
           </div>
         )}
+
+        {showFiscal && <OrderFiscalPanel orderId={order.id} initialDoc={fiscalDocForClient} />}
       </div>
 
       {/* Print tickets — hidden on screen, printed during @media print:

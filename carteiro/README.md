@@ -14,8 +14,10 @@ para `pkg --public` — que embute o JS em **texto puro**, sem bytecode. Foi uma
 correção de bug na época (o V8 rejeitava o bytecode cross-build), e de quebra
 deixou o fonte legível dentro do binário.
 
-Extraído do `.exe` em 2026-07-25, conferido byte a byte contra o tamanho
-registrado no índice do pkg (15.447 bytes) e validado como JS parseável.
+Extraído do `.exe` em 2026-07-25 (v0.2.1), conferido byte a byte contra o
+tamanho registrado no índice do pkg e validado como JS parseável. A partir daí
+o fonte voltou a ser mantido normalmente — a versão neste arquivo já evoluiu
+além daquela extração.
 
 > Lição: **o fonte mora aqui agora.** Se o próximo build voltar a usar bytecode,
 > não haverá segunda chance de recuperar.
