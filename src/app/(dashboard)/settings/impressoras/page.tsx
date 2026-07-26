@@ -50,7 +50,7 @@ function StatusBanner({ agent }: { agent: Agent | null }) {
         </p>
         <p className="text-xs text-muted">
           {online
-            ? `${agent?.printers.length ?? 0} impressora(s) detectada(s) neste PC.`
+            ? `Carteiro v${agent?.version ?? "?"} · ${agent?.printers.length ?? 0} impressora(s) detectada(s).`
             : "Siga o passo a passo abaixo para ativar a impressão automática."}
         </p>
       </div>
@@ -67,11 +67,11 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
         <p className="mb-3 text-sm text-ink2">Ele roda no computador do restaurante (Windows) e imprime sozinho.</p>
         <div className="flex flex-wrap gap-2">
           <a
-            href="/downloads/FOOCCI-Carteiro.exe"
-            download
+            href="/downloads/FOOCCI-Carteiro-0.3.0.exe"
+            download="FOOCCI-Carteiro.exe"
             className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 transition"
           >
-            ⬇️ Baixar o programa
+            ⬇️ Baixar o programa (v0.3.0)
           </a>
           <a
             href="/downloads/Carteiro-Manual.txt"
