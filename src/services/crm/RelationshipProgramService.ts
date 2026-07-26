@@ -86,8 +86,9 @@ export interface CloseToNextTierCustomer {
  *  campaigns (Mimo mensal / Subiu de nível) — not free text. */
 export interface TierReward {
   tier:   TierKey;
-  label:  string; // "10% OFF" · "Frete grátis" · "sobremesa grátis"
-  source: string; // owner-facing origin, e.g. "Mimo mensal"
+  label:  string;  // "10% OFF" · "Frete grátis" · "sobremesa grátis"
+  source: string;  // owner-facing origin, e.g. "Mimo mensal"
+  active: boolean; // is the source campaign actually sending? (ACTIVE/SCHEDULED)
 }
 
 export interface ProgramOverview {
@@ -427,7 +428,7 @@ export class RelationshipProgramService {
     const rows = await prisma.campaign.findMany({
       where:   { restaurantId, templateId: { in: [...TIER_COUPON_CAMPAIGN_IDS] }, status: { notIn: ["SENT", "COMPLETED", "CANCELLED"] as never[] } },
       orderBy: { createdAt: "desc" },
-      select:  { templateId: true, scheduleConfig: true },
+      select:  { templateId: true, scheduleConfig: true, status: true },
     }).catch(() => []);
 
     const SOURCE: Record<string, string> = { "mimo-mensal-nivel": "Mimo mensal", "subiu-de-nivel": "Ao subir de nível" };
@@ -436,6 +437,7 @@ export class RelationshipProgramService {
     for (const r of rows) {
       if (!r.templateId || seen.has(r.templateId)) continue; // newest row per campaign
       seen.add(r.templateId);
+      const active = ["ACTIVE", "SCHEDULED"].includes(r.status as string);
       const cfg = (r.scheduleConfig as { coupon?: ReadyMadeCoupon | null; tierCoupons?: TierCouponsConfig } | null);
       for (const tier of ["BRONZE", "PRATA", "OURO", "DIAMANTE"] as const) {
         // "Subir de nível" never lands on Bronze (the entry tier), so it earns no
@@ -445,7 +447,7 @@ export class RelationshipProgramService {
         // only an EXPLICIT per-tier coupon counts for Bronze.
         const fallback = tier === "BRONZE" ? null : (cfg?.coupon ?? null);
         const coupon   = resolveTierCoupon(cfg?.tierCoupons, tier, fallback);
-        if (coupon) out.push({ tier, label: couponLabel(coupon), source: SOURCE[r.templateId] ?? r.templateId });
+        if (coupon) out.push({ tier, label: couponLabel(coupon), source: SOURCE[r.templateId] ?? r.templateId, active });
       }
     }
     return out;

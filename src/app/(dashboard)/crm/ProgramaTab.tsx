@@ -296,7 +296,7 @@ function BenefitsPanel({
 }: {
   tier:      TierKey;
   benefits:  Benefit[];
-  rewards:   Array<{ tier: TierKey; label: string; source: string }>;
+  rewards:   Array<{ tier: TierKey; label: string; source: string; active: boolean }>;
   onAdded:   (b: Benefit) => void;
   onDeleted: (id: string) => void;
   onToggled: (id: string, active: boolean) => void;
@@ -416,19 +416,29 @@ function BenefitsPanel({
       {rewards.length > 0 && (
         <div className="mb-2 space-y-1">
           {rewards.map((r, i) => (
-            <div key={i} className="flex items-start justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-emerald-800">🎁 {r.label}</p>
-                <p className="text-[10px] text-emerald-600">via campanha “{r.source}”</p>
+            <div
+              key={i}
+              className={`rounded-lg border px-3 py-2 ${r.active ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className={`text-xs font-semibold ${r.active ? "text-emerald-800" : "text-amber-800"}`}>🎁 {r.label}</p>
+                  <p className={`text-[10px] ${r.active ? "text-emerald-600" : "text-amber-600"}`}>via campanha “{r.source}”</p>
+                </div>
+                {r.source === "Mimo mensal" && (
+                  <button
+                    onClick={() => void handleRemoveReward()}
+                    className="shrink-0 text-[10px] text-red-400 hover:text-red-600"
+                    title="Remover cupom deste nível"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
-              {r.source === "Mimo mensal" && (
-                <button
-                  onClick={() => void handleRemoveReward()}
-                  className="shrink-0 text-[10px] text-red-400 hover:text-red-600"
-                  title="Remover cupom deste nível"
-                >
-                  ✕
-                </button>
+              {!r.active && (
+                <p className="mt-1 border-t border-amber-200/70 pt-1 text-[10px] font-medium text-amber-700">
+                  ⚠️ Ainda não está sendo entregue. Ative a campanha “{r.source}” em <strong>Campanhas</strong> para o cliente receber.
+                </p>
               )}
             </div>
           ))}
@@ -772,7 +782,7 @@ export function ProgramaTab() {
   const [error,       setError]       = useState<string | null>(null);
   const [tiers,       setTiers]       = useState<TierStats[]>([]);
   const [closeList,   setCloseList]   = useState<CloseToNextTierCustomer[]>([]);
-  const [tierRewards, setTierRewards] = useState<Array<{ tier: TierKey; label: string; source: string }>>([]);
+  const [tierRewards, setTierRewards] = useState<Array<{ tier: TierKey; label: string; source: string; active: boolean }>>([]);
   const [settings,    setSettings]    = useState<TierSettingsInput>(DEFAULT_SETTINGS);
   const [benefits,    setBenefits]    = useState<Benefit[]>([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -780,7 +790,7 @@ export function ProgramaTab() {
   const loadOverview = useCallback(async () => {
     try {
       const res  = await fetch("/api/crm/relationship/overview");
-      const json = await res.json() as { data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[]; tierRewards?: Array<{ tier: TierKey; label: string; source: string }> }; error?: string };
+      const json = await res.json() as { data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[]; tierRewards?: Array<{ tier: TierKey; label: string; source: string; active: boolean }> }; error?: string };
       if (res.ok && json.data) {
         setTiers(json.data.tiers);
         setCloseList(json.data.closeToNextTier);
@@ -799,7 +809,7 @@ export function ProgramaTab() {
           fetch("/api/crm/relationship/benefits"),
         ]);
         const [ovJson, sJson, bJson] = await Promise.all([
-          ovRes.json() as Promise<{ data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[]; tierRewards?: Array<{ tier: TierKey; label: string; source: string }> }; error?: string }>,
+          ovRes.json() as Promise<{ data?: { tiers: TierStats[]; closeToNextTier: CloseToNextTierCustomer[]; tierRewards?: Array<{ tier: TierKey; label: string; source: string; active: boolean }> }; error?: string }>,
           sRes.json()  as Promise<{ data?: TierSettingsInput; error?: string }>,
           bRes.json()  as Promise<{ data?: Benefit[]; error?: string }>,
         ]);
