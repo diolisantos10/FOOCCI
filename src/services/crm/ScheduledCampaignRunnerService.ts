@@ -1992,8 +1992,9 @@ export class ScheduledCampaignRunnerService {
 
   /**
    * Auditoria da Oficina sobre o par (sorteio × agente) — NÃO envia nada e NÃO
-   * gasta IA. Gated por CRM_OFICINA_SHADOW_ENABLED (OFF padrão), independente da
-   * flag do shadow do CRM: dá pra medir a Oficina sem mexer no resto.
+   * gasta IA — o crítico é determinístico. Por isso vem LIGADO por padrão: já
+   * que roda dentro do shadow do CRM, ligar a auditoria não acrescenta custo
+   * nem risco, só medição. Para desligar: CRM_OFICINA_SHADOW_ENABLED=false.
    *
    * Guarda como evidência com agentId "oficina-sorteio" e "oficina-agente", pra
    * a comparação sair direto do relatório de sombra que já existe. `confidence`
@@ -2008,7 +2009,7 @@ export class ScheduledCampaignRunnerService {
     mensagemSorteada: string,
     mensagemDoAgente: string,
   ): Promise<void> {
-    if (process.env.CRM_OFICINA_SHADOW_ENABLED !== "true") return;
+    if (process.env.CRM_OFICINA_SHADOW_ENABLED === "false") return;
 
     const [{ auditarPeca }, { recordShadowOutcome }] = await Promise.all([
       import("@/services/brain/oficina/AuditorDePeca"),
