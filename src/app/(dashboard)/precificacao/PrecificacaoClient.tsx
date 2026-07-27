@@ -169,6 +169,51 @@ function parseNum4(s: string): number | null {
 const fmtQty = (n: number) =>
   n.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
 
+interface ParsedBulkIng {
+  name: string;
+  unit: string;
+  costPerUnit: number | null;
+}
+
+/**
+ * Lê uma lista colada/arquivada de insumos: 1 por linha. Remove marcadores de
+ * lista (-, •, "1." …), deduplica por nome (case-insensitive, mantém o 1º) e
+ * aceita "Nome ; unidade ; custo" (o custo em vírgula decimal, por isso o
+ * separador de colunas é ; ou tab — nunca vírgula).
+ */
+function parseIngredientList(text: string): {
+  items: ParsedBulkIng[];
+  duplicatesInList: number;
+  ignoredShort: number;
+} {
+  const seen = new Set<string>();
+  const items: ParsedBulkIng[] = [];
+  let duplicatesInList = 0;
+  let ignoredShort = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim();
+    if (!line) continue;
+    const parts = line.split(/[;\t]/).map((s) => s.trim());
+    const name = parts[0];
+    if (!name || name.length < 2) {
+      ignoredShort++;
+      continue;
+    }
+    const key = name.toLocaleLowerCase("pt-BR");
+    if (seen.has(key)) {
+      duplicatesInList++;
+      continue;
+    }
+    seen.add(key);
+    items.push({
+      name,
+      unit: parts[1] ? parts[1].slice(0, 20) : "un",
+      costPerUnit: parts[2] ? parseNum4(parts[2]) : null,
+    });
+  }
+  return { items, duplicatesInList, ignoredShort };
+}
+
 const numToInput = (n: number | null): string => (n === null ? "" : String(n));
 
 const INPUT_CLS =
@@ -325,6 +370,12 @@ export function PrecificacaoClient({
   const [readingInvoice, setReadingInvoice] = useState(false);
   const [applyingInvoice, setApplyingInvoice] = useState(false);
   const [invoiceRows, setInvoiceRows] = useState<InvoiceRow[] | null>(null);
+
+  // ── Importar lista de insumos em massa (colar texto ou enviar .txt/.csv) ──
+  const bulkIngFileRef = useRef<HTMLInputElement>(null);
+  const [bulkIngOpen, setBulkIngOpen] = useState(false);
+  const [bulkIngText, setBulkIngText] = useState("");
+  const [bulkIngBusy, setBulkIngBusy] = useState(false);
 
   // ── Markup por categoria ──
   const [cats, setCats] = useState<CategoryDTO[]>(initialCategories);
@@ -540,6 +591,19 @@ export function PrecificacaoClient({
     return changes;
   }, [ingCostDrafts, ingUnitDrafts, ingredients]);
 
+  // ── Derived: preview da importação em massa ──
+  const bulkParsed = useMemo(() => parseIngredientList(bulkIngText), [bulkIngText]);
+  const bulkPreview = useMemo(() => {
+    const existingKeys = new Set(ingredients.map((i) => i.name.toLocaleLowerCase("pt-BR")));
+    let novos = 0;
+    let jaExistem = 0;
+    for (const it of bulkParsed.items) {
+      if (existingKeys.has(it.name.toLocaleLowerCase("pt-BR"))) jaExistem++;
+      else novos++;
+    }
+    return { novos, jaExistem };
+  }, [bulkParsed, ingredients]);
+
   // ── Actions ──
   function mergeItems(updates: ItemStateDTO[]) {
     if (updates.length === 0) return;
@@ -683,6 +747,49 @@ export function PrecificacaoClient({
       setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro na importação." });
     } finally {
       setImporting(false);
+    }
+  }
+
+  function loadBulkFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () =>
+      setBulkIngText((prev) => {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        return prev.trim() ? `${prev.trim()}\n${text}` : text;
+      });
+    reader.onerror = () =>
+      setInsumosMsg({ ok: false, text: "Não consegui ler o arquivo. Tente colar o texto." });
+    reader.readAsText(file);
+  }
+
+  async function applyBulkIngredients() {
+    if (bulkParsed.items.length === 0) {
+      setInsumosMsg({ ok: false, text: "Cole ou envie uma lista com pelo menos um insumo." });
+      return;
+    }
+    setBulkIngBusy(true);
+    setInsumosMsg(null);
+    try {
+      const res = await apiFetch("/api/pricing/ingredients/bulk", "POST", {
+        items: bulkParsed.items,
+      });
+      const { created, alreadyExisted } = res.data as {
+        created: number;
+        alreadyExisted: number;
+        received: number;
+      };
+      await refreshIngredients();
+      setBulkIngOpen(false);
+      setBulkIngText("");
+      let text = `${created} insumo(s) adicionados.`;
+      if (alreadyExisted > 0) text += ` ${alreadyExisted} já existiam (ignorados).`;
+      if (bulkParsed.duplicatesInList > 0)
+        text += ` ${bulkParsed.duplicatesInList} repetido(s) na lista foram unificados.`;
+      setInsumosMsg({ ok: true, text });
+    } catch (err) {
+      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao importar a lista." });
+    } finally {
+      setBulkIngBusy(false);
     }
   }
 
@@ -1631,6 +1738,9 @@ export function PrecificacaoClient({
                     {importing ? "Importando…" : "↻ Importar do cardápio"}
                   </Button>
                 )}
+                {canEdit && (
+                  <Button onClick={() => setBulkIngOpen(true)}>📄 Importar lista</Button>
+                )}
                 {canEdit && dirtyIngredients.length > 0 && (
                   <Button
                     variant="primary"
@@ -2280,6 +2390,75 @@ export function PrecificacaoClient({
             </>
           }
         />
+      )}
+
+      {bulkIngOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[88vh] w-full max-w-xl flex-col rounded-2xl border border-line bg-paper shadow-2xl">
+            <div className="border-b border-line px-5 py-4">
+              <h3 className="text-[15px] font-bold text-ink">Adicionar insumos em massa</h3>
+              <p className="mt-0.5 text-[12.5px] text-muted">
+                Cole a lista (um insumo por linha) ou envie um arquivo .txt/.csv. Repetidos são
+                unificados e os que já estão no catálogo são ignorados. Para já informar unidade e
+                custo, separe por ponto e vírgula:{" "}
+                <b className="text-ink2">Nome ; unidade ; custo</b>.
+              </p>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+              <input
+                ref={bulkIngFileRef}
+                type="file"
+                accept=".txt,.csv,text/plain,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) loadBulkFile(f);
+                  if (bulkIngFileRef.current) bulkIngFileRef.current.value = "";
+                }}
+              />
+              <Button variant="secondary" onClick={() => bulkIngFileRef.current?.click()}>
+                📎 Escolher arquivo (.txt / .csv)
+              </Button>
+              <textarea
+                value={bulkIngText}
+                onChange={(e) => setBulkIngText(e.target.value)}
+                rows={10}
+                placeholder={"Farinha de trigo\nQueijo mussarela ; kg ; 32,00\nTomate\nCebola\nAzeite ; L ; 28,90"}
+                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-brand-400"
+              />
+              {bulkIngText.trim() !== "" && (
+                <div className="rounded-lg bg-[#F6F6F4] px-3 py-2 text-[12.5px] text-ink2">
+                  <b className="text-ink">{bulkPreview.novos}</b> novo(s) ·{" "}
+                  <b>{bulkPreview.jaExistem}</b> já no catálogo ·{" "}
+                  <b>{bulkParsed.duplicatesInList}</b> repetido(s) na lista
+                  {bulkParsed.ignoredShort > 0 && (
+                    <> · {bulkParsed.ignoredShort} linha(s) ignorada(s)</>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
+              <Button
+                onClick={() => {
+                  setBulkIngOpen(false);
+                  setBulkIngText("");
+                }}
+                disabled={bulkIngBusy}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => void applyBulkIngredients()}
+                disabled={bulkIngBusy || bulkPreview.novos === 0}
+              >
+                {bulkIngBusy ? "Adicionando…" : `Adicionar ${bulkPreview.novos} insumo(s)`}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {invoiceRows && (
