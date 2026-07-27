@@ -13,7 +13,7 @@
  * reage ao rascunho em edição.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ConfirmDialog, EmptyState, Pill } from "@/components/ui";
 import {
   CMV_HEALTHY_MAX_PCT,
@@ -273,6 +273,8 @@ const UNIT_OPTIONS = ["un", "g", "kg", "ml", "L", "fatia", "porção"];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+type PricingTab = "formula" | "markup" | "precos" | "insumos" | "automacao";
+
 export function PrecificacaoClient({
   initialConfig,
   initialItems,
@@ -281,6 +283,8 @@ export function PrecificacaoClient({
   initialRecipeLines,
   initialCategories,
   canEdit,
+  initialTab,
+  initialFichaItemId,
 }: {
   initialConfig: PricingConfigDTO;
   initialItems: PricingItemDTO[];
@@ -289,6 +293,8 @@ export function PrecificacaoClient({
   initialRecipeLines: RecipeLineDTO[];
   initialCategories: CategoryDTO[];
   canEdit: boolean;
+  initialTab?: PricingTab;
+  initialFichaItemId?: string;
 }) {
   const [savedConfig, setSavedConfig] = useState<PricingConfigDTO>(initialConfig);
   const [draft, setDraft] = useState<ConfigDraft>(() => toDraft(initialConfig));
@@ -303,7 +309,7 @@ export function PrecificacaoClient({
   const [ingUnitDrafts, setIngUnitDrafts] = useState<Record<string, string>>({});
   const [ingSearch, setIngSearch] = useState("");
   const [newIng, setNewIng] = useState({ name: "", unit: "un", cost: "" });
-  const [fichaItemId, setFichaItemId] = useState("");
+  const [fichaItemId, setFichaItemId] = useState(initialFichaItemId ?? "");
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({}); // key `${itemId}:${ingId}`
   const [addLine, setAddLine] = useState({ ingredientId: "", quantity: "" });
   const [savingIngredients, setSavingIngredients] = useState(false);
@@ -323,9 +329,7 @@ export function PrecificacaoClient({
   const [savingMarkups, setSavingMarkups] = useState(false);
   const [markupMsg, setMarkupMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const [tab, setTab] = useState<"formula" | "markup" | "precos" | "insumos" | "automacao">(
-    "formula"
-  );
+  const [tab, setTab] = useState<PricingTab>(initialTab ?? "formula");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
@@ -339,6 +343,31 @@ export function PrecificacaoClient({
   const [tableMsg, setTableMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const set = (patch: Partial<ConfigDraft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  /** Abre a aba Insumos com a ficha do produto selecionada e rola até ela. */
+  function scrollToFicha(delay: number) {
+    setTimeout(
+      () =>
+        document
+          .getElementById("ficha-produto")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      delay
+    );
+  }
+
+  function goToFicha(itemId: string) {
+    setFichaItemId(itemId);
+    setAddLine({ ingredientId: "", quantity: "" });
+    setTab("insumos");
+    scrollToFicha(60);
+  }
+
+  // Chegou por deep-link (?ficha=…): já entra na aba Insumos — rola até a ficha.
+  useEffect(() => {
+    if (initialFichaItemId) scrollToFicha(120);
+    // Só no mount — o alvo inicial não muda depois.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Derived: markup (draft = live preview; saved = what the table uses) ──
   const draftFixedPct = computeFixedPct(
@@ -1443,11 +1472,14 @@ export function PrecificacaoClient({
                               }
                               disabled={!canEdit || fichaComplete}
                             />
-                            {fichaComplete && (
-                              <span className="mt-1 block text-[10.5px] font-semibold text-brand-600">
-                                🧾 pela ficha
-                              </span>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => goToFicha(row.id)}
+                              className="mt-1 block w-full text-right text-[10.5px] font-semibold text-brand-600 hover:underline"
+                              title="Montar a ficha de insumos e calcular o custo pelo CMV"
+                            >
+                              {fichaComplete ? "🧾 ver ficha" : "＋ montar ficha"}
+                            </button>
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                             {fmtBRL(row.price)}
@@ -1725,7 +1757,7 @@ export function PrecificacaoClient({
           </Card>
 
           {/* Ficha por produto */}
-          <Card className="p-5">
+          <Card id="ficha-produto" className="scroll-mt-4 p-5">
             <h3 className="text-[15px] font-bold text-ink">Ficha por produto</h3>
             <p className="mt-0.5 text-[12.5px] text-muted">
               Informe a quantidade de cada insumo no produto. Ficha completa (todas as quantidades

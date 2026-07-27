@@ -2850,6 +2850,22 @@ function EditItemModal({
                 rows={3}
                 className="w-full rounded-lg border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
+              {item && (
+                <div className="pt-1">
+                  <a
+                    href={`/precificacao?ficha=${item.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50"
+                  >
+                    🧾 Definir ficha de custo (CMV)
+                  </a>
+                  <p className="mt-1 text-[11px] text-muted">
+                    A <b>quantidade</b> de cada insumo e o custo do prato ficam na Precificação →
+                    Insumos. Abre em nova aba.
+                  </p>
+                </div>
+              )}
             </div>
 
           </div>

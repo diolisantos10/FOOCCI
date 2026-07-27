@@ -17,7 +17,14 @@ import {
 
 export const metadata = { title: "CMV & Precificação — Foocci" };
 
-export default async function PrecificacaoPage() {
+const PRICING_TABS = ["formula", "markup", "precos", "insumos", "automacao"] as const;
+type PricingTab = (typeof PRICING_TABS)[number];
+
+export default async function PrecificacaoPage({
+  searchParams,
+}: {
+  searchParams: { tab?: string; ficha?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
@@ -125,6 +132,18 @@ export default async function PrecificacaoPage() {
     markupOverride: c.markupOverride === null ? null : Number(c.markupOverride),
   }));
 
+  // Deep-link: /precificacao?ficha=<itemId> (do Cardápio ou da aba Preços) abre a
+  // aba Insumos com a ficha do produto já selecionada. Só respeita alvos válidos.
+  const fichaTarget =
+    searchParams.ficha && initialItems.some((i) => i.id === searchParams.ficha)
+      ? searchParams.ficha
+      : undefined;
+  const initialTab: PricingTab | undefined = fichaTarget
+    ? "insumos"
+    : PRICING_TABS.includes(searchParams.tab as PricingTab)
+      ? (searchParams.tab as PricingTab)
+      : undefined;
+
   return (
     <>
       <TopBar title="CMV & Precificação" />
@@ -136,6 +155,8 @@ export default async function PrecificacaoPage() {
         initialRecipeLines={initialRecipeLines}
         initialCategories={initialCategories}
         canEdit={canEdit}
+        initialTab={initialTab}
+        initialFichaItemId={fichaTarget}
       />
     </>
   );
