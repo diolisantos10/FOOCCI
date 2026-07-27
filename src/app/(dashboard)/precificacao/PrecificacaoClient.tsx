@@ -273,7 +273,7 @@ const UNIT_OPTIONS = ["un", "g", "kg", "ml", "L", "fatia", "porção"];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type PricingTab = "formula" | "markup" | "precos" | "insumos" | "automacao";
+type PricingTab = "formula" | "markup" | "precos" | "insumos" | "fichas" | "automacao";
 
 export function PrecificacaoClient({
   initialConfig,
@@ -316,6 +316,8 @@ export function PrecificacaoClient({
   const [importing, setImporting] = useState(false);
   const [deleteIngId, setDeleteIngId] = useState<string | null>(null);
   const [insumosMsg, setInsumosMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [fichaMsg, setFichaMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [savingUnitFor, setSavingUnitFor] = useState<string | null>(null);
 
   // ── Importador de nota de compra (foto/PDF) ──
   const invoiceFileRef = useRef<HTMLInputElement>(null);
@@ -358,7 +360,7 @@ export function PrecificacaoClient({
   function goToFicha(itemId: string) {
     setFichaItemId(itemId);
     setAddLine({ ingredientId: "", quantity: "" });
-    setTab("insumos");
+    setTab("fichas");
     scrollToFicha(60);
   }
 
@@ -503,6 +505,16 @@ export function PrecificacaoClient({
   }, [linesByItem, ingredientById]);
 
   const ingredientsWithoutCost = ingredients.filter((i) => i.costPerUnit === null).length;
+
+  // Produtos que já têm insumos na ficha mas ainda estão incompletos (faltam
+  // quantidades ou custos) — vira badge na aba "Ficha de custo".
+  const fichasIncompletas = useMemo(() => {
+    let n = 0;
+    for (const st of Array.from(recipeStateByItem.values())) {
+      if (st.lines > 0 && !st.complete) n++;
+    }
+    return n;
+  }, [recipeStateByItem]);
 
   const visibleIngredients = ingredients.filter(
     (i) => !ingSearch || i.name.toLowerCase().includes(ingSearch.toLowerCase())
@@ -681,7 +693,7 @@ export function PrecificacaoClient({
     );
     if (!current || parsed === current.quantity) return;
     if (parsed !== null && parsed <= 0) {
-      setInsumosMsg({ ok: false, text: "Quantidade deve ser maior que zero (ou vazia)." });
+      setFichaMsg({ ok: false, text: "Quantidade deve ser maior que zero (ou vazia)." });
       setQtyDrafts((prev) => {
         const next = { ...prev };
         delete next[key];
@@ -689,7 +701,7 @@ export function PrecificacaoClient({
       });
       return;
     }
-    setInsumosMsg(null);
+    setFichaMsg(null);
     try {
       const res = await apiFetch("/api/pricing/recipe", "PUT", {
         menuItemId,
@@ -710,15 +722,42 @@ export function PrecificacaoClient({
         return next;
       });
       const suffix = absorbPropagation(propagation);
-      if (suffix) setInsumosMsg({ ok: true, text: `Quantidade salva${suffix}.` });
+      if (suffix) setFichaMsg({ ok: true, text: `Quantidade salva${suffix}.` });
     } catch (err) {
-      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar quantidade." });
+      setFichaMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar quantidade." });
+    }
+  }
+
+  /**
+   * Troca a unidade de medida do insumo direto na ficha (g / kg / ml / L / un…).
+   * A unidade é do insumo (compartilhada por todas as fichas que o usam); o custo
+   * é quantidade × custo/unidade — mantenha a unidade e o custo/unidade na mesma
+   * medida. Só rótulo: não recalcula sozinho.
+   */
+  async function saveLineUnit(ingredientId: string, unit: string) {
+    const ing = ingredients.find((i) => i.id === ingredientId);
+    if (!ing || ing.unit === unit) return;
+    const prevUnit = ing.unit;
+    setSavingUnitFor(ingredientId);
+    setFichaMsg(null);
+    setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, unit } : i)));
+    try {
+      await apiFetch("/api/pricing/ingredients", "PATCH", { items: [{ id: ingredientId, unit }] });
+      setFichaMsg({
+        ok: true,
+        text: `Unidade de "${ing.name}" salva como ${unit}. Confira se o custo por unidade está nessa medida.`,
+      });
+    } catch (err) {
+      setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, unit: prevUnit } : i)));
+      setFichaMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar unidade." });
+    } finally {
+      setSavingUnitFor(null);
     }
   }
 
   async function addLineAction() {
     if (!fichaItemId || !addLine.ingredientId) return;
-    setInsumosMsg(null);
+    setFichaMsg(null);
     try {
       const quantity = parseNum4(addLine.quantity);
       const res = await apiFetch("/api/pricing/recipe", "PUT", {
@@ -737,9 +776,9 @@ export function PrecificacaoClient({
         prev.map((i) => (i.id === addLine.ingredientId ? { ...i, usedIn: i.usedIn + 1 } : i))
       );
       setAddLine({ ingredientId: "", quantity: "" });
-      setInsumosMsg({ ok: true, text: `Insumo adicionado à ficha${absorbPropagation(propagation)}.` });
+      setFichaMsg({ ok: true, text: `Insumo adicionado à ficha${absorbPropagation(propagation)}.` });
     } catch (err) {
-      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao adicionar." });
+      setFichaMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao adicionar." });
     }
   }
 
@@ -831,7 +870,7 @@ export function PrecificacaoClient({
   }
 
   async function removeLineAction(menuItemId: string, ingredientId: string) {
-    setInsumosMsg(null);
+    setFichaMsg(null);
     try {
       const res = await apiFetch("/api/pricing/recipe", "DELETE", { menuItemId, ingredientId });
       const { propagation } = res.data as { propagation: PropagationDTO };
@@ -841,9 +880,9 @@ export function PrecificacaoClient({
       setIngredients((prev) =>
         prev.map((i) => (i.id === ingredientId ? { ...i, usedIn: Math.max(0, i.usedIn - 1) } : i))
       );
-      setInsumosMsg({ ok: true, text: `Insumo removido da ficha${absorbPropagation(propagation)}.` });
+      setFichaMsg({ ok: true, text: `Insumo removido da ficha${absorbPropagation(propagation)}.` });
     } catch (err) {
-      setInsumosMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao remover da ficha." });
+      setFichaMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao remover da ficha." });
     }
   }
 
@@ -980,6 +1019,7 @@ export function PrecificacaoClient({
     { key: "markup" as const, label: "Markup" },
     { key: "precos" as const, label: "Preços do cardápio", badge: pendingCount },
     { key: "insumos" as const, label: "Insumos", badge: ingredientsWithoutCost },
+    { key: "fichas" as const, label: "Ficha de custo", badge: fichasIncompletas },
     { key: "automacao" as const, label: "Automação" },
   ];
 
@@ -1755,14 +1795,19 @@ export function PrecificacaoClient({
                 <InlineError message={insumosMsg.text} />
               ))}
           </Card>
+        </div>
+      )}
 
-          {/* Ficha por produto */}
+      {/* ── ABA · Ficha de custo (ficha técnica por produto) ───────────── */}
+      {tab === "fichas" && (
+        <div className="space-y-5">
           <Card id="ficha-produto" className="scroll-mt-4 p-5">
             <h3 className="text-[15px] font-bold text-ink">Ficha por produto</h3>
             <p className="mt-0.5 text-[12.5px] text-muted">
-              Informe a quantidade de cada insumo no produto. Ficha completa (todas as quantidades
-              + todos os custos) → o custo do produto passa a ser calculado automaticamente.
-              Enquanto estiver incompleta, vale o custo digitado na aba Preços.
+              Escolha o produto e informe a <b className="text-ink2">quantidade</b> e a{" "}
+              <b className="text-ink2">unidade</b> (g, kg, ml, L, un…) de cada insumo. Ficha completa
+              (todas as quantidades + todos os custos) → o custo do produto passa a ser calculado
+              automaticamente. Enquanto estiver incompleta, vale o custo digitado na aba Preços.
             </p>
 
             <div className="mt-4 max-w-md">
@@ -1873,7 +1918,23 @@ export function PrecificacaoClient({
                                         }
                                         disabled={!canEdit}
                                       />
-                                      <span className="w-10 text-left text-[12px] text-muted">{ing.unit}</span>
+                                      <select
+                                        aria-label={`Unidade de ${ing.name}`}
+                                        title="Unidade de medida deste insumo (g, kg, ml, L, un…)"
+                                        className="rounded-lg border border-line2 bg-paper px-1.5 py-1.5 text-[12px] text-ink2 focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:opacity-60"
+                                        value={ing.unit}
+                                        onChange={(e) => void saveLineUnit(line.ingredientId, e.target.value)}
+                                        disabled={!canEdit || savingUnitFor === line.ingredientId}
+                                      >
+                                        {(UNIT_OPTIONS.includes(ing.unit)
+                                          ? UNIT_OPTIONS
+                                          : [ing.unit, ...UNIT_OPTIONS]
+                                        ).map((u) => (
+                                          <option key={u} value={u}>
+                                            {u}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </span>
                                   </td>
                                   <td className="px-3 py-2 text-right tabular-nums">
@@ -1949,6 +2010,13 @@ export function PrecificacaoClient({
                 );
               })()}
           </Card>
+
+          {fichaMsg &&
+            (fichaMsg.ok ? (
+              <InlineSuccess message={fichaMsg.text} />
+            ) : (
+              <InlineError message={fichaMsg.text} />
+            ))}
         </div>
       )}
 

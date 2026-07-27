@@ -17,7 +17,7 @@ import {
 
 export const metadata = { title: "CMV & Precificação — Foocci" };
 
-const PRICING_TABS = ["formula", "markup", "precos", "insumos", "automacao"] as const;
+const PRICING_TABS = ["formula", "markup", "precos", "insumos", "fichas", "automacao"] as const;
 type PricingTab = (typeof PRICING_TABS)[number];
 
 export default async function PrecificacaoPage({
@@ -139,7 +139,7 @@ export default async function PrecificacaoPage({
       ? searchParams.ficha
       : undefined;
   const initialTab: PricingTab | undefined = fichaTarget
-    ? "insumos"
+    ? "fichas"
     : PRICING_TABS.includes(searchParams.tab as PricingTab)
       ? (searchParams.tab as PricingTab)
       : undefined;
