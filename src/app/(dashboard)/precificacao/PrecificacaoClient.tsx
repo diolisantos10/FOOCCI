@@ -310,6 +310,7 @@ export function PrecificacaoClient({
   const [ingSearch, setIngSearch] = useState("");
   const [newIng, setNewIng] = useState({ name: "", unit: "un", cost: "" });
   const [fichaItemId, setFichaItemId] = useState(initialFichaItemId ?? "");
+  const [fichaSearch, setFichaSearch] = useState("");
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({}); // key `${itemId}:${ingId}`
   const [addLine, setAddLine] = useState({ ingredientId: "", quantity: "" });
   const [savingIngredients, setSavingIngredients] = useState(false);
@@ -1800,46 +1801,103 @@ export function PrecificacaoClient({
 
       {/* ── ABA · Ficha de custo (ficha técnica por produto) ───────────── */}
       {tab === "fichas" && (
-        <div className="space-y-5">
-          <Card id="ficha-produto" className="scroll-mt-4 p-5">
-            <h3 className="text-[15px] font-bold text-ink">Ficha por produto</h3>
-            <p className="mt-0.5 text-[12.5px] text-muted">
-              Escolha o produto e informe a <b className="text-ink2">quantidade</b> e a{" "}
-              <b className="text-ink2">unidade</b> (g, kg, ml, L, un…) de cada insumo. Ficha completa
-              (todas as quantidades + todos os custos) → o custo do produto passa a ser calculado
-              automaticamente. Enquanto estiver incompleta, vale o custo digitado na aba Preços.
-            </p>
+        <div id="ficha-produto" className="scroll-mt-4 space-y-5">
+          {!fichaItemId ? (
+            <Card className="p-5">
+              <h3 className="text-[15px] font-bold text-ink">Fichas de custo</h3>
+              <p className="mt-0.5 text-[12.5px] text-muted">
+                Todos os pratos do cardápio. Toque num prato para abrir a ficha e informar a
+                quantidade e a unidade de cada insumo — o custo é calculado sozinho quando a ficha
+                fica completa.
+              </p>
 
-            <div className="mt-4 max-w-md">
-              <select
-                className={INPUT_CLS}
-                value={fichaItemId}
-                onChange={(e) => {
-                  setFichaItemId(e.target.value);
+              <div className="mt-4">
+                <input
+                  type="search"
+                  placeholder="Buscar prato…"
+                  className={`${INPUT_CLS} max-w-56`}
+                  value={fichaSearch}
+                  onChange={(e) => setFichaSearch(e.target.value)}
+                />
+              </div>
+
+              {items.length === 0 ? (
+                <EmptyState
+                  icon="🍽️"
+                  title="Nenhum prato no cardápio ainda"
+                  sub="Cadastre produtos no Cardápio para montar as fichas de custo."
+                />
+              ) : (
+                <div className="mt-4 space-y-5">
+                  {categories.map((cat) => {
+                    const catItems = items.filter(
+                      (i) =>
+                        i.categoryId === cat.id &&
+                        (!fichaSearch ||
+                          i.name.toLowerCase().includes(fichaSearch.toLowerCase()))
+                    );
+                    if (catItems.length === 0) return null;
+                    return (
+                      <div key={cat.id}>
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted">
+                          {cat.name}
+                        </p>
+                        <div className="overflow-hidden rounded-xl border border-line">
+                          {catItems.map((it, idx) => {
+                            const st = recipeStateByItem.get(it.id);
+                            const lines = st?.lines ?? 0;
+                            return (
+                              <button
+                                key={it.id}
+                                type="button"
+                                onClick={() => goToFicha(it.id)}
+                                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-brand-50 ${
+                                  idx > 0 ? "border-t border-line" : ""
+                                }`}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[14px] font-medium text-ink">
+                                    {it.name}
+                                  </span>
+                                  <span className="mt-0.5 block text-[11.5px] text-muted">
+                                    {lines === 0
+                                      ? "Sem ficha ainda"
+                                      : st?.complete
+                                        ? `Ficha completa · custo ${fmtBRL(st.cost ?? 0)}`
+                                        : `${lines} insumo${lines > 1 ? "s" : ""} · incompleta`}
+                                  </span>
+                                </span>
+                                {lines === 0 ? (
+                                  <Pill tone="neutral">montar</Pill>
+                                ) : st?.complete ? (
+                                  <Pill tone="green">completa</Pill>
+                                ) : (
+                                  <Pill tone="amber">incompleta</Pill>
+                                )}
+                                <span className="text-[18px] leading-none text-muted">›</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          ) : (
+            <Card className="p-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setFichaItemId("");
                   setAddLine({ ingredientId: "", quantity: "" });
                 }}
+                className="-ml-2 mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-semibold text-brand-600 hover:bg-brand-50"
               >
-                <option value="">Escolha um produto…</option>
-                {categories.map((c) => (
-                  <optgroup key={c.id} label={c.name}>
-                    {items
-                      .filter((i) => i.categoryId === c.id)
-                      .map((i) => {
-                        const st = recipeStateByItem.get(i.id);
-                        return (
-                          <option key={i.id} value={i.id}>
-                            {i.name}
-                            {st ? ` (${st.lines} insumo${st.lines > 1 ? "s" : ""}${st.complete ? " · ficha completa" : ""})` : ""}
-                          </option>
-                        );
-                      })}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-
-            {fichaItemId &&
-              (() => {
+                ← Voltar aos pratos
+              </button>
+              {(() => {
                 const lines = linesByItem.get(fichaItemId) ?? [];
                 const st = recipeStateByItem.get(fichaItemId);
                 const item = items.find((i) => i.id === fichaItemId);
@@ -1847,7 +1905,10 @@ export function PrecificacaoClient({
                   (ing) => !lines.some((l) => l.ingredientId === ing.id)
                 );
                 return (
-                  <div className="mt-4 space-y-3">
+                  <div className="space-y-3">
+                    <h3 className="text-[16px] font-bold text-ink">
+                      {item?.name ?? "Ficha do produto"}
+                    </h3>
                     <div className="flex flex-wrap items-center gap-2">
                       {st?.complete ? (
                         <Pill tone="green">
@@ -2009,7 +2070,8 @@ export function PrecificacaoClient({
                   </div>
                 );
               })()}
-          </Card>
+            </Card>
+          )}
 
           {fichaMsg &&
             (fichaMsg.ok ? (
