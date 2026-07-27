@@ -257,6 +257,70 @@ export async function createIngredient(
   return serviceOk({ id: created.id });
 }
 
+export interface BulkCreateOutcome {
+  created: number; // efetivamente inseridos
+  alreadyExisted: number; // nomes que já estavam no catálogo (ignorados)
+  received: number; // itens válidos após dedupe da própria lista
+}
+
+/**
+ * Adiciona insumos em massa a partir de uma lista (colada ou de arquivo, já
+ * parseada no cliente). Dedupe em duas frentes: a lista recebida já vem sem
+ * repetição, e aqui filtramos contra o catálogo existente por nome
+ * case-insensitive (o unique do banco é case-sensitive, então a checagem é
+ * feita em memória, como no importFromMenu). Nunca sobrescreve custo/unidade
+ * de um insumo que já existe.
+ */
+export async function bulkCreateIngredients(
+  restaurantId: string,
+  items: Array<{ name: string; unit?: string; costPerUnit?: number | null }>
+): Promise<ServiceResult<BulkCreateOutcome>> {
+  const byKey = new Map<string, { name: string; unit: string; costPerUnit: number | null }>();
+  for (const it of items) {
+    const name = it.name.trim();
+    if (name.length < 2) continue;
+    const key = name.toLocaleLowerCase("pt-BR");
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        name,
+        unit: it.unit && it.unit.trim() ? it.unit.trim().slice(0, 20) : "un",
+        costPerUnit: it.costPerUnit ?? null,
+      });
+    }
+  }
+  if (byKey.size === 0) return serviceFail("Nenhum insumo válido na lista.", 400);
+
+  const existing = await prisma.ingredient.findMany({
+    where: { restaurantId },
+    select: { name: true },
+  });
+  const existingKeys = new Set(existing.map((e) => e.name.toLocaleLowerCase("pt-BR")));
+
+  const toCreate = Array.from(byKey.values()).filter(
+    (v) => !existingKeys.has(v.name.toLocaleLowerCase("pt-BR"))
+  );
+
+  let created = 0;
+  if (toCreate.length > 0) {
+    const res = await prisma.ingredient.createMany({
+      data: toCreate.map((v) => ({
+        restaurantId,
+        name: v.name,
+        unit: v.unit,
+        costPerUnit: v.costPerUnit === null ? null : new Decimal(v.costPerUnit.toFixed(4)),
+      })),
+      skipDuplicates: true,
+    });
+    created = res.count;
+  }
+
+  return serviceOk({
+    created,
+    alreadyExisted: byKey.size - toCreate.length,
+    received: byKey.size,
+  });
+}
+
 export async function deleteIngredient(
   restaurantId: string,
   ingredientId: string,
@@ -347,6 +411,7 @@ export const RecipeCostService = {
   recomputeAndPropagate,
   updateIngredients,
   createIngredient,
+  bulkCreateIngredients,
   deleteIngredient,
   setRecipeLine,
   removeRecipeLine,

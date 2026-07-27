@@ -29,6 +29,20 @@ export const updateIngredientsSchema = z.object({
     .max(500),
 });
 
+// Adição em massa: lista (colada ou de arquivo) já parseada no cliente.
+export const bulkIngredientsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2).max(60),
+        unit: unitField.optional(),
+        costPerUnit: costPerUnitField.optional(),
+      })
+    )
+    .min(1)
+    .max(1000),
+});
+
 export const recipeLineSchema = z.object({
   menuItemId: z.string().cuid(),
   ingredientId: z.string().cuid(),
@@ -43,4 +57,5 @@ export const removeRecipeLineSchema = z.object({
 
 export type CreateIngredientInput = z.infer<typeof createIngredientSchema>;
 export type UpdateIngredientsInput = z.infer<typeof updateIngredientsSchema>;
+export type BulkIngredientsInput = z.infer<typeof bulkIngredientsSchema>;
 export type RecipeLineInput = z.infer<typeof recipeLineSchema>;
