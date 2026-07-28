@@ -159,3 +159,15 @@ export {
   type PedidoNaPorta,
   type RespostaDaPorta,
 } from "./oficina/PortaDaOficina";
+export {
+  avaliarSondagem,
+  podeEntregarPlano,
+  proximasPerguntas,
+  CAMPOS_DA_SONDAGEM,
+  EXIGENCIAS_POR_ENTREGAVEL,
+  type CampoDaSondagem,
+  type EstadoDaSondagem,
+  type AvaliacaoDaSondagem,
+  type EntregavelAvaliado,
+  type Lacuna,
+} from "./oficina/Sondagem";
