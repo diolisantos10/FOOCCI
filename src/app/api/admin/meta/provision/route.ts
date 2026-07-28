@@ -18,7 +18,7 @@ import { ok, unauthorized, badRequest, serverError } from "@/lib/api-response";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { metaGraphUrl } from "@/services/whatsapp/metaFlag";
 import {
-  addPhoneNumberToWaba, requestVerificationCode, verifyPhoneCode,
+  addPhoneNumberToWaba, requestVerificationCode, verifyPhoneCode, deletePhoneNumberFromWaba,
 } from "@/services/whatsapp/MetaOnboardingService";
 
 export async function POST(req: NextRequest) {
@@ -43,6 +43,15 @@ export async function POST(req: NextRequest) {
         const r = await addPhoneNumberToWaba(token, cfg.wabaId, cc, phoneNumber, verifiedName);
         return ok(r);
       }
+      case "delete": {
+        if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
+        // Guard: never delete the restaurant's live number via this path.
+        if (body.phoneNumberId === cfg.phoneNumberId) {
+          return badRequest("Recusado: esse é o número ativo do restaurante. Não vou removê-lo por aqui.");
+        }
+        const r = await deletePhoneNumberFromWaba(token, body.phoneNumberId);
+        return ok(r);
+      }
       case "request-code": {
         if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
         const r = await requestVerificationCode(token, body.phoneNumberId, body.method ?? "SMS");
@@ -63,7 +72,7 @@ export async function POST(req: NextRequest) {
         return ok({ phone: json });
       }
       default:
-        return badRequest("action inválida (use add | request-code | verify-code | status).");
+        return badRequest("action inválida (use add | delete | request-code | verify-code | status).");
     }
   } catch (err) {
     console.error("[POST /api/admin/meta/provision]", err);

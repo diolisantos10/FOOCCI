@@ -194,6 +194,30 @@ export async function addPhoneNumberToWaba(
 }
 
 /**
+ * Removes a phone number from the WABA entirely (DELETE /{phoneNumberId}). Frees a
+ * slot against the per-business number limit. Use to drop the unused Meta test number.
+ * Different from deregister (which only unregisters from the Cloud API runtime).
+ */
+export async function deletePhoneNumberFromWaba(
+  accessToken:   string,
+  phoneNumberId: string,
+): Promise<{ ok: boolean; error?: string; raw?: unknown }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${phoneNumberId}`), {
+      method:  "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || json.error) {
+      return { ok: false, error: maskGraphResponse(json.error?.message ?? "Falha ao remover o número da conta."), raw: json };
+    }
+    return { ok: true, raw: json };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
+/**
  * Requests a verification code for a pending phone number (POST /{phoneNumberId}/request_code).
  * Meta sends a 6-digit code to the physical line via SMS or VOICE.
  */
