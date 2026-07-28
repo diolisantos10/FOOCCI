@@ -2,119 +2,226 @@ import { describe, it, expect } from "vitest";
 
 import {
   avaliarSondagem,
-  podeEntregarPlano,
+  podePropor,
   proximasPerguntas,
-  CAMPOS_DA_SONDAGEM,
-  EXIGENCIAS_POR_ENTREGAVEL,
+  CAMPOS_DA_FICHA,
+  CATALOGO_DE_SERVICOS,
+  type EstadoDaSondagem,
+  type ServicoContratado,
 } from "./Sondagem";
 
-const VAZIA = { respostas: {} };
+const VAZIA: EstadoDaSondagem = {};
 
-function comEssenciais(over: Record<string, unknown> = {}) {
-  const r: Record<string, unknown> = {};
-  for (const c of CAMPOS_DA_SONDAGEM) if (c.essencial) r[c.chave] = "respondido";
-  return { respostas: { ...r, ...over } as Record<string, string> };
+/** Ficha inteira respondida — o que o SDR levantou antes de falar de serviço. */
+function fichaCheia(over: Record<string, string | boolean> = {}) {
+  const f: Record<string, string | boolean> = {};
+  for (const c of CAMPOS_DA_FICHA) f[c.chave] = "respondido";
+  return { ...f, ...over };
 }
 
-describe("a falha que originou isto", () => {
-  it("NÃO libera reels sem saber se alguém aparece na câmera", () => {
-    const a = avaliarSondagem(VAZIA);
-    const reels = a.entregaveis.find((e) => e.entregavel === "reels com a pessoa falando");
-    expect(reels?.liberado).toBe(false);
-    expect(reels?.faltaSaber).toContain("alguem_na_camera");
+/** Um serviço com tudo definido: origem, quem executa e as definições. */
+function servicoFechado(chave: string, origem: "cliente" | "agencia" | "misto" = "agencia"): ServicoContratado {
+  const cat = CATALOGO_DE_SERVICOS.find((s) => s.chave === chave);
+  const definicoes: Record<string, string> = {};
+  for (const d of cat?.definicoes ?? []) definicoes[d.chave] = "definido";
+  return { chave, origemDoInsumo: origem, quemExecuta: "equipe do cliente", definicoes };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("a falha real que originou isto", () => {
+  it("NÃO deixa propor reels sem saber de onde vem o vídeo", () => {
+    const a = avaliarSondagem({ ficha: fichaCheia(), servicos: [{ chave: "reels" }] });
+    expect(a.podePropor).toBe(false);
+    const reels = a.servicos.find((s) => s.chave === "reels");
+    expect(reels?.pronto).toBe(false);
+    expect(reels?.origemDoInsumo).toBeNull();
+    expect(reels?.quemTrazOMaterial).toMatch(/NÃO DEFINIDO/);
   });
 
-  it("NÃO libera calendário sem data, frequência e formato", () => {
-    const cal = avaliarSondagem(VAZIA).entregaveis.find((e) => e.entregavel === "calendário com datas");
-    expect(cal?.faltaSaber).toEqual(expect.arrayContaining(["data_inicio", "frequencia", "formatos"]));
+  it("a pergunta que faltou aparece com todas as letras", () => {
+    const a = avaliarSondagem({ ficha: fichaCheia(), servicos: [{ chave: "reels" }] });
+    const p = a.perguntar.find((x) => x.chave === "reels.origemDoInsumo");
+    expect(p?.pergunta).toMatch(/vem de você ou a gente produz/i);
   });
 
-  it("libera reels quando o cliente confirma que grava", () => {
-    const a = avaliarSondagem({ respostas: { alguem_na_camera: "a dona aparece", frequencia_gravacao: "2x por semana" } });
-    expect(a.entregaveis.find((e) => e.entregavel === "reels com a pessoa falando")?.liberado).toBe(true);
+  it("reels NÃO é 'pessoa falando' — o formato é perguntado, não presumido", () => {
+    const cat = CATALOGO_DE_SERVICOS.find((s) => s.chave === "reels");
+    const tipo = cat?.definicoes.find((d) => d.chave === "tipo_de_reels");
+    expect(tipo?.pergunta).toMatch(/ambiente/i);
+    expect(tipo?.pergunta).toMatch(/bastidor/i);
   });
 
-  it("'não tem vídeo' É resposta — não conta como lacuna", () => {
-    const a = avaliarSondagem({ respostas: { tem_videos: false } });
-    expect(a.lacunas.map((l) => l.chave)).not.toContain("tem_videos");
+  it("também cobra o formato do reels, não só a origem", () => {
+    const a = avaliarSondagem({
+      ficha: fichaCheia(),
+      servicos: [{ chave: "reels", origemDoInsumo: "agencia" }],
+    });
+    expect(a.perguntar.map((p) => p.chave)).toContain("reels.tipo_de_reels");
   });
 
-  it("resposta em branco NÃO conta como respondida", () => {
-    const a = avaliarSondagem({ respostas: { objetivo: "   ", ofertas: [] } });
-    expect(a.lacunas.map((l) => l.chave)).toEqual(expect.arrayContaining(["objetivo", "ofertas"]));
+  it("catálogo não apresentado = nem começou", () => {
+    const a = avaliarSondagem({ ficha: fichaCheia() });
+    expect(a.podePropor).toBe(false);
+    expect(a.veredito).toMatch(/apresente o catálogo/i);
+  });
+
+  it("com tudo definido, libera a proposta", () => {
+    const a = avaliarSondagem({
+      ficha: fichaCheia(),
+      servicos: [servicoFechado("reels", "cliente"), servicoFechado("legenda")],
+    });
+    expect(a.podePropor).toBe(true);
+    expect(a.veredito).toMatch(/Sondagem fechada/i);
   });
 });
 
-describe("a trava de passagem de bastão", () => {
-  it("sondagem vazia NÃO pode entregar plano", () => {
-    const r = podeEntregarPlano(VAZIA);
-    expect(r.pode).toBe(false);
-    expect(r.motivo).toMatch(/essenciais/i);
+describe("de onde vem o material", () => {
+  it("cliente entrega → precisa saber QUEM produz", () => {
+    const a = avaliarSondagem({
+      ficha: fichaCheia(),
+      servicos: [{ chave: "reels", origemDoInsumo: "cliente", definicoes: { tipo_de_reels: "ambiente", quantidade: "8" } }],
+    });
+    expect(a.perguntar.map((p) => p.chave)).toContain("reels.quemExecuta");
   });
 
-  it("com todos os essenciais, libera", () => {
-    expect(podeEntregarPlano(comEssenciais()).pode).toBe(true);
+  it("agência produz → não pergunta quem produz do lado do cliente", () => {
+    const a = avaliarSondagem({
+      ficha: fichaCheia(),
+      servicos: [{ chave: "reels", origemDoInsumo: "agencia", definicoes: { tipo_de_reels: "produto", quantidade: "8" } }],
+    });
+    expect(a.perguntar.map((p) => p.chave)).not.toContain("reels.quemExecuta");
+    expect(a.podePropor).toBe(true);
   });
 
-  it("falta UM essencial e já trava", () => {
-    const quase = comEssenciais();
-    delete (quase.respostas as Record<string, unknown>).formatos;
-    const r = podeEntregarPlano(quase);
-    expect(r.pode).toBe(false);
-    expect(r.motivo).toContain("formatos");
+  it("misto também exige dono do material", () => {
+    const a = avaliarSondagem({
+      ficha: fichaCheia(),
+      servicos: [{ chave: "reels", origemDoInsumo: "misto", definicoes: { tipo_de_reels: "misto", quantidade: "8" } }],
+    });
+    expect(a.perguntar.map((p) => p.chave)).toContain("reels.quemExecuta");
+  });
+
+  it("cada serviço vira uma frase legível de quem traz o material", () => {
+    const a = avaliarSondagem({
+      ficha: fichaCheia(),
+      servicos: [servicoFechado("reels", "cliente"), servicoFechado("arte_grafica", "agencia")],
+    });
+    expect(a.servicos[0]?.quemTrazOMaterial).toMatch(/cliente entrega/i);
+    expect(a.servicos[1]?.quemTrazOMaterial).toMatch(/agência produz/i);
+  });
+});
+
+describe("não perguntar é o pecado — não responder, não", () => {
+  it("essencial nunca perguntado trava", () => {
+    const a = avaliarSondagem({ servicos: [servicoFechado("legenda")] });
+    expect(a.podePropor).toBe(false);
+    expect(a.naoPerguntado.map((p) => p.chave)).toContain("redes_sociais");
+  });
+
+  it("perguntado e sem resposta NÃO trava — só vai declarado", () => {
+    const ficha = fichaCheia();
+    delete ficha.redes_sociais;
+    const a = avaliarSondagem({
+      ficha,
+      perguntadas: ["redes_sociais"],
+      servicos: [servicoFechado("legenda")],
+    });
+    expect(a.podePropor).toBe(true);
+    expect(a.aguardandoCliente.map((p) => p.chave)).toContain("redes_sociais");
+    expect(a.motivo).toMatch(/declare na proposta/i);
+  });
+
+  it("'não tenho' É resposta", () => {
+    const a = avaliarSondagem({ ficha: fichaCheia({ identidade_visual: false }) });
+    const chaves = [...a.naoPerguntado, ...a.aguardandoCliente].map((p) => p.chave);
+    expect(chaves).not.toContain("identidade_visual");
+  });
+
+  it("resposta em branco não conta como respondida", () => {
+    const a = avaliarSondagem({ ficha: fichaCheia({ objetivo: "   " }) });
+    expect(a.naoPerguntado.map((p) => p.chave)).toContain("objetivo");
+  });
+
+  it("não essencial sem perguntar não trava a proposta", () => {
+    const ficha = fichaCheia();
+    delete ficha.concorrentes;
+    const a = avaliarSondagem({ ficha, servicos: [servicoFechado("legenda")] });
+    expect(a.podePropor).toBe(true);
+    expect(a.naoPerguntado.map((p) => p.chave)).toContain("concorrentes");
+  });
+});
+
+describe("a leitura do cliente vem antes", () => {
+  it("pergunta pelas redes e pelo acesso às contas", () => {
+    const chaves = CAMPOS_DA_FICHA.map((c) => c.chave);
+    expect(chaves).toEqual(expect.arrayContaining(["redes_sociais", "acesso_contas", "metricas_atuais"]));
+  });
+
+  it("redes sociais e acesso são essenciais — sem isso a agência trabalha cega", () => {
+    for (const chave of ["redes_sociais", "acesso_contas", "data_inicio"]) {
+      expect(CAMPOS_DA_FICHA.find((c) => c.chave === chave)?.essencial).toBe(true);
+    }
+  });
+
+  it("data de início é essencial — foi o que faltou no plano sem data", () => {
+    const a = avaliarSondagem({ ficha: {}, servicos: [servicoFechado("legenda")] });
+    expect(a.perguntar.map((p) => p.chave)).toContain("data_inicio");
   });
 });
 
 describe("condução da conversa", () => {
-  it("a próxima pergunta é sempre um essencial pendente", () => {
-    expect(avaliarSondagem(VAZIA).proxima?.essencial).toBe(true);
+  it("serviço vem antes da ficha na fila — é o que trava", () => {
+    const a = avaliarSondagem({ servicos: [{ chave: "reels" }] });
+    expect(a.perguntar[0]?.chave).toBe("reels.origemDoInsumo");
   });
 
-  it("toda pergunta vem com o PORQUÊ — o SDR sabe por que está perguntando", () => {
-    for (const l of proximasPerguntas(VAZIA, 5)) {
-      expect(l.pergunta.length).toBeGreaterThan(20);
-      expect(l.porque.length).toBeGreaterThan(15);
+  it("toda pergunta carrega o porquê", () => {
+    for (const p of proximasPerguntas({ servicos: [{ chave: "reels" }] }, 5)) {
+      expect(p.pergunta.length).toBeGreaterThan(15);
+      expect(p.porque.length).toBeGreaterThan(15);
     }
   });
 
-  it("respondendo tudo, não sobra próxima pergunta essencial", () => {
-    const a = avaliarSondagem(comEssenciais());
-    expect(a.completa).toBe(true);
-    expect(a.proxima?.essencial ?? false).toBe(false);
+  it("proximasPerguntas respeita a quantidade pedida", () => {
+    expect(proximasPerguntas(VAZIA, 2)).toHaveLength(2);
   });
 
-  it("a cobertura sobe conforme responde", () => {
+  it("a cobertura mede o essencial respondido", () => {
     expect(avaliarSondagem(VAZIA).cobertura).toBe(0);
-    expect(avaliarSondagem(comEssenciais()).cobertura).toBe(100);
+    expect(avaliarSondagem({ ficha: fichaCheia() }).cobertura).toBe(100);
+  });
+
+  it("podePropor é a mesma decisão de avaliarSondagem", () => {
+    const e = { ficha: fichaCheia(), servicos: [{ chave: "reels" }] };
+    expect(podePropor(e).pode).toBe(avaliarSondagem(e).podePropor);
+    expect(podePropor(e).motivo).toBe(avaliarSondagem(e).motivo);
   });
 });
 
-describe("o veredito é legível por gente", () => {
-  it("sondagem vazia diz o que NÃO prometer", () => {
-    expect(avaliarSondagem(VAZIA).veredito).toMatch(/Não prometa/i);
-  });
-
-  it("sondagem completa mas sem insumo avisa o que ainda trava", () => {
-    const v = avaliarSondagem(comEssenciais()).veredito;
-    expect(v).toMatch(/completa/i);
-  });
-});
-
-describe("integridade do questionário", () => {
-  it("nenhuma chave duplicada", () => {
-    const chaves = CAMPOS_DA_SONDAGEM.map((c) => c.chave);
+describe("integridade", () => {
+  it("nenhuma chave de ficha duplicada", () => {
+    const chaves = CAMPOS_DA_FICHA.map((c) => c.chave);
     expect(new Set(chaves).size).toBe(chaves.length);
   });
 
-  it("toda exigência aponta para um campo que existe", () => {
-    const chaves = new Set(CAMPOS_DA_SONDAGEM.map((c) => c.chave));
-    for (const exigidas of Object.values(EXIGENCIAS_POR_ENTREGAVEL)) {
-      for (const c of exigidas) expect(chaves.has(c)).toBe(true);
-    }
+  it("nenhum serviço duplicado no catálogo", () => {
+    const chaves = CATALOGO_DE_SERVICOS.map((s) => s.chave);
+    expect(new Set(chaves).size).toBe(chaves.length);
   });
 
-  it("cobre os seis grupos da conversa", () => {
-    const grupos = new Set(CAMPOS_DA_SONDAGEM.map((c) => c.grupo));
-    expect(grupos).toEqual(new Set(["insumo", "execucao", "negocio", "objetivo", "restricao", "operacao"]));
+  it("todo serviço declara qual insumo consome", () => {
+    for (const s of CATALOGO_DE_SERVICOS) expect(s.insumo.trim().length).toBeGreaterThan(0);
+  });
+
+  it("cobre os cinco grupos da ficha", () => {
+    const grupos = new Set(CAMPOS_DA_FICHA.map((c) => c.grupo));
+    expect(grupos).toEqual(new Set(["identificacao", "presenca", "acesso", "objetivo", "restricao"]));
+  });
+
+  it("serviço fora do catálogo ainda é avaliado, não some", () => {
+    const a = avaliarSondagem({ ficha: fichaCheia(), servicos: [{ chave: "podcast" }] });
+    expect(a.servicos.map((s) => s.chave)).toContain("podcast");
+    expect(a.podePropor).toBe(false);
   });
 });
