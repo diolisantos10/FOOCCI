@@ -164,6 +164,86 @@ export async function deregisterPhoneNumber(
   }
 }
 
+/**
+ * Adds a NEW phone number to an existing WABA (POST /{wabaId}/phone_numbers).
+ * Returns the new phone_number_id. The number must NOT be active on any WhatsApp
+ * (consumer or Business app). `verifiedName` is the business display name shown to
+ * recipients (may require Meta review). Additive — never touches existing numbers.
+ */
+export async function addPhoneNumberToWaba(
+  accessToken:  string,
+  wabaId:       string,
+  cc:           string,
+  phoneNumber:  string,
+  verifiedName: string,
+): Promise<{ ok: boolean; phoneNumberId?: string; error?: string; raw?: unknown }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${wabaId}/phone_numbers`), {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body:    JSON.stringify({ cc, phone_number: phoneNumber, verified_name: verifiedName }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+    if (!res.ok || !json.id) {
+      return { ok: false, error: maskGraphResponse(json.error?.message ?? "Falha ao adicionar o número à conta."), raw: json };
+    }
+    return { ok: true, phoneNumberId: json.id, raw: json };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
+/**
+ * Requests a verification code for a pending phone number (POST /{phoneNumberId}/request_code).
+ * Meta sends a 6-digit code to the physical line via SMS or VOICE.
+ */
+export async function requestVerificationCode(
+  accessToken:   string,
+  phoneNumberId: string,
+  method:        "SMS" | "VOICE" = "SMS",
+  language:      string = "pt_BR",
+): Promise<{ ok: boolean; error?: string; raw?: unknown }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${phoneNumberId}/request_code`), {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body:    JSON.stringify({ code_method: method, language }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || json.error) {
+      return { ok: false, error: maskGraphResponse(json.error?.message ?? "Falha ao pedir o código de verificação."), raw: json };
+    }
+    return { ok: true, raw: json };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
+/**
+ * Submits the 6-digit verification code (POST /{phoneNumberId}/verify_code). On success
+ * the number is verified and can then be registered on the Cloud API.
+ */
+export async function verifyPhoneCode(
+  accessToken:   string,
+  phoneNumberId: string,
+  code:          string,
+): Promise<{ ok: boolean; error?: string; raw?: unknown }> {
+  try {
+    const res = await fetch(metaGraphUrl(`${phoneNumberId}/verify_code`), {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body:    JSON.stringify({ code }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || json.error) {
+      return { ok: false, error: maskGraphResponse(json.error?.message ?? "Código inválido ou expirado."), raw: json };
+    }
+    return { ok: true, raw: json };
+  } catch (e) {
+    return { ok: false, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
+  }
+}
+
 export async function fetchPhoneDetails(
   accessToken:   string,
   phoneNumberId: string,

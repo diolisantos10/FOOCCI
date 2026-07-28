@@ -1,0 +1,72 @@
+/**
+ * POST /api/admin/meta/provision — admin-only. Provision a NEW phone number on the
+ * SAME WABA as an existing restaurant config, without touching the current number.
+ *
+ * Uses the WABA-wide access token stored for `restaurantId`. Actions:
+ *   { action: "add",          restaurantId, cc, phoneNumber, verifiedName? }  → new phone_number_id
+ *   { action: "request-code", restaurantId, phoneNumberId, method? }          → SMS/VOICE code sent
+ *   { action: "verify-code",  restaurantId, phoneNumberId, code }             → verifies the number
+ *   { action: "status",       restaurantId, phoneNumberId }                   → live phone fields
+ *
+ * Registering + repointing the config to the new number is done via the existing
+ * /api/admin/meta/register endpoint (phoneNumberId + pin). Read-only of secrets.
+ */
+
+import { NextRequest } from "next/server";
+import { checkAdminRequest } from "@/lib/admin-auth";
+import { ok, unauthorized, badRequest, serverError } from "@/lib/api-response";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { metaGraphUrl } from "@/services/whatsapp/metaFlag";
+import {
+  addPhoneNumberToWaba, requestVerificationCode, verifyPhoneCode,
+} from "@/services/whatsapp/MetaOnboardingService";
+
+export async function POST(req: NextRequest) {
+  if (!checkAdminRequest(req)) return unauthorized();
+  try {
+    const body = (await req.json().catch(() => ({}))) as {
+      action?: string; restaurantId?: string; cc?: string; phoneNumber?: string;
+      verifiedName?: string; phoneNumberId?: string; method?: "SMS" | "VOICE"; code?: string;
+    };
+    if (!body.restaurantId) return badRequest("restaurantId é obrigatório.");
+
+    const cfg = await MetaConfigService.getResolved(body.restaurantId);
+    if (!cfg) return badRequest("Sem config Meta para este restaurante.");
+    const token = cfg.accessToken;
+
+    switch (body.action) {
+      case "add": {
+        const cc = (body.cc ?? "").replace(/\D/g, "");
+        const phoneNumber = (body.phoneNumber ?? "").replace(/\D/g, "");
+        if (!cc || !phoneNumber) return badRequest("Informe cc e phoneNumber (somente dígitos).");
+        const verifiedName = body.verifiedName?.trim() || "Sushi Cazza";
+        const r = await addPhoneNumberToWaba(token, cfg.wabaId, cc, phoneNumber, verifiedName);
+        return ok(r);
+      }
+      case "request-code": {
+        if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
+        const r = await requestVerificationCode(token, body.phoneNumberId, body.method ?? "SMS");
+        return ok(r);
+      }
+      case "verify-code": {
+        if (!body.phoneNumberId || !body.code) return badRequest("phoneNumberId e code são obrigatórios.");
+        const r = await verifyPhoneCode(token, body.phoneNumberId, body.code.replace(/\D/g, ""));
+        return ok(r);
+      }
+      case "status": {
+        if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
+        const res = await fetch(
+          metaGraphUrl(`${body.phoneNumberId}?fields=display_phone_number,verified_name,code_verification_status,platform_type,name_status,account_mode,quality_rating`),
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const json = await res.json().catch(() => ({}));
+        return ok({ phone: json });
+      }
+      default:
+        return badRequest("action inválida (use add | request-code | verify-code | status).");
+    }
+  } catch (err) {
+    console.error("[POST /api/admin/meta/provision]", err);
+    return serverError();
+  }
+}
