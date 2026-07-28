@@ -111,4 +111,3 @@ export class OpenAIEnhancementProvider implements ImageEnhancementProvider {
     }
   }
 }
-

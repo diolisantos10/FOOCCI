@@ -1969,9 +1969,12 @@ function CampaignManageModal({
   const [poolSelected, setPoolSelected] = useState<Set<string>>(new Set());
   const [poolCustom, setPoolCustom]     = useState<{ id: string; text: string; on: boolean }[]>([]);
   const [composing, setComposing]       = useState(false);
-  const [phraseStats, setPhraseStats]   = useState<Record<string, { sent: number; converted: number; revenue: number }>>({});
+  // Per-phrase effectiveness + confidence seal (tier = same rule the agent uses).
+  const [phraseStats, setPhraseStats]   = useState<Record<string, { sent: number; converted: number; revenue: number; underTest?: boolean; champion?: boolean; tier?: "champion" | "reliable" | "under-test" | "none" }>>({});
   // Meta approval status per phrase (variantKey → APPROVED/PENDING/REJECTED).
   const [phraseMeta, setPhraseMeta]     = useState<{ enabled: boolean; status: Record<string, string> }>({ enabled: false, status: {} });
+  // Campaign-level maturity: are there enough sends to trust conclusions yet?
+  const [phraseCampaign, setPhraseCampaign] = useState<{ totalSent: number; baselineTarget: number; baselineReached: boolean }>({ totalSent: 0, baselineTarget: 100, baselineReached: false });
 
   // Edit – schedule
   const [editWd,      setEditWd]      = useState<number[]>([]);
@@ -2069,11 +2072,13 @@ function CampaignManageModal({
     // Per-phrase effectiveness + Meta approval status for the pool list.
     setPhraseStats({});
     setPhraseMeta({ enabled: false, status: {} });
+    setPhraseCampaign({ totalSent: 0, baselineTarget: 100, baselineReached: false });
     fetch(`/api/crm/campaigns/${detailId}/phrase-stats`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => {
         setPhraseStats(json.data?.stats ?? {});
         setPhraseMeta({ enabled: !!json.data?.metaEnabled, status: json.data?.meta ?? {} });
+        setPhraseCampaign(json.data?.campaign ?? { totalSent: 0, baselineTarget: 100, baselineReached: false });
       })
       .catch(() => {});
   }, [detailId]);
@@ -2142,6 +2147,23 @@ function CampaignManageModal({
     if (st === "PENDING")  return <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">⏳ Meta em análise</span>;
     if (st === "REJECTED") return <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-red-700">✗ Meta rejeitou</span>;
     return <span className="rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-muted">Meta: na fila</span>;
+  };
+
+  /**
+   * Confidence seal for a phrase — one per row, mutually exclusive, hierarchy
+   * campeã > confiável > em teste. Same rule the agent uses under the hood, so
+   * the owner never over-reads a phrase with too few sends. Sized to match the
+   * adjacent metaBadge (same line ⇒ same scale).
+   */
+  const confidenceBadge = (key: string) => {
+    const tier = phraseStats[key]?.tier;
+    if (tier === "champion")
+      return <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-brand-600" title="Converte bem acima da média com amostra suficiente — o agente já copia o padrão dela.">🏆 Campeã</span>;
+    if (tier === "reliable")
+      return <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-blue-600" title="Já tem envios suficientes para confiar no número.">✓ Confiável</span>;
+    if (tier === "under-test")
+      return <span className="rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-muted" title="Ainda com poucos envios — número provisório, o agente segue testando.">🧪 Em teste</span>;
+    return null;
   };
 
   async function handleSaveName() {
@@ -2538,6 +2560,19 @@ function CampaignManageModal({
                             : null}
                         </div>
 
+                        {/* Coletando baseline: avisa que os números ainda estão maturando,
+                            pra ninguém eleger favorita cedo demais. Só enquanto há envios
+                            mas o baseline não foi atingido. */}
+                        {phraseCampaign.totalSent > 0 && !phraseCampaign.baselineReached && (
+                          <div className="mb-3 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] leading-snug text-blue-700">
+                            <span aria-hidden>📊</span>
+                            <span>
+                              Coletando baseline — <b className="tabular-nums">{phraseCampaign.totalSent}/{phraseCampaign.baselineTarget}</b> envios.
+                              Os números ainda estão maturando: o agente testa todas por igual antes de eleger favoritas.
+                            </span>
+                          </div>
+                        )}
+
                         <div className="space-y-2">
                           {/* Frases prontas do catálogo */}
                           {rmVariants.map((v) => {
@@ -2565,6 +2600,7 @@ function CampaignManageModal({
                                       <p className="mt-0.5 text-[10px] text-emerald-600">🎁 + linha do cupom no final (automática): &ldquo;você ganhou {couponLabel(coupon)}…&rdquo;</p>
                                     )}
                                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                      {confidenceBadge(key)}
                                       {metaBadge(key)}
                                       <p className="text-[10px] tabular-nums text-muted">
                                         {st && st.sent > 0
@@ -2600,6 +2636,7 @@ function CampaignManageModal({
                                     )}
                                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                                       <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">Sua frase</span>
+                                      {confidenceBadge(key)}
                                       {metaBadge(key)}
                                       <p className="text-[10px] tabular-nums text-muted">
                                         {st && st.sent > 0

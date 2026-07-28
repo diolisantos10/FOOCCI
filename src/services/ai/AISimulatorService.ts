@@ -29,6 +29,7 @@ import type { UpsellSuggestion } from "./UpsellEngine";
 import { ConversationStatus } from "@prisma/client";
 import type OpenAI from "openai";
 import { generateScenarios } from "./ScenarioGenerator";
+import { simulatorBlockReason, isAiKeyConfigured } from "./AISimulatorPreflight";
 
 const MAX_TOOL_ITERATIONS = 6;
 
@@ -871,6 +872,15 @@ export class AISimulatorService {
       where: { isActive: true, category: { restaurantId } },
       select: { id: true, name: true, ingredients: true, price: true, category: { select: { name: true } } },
     });
+
+    // Pré-voo: para ANTES de queimar cenários se não dá pra rodar (chave da IA
+    // ausente ou cardápio vazio). Troca o "tudo vermelho sem explicação" por um
+    // motivo claro que sobe até a tela via o handler de erro da rota.
+    const blockReason = simulatorBlockReason({
+      menuCount: menu.length,
+      aiKeyConfigured: isAiKeyConfigured(process.env.OPENAI_API_KEY),
+    });
+    if (blockReason) throw new Error(blockReason);
 
     const menuById = new Map<string, { categoryName: string }>(
       menu.map((m) => [m.id, { categoryName: m.category?.name ?? "" }] as [string, { categoryName: string }]),

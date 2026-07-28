@@ -4455,6 +4455,28 @@ model RestaurantExperience {
   @@map("restaurant_experiences")
 }
 
+/// Memória do anti-mesmice da Oficina. Cada linha é uma COMBINAÇÃO de abordagem
+/// (ângulo, luz, lente, abertura…) que já foi gasta numa peça — o Variador
+/// consulta as recentes e escolhe outra. Precisa ser tabela, não memória de
+/// processo: o app roda em mais de uma instância, então duas peças simultâneas
+/// não se enxergariam e o anti-mesmice não valeria nada em produção.
+/// Sem PII: guarda a assinatura da abordagem, nunca o conteúdo da peça.
+model OficinaAssinatura {
+  id String @id @default(cuid())
+
+  /// negócio::agente::assunto — a janela é separada por essas três coisas.
+  chave String
+
+  /// A combinação em si, legível: "angulo:45°|luz:janela de manhã".
+  assinatura String
+
+  createdAt DateTime @default(now())
+
+  @@unique([chave, assinatura], name: "oficina_assinatura_unica")
+  @@index([chave, createdAt])
+  @@map("oficina_assinaturas")
+}
+
 // ═══════════════════════════════════════════
 //  FISCAL — Emissão de Nota Fiscal (NFC-e, modelo 65)
 // ═══════════════════════════════════════════

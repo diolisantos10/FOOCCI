@@ -76,3 +76,86 @@ export { reasonViaBrain } from "./reasoning/WaiterBrainReasoningAdapter";
 export * from "./training/BrainTrainingContract";
 export * from "./quality/BrainQualityGate";
 export * from "./evidence/BrainEvidenceContract";
+
+// oficina (Fatia 1 — a fábrica de perguntas: pedido cru → ficha → juiz → comando)
+export * from "./oficina/OficinaTypes";
+export { forjar, montarFicha, renderizar, type ForjarInput, type ForjaResult } from "./oficina/OficinaService";
+export { criticar, CORTE_PADRAO } from "./oficina/PromptCritic";
+export {
+  registerManual,
+  resolveManual,
+  registeredDominios,
+  violacoes,
+  manualRestaurante,
+  type Manual,
+} from "./oficina/HouseManual";
+export { variar, assinar, semear, totalDeCombinacoes, type Eixo, type Variacao } from "./oficina/Variator";
+export { criticarResultado, type CriticaResultadoOpts } from "./oficina/OutputCritic";
+export { buscarVerdade, snapshotParaVerdade, type VerdadeBuscada } from "./oficina/TruthSource";
+export { criarReescritor } from "./oficina/Reescritor";
+export {
+  chaveDeMemoria,
+  getAssinaturaMemory,
+  setAssinaturaMemory,
+  resetAssinaturaMemory,
+  resolverMemoria,
+  JANELA_PADRAO,
+  type AssinaturaMemory,
+} from "./oficina/AssinaturaMemory";
+export {
+  rodarEsteira,
+  forjarComando,
+  type EsteiraInput,
+  type EsteiraResult,
+  type ModoDaEsteira,
+} from "./oficina/OficinaPipeline";
+export { runOficinaDiagnostic, type OficinaDiagnosticResult } from "./oficina/OficinaDiagnostic";
+export { auditarPeca, type AuditoriaInput, type Auditoria } from "./oficina/AuditorDePeca";
+export {
+  decidirImagem,
+  autorizacaoCobre,
+  SELO_ILUSTRATIVO,
+  VALIDADE_DA_AUTORIZACAO_DIAS,
+  type CategoriaVisual,
+  type AutorizacaoDoLojista,
+  type DecisaoDeImagem,
+  type CaminhoDaImagem,
+} from "./oficina/PoliticaDeImagem";
+export {
+  rodarEsteiraDeImagem,
+  renderizarComandoDeImagem,
+  type EsteiraDeImagemInput,
+  type EsteiraDeImagemResult,
+} from "./oficina/EsteiraDeImagem";
+export {
+  forjarPromptDeFoto,
+  forjarOpcoesDeFoto,
+  detectarTipo,
+  limparPedido,
+  type PedidoDeFoto,
+  type PromptDeFoto,
+  type TipoDeFoto,
+} from "./oficina/ForjaDeFoto";
+export { montarPauta, type PedidoDePauta, type Pauta, type ConceitoDeFoto, type ItemDaPauta } from "./oficina/PautaDeFotos";
+export {
+  atenderPedidoDeFoto,
+  lerPedido,
+  type PedidoAberto,
+  type Atendimento,
+  type ModoDeAtendimento,
+} from "./oficina/AtendenteDeFoto";
+export {
+  forjarPromptDeTexto,
+  forjarOpcoesDeTexto,
+  detectarTipoDeTexto,
+  type PedidoDeTexto,
+  type PromptDeTexto,
+  type TipoDeTexto,
+} from "./oficina/ForjaDeTexto";
+export {
+  atender,
+  lerMeio,
+  type Meio,
+  type PedidoNaPorta,
+  type RespostaDaPorta,
+} from "./oficina/PortaDaOficina";

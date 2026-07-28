@@ -3,12 +3,16 @@
  *
  * Per-phrase data for the campaign's message pool, keyed by variantKey (the
  * phrase fingerprint):
- *   { stats: { [key]: { sent, converted, revenue } }   // effectiveness
+ *   { stats: { [key]: { sent, converted, revenue,        // effectiveness
+ *              underTest, champion, tier } }             // + confidence seal
  *   , meta:  { [key]: "APPROVED"|"PENDING"|"REJECTED" } // Meta template status
- *   , metaEnabled: boolean }                            // restaurant uses Meta CRM
+ *   , metaEnabled: boolean                              // restaurant uses Meta CRM
+ *   , campaign: { totalSent, baselineReached } }        // campaign-level maturity
  *
  * Shows the owner which phrase converts best AND where each phrase stands in
- * Meta's approval — right where the phrases live. Read-only, tenant-scoped.
+ * Meta's approval — right where the phrases live. The confidence seal ("em teste
+ * / confiável / campeã") uses the SAME rule the agent uses under the hood, so the
+ * owner never over-reads a phrase with too few sends. Read-only, tenant-scoped.
  */
 
 import { NextRequest } from "next/server";
@@ -16,6 +20,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { readPhraseMetaTemplates } from "@/services/crm/crmMessagePool";
+import { computePhraseConfidence, type PhraseTier } from "@/services/crm/CrmPhraseConfidence";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +73,20 @@ export async function GET(
     for (const r of convRows) { const s = row(r.variantKey); if (s) s.converted = r._count._all; }
     for (const r of revRows)  { const s = row(r.variantKey); if (s) s.revenue = Number(r._sum.revenue ?? 0); }
 
+    // Confidence seal per phrase — same rule the agent uses (no new queries: the
+    // sent/converted counts above are exactly what the seal needs).
+    const conf = computePhraseConfidence(
+      Object.entries(stats).map(([key, s]) => ({ key, sent: s.sent, converted: s.converted })),
+    );
+    const statsOut: Record<
+      string,
+      { sent: number; converted: number; revenue: number; underTest: boolean; champion: boolean; tier: PhraseTier }
+    > = {};
+    for (const [key, s] of Object.entries(stats)) {
+      const c = conf.byKey[key];
+      statsOut[key] = { ...s, underTest: c?.underTest ?? false, champion: c?.champion ?? false, tier: c?.tier ?? "none" };
+    }
+
     // Meta status per phrase: variantKey → its template's current approval status.
     const statusByName = new Map(templateRows.map((t) => [t.templateName, t.status]));
     const meta: Record<string, string> = {};
@@ -77,9 +96,10 @@ export async function GET(
     }
 
     return ok({
-      stats,
+      stats: statsOut,
       meta,
       metaEnabled: metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED",
+      campaign: conf.campaign,
     });
   } catch (err) {
     console.error("[GET /api/crm/campaigns/[id]/phrase-stats]", err);
