@@ -3,7 +3,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const db = vi.hoisted(() => ({ campaign: { findFirst: vi.fn(), update: vi.fn() } }));
 const proposePhrase = vi.hoisted(() => vi.fn());
 const provisionPoolTemplates = vi.hoisted(() => vi.fn());
+const relatorioGlobalDeFrases = vi.hoisted(() => vi.fn());
+const championOfCampaign = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
+vi.mock("@/services/crm/CrmPhraseGlobalReport", () => ({ relatorioGlobalDeFrases }));
+vi.mock("@/services/crm/CrmChampionDetector", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  championOfCampaign,
+}));
 vi.mock("@/services/crm/CrmPhraseProposer", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   proposePhrase,
@@ -18,6 +25,8 @@ beforeEach(() => {
     id: "c1", name: "Cliente frio", objective: "RECUPERAR", targetSegment: "FRIO",
     couponCode: null, message: "Sentimos sua falta!", scheduleConfig: null,
   });
+  championOfCampaign.mockResolvedValue(null);
+  relatorioGlobalDeFrases.mockResolvedValue({ destaques: [] });
   let n = 0;
   proposePhrase.mockImplementation(async () => {
     n += 1;
@@ -46,6 +55,31 @@ describe("CrmAgentRepertoireService — o agente cresce o repertório (PREVIEW)"
   it("passa a frase campeã (aprendizado) para o proponente", async () => {
     await proposeForCampaign({ restaurantId: "r1", campaignId: "c1", count: 1, winningExample: "Sumiu, {nome}?!" });
     expect(proposePhrase.mock.calls[0][0].winningExample).toBe("Sumiu, {nome}?!");
+  });
+
+  it("sem campeã na campanha, aprende com o padrão da rede", async () => {
+    relatorioGlobalDeFrases.mockResolvedValue({ destaques: [{ texto: "Padrão que funciona em 4 casas" }] });
+    await proposeForCampaign({ restaurantId: "r1", campaignId: "c1", count: 1 });
+    expect(proposePhrase.mock.calls[0][0].winningExample).toBe("Padrão que funciona em 4 casas");
+  });
+
+  it("a campeã da própria campanha ganha do padrão da rede", async () => {
+    championOfCampaign.mockResolvedValue({ phrase: "A campeã daqui" });
+    relatorioGlobalDeFrases.mockResolvedValue({ destaques: [{ texto: "Padrão da rede" }] });
+    await proposeForCampaign({ restaurantId: "r1", campaignId: "c1", count: 1 });
+    expect(proposePhrase.mock.calls[0][0].winningExample).toBe("A campeã daqui");
+  });
+
+  it("rede sem destaque não inventa exemplo", async () => {
+    await proposeForCampaign({ restaurantId: "r1", campaignId: "c1", count: 1 });
+    expect(proposePhrase.mock.calls[0][0].winningExample).toBeUndefined();
+  });
+
+  it("falha ao ler a rede não derruba a proposta", async () => {
+    relatorioGlobalDeFrases.mockRejectedValue(new Error("banco fora"));
+    const r = await proposeForCampaign({ restaurantId: "r1", campaignId: "c1", count: 1 });
+    const res = r as Exclude<typeof r, { ok: false }>;
+    expect(res.proposals).toHaveLength(1);
   });
 
   it("campanha inexistente → erro claro", async () => {

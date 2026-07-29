@@ -159,3 +159,57 @@ export {
   type PedidoNaPorta,
   type RespostaDaPorta,
 } from "./oficina/PortaDaOficina";
+export {
+  avaliarSondagem,
+  podePropor,
+  proximasPerguntas,
+  CAMPOS_DA_FICHA,
+  CATALOGO_DE_SERVICOS,
+  type EstadoDaInfo,
+  type GrupoDaFicha,
+  type CampoDaFicha,
+  type OrigemDoInsumo,
+  type ServicoDoCatalogo,
+  type ServicoContratado,
+  type EstadoDaSondagem,
+  type AvaliacaoDaSondagem,
+  type ServicoAvaliado,
+  type Pendencia,
+} from "./oficina/Sondagem";
+
+// sdr — a sondagem conduzida: entrevista com memória → plano com datas
+export {
+  ouvir,
+  roteiroDoTurno,
+  lerOrigem,
+  lerServicos,
+  type TurnoDaEntrevista,
+  type ResultadoDoTurno,
+  type CampoEntendido,
+} from "./sdr/Entrevistador";
+export {
+  chaveDaEntrevista,
+  resolverMemoriaDaEntrevista,
+  setMemoriaDaEntrevista,
+  resetMemoriaDaEntrevista,
+  type MemoriaDaEntrevista,
+} from "./sdr/MemoriaDaEntrevista";
+export {
+  gerarPlano,
+  renderizarPlano,
+  lerData,
+  type Plano,
+  type PedidoDePlano,
+  type LinhaDoPlano,
+  type LinhaContinua,
+  type PendenciaDeclarada,
+} from "./sdr/PlanoDeMidia";
+export {
+  conduzirTurno,
+  abrirEntrevista,
+  planoDoCliente,
+  type PedidoDeTurno,
+  type RespostaDoTurno,
+  type EntrevistaAberta,
+} from "./sdr/SdrService";
+export { runSdrDiagnostic, type SdrDiagnosticResult, type SdrCheck } from "./sdr/SdrDiagnostic";
