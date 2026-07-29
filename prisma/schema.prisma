@@ -4477,6 +4477,35 @@ model OficinaAssinatura {
   @@map("oficina_assinaturas")
 }
 
+/// A entrevista de sondagem do SDR, guardada entre um turno e outro.
+/// Uma entrevista leva dias e passa por várias conversas; sem tabela, o turno de
+/// amanhã cairia noutra instância e a sondagem recomeçaria em branco sem ninguém
+/// perceber — que é como o briefing quebrado nasceu.
+/// `perguntadas` é o campo que sustenta a regra da casa: falta de RESPOSTA não
+/// trava a proposta, falta de PERGUNTA trava. É o registro de que a agência
+/// perguntou, não de que o cliente respondeu.
+model SdrEntrevista {
+  id String @id @default(cuid())
+
+  /// agencia::cliente — duas agências não enxergam a entrevista uma da outra.
+  chave String @unique
+
+  /// A ficha do cliente: chave do campo → o que ele respondeu.
+  ficha Json @default("{}")
+
+  /// Chaves já PERGUNTADAS. Guardadas mesmo sem resposta — esse é o ponto.
+  perguntadas Json @default("[]")
+
+  /// Serviços contratados + de onde vem o insumo de cada um.
+  servicos Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+  @@map("sdr_entrevistas")
+}
+
 // ═══════════════════════════════════════════
 //  FISCAL — Emissão de Nota Fiscal (NFC-e, modelo 65)
 // ═══════════════════════════════════════════

@@ -124,9 +124,26 @@ export const runOficinaGateForBrain: BrainQualityGateRunner = async () => {
   };
 };
 
+/** Gate do SDR: prova que a proposta não sai sem ter perguntado — serviço sem
+ *  origem de insumo trava, catálogo não apresentado trava, data vaga não vira
+ *  calendário, e o que não foi respondido sai declarado. Hermético, com P0=0. */
+export const runSdrGateForBrain: BrainQualityGateRunner = async () => {
+  const { runSdrDiagnostic } = await import("@/services/brain/sdr/SdrDiagnostic");
+  const diag = runSdrDiagnostic();
+  return {
+    passed: diag.status === "PASS" && diag.p0 === 0,
+    p0Count: diag.p0,
+    reason: diag.status === "PASS"
+      ? `diagnóstico PASS (${diag.passed}/${diag.total})`
+      : `diagnóstico FAIL (${diag.passed}/${diag.total}, p0=${diag.p0})`,
+    ranAt: new Date().toISOString(),
+  };
+};
+
 // Gates built-in registrados na carga do módulo.
 registerQualityGate("waiter", runWaiterGateForBrain);
 registerQualityGate("whatsapp", runWhatsAppGateForBrain);
 registerQualityGate("crm", runCrmGateForBrain);
 registerQualityGate("suporte-tecnico", runSupportGateForBrain);
 registerQualityGate("oficina", runOficinaGateForBrain);
+registerQualityGate("sdr", runSdrGateForBrain);
