@@ -17,6 +17,7 @@ import { proposePhrase, PHRASE_ANGLES, type ProposePhraseResult } from "@/servic
 import { parseMessagePool, phraseKey, type CustomPhrase } from "@/services/crm/crmMessagePool";
 import { detectSpamLanguage, impliesDiscount } from "@/services/crm/MessageVariationService";
 import { championOfCampaign } from "@/services/crm/CrmChampionDetector";
+import { relatorioGlobalDeFrases } from "@/services/crm/CrmPhraseGlobalReport";
 import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 /** Teto de frases ativas por campanha (rodízio saudável p/ o agente aprender rápido). */
@@ -34,6 +35,22 @@ export interface CampaignProposal {
   committed: false;
   submittedToMeta: false;
   sent: false;
+}
+
+/** Janela da busca por padrão de rede — o que é recente ainda vale como sinal. */
+const DIAS_DA_REDE = 180;
+
+/**
+ * A frase que mais converte na rede, entre as que provaram valor em mais de uma
+ * casa. Best-effort: qualquer falha devolve null e o proponente segue sem
+ * exemplo — perder o aprendizado é ruim, não propor frase nenhuma é pior.
+ */
+async function padraoDaRede(): Promise<string | null> {
+  const relatorio = await relatorioGlobalDeFrases({
+    desde: new Date(Date.now() - DIAS_DA_REDE * 24 * 60 * 60 * 1000),
+  });
+  const melhor = relatorio.destaques[0];
+  return melhor?.texto?.trim() || null;
 }
 
 /** Textos das frases já existentes na campanha (todos os baldes + a mensagem base). */
@@ -65,12 +82,24 @@ export async function proposeForCampaign(input: ProposeForCampaignInput): Promis
 
   if (!campaign) return { ok: false, error: "campanha não encontrada neste restaurante" };
 
-  // Aprendizado AUTOMÁTICO: se ninguém passou uma campeã, o agente descobre a
-  // desta campanha sozinho e imita o padrão dela.
+  // Aprendizado AUTOMÁTICO, em duas camadas.
+  //
+  // 1. A campeã DESTA campanha — o sinal mais forte que existe, porque veio do
+  //    público deste restaurante.
+  // 2. Não havendo (campanha nova, ou uma frase só no rodízio), o agente busca
+  //    na rede uma frase que converte acima da média em VÁRIAS casas. Uma frase
+  //    boa numa casa só pode ser sorte; boa em várias é padrão, e padrão é o
+  //    que vale imitar. Campanha nova deixaria de aprender sem esta camada.
+  //
+  // O proponente imita o PADRÃO — nunca copia o texto. É o que permite usar a
+  // campeã de outra casa sem entregar a frase dela de bandeja.
   let winningExample = input.winningExample;
   if (!winningExample) {
     const champ = await championOfCampaign(campaign).catch(() => null);
     if (champ) winningExample = champ.phrase;
+  }
+  if (!winningExample) {
+    winningExample = (await padraoDaRede().catch(() => null)) ?? undefined;
   }
 
   const existing = existingPhrases(campaign);
