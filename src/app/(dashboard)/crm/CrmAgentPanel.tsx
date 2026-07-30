@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * CrmAgentPanel — a casa do Agente de CRM no painel do lojista.
- * Mostra o agente aprendendo (campeãs, ganho projetado) e dá os controles
- * (ativar por campanha + botão de pânico). Segue o DESIGN.md (laranja + tokens).
+ * CrmAgentPanel — o que o Agente de CRM tem a dizer para o lojista.
+ *
+ * Só RESULTADO. Os interruptores — ligar a IA por campanha, master switch,
+ * botão de pânico, automações — saíram daqui em 30/07 e foram para o admin
+ * (`/admin/crm-agente`). O motivo é de produto: decidir se a IA escreve a
+ * mensagem de uma campanha é operação do Foocci, não trabalho do dono do
+ * restaurante. Ele quer saber se vendeu.
+ *
+ * O que sobrou tem uma coisa em comum: tudo aqui é leitura. Nenhum clique
+ * nesta tela muda o que vai ao cliente. Segue o DESIGN.md (laranja + tokens).
  */
 
 interface Champion { campaignId: string; campaignName: string; phrase: string; liftVsAvg: number; sent: number }
-interface ShadowCampaign { campaignId: string; name: string; mode: "EXPLORING" | "OPTIMIZING"; projectedLiftPct: number | null; phrases: number }
-interface Activation { campaignId: string; name: string; agentActive: boolean }
 interface BriefingNote { kind: "WIN" | "OPPORTUNITY"; emoji: string; title: string; detail: string }
 interface WeeklyRecap {
   hasActivity: boolean;
@@ -40,9 +45,6 @@ interface AgentData {
   briefing: BriefingNote[];
   status: { mode: "ATIVO" | "APRENDIZ" | "DESLIGADO"; activeCampaigns: number; totalCampaigns: number; championsFound: number };
   champions: Champion[];
-  shadow: { optimizing: number; exploring: number; avgProjectedLiftPct: number | null };
-  shadowCampaigns: ShadowCampaign[];
-  activation: Activation[];
 }
 
 function Stat({ n, label }: { n: string | number; label: string }) {
@@ -54,25 +56,9 @@ function Stat({ n, label }: { n: string | number; label: string }) {
   );
 }
 
-function Toggle({ on, onClick, busy }: { on: boolean; onClick: () => void; busy: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={busy}
-      onClick={onClick}
-      className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-50 ${on ? "bg-brand-500" : "bg-line2"}`}
-    >
-      <span className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-paper shadow transition-transform ${on ? "translate-x-3" : "translate-x-0"}`} />
-    </button>
-  );
-}
-
 export default function CrmAgentPanel() {
   const [data, setData] = useState<AgentData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -90,48 +76,6 @@ export default function CrmAgentPanel() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const toggle = async (campaignId: string, active: boolean) => {
-    setBusyId(campaignId);
-    try {
-      await fetch("/api/crm/agent/activation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId, active }),
-      });
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const setMaster = async (enabled: boolean) => {
-    setBusyId("master");
-    try {
-      await fetch("/api/crm/agent/activation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ masterEnabled: enabled }),
-      });
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const panic = async () => {
-    setBusyId("panic");
-    try {
-      await fetch("/api/crm/agent/activation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ panic: true }),
-      });
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   if (loading) {
     return <div className="rounded-2xl border border-line bg-paper p-5 text-sm text-muted">Carregando o agente…</div>;
   }
@@ -141,7 +85,6 @@ export default function CrmAgentPanel() {
 
   const off = !data.globallyEnabled;
   const learning = data.status.mode === "APRENDIZ";
-  const liftByCampaign = new Map(data.shadowCampaigns.map((s) => [s.campaignId, s]));
   const statusPill = off
     ? { cls: "bg-[#F4F4F2] text-ink2", label: "Desligado" }
     : learning
@@ -182,7 +125,7 @@ export default function CrmAgentPanel() {
         </div>
       )}
 
-      {/* Cabeçalho + status + master switch */}
+      {/* Cabeçalho + status (leitura) */}
       <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -199,17 +142,13 @@ export default function CrmAgentPanel() {
           </span>
         </div>
 
-        {/* Master switch: liga/desliga a IA toda (rodar o CRM na mão) */}
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5">
-          <div>
-            <p className="text-xs font-semibold text-ink">Inteligência do CRM</p>
-            <p className="mt-0.5 text-[11px] text-muted">{off ? "Desligada — você está rodando o CRM na mão." : "Ligada — o agente trabalha nos bastidores."}</p>
-          </div>
-          <Toggle on={data.globallyEnabled} busy={busyId === "master"} onClick={() => setMaster(off)} />
-        </div>
-
-        {!off && (
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {off ? (
+          <p className="mt-4 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 text-xs text-ink2">
+            A inteligência do CRM está desligada — você está rodando o CRM na mão. Os resultados das
+            campanhas continuam aparecendo normalmente aqui.
+          </p>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Stat n={learning ? "Aprendiz" : "Ativo"} label="Modo agora" />
             <Stat n={`${data.status.activeCampaigns}/${data.status.totalCampaigns}`} label="Campanhas ativadas" />
             <Stat n={data.status.championsFound} label="Frases campeãs achadas" />
@@ -218,8 +157,8 @@ export default function CrmAgentPanel() {
 
         {!off && learning && (
           <p className="mt-3 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 text-xs text-ink2">
-            🌱 <span className="font-semibold">Modo aprendiz:</span> o agente está observando suas campanhas e acumulando dados.
-            Nada que ele criou vai ao cliente ainda — você liga campanha por campanha quando quiser.
+            🌱 <span className="font-semibold">Modo aprendiz:</span> o agente está observando suas campanhas e
+            acumulando dados. Nada que ele criou vai ao cliente ainda.
           </p>
         )}
       </div>
@@ -279,58 +218,6 @@ export default function CrmAgentPanel() {
             ))}
           </div>
         </div>
-      )}
-
-      {/* Campanhas: ganho projetado + interruptor */}
-      {!off && (
-      <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-ink2">Campanhas</p>
-            <p className="mt-0.5 text-xs text-muted">Ligue o agente por campanha. Desligado = ele só observa.</p>
-          </div>
-          {data.status.activeCampaigns > 0 && (
-            <button
-              type="button"
-              onClick={panic}
-              disabled={busyId === "panic"}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
-            >
-              🛑 Voltar tudo ao seguro
-            </button>
-          )}
-        </div>
-
-        <div className="mt-3 flex flex-col divide-y divide-line">
-          {data.activation.length === 0 && (
-            <p className="py-3 text-xs text-muted">Nenhuma campanha ainda.</p>
-          )}
-          {data.activation.map((a) => {
-            const s = liftByCampaign.get(a.campaignId);
-            const lift = s?.projectedLiftPct;
-            return (
-              <div key={a.campaignId} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-ink">{a.name}</p>
-                  <p className="mt-0.5 text-[11px] text-muted">
-                    {lift != null
-                      ? `ganho projetado do agente: +${lift}%`
-                      : s?.mode === "EXPLORING"
-                        ? "coletando dados…"
-                        : "sem dados ainda"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[11px] font-semibold ${a.agentActive ? "text-brand-600" : "text-muted"}`}>
-                    {a.agentActive ? "Ativo" : "Aprendiz"}
-                  </span>
-                  <Toggle on={a.agentActive} busy={busyId === a.campaignId} onClick={() => toggle(a.campaignId, !a.agentActive)} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
       )}
     </div>
   );
