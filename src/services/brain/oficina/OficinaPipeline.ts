@@ -14,7 +14,7 @@
  */
 
 import type { BusinessType } from "../core/BrainTypes";
-import type { Ficha, Nota, Pedido } from "./OficinaTypes";
+import type { Ficha, Nota, Pedido, Verdade } from "./OficinaTypes";
 import { resolveManual } from "./HouseManual";
 import { forjar, type ForjarInput } from "./OficinaService";
 import { criticarResultado } from "./OutputCritic";
@@ -42,6 +42,15 @@ export interface EsteiraInput {
   maxVoltas?: number;
   /** Quantas peças pra trás o anti-mesmice enxerga. */
   janela?: number;
+  /**
+   * A verdade já em mãos, quando quem chama acabou de carregá-la.
+   *
+   * Existe para não obrigar uma segunda ida ao banco por peça — e para o piloto
+   * da esteira conseguir rodar a corrente inteira sem Postgres. Passar isto NÃO
+   * afrouxa nada: a mesma verdade continua passando pelo mesmo juiz, e verdade
+   * vazia continua reprovando o comando.
+   */
+  verdade?: { verdade: Verdade; faltando: string[]; completude: number };
 }
 
 export interface EsteiraResult {
@@ -83,7 +92,7 @@ export async function rodarEsteira(input: EsteiraInput): Promise<EsteiraResult> 
   const chave = chaveDeMemoria(input.businessId, input.pedido.agentId, input.pedido.intencao);
 
   // 1. A verdade primeiro — é o que faz a peça deixar de ser genérica.
-  const { verdade, faltando, completude } = await buscarVerdade(input.businessType, input.businessId, {
+  const { verdade, faltando, completude } = input.verdade ?? await buscarVerdade(input.businessType, input.businessId, {
     agentId: input.pedido.agentId,
     queryHint: input.pedido.intencao,
   });

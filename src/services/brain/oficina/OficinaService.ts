@@ -110,9 +110,23 @@ export async function forjar(input: ForjarInput): Promise<ForjaResult> {
   const manual = resolveManual(input.pedido.dominio);
 
   if (!manual) {
+    // Domínio sem manual entrega ficha pelada e é reprovado por construção —
+    // isso é o certo. O que NÃO era certo: jogar fora o que quem chamou já
+    // sabia. As proibições do rascunho vêm do cliente ("não posicionar como
+    // chatbot", "nada de métrica inventada"); descartá-las deixava o juiz sem
+    // nada para conferir justamente na peça mais arriscada — a de um domínio
+    // que a casa ainda não conhece. O rascunho entra, o manual continua
+    // faltando, e a reprovação segue dizendo a verdade.
+    const r = input.rascunho ?? {};
     const ficha: Ficha = {
-      objetivo: input.pedido.intencao, publico: "", tom: "", formato: "",
-      verdade: input.verdade, proibicoes: [], eixos: {}, assinatura: "",
+      objetivo:   r.objetivo ?? input.pedido.intencao,
+      publico:    r.publico  ?? "",
+      tom:        r.tom      ?? "",
+      formato:    r.formato  ?? "",
+      verdade:    input.verdade,
+      proibicoes: [...new Set(r.proibicoes ?? [])],
+      eixos:      {},
+      assinatura: "",
     };
     return { ficha, nota: criticar(ficha, null, corte), prompt: renderizar(ficha), voltas: 0, esgotado: true };
   }

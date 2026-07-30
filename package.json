@@ -19,6 +19,7 @@
     "buildos:verify": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/verify-buildos.ts",
     "buildos:test-command": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/test-buildos-command.ts",
     "dioli:briefing": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/seed-briefing-foocci.ts",
+    "dioli:piloto": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/piloto-dioli.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "type-check": "tsc --noEmit",
