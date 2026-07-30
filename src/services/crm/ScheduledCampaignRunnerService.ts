@@ -78,7 +78,7 @@ import { CustomerCouponService } from "./CustomerCouponService";
 import { readDedupePolicy, readOverridePolicy } from "./crmDedupePolicy";
 import { generateMessageFingerprint } from "./messageFingerprint";
 import { getImpactedByConcept, getImpactedByMessage, recordLedger } from "./CRMContactLedgerService";
-import { classifyExecution } from "./crmExecutionClassification";
+import { classifyExecution, saiDaFilaParaSempre } from "./crmExecutionClassification";
 import {
   computeRecoverablePlan,
   assertReprocessAllowed,
@@ -501,21 +501,44 @@ export class ScheduledCampaignRunnerService {
       })).map((e) => e.customerId)
     );
 
-    // Avoid useless retry: a customer recently BLOCKED (weekly cap / cooldown /
-    // opt-out / window) OR recently FAILED at the provider (e.g. invalid number)
-    // is NOT re-attempted within the retry window, so we don't create a fresh
-    // block/failure row every tick (which inflated "falhas" to the hundreds).
-    // They are re-evaluated only after the window expires.
-    const recentlyAttemptedIds = new Set(
-      (await prisma.campaignExecution.findMany({
-        where: {
-          campaignId,
-          status:    { in: ["BLOCKED", "FAILED"] as never[] },
-          createdAt: { gte: new Date(Date.now() - BLOCK_RETRY_WINDOW_HOURS * 60 * 60 * 1000) },
-        },
-        select: { customerId: true },
-      })).map((e) => e.customerId)
-    );
+    // Duas exclusões diferentes, e a diferença é o ponto.
+    //
+    // 1. RECENTE — bloqueio (cap semanal / cooldown / opt-out / janela) ou falha
+    //    de qualquer tipo nas últimas horas. É só respiro: sem ele, cada tick
+    //    criava uma linha nova de bloqueio/falha e o total ia às centenas.
+    //
+    // 2. PERMANENTE — falha que nenhuma nova tentativa resolve: número inválido,
+    //    credencial vencida, template vazio. Antes ela caía na mesma janela de
+    //    24h e voltava para a fila DE NOVO, e de novo, para sempre — cada rodada
+    //    produzindo uma falha idêntica à anterior. Isso não é retentativa, é
+    //    loop. Agora só volta `RETRYABLE_LATER`, que é a única política em que o
+    //    mundo pode ter mudado sozinho (instância reconectou, 5xx passou).
+    //    Bloqueio é o contrário: cooldown e cap semanal existem para deixar
+    //    passar depois, então voltam. Só o opt-out não volta — não é limite, é
+    //    a vontade do cliente, e ela não expira em 24 horas.
+    //
+    // O que ficou de fora não some: continua na tela de falhas do lojista, com
+    // o motivo escrito, e o "Reprocessar" manual segue disponível depois que
+    // alguém corrigir o cadastro.
+    const tentativasAnteriores = await prisma.campaignExecution.findMany({
+      where:  { campaignId, status: { in: ["BLOCKED", "FAILED"] as never[] } },
+      select: { customerId: true, status: true, failedReason: true, errorMessage: true, createdAt: true },
+    });
+
+    const limiteDaJanela = new Date(Date.now() - BLOCK_RETRY_WINDOW_HOURS * 60 * 60 * 1000);
+    const recentlyAttemptedIds = new Set<string>();
+    const permanentlyFailedIds = new Set<string>();
+
+    for (const t of tentativasAnteriores) {
+      if (t.createdAt >= limiteDaJanela) recentlyAttemptedIds.add(t.customerId);
+      if (saiDaFilaParaSempre(t)) permanentlyFailedIds.add(t.customerId);
+    }
+
+    if (permanentlyFailedIds.size > 0) {
+      console.info("[CampaignRunner] falhas permanentes fora da fila — não adianta tentar de novo", {
+        campaignId, clientes: permanentlyFailedIds.size,
+      });
+    }
 
     // ── Governance dedupe (concept + message) via the impact ledger ──────────
     // Anti-spam by default: do not re-contact a customer already impacted by this
@@ -535,7 +558,12 @@ export class ScheduledCampaignRunnerService {
     }
 
     const newEligible = allEligible.filter(
-      (c) => !alreadySentIds.has(c.id) && !recentlyAttemptedIds.has(c.id) && !impactedByConcept.has(c.id) && !impactedByMessage.has(c.id),
+      (c) =>
+        !alreadySentIds.has(c.id) &&
+        !recentlyAttemptedIds.has(c.id) &&
+        !permanentlyFailedIds.has(c.id) &&
+        !impactedByConcept.has(c.id) &&
+        !impactedByMessage.has(c.id),
     );
 
     if (newEligible.length === 0) {
