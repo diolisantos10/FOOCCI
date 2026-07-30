@@ -312,9 +312,9 @@ export function RevenueBlock({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-500 mb-1">Converteram</p>
               <p className="text-lg font-extrabold text-brand-600">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
               <p className="text-[10px] text-brand-400 mt-0.5">
-                {revenueSummary.totalResponded > 0
-                  ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas`
-                  : `${revenueSummary.totalResponded} responderam`}
+                {revenueSummary.totalSent > 0
+                  ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalSent) * 100)}% dos enviados`
+                  : "sem envios no período"}
               </p>
             </div>
             <div className="rounded-xl bg-brand-50 p-3">
