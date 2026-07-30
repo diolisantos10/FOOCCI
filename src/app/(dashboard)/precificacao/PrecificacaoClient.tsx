@@ -27,6 +27,7 @@ import {
   type PriceStatus,
   type RoundingMode,
 } from "@/services/menu/PricingEngine";
+import { lineCost, compatibleUseUnits } from "@/services/menu/units";
 
 // ── DTOs (serialized by the RSC / API routes) ─────────────────────────────────
 
@@ -79,6 +80,7 @@ export interface RecipeLineDTO {
   menuItemId: string;
   ingredientId: string;
   quantity: number | null;
+  unit: string | null; // unidade de USO; null = usa a unidade de compra do insumo
 }
 
 export interface CategoryDTO {
@@ -544,8 +546,9 @@ export function PrecificacaoClient({
       let complete = lines.length > 0;
       for (const l of lines) {
         const ing = ingredientById.get(l.ingredientId);
-        if (l.quantity === null || !ing || ing.costPerUnit === null) complete = false;
-        else total += l.quantity * ing.costPerUnit;
+        const c = ing ? lineCost(l.quantity, l.unit ?? ing.unit, ing.unit, ing.costPerUnit) : null;
+        if (c === null) complete = false;
+        else total += c;
       }
       m.set(itemId, {
         complete,
@@ -837,26 +840,40 @@ export function PrecificacaoClient({
   }
 
   /**
-   * Troca a unidade de medida do insumo direto na ficha (g / kg / ml / L / un…).
-   * A unidade é do insumo (compartilhada por todas as fichas que o usam); o custo
-   * é quantidade × custo/unidade — mantenha a unidade e o custo/unidade na mesma
-   * medida. Só rótulo: não recalcula sozinho.
+   * Troca a unidade de USO da linha da ficha (ex.: compra em kg, usa em g). O
+   * custo converte uso→compra automaticamente, então isto recalcula o custo do
+   * produto (por isso passa pela mesma propagação da quantidade). A unidade de
+   * COMPRA continua sendo a do insumo, editada no catálogo (aba Insumos).
    */
-  async function saveLineUnit(ingredientId: string, unit: string) {
-    const ing = ingredients.find((i) => i.id === ingredientId);
-    if (!ing || ing.unit === unit) return;
-    const prevUnit = ing.unit;
+  async function saveLineUnit(
+    menuItemId: string,
+    ingredientId: string,
+    quantity: number | null,
+    unit: string
+  ) {
+    const current = recipeLines.find(
+      (l) => l.menuItemId === menuItemId && l.ingredientId === ingredientId
+    );
+    const ing = ingredientById.get(ingredientId);
+    if ((current?.unit ?? ing?.unit) === unit) return;
     setSavingUnitFor(ingredientId);
     setFichaMsg(null);
-    setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, unit } : i)));
     try {
-      await apiFetch("/api/pricing/ingredients", "PATCH", { items: [{ id: ingredientId, unit }] });
-      setFichaMsg({
-        ok: true,
-        text: `Unidade de "${ing.name}" salva como ${unit}. Confira se o custo por unidade está nessa medida.`,
+      const res = await apiFetch("/api/pricing/recipe", "PUT", {
+        menuItemId,
+        ingredientId,
+        quantity,
+        unit,
       });
+      const { propagation } = res.data as { propagation: PropagationDTO };
+      setRecipeLines((prev) =>
+        prev.map((l) =>
+          l.menuItemId === menuItemId && l.ingredientId === ingredientId ? { ...l, unit } : l
+        )
+      );
+      const suffix = absorbPropagation(propagation);
+      setFichaMsg({ ok: true, text: `Unidade de uso salva como ${unit}${suffix}.` });
     } catch (err) {
-      setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, unit: prevUnit } : i)));
       setFichaMsg({ ok: false, text: err instanceof Error ? err.message : "Erro ao salvar unidade." });
     } finally {
       setSavingUnitFor(null);
@@ -878,7 +895,12 @@ export function PrecificacaoClient({
         ...prev.filter(
           (l) => !(l.menuItemId === fichaItemId && l.ingredientId === addLine.ingredientId)
         ),
-        { menuItemId: fichaItemId, ingredientId: addLine.ingredientId, quantity },
+        {
+          menuItemId: fichaItemId,
+          ingredientId: addLine.ingredientId,
+          quantity,
+          unit: ingredientById.get(addLine.ingredientId)?.unit ?? null,
+        },
       ]);
       setIngredients((prev) =>
         prev.map((i) => (i.id === addLine.ingredientId ? { ...i, usedIn: i.usedIn + 1 } : i))
@@ -2036,6 +2058,13 @@ export function PrecificacaoClient({
                       )}
                     </div>
 
+                    <p className="text-[11.5px] text-muted">
+                      A <b className="text-ink2">unidade</b> de cada linha é como você{" "}
+                      <b className="text-ink2">usa</b> no prato. O custo vem do preço de compra do
+                      insumo (catálogo) e é convertido sozinho — ex.: compra em <b>kg</b>, usa em{" "}
+                      <b>g</b>.
+                    </p>
+
                     {lines.length === 0 ? (
                       <EmptyState
                         title="Este produto ainda não tem insumos na ficha"
@@ -2058,18 +2087,26 @@ export function PrecificacaoClient({
                               if (!ing) return null;
                               const key = `${line.menuItemId}:${line.ingredientId}`;
                               const qtyValue = qtyDrafts[key] ?? numToInput(line.quantity);
-                              const lineCost =
-                                line.quantity !== null && ing.costPerUnit !== null
-                                  ? line.quantity * ing.costPerUnit
-                                  : null;
+                              const useUnit = line.unit ?? ing.unit;
+                              const useOptions = compatibleUseUnits(ing.unit);
+                              const lineTotal = lineCost(
+                                line.quantity,
+                                useUnit,
+                                ing.unit,
+                                ing.costPerUnit
+                              );
                               return (
                                 <tr key={key} className="border-b border-line last:border-b-0">
                                   <td className="px-3 py-2 font-medium text-ink">
                                     {ing.name}
-                                    {ing.costPerUnit === null && (
+                                    {ing.costPerUnit === null ? (
                                       <Pill tone="amber" className="ml-2">
                                         sem custo
                                       </Pill>
+                                    ) : (
+                                      <span className="mt-0.5 block text-[11px] font-normal text-muted">
+                                        compra: {fmtBRL(ing.costPerUnit)}/{ing.unit}
+                                      </span>
                                     )}
                                   </td>
                                   <td className="px-3 py-2 text-right">
@@ -2090,16 +2127,27 @@ export function PrecificacaoClient({
                                         disabled={!canEdit}
                                       />
                                       <select
-                                        aria-label={`Unidade de ${ing.name}`}
-                                        title="Unidade de medida deste insumo (g, kg, ml, L, un…)"
+                                        aria-label={`Unidade de uso de ${ing.name}`}
+                                        title="Unidade em que você USA no prato — o custo converte da unidade de compra do insumo"
                                         className="rounded-lg border border-line2 bg-paper px-1.5 py-1.5 text-[12px] text-ink2 focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:opacity-60"
-                                        value={ing.unit}
-                                        onChange={(e) => void saveLineUnit(line.ingredientId, e.target.value)}
-                                        disabled={!canEdit || savingUnitFor === line.ingredientId}
+                                        value={useUnit}
+                                        onChange={(e) =>
+                                          void saveLineUnit(
+                                            line.menuItemId,
+                                            line.ingredientId,
+                                            line.quantity,
+                                            e.target.value
+                                          )
+                                        }
+                                        disabled={
+                                          !canEdit ||
+                                          savingUnitFor === line.ingredientId ||
+                                          useOptions.length <= 1
+                                        }
                                       >
-                                        {(UNIT_OPTIONS.includes(ing.unit)
-                                          ? UNIT_OPTIONS
-                                          : [ing.unit, ...UNIT_OPTIONS]
+                                        {(useOptions.includes(useUnit)
+                                          ? useOptions
+                                          : [useUnit, ...useOptions]
                                         ).map((u) => (
                                           <option key={u} value={u}>
                                             {u}
@@ -2109,10 +2157,10 @@ export function PrecificacaoClient({
                                     </span>
                                   </td>
                                   <td className="px-3 py-2 text-right tabular-nums">
-                                    {lineCost === null ? (
+                                    {lineTotal === null ? (
                                       <span className="text-muted">—</span>
                                     ) : (
-                                      fmtBRL(lineCost)
+                                      fmtBRL(lineTotal)
                                     )}
                                   </td>
                                   <td className="px-3 py-2 text-right">

@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.recipeLine.findMany({
         where: { menuItem: { category: { restaurantId: ctx.restaurantId } } },
-        select: { menuItemId: true, ingredientId: true, quantity: true },
+        select: { menuItemId: true, ingredientId: true, quantity: true, unit: true },
       }),
     ]);
 
@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
         menuItemId: l.menuItemId,
         ingredientId: l.ingredientId,
         quantity: l.quantity === null ? null : Number(l.quantity),
+        unit: l.unit,
       })),
     });
   } catch (err) {

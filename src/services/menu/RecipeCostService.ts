@@ -19,6 +19,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import { parseIngredientNames } from "./IngredientParser";
+import { lineCost } from "./units";
 import {
   updateCostsWithReprice,
   type UpdateCostsResult,
@@ -128,20 +129,23 @@ export async function computeRecipeCosts(
     select: {
       menuItemId: true,
       quantity: true,
-      ingredient: { select: { costPerUnit: true, isActive: true } },
+      unit: true,
+      ingredient: { select: { costPerUnit: true, isActive: true, unit: true } },
     },
   });
 
   const byItem = new Map<string, { total: number; complete: boolean }>();
   for (const line of lines) {
     const entry = byItem.get(line.menuItemId) ?? { total: 0, complete: true };
-    const qty = num(line.quantity);
-    const unitCost = num(line.ingredient.costPerUnit);
-    if (qty === null || unitCost === null) {
-      entry.complete = false;
-    } else {
-      entry.total += qty * unitCost;
-    }
+    const useUnit = line.unit ?? line.ingredient.unit;
+    const c = lineCost(
+      num(line.quantity),
+      useUnit,
+      line.ingredient.unit,
+      num(line.ingredient.costPerUnit)
+    );
+    if (c === null) entry.complete = false;
+    else entry.total += c;
     byItem.set(line.menuItemId, entry);
   }
 
@@ -359,6 +363,7 @@ export async function setRecipeLine(
   menuItemId: string,
   ingredientId: string,
   quantity: number | null,
+  unit: string | undefined,
   userId: string | null
 ): Promise<ServiceResult<{ propagation: UpdateCostsResult | null }>> {
   const [item, ingredient] = await Promise.all([
@@ -368,18 +373,23 @@ export async function setRecipeLine(
     }),
     prisma.ingredient.findFirst({
       where: { id: ingredientId, restaurantId },
-      select: { id: true },
+      select: { id: true, unit: true },
     }),
   ]);
   if (!item || !ingredient) return serviceFail("Produto ou insumo não encontrado.", 404);
 
+  const cleanUnit = unit && unit.trim() ? unit.trim().slice(0, 20) : undefined;
   await prisma.recipeLine.upsert({
     where: { menuItemId_ingredientId: { menuItemId, ingredientId } },
-    update: { quantity: quantity === null ? null : new Decimal(quantity.toFixed(4)) },
+    update: {
+      quantity: quantity === null ? null : new Decimal(quantity.toFixed(4)),
+      ...(cleanUnit !== undefined ? { unit: cleanUnit } : {}),
+    },
     create: {
       menuItemId,
       ingredientId,
       quantity: quantity === null ? null : new Decimal(quantity.toFixed(4)),
+      unit: cleanUnit ?? ingredient.unit,
     },
   });
 

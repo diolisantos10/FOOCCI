@@ -26,8 +26,15 @@ export async function PUT(req: NextRequest) {
     const parsed = recipeLineSchema.safeParse(body);
     if (!parsed.success) return badRequest("Validation failed", parsed.error.flatten());
 
-    const { menuItemId, ingredientId, quantity } = parsed.data;
-    const result = await setRecipeLine(ctx.restaurantId, menuItemId, ingredientId, quantity, ctx.userId);
+    const { menuItemId, ingredientId, quantity, unit } = parsed.data;
+    const result = await setRecipeLine(
+      ctx.restaurantId,
+      menuItemId,
+      ingredientId,
+      quantity,
+      unit,
+      ctx.userId
+    );
     if (!result.ok) return notFound(result.error);
     return ok(result.data);
   } catch (err) {
