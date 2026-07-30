@@ -80,6 +80,17 @@ jobs:
           if [[ "$STATUS" != "PASS" ]]; then echo "::error::status='$STATUS' (expected PASS). $MESSAGE"; exit 1; fi
           if [[ "$RUNTIME" != "false" ]]; then echo "::error::runtimeTouched='$RUNTIME' (expected false)."; exit 1; fi
           # A simulation that surfaces a P0 must fail the job so it is noticed.
-          if ! [[ "$P0" =~ ^0$ ]]; then echo "::error::p0Count='$P0' (expected 0) — Waiter simulation found a critical issue."; exit 1; fi
+          if ! [[ "$P0" =~ ^0$ ]]; then
+            # O alerta imprime a evidência. Sem isto, o e-mail das 6h dizia
+            # "achou 1 problema crítico" e obrigava a caçar a rodada no admin
+            # para descobrir o quê.
+            echo ""
+            echo "──────── cenário(s) crítico(s) ────────"
+            jq -r '.p0[]? | "cenário      : \(.cenario)\ncliente pediu: \(.clientePediu)\nagente disse : \(.agenteDisse)\ncards        : \(.cards | join(", "))\nviolação     : \(.violacoes | join(" | "))\n"' /tmp/response.json 2>/dev/null \
+              || echo "(a resposta não trouxe o detalhe — deploy antigo?)"
+            echo "───────────────────────────────────────"
+            echo "::error::p0Count='$P0' (expected 0) — Waiter simulation found a critical issue."
+            exit 1
+          fi
 
           echo "✅ Waiter simulation run OK — $TOTAL cenários, P0=$P0, oportunidades=$OPPS, runtime intocado."
