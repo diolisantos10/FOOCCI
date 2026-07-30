@@ -955,7 +955,47 @@ const QUERY_STOPWORDS = new Set([
   "isso","aqui","voce","vc","me","mim","seu","sua","seus","suas","muito",
   "pouco","bem","mal","ter","quais","quem","esta","esse","essa","esses",
   "essas","este","estes","estas","esse","aquele","aquela","aqueles","aquelas",
+
+  // ── Como o cliente PERGUNTA — nunca o que ele pede ──────────────────────────
+  // Faltavam aqui, e a ausência aparecia na cara do cliente: "vocês têm pizza?"
+  // era respondido com "Não temos VOCES no cardápio", porque o pronome no plural
+  // passava pelo filtro e virava o termo de busca. O mesmo com "vende açaí?"
+  // ("Não encontrei VENDE") e "vocês servem almoço?" ("Não encontrei VOCES").
+  // Nenhuma destas palavras nomeia um prato em lugar nenhum — elas só descrevem
+  // a forma da pergunta, e por isso não têm o que fazer numa busca de cardápio.
+  "voces","vcs","ces","gente",
+  "existe","existem","possui","possuem","teria","teriam","tinha","tinham",
+  "vende","vendem","venda","vender","serve","servem","servir",
+  "faz","fazem","fazer","trabalha","trabalham","oferece","oferecem",
+  "aceita","aceitam","aceitar","entrega","entregam","entregar","entregas",
+  "gostaria","gostariam","procuro","procurando","busco","buscando",
+  "queremos","preciso","precisa","poderia","podem","podia",
+  "oi","ola","bom","boa","dia","tarde","noite","obrigado","obrigada",
+  "algum","alguma","alguns","algumas",
 ]);
+
+/**
+ * O termo que o cliente perguntou — o "X" de "Não temos X no cardápio".
+ *
+ * Antes isto era `queryTerms[0]`, e o primeiro termo nem sempre é o produto:
+ * em "vocês têm pizza?" o primeiro era "voces". A régua nova ignora a forma da
+ * pergunta (a lista acima) e fica com as palavras de conteúdo, na ordem em que
+ * o cliente falou — daí "pizza calabresa" sair inteiro em vez de só "pizza".
+ *
+ * Lê a mensagem CRUA de propósito: `normalizeSearch` tira acento, e devolver
+ * "hamburguer" para quem escreveu "hambúrguer" faz a resposta parecer defeito.
+ * O corte em duas palavras é o que separa um nome de prato de uma frase inteira.
+ */
+export function termoPerguntado(mensagem: string): string {
+  const palavras = mensagem
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((p) => {
+      const n = normalizeSearch(p);
+      return n.length > 2 && !QUERY_STOPWORDS.has(n);
+    })
+    .slice(0, 2);
+  return palavras.length > 0 ? palavras.join(" ").toLowerCase() : "esse item";
+}
 
 
 /**
@@ -3078,7 +3118,7 @@ function handleUserMessage(input: V2Input): V2Output {
   {
     const menuIntent = resolveMenuIntent(msgRaw, catalog, { cartItemIds });
     if (menuIntent.intent === "ASK_PRODUCT_EXISTS" && menuIntent.noMatch) {
-      const termLabel = menuIntent.queryTerms[0] ?? "esse item";
+      const termLabel = termoPerguntado(msgRaw);
       const altIds = applyConstraints(
         menuIntent.alternativeProducts.map((i) => i.id),
         catalog,

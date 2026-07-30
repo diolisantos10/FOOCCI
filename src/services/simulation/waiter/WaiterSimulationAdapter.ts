@@ -36,6 +36,25 @@ function mainDishId(): string {
   return "yakisoba"; // a substantial single main for cart-seeded flows
 }
 
+/**
+ * As formas de dizer "isso a gente não tem".
+ *
+ * O caminho determinístico usa duas frases fixas ("Não temos X no cardápio",
+ * "Não encontrei X"), mas o mesmo cenário pode cair no caminho da IA, e aí a
+ * negação vem escrita de outro jeito. A lista cobre as variações comuns em
+ * português; sobre texto sem acento, para "não" e "nao" valerem igual.
+ */
+const NEGA_O_ITEM =
+  /nao (temos|tenho|tem|ha|existe|encontrei|achei|trabalh\w*|possu\w*|serv\w*|faz\w*|vend\w*|ofere\w*|disponibiliz\w*)|nao (esta|estao) (no|em|disponivel)|fora do (nosso )?cardapio|infelizmente/;
+
+function negouOItem(mensagem: string): boolean {
+  const limpo = mensagem
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  return NEGA_O_ITEM.test(limpo);
+}
+
 export const WaiterSimulationAdapter: AgentSimulationAdapter = {
   agentSlug: "waiter",
   departmentSlug: "waiter",
@@ -167,10 +186,24 @@ export const WaiterSimulationAdapter: AgentSimulationAdapter = {
           break;
         }
         case "non_existent": {
-          // Honest answer = no fabricated cards for an item absent from the menu.
-          const fabricated = output.cards.length > 0 && menuIntent.noMatch;
-          if (fabricated) criticalViolations.push("mostrou card para item inexistente");
-          meets(output.cards.length === 0 || !menuIntent.noMatch);
+          // A régua antiga tratava QUALQUER card como card inventado quando o
+          // item não existia — e reprovava o Garçom por acertar. O próprio
+          // cenário pede "oferecer alternativa real": negar e mostrar o que a
+          // casa tem é o comportamento CERTO, não uma falha crítica.
+          //
+          // Crítico agora é só o caso desonesto: o motor SABE que o item não
+          // existe e mesmo assim empurra cards sem dizer isso — o cliente lê
+          // como "é isto que você pediu". Card fora do catálogo continua caindo
+          // em `no_hallucination`, que é a gaveta dele.
+          //
+          // E o esperado do cenário — "informar que não há esse item" — virou
+          // uma cobrança de verdade: sem negação explícita não há PASS, nem
+          // quando o agente se cala. Silêncio não é resposta honesta.
+          const negou = negouOItem(output.finalMessage);
+          if (menuIntent.noMatch && output.cards.length > 0 && !negou) {
+            criticalViolations.push("mostrou card sem dizer que o item não existe");
+          }
+          meets(negou);
           break;
         }
         case "vegan_safe": {
