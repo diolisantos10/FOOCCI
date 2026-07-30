@@ -56,6 +56,11 @@ export interface ScenarioRunOutput {
   optionsCount: number;
   /** Whether the driver had to use an LLM (false for the SERVICE MVP). */
   usedLLM: boolean;
+  /**
+   * Valor do carrinho no turno. O checador de preço precisa dele para saber
+   * que um TOTAL dito pelo agente é legítimo, e não preço inventado.
+   */
+  cartValue?: number;
 }
 
 /** The evaluation of a scenario run. */
