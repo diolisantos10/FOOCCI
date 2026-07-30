@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { getTenantId } from "@/lib/tenant";
 import { TopBar } from "@/components/layout/TopBar";
-import { CRMClient } from "./CRMClient";
+import { CRMClient, type CrmTab } from "./CRMClient";
 import { CRMService, getTier } from "@/services/crm/CRMService";
 import type { CRMCustomer, Opportunity, OverviewStats } from "@/services/crm/CRMService";
 import { CrmActionCenterService } from "@/services/crm/CrmActionCenterService";
@@ -11,15 +11,17 @@ import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
 
-type Tab = "overview" | "campanhas" | "cupons" | "conversoes" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
-
-const TAB_PARAM_MAP: Record<string, Tab> = {
+// A lista de abas mora no CRMClient — aqui só se traduz o slug da URL. Antes
+// existiam duas cópias deste tipo, e elas já tinham divergido: esta esquecera a
+// aba "migracao" e ainda carregava "automacoes", que não existe mais.
+const TAB_PARAM_MAP: Record<string, CrmTab> = {
   "visao-geral":   "overview",
   "campanhas":     "campanhas",
+  "migracao":      "migracao",
   "cupons":        "cupons",
   "conversoes":    "conversoes",
-  "automacoes":    "automacoes",
   "clientes":      "customers",
+  "programa":      "programa",
   "avaliacoes":    "avaliacoes",
   "configuracoes": "configuracoes",
 };
@@ -32,7 +34,7 @@ export default async function CRMPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab: tabParam } = await searchParams;
-  const initialTab: Tab = TAB_PARAM_MAP[tabParam ?? ""] ?? "overview";
+  const initialTab: CrmTab = TAB_PARAM_MAP[tabParam ?? ""] ?? "overview";
   let restaurantId: string | null = null;
   let restaurantName = "Restaurante";
   try { restaurantId = getTenantId(); } catch { /* unauthenticated */ }
