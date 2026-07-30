@@ -67,15 +67,18 @@ export function SoundGateBanner() {
     markAudioArmed();
   };
 
+  // Chip pequeno, colado no canto superior direito (dentro da faixa do topo) —
+  // não uma faixa no meio da tela por cima do conteúdo. Some no 1º toque/clique.
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex justify-center px-3 pt-3">
+    <div className="pointer-events-none fixed right-3 top-2.5 z-[60]">
       <button
         type="button"
         onClick={arm}
-        className="pointer-events-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl border border-brand-600 bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+        title="Ativar o som dos alertas de pedido"
+        className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-brand-600 bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
       >
-        <span aria-hidden className="text-base">🔔</span>
-        Toque para ativar o som dos pedidos
+        <span aria-hidden>🔔</span>
+        Ativar som
       </button>
     </div>
   );
