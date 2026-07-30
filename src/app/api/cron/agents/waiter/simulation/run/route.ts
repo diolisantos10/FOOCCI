@@ -65,14 +65,14 @@ export async function POST(req: NextRequest) {
       // dispara. Aqui vai o mínimo para agir: qual cenário, o que o cliente
       // pediu, o que o agente respondeu e a violação exata. Sem PII — o
       // simulador roda sobre catálogo sintético.
-      p0: result.scenarios
-        .filter((s) => s.evaluation.severity === "P0")
+      p0: (result.scenarios ?? [])
+        .filter((s) => s?.evaluation?.severity === "P0")
         .map((s) => ({
-          cenario:    s.scenario.scenarioType,
-          clientePediu: s.scenario.initialMessage,
-          agenteDisse:  s.output.finalMessage.slice(0, 400),
-          cards:        s.output.cards,
-          violacoes:    s.evaluation.evidence,
+          cenario:      s.scenario?.scenarioType ?? "?",
+          clientePediu: s.scenario?.initialMessage ?? "",
+          agenteDisse:  (s.output?.finalMessage ?? "").slice(0, 400),
+          cards:        s.output?.cards ?? [],
+          violacoes:    s.evaluation?.evidence ?? [],
         })),
     }, { status: 200 });
   } catch (err) {
