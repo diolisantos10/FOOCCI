@@ -4200,23 +4200,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     setCampaigns((prev) => prev.map((c) => c.id === id ? { ...c, ...updates } : c));
   }
 
-  const [resettingMetrics, setResettingMetrics] = useState(false);
-  async function handleResetMetrics() {
-    if (!confirm("Limpar as métricas (enviados, falhas, receita) de TODAS as campanhas e apagar o histórico de falhas antigas?\n\nComeça a contar do zero. Não reenvia mensagens nem apaga clientes — os envios bem-sucedidos são mantidos.")) return;
-    setResettingMetrics(true);
-    try {
-      const res = await fetch("/api/crm/campaigns/reset-metrics", { method: "POST" });
-      if (res.ok) {
-        setCampaigns((prev) => prev.map((c) => ({
-          ...c, totalSent: 0, totalFailed: 0, totalResponded: 0, totalConverted: 0, totalRevenue: 0,
-        })));
-        setReadyMadeReload((n) => n + 1);
-      }
-    } finally {
-      setResettingMetrics(false);
-    }
-  }
-
   useEffect(() => {
     fetch("/api/crm/custom-actions")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -4267,26 +4250,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           <p className="mt-0.5 text-xs text-muted">
             Ligue uma campanha pronta ou crie a sua. Tudo via WhatsApp, com segurança de envio.
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={handleResetMetrics}
-            disabled={resettingMetrics}
-            className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-muted hover:bg-[#FAFAF8] hover:text-ink2 transition-colors disabled:opacity-50"
-            title="Zera enviados, falhas e receita de todas as campanhas para começar a contar do zero. Não reenvia mensagens."
-          >
-            {resettingMetrics ? "Limpando…" : "🧹 Limpar métricas"}
-          </button>
-          <button
-            onClick={() => void handleCreateCustomCampaign()}
-            disabled={creatingCampaign}
-            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-60"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            {creatingCampaign ? "Criando…" : "Criar minha campanha"}
-          </button>
         </div>
       </div>
 
@@ -4359,6 +4322,29 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         )}
       </div>
 
+      {/* ── Criar campanha personalizada (manual OU por IA — texto/voz), acima da tabela ── */}
+      <div className="space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-bold text-ink">Criar campanha personalizada</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Preencha manualmente no botão, ou descreva por texto/voz que a IA monta pra você.
+            </p>
+          </div>
+          <button
+            onClick={() => void handleCreateCustomCampaign()}
+            disabled={creatingCampaign}
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-60"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            {creatingCampaign ? "Criando…" : "Preencher manual"}
+          </button>
+        </div>
+        <CrmCampaignAI onCreated={() => setReadyMadeReload((n) => n + 1)} />
+      </div>
+
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
       {!loadingHistory && (
         <CampanhasAtivasSection
@@ -4374,9 +4360,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
       )}
-
-      {/* ── Criar campanha com IA (texto ou voz) ─────────────────────────────── */}
-      <CrmCampaignAI onCreated={() => setReadyMadeReload((n) => n + 1)} />
 
       {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
       <ReadyMadeCampaignsSection
@@ -5578,31 +5561,6 @@ function CrmConfiguracoes() {
           <button type="button" className="ml-2 text-xs underline opacity-70 hover:opacity-100" onClick={() => setError(null)}>fechar</button>
         </div>
       )}
-
-      {/* Hub — todas as configurações do CRM a partir de um lugar */}
-      <div className="rounded-2xl border border-line bg-paper p-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-muted">Configurações do CRM</p>
-        <p className="mt-0.5 text-xs text-muted">Ajuste tudo a partir daqui.</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            { href: "/settings/marketing", emoji: "💬", title: "Configuração do WhatsApp", sub: "Limites e regras de envio de mensagens" },
-            { href: "/crm?tab=programa",   emoji: "🏆", title: "Níveis dos clientes", sub: "Bronze, Prata, Ouro, Diamante" },
-          ].map((s) => (
-            <Link
-              key={s.href}
-              href={s.href}
-              className="flex items-start gap-2 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 transition-colors hover:bg-white"
-            >
-              <span className="text-lg leading-none">{s.emoji}</span>
-              <span>
-                <span className="block text-[12px] font-bold text-ink">{s.title}</span>
-                <span className="block text-[10px] text-muted">{s.sub}</span>
-              </span>
-            </Link>
-          ))}
-        </div>
-        <p className="mt-2 text-[10px] text-muted">As regras de segurança de envio ficam logo abaixo. A classificação dos clientes fica na aba Clientes.</p>
-      </div>
 
       {/* Regras de Segurança — controle manual + limite de contatos + proteções */}
       <CfgCard

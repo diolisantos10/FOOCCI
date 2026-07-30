@@ -93,38 +93,6 @@ export default function CrmAgentPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 1º módulo: o diário do agente — retrospecto de ontem/semana + próximas
-          ações. Sempre visível (o resultado das campanhas existe com a IA on ou off). */}
-      {data.daily && (
-        <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-brand-600">
-              🗞️ {data.daily.agentName} — seu diário
-            </p>
-            <span className="text-[11px] text-muted">ontem · semana</span>
-          </div>
-
-          <div className="mt-3 rounded-xl border border-line bg-paper px-3.5 py-3">
-            <ul className="flex flex-col gap-1.5">
-              {data.daily.retrospective.map((l, i) => (
-                <li key={i} className="text-[13px] leading-snug text-ink">• {l}</li>
-              ))}
-            </ul>
-
-            {data.daily.nextActions.length > 0 && (
-              <div className="mt-3 border-t border-line pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-ink2">🎯 Próximas ações</p>
-                <ul className="mt-1.5 flex flex-col gap-1">
-                  {data.daily.nextActions.map((a, i) => (
-                    <li key={i} className="text-[12.5px] leading-snug text-ink2">→ {a}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Cabeçalho + status (leitura) */}
       <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
         <div className="flex items-start justify-between gap-3">
@@ -199,26 +167,6 @@ export default function CrmAgentPanel() {
         </div>
       )}
 
-      {/* Frases campeãs */}
-      {!off && data.champions.length > 0 && (
-        <div className="rounded-2xl border border-line bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
-          <p className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-ink2">🏆 Frases campeãs</p>
-          <p className="mt-0.5 text-xs text-muted">As que mais convertem — o agente aprende com elas pra criar novas parecidas.</p>
-          <div className="mt-3 flex flex-col gap-2">
-            {data.champions.slice(0, 5).map((c) => (
-              <div key={c.campaignId} className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-ink">{c.campaignName}</span>
-                  <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                    {c.liftVsAvg}× a média
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-ink2">“{c.phrase}”</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
