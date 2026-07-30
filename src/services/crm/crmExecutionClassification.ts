@@ -248,6 +248,45 @@ export function classifyExecution(input: ExecutionInput): ExecutionClassificatio
   return materialize(category);
 }
 
+/**
+ * O robô pode tentar de novo sozinho?
+ *
+ * SÓ `RETRYABLE_LATER`. É a única política em que o mundo pode ter mudado
+ * sozinho — a instância reconectou, o 5xx passou, o timeout foi um soluço de
+ * rede. Nas outras, tentar de novo é repetir o mesmo erro:
+ *
+ *  • RETRYABLE_AFTER_FIX → alguém precisa consertar (número errado no cadastro,
+ *    credencial vencida, template vazio). Uma hora a mais não conserta nada.
+ *  • PERMANENT / NEVER_RETRY → não é para contatar de novo, ponto.
+ *
+ * Isto existe porque o runner tratava toda falha igual: esperava a janela de
+ * 24h e reenviava para o mesmo número inválido, para sempre. Cada rodada
+ * gerava uma falha nova, idêntica, e o relatório do lojista enchia de erro que
+ * nenhuma tentativa jamais resolveria.
+ */
+export function podeRetentarSozinho(input: ExecutionInput): boolean {
+  return classifyExecution(input).retryability === "RETRYABLE_LATER";
+}
+
+/**
+ * O cliente sai da fila desta campanha PARA SEMPRE?
+ *
+ * Falha e bloqueio pedem respostas diferentes, e misturar as duas foi o erro:
+ *
+ *  • FALHA — sai de vez, a não ser que seja `RETRYABLE_LATER`. Número inválido,
+ *    credencial vencida e template quebrado não se consertam esperando.
+ *
+ *  • BLOQUEIO — quase todo bloqueio é temporário de propósito: cooldown, cap
+ *    semanal e janela de envio existem justamente para deixar passar depois.
+ *    Esses TÊM que voltar. Só o opt-out não volta — não é limite, é a vontade
+ *    do cliente, e ela não expira em 24 horas.
+ */
+export function saiDaFilaParaSempre(input: ExecutionInput): boolean {
+  const { retryability } = classifyExecution(input);
+  if (input.status === "FAILED") return retryability !== "RETRYABLE_LATER";
+  return retryability === "NEVER_RETRY" || retryability === "PERMANENT";
+}
+
 function materialize(category: ExecutionCategory): ExecutionClassification {
   const meta = CATEGORY_META[category];
   return {

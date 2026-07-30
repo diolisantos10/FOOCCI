@@ -11,6 +11,7 @@
  * Eligibility rules — ALL must be true:
  *   1.  status = OPEN
  *   2.  updatedAt < NOW − inactivityMinutes
+ *   2b. updatedAt > NOW − maxAgeHours  ← o carrinho tem PRAZO DE VALIDADE
  *   3.  draft has at least one item
  *   4.  customer has a real (non-guest) phone
  *   5.  recoveryAttempts = 0 on this draft (one recovery per draft, ever)
@@ -76,8 +77,29 @@ export interface RecoverySendResult {
   failed:                     number; // the active provider (Meta or Evolution) was called but returned an error
   dryRun:                     boolean;
   inactivityMinutes:          number;
+  /** Idade máxima de um carrinho recuperável — depois disso ele vence. */
+  maxAgeHours:                number;
+  /** Carrinhos que venceram e por isso NÃO foram cobrados. */
+  skippedTooOld:              number;
   durationMs:                 number;
 }
+
+/**
+ * O prazo de validade do carrinho abandonado.
+ *
+ * A busca tinha piso (2 minutos de inatividade) e NENHUM teto. Um rascunho
+ * aberto três semanas atrás, com recoveryAttempts=0, continuava candidato para
+ * sempre — e uma hora o Foocci mandava "percebi que seu pedido não foi
+ * finalizado 😊" sobre um carrinho do mês passado. Não é recuperação, é
+ * constrangimento: a pessoa já jantou, provavelmente já pediu de novo, e
+ * recebe uma mensagem sobre um pedido que não lembra.
+ *
+ * Seis horas é o limite honesto para comida: dentro da mesma refeição, o
+ * lembrete ajuda; fora dela, ele só assusta. O rascunho não é apagado nem
+ * cancelado — o cliente que voltar pelo link continua achando o carrinho dele.
+ * O que vence é o direito de COBRAR por ele.
+ */
+const MAX_AGE_HOURS = 6;
 
 // Unambiguous alphanumeric charset (no 0/O, 1/I/l)
 const RECOVERY_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -172,11 +194,14 @@ async function logRecoveryToConversation(
 export class OrderDraftRecoverySendService {
   static async sendCartRecoveryMessages({
     inactivityMinutes = 2,
+    maxAgeHours       = MAX_AGE_HOURS,
     limit             = 50,
     dryRun            = false,
     restaurantId,
   }: {
     inactivityMinutes?: number;
+    /** Prazo de validade do carrinho. Mais velho que isso não é mais cobrado. */
+    maxAgeHours?:       number;
     limit?:             number;
     dryRun?:            boolean;
     /**
@@ -190,14 +215,20 @@ export class OrderDraftRecoverySendService {
   } = {}): Promise<RecoverySendResult> {
     const startMs        = Date.now();
     const thresholdDate  = new Date(Date.now() - inactivityMinutes * 60_000);
+    // O piso da validade: mais velho que isto, o carrinho venceu.
+    const vencimentoDate = new Date(Date.now() - maxAgeHours * 60 * 60_000);
     const oneDayAgo      = new Date(Date.now() - 24 * 60 * 60_000);
 
     // ── Step 1: fetch candidate drafts ──────────────────────────────────────
-    // OPEN + stale + has items + no recovery already sent on this exact draft
+    // OPEN + parado o suficiente + DENTRO DO PRAZO + com item + sem recuperação
+    // já enviada neste rascunho. O `gte: vencimentoDate` é a correção de 30/07:
+    // sem ele, um rascunho de três semanas atrás continuava candidato para
+    // sempre e uma hora virava "percebi que seu pedido não foi finalizado"
+    // sobre um carrinho do mês passado.
     const candidates = await prisma.orderDraft.findMany({
       where: {
         status:           "OPEN",
-        updatedAt:        { lt: thresholdDate },
+        updatedAt:        { lt: thresholdDate, gte: vencimentoDate },
         recoveryAttempts: 0,
         items:            { some: {} },
         ...(restaurantId ? { restaurantId } : {}),
@@ -225,6 +256,19 @@ export class OrderDraftRecoverySendService {
       take:    limit,
     });
 
+    // Quantos ficaram de fora POR TEREM VENCIDO. Sem este número, o corte
+    // pareceria "sumiu carrinho" na tela de diagnóstico — e a diferença entre
+    // "não havia" e "venceu" é exatamente o que se quer enxergar.
+    const skippedTooOld = await prisma.orderDraft.count({
+      where: {
+        status:           "OPEN",
+        updatedAt:        { lt: vencimentoDate },
+        recoveryAttempts: 0,
+        items:            { some: {} },
+        ...(restaurantId ? { restaurantId } : {}),
+      },
+    });
+
     if (candidates.length === 0) {
       return {
         checked: 0, eligible: 0, sent: 0,
@@ -232,7 +276,7 @@ export class OrderDraftRecoverySendService {
         skippedOrderedAfter: 0, skippedPendingPayment: 0,
         skippedOrderOrPaymentExists: 0,
         skippedNoConfig: 0, skippedRestaurantClosed: 0, failed: 0,
-        dryRun, inactivityMinutes,
+        dryRun, inactivityMinutes, maxAgeHours, skippedTooOld,
         durationMs: Date.now() - startMs,
       };
     }
@@ -605,6 +649,8 @@ export class OrderDraftRecoverySendService {
       failed,
       dryRun,
       inactivityMinutes,
+      maxAgeHours,
+      skippedTooOld,
       durationMs: Date.now() - startMs,
     };
   }
