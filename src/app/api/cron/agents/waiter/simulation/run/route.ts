@@ -54,6 +54,26 @@ export async function POST(req: NextRequest) {
       p0Count: result.p0Count,
       opportunityCount: result.opportunityCount,
       runtimeTouched: false,
+      // O alerta carrega a própria evidência.
+      //
+      // Antes, o cron falhava com "p0Count=1 — encontrou um problema crítico" e
+      // NADA mais: nem o cenário, nem a frase, nem o que o agente respondeu. O
+      // detalhe ficava no banco, e quem recebia o e-mail às 6h não tinha como
+      // saber o que quebrou sem abrir o admin e caçar a rodada.
+      //
+      // Alerta que não diz o porquê custa uma investigação inteira toda vez que
+      // dispara. Aqui vai o mínimo para agir: qual cenário, o que o cliente
+      // pediu, o que o agente respondeu e a violação exata. Sem PII — o
+      // simulador roda sobre catálogo sintético.
+      p0: result.scenarios
+        .filter((s) => s.evaluation.severity === "P0")
+        .map((s) => ({
+          cenario:    s.scenario.scenarioType,
+          clientePediu: s.scenario.initialMessage,
+          agenteDisse:  s.output.finalMessage.slice(0, 400),
+          cards:        s.output.cards,
+          violacoes:    s.evaluation.evidence,
+        })),
     }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";
