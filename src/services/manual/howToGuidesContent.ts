@@ -292,23 +292,44 @@ Para gerar o Pix automaticamente no checkout:
     slug: "guia-criar-campanha-crm",
     title: "Como criar uma campanha / promoção no CRM",
     area: "CRM",
-    description: "Enviar mensagens e promoções para grupos de clientes.",
+    description: "Ligar campanhas prontas ou criar a sua (manual ou por IA) e acompanhar o resultado.",
     content: `# Como criar uma campanha / promoção no CRM
 
 Vá no menu lateral em **Marketing → CRM** e abra a aba **Campanhas**.
 
-1. Escolha um modelo pronto (ex: **🥶 Recuperar clientes frios**, **🌡️ Reativar clientes mornos**, **🔁 Garantir a segunda compra**).
-2. Dê um **Nome da campanha** (ex: "Reativação frios — PROMO10").
-3. Confira o **Segmento alvo** (já vem preenchido pelo modelo) e o **Público estimado**.
-4. Edite a **Mensagem sugerida**. Você pode inserir variáveis: **{nome}**, **{restaurante}**, **{ultimo_pedido}**, **{produto_favorito}**.
-5. Opcional: informe um **Cupom vinculado** (ex: PROMO10) para medir o resultado.
-6. Escolha o tipo de envio:
-   - **Envio único** — manda agora para todos do segmento.
-   - **Agendada** — escolha **Data** e **Hora**.
-   - **Recorrente** — dias da semana, janela de horário e limite diário.
-7. Clique em **Enviar** / **Agendar** / **Ativar recorrente** (ou **Salvar rascunho**).
+## 1. Escolha o período que você quer olhar
+Na régua **Período:** clique em **Hoje**, **Ontem**, **Últimos 7 dias**, **Semana passada**, **Últimos 30 dias**, **Este mês**, **Personalizado** (aí aparecem os campos de data "até") ou **Total**.
 
-> Em "Identidade & evitar repetição" você impede reenvio para quem já recebeu a mesma campanha.`,
+O bloco **Receita gerada pelo CRM** responde ao período escolhido, com os quadros **Receita atribuída**, **Mensagens enviadas**, **Converteram** (% dos enviados) e **Cupons usados**. O gráfico tem os botões **Barras** e **Linha**.
+
+Ao lado fica o quadradinho **📤 Limite de envio** (mensagens/dia) e a **Distribuição** entre campanhas: **🎯 Por audiência**, **Igual p/ todas** ou **Manual**.
+
+## 2. Caminho mais rápido: ligar uma campanha pronta
+Desça até **Campanhas prontas** ("já vêm configuradas para qualquer restaurante — é só ligar"). Ligue a que interessa e use **Gerenciar** se quiser ajustar antes ou depois.
+
+## 3. Criar a sua campanha
+O bloco **Criar campanha personalizada** fica logo acima da lista de campanhas. Dois caminhos:
+
+### a) Com IA — texto ou voz
+Na caixa **✨ Criar campanha com IA**:
+1. Escreva o que você quer (ex: "recuperar quem sumiu faz 30 dias com 10% de desconto") **ou** clique em **🎤 Falar**, fale e clique em **⏹ Parar**.
+2. Clique em **Montar**.
+3. Confira o **Rascunho da IA** (nome, público, objetivo e a mensagem) e clique em **Criar campanha** — ou **Descartar** e tente de novo.
+
+A campanha nasce como rascunho: você revisa e ativa na lista abaixo.
+
+### b) Manual
+Clique em **Preencher manual**. A campanha nasce **pausada** de propósito e abre a janela **Gerenciar campanha**, com as abas **Visão Geral**, **Mensagem**, **Agendamento**, **Performance** e **Diagnóstico**.
+
+## 4. Ajustar na janela "Gerenciar campanha"
+- **Visão Geral** — **Editar nome da campanha** (+ **Salvar**) e **Público-alvo**: Todos os clientes, Clientes quentes, Clientes mornos, Clientes frios, VIPs (Ouro/Diamante), Fizeram só 1 pedido, Cadastrados sem compra, Recorrentes (2+ pedidos) (+ **Salvar**).
+- **Mensagem** — em **Frases da campanha**, ligue as frases que vão rodar (cada envio sorteia uma das ativas e os números mostram qual converte mais). Para escrever a sua: **+ Nova frase personalizada** → **Adicionar frase**.
+- **Agendamento** — em **Editar agendamento** escolha os **Dias da semana**, a **Início** e **Fim** da janela de horário e o **Limite diário (mensagens)** (máximo 200/dia). Clique em **Salvar agendamento**.
+
+## 5. Ligar e acompanhar
+Em **Campanhas ativas** ("campanhas em execução, agendadas ou recorrentes") cada campanha tem **Pausar** / **Retomar** e o detalhe pelo **Gerenciar**. Em **Ver histórico geral** você vê os **Envios recentes (ao vivo)**, com data e hora.
+
+> Se preferir montar a mensagem antes, salve um rascunho em **Modelos salvos** e depois clique em **Usar em campanha** — ali você define **Nome da campanha**, **Público alvo**, **Mensagem sugerida**, **Cupom vinculado** e o tipo: **Envio único**, **Agendada** (Data + Hora) ou **Recorrente**.`,
   },
   {
     slug: "guia-area-entrega-taxas",
@@ -786,13 +807,19 @@ Vá em **Configurações → Impressoras**. A impressão automática usa o **Car
 
 Quando der certo, o topo mostra **"Carteiro conectado"** com as impressoras detectadas.
 
-## 2. Impressora de cada estação
+## 2. Acompanhar a fila (quando o papel não sai)
+O cartão **Fila de impressão** ("o caminho da comanda entre o pedido e o papel") tem três contadores: **Na fila**, **No Carteiro** e **Impressas 24h**.
+
+- Sem nada travado, ele diz **"Nada esperando. Toda comanda enviada saiu no papel."** ou **"Nenhuma comanda travada — o que está na fila ainda vai sair."**
+- Se alguma comanda travar (tentou 5 vezes e não saiu), ela aparece na lista com o **motivo** e a impressora de destino. Confira se o Carteiro está aberto no computador e se a impressora aparece no Windows com esse mesmo nome — depois clique em **Tentar de novo**.
+
+## 3. Impressora de cada estação
 No cartão **"1. Impressora de cada estação"**, escolha a impressora de cada estação (Cozinha, Caixa, Copa…) e clique em **🖨️ Testar** para sair uma comanda de teste.
 
-## 3. Para onde vai cada categoria
+## 4. Para onde vai cada categoria
 No cartão **"2. Para onde vai cada categoria"**, diga em qual estação cada categoria do cardápio imprime. Um prato pode sair em duas cozinhas — use **+ adicionar impressora**.
 
-## 4. Letras grandes (opcional)
+## 5. Letras grandes (opcional)
 **"3. Letras grandes na cozinha"** imprime os itens em letra dupla, mais fácil de ler de longe.
 
 Termine em **Salvar tudo**.`,
@@ -832,5 +859,70 @@ São três textos, cada um com até 5.000 caracteres:
 Escreva (ou cole) os textos e clique em **Salvar**.
 
 > Salvar já publica: os documentos aparecem no rodapé do cardápio web e são enviados ao cliente quando solicitado. Campo vazio = documento não exibido.`,
+  },
+  {
+    slug: "guia-precificacao",
+    title: "Como calcular o CMV e o preço certo de cada prato",
+    area: "ANALYTICS",
+    description: "Premissas, markup, ficha de custo dos insumos e reprecificação automática.",
+    content: `# Como calcular o CMV e o preço certo de cada prato
+
+Vá no menu lateral em **Vendas → CMV & Precificação**. A tela tem seis abas: **Custos & Fórmula**, **Markup**, **Preços do cardápio**, **Insumos**, **Ficha de custo** e **Automação**.
+
+> Só **dono** ou **gerente** edita. Outros perfis veem o aviso "Você está em modo de visualização".
+
+## 1. Custos & Fórmula (comece aqui)
+No cartão **Premissas do negócio** preencha:
+1. **Faturamento médio mensal (R$)**.
+2. **Despesas fixas mensais (R$)** — aluguel, equipe, luz, contador. A tela mostra a quanto isso equivale em % do faturamento.
+3. **Impostos + taxas (%)** — Simples, cartão, apps de entrega.
+4. **Margem de lucro desejada (%)** — quanto deve sobrar de cada venda.
+
+Ao lado aparece o **Seu markup** (ex: "2,85×"), o multiplicador que transforma custo em preço: **preço ideal = custo × markup**. Referência do setor: 2,5× a 3× (bebidas e sobremesas até 4–5×).
+
+Abaixo, **CMV do período (opcional)**: informe **Estoque inicial (R$)**, **Compras do período (R$)**, **Estoque final (R$)** e **Faturamento do período (R$)** — a tela calcula o CMV do negócio inteiro e mostra se está na faixa saudável (25–35%).
+
+Clique em **Salvar premissas**. Enquanto não salvar, a tabela de preços continua usando as premissas antigas (a tela avisa).
+
+## 2. Markup (opcional, por categoria)
+Na aba **Markup** cada categoria pode ter um multiplicador próprio — prática do setor: pratos 2,5–3×, bebidas e sobremesas 4–5×. A tabela mostra **Itens**, **Markup da categoria**, **CMV alvo** e **Custo R$ 10 vira**. Categoria sem valor segue o markup global; use **limpar** para voltar ao global. Termine em **Salvar markups**.
+
+## 3. Insumos (o que você compra)
+Na aba **Insumos**, a **Lista de insumos** traz os ingredientes com **Unidade**, **Custo por unidade (R$)** e em quantos produtos cada um é **Usado em**. Formas de preencher:
+- **📷 Ler nota de compra** — mande a foto ou o PDF da nota; a IA lê e abre **Revisar preços da nota** para você conferir linha por linha. Nada muda sem você clicar em **Aplicar preços marcados**.
+- **↻ Importar do cardápio** — puxa os ingredientes escritos nos produtos.
+- **📄 Importar lista** — cole a lista (um insumo por linha) ou envie um .txt/.csv. Para já vir com unidade e custo, separe por ponto e vírgula: \`Nome ; unidade ; custo\`.
+- **Novo insumo** — nome, **Unidade** e **Custo por unidade (R$)**, depois **＋ Cadastrar**.
+
+Editou custos na tabela? Clique em **Salvar insumos**.
+
+## 4. Ficha de custo (o que entra no prato)
+A aba **Ficha de custo** lista todos os pratos por categoria, cada um marcado como **montar**, **incompleta** ou **completa**. Toque no prato para abrir a ficha.
+
+Na ficha:
+1. Em **Adicionar insumo à ficha**, escolha o insumo, informe a **Quantidade** e clique em **＋ Adicionar**.
+2. Em cada linha, escolha a **unidade de uso** — como você usa **no prato**. O custo vem do preço de compra do insumo e converte sozinho: compra em **kg**, usa em **g** (ex: 150 g de um insumo a R$ 30,00/kg = R$ 4,50). Debaixo do nome do insumo a tela mostra "compra: R$ 30,00/kg".
+3. A conversão só vale dentro da mesma medida (massa g↔kg, volume ml↔L). Contagem (un, fatia, porção) não converte.
+
+Quando todas as linhas têm quantidade e custo, o topo mostra **"Ficha completa · custo calculado: R$ …"** e esse custo passa a valer para o produto. Use **← Voltar aos pratos** para escolher outro.
+
+## 5. Preços do cardápio
+A aba **Preços do cardápio** mostra, item por item: **Custo (R$)**, **Preço atual**, **CMV**, **Preço ideal** e o **Status** — **Sem custo**, **Subir R$ …**, **No alvo** ou **Margem extra**.
+- Item com ficha completa tem o custo travado (é a ficha que manda) — o atalho **🧾 ver ficha** / **＋ montar ficha** leva direto pra ela.
+- **Aplicar** sobe um item para o preço ideal; **Aplicar sugeridos (N)** faz todos de uma vez (a confirmação mostra o potencial somando uma venda de cada).
+
+Preço alterado vale na hora no cardápio e no agente do WhatsApp.
+
+## 6. Automação
+Na aba **Automação**, o **Dispositivo de reprecificação** decide o que acontece quando um custo muda:
+- **Desligado** — nada muda sozinho, a tela só mostra os preços ideais.
+- **Sugerir** (recomendado) — o novo preço ideal fica pendente e você aprova com 1 clique.
+- **Automático** — atualiza o preço na hora, dentro da trava.
+
+Ajuste também o **Arredondamento do preço sugerido** (terminar em ,90 / em ,99 / sem arredondamento) e a **Trava do modo Automático (%)** — variações maiores que isso viram sugestão em vez de serem aplicadas sozinhas. Clique em **Salvar automação**.
+
+O **Histórico de alterações** abaixo registra toda mudança de custo ou preço, com origem e horário.
+
+> Travas permanentes: o preço sugerido nunca fica abaixo do custo, e toda alteração — manual ou automática — vai pro histórico.`,
   },
 ];
