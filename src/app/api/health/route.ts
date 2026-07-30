@@ -9,7 +9,26 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const startedAt = Date.now();
+export const dynamic = "force-dynamic";
+
+/**
+ * Há quanto tempo o PROCESSO está de pé.
+ *
+ * Era `const startedAt = Date.now()` no topo do módulo — e o módulo de uma
+ * rota é reavaliado, então `uptimeSeconds` dava 0 em toda requisição, sempre.
+ * O número existia, parecia saudável e não queria dizer nada.
+ *
+ * Isso importa mais do que parece: uptime é exatamente a métrica que denuncia
+ * container reiniciando em loop. Com ela travada em 0, o /api/health não tinha
+ * como diferenciar "no ar há dois dias" de "acabou de subir pela décima vez".
+ *
+ * `process.uptime()` é do processo Node, não do módulo — sobrevive à
+ * reavaliação da rota e cai para perto de zero quando o container reinicia de
+ * verdade, que é o sinal que se quer.
+ */
+function uptimeSeconds(): number {
+  return Math.floor(process.uptime());
+}
 
 export async function GET() {
   let dbOk = false;
@@ -38,7 +57,7 @@ export async function GET() {
       commitSha: process.env.RAILWAY_GIT_COMMIT_SHA  ?? "unknown",
       branch:    process.env.RAILWAY_GIT_BRANCH      ?? "unknown",
       env: process.env.NODE_ENV,
-      uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+      uptimeSeconds: uptimeSeconds(),
       db: dbOk ? "ok" : "unreachable",
       checks: {
         encryptionKey:    !!process.env.ENCRYPTION_KEY,
