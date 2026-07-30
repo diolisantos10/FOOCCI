@@ -31,6 +31,7 @@ export function AdminSidebar() {
         { href: "/admin/quality",          label: "Qualidade",       icon: "🛡️" },
         { href: "/admin/brain",            label: "Brain",           icon: "⚡" },
         { href: "/admin/brain/free-form",  label: "Escada do Brain", icon: "🪜" },
+        { href: "/admin/crm-agente",       label: "Agente de CRM",   icon: "🎚️" },
       ],
     },
     {
