@@ -7,7 +7,6 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { SidebarProvider } from "@/components/layout/SidebarContext";
 import { HelpWidget } from "@/components/help/HelpWidget";
 import { GlobalAlertEngine } from "@/components/layout/GlobalAlertEngine";
-import { SoundGateBanner } from "@/components/layout/SoundGateBanner";
 
 export default async function DashboardLayout({
   children,
@@ -62,7 +61,6 @@ export default async function DashboardLayout({
         </div>
         <HelpWidget />
         <GlobalAlertEngine />
-        <SoundGateBanner />
       </div>
     </SidebarProvider>
   );

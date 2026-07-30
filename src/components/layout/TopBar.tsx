@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useSidebar } from "./SidebarContext";
+import { SoundStatusChip } from "./SoundStatusChip";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -111,14 +112,14 @@ export function TopBar({ title }: TopBarProps) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <header className="flex h-14 items-center justify-between border-b border-line2 bg-white px-6">
-      {/* Left: hamburger (mobile) + brand / page breadcrumb */}
-      <div className="flex items-center gap-2">
+      {/* Left: hamburger (mobile) + brand / page breadcrumb + sound control */}
+      <div className="flex min-w-0 items-center gap-2">
         {/* Hamburger — mobile only */}
         <button
           type="button"
           onClick={toggleSidebar}
           aria-label="Abrir menu"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink lg:hidden"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink lg:hidden"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -126,12 +127,14 @@ export function TopBar({ title }: TopBarProps) {
         </button>
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-7 w-7 rounded-lg lg:hidden" />
+        <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-7 w-7 shrink-0 rounded-lg lg:hidden" />
         {title && (
-          <>
-            <span className="text-sm font-semibold text-ink2 sm:text-muted">{title}</span>
-          </>
+          <span className="min-w-0 truncate text-sm font-semibold text-ink2 sm:text-muted">{title}</span>
         )}
+        {/* Sound control lives right here in the white bar on every tab (owner's
+            request, 2026-07-30) — not a floating balloon over the account cluster. */}
+        <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-[#E5E5E5] sm:block" />
+        <SoundStatusChip />
       </div>
 
       {/* Right: pause + bell + sign out */}
