@@ -11,7 +11,8 @@ import { decide, resolveMenuIntent, type V2CatalogItem, type V2Input } from "@/s
 import { makeRng } from "../scenarioGenerator";
 import { classifyEvaluation } from "../simulationEvaluator";
 import { makeOpportunity } from "../opportunityBuilder";
-import { waiterSyntheticCatalog, catalogPrices } from "./waiterSyntheticCatalog";
+import { waiterSyntheticCatalog } from "./waiterSyntheticCatalog";
+import { precoSeSustenta, valoresDefensaveis } from "./precoDefensavel";
 import { WAITER_SCENARIO_TEMPLATES, type WaiterScenarioTemplate, type WaiterCheckKind } from "./waiterScenarioTemplates";
 import type {
   AgentSimulationAdapter,
@@ -29,7 +30,6 @@ const PRICE_RE = /R\$\s?(\d+(?:[.,]\d{1,2})?)/g;
 
 const catalog = waiterSyntheticCatalog();
 const catalogIds = new Set(catalog.map((i) => i.id));
-const prices = catalogPrices(catalog);
 const catalogById = new Map(catalog.map((i) => [i.id, i]));
 
 function mainDishId(): string {
@@ -106,6 +106,7 @@ export const WaiterSimulationAdapter: AgentSimulationAdapter = {
       mode: output.mode,
       optionsCount: output.options.length,
       usedLLM: false,
+      cartValue,
     };
   },
 
@@ -130,10 +131,24 @@ export const WaiterSimulationAdapter: AgentSimulationAdapter = {
           break;
         }
         case "no_fake_price": {
+          // Um garçom honesto SOMA: total do carrinho, "os dois saem por X",
+          // "com a sobremesa fica Y". Antes, qualquer valor que não fosse
+          // preço exato de item virava CRÍTICO — o checador reprovava o agente
+          // justamente nos cenários de pagamento e fechamento, onde dizer o
+          // total é o comportamento certo. Agora o valor precisa ser
+          // EXPLICÁVEL pelo que está na mesa; o que não fecha continua caindo.
+          const defensaveis = valoresDefensaveis({
+            precosDoCatalogo: catalog.map((i) => i.price),
+            valorDoCarrinho:  output.cartValue ?? 0,
+            precosMostrados:  output.cards.map((id) => catalogById.get(id)?.price ?? 0).filter((p) => p > 0),
+          });
           for (const m of output.finalMessage.matchAll(PRICE_RE)) {
             const raw = m[1] ?? "";
+            if (!raw) continue;
             const val = Number(raw.replace(",", "."));
-            if (raw && !prices.has(val)) criticalViolations.push(`preço inventado: R$ ${raw}`);
+            if (!precoSeSustenta(val, defensaveis)) {
+              criticalViolations.push(`preço inventado: R$ ${raw}`);
+            }
           }
           break;
         }
