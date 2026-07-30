@@ -22,7 +22,7 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const PORT = 9999;
 const HOST = "127.0.0.1";
 const DEFAULT_BASE_URL = "https://foocci.com.br";
@@ -199,8 +199,24 @@ function buildTestTicket(printerName) {
 }
 
 // ── O cano: pergunta ao FOOCCI se tem pedido e imprime ────────────────────────
+
+// Impressora térmica pode levar mais que os 4s do ciclo. Sem esta trava, o
+// próximo tick entrava enquanto o anterior ainda imprimia e ia buscar MAIS
+// trabalho — várias impressões concorrentes na mesma bobina.
+let imprimindo = false;
+
 async function pollOnce() {
   if (!config.token || !config.baseUrl) return;
+  if (imprimindo) return;
+  imprimindo = true;
+  try {
+    await pollOnceInterno();
+  } finally {
+    imprimindo = false;
+  }
+}
+
+async function pollOnceInterno() {
   let printers = [];
   try {
     printers = await listPrinters();
@@ -237,7 +253,10 @@ async function pollOnce() {
         body: JSON.stringify({ token: config.token, jobId: job.id, ok, error: errMsg }),
       });
     } catch {
-      /* o FOOCCI re-tenta no próximo poll se não receber o ack */
+      // Sem internet para o ack: o FOOCCI devolve o job para a fila quando o
+      // prazo do empréstimo vence, e ele volta no próximo poll. (Isto passou a
+      // ser verdade em 30/07/2026 — antes o job ficava CLAIMED para sempre e a
+      // comanda simplesmente não saía.)
     }
   }
 }

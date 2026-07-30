@@ -31,7 +31,15 @@ import {
 const CASHIER_STATION_KEYS = new Set(["CAIXA", "CUPOM"]);
 
 export class PrintQueueService {
-  /** Enqueue station print jobs for an order, exactly once. Safe to call repeatedly. */
+  /**
+   * Enqueue station print jobs for an order, exactly once. Safe to call repeatedly.
+   *
+   * O carimbo é desfeito quando NADA foi enfileirado. Sem isso, o pedido que
+   * chegou antes de a impressora estar configurada — ou durante uma falha de
+   * banco — saía carimbado como "já tratado" e não imprimia nunca mais, nem
+   * depois de o lojista terminar a configuração. O carimbo existe para impedir
+   * papel em dobro; job nenhum criado significa que não há nada para duplicar.
+   */
   static async maybeEnqueueOrder(restaurantId: string, orderId: string): Promise<void> {
     // Atomic once-only guard — the first caller wins the race, the rest no-op.
     const stamped = await prisma.order.updateMany({
@@ -40,11 +48,23 @@ export class PrintQueueService {
     });
     if (stamped.count === 0) return;
 
+    let jobs = 0;
     try {
-      await this.enqueue(restaurantId, orderId);
+      jobs = await this.enqueue(restaurantId, orderId);
     } catch (err) {
       console.error("[PrintQueueService] enqueue failed", {
         restaurantId, orderId, err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    if (jobs === 0) {
+      await prisma.order
+        .updateMany({ where: { id: orderId, restaurantId }, data: { printQueuedAt: null } })
+        .catch((err) => console.error("[PrintQueueService] failed to release the print stamp", {
+          restaurantId, orderId, err: err instanceof Error ? err.message : String(err),
+        }));
+      console.warn("[PrintQueueService] nothing enqueued — stamp released so the order can print later", {
+        restaurantId, orderId,
       });
     }
   }

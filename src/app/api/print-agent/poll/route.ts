@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveByToken } from "@/services/print/PrintAgentService";
+import { emprestarJobs, resgatarJobsVencidos } from "@/services/print/PrintJobLease";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -46,22 +47,18 @@ export async function POST(req: NextRequest) {
     select: { key: true, name: true, printerName: true, enabled: true },
   });
 
-  // Claim the oldest pending jobs (single agent → simple find + mark CLAIMED).
-  const pending = await prisma.printJob.findMany({
-    where: { restaurantId: agent.restaurantId, status: "PENDING" },
-    orderBy: { createdAt: "asc" },
-    take: 20,
-  });
-  if (pending.length > 0) {
-    await prisma.printJob.updateMany({
-      where: { id: { in: pending.map((j) => j.id) } },
-      data: { status: "CLAIMED", claimedAt: new Date() },
-    });
-  }
+  // Primeiro o resgate: comanda que saiu daqui e nunca voltou com ack volta
+  // para a fila. Antes disto o job ficava CLAIMED para sempre e o restaurante
+  // simplesmente não imprimia, sem erro nenhum aparecer.
+  await resgatarJobsVencidos(agent.restaurantId).catch((e) =>
+    console.error("[print] resgate falhou", e),
+  );
+
+  const jobs = await emprestarJobs(agent.restaurantId);
 
   return NextResponse.json({
     ok: true,
     stations,
-    jobs: pending.map((j) => ({ id: j.id, printerName: j.printerName, title: j.title, body: j.body })),
+    jobs: jobs.map((j) => ({ id: j.id, printerName: j.printerName, title: j.title, body: j.body })),
   });
 }

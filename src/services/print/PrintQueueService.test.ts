@@ -156,6 +156,30 @@ describe("station routing", () => {
     await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
     expect(db.printJob.createMany).not.toHaveBeenCalled();
   });
+
+  // O pedido que chega ANTES de a impressora estar configurada não pode sair
+  // carimbado como "já tratado": era assim que ele deixava de imprimir para
+  // sempre, mesmo depois de o lojista terminar a configuração.
+  it("solta o carimbo quando não enfileirou nada, para o pedido poder imprimir depois", async () => {
+    db.printStation.findMany.mockResolvedValue([
+      { key: "CAIXA", name: "Caixa", printerName: null, enabled: true, position: 0 },
+    ]);
+    await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
+
+    expect(db.order.updateMany).toHaveBeenLastCalledWith({
+      where: { id: "ord_1", restaurantId: "rest_1" },
+      data:  { printQueuedAt: null },
+    });
+  });
+
+  it("com job criado o carimbo FICA — nada de papel em dobro", async () => {
+    await PrintQueueService.maybeEnqueueOrder("rest_1", "ord_1");
+
+    const soltou = db.order.updateMany.mock.calls.some(
+      (c) => (c[0] as { data?: { printQueuedAt?: unknown } }).data?.printQueuedAt === null,
+    );
+    expect(soltou).toBe(false);
+  });
 });
 
 describe("reprint + large font", () => {

@@ -29,6 +29,21 @@ interface Category {
   printStationKeys: string[];
 }
 
+interface JobTravado {
+  id: string;
+  title: string;
+  printerName: string;
+  error: string | null;
+  createdAt: string;
+}
+
+interface Fila {
+  naFila: number;
+  comOCarteiro: number;
+  impressas24h: number;
+  travadas: JobTravado[];
+}
+
 function stationEmoji(key: string) {
   return key === "CAIXA" ? "💵" : key === "COPA" ? "🥤" : key === "CUPOM" ? "🧾" : "🍳";
 }
@@ -54,6 +69,80 @@ function StatusBanner({ agent }: { agent: Agent | null }) {
             : "Siga o passo a passo abaixo para ativar a impressão automática."}
         </p>
       </div>
+    </div>
+  );
+}
+
+// ── Fila de impressão ─────────────────────────────────────────────────────────
+//
+// Existe porque o lojista era cego. Quando a comanda não saía, não havia número,
+// tela nem erro em lugar nenhum — só o papel que não veio. Aqui ele vê a fila
+// andando e, quando alguma trava de vez, vê o motivo e reenvia.
+
+function FilaCard({ fila, onRetry, retrying }: { fila: Fila | null; onRetry: () => void; retrying: boolean }) {
+  if (!fila) return null;
+
+  const travadas = fila.travadas.length;
+
+  return (
+    <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">Fila de impressão</p>
+          <p className="text-xs text-muted">O caminho da comanda entre o pedido e o papel.</p>
+        </div>
+        {travadas > 0 && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            className="shrink-0 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50"
+          >
+            {retrying ? "Reenviando…" : `Tentar de novo (${travadas})`}
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <Contador rotulo="Na fila" valor={fila.naFila} />
+        <Contador rotulo="No Carteiro" valor={fila.comOCarteiro} />
+        <Contador rotulo="Impressas 24h" valor={fila.impressas24h} />
+      </div>
+
+      {travadas === 0 ? (
+        <p className="mt-4 text-xs text-muted">
+          {fila.naFila + fila.comOCarteiro === 0
+            ? "Nada esperando. Toda comanda enviada saiu no papel."
+            : "Nenhuma comanda travada — o que está na fila ainda vai sair."}
+        </p>
+      ) : (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-semibold text-amber-800">
+            {travadas === 1 ? "1 comanda travada" : `${travadas} comandas travadas`} — tentou {"5"} vezes e não saiu:
+          </p>
+          {fila.travadas.map((j) => (
+            <div key={j.id} className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+              <p className="text-sm font-semibold text-amber-900">
+                {j.title} <span className="font-normal text-amber-800">→ {j.printerName}</span>
+              </p>
+              {j.error && <p className="mt-0.5 text-xs text-amber-800">{j.error}</p>}
+            </div>
+          ))}
+          <p className="text-xs text-muted">
+            Confira se o Carteiro está aberto no computador e se a impressora aparece no Windows com
+            esse mesmo nome. Depois clique em <strong>Tentar de novo</strong>.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Contador({ rotulo, valor }: { rotulo: string; valor: number }) {
+  return (
+    <div className="rounded-xl border border-line2 bg-[#FAFAF8] px-3 py-2.5">
+      <p className="text-lg font-semibold text-ink">{valor}</p>
+      <p className="text-xs text-muted">{rotulo}</p>
     </div>
   );
 }
@@ -180,6 +269,32 @@ export default function ImpressorasPage() {
   const [copied, setCopied] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fila, setFila] = useState<Fila | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  const loadFila = useCallback(async () => {
+    const { ok, data } = await apiFetch("/api/integracoes/impressao/fila");
+    if (ok && data) setFila(data as unknown as Fila);
+  }, []);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    setSuccess(null);
+    setError(null);
+    const { ok, data } = await apiFetch("/api/integracoes/impressao/fila", "POST", {});
+    setRetrying(false);
+    if (ok) {
+      setFila(data as unknown as Fila);
+      const n = Number((data as { reenfileiradas?: unknown })?.reenfileiradas ?? 0);
+      setSuccess(
+        n > 0
+          ? `${n} comanda(s) de volta na fila. Se o Carteiro estiver aberto, saem em segundos.`
+          : "Nada para reenviar.",
+      );
+    } else {
+      setError((data as { error?: string })?.error ?? "Não consegui reenviar as comandas.");
+    }
+  };
 
   const load = useCallback(async () => {
     const { ok, data } = await apiFetch("/api/integracoes/impressao");
@@ -203,9 +318,13 @@ export default function ImpressorasPage() {
 
   useEffect(() => {
     load();
-    const t = setInterval(refreshAgent, 15_000);
+    loadFila();
+    const t = setInterval(() => {
+      refreshAgent();
+      loadFila();
+    }, 15_000);
     return () => clearInterval(t);
-  }, [load, refreshAgent]);
+  }, [load, refreshAgent, loadFila]);
 
   const update = (id: string, patch: Partial<Station>) => {
     setStations((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -303,6 +422,9 @@ export default function ImpressorasPage() {
 
       {/* Status */}
       <StatusBanner agent={agent} />
+
+      {/* A fila, visível. Sem isto o lojista só sabia que "não imprimiu". */}
+      <FilaCard fila={fila} onRetry={handleRetry} retrying={retrying} />
 
       {/* Guidance for the "folha grande (A4)" symptom. Browser printing obeys the
           OS printer's paper size — if that is A4, the small comanda lands on a full
