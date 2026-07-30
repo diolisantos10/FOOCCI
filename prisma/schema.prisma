@@ -2054,6 +2054,36 @@ model StoreProfile {
   dineInEnabled             Boolean @default(true)
   averagePreparationMinutes Int?
 
+  // ── Quem é esse cliente (cadastro interno) ─────────────────
+  //
+  // Nasceu de um buraco concreto: para escrever a primeira peça de um cliente
+  // foi preciso procurar o @ dele — e não existia em lugar nenhum. Nem o @, nem
+  // o nicho, nem a persona. Cada vez que alguém precisava, perguntava de novo.
+  //
+  // Estes campos são o CADASTRO: quem é o restaurante, não como ele está. Ficam
+  // ao lado do fiscal e do endereço de propósito — é tudo a mesma ficha, e
+  // dividir em duas tabelas seria só garantir que uma delas ficaria vazia.
+  instagram         String? // @ ou URL
+  facebook          String?
+  tiktok            String?
+  youtube           String?
+  website           String?
+  googleBusinessUrl String? // Google Meu Negócio
+  ifoodUrl          String?
+  otherLinks        Json? // [{ label, url }] — o que não coube acima
+
+  niche              String? // "hamburgueria artesanal", "japonês delivery"
+  targetPersona      String? @db.Text // quem compra, descrito como gente
+  differentiator     String? @db.Text // por que escolhem ele e não o vizinho
+  averageTicketRange String? // faixa de ticket, como o dono fala
+  mainCompetitors    String? @db.Text
+  brandTone          String? // como a marca fala
+
+  /// De onde veio este cliente (indicação, inbound, prospecção…).
+  leadSource String?
+  /// Anotações da equipe. NUNCA exposto ao lojista — só no admin.
+  internalNotes String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

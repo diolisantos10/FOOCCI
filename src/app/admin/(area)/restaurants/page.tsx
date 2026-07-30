@@ -767,6 +767,13 @@ export default function AdminRestaurantsPage() {
                         >
                           ✎
                         </button>
+                        <a
+                          href={`/admin/restaurants/${r.id}`}
+                          title="Ficha do cliente — redes, nicho, persona, fiscal"
+                          className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-700 hover:text-gray-300 transition-colors text-xs"
+                        >
+                          📇
+                        </a>
                         <button
                           title="Ver links públicos"
                           onClick={() => setLinksRow(r)}
