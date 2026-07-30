@@ -48,6 +48,8 @@ export const recipeLineSchema = z.object({
   ingredientId: z.string().cuid(),
   // null = link kept but not quantified (out of the math)
   quantity: z.number().positive("Quantidade deve ser maior que zero").max(999999).nullable(),
+  // unidade de USO no prato (g/kg/ml/L…); ausente = mantém/usa a unidade do insumo
+  unit: unitField.optional(),
 });
 
 export const removeRecipeLineSchema = z.object({
