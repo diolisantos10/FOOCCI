@@ -61,6 +61,9 @@ export { autoFileGovernanceForLatestRun } from "./training/QualityGovernanceBrid
 // knowledge
 export * from "./knowledge/BusinessKnowledgeContract";
 export { restaurantKnowledgeAdapter } from "./knowledge/RestaurantKnowledgeAdapter";
+// O import registra o adapter. A verdade de um cliente de agência é o briefing
+// do SDR — sem esta linha a Oficina não escreve peça nenhuma para a Dioli.
+export { agencyKnowledgeAdapter } from "./knowledge/AgencyKnowledgeAdapter";
 
 // memory (Cognição 8→9 — memória durável de cliente, sem PII)
 export * from "./memory/CustomerMemoryService";
@@ -89,6 +92,8 @@ export {
   manualRestaurante,
   type Manual,
 } from "./oficina/HouseManual";
+// O import registra o manual. Domínio novo = um arquivo + uma linha aqui.
+export { manualAgencia } from "./oficina/manualAgencia";
 export { variar, assinar, semear, totalDeCombinacoes, type Eixo, type Variacao } from "./oficina/Variator";
 export { criticarResultado, type CriticaResultadoOpts } from "./oficina/OutputCritic";
 export { buscarVerdade, snapshotParaVerdade, type VerdadeBuscada } from "./oficina/TruthSource";
