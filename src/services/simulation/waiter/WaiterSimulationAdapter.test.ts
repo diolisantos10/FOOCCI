@@ -74,6 +74,86 @@ describe("WaiterSimulationAdapter — running scenarios (deterministic, no LLM)"
   });
 });
 
+/**
+ * O checador `non_existent` reprovava o Garçom por acertar.
+ *
+ * Ele marcava CRÍTICO qualquer card mostrado quando o item pedido não existia —
+ * mas o próprio cenário NON_EXISTENT_PRODUCT espera "oferecer alternativa real".
+ * Negar e mostrar o que a casa tem era a resposta certa, e virava P0. Foi essa
+ * régua que deixou o p0Count travado em 1 na rodada noturna.
+ *
+ * A régua nova separa as duas coisas: desonestidade é empurrar card SEM dizer
+ * que não tem (o cliente lê como "é isto que você pediu"); não negar é falta de
+ * comportamento esperado, e vira aviso — inclusive quando o agente se cala.
+ */
+describe("item que não existe no cardápio", () => {
+  const cenario = () => ({
+    ...WaiterSimulationAdapter.generateScenarios({ seed: "ne", count: 1, scenarioTypes: ["NON_EXISTENT_PRODUCT"] })[0],
+    initialMessage: "vocês têm pizza?",
+  });
+
+  const avaliar = (finalMessage: string, cards: string[] = []) =>
+    WaiterSimulationAdapter.evaluateScenario(cenario(), {
+      transcript: [], finalMessage, cards, mode: "SUGGESTION", optionsCount: 0, usedLLM: false,
+    });
+
+  it("REGRESSÃO: negar e oferecer alternativa real passa — era isto que dava P0", () => {
+    const e = avaliar("Não temos pizza no cardápio. Que tal essas opções? 👇", ["combo40", "festival"]);
+    expect(e.severity, e.evidence.join(" | ")).toBe("INFO");
+    expect(e.status).toBe("PASS");
+  });
+
+  it("negar sem ter alternativa também passa", () => {
+    expect(avaliar("Não encontrei pizza no nosso cardápio. Posso ajudar com outra coisa? 😊").severity).toBe("INFO");
+  });
+
+  it("negação escrita pela IA, com outras palavras, também vale", () => {
+    for (const frase of [
+      "Infelizmente pizza é fora do nosso cardápio.",
+      "A gente não trabalha com pizza, mas tem combinado 👇",
+      "Não servimos pizza por aqui.",
+    ]) {
+      expect(avaliar(frase, ["combo40"]).severity, frase).toBe("INFO");
+    }
+  });
+
+  it("CRÍTICO de verdade: empurra card sem dizer que não tem", () => {
+    const e = avaliar("Essas aqui são bem pedidas 👇", ["combo40", "festival"]);
+    expect(e.severity).toBe("P0");
+    expect(e.evidence.join(" ")).toMatch(/sem dizer que o item não existe/);
+  });
+
+  it("silêncio não é resposta honesta — sem negação não há PASS", () => {
+    const e = avaliar("");
+    expect(e.severity).toBe("P2");      // aviso, não crítico: não enganou ninguém
+    expect(e.status).toBe("WARNING");
+  });
+
+  it("card fora do catálogo continua P0 — na gaveta dele", () => {
+    const e = avaliar("Não temos pizza. Olha essas 👇", ["PRODUTO_FALSO_999"]);
+    expect(e.severity).toBe("P0");
+    expect(e.evidence.join(" ")).toMatch(/fora do catálogo/);
+  });
+
+  it("o motor de verdade, na frase de verdade, não é mais P0", () => {
+    const s = cenario();
+    return WaiterSimulationAdapter.runScenario(s).then((out) => {
+      expect(out.finalMessage).toContain("pizza");
+      expect(WaiterSimulationAdapter.evaluateScenario(s, out).severity).toBe("INFO");
+    });
+  });
+
+  it("todas as frases do cenário passam no motor determinístico", async () => {
+    const base = cenario();
+    for (const msg of ["vocês têm pizza?", "tem hambúrguer?", "tem lasanha?", "vende açaí?"]) {
+      const s = { ...base, initialMessage: msg };
+      const out = await WaiterSimulationAdapter.runScenario(s);
+      const e = WaiterSimulationAdapter.evaluateScenario(s, out);
+      expect(e.severity, `${msg} → "${out.finalMessage}" | ${e.evidence.join(" | ")}`).not.toBe("P0");
+    }
+  });
+});
+
 describe("AgentSimulationService — end-to-end with the Waiter adapter", () => {
   it("runs a full simulation, dry-run, runtimeTouched false", async () => {
     const result = await runSimulation(WaiterSimulationAdapter, { seed: "e2e", scenarioCount: 12 });
