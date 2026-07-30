@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveByToken } from "@/services/print/PrintAgentService";
+import { registrarAck } from "@/services/print/PrintJobLease";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -23,19 +24,18 @@ export async function POST(req: NextRequest) {
 
   const jobId = typeof body.jobId === "string" ? body.jobId : "";
   const job = await prisma.printJob.findFirst({
-    where: { id: jobId, restaurantId: agent.restaurantId },
+    where:  { id: jobId, restaurantId: agent.restaurantId },
+    select: { id: true, attempts: true },
   });
   if (!job) return NextResponse.json({ ok: false, error: "Job não encontrado." }, { status: 404 });
 
-  const printed = body.ok === true;
-  await prisma.printJob.update({
-    where: { id: job.id },
-    data: {
-      status: printed ? "PRINTED" : "FAILED",
-      printedAt: printed ? new Date() : null,
-      error: typeof body.error === "string" ? body.error.slice(0, 500) : null,
-    },
-  });
+  // Falha não é sentença: volta para a fila com respiro até esgotar as
+  // tentativas. Papel acabando por dez segundos não pode matar uma comanda.
+  const destino = await registrarAck(
+    job,
+    body.ok === true,
+    typeof body.error === "string" ? body.error : null,
+  );
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, status: destino });
 }
