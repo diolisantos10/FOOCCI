@@ -349,10 +349,9 @@ export function Highlights({ data }: { data: DashboardData }) {
 // "Faturamento". Barra empilhada 100% + legenda com valor e % — respeita a régua.
 
 const SOURCE_META: Record<RevenueSourceKey, { label: string; color: string; hint: string }> = {
-  crm:      { label: "CRM",            color: "#EA580C", hint: "campanhas e automações" },
-  referral: { label: "Indicações",     color: "#059669", hint: "vieram indicados" },
-  new:      { label: "Clientes novos", color: "#0284C7", hint: "primeira compra" },
-  organic:  { label: "Orgânico",       color: "#78716C", hint: "por conta própria" },
+  crm:        { label: "CRM",                 color: "#EA580C", hint: "campanhas e automações" },
+  garcom:     { label: "Garçom / Indicações", color: "#059669", hint: "recomendou ou indicou" },
+  espontanea: { label: "Espontânea",          color: "#0284C7", hint: "cliente por conta própria" },
 };
 
 // Ponto na circunferência (0° = topo) — para desenhar os arcos do donut.
@@ -419,7 +418,7 @@ export function RevenueSources({ data }: { data: DashboardData }) {
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
           <RevenueDonut buckets={src.buckets} total={total} />
           {/* Legenda: cor + origem, valor e % + dica */}
-          <div className="grid w-full flex-1 grid-cols-2 gap-x-5 gap-y-4">
+          <div className="grid w-full flex-1 grid-cols-1 gap-3.5">
             {src.buckets.map((b) => {
               const m   = SOURCE_META[b.key];
               const pct = total > 0 ? Math.round((b.revenue / total) * 100) : 0;

@@ -1,22 +1,20 @@
 /**
- * RevenueAttributionService — "de onde vem o faturamento".
+ * RevenueAttributionService — "de onde vem a venda".
  *
- * Splits a period's revenue into four MUTUALLY EXCLUSIVE buckets so the shares
- * sum to exactly the dashboard's "Faturamento":
+ * Splits a period's revenue into THREE mutually exclusive buckets of INFLUENCE,
+ * so the shares sum to exactly the dashboard's "Faturamento":
  *
- *   • referral — the order that validated a Foocci indicação (Referral.orderId).
- *   • new      — the customer's FIRST order (acquisition), when not a referral.
- *   • crm      — a returning order the CRM engine brought back (campaign execution,
- *                AI/automation action log, or a redeemed campaign coupon).
- *   • organic  — everything else: a returning customer ordering on their own,
- *                plus imported/historical orders (no Foocci attribution).
+ *   • garcom      — the Foocci agent drove the sale: a validated indicação
+ *                   (Referral) OR the order carried an item the agent upsold /
+ *                   recommended.
+ *   • crm         — a CRM campaign/automation brought the customer (campaign
+ *                   execution, AI/automation action, or a campaign coupon).
+ *   • espontanea  — none of the above: the customer bought on their own.
  *
- * Priority (referral > new > crm > organic) resolves overlaps: a referral order
- * is also a first order, so we credit the referral; a new customer isn't "CRM".
- * Nothing is double-counted — each order lands in exactly one bucket.
- *
- * The pure `bucketRevenueSources` holds the classification rule (unit-tested);
- * `getRevenueSources` does the tenant-scoped queries and feeds it.
+ * Priority (referral > crm > upsell > espontânea) resolves overlaps so each order
+ * lands in exactly one bucket — nothing double-counted. The pure
+ * `bucketRevenueSources` holds the rule (unit-tested); `getRevenueSources` runs
+ * the tenant-scoped queries and feeds it.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -26,7 +24,7 @@ import { OrderStatus } from "@prisma/client";
 // so this breakdown always sums to the number shown in the KPI square.
 const REVENUE_STATUS: OrderStatus[] = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
 
-export type RevenueSourceKey = "crm" | "referral" | "new" | "organic";
+export type RevenueSourceKey = "crm" | "garcom" | "espontanea";
 
 export interface RevenueSourceBucket {
   key: RevenueSourceKey;
@@ -36,37 +34,35 @@ export interface RevenueSourceBucket {
 
 export interface RevenueSourcesResult {
   total: number;
-  buckets: RevenueSourceBucket[]; // always the 4 keys, in display order
+  buckets: RevenueSourceBucket[]; // always the 3 keys, in display order
 }
 
 /** Display order for the buckets (also the shape of an empty result). */
-const DISPLAY_ORDER: RevenueSourceKey[] = ["crm", "referral", "new", "organic"];
+const DISPLAY_ORDER: RevenueSourceKey[] = ["crm", "garcom", "espontanea"];
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Pure classifier. Each order → exactly one bucket by priority
- * referral > new > crm > organic. Sums to the orders' total.
+ * referral > crm > upsell > espontânea. Sums to the orders' total.
  */
 export function bucketRevenueSources(
-  orders: Array<{ id: string; total: number; isFirst: boolean }>,
-  crmOrderIds: Set<string>,
-  referralOrderIds: Set<string>,
+  orders: Array<{ id: string; total: number }>,
+  sets: { referral: Set<string>; crm: Set<string>; upsell: Set<string> },
 ): RevenueSourcesResult {
   const acc: Record<RevenueSourceKey, { revenue: number; orders: number }> = {
-    crm:      { revenue: 0, orders: 0 },
-    referral: { revenue: 0, orders: 0 },
-    new:      { revenue: 0, orders: 0 },
-    organic:  { revenue: 0, orders: 0 },
+    crm:        { revenue: 0, orders: 0 },
+    garcom:     { revenue: 0, orders: 0 },
+    espontanea: { revenue: 0, orders: 0 },
   };
   let total = 0;
   for (const o of orders) {
     total += o.total;
     const key: RevenueSourceKey =
-      referralOrderIds.has(o.id) ? "referral"
-      : o.isFirst               ? "new"
-      : crmOrderIds.has(o.id)   ? "crm"
-      : "organic";
+      sets.referral.has(o.id) ? "garcom"     // agente indicou (referral)
+      : sets.crm.has(o.id)    ? "crm"        // CRM trouxe de volta
+      : sets.upsell.has(o.id) ? "garcom"     // agente recomendou (upsell)
+      : "espontanea";                        // cliente por conta própria
     acc[key].revenue += o.total;
     acc[key].orders  += 1;
   }
@@ -96,14 +92,13 @@ export async function getRevenueSources(
       createdAt: { gte: rangeStart, lte: rangeEnd },
       status:    { in: REVENUE_STATUS },
     },
-    select: { id: true, total: true, customerId: true, importedAt: true, createdAt: true },
+    select: { id: true, total: true },
   });
   if (orders.length === 0) return emptyResult();
 
-  const orderIds    = orders.map((o) => o.id);
-  const customerIds = [...new Set(orders.filter((o) => o.customerId).map((o) => o.customerId as string))];
+  const orderIds = orders.map((o) => o.id);
 
-  const [crmExec, crmActions, campaignCoupons, referrals, firstOrderAgg] = await Promise.all([
+  const [crmExec, crmActions, campaignCoupons, referrals, upsellItems] = await Promise.all([
     // CRM: a campaign recipient that converted on one of these orders
     prisma.campaignExecution.findMany({
       where:  { convertedOrderId: { in: orderIds } },
@@ -119,42 +114,31 @@ export async function getRevenueSources(
       where:  { usedOrderId: { in: orderIds }, sourceCampaignId: { not: null } },
       select: { usedOrderId: true },
     }),
-    // Referral: the order that validated a Foocci indicação
+    // Garçom: the order that validated a Foocci indicação (referral)
     prisma.referral.findMany({
       where:  { restaurantId, orderId: { in: orderIds } },
       select: { orderId: true },
     }),
-    // New customer: each customer's earliest valid, non-imported order (all time).
-    // If that earliest order falls inside the period, it's an acquisition here.
-    customerIds.length > 0
-      ? prisma.order.groupBy({
-          by:    ["customerId"],
-          where: { restaurantId, customerId: { in: customerIds }, importedAt: null, status: { in: REVENUE_STATUS } },
-          _min:  { createdAt: true },
-        })
-      : Promise.resolve([] as Array<{ customerId: string | null; _min: { createdAt: Date | null } }>),
+    // Garçom: the order carried an item the agent upsold / recommended
+    prisma.orderItem.findMany({
+      where:  { orderId: { in: orderIds }, isUpsell: true },
+      select: { orderId: true },
+    }),
   ]);
 
-  const crmOrderIds = new Set<string>();
-  for (const e of crmExec)         if (e.convertedOrderId) crmOrderIds.add(e.convertedOrderId);
-  for (const a of crmActions)      if (a.orderId)          crmOrderIds.add(a.orderId);
-  for (const c of campaignCoupons) if (c.usedOrderId)      crmOrderIds.add(c.usedOrderId);
+  const crm = new Set<string>();
+  for (const e of crmExec)         if (e.convertedOrderId) crm.add(e.convertedOrderId);
+  for (const a of crmActions)      if (a.orderId)          crm.add(a.orderId);
+  for (const c of campaignCoupons) if (c.usedOrderId)      crm.add(c.usedOrderId);
 
-  const referralOrderIds = new Set<string>();
-  for (const r of referrals) if (r.orderId) referralOrderIds.add(r.orderId);
+  const referral = new Set<string>();
+  for (const r of referrals) if (r.orderId) referral.add(r.orderId);
 
-  const firstOrderAtByCustomer = new Map<string, number>();
-  for (const g of firstOrderAgg) {
-    if (g.customerId && g._min.createdAt) firstOrderAtByCustomer.set(g.customerId, g._min.createdAt.getTime());
-  }
+  const upsell = new Set<string>();
+  for (const u of upsellItems) if (u.orderId) upsell.add(u.orderId);
 
-  const mapped = orders.map((o) => ({
-    id:      o.id,
-    total:   Number(o.total),
-    // First order = non-imported, has a customer, and this row IS that customer's
-    // earliest valid order (its createdAt equals the per-customer minimum).
-    isFirst: !o.importedAt && !!o.customerId && firstOrderAtByCustomer.get(o.customerId) === o.createdAt.getTime(),
-  }));
-
-  return bucketRevenueSources(mapped, crmOrderIds, referralOrderIds);
+  return bucketRevenueSources(
+    orders.map((o) => ({ id: o.id, total: Number(o.total) })),
+    { referral, crm, upsell },
+  );
 }
