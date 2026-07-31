@@ -38,6 +38,15 @@ import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from 
 import { getPublicMenuUrl, getPublicQrUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { signWaToken } from "@/lib/wa-token";
 import { buildShortMenuUrl } from "@/lib/wa-menu-link";
+import { respostaQuandoNaoEntendeu } from "./respostaDeQueda";
+
+/**
+ * Janela que define "conversa em andamento" — o mesmo valor que o Cérebro usa
+ * para decidir sessão ativa. As duas peças PRECISAM concordar: se divergirem,
+ * uma acha que a conversa começou e a outra acha que não, e o cliente recebe a
+ * saudação no meio do atendimento (o incidente que originou `respostaDeQueda`).
+ */
+const JANELA_DE_SESSAO_MS = 30 * 60 * 1000;
 import {
   P0_FALLBACK_REPLY,
   isRepeatedClarificationLoop,
@@ -1412,6 +1421,29 @@ async function run(conversationId: string): Promise<void> {
           }
         } else {
           // Deterministic template path
+          //
+          // ── A queda NÃO pode apagar a conversa ───────────────────────────────
+          // Todo portão do Cérebro que reprova cai aqui. Antes, sem intenção que
+          // casasse, a resposta era a SAUDAÇÃO — e uma cliente real recebeu a tela
+          // de entrada cinco vezes no meio de um pedido. Do ponto de vista dela, o
+          // robô teve amnésia cinco vezes.
+          //
+          // Saber se a conversa já começou é o que separa "acolher quem chegou" de
+          // "esquecer quem já estava aqui". Mesma janela de 30 min que o Cérebro
+          // usa para decidir sessão ativa — as duas peças precisam concordar.
+          const ultimaFalaDoAgente = await prisma.message.findFirst({
+            where:   { conversationId, direction: "OUTBOUND", senderType: "AI",
+                       sentAt: { gte: new Date(Date.now() - JANELA_DE_SESSAO_MS) } },
+            orderBy: { sentAt: "desc" },
+            select:  { content: true },
+          }).catch(() => null);
+          const quedaSemApagar = () =>
+            respostaQuandoNaoEntendeu({
+              conversaEmAndamento: ultimaFalaDoAgente !== null,
+              saudacao:            ctx.welcomeMessage,
+              ultimaFalaDoAgente:  ultimaFalaDoAgente?.content,
+            });
+
           if (intent === "GREETING") {
             // First message in conversation + menu options available:
             // ALWAYS show the configured menu first. If restaurant is currently
@@ -1447,10 +1479,10 @@ async function run(conversationId: string): Promise<void> {
                 replyText += `\n\nCardápio completo: ${ctx.pedidoUrl}`;
               }
             } else {
-              replyText = appendBackToMainMenu(templateReply ?? ctx.welcomeMessage);
+              replyText = appendBackToMainMenu(templateReply ?? quedaSemApagar());
             }
           } else {
-            replyText = appendBackToMainMenu(templateReply ?? ctx.welcomeMessage);
+            replyText = appendBackToMainMenu(templateReply ?? quedaSemApagar());
           }
           triggerHandoff = false;
 

@@ -289,6 +289,12 @@ const WHATSAPP_PROFILE: AgentProfileDefinition = {
     "Tratar mensagem social ou dúvida como item de cardápio",
     "Afirmar que aceita um benefício ou pagamento que não está cadastrado",
     "Alterar preços, cardápio ou regras do restaurante",
+    // Este agente NÃO tem carrinho. Uma cliente real disse "sim" duas vezes para
+    // "posso confirmar o seu pedido?" e as duas caíram no vazio, porque não havia
+    // pedido nenhum. Quem quer pedir vai para o cardápio — e o gate abaixo é a
+    // trava: prompt sozinho já provou não segurar.
+    "Dizer que adicionou, anotou, montou ou vai confirmar um pedido — este agente não cria pedido",
+    "Perguntar endereço, forma de pagamento ou troco como se fosse fechar o pedido",
   ],
   tools: ["answer_question", "route_to_ordering", "transfer_to_human"],
   knowledgeAreas: [
