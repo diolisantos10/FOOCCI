@@ -5618,9 +5618,13 @@ function CrmConfiguracoes() {
 
         {/* (b) Limite de contatos */}
         <div className="mt-5 border-t border-line pt-5">
-          <p className="text-sm font-semibold text-ink">Limite de contatos</p>
+          <p className="text-sm font-semibold text-ink">
+            Limite de contatos <span className="font-normal text-muted">(no total, para sempre)</span>
+          </p>
           <p className="mt-0.5 text-xs text-muted">
-            Quantas pessoas diferentes o CRM pode abordar no total. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. 0 = sem limite.
+            Teto de pessoas <strong>diferentes</strong> que o CRM pode abordar na <strong>vida toda</strong>. Não confunda com o
+            limite diário acima: aquele é <strong>por dia</strong> e reseta todo dia; este <strong>acumula e nunca zera sozinho</strong>.
+            Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. <strong>0 = sem limite.</strong>
           </p>
           {(() => {
             const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
@@ -5628,7 +5632,8 @@ function CrmConfiguracoes() {
             const on    = total > 0;
             const remaining = on ? Math.max(0, total - used) : 0;
             const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
-            const low   = on && remaining <= Math.max(1, Math.round(total * 0.1));
+            const exhausted = on && remaining <= 0;
+            const low   = on && !exhausted && remaining <= Math.max(1, Math.round(total * 0.1));
             return (
               <div className="mt-3 grid gap-5 sm:grid-cols-2">
                 <CfgField
@@ -5646,19 +5651,27 @@ function CrmConfiguracoes() {
                   />
                 </CfgField>
 
-                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                <div className={`rounded-xl border px-4 py-3 ${exhausted ? "border-red-300 bg-red-50" : "border-line bg-[#FAFAF8]"}`}>
                   {on ? (
                     <>
                       <div className="flex items-baseline justify-between">
                         <span className="text-sm text-muted">Contatos restantes</span>
-                        <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                        <span className={`text-lg font-bold ${exhausted ? "text-red-600" : low ? "text-amber-600" : "text-emerald-600"}`}>
                           {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
                         </span>
                       </div>
                       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                        <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                        <div className={`h-full rounded-full ${exhausted ? "bg-red-500" : low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                      {exhausted ? (
+                        <p className="mt-2 text-xs font-semibold text-red-700">
+                          🚫 Alcance esgotado: {used} pessoas já abordadas atingiram o teto de {total}. O CRM
+                          <strong> não consegue abordar novos clientes</strong> até você aumentar este número.
+                          Ligue “Assumir controle manual” acima e coloque <strong>0 (sem limite)</strong> ou um valor bem maior.
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-muted">
@@ -5834,9 +5847,6 @@ function CrmConfiguracoes() {
         </p>
       </CfgCard>
 
-      {/* G — Agente de CRM (a IA de mensagens, ao vivo) */}
-      <CrmAgentPanel />
-
       {/* Save */}
       <div className="flex justify-end pt-2">
         <button
@@ -5948,24 +5958,7 @@ export function CRMClient({
   const [topCustomers, setTopCustomers] = useState<import("@/services/crm/CRMService").TopCustomersResult | null>(null);
   const [topCustomersLoading, setTopCustomersLoading] = useState(false);
 
-  // Campaigns for the overview "top 5 mais rentáveis" preview (same table as the CRM panel)
-  const [overviewCampaigns, setOverviewCampaigns] = useState<CampaignHistoryRow[]>([]);
-  const refreshOverviewCampaigns = useCallback(() => {
-    fetch("/api/crm/campaigns")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json) => setOverviewCampaigns(json.data ?? []))
-      .catch(() => {});
-  }, []);
-  async function overviewCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
-    await fetch(`/api/crm/campaigns/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ action }),
-    }).catch(() => {});
-    refreshOverviewCampaigns();
-  }
-
-  // Load initial revenue summary + top customers + campaigns (all-time) on mount
+  // Load initial revenue summary + top customers on mount
   useEffect(() => {
     fetch("/api/crm/revenue-summary")
       .then((r) => (r.ok ? r.json() : null))
@@ -5975,7 +5968,6 @@ export function CRMClient({
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (json?.data) setTopCustomers(json.data); })
       .catch(() => {});
-    refreshOverviewCampaigns();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDateChange(
@@ -6111,7 +6103,9 @@ export function CRMClient({
 
       {/* Tab content */}
       {tab === "overview" && (
-        <OverviewTab
+        <div className="flex flex-col gap-4">
+          <CrmAgentPanel />
+          <OverviewTab
           stats={currentStats}
           opportunitiesCount={opportunitiesCount}
           actions={initialActions}
@@ -6126,16 +6120,8 @@ export function CRMClient({
           revenueSummaryLoading={revenueSummaryLoading}
           topCustomers={topCustomers}
           topCustomersLoading={topCustomersLoading}
-          campaignsSlot={
-            <CampanhasAtivasSection
-              campaigns={overviewCampaigns}
-              onDetail={() => setTab("campanhas")}
-              onAction={overviewCampaignAction}
-              limit={5}
-              onSeeAll={() => setTab("campanhas")}
-            />
-          }
-        />
+          />
+        </div>
       )}
       {tab === "campanhas" && (
         <CampanhasTab stats={currentStats} />
