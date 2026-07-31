@@ -16,9 +16,13 @@
 6. **Robô noturno (manual vivo)** — workflow diário 03:07 BRT reescreve guias
    das telas alteradas + auto-publicação no boot do deploy. Playbook + log em docs/.
 
-## ⚠️ Bloqueado — depende do Diego
-- **B1. Segredo `ANTHROPIC_API_KEY` no GitHub** (Settings → Secrets → Actions).
-  Sem ele o robô noturno acorda mas não roda a IA. É o único passo manual.
+## ✅ Desbloqueado — nada pendente com o Diego
+- **B1. Segredo `ANTHROPIC_API_KEY` no GitHub** — **RESOLVIDO em 30/07/2026.**
+  O segredo entrou e o robô passou a rodar de verdade: execução manual de
+  30/07 12:00 UTC verde (primeiro sucesso) e a agendada de 31/07 06:07 UTC
+  também. No run agendado, o passo "Claude — executar o playbook do manual"
+  levou 4min07s — a IA rodou, não foi só o check do segredo passando batido.
+  Toda execução agendada anterior a 30/07 falhava por falta da chave.
 
 ## ✅ Entregue (2ª leva)
 7. **P1 — Guias das sub-telas de Configurações** — Loja, Equipe, Impressoras,
