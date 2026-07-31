@@ -482,7 +482,8 @@ model RecipeLine {
   id           String   @id @default(cuid())
   menuItemId   String
   ingredientId String
-  quantity     Decimal? @db.Decimal(12, 4) // na unidade do ingrediente
+  quantity     Decimal? @db.Decimal(12, 4) // na unidade de USO (abaixo)
+  unit         String? // unidade de uso no prato; null = usa a unidade de compra do insumo
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -68,7 +68,7 @@ export default async function PrecificacaoPage({
     }),
     prisma.recipeLine.findMany({
       where: { menuItem: { category: { restaurantId } } },
-      select: { menuItemId: true, ingredientId: true, quantity: true },
+      select: { menuItemId: true, ingredientId: true, quantity: true, unit: true },
     }),
   ]);
 
@@ -124,6 +124,7 @@ export default async function PrecificacaoPage({
     menuItemId: l.menuItemId,
     ingredientId: l.ingredientId,
     quantity: l.quantity === null ? null : Number(l.quantity),
+    unit: l.unit,
   }));
 
   const initialCategories: CategoryDTO[] = categories.map((c) => ({

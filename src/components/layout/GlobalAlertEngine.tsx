@@ -35,6 +35,7 @@ import { usePathname } from "next/navigation";
 import { AlertLoopController } from "@/lib/alert-loop";
 import { playAlertAudio, installGlobalAudioArming, resumeSharedAudioContext } from "@/lib/sound-player";
 import { markAudioArmed } from "@/lib/audio-gate";
+import { startSoundLeaderElection } from "@/lib/sound-leader";
 import {
   ORDER_ALERT_ASSET,
   HANDOFF_ALERT_ASSET,
@@ -181,11 +182,14 @@ export function GlobalAlertEngine() {
     const resolvedOrderIds = new Set<string>();
 
     // ── The rule, in one place ───────────────────────────────────────────────
-    // Ring on ANY screen, gated only by this tab being in the foreground. Which
-    // screen you are on no longer matters — the signal itself (a pending order /
-    // a waiting customer) is what decides, exactly as Configurações → Sons says.
-    const canRingOrder   = () => isVisibleRef.current;
-    const canRingHandoff = () => isVisibleRef.current;
+    // Ring on ANY screen. Which tab rings is decided by a cross-tab LEADER (Web
+    // Locks) instead of "is this tab in the foreground" — so the alarm sounds even
+    // when FOOCCI is a BACKGROUND tab (owner working on another site), while still
+    // never ringing in two tabs at once. Sem Web Locks → cai no gate de foco antigo.
+    const leader = startSoundLeaderElection(() => reevalRef.current());
+    const canRing = () => (leader.supported ? leader.isLeader() : isVisibleRef.current);
+    const canRingOrder   = canRing;
+    const canRingHandoff = canRing;
     const safeOrderSync = (ids: string[]) =>
       orderController.sync(canRingOrder() ? ids.filter((id) => !resolvedOrderIds.has(id)) : []);
     const safeHandoffSync = (ids: string[]) => handoffController.sync(canRingHandoff() ? ids : []);
@@ -293,6 +297,7 @@ export function GlobalAlertEngine() {
       window.removeEventListener("foocci:order-resolved", onOrderResolved);
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
       disposeArming();
+      leader.dispose();
       reevalRef.current = () => {};
       orderController.dispose();
       handoffController.dispose();

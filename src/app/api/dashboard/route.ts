@@ -22,6 +22,7 @@ import { OrderStatus, CampaignStatus } from "@prisma/client";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { computePeriodRange, buildChartBuckets, type Period } from "@/lib/dashboard-periods";
+import { getRevenueSources } from "@/services/dashboard/RevenueAttributionService";
 
 const TERMINAL: OrderStatus[]        = ["DELIVERED", "CANCELLED"];
 const REVENUE_STATUS: OrderStatus[]  = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
@@ -170,7 +171,7 @@ export async function GET(req: NextRequest) {
     //    period + JS intersection, instead of 2 counts × N channels.
     const [
       convRowsNow, convRowsPrev, orderCustNow, orderCustPrev,
-      menuEntriesNow, menuEntriesPrev,
+      menuEntriesNow, menuEntriesPrev, revenueSources,
     ] = await Promise.all([
       prisma.conversation.findMany({
         where: { restaurantId: ctx.restaurantId, createdAt: { gte: rangeStart, lte: rangeEnd }, customerId: { not: null }, customer: { isGuest: false } },
@@ -200,6 +201,8 @@ export async function GET(req: NextRequest) {
       prisma.menuEvent.count({
         where: { restaurantId: ctx.restaurantId, createdAt: { gte: prevStart, lt: prevFetchEnd } },
       }),
+      // De onde vem o faturamento (atribuição por origem) — mesma janela do período
+      getRevenueSources(ctx.restaurantId, rangeStart, rangeEnd),
     ]);
 
     const CHANNEL_GROUPS: Array<{ key: string; channels: string[] }> = [
@@ -372,6 +375,10 @@ export async function GET(req: NextRequest) {
 
       // Period: order source / channel attribution
       ordersBySource: sourceMap,
+
+      // Period: revenue attribution — de onde vem o faturamento
+      // (crm × indicações × clientes novos × orgânico), soma = revenuePeriod
+      revenueSources,
 
       // Campaigns (real-time)
       activeCampaigns: activeCampaigns.map(c => ({

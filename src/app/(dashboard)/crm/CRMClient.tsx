@@ -23,7 +23,6 @@ import { ReadyMadeCampaignsSection, type ReadyMadeState } from "./ReadyMadeCampa
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, RevenueBlock, type DateFilterPreset } from "./OverviewTab";
-import CrmAgentPanel from "./CrmAgentPanel";
 import CrmCampaignAI from "./CrmCampaignAI";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
 import { ConversoesTab } from "./ConversoesTab";
@@ -4200,23 +4199,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     setCampaigns((prev) => prev.map((c) => c.id === id ? { ...c, ...updates } : c));
   }
 
-  const [resettingMetrics, setResettingMetrics] = useState(false);
-  async function handleResetMetrics() {
-    if (!confirm("Limpar as métricas (enviados, falhas, receita) de TODAS as campanhas e apagar o histórico de falhas antigas?\n\nComeça a contar do zero. Não reenvia mensagens nem apaga clientes — os envios bem-sucedidos são mantidos.")) return;
-    setResettingMetrics(true);
-    try {
-      const res = await fetch("/api/crm/campaigns/reset-metrics", { method: "POST" });
-      if (res.ok) {
-        setCampaigns((prev) => prev.map((c) => ({
-          ...c, totalSent: 0, totalFailed: 0, totalResponded: 0, totalConverted: 0, totalRevenue: 0,
-        })));
-        setReadyMadeReload((n) => n + 1);
-      }
-    } finally {
-      setResettingMetrics(false);
-    }
-  }
-
   useEffect(() => {
     fetch("/api/crm/custom-actions")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -4267,26 +4249,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           <p className="mt-0.5 text-xs text-muted">
             Ligue uma campanha pronta ou crie a sua. Tudo via WhatsApp, com segurança de envio.
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={handleResetMetrics}
-            disabled={resettingMetrics}
-            className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-muted hover:bg-[#FAFAF8] hover:text-ink2 transition-colors disabled:opacity-50"
-            title="Zera enviados, falhas e receita de todas as campanhas para começar a contar do zero. Não reenvia mensagens."
-          >
-            {resettingMetrics ? "Limpando…" : "🧹 Limpar métricas"}
-          </button>
-          <button
-            onClick={() => void handleCreateCustomCampaign()}
-            disabled={creatingCampaign}
-            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-60"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            {creatingCampaign ? "Criando…" : "Criar minha campanha"}
-          </button>
         </div>
       </div>
 
@@ -4359,6 +4321,29 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         )}
       </div>
 
+      {/* ── Criar campanha personalizada (manual OU por IA — texto/voz), acima da tabela ── */}
+      <div className="space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-bold text-ink">Criar campanha personalizada</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Preencha manualmente no botão, ou descreva por texto/voz que a IA monta pra você.
+            </p>
+          </div>
+          <button
+            onClick={() => void handleCreateCustomCampaign()}
+            disabled={creatingCampaign}
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-60"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            {creatingCampaign ? "Criando…" : "Preencher manual"}
+          </button>
+        </div>
+        <CrmCampaignAI onCreated={() => setReadyMadeReload((n) => n + 1)} />
+      </div>
+
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
       {!loadingHistory && (
         <CampanhasAtivasSection
@@ -4374,9 +4359,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
       )}
-
-      {/* ── Criar campanha com IA (texto ou voz) ─────────────────────────────── */}
-      <CrmCampaignAI onCreated={() => setReadyMadeReload((n) => n + 1)} />
 
       {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
       <ReadyMadeCampaignsSection
@@ -5511,7 +5493,7 @@ function CrmConfiguracoes() {
   const [success, setSuccess] = useState<string | null>(null);
   const [error,   setError]   = useState<string | null>(null);
   const [cfg, setCfg]         = useState<SafetyCfg>({ ...DEFAULT_CFG });
-  const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number }>({ ageDays: 0, safeDailyLimit: 20 });
+  const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number; metaOfficial?: boolean; qualityRating?: string | null; messagingLimit?: string | null }>({ ageDays: 0, safeDailyLimit: 20 });
 
   useEffect(() => {
     fetch("/api/settings/crm-safety")
@@ -5579,35 +5561,10 @@ function CrmConfiguracoes() {
         </div>
       )}
 
-      {/* Hub — todas as configurações do CRM a partir de um lugar */}
-      <div className="rounded-2xl border border-line bg-paper p-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-muted">Configurações do CRM</p>
-        <p className="mt-0.5 text-xs text-muted">Ajuste tudo a partir daqui.</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            { href: "/settings/marketing", emoji: "💬", title: "Configuração do WhatsApp", sub: "Limites e regras de envio de mensagens" },
-            { href: "/crm?tab=programa",   emoji: "🏆", title: "Níveis dos clientes", sub: "Bronze, Prata, Ouro, Diamante" },
-          ].map((s) => (
-            <Link
-              key={s.href}
-              href={s.href}
-              className="flex items-start gap-2 rounded-xl border border-line bg-[#FAFAF8] px-3 py-2.5 transition-colors hover:bg-white"
-            >
-              <span className="text-lg leading-none">{s.emoji}</span>
-              <span>
-                <span className="block text-[12px] font-bold text-ink">{s.title}</span>
-                <span className="block text-[10px] text-muted">{s.sub}</span>
-              </span>
-            </Link>
-          ))}
-        </div>
-        <p className="mt-2 text-[10px] text-muted">As regras de segurança de envio ficam logo abaixo. A classificação dos clientes fica na aba Clientes.</p>
-      </div>
-
       {/* Regras de Segurança — controle manual + limite de contatos + proteções */}
       <CfgCard
         title="Regras de Segurança"
-        subtitle="Protegem o seu número de WhatsApp contra bloqueio. No modo seguro o limite de mensagens do dia sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — aí o risco fica com você."
+        subtitle="O limite de mensagens por dia é o teto oficial da Meta, e sobe sozinho conforme a qualidade do seu número. As regras abaixo cuidam do ritmo de envio para o cliente."
       >
         {/* (a) Controle manual + modo seguro */}
         <CfgToggle
@@ -5620,14 +5577,19 @@ function CrmConfiguracoes() {
         {!cfg.manualOverride ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-emerald-800">🔒 Modo seguro ativo</span>
+              <span className="text-sm font-semibold text-emerald-800">🟢 Limite oficial da Meta</span>
               <span className="text-lg font-bold text-emerald-700">
                 {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia hoje</span>
               </span>
             </div>
             <p className="mt-1.5 text-xs text-emerald-800/80">
-              Limite seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
-              Sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
+              Este é o limite <strong>oficial da Meta</strong> para o seu WhatsApp Business
+              {(() => {
+                const q = warmup.qualityRating;
+                const lbl = q === "GREEN" || q === "HIGH" ? "alta" : q === "YELLOW" || q === "MEDIUM" ? "média" : q === "RED" || q === "LOW" ? "baixa" : null;
+                return lbl ? <> — qualidade do número: <strong>{lbl}</strong></> : null;
+              })()}
+              . Ele sobe sozinho conforme a qualidade e o histórico do seu número, sem risco de bloqueio.
             </p>
             {/* Valores fixos do modo seguro — congelados, só pra visualização. Ligue o
                 controle manual para editar qualquer um deles. */}
@@ -5660,9 +5622,13 @@ function CrmConfiguracoes() {
 
         {/* (b) Limite de contatos */}
         <div className="mt-5 border-t border-line pt-5">
-          <p className="text-sm font-semibold text-ink">Limite de contatos</p>
+          <p className="text-sm font-semibold text-ink">
+            Limite de contatos <span className="font-normal text-muted">(no total, para sempre)</span>
+          </p>
           <p className="mt-0.5 text-xs text-muted">
-            Quantas pessoas diferentes o CRM pode abordar no total. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. 0 = sem limite.
+            Teto de pessoas <strong>diferentes</strong> que o CRM pode abordar na <strong>vida toda</strong>. Não confunda com o
+            limite diário acima: aquele é <strong>por dia</strong> e reseta todo dia; este <strong>acumula e nunca zera sozinho</strong>.
+            Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. <strong>0 = sem limite.</strong>
           </p>
           {(() => {
             const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
@@ -5670,7 +5636,8 @@ function CrmConfiguracoes() {
             const on    = total > 0;
             const remaining = on ? Math.max(0, total - used) : 0;
             const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
-            const low   = on && remaining <= Math.max(1, Math.round(total * 0.1));
+            const exhausted = on && remaining <= 0;
+            const low   = on && !exhausted && remaining <= Math.max(1, Math.round(total * 0.1));
             return (
               <div className="mt-3 grid gap-5 sm:grid-cols-2">
                 <CfgField
@@ -5688,19 +5655,26 @@ function CrmConfiguracoes() {
                   />
                 </CfgField>
 
-                <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
+                <div className={`rounded-xl border px-4 py-3 ${exhausted ? "border-amber-200 bg-amber-50" : "border-line bg-[#FAFAF8]"}`}>
                   {on ? (
                     <>
                       <div className="flex items-baseline justify-between">
                         <span className="text-sm text-muted">Contatos restantes</span>
-                        <span className={`text-lg font-bold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                        <span className={`text-lg font-bold ${exhausted ? "text-amber-700" : low ? "text-amber-600" : "text-emerald-600"}`}>
                           {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
                         </span>
                       </div>
                       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                        <div className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                        <div className={`h-full rounded-full ${exhausted || low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                      {exhausted ? (
+                        <p className="mt-2 text-xs text-amber-800">
+                          Limite de contatos atingido — <strong>{used}</strong> pessoas já abordadas. Para falar com novos
+                          clientes, ligue o controle manual acima e aumente o teto (ou coloque <strong>0 = sem limite</strong>).
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-muted">
@@ -5876,9 +5850,6 @@ function CrmConfiguracoes() {
         </p>
       </CfgCard>
 
-      {/* G — Agente de CRM (a IA de mensagens, ao vivo) */}
-      <CrmAgentPanel />
-
       {/* Save */}
       <div className="flex justify-end pt-2">
         <button
@@ -5990,24 +5961,7 @@ export function CRMClient({
   const [topCustomers, setTopCustomers] = useState<import("@/services/crm/CRMService").TopCustomersResult | null>(null);
   const [topCustomersLoading, setTopCustomersLoading] = useState(false);
 
-  // Campaigns for the overview "top 5 mais rentáveis" preview (same table as the CRM panel)
-  const [overviewCampaigns, setOverviewCampaigns] = useState<CampaignHistoryRow[]>([]);
-  const refreshOverviewCampaigns = useCallback(() => {
-    fetch("/api/crm/campaigns")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json) => setOverviewCampaigns(json.data ?? []))
-      .catch(() => {});
-  }, []);
-  async function overviewCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
-    await fetch(`/api/crm/campaigns/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ action }),
-    }).catch(() => {});
-    refreshOverviewCampaigns();
-  }
-
-  // Load initial revenue summary + top customers + campaigns (all-time) on mount
+  // Load initial revenue summary + top customers on mount
   useEffect(() => {
     fetch("/api/crm/revenue-summary")
       .then((r) => (r.ok ? r.json() : null))
@@ -6017,7 +5971,6 @@ export function CRMClient({
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (json?.data) setTopCustomers(json.data); })
       .catch(() => {});
-    refreshOverviewCampaigns();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDateChange(
@@ -6153,7 +6106,8 @@ export function CRMClient({
 
       {/* Tab content */}
       {tab === "overview" && (
-        <OverviewTab
+        <div className="flex flex-col gap-4">
+          <OverviewTab
           stats={currentStats}
           opportunitiesCount={opportunitiesCount}
           actions={initialActions}
@@ -6168,16 +6122,8 @@ export function CRMClient({
           revenueSummaryLoading={revenueSummaryLoading}
           topCustomers={topCustomers}
           topCustomersLoading={topCustomersLoading}
-          campaignsSlot={
-            <CampanhasAtivasSection
-              campaigns={overviewCampaigns}
-              onDetail={() => setTab("campanhas")}
-              onAction={overviewCampaignAction}
-              limit={5}
-              onSeeAll={() => setTab("campanhas")}
-            />
-          }
-        />
+          />
+        </div>
       )}
       {tab === "campanhas" && (
         <CampanhasTab stats={currentStats} />

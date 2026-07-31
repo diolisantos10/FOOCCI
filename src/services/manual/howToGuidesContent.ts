@@ -292,23 +292,44 @@ Para gerar o Pix automaticamente no checkout:
     slug: "guia-criar-campanha-crm",
     title: "Como criar uma campanha / promoção no CRM",
     area: "CRM",
-    description: "Enviar mensagens e promoções para grupos de clientes.",
+    description: "Ligar campanhas prontas ou criar a sua (manual ou por IA) e acompanhar o resultado.",
     content: `# Como criar uma campanha / promoção no CRM
 
 Vá no menu lateral em **Marketing → CRM** e abra a aba **Campanhas**.
 
-1. Escolha um modelo pronto (ex: **🥶 Recuperar clientes frios**, **🌡️ Reativar clientes mornos**, **🔁 Garantir a segunda compra**).
-2. Dê um **Nome da campanha** (ex: "Reativação frios — PROMO10").
-3. Confira o **Segmento alvo** (já vem preenchido pelo modelo) e o **Público estimado**.
-4. Edite a **Mensagem sugerida**. Você pode inserir variáveis: **{nome}**, **{restaurante}**, **{ultimo_pedido}**, **{produto_favorito}**.
-5. Opcional: informe um **Cupom vinculado** (ex: PROMO10) para medir o resultado.
-6. Escolha o tipo de envio:
-   - **Envio único** — manda agora para todos do segmento.
-   - **Agendada** — escolha **Data** e **Hora**.
-   - **Recorrente** — dias da semana, janela de horário e limite diário.
-7. Clique em **Enviar** / **Agendar** / **Ativar recorrente** (ou **Salvar rascunho**).
+## 1. Escolha o período que você quer olhar
+Na régua **Período:** clique em **Hoje**, **Ontem**, **Últimos 7 dias**, **Semana passada**, **Últimos 30 dias**, **Este mês**, **Personalizado** (aí aparecem os campos de data "até") ou **Total**.
 
-> Em "Identidade & evitar repetição" você impede reenvio para quem já recebeu a mesma campanha.`,
+O bloco **Receita gerada pelo CRM** responde ao período escolhido, com os quadros **Receita atribuída**, **Mensagens enviadas**, **Converteram** (% dos enviados) e **Cupons usados**. O gráfico tem os botões **Barras** e **Linha**.
+
+Ao lado fica o quadradinho **📤 Limite de envio** (mensagens/dia) e a **Distribuição** entre campanhas: **🎯 Por audiência**, **Igual p/ todas** ou **Manual**.
+
+## 2. Caminho mais rápido: ligar uma campanha pronta
+Desça até **Campanhas prontas** ("já vêm configuradas para qualquer restaurante — é só ligar"). Ligue a que interessa e use **Gerenciar** se quiser ajustar antes ou depois.
+
+## 3. Criar a sua campanha
+O bloco **Criar campanha personalizada** fica logo acima da lista de campanhas. Dois caminhos:
+
+### a) Com IA — texto ou voz
+Na caixa **✨ Criar campanha com IA**:
+1. Escreva o que você quer (ex: "recuperar quem sumiu faz 30 dias com 10% de desconto") **ou** clique em **🎤 Falar**, fale e clique em **⏹ Parar**.
+2. Clique em **Montar**.
+3. Confira o **Rascunho da IA** (nome, público, objetivo e a mensagem) e clique em **Criar campanha** — ou **Descartar** e tente de novo.
+
+A campanha nasce como rascunho: você revisa e ativa na lista abaixo.
+
+### b) Manual
+Clique em **Preencher manual**. A campanha nasce **pausada** de propósito e abre a janela **Gerenciar campanha**, com as abas **Visão Geral**, **Mensagem**, **Agendamento**, **Performance** e **Diagnóstico**.
+
+## 4. Ajustar na janela "Gerenciar campanha"
+- **Visão Geral** — **Editar nome da campanha** (+ **Salvar**) e **Público-alvo**: Todos os clientes, Clientes quentes, Clientes mornos, Clientes frios, VIPs (Ouro/Diamante), Fizeram só 1 pedido, Cadastrados sem compra, Recorrentes (2+ pedidos) (+ **Salvar**).
+- **Mensagem** — em **Frases da campanha**, ligue as frases que vão rodar (cada envio sorteia uma das ativas e os números mostram qual converte mais). Para escrever a sua: **+ Nova frase personalizada** → **Adicionar frase**.
+- **Agendamento** — em **Editar agendamento** escolha os **Dias da semana**, a **Início** e **Fim** da janela de horário e o **Limite diário (mensagens)** (máximo 200/dia). Clique em **Salvar agendamento**.
+
+## 5. Ligar e acompanhar
+Em **Campanhas ativas** ("campanhas em execução, agendadas ou recorrentes") cada campanha tem **Pausar** / **Retomar** e o detalhe pelo **Gerenciar**. Em **Ver histórico geral** você vê os **Envios recentes (ao vivo)**, com data e hora.
+
+> Se preferir montar a mensagem antes, salve um rascunho em **Modelos salvos** e depois clique em **Usar em campanha** — ali você define **Nome da campanha**, **Público alvo**, **Mensagem sugerida**, **Cupom vinculado** e o tipo: **Envio único**, **Agendada** (Data + Hora) ou **Recorrente**.`,
   },
   {
     slug: "guia-area-entrega-taxas",
@@ -407,20 +428,49 @@ Ao final, clique em **Salvar persona da marca**.`,
     slug: "guia-painel-inicial",
     title: "Como ler o painel inicial (Início)",
     area: "GENERAL",
-    description: "Entender os números e seções da tela inicial.",
+    description: "Entender os números e seções da tela inicial, do período aos Destaques e à origem do faturamento.",
     content: `# Como ler o painel inicial (Início)
 
-No menu lateral, **Início** é o resumo do seu negócio em tempo real.
+No menu lateral, **Início** é o resumo do seu negócio. O topo dá bom dia (ou boa tarde/boa noite), mostra a data e avisa que é **visão em tempo real** — com o período **Hoje**, os números se atualizam sozinhos a cada 2 minutos.
 
-No topo, escolha o período: **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **30 dias** ou **Personalizado**.
+## Primeiro, escolha o período
+No canto de cima ficam os botões **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **30 dias** e **Personalizado** (esse último abre duas datas, "de … **até** …").
 
-- **Saúde do negócio** — os números do período: **Faturamento**, **Pedidos**, **Ticket médio**, **Novos clientes** e **Taxa de conversão** (cada um mostra a variação vs. o período anterior).
-- **Foocci em ação** — o que o Foocci fez por você: **Vendas no upsell**, **Carrinhos recuperados** e **Clientes quentes (CRM)**.
-- **Operação agora** — pedidos em andamento por etapa: **Aguardando**, **Em preparo**, **Prontos** e **Em entrega**, com avisos de atrasados e aguardando pagamento.
-- **O que fazer agora** — ações sugeridas para hoje.
-- **Mais vendidos** — ranking dos produtos do período.
+Essa escolha vale pra **tela toda**: todo número, gráfico e destaque abaixo é do período escolhido e se compara com a janela anterior.
 
-No rodapé, **Ver análise completa →** abre o Analytics.`,
+## Saúde do negócio
+Os cinco números do período, cada um com a variação em % vs. o período anterior:
+**Faturamento**, **Pedidos**, **Ticket médio**, **Novos clientes** e **Taxa de conversão** (quantos dos que entraram compraram — ex: "8 compraram de 40 que entraram").
+
+## Receita no período
+O gráfico de barras do faturamento. Em **Hoje**/**Ontem** cada barra é uma hora; em períodos longos, um dia. A barra escura é **Atual** e a barra clarinha do lado é a janela de comparação (a legenda embaixo diz qual). A barra laranja é a mais recente com venda. Passe o mouse pra ver o valor exato.
+
+## Destaques
+Ao lado do gráfico, o "diário" do período — os melhores números, em frase curta: quanto faturou acima (ou abaixo) da janela anterior, o **Campeão** de vendas, o **Pico** de horário (ou o **Melhor dia**), ticket médio que subiu, clientes novos, carrinhos recuperados, dinheiro a mais com sugestões e conversão. Aparecem até 6, só o que tiver número no período. Sem vendas ainda, aparece **Sem destaques ainda**.
+
+## Origem do faturamento
+De onde veio **cada real** do período, num gráfico de rosca com o **total** no meio. A legenda ao lado mostra valor e % de cada origem:
+- **CRM** — campanhas e automações.
+- **Indicações** — vieram indicados.
+- **Clientes novos** — primeira compra.
+- **Orgânico** — o cliente pediu por conta própria.
+
+Cada pedido entra em uma origem só, então a soma fecha com o **Faturamento** lá de cima. Passando o mouse na fatia, ela diz o valor e a %.
+
+## Foocci em ação
+O que o Foocci fez por você — e cada quadro leva pra tela onde você age: **Vendas no upsell** (vai pro Analytics), **Carrinhos recuperados** (recuperados/abandonados, vai pro CRM) e **Clientes quentes (CRM)**, com mornos e frios embaixo.
+
+## Operação agora
+Os pedidos em andamento por etapa: **Aguardando**, **Em preparo**, **Prontos** e **Em entrega**, com os avisos **⏱ atrasado(s)** e **💳 aguardando pagamento** quando houver. O título leva pra tela **Pedidos**. Sem nada aberto, mostra **Nenhum pedido em andamento**.
+
+## Mais vendidos
+O ranking dos produtos ("top 10 no período"), com a quantidade vendida de cada um.
+
+## Conversão por canal
+Quantos dos clientes identificados compraram em cada porta de entrada — **WhatsApp**, **Cardápio (link)**, **QR na mesa** e **Instagram** — com a % de agora e a de antes.
+
+## No rodapé
+À esquerda, se houver, aparece o aviso discreto de **ajustes de configuração pendentes** (leva pra tela do ajuste). À direita, **Ver análise completa →** abre o Analytics.`,
   },
   {
     slug: "guia-central-conversas",
@@ -784,15 +834,23 @@ Vá em **Configurações → Impressoras**. A impressão automática usa o **Car
 2. Abra o arquivo com dois cliques. Se o Windows mostrar o aviso azul: **Mais informações → Executar assim mesmo**.
 3. Na telinha do Carteiro, cole o código da tela (**Copiar código**) e clique em **Parear**.
 
-Quando der certo, o topo mostra **"Carteiro conectado"** com as impressoras detectadas.
+Ao fim dos três passos a tela avisa: **"✅ Pronto! O Carteiro acha a impressora sozinho"** — você **não precisa escolher marca nem modelo**, e a partir do pareamento cada pedido imprime automaticamente.
 
-## 2. Impressora de cada estação
+Quando der certo, o topo mostra **"Carteiro conectado"** com as impressoras detectadas. Se já estiver pareado, o passo 3 mostra **"✓ Já conectado — não precisa fazer de novo."**
+
+## 2. Acompanhar a fila (quando o papel não sai)
+O cartão **Fila de impressão** ("o caminho da comanda entre o pedido e o papel") tem três contadores: **Na fila**, **No Carteiro** e **Impressas 24h**.
+
+- Sem nada travado, ele diz **"Nada esperando. Toda comanda enviada saiu no papel."** ou **"Nenhuma comanda travada — o que está na fila ainda vai sair."**
+- Se alguma comanda travar (tentou 5 vezes e não saiu), ela aparece na lista com o **motivo** e a impressora de destino. Confira se o Carteiro está aberto no computador e se a impressora aparece no Windows com esse mesmo nome — depois clique em **Tentar de novo**.
+
+## 3. Impressora de cada estação
 No cartão **"1. Impressora de cada estação"**, escolha a impressora de cada estação (Cozinha, Caixa, Copa…) e clique em **🖨️ Testar** para sair uma comanda de teste.
 
-## 3. Para onde vai cada categoria
+## 4. Para onde vai cada categoria
 No cartão **"2. Para onde vai cada categoria"**, diga em qual estação cada categoria do cardápio imprime. Um prato pode sair em duas cozinhas — use **+ adicionar impressora**.
 
-## 4. Letras grandes (opcional)
+## 5. Letras grandes (opcional)
 **"3. Letras grandes na cozinha"** imprime os itens em letra dupla, mais fácil de ler de longe.
 
 Termine em **Salvar tudo**.`,
@@ -801,10 +859,22 @@ Termine em **Salvar tudo**.`,
     slug: "guia-sons-alertas",
     title: "Como configurar sons e alertas",
     area: "GENERAL",
-    description: "Som de novo pedido e de atendimento humano, volume e temas.",
+    description: "Ativar o som no topo do painel, som de novo pedido e de atendimento humano, volume e temas.",
     content: `# Como configurar sons e alertas
 
-Vá em **Configurações → Sons e alertas**. Regra de ouro: **mantenha a tela do painel aberta** no computador do restaurante — é ela que toca os alertas.
+## Antes de tudo: ativar o som no topo (1 clique)
+Na **faixa branca do topo**, logo depois do nome da tela, fica o controle de som — ele aparece em **todas as abas** do painel:
+
+- **🔔 Ativar som** (laranja, piscando) — é o primeiro acesso naquele navegador. Clique **uma vez**: o navegador libera o som e a escolha fica gravada, então não pergunta mais a cada vez que você abre o painel.
+- **🔔 Som ativo** — já está tudo liberado. Clicando, vai direto pra tela de sons.
+- **🔕 Sons off** — o som está **desligado nas configurações**. Clique pra abrir a tela e ligar.
+
+No celular aparece só o sininho (sem o texto), pra não atrapalhar o resto do topo.
+
+Regra de ouro: **mantenha a tela do painel aberta** no computador do restaurante — é ela que toca os alertas.
+
+## Ajustar os sons
+Vá em **Configurações → Sons e alertas**.
 
 1. **Sons do restaurante** — ligue **Ativar todos os sons**.
 2. **Volume** — ajuste no slider ou nos atalhos (**Baixo 50%** a **Máximo 400%**). Recomendado: **Alto (150%)** para ambiente de cozinha.
@@ -832,5 +902,70 @@ São três textos, cada um com até 5.000 caracteres:
 Escreva (ou cole) os textos e clique em **Salvar**.
 
 > Salvar já publica: os documentos aparecem no rodapé do cardápio web e são enviados ao cliente quando solicitado. Campo vazio = documento não exibido.`,
+  },
+  {
+    slug: "guia-precificacao",
+    title: "Como calcular o CMV e o preço certo de cada prato",
+    area: "ANALYTICS",
+    description: "Premissas, markup, ficha de custo dos insumos e reprecificação automática.",
+    content: `# Como calcular o CMV e o preço certo de cada prato
+
+Vá no menu lateral em **Vendas → CMV & Precificação**. A tela tem seis abas: **Custos & Fórmula**, **Markup**, **Preços do cardápio**, **Insumos**, **Ficha de custo** e **Automação**.
+
+> Só **dono** ou **gerente** edita. Outros perfis veem o aviso "Você está em modo de visualização".
+
+## 1. Custos & Fórmula (comece aqui)
+No cartão **Premissas do negócio** preencha:
+1. **Faturamento médio mensal (R$)**.
+2. **Despesas fixas mensais (R$)** — aluguel, equipe, luz, contador. A tela mostra a quanto isso equivale em % do faturamento.
+3. **Impostos + taxas (%)** — Simples, cartão, apps de entrega.
+4. **Margem de lucro desejada (%)** — quanto deve sobrar de cada venda.
+
+Ao lado aparece o **Seu markup** (ex: "2,85×"), o multiplicador que transforma custo em preço: **preço ideal = custo × markup**. Referência do setor: 2,5× a 3× (bebidas e sobremesas até 4–5×).
+
+Abaixo, **CMV do período (opcional)**: informe **Estoque inicial (R$)**, **Compras do período (R$)**, **Estoque final (R$)** e **Faturamento do período (R$)** — a tela calcula o CMV do negócio inteiro e mostra se está na faixa saudável (25–35%).
+
+Clique em **Salvar premissas**. Enquanto não salvar, a tabela de preços continua usando as premissas antigas (a tela avisa).
+
+## 2. Markup (opcional, por categoria)
+Na aba **Markup** cada categoria pode ter um multiplicador próprio — prática do setor: pratos 2,5–3×, bebidas e sobremesas 4–5×. A tabela mostra **Itens**, **Markup da categoria**, **CMV alvo** e **Custo R$ 10 vira**. Categoria sem valor segue o markup global; use **limpar** para voltar ao global. Termine em **Salvar markups**.
+
+## 3. Insumos (o que você compra)
+Na aba **Insumos**, a **Lista de insumos** traz os ingredientes com **Unidade**, **Custo por unidade (R$)** e em quantos produtos cada um é **Usado em**. Formas de preencher:
+- **📷 Ler nota de compra** — mande a foto ou o PDF da nota; a IA lê e abre **Revisar preços da nota** para você conferir linha por linha. Nada muda sem você clicar em **Aplicar preços marcados**.
+- **↻ Importar do cardápio** — puxa os ingredientes escritos nos produtos.
+- **📄 Importar lista** — cole a lista (um insumo por linha) ou envie um .txt/.csv. Para já vir com unidade e custo, separe por ponto e vírgula: \`Nome ; unidade ; custo\`.
+- **Novo insumo** — nome, **Unidade** e **Custo por unidade (R$)**, depois **＋ Cadastrar**.
+
+Editou custos na tabela? Clique em **Salvar insumos**.
+
+## 4. Ficha de custo (o que entra no prato)
+A aba **Ficha de custo** lista todos os pratos por categoria, cada um marcado como **montar**, **incompleta** ou **completa**. Toque no prato para abrir a ficha.
+
+Na ficha:
+1. Em **Adicionar insumo à ficha**, escolha o insumo, informe a **Quantidade** e clique em **＋ Adicionar**.
+2. Em cada linha, escolha a **unidade de uso** — como você usa **no prato**. O custo vem do preço de compra do insumo e converte sozinho: compra em **kg**, usa em **g** (ex: 150 g de um insumo a R$ 30,00/kg = R$ 4,50). Debaixo do nome do insumo a tela mostra "compra: R$ 30,00/kg".
+3. A conversão só vale dentro da mesma medida (massa g↔kg, volume ml↔L). Contagem (un, fatia, porção) não converte.
+
+Quando todas as linhas têm quantidade e custo, o topo mostra **"Ficha completa · custo calculado: R$ …"** e esse custo passa a valer para o produto. Use **← Voltar aos pratos** para escolher outro.
+
+## 5. Preços do cardápio
+A aba **Preços do cardápio** mostra, item por item: **Custo (R$)**, **Preço atual**, **CMV**, **Preço ideal** e o **Status** — **Sem custo**, **Subir R$ …**, **No alvo** ou **Margem extra**.
+- Item com ficha completa tem o custo travado (é a ficha que manda) — o atalho **🧾 ver ficha** / **＋ montar ficha** leva direto pra ela.
+- **Aplicar** sobe um item para o preço ideal; **Aplicar sugeridos (N)** faz todos de uma vez (a confirmação mostra o potencial somando uma venda de cada).
+
+Preço alterado vale na hora no cardápio e no agente do WhatsApp.
+
+## 6. Automação
+Na aba **Automação**, o **Dispositivo de reprecificação** decide o que acontece quando um custo muda:
+- **Desligado** — nada muda sozinho, a tela só mostra os preços ideais.
+- **Sugerir** (recomendado) — o novo preço ideal fica pendente e você aprova com 1 clique.
+- **Automático** — atualiza o preço na hora, dentro da trava.
+
+Ajuste também o **Arredondamento do preço sugerido** (terminar em ,90 / em ,99 / sem arredondamento) e a **Trava do modo Automático (%)** — variações maiores que isso viram sugestão em vez de serem aplicadas sozinhas. Clique em **Salvar automação**.
+
+O **Histórico de alterações** abaixo registra toda mudança de custo ou preço, com origem e horário.
+
+> Travas permanentes: o preço sugerido nunca fica abaixo do custo, e toda alteração — manual ou automática — vai pro histórico.`,
   },
 ];

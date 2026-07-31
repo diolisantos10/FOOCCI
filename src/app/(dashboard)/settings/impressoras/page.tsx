@@ -201,6 +201,11 @@ function SetupSteps({ agent, onCopy, copied }: { agent: Agent | null; onCopy: ()
           </div>
         )}
       </Step>
+
+      <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        ✅ <strong>Pronto!</strong> O Carteiro <strong>acha a impressora sozinho</strong> — você não
+        precisa escolher marca nem modelo. A partir daqui, cada pedido imprime automaticamente.
+      </div>
     </div>
   );
 }

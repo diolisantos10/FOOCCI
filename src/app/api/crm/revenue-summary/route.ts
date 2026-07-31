@@ -39,26 +39,38 @@ export async function GET(req: NextRequest) {
   const fromDate = hasRange ? new Date(from!) : null;
   const toDate   = hasRange ? new Date(to!)   : null;
 
-  const campaignDateFilter = hasRange
-    ? {
-        OR: [
-          { sentAt:    { gte: fromDate!, lte: toDate! } },
-          { createdAt: { gte: fromDate!, lte: toDate! } },
-        ],
-      }
-    : {};
-
-  // ── Campaign aggregates (engagement + campaign-attributed revenue) ───────────
-  const agg = await prisma.campaign.aggregate({
-    where: { restaurantId, ...campaignDateFilter },
-    _sum: {
-      totalSent:      true,
-      totalResponded: true,
-      totalConverted: true,
-      totalRevenue:   true,
-    },
-    _count: { _all: true },
-  });
+  // ── Engagement + attributed revenue, PERIOD-ACCURATE by event date ───────────
+  // The cards must reflect what happened IN the period, so we count CampaignExecution
+  // events (sentAt / convertedAt / readAt) — NOT Campaign lifetime counters, which
+  // would report a campaign's whole history the moment it was merely touched in the
+  // window (why "Hoje" showed 0 even after sends today).
+  const sentWhere = {
+    campaign: { restaurantId },
+    sentAt: hasRange ? { gte: fromDate!, lte: toDate! } : { not: null },
+  };
+  const convWhere = {
+    campaign: { restaurantId },
+    converted: true,
+    convertedAt: hasRange ? { gte: fromDate!, lte: toDate! } : { not: null },
+  };
+  const [totalSent, sentCampaigns, convAgg, totalResponded] = await Promise.all([
+    prisma.campaignExecution.count({ where: sentWhere }),
+    prisma.campaignExecution.groupBy({ by: ["campaignId"], where: sentWhere }),
+    prisma.campaignExecution.aggregate({
+      where: convWhere,
+      _count: { _all: true },
+      _sum: { revenue: true },
+    }),
+    prisma.campaignExecution.count({
+      where: {
+        campaign: { restaurantId },
+        readAt: hasRange ? { gte: fromDate!, lte: toDate! } : { not: null },
+      },
+    }),
+  ]);
+  const totalConverted = convAgg._count._all;
+  const campaignRevenue = Number(convAgg._sum.revenue ?? 0);
+  const campaignCount = sentCampaigns.length;
 
   // ── Coupon-proven revenue: orders in period using a CRM campaign couponCode ──
   // Pull the distinct, non-null couponCodes linked to this tenant's campaigns,
@@ -115,10 +127,42 @@ export async function GET(req: NextRequest) {
   const seriesRevenue = series.reduce((s, b) => s + b.revenue, 0);
   const seriesOrders  = series.reduce((s, b) => s + b.orders, 0);
 
-  const campaignRevenue = Number(agg._sum.totalRevenue ?? 0);
-  const totalSent       = Number(agg._sum.totalSent      ?? 0);
-  const totalResponded  = Number(agg._sum.totalResponded ?? 0);
-  const totalConverted  = Number(agg._sum.totalConverted ?? 0);
+  // ── Top campaigns by PROVEN revenue in the period (powers the overview Top 5) ─
+  // Period-accurate: ranks Campaign by summed CampaignExecution.revenue whose
+  // conversion happened inside the window — never lifetime Campaign.totalRevenue.
+  const [revByCampaign, sentByCampaignRows] = await Promise.all([
+    prisma.campaignExecution.groupBy({
+      by:     ["campaignId"],
+      where:  convWhere,
+      _sum:   { revenue: true },
+      _count: { _all: true },
+    }),
+    prisma.campaignExecution.groupBy({
+      by:     ["campaignId"],
+      where:  sentWhere,
+      _count: { _all: true },
+    }),
+  ]);
+  const sentByCampaign = new Map(sentByCampaignRows.map((r) => [r.campaignId, r._count._all]));
+  const rankedCampaigns = revByCampaign
+    .map((r) => ({ id: r.campaignId, revenue: Number(r._sum.revenue ?? 0), converted: r._count._all }))
+    .filter((c) => c.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
+  const campNames = rankedCampaigns.length
+    ? await prisma.campaign.findMany({
+        where:  { id: { in: rankedCampaigns.map((c) => c.id) } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const nameById = new Map(campNames.map((c) => [c.id, c.name]));
+  const topCampaigns = rankedCampaigns.map((c) => ({
+    id:        c.id,
+    name:      nameById.get(c.id) ?? "Campanha",
+    revenue:   c.revenue,
+    converted: c.converted,
+    sent:      sentByCampaign.get(c.id) ?? 0,
+  }));
 
   return NextResponse.json({
     data: {
@@ -127,7 +171,7 @@ export async function GET(req: NextRequest) {
       totalSent,
       totalResponded,
       totalConverted,
-      campaignCount:  agg._count._all,
+      campaignCount,
       // Coupon-proven dimension:
       couponRevenue,
       couponOrders,
@@ -137,6 +181,8 @@ export async function GET(req: NextRequest) {
       seriesRevenue,
       seriesOrders,
       granularity,
+      // Top 5 campaigns by proven revenue in the period (overview cards):
+      topCampaigns,
     },
   });
 }
