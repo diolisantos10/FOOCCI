@@ -5961,24 +5961,7 @@ export function CRMClient({
   const [topCustomers, setTopCustomers] = useState<import("@/services/crm/CRMService").TopCustomersResult | null>(null);
   const [topCustomersLoading, setTopCustomersLoading] = useState(false);
 
-  // Campaigns for the overview "top 5 mais rentáveis" preview (same table as the CRM panel)
-  const [overviewCampaigns, setOverviewCampaigns] = useState<CampaignHistoryRow[]>([]);
-  const refreshOverviewCampaigns = useCallback(() => {
-    fetch("/api/crm/campaigns")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json) => setOverviewCampaigns(json.data ?? []))
-      .catch(() => {});
-  }, []);
-  async function overviewCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
-    await fetch(`/api/crm/campaigns/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ action }),
-    }).catch(() => {});
-    refreshOverviewCampaigns();
-  }
-
-  // Load initial revenue summary + top customers + campaigns (all-time) on mount
+  // Load initial revenue summary + top customers on mount
   useEffect(() => {
     fetch("/api/crm/revenue-summary")
       .then((r) => (r.ok ? r.json() : null))
@@ -5988,7 +5971,6 @@ export function CRMClient({
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (json?.data) setTopCustomers(json.data); })
       .catch(() => {});
-    refreshOverviewCampaigns();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDateChange(
@@ -6139,15 +6121,6 @@ export function CRMClient({
           revenueSummaryLoading={revenueSummaryLoading}
           topCustomers={topCustomers}
           topCustomersLoading={topCustomersLoading}
-          campaignsSlot={
-            <CampanhasAtivasSection
-              campaigns={overviewCampaigns}
-              onDetail={() => setTab("campanhas")}
-              onAction={overviewCampaignAction}
-              limit={5}
-              onSeeAll={() => setTab("campanhas")}
-            />
-          }
         />
       )}
       {tab === "campanhas" && (

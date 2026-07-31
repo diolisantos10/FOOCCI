@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect } from "react";
 import type { OverviewStats, CustomerTier, TopCustomersResult, TopCustomerSegment } from "@/services/crm/CRMService";
 import type { CrmAction, CrmActionType, ActionPriority } from "@/services/crm/CrmActionCenterService";
 import { ReviewRequestModal } from "./ReviewRequestModal";
@@ -222,6 +222,7 @@ export function RevenueBlock({
     seriesRevenue?: number;
     seriesOrders?: number;
     granularity?: "hour" | "day" | "month";
+    topCampaigns?: Array<{ id: string; name: string; revenue: number; converted: number; sent: number }>;
   } | null;
   revenueSummaryLoading: boolean;
 }) {
@@ -470,7 +471,6 @@ export function OverviewTab({
   revenueSummaryLoading,
   topCustomers,
   topCustomersLoading,
-  campaignsSlot,
 }: {
   stats: OverviewStats;
   opportunitiesCount: number;
@@ -495,12 +495,11 @@ export function OverviewTab({
     seriesRevenue?: number;
     seriesOrders?: number;
     granularity?: "hour" | "day" | "month";
+    topCampaigns?: Array<{ id: string; name: string; revenue: number; converted: number; sent: number }>;
   } | null;
   revenueSummaryLoading?: boolean;
   topCustomers?: TopCustomersResult | null;
   topCustomersLoading?: boolean;
-  /** The campaigns table (top 5) — same component used in the CRM panel. */
-  campaignsSlot?: ReactNode;
 }) {
   const [localFrom, setLocalFrom] = useState(customFrom);
   const [localTo,   setLocalTo]   = useState(customTo);
@@ -689,8 +688,54 @@ export function OverviewTab({
         revenueSummaryLoading={!!revenueSummaryLoading}
       />
 
-      {/* 4. Campanhas mais rentáveis (top 5) — mesma tabela do painel de CRM */}
-      {campaignsSlot}
+      {/* 4. Campanhas mais rentáveis (top 5) — quadradinhos, por período */}
+      <div className="rounded-2xl border border-line bg-paper p-5 shadow-sm">
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted">
+              Campanhas mais rentáveis
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted">Top 5 por receita no período selecionado.</p>
+          </div>
+          {onNavigateToTab && (
+            <button
+              onClick={() => onNavigateToTab("campanhas")}
+              className="shrink-0 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+            >
+              Ver todas →
+            </button>
+          )}
+        </div>
+        {revenueSummaryLoading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-[104px] animate-pulse rounded-xl border border-line bg-[#FAFAF8]" />
+            ))}
+          </div>
+        ) : (revenueSummary?.topCampaigns?.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted">Nenhuma campanha gerou receita comprovada neste período.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {revenueSummary!.topCampaigns!.map((c, i) => (
+              <div key={c.id} className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
+                    {i + 1}º
+                  </span>
+                  {c.converted > 0 && (
+                    <span className="text-[10px] font-semibold text-muted">{c.converted} pedido{c.converted !== 1 ? "s" : ""}</span>
+                  )}
+                </div>
+                <p className="mt-2 truncate text-xs font-semibold text-ink" title={c.name}>{c.name}</p>
+                <p className="mt-1 text-lg font-bold leading-none text-emerald-600">
+                  R$ {c.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="mt-1 text-[10px] text-muted">{c.sent.toLocaleString("pt-BR")} enviada{c.sent !== 1 ? "s" : ""}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* 5. Clientes mais valiosos (replaces redundant temperature strip) */}
       <TopCustomersBlock data={topCustomers ?? null} loading={!!topCustomersLoading} />

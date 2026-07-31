@@ -127,6 +127,43 @@ export async function GET(req: NextRequest) {
   const seriesRevenue = series.reduce((s, b) => s + b.revenue, 0);
   const seriesOrders  = series.reduce((s, b) => s + b.orders, 0);
 
+  // ── Top campaigns by PROVEN revenue in the period (powers the overview Top 5) ─
+  // Period-accurate: ranks Campaign by summed CampaignExecution.revenue whose
+  // conversion happened inside the window — never lifetime Campaign.totalRevenue.
+  const [revByCampaign, sentByCampaignRows] = await Promise.all([
+    prisma.campaignExecution.groupBy({
+      by:     ["campaignId"],
+      where:  convWhere,
+      _sum:   { revenue: true },
+      _count: { _all: true },
+    }),
+    prisma.campaignExecution.groupBy({
+      by:     ["campaignId"],
+      where:  sentWhere,
+      _count: { _all: true },
+    }),
+  ]);
+  const sentByCampaign = new Map(sentByCampaignRows.map((r) => [r.campaignId, r._count._all]));
+  const rankedCampaigns = revByCampaign
+    .map((r) => ({ id: r.campaignId, revenue: Number(r._sum.revenue ?? 0), converted: r._count._all }))
+    .filter((c) => c.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
+  const campNames = rankedCampaigns.length
+    ? await prisma.campaign.findMany({
+        where:  { id: { in: rankedCampaigns.map((c) => c.id) } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const nameById = new Map(campNames.map((c) => [c.id, c.name]));
+  const topCampaigns = rankedCampaigns.map((c) => ({
+    id:        c.id,
+    name:      nameById.get(c.id) ?? "Campanha",
+    revenue:   c.revenue,
+    converted: c.converted,
+    sent:      sentByCampaign.get(c.id) ?? 0,
+  }));
+
   return NextResponse.json({
     data: {
       // Backwards-compatible fields (consumed by OverviewTab today):
@@ -144,6 +181,8 @@ export async function GET(req: NextRequest) {
       seriesRevenue,
       seriesOrders,
       granularity,
+      // Top 5 campaigns by proven revenue in the period (overview cards):
+      topCampaigns,
     },
   });
 }
