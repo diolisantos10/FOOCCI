@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       CustomerCouponService.monthlyUsedStats(ctx.restaurantId),
       prisma.metaWhatsAppConfig.findUnique({
         where:  { restaurantId: ctx.restaurantId },
-        select: { metaCrmEnabled: true, connectionStatus: true },
+        select: { metaCrmEnabled: true, connectionStatus: true, qualityRating: true, messagingLimit: true },
       }).catch(() => null),
     ]);
 
@@ -45,7 +45,13 @@ export async function GET(req: NextRequest) {
       ...raw,
       todaySent, weekSent, contactBudgetUsed, couponSpentThisMonth,
       couponUsedCount: couponUsedThisMonth.count, couponUsedSpend: couponUsedThisMonth.spend,
-      warmup:    { ageDays, safeDailyLimit: metaOfficial ? effective.dailyGlobalCap : warmupDailyLimit(ageDays), metaOfficial },
+      warmup:    {
+        ageDays,
+        safeDailyLimit: metaOfficial ? effective.dailyGlobalCap : warmupDailyLimit(ageDays),
+        metaOfficial,
+        qualityRating:  metaOfficial ? (metaCfg?.qualityRating ?? null) : null,
+        messagingLimit: metaOfficial ? (metaCfg?.messagingLimit ?? null) : null,
+      },
       effective,
     });
   } catch (err) {

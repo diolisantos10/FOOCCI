@@ -5493,7 +5493,7 @@ function CrmConfiguracoes() {
   const [success, setSuccess] = useState<string | null>(null);
   const [error,   setError]   = useState<string | null>(null);
   const [cfg, setCfg]         = useState<SafetyCfg>({ ...DEFAULT_CFG });
-  const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number }>({ ageDays: 0, safeDailyLimit: 20 });
+  const [warmup, setWarmup]   = useState<{ ageDays: number; safeDailyLimit: number; metaOfficial?: boolean; qualityRating?: string | null; messagingLimit?: string | null }>({ ageDays: 0, safeDailyLimit: 20 });
 
   useEffect(() => {
     fetch("/api/settings/crm-safety")
@@ -5564,7 +5564,9 @@ function CrmConfiguracoes() {
       {/* Regras de Segurança — controle manual + limite de contatos + proteções */}
       <CfgCard
         title="Regras de Segurança"
-        subtitle="Protegem o seu número de WhatsApp contra bloqueio. No modo seguro o limite de mensagens do dia sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — aí o risco fica com você."
+        subtitle={warmup.metaOfficial
+          ? "Seu WhatsApp é oficial da Meta. O limite de mensagens por dia é o teto oficial da Meta e sobe sozinho conforme a qualidade do seu número. As regras abaixo cuidam do ritmo de envio para o cliente."
+          : "Protegem o seu número de WhatsApp contra bloqueio. No modo seguro o limite de mensagens do dia sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — aí o risco fica com você."}
       >
         {/* (a) Controle manual + modo seguro */}
         <CfgToggle
@@ -5577,14 +5579,30 @@ function CrmConfiguracoes() {
         {!cfg.manualOverride ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-emerald-800">🔒 Modo seguro ativo</span>
+              <span className="text-sm font-semibold text-emerald-800">
+                {warmup.metaOfficial ? "🟢 Limite oficial da Meta" : "🔒 Modo seguro ativo"}
+              </span>
               <span className="text-lg font-bold text-emerald-700">
                 {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia hoje</span>
               </span>
             </div>
             <p className="mt-1.5 text-xs text-emerald-800/80">
-              Limite seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
-              Sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
+              {warmup.metaOfficial ? (
+                <>
+                  Este é o limite <strong>oficial da Meta</strong> para o seu WhatsApp Business
+                  {(() => {
+                    const q = warmup.qualityRating;
+                    const lbl = q === "GREEN" || q === "HIGH" ? "alta" : q === "YELLOW" || q === "MEDIUM" ? "média" : q === "RED" || q === "LOW" ? "baixa" : null;
+                    return lbl ? <> — qualidade do número: <strong>{lbl}</strong></> : null;
+                  })()}
+                  . Ele sobe sozinho conforme a qualidade e o histórico do seu número, sem risco de bloqueio.
+                </>
+              ) : (
+                <>
+                  Limite seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
+                  Sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
+                </>
+              )}
             </p>
             {/* Valores fixos do modo seguro — congelados, só pra visualização. Ligue o
                 controle manual para editar qualquer um deles. */}
@@ -5650,23 +5668,22 @@ function CrmConfiguracoes() {
                   />
                 </CfgField>
 
-                <div className={`rounded-xl border px-4 py-3 ${exhausted ? "border-red-300 bg-red-50" : "border-line bg-[#FAFAF8]"}`}>
+                <div className={`rounded-xl border px-4 py-3 ${exhausted ? "border-amber-200 bg-amber-50" : "border-line bg-[#FAFAF8]"}`}>
                   {on ? (
                     <>
                       <div className="flex items-baseline justify-between">
                         <span className="text-sm text-muted">Contatos restantes</span>
-                        <span className={`text-lg font-bold ${exhausted ? "text-red-600" : low ? "text-amber-600" : "text-emerald-600"}`}>
+                        <span className={`text-lg font-bold ${exhausted ? "text-amber-700" : low ? "text-amber-600" : "text-emerald-600"}`}>
                           {remaining} <span className="text-sm font-normal text-muted">de {total}</span>
                         </span>
                       </div>
                       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                        <div className={`h-full rounded-full ${exhausted ? "bg-red-500" : low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                        <div className={`h-full rounded-full ${exhausted || low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                       </div>
                       {exhausted ? (
-                        <p className="mt-2 text-xs font-semibold text-red-700">
-                          🚫 Alcance esgotado: {used} pessoas já abordadas atingiram o teto de {total}. O CRM
-                          <strong> não consegue abordar novos clientes</strong> até você aumentar este número.
-                          Ligue “Assumir controle manual” acima e coloque <strong>0 (sem limite)</strong> ou um valor bem maior.
+                        <p className="mt-2 text-xs text-amber-800">
+                          Limite de contatos atingido — <strong>{used}</strong> pessoas já abordadas. Para falar com novos
+                          clientes, ligue o controle manual acima e aumente o teto (ou coloque <strong>0 = sem limite</strong>).
                         </p>
                       ) : (
                         <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
