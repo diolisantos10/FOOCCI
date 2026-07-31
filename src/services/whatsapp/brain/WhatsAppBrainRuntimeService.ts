@@ -28,6 +28,7 @@ import { sanitizeText } from "@/services/simulation/simulationSanitizer";
 import { isWhatsAppBrainShadowMode } from "./WhatsAppBrainReasoningAdapter";
 import { resolveFreeFormAccess } from "@/services/brain/runtime/BrainFreeFormConfigService";
 import { resolveProviderId, WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
+import { encaminharParaOCardapio, prometeuPedido } from "./promessaDePedido";
 
 /** The Brain front door is ON for everyone by default; set WHATSAPP_BRAIN_ENABLED=false to disable. */
 export function isWhatsAppBrainEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -260,8 +261,31 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     ...(await loadCustomerMemory(restaurantId, conversation.customer?.id).then((m) => (m ? { customerMemory: m } : {}))),
   });
 
-  const reply = outcome.result.idealResponse?.trim();
-  if (!reply) return { status: "SKIPPED", reason: "brain produced no reply" };
+  const replyBruto = outcome.result.idealResponse?.trim();
+  if (!replyBruto) return { status: "SKIPPED", reason: "brain produced no reply" };
+
+  // ── Portão da promessa: este agente NÃO tem carrinho ────────────────────────
+  // Uma cliente real ouviu "vou adicionar tare ao seu pedido" e "posso confirmar
+  // o seu pedido agora?", respondeu "sim" duas vezes, e as duas caíram no vazio —
+  // não havia pedido nenhum. O agente não alucinou um FATO: ele encenou uma
+  // CAPACIDADE, e por isso nenhum verificador de preço ou de cardápio pegava.
+  //
+  // "Não prometa pedido" já estava escrito no perfil e não segurou. Prompt é
+  // aviso; isto é a trava.
+  //
+  // A resposta certa aqui NÃO é cair no recepcionista: é mandar a pessoa para
+  // onde o pedido realmente existe. O rodapé "0. menu" (colado adiante) abre o
+  // menu numerado, cuja opção de pedido leva ao cardápio.
+  const promessa = prometeuPedido(replyBruto);
+  const reply = promessa.prometeu ? encaminharParaOCardapio() : replyBruto;
+  if (promessa.prometeu) {
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:      "promessa-de-pedido",
+      motivos:   promessa.motivos,
+      text:      inboundText.slice(0, 60),
+      candidate: replyBruto.slice(0, 100),
+    }));
+  }
 
   // ── Portão do crítico, POR MENSAGEM: raciocínio de verdade (LLM), coerente
   // com a base (claim-vs-snapshot PASS) e confiante o bastante — senão o
