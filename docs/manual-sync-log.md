@@ -5,6 +5,41 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-07-31
+- **Arquivos que dispararam** (mudanças depois do sync de 30/07, telas do lojista):
+  - `src/app/(dashboard)/dashboard/DashboardClient.tsx` — painel **Destaques** (diário do
+    período) no lugar do antigo "O que fazer agora" + **Origem do faturamento** em gráfico
+    de rosca com o total no centro (commits `5b79ec3f`, `7aaea149`).
+  - `src/components/layout/TopBar.tsx`, `src/components/layout/SoundStatusChip.tsx`,
+    `src/app/(dashboard)/layout.tsx` — o controle de som virou chip dentro da faixa branca
+    do topo (3 estados) e o opt-in passou a ficar gravado no navegador; a faixa flutuante
+    `SoundGateBanner` foi removida (commit `dbfb3601`).
+  - `src/app/(dashboard)/settings/impressoras/page.tsx` — aviso "Pronto!" ao fim dos 3
+    passos: o Carteiro detecta a impressora sozinho (commit `24109e33`).
+- **Guias atualizados:**
+  - `guia-painel-inicial` — reescrito. Saiu **"O que fazer agora"** (não existe mais na
+    tela); entraram **Destaques** (campeão, pico/melhor dia, ticket, clientes novos,
+    carrinhos, upsell, conversão), **Origem do faturamento** (rosca com total no centro e
+    legenda **CRM** / **Indicações** / **Clientes novos** / **Orgânico**, valor + %),
+    **Receita no período** (barra Atual vs. janela de comparação) e **Conversão por canal**
+    (WhatsApp, Cardápio (link), QR na mesa, Instagram). Régua de tempo documentada como
+    valendo pra tela toda, incluindo o **Personalizado** com "de … até …".
+  - `guia-sons-alertas` — nova seção de abertura "Antes de tudo: ativar o som no topo
+    (1 clique)" com os três estados do chip na faixa branca (**🔔 Ativar som** laranja
+    piscando, **🔔 Som ativo**, **🔕 Sons off**), a persistência do clique no navegador e o
+    comportamento no celular (só o sininho). O passo a passo de **Configurações → Sons e
+    alertas** ficou numa seção própria, sem mudança de rótulo.
+  - `guia-impressoras` — o passo a passo agora cita o aviso **"✅ Pronto! O Carteiro acha a
+    impressora sozinho"** (sem escolher marca/modelo) e o estado **"✓ Já conectado — não
+    precisa fazer de novo."** do passo 3.
+- **Sem mudança:** `guia-pausar-pedidos` — o `TopBar.tsx` mudou só na faixa da esquerda
+  (chip de som); os rótulos de **Pausar pedidos**, motivo, retomada automática e
+  **Reativar** continuam iguais aos do código. Nenhuma tela nova em `(dashboard)/` →
+  nenhum guia criado e nenhuma linha nova no mapa do playbook.
+- **Verificação:** `npm run type-check` — OK.
+
+---
+
 ## 2026-07-30
 - **Arquivos que dispararam** (últimas 26h, telas do lojista):
   - `src/app/(dashboard)/crm/CRMClient.tsx`, `CrmAgentPanel.tsx`, `OverviewTab.tsx`,

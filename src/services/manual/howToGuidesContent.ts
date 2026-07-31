@@ -428,20 +428,49 @@ Ao final, clique em **Salvar persona da marca**.`,
     slug: "guia-painel-inicial",
     title: "Como ler o painel inicial (Início)",
     area: "GENERAL",
-    description: "Entender os números e seções da tela inicial.",
+    description: "Entender os números e seções da tela inicial, do período aos Destaques e à origem do faturamento.",
     content: `# Como ler o painel inicial (Início)
 
-No menu lateral, **Início** é o resumo do seu negócio em tempo real.
+No menu lateral, **Início** é o resumo do seu negócio. O topo dá bom dia (ou boa tarde/boa noite), mostra a data e avisa que é **visão em tempo real** — com o período **Hoje**, os números se atualizam sozinhos a cada 2 minutos.
 
-No topo, escolha o período: **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **30 dias** ou **Personalizado**.
+## Primeiro, escolha o período
+No canto de cima ficam os botões **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **30 dias** e **Personalizado** (esse último abre duas datas, "de … **até** …").
 
-- **Saúde do negócio** — os números do período: **Faturamento**, **Pedidos**, **Ticket médio**, **Novos clientes** e **Taxa de conversão** (cada um mostra a variação vs. o período anterior).
-- **Foocci em ação** — o que o Foocci fez por você: **Vendas no upsell**, **Carrinhos recuperados** e **Clientes quentes (CRM)**.
-- **Operação agora** — pedidos em andamento por etapa: **Aguardando**, **Em preparo**, **Prontos** e **Em entrega**, com avisos de atrasados e aguardando pagamento.
-- **O que fazer agora** — ações sugeridas para hoje.
-- **Mais vendidos** — ranking dos produtos do período.
+Essa escolha vale pra **tela toda**: todo número, gráfico e destaque abaixo é do período escolhido e se compara com a janela anterior.
 
-No rodapé, **Ver análise completa →** abre o Analytics.`,
+## Saúde do negócio
+Os cinco números do período, cada um com a variação em % vs. o período anterior:
+**Faturamento**, **Pedidos**, **Ticket médio**, **Novos clientes** e **Taxa de conversão** (quantos dos que entraram compraram — ex: "8 compraram de 40 que entraram").
+
+## Receita no período
+O gráfico de barras do faturamento. Em **Hoje**/**Ontem** cada barra é uma hora; em períodos longos, um dia. A barra escura é **Atual** e a barra clarinha do lado é a janela de comparação (a legenda embaixo diz qual). A barra laranja é a mais recente com venda. Passe o mouse pra ver o valor exato.
+
+## Destaques
+Ao lado do gráfico, o "diário" do período — os melhores números, em frase curta: quanto faturou acima (ou abaixo) da janela anterior, o **Campeão** de vendas, o **Pico** de horário (ou o **Melhor dia**), ticket médio que subiu, clientes novos, carrinhos recuperados, dinheiro a mais com sugestões e conversão. Aparecem até 6, só o que tiver número no período. Sem vendas ainda, aparece **Sem destaques ainda**.
+
+## Origem do faturamento
+De onde veio **cada real** do período, num gráfico de rosca com o **total** no meio. A legenda ao lado mostra valor e % de cada origem:
+- **CRM** — campanhas e automações.
+- **Indicações** — vieram indicados.
+- **Clientes novos** — primeira compra.
+- **Orgânico** — o cliente pediu por conta própria.
+
+Cada pedido entra em uma origem só, então a soma fecha com o **Faturamento** lá de cima. Passando o mouse na fatia, ela diz o valor e a %.
+
+## Foocci em ação
+O que o Foocci fez por você — e cada quadro leva pra tela onde você age: **Vendas no upsell** (vai pro Analytics), **Carrinhos recuperados** (recuperados/abandonados, vai pro CRM) e **Clientes quentes (CRM)**, com mornos e frios embaixo.
+
+## Operação agora
+Os pedidos em andamento por etapa: **Aguardando**, **Em preparo**, **Prontos** e **Em entrega**, com os avisos **⏱ atrasado(s)** e **💳 aguardando pagamento** quando houver. O título leva pra tela **Pedidos**. Sem nada aberto, mostra **Nenhum pedido em andamento**.
+
+## Mais vendidos
+O ranking dos produtos ("top 10 no período"), com a quantidade vendida de cada um.
+
+## Conversão por canal
+Quantos dos clientes identificados compraram em cada porta de entrada — **WhatsApp**, **Cardápio (link)**, **QR na mesa** e **Instagram** — com a % de agora e a de antes.
+
+## No rodapé
+À esquerda, se houver, aparece o aviso discreto de **ajustes de configuração pendentes** (leva pra tela do ajuste). À direita, **Ver análise completa →** abre o Analytics.`,
   },
   {
     slug: "guia-central-conversas",
@@ -805,7 +834,9 @@ Vá em **Configurações → Impressoras**. A impressão automática usa o **Car
 2. Abra o arquivo com dois cliques. Se o Windows mostrar o aviso azul: **Mais informações → Executar assim mesmo**.
 3. Na telinha do Carteiro, cole o código da tela (**Copiar código**) e clique em **Parear**.
 
-Quando der certo, o topo mostra **"Carteiro conectado"** com as impressoras detectadas.
+Ao fim dos três passos a tela avisa: **"✅ Pronto! O Carteiro acha a impressora sozinho"** — você **não precisa escolher marca nem modelo**, e a partir do pareamento cada pedido imprime automaticamente.
+
+Quando der certo, o topo mostra **"Carteiro conectado"** com as impressoras detectadas. Se já estiver pareado, o passo 3 mostra **"✓ Já conectado — não precisa fazer de novo."**
 
 ## 2. Acompanhar a fila (quando o papel não sai)
 O cartão **Fila de impressão** ("o caminho da comanda entre o pedido e o papel") tem três contadores: **Na fila**, **No Carteiro** e **Impressas 24h**.
@@ -828,10 +859,22 @@ Termine em **Salvar tudo**.`,
     slug: "guia-sons-alertas",
     title: "Como configurar sons e alertas",
     area: "GENERAL",
-    description: "Som de novo pedido e de atendimento humano, volume e temas.",
+    description: "Ativar o som no topo do painel, som de novo pedido e de atendimento humano, volume e temas.",
     content: `# Como configurar sons e alertas
 
-Vá em **Configurações → Sons e alertas**. Regra de ouro: **mantenha a tela do painel aberta** no computador do restaurante — é ela que toca os alertas.
+## Antes de tudo: ativar o som no topo (1 clique)
+Na **faixa branca do topo**, logo depois do nome da tela, fica o controle de som — ele aparece em **todas as abas** do painel:
+
+- **🔔 Ativar som** (laranja, piscando) — é o primeiro acesso naquele navegador. Clique **uma vez**: o navegador libera o som e a escolha fica gravada, então não pergunta mais a cada vez que você abre o painel.
+- **🔔 Som ativo** — já está tudo liberado. Clicando, vai direto pra tela de sons.
+- **🔕 Sons off** — o som está **desligado nas configurações**. Clique pra abrir a tela e ligar.
+
+No celular aparece só o sininho (sem o texto), pra não atrapalhar o resto do topo.
+
+Regra de ouro: **mantenha a tela do painel aberta** no computador do restaurante — é ela que toca os alertas.
+
+## Ajustar os sons
+Vá em **Configurações → Sons e alertas**.
 
 1. **Sons do restaurante** — ligue **Ativar todos os sons**.
 2. **Volume** — ajuste no slider ou nos atalhos (**Baixo 50%** a **Máximo 400%**). Recomendado: **Alto (150%)** para ambiente de cozinha.
