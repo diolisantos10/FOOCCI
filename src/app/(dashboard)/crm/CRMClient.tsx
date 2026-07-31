@@ -5564,9 +5564,7 @@ function CrmConfiguracoes() {
       {/* Regras de Segurança — controle manual + limite de contatos + proteções */}
       <CfgCard
         title="Regras de Segurança"
-        subtitle={warmup.metaOfficial
-          ? "Seu WhatsApp é oficial da Meta. O limite de mensagens por dia é o teto oficial da Meta e sobe sozinho conforme a qualidade do seu número. As regras abaixo cuidam do ritmo de envio para o cliente."
-          : "Protegem o seu número de WhatsApp contra bloqueio. No modo seguro o limite de mensagens do dia sobe sozinho conforme o número amadurece. Ligue o controle manual só se quiser enviar mais — aí o risco fica com você."}
+        subtitle="O limite de mensagens por dia é o teto oficial da Meta, e sobe sozinho conforme a qualidade do seu número. As regras abaixo cuidam do ritmo de envio para o cliente."
       >
         {/* (a) Controle manual + modo seguro */}
         <CfgToggle
@@ -5579,30 +5577,19 @@ function CrmConfiguracoes() {
         {!cfg.manualOverride ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-semibold text-emerald-800">
-                {warmup.metaOfficial ? "🟢 Limite oficial da Meta" : "🔒 Modo seguro ativo"}
-              </span>
+              <span className="text-sm font-semibold text-emerald-800">🟢 Limite oficial da Meta</span>
               <span className="text-lg font-bold text-emerald-700">
                 {warmup.safeDailyLimit} <span className="text-sm font-normal text-emerald-800/70">msgs/dia hoje</span>
               </span>
             </div>
             <p className="mt-1.5 text-xs text-emerald-800/80">
-              {warmup.metaOfficial ? (
-                <>
-                  Este é o limite <strong>oficial da Meta</strong> para o seu WhatsApp Business
-                  {(() => {
-                    const q = warmup.qualityRating;
-                    const lbl = q === "GREEN" || q === "HIGH" ? "alta" : q === "YELLOW" || q === "MEDIUM" ? "média" : q === "RED" || q === "LOW" ? "baixa" : null;
-                    return lbl ? <> — qualidade do número: <strong>{lbl}</strong></> : null;
-                  })()}
-                  . Ele sobe sozinho conforme a qualidade e o histórico do seu número, sem risco de bloqueio.
-                </>
-              ) : (
-                <>
-                  Limite seguro para hoje (número com {warmup.ageDays} dia{warmup.ageDays === 1 ? "" : "s"} de uso).
-                  Sobe sozinho: 20 → 40 → 80 → 150 → 250 por dia conforme o número amadurece.
-                </>
-              )}
+              Este é o limite <strong>oficial da Meta</strong> para o seu WhatsApp Business
+              {(() => {
+                const q = warmup.qualityRating;
+                const lbl = q === "GREEN" || q === "HIGH" ? "alta" : q === "YELLOW" || q === "MEDIUM" ? "média" : q === "RED" || q === "LOW" ? "baixa" : null;
+                return lbl ? <> — qualidade do número: <strong>{lbl}</strong></> : null;
+              })()}
+              . Ele sobe sozinho conforme a qualidade e o histórico do seu número, sem risco de bloqueio.
             </p>
             {/* Valores fixos do modo seguro — congelados, só pra visualização. Ligue o
                 controle manual para editar qualquer um deles. */}

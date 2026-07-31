@@ -110,11 +110,10 @@ export function Sidebar() {
             The partner restaurant + logged-in user live in the TopBar account
             cluster (top-right), so this stays untouched. */}
         <div className="flex items-center justify-between border-b border-line px-4 py-4">
-          <Link href="/dashboard" onClick={close} className="flex items-center gap-2.5">
+          <Link href="/dashboard" onClick={close} className="flex items-center">
+            {/* Só a logo (wordmark) — logo e anagrama nunca juntos. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-10 w-10 rounded-[11px]" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/foocci/foocci-wordmark.png" alt="Foocci" className="h-[26px]" />
+            <img src="/brand/foocci/foocci-wordmark.png" alt="Foocci" className="h-7" />
           </Link>
           {/* Close button — mobile only */}
           <button
