@@ -704,25 +704,20 @@ export function OverviewTab({
           <p className="text-sm text-muted">Nenhum cliente ainda.</p>
         ) : (
           <>
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {stats.segments.map(({ tier, count }) => {
                 const cfg = TIER_CONFIG[tier];
                 const pct = totalSegmented > 0 ? Math.round((count / totalSegmented) * 100) : 0;
                 return (
-                  <div key={tier} className="flex items-center gap-3">
-                    <span className="w-[80px] shrink-0 text-xs font-semibold text-ink2">
-                      {cfg.icon} {cfg.label}
-                    </span>
-                    <span className={`text-sm font-bold ${cfg.text} w-16 shrink-0`}>
-                      {count.toLocaleString("pt-BR")}
-                    </span>
-                    <span className="text-xs text-muted w-10 shrink-0">{pct}%</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-[#F4F4F2] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${cfg.bar} transition-all`}
-                        style={{ width: count > 0 ? `${Math.max(pct, 2)}%` : "0%" }}
-                      />
+                  <div key={tier} className="rounded-xl border border-line bg-[#FAFAF8] px-3 py-3">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-ink2">
+                      <span>{cfg.icon}</span>
+                      <span>{cfg.label}</span>
                     </div>
+                    <p className={`mt-1.5 text-2xl font-bold leading-none ${cfg.text}`}>
+                      {count.toLocaleString("pt-BR")}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted">{pct}% da base</p>
                   </div>
                 );
               })}
