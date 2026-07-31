@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { CockpitReport, CockpitAction } from "@/services/dashboard/DashboardCockpitService";
+import type { CockpitReport } from "@/services/dashboard/DashboardCockpitService";
+import type { RevenueSourcesResult, RevenueSourceKey } from "@/services/dashboard/RevenueAttributionService";
 import { Card, SectionTitle, Stat, Pill, Button, EmptyState } from "@/components/ui";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ interface DashboardData {
   cancelledPeriod: number; ordersBySource: Record<string, number>;
   foocciProof: { upsellRevenue: number; upsellItemCount: number; recoveryTotal: number; recoveryConverted: number; recoveryRate: number | null };
   crmSegments: { quente: number; morno: number; frio: number; semPedidos: number };
+  revenueSources?: RevenueSourcesResult;
 }
 
 // ── Utilities ────────────────────────────────────────────────────────────────
@@ -249,28 +251,151 @@ export function TopSellers({ products }: { products: TopProduct[] }) {
   );
 }
 
-// ── O que fazer agora (cockpit actions) ────────────────────────────────────────
+// ── Destaques / Diário do restaurante ──────────────────────────────────────────
+// Um "diário" curado do período: destaques quantitativos + qualitativos, com viés
+// positivo, derivados dos números que a própria tela já carrega. Respeita a régua
+// de tempo (recebe `data`, que muda com o period selector). Substitui o antigo
+// "O que fazer agora" nesse espaço, e cresce pra acompanhar a altura do gráfico.
 
-const ACTION_ICON: Record<string, string> = { RECOVERY: "💬", CRM: "🎁", OPERATIONS: "⚡" };
+interface Highlight { key: string; icon: string; node: React.ReactNode }
 
-export function ActionsNow({ actions }: { actions: CockpitAction[] }) {
+const HV = ({ children }: { children: React.ReactNode }) => (
+  <span className="font-semibold text-ink">{children}</span>
+);
+
+function buildHighlights(d: DashboardData): Highlight[] {
+  const out: Highlight[] = [];
+  const prevName = d.prevPeriodLabel.replace(/^vs\.?\s*/i, "").trim() || "o período anterior";
+
+  // 1. Faturamento vs janela de comparação (abre com o número que mais importa)
+  if (d.revenuePeriod > 0 && d.revenuePrev > 0) {
+    const pct = Math.round(((d.revenuePeriod - d.revenuePrev) / d.revenuePrev) * 100);
+    out.push(pct >= 0
+      ? { key: "rev", icon: "📈", node: <>Faturou <HV>{pct}% acima</HV> de {prevName} — {fmtCurrency(d.revenuePeriod)}</> }
+      : { key: "rev", icon: "📊", node: <>Faturou <HV>{Math.abs(pct)}% abaixo</HV> de {prevName} — dá pra virar</> });
+  } else if (d.revenuePeriod > 0) {
+    out.push({ key: "rev", icon: "💰", node: <>Faturamento no período: <HV>{fmtCurrency(d.revenuePeriod)}</HV></> });
+  }
+
+  // 2. Prato campeão
+  if (d.topProducts.length > 0 && d.topProducts[0]!.quantity > 0) {
+    const t = d.topProducts[0]!;
+    out.push({ key: "champ", icon: "🏆", node: <>Campeão: <HV>{t.name}</HV> — {fmtNum(t.quantity)} un.</> });
+  }
+
+  // 3. Melhor horário (hoje/ontem) ou melhor dia (períodos longos)
+  const best = (d.chartBuckets ?? []).reduce<ChartBucket | null>(
+    (acc, b) => (!acc || b.revenue > acc.revenue ? b : acc), null);
+  if (best && best.revenue > 0) {
+    out.push(d.granularity === "hour"
+      ? { key: "peak", icon: "⏰", node: <>Pico às <HV>{best.label}</HV> — {fmtCurrency(best.revenue)}</> }
+      : { key: "peak", icon: "📅", node: <>Melhor dia: <HV>{best.label}</HV> — {fmtCurrency(best.revenue)}</> });
+  }
+
+  // 4. Ticket médio (só quando subiu — mantém o tom positivo)
+  if (d.avgTicket > 0 && d.avgTicketPrev > 0 && d.avgTicket > d.avgTicketPrev) {
+    out.push({ key: "ticket", icon: "🧾", node: <>Ticket médio subiu pra <HV>{fmtCurrency(d.avgTicket)}</HV></> });
+  }
+
+  // 5. Clientes novos
+  if (d.newCustomersPeriod > 0) {
+    out.push({ key: "new", icon: "✨", node: <><HV>{fmtNum(d.newCustomersPeriod)}</HV> {d.newCustomersPeriod === 1 ? "cliente novo" : "clientes novos"} na base</> });
+  }
+
+  // 6. Carrinhos recuperados pelo Foocci
+  if (d.foocciProof.recoveryConverted > 0) {
+    out.push({ key: "recovery", icon: "💬", node: <><HV>{fmtNum(d.foocciProof.recoveryConverted)}</HV> {d.foocciProof.recoveryConverted === 1 ? "carrinho recuperado" : "carrinhos recuperados"} pelo Foocci</> });
+  }
+
+  // 7. Upsell
+  if (d.foocciProof.upsellRevenue > 0) {
+    out.push({ key: "upsell", icon: "🛒", node: <><HV>{fmtCurrency(d.foocciProof.upsellRevenue)}</HV> a mais com sugestões</> });
+  }
+
+  // 8. Conversão
+  if (d.conversionRate != null && d.conversionIdentified > 0) {
+    out.push({ key: "conv", icon: "🎯", node: <><HV>{d.conversionRate}%</HV> dos que entraram compraram</> });
+  }
+
+  return out;
+}
+
+export function Highlights({ data }: { data: DashboardData }) {
+  const items = buildHighlights(data).slice(0, 6);
+  return (
+    <Card className="flex h-full flex-col p-5">
+      <SectionTitle meta={data.periodLabel}>Destaques</SectionTitle>
+      {items.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState icon="✦" title="Sem destaques ainda" sub="Assim que entrarem pedidos, os melhores números do período aparecem aqui." />
+        </div>
+      ) : (
+        <ul className="flex flex-1 flex-col justify-center gap-3">
+          {items.map((h) => (
+            <li key={h.key} className="flex items-start gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[15px]">{h.icon}</span>
+              <p className="pt-[3px] text-[13px] leading-snug text-ink2">{h.node}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// ── Origem do faturamento (atribuição por origem) ──────────────────────────────
+// De onde veio cada real no período: CRM (campanhas/automações), indicações do
+// Foocci, clientes novos (1ª compra) e orgânico (cliente sozinho). Soma = a KPI
+// "Faturamento". Barra empilhada 100% + legenda com valor e % — respeita a régua.
+
+const SOURCE_META: Record<RevenueSourceKey, { label: string; color: string; hint: string }> = {
+  crm:      { label: "CRM",            color: "#F97316", hint: "campanhas e automações" },
+  referral: { label: "Indicações",     color: "#10B981", hint: "vieram indicados" },
+  new:      { label: "Clientes novos", color: "#0EA5E9", hint: "primeira compra" },
+  organic:  { label: "Orgânico",       color: "#A8A29E", hint: "por conta própria" },
+};
+
+export function RevenueSources({ data }: { data: DashboardData }) {
+  const src   = data.revenueSources;
+  const total = src?.total ?? 0;
   return (
     <Card className="p-5">
-      <SectionTitle>O que fazer agora</SectionTitle>
-      {actions.length === 0 ? (
-        <EmptyState icon="✦" title="Tudo em dia" sub="Sem ações pendentes no momento." />
+      <SectionTitle meta="de onde veio cada real no período">Origem do faturamento</SectionTitle>
+      {!src || total <= 0 ? (
+        <EmptyState icon="💸" title="Sem faturamento no período" sub="Quando entrarem vendas, mostro de onde cada real veio." />
       ) : (
-        <div className="space-y-2.5">
-          {actions.slice(0, 4).map((a) => (
-            <Link key={a.id} href={a.actionHref} className="flex gap-3 rounded-xl border border-line border-l-[3px] border-l-brand-500 p-3.5 transition-colors hover:bg-[#FAFAF8]">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[15px]">{ACTION_ICON[a.source] ?? "💡"}</span>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-semibold text-ink">{a.title}</div>
-                <p className="mt-0.5 text-[12.5px] leading-snug text-ink2">{a.description}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          {/* Barra empilhada 100% — o container arredondado recorta os segmentos */}
+          <div className="mt-1 flex h-3.5 w-full overflow-hidden rounded-full bg-[#F0F0EE]">
+            {src.buckets.map((b) =>
+              b.revenue > 0 ? (
+                <div
+                  key={b.key}
+                  className="h-full"
+                  style={{ width: `${(b.revenue / total) * 100}%`, backgroundColor: SOURCE_META[b.key].color }}
+                  title={`${SOURCE_META[b.key].label}: ${fmtCurrency(b.revenue)}`}
+                />
+              ) : null,
+            )}
+          </div>
+          {/* Legenda: valor + % + dica, por origem */}
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-4">
+            {src.buckets.map((b) => {
+              const m   = SOURCE_META[b.key];
+              const pct = total > 0 ? Math.round((b.revenue / total) * 100) : 0;
+              return (
+                <div key={b.key} className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: m.color }} />
+                    <span className="truncate text-[12px] font-semibold text-ink2">{m.label}</span>
+                  </div>
+                  <div className="mt-1.5 text-[18px] font-extrabold leading-none tracking-[-.02em] text-ink">{fmtCurrency(b.revenue)}</div>
+                  <div className="mt-1 text-[11px] leading-tight text-muted">{pct}% · {m.hint}</div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </Card>
   );
@@ -533,18 +658,23 @@ export default function DashboardClient({ userName }: { userName: string }) {
               </div>
             </div>
 
-            {/* Two-column body */}
+            {/* Topo: gráfico + destaques do período — mesma altura (simetria pedida) */}
+            <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-stretch">
+              <SalesChart data={data} />
+              <Highlights data={data} />
+            </div>
+
+            {/* De onde vem o faturamento — atribuição por origem, respeita a régua */}
+            <RevenueSources data={data} />
+
+            {/* Corpo em duas colunas */}
             <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-start">
               <div className="space-y-5">
-                <SalesChart data={data} />
                 {/* Foocci em ação — logo abaixo do gráfico, acima do status da cozinha */}
                 <FoocciProof proof={data.foocciProof} crm={data.crmSegments} />
                 <OperationNow data={data} />
               </div>
               <div className="space-y-5">
-                {/* Carrinhos abandonados now live in the "Taxa de conversão" KPI,
-                    so the RECOVERY action is dropped from "O que fazer agora". */}
-                {period === "today" && <ActionsNow actions={(cockpit?.recommendedActions ?? []).filter((a) => a.source !== "RECOVERY")} />}
                 <TopSellers products={data.topProducts} />
                 <ConversionByChannel rows={data.conversionByChannel ?? []} />
               </div>
