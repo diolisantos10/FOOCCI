@@ -25,8 +25,14 @@ interface SafetyConfig {
   randomDelayEnabled:    boolean;
   randomDelayMinSec:     number;
   randomDelayMaxSec:     number;
+  manualOverride?:       boolean;
   todaySent?:            number;
   weekSent?:             number;
+  // Derived, read-only fields the GET adds alongside the raw config. `effective`
+  // is what actually gets enforced (applyEffectiveSafety); `warmup` explains the
+  // auto daily number when manual override is OFF (Meta official → tier ceiling).
+  warmup?:               { ageDays: number; safeDailyLimit: number; metaOfficial: boolean };
+  effective?:            { dailyGlobalCap: number };
 }
 
 // ─── Segment Section ─────────────────────────────────────────────────────────
@@ -238,8 +244,8 @@ function SafetySection() {
           <div className="shrink-0 rounded-xl bg-brand-50 px-3 py-1.5 text-center">
             <p className="text-[11px] text-muted">Hoje enviados</p>
             <p className="text-lg font-bold text-brand-700">{cfg.todaySent}</p>
-            {cfg.dailyGlobalCap > 0 && (
-              <p className="text-[10px] text-muted">de {cfg.dailyGlobalCap}</p>
+            {(cfg.effective?.dailyGlobalCap ?? cfg.dailyGlobalCap) > 0 && (
+              <p className="text-[10px] text-muted">de {cfg.effective?.dailyGlobalCap ?? cfg.dailyGlobalCap}</p>
             )}
           </div>
         )}
@@ -264,6 +270,14 @@ function SafetySection() {
                   className={INPUT} />
               </Field>
             </div>
+          )}
+          {!cfg.manualOverride && cfg.warmup && (
+            <p className="-mt-1 pl-12 text-[11px] text-brand-700">
+              No modo seguro, o limite diário é <strong>automático</strong>:{" "}
+              <strong>{cfg.warmup.safeDailyLimit} msg/dia</strong>
+              {cfg.warmup.metaOfficial ? " (WhatsApp oficial da Meta)" : " (aquecimento do número)"}. O
+              valor acima só passa a valer se você assumir o controle manual.
+            </p>
           )}
 
           <Toggle

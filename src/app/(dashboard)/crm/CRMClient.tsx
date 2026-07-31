@@ -1567,6 +1567,9 @@ function CampaignReviewModal({
     randomDelayMinSec: number;
     randomDelayMaxSec: number;
     todaySent: number;
+    // What is actually enforced (applyEffectiveSafety): on Meta official this is
+    // the 900 tier ceiling, not the raw 200 default. Prefer this over dailyGlobalCap.
+    effective?: { dailyGlobalCap: number };
   } | null>(null);
 
   useEffect(() => {
@@ -1576,10 +1579,13 @@ function CampaignReviewModal({
       .catch(() => {});
   }, []);
 
-  // For manual sends: cap to remaining global daily capacity (dailyGlobalCap - todaySent).
-  // 0 dailyGlobalCap means no cap configured.
-  const effectiveMax = safety?.dailyGlobalCap && safety.dailyGlobalCap > 0
-    ? Math.max(0, safety.dailyGlobalCap - (safety.todaySent ?? 0))
+  // For manual sends: cap to remaining global daily capacity (dailyCap - todaySent).
+  // Use the EFFECTIVE cap (applyEffectiveSafety → 900 on Meta official), never the
+  // raw 200 default, or the composer would over-restrict a Meta-official number.
+  // 0 means no cap configured.
+  const dailyCap = safety?.effective?.dailyGlobalCap ?? safety?.dailyGlobalCap ?? 0;
+  const effectiveMax = dailyCap > 0
+    ? Math.max(0, dailyCap - (safety?.todaySent ?? 0))
     : 9999;
 
   const active = initialRecipients.filter((r) => !removed.has(r.id));
@@ -1684,10 +1690,10 @@ function CampaignReviewModal({
               <div className="border-b border-brand-100 bg-brand-50 px-5 py-2.5 shrink-0">
                 <p className="text-[11px] font-semibold text-brand-700 mb-1">🛡️ Modo seguro ativo</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-brand-600">
-                  {safety.dailyGlobalCap > 0 && (
+                  {dailyCap > 0 && (
                     <span>
-                      Limite diário: {safety.dailyGlobalCap} msg
-                      {safety.todaySent > 0 && ` · ${Math.max(0, safety.dailyGlobalCap - safety.todaySent)} restantes hoje`}
+                      Limite diário: {dailyCap} msg
+                      {safety.todaySent > 0 && ` · ${Math.max(0, dailyCap - safety.todaySent)} restantes hoje`}
                     </span>
                   )}
                   {safety.quietHoursEnabled && (
