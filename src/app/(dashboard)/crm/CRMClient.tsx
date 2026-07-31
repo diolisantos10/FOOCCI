@@ -5847,9 +5847,6 @@ function CrmConfiguracoes() {
         </p>
       </CfgCard>
 
-      {/* G — Agente de CRM (a IA de mensagens, ao vivo) */}
-      <CrmAgentPanel />
-
       {/* Save */}
       <div className="flex justify-end pt-2">
         <button
@@ -6106,7 +6103,9 @@ export function CRMClient({
 
       {/* Tab content */}
       {tab === "overview" && (
-        <OverviewTab
+        <div className="flex flex-col gap-4">
+          <CrmAgentPanel />
+          <OverviewTab
           stats={currentStats}
           opportunitiesCount={opportunitiesCount}
           actions={initialActions}
@@ -6121,7 +6120,8 @@ export function CRMClient({
           revenueSummaryLoading={revenueSummaryLoading}
           topCustomers={topCustomers}
           topCustomersLoading={topCustomersLoading}
-        />
+          />
+        </div>
       )}
       {tab === "campanhas" && (
         <CampanhasTab stats={currentStats} />
