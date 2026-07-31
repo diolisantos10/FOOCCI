@@ -23,7 +23,6 @@ import { ReadyMadeCampaignsSection, type ReadyMadeState } from "./ReadyMadeCampa
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, RevenueBlock, type DateFilterPreset } from "./OverviewTab";
-import CrmAgentPanel from "./CrmAgentPanel";
 import CrmCampaignAI from "./CrmCampaignAI";
 import { ContactBaseHealthPanel } from "./ContactBaseHealthPanel";
 import { ConversoesTab } from "./ConversoesTab";
@@ -6104,7 +6103,6 @@ export function CRMClient({
       {/* Tab content */}
       {tab === "overview" && (
         <div className="flex flex-col gap-4">
-          <CrmAgentPanel />
           <OverviewTab
           stats={currentStats}
           opportunitiesCount={opportunitiesCount}
