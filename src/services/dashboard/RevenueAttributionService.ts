@@ -1,18 +1,23 @@
 /**
  * RevenueAttributionService — "de onde vem a venda".
  *
- * Splits a period's revenue into THREE mutually exclusive buckets of INFLUENCE,
- * so the shares sum to exactly the dashboard's "Faturamento":
+ * Splits a period's revenue into THREE buckets so the shares sum to exactly the
+ * dashboard's "Faturamento". Attribution is VALUE-SPLIT, not whole-order:
  *
- *   • garcom      — the Foocci agent drove the sale: a validated indicação
- *                   (Referral) OR the order carried an item the agent upsold /
- *                   recommended.
- *   • crm         — a CRM campaign/automation brought the customer (campaign
- *                   execution, AI/automation action, or a campaign coupon).
- *   • espontanea  — none of the above: the customer bought on their own.
+ *   • garcom      — the agent's own merit: the value of the SPECIFIC items the
+ *                   customer was upsold/recommended (Σ isUpsell item totals),
+ *                   PLUS the remaining value of orders that closed a validated
+ *                   indicação (Referral).
+ *   • crm         — a CRM campaign/automation brought the customer back: the
+ *                   remaining order value (order total minus any upsold items)
+ *                   of converted orders (campaign execution, AI/automation
+ *                   action, or a campaign coupon).
+ *   • espontanea  — whatever is left: the customer bought on their own.
  *
- * Priority (referral > crm > upsell > espontânea) resolves overlaps so each order
- * lands in exactly one bucket — nothing double-counted. The pure
+ * The upsold item is ALWAYS credited to garçom — the specific product is the
+ * agent's merit even when CRM/referral drove the visit — while the rest of that
+ * same order is credited to whoever drove the whole purchase. Every cent is
+ * counted exactly once and the buckets sum to the period total. The pure
  * `bucketRevenueSources` holds the rule (unit-tested); `getRevenueSources` runs
  * the tenant-scoped queries and feeds it.
  */
@@ -43,12 +48,17 @@ const DISPLAY_ORDER: RevenueSourceKey[] = ["crm", "garcom", "espontanea"];
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * Pure classifier. Each order → exactly one bucket by priority
- * referral > crm > upsell > espontânea. Sums to the orders' total.
+ * Pure classifier — VALUE-SPLIT per order. The upsold items' value always goes to
+ * garçom (the specific product is the agent's merit); the rest of the order goes
+ * to whoever drove the whole purchase, by priority referral > crm > espontânea.
+ * Every cent is counted once and the buckets sum to the orders' total.
+ *
+ * `upsellValueByOrder[orderId]` = Σ of that order's upsold (isUpsell) item totals.
  */
 export function bucketRevenueSources(
   orders: Array<{ id: string; total: number }>,
-  sets: { referral: Set<string>; crm: Set<string>; upsell: Set<string> },
+  sets: { referral: Set<string>; crm: Set<string> },
+  upsellValueByOrder: Record<string, number> = {},
 ): RevenueSourcesResult {
   const acc: Record<RevenueSourceKey, { revenue: number; orders: number }> = {
     crm:        { revenue: 0, orders: 0 },
@@ -58,13 +68,22 @@ export function bucketRevenueSources(
   let total = 0;
   for (const o of orders) {
     total += o.total;
-    const key: RevenueSourceKey =
-      sets.referral.has(o.id) ? "garcom"     // agente indicou (referral)
+    // The specific upsold product is always the agent's (garçom) merit — clamp to
+    // [0, total] so a stale/oversized figure can never exceed the order.
+    const upsellValue = Math.min(o.total, Math.max(0, upsellValueByOrder[o.id] ?? 0));
+    const remainder   = o.total - upsellValue;
+    acc.garcom.revenue += upsellValue;
+    // The rest of the order is attributed to whoever drove the whole purchase.
+    const baseKey: RevenueSourceKey =
+      sets.referral.has(o.id) ? "garcom"     // indicação validada trouxe o cliente
       : sets.crm.has(o.id)    ? "crm"        // CRM trouxe de volta
-      : sets.upsell.has(o.id) ? "garcom"     // agente recomendou (upsell)
       : "espontanea";                        // cliente por conta própria
-    acc[key].revenue += o.total;
-    acc[key].orders  += 1;
+    acc[baseKey].revenue += remainder;
+    // Count the order once, under its primary driver — or garçom when the only
+    // Foocci influence on an otherwise-spontaneous order was the upsell.
+    const countKey: RevenueSourceKey =
+      baseKey === "espontanea" && upsellValue > 0 ? "garcom" : baseKey;
+    acc[countKey].orders += 1;
   }
   return {
     total: round2(total),
@@ -98,7 +117,7 @@ export async function getRevenueSources(
 
   const orderIds = orders.map((o) => o.id);
 
-  const [crmExec, crmActions, campaignCoupons, referrals, upsellItems] = await Promise.all([
+  const [crmExec, crmActions, campaignCoupons, referrals, upsellAgg] = await Promise.all([
     // CRM: a campaign recipient that converted on one of these orders
     prisma.campaignExecution.findMany({
       where:  { convertedOrderId: { in: orderIds } },
@@ -119,10 +138,12 @@ export async function getRevenueSources(
       where:  { restaurantId, orderId: { in: orderIds } },
       select: { orderId: true },
     }),
-    // Garçom: the order carried an item the agent upsold / recommended
-    prisma.orderItem.findMany({
+    // Garçom: value of the SPECIFIC items the agent upsold, summed per order —
+    // only this delta is the agent's merit, not the whole order it rode on.
+    prisma.orderItem.groupBy({
+      by:     ["orderId"],
       where:  { orderId: { in: orderIds }, isUpsell: true },
-      select: { orderId: true },
+      _sum:   { total: true },
     }),
   ]);
 
@@ -134,11 +155,12 @@ export async function getRevenueSources(
   const referral = new Set<string>();
   for (const r of referrals) if (r.orderId) referral.add(r.orderId);
 
-  const upsell = new Set<string>();
-  for (const u of upsellItems) if (u.orderId) upsell.add(u.orderId);
+  const upsellValueByOrder: Record<string, number> = {};
+  for (const u of upsellAgg) if (u.orderId) upsellValueByOrder[u.orderId] = Number(u._sum.total ?? 0);
 
   return bucketRevenueSources(
     orders.map((o) => ({ id: o.id, total: Number(o.total) })),
-    { referral, crm, upsell },
+    { referral, crm },
+    upsellValueByOrder,
   );
 }
