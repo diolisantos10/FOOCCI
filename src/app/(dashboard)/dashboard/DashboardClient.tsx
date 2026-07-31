@@ -349,11 +349,63 @@ export function Highlights({ data }: { data: DashboardData }) {
 // "Faturamento". Barra empilhada 100% + legenda com valor e % — respeita a régua.
 
 const SOURCE_META: Record<RevenueSourceKey, { label: string; color: string; hint: string }> = {
-  crm:      { label: "CRM",            color: "#F97316", hint: "campanhas e automações" },
-  referral: { label: "Indicações",     color: "#10B981", hint: "vieram indicados" },
-  new:      { label: "Clientes novos", color: "#0EA5E9", hint: "primeira compra" },
-  organic:  { label: "Orgânico",       color: "#A8A29E", hint: "por conta própria" },
+  crm:      { label: "CRM",            color: "#EA580C", hint: "campanhas e automações" },
+  referral: { label: "Indicações",     color: "#059669", hint: "vieram indicados" },
+  new:      { label: "Clientes novos", color: "#0284C7", hint: "primeira compra" },
+  organic:  { label: "Orgânico",       color: "#78716C", hint: "por conta própria" },
 };
+
+// Ponto na circunferência (0° = topo) — para desenhar os arcos do donut.
+function donutPoint(cx: number, cy: number, r: number, deg: number): [number, number] {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+function donutArc(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
+  const [x1, y1] = donutPoint(cx, cy, r, startDeg);
+  const [x2, y2] = donutPoint(cx, cy, r, endDeg);
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+}
+
+/** Gráfico de rosca (pizza) da origem do faturamento — total no centro. */
+function RevenueDonut({ buckets, total }: { buckets: RevenueSourcesResult["buckets"]; total: number }) {
+  const size = 168, stroke = 26, r = (size - stroke) / 2, c = size / 2;
+  const active = buckets.filter((b) => b.revenue > 0);
+  const gap = active.length > 1 ? 3 : 0; // graus de respiro entre fatias (2px de superfície)
+  let cursor = 0;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Origem do faturamento por fatia">
+        <circle cx={c} cy={c} r={r} fill="none" stroke="#F0F0EE" strokeWidth={stroke} />
+        {active.map((b) => {
+          const frac  = b.revenue / total;
+          const start = cursor * 360;
+          const end   = (cursor + frac) * 360;
+          cursor += frac;
+          const color = SOURCE_META[b.key].color;
+          const label = `${SOURCE_META[b.key].label} — ${fmtCurrency(b.revenue)} · ${Math.round(frac * 100)}%`;
+          // Fatia única → círculo cheio (um arco SVG não fecha 360°).
+          if (active.length === 1 || frac >= 0.999) {
+            return (
+              <circle key={b.key} cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={stroke}>
+                <title>{label}</title>
+              </circle>
+            );
+          }
+          return (
+            <path key={b.key} d={donutArc(c, c, r, start + gap / 2, end - gap / 2)} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="butt">
+              <title>{label}</title>
+            </path>
+          );
+        })}
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[10px] font-semibold uppercase tracking-[.06em] text-muted">total</span>
+        <span className="mt-0.5 whitespace-nowrap text-[15px] font-extrabold leading-none tracking-[-.02em] text-ink">{fmtCurrency(total)}</span>
+      </div>
+    </div>
+  );
+}
 
 export function RevenueSources({ data }: { data: DashboardData }) {
   const src   = data.revenueSources;
@@ -364,22 +416,10 @@ export function RevenueSources({ data }: { data: DashboardData }) {
       {!src || total <= 0 ? (
         <EmptyState icon="💸" title="Sem faturamento no período" sub="Quando entrarem vendas, mostro de onde cada real veio." />
       ) : (
-        <>
-          {/* Barra empilhada 100% — o container arredondado recorta os segmentos */}
-          <div className="mt-1 flex h-3.5 w-full overflow-hidden rounded-full bg-[#F0F0EE]">
-            {src.buckets.map((b) =>
-              b.revenue > 0 ? (
-                <div
-                  key={b.key}
-                  className="h-full"
-                  style={{ width: `${(b.revenue / total) * 100}%`, backgroundColor: SOURCE_META[b.key].color }}
-                  title={`${SOURCE_META[b.key].label}: ${fmtCurrency(b.revenue)}`}
-                />
-              ) : null,
-            )}
-          </div>
-          {/* Legenda: valor + % + dica, por origem */}
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-4">
+        <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
+          <RevenueDonut buckets={src.buckets} total={total} />
+          {/* Legenda: cor + origem, valor e % + dica */}
+          <div className="grid w-full flex-1 grid-cols-2 gap-x-5 gap-y-4">
             {src.buckets.map((b) => {
               const m   = SOURCE_META[b.key];
               const pct = total > 0 ? Math.round((b.revenue / total) * 100) : 0;
@@ -395,7 +435,7 @@ export function RevenueSources({ data }: { data: DashboardData }) {
               );
             })}
           </div>
-        </>
+        </div>
       )}
     </Card>
   );
