@@ -85,6 +85,41 @@ oficina do agente, se for do domínio; aqui, se atravessar domínios.
 
 ---
 
+## O aplicativo Meta é chave mestra, e chave mestra tem dono só dela
+
+**Decidido em** 2026-08-01 · **por** CEO · **origem:** conversa com o Diretor, com o
+painel do app à vista (`Foocci Whats`, App ID `893641126399955`)
+
+Existe **um único aplicativo** da Foocci dentro da Meta, e ele serve **WhatsApp e
+Instagram ao mesmo tempo**. Não são dois. Uma permissão negada, uma revisão
+reprovada, um cadastro de empresa incompleto ou um segredo rotacionado sem
+atualizar o Railway **derruba os dois canais de uma vez, para todos os clientes**.
+
+O Diretor recomendou manter isso dentro de `canais` e **o CEO decidiu o
+contrário** — com o argumento que venceu: `META_APP_SECRET` é **chave mestra**.
+Quem a tem faz qualquer coisa dentro da Meta em nome da Foocci. Isso é **custódia
+de credencial e governança**, não tráfego de mensagem.
+
+**A fronteira: `meta` cuida da CHAVE; `canais` usa a PORTA.**
+
+| É do `meta` | É do `canais` |
+|---|---|
+| o app não tem a permissão | a mensagem não chegou |
+| o token morreu / nasceu curto | a DM caiu no filtro errado |
+| o número não registra | o número corre risco de bloqueio |
+| a assinatura do webhook não confere | o webhook chegou e roteou errado |
+| rotacionar segredo | escolher provedor (Evolution × Meta) |
+
+Seis entradas de vitrine migraram de `canais` para `meta`, com proveniência
+preservada.
+
+**O que muda para todos:** o teste de fronteira é uma pergunta só — *"isso quebra
+WhatsApp e Instagram juntos?"*. Se sim, é do `meta`. E **segredo do app nunca
+aparece em chat, log, documento ou commit** — esta casa já vazou dois (o PIN de 2FA
+do WhatsApp e o client secret do Google), e nenhum dos dois tem rotação confirmada.
+
+---
+
 ## Sala sem dono é memória que ninguém mantém — o `manual` virou o 9º especialista
 
 **Decidido em** 2026-08-01 · **por** CEO (*"pode seguir com todos os fixes"*) ·

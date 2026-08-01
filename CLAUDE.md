@@ -56,13 +56,21 @@ respondendo por ele. Na maioria dos casos não precisa.
 |---|---|
 | `cerebro` | raciocínio, portões, verdade, escada de liberação |
 | `garcom` | a voz que fala com o cliente final no cardápio |
-| `canais` | WhatsApp, Instagram, integrações externas |
+| `meta` | **o aplicativo dentro da Meta** — credenciais, permissões, App Review, tokens, registro de número |
+| `canais` | WhatsApp, Instagram, Google, integrações externas — a mensagem que entra e sai |
 | `crm` | campanhas, níveis, cupons, atribuição de receita |
 | `operacao` | cardápio → pedido → pagamento → comanda → nota fiscal |
 | `interface` | toda tela das duas superfícies; dono do `DESIGN.md` |
 | `manual` | guias, assistente de ajuda, robô noturno de sync, onboarding do lojista |
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
+
+> **`meta` × `canais` — a fronteira, porque eles fazem divisa:** o `meta` cuida da
+> **chave**; o `canais` usa a **porta**. Existe **um único aplicativo** dentro da
+> Meta e ele serve WhatsApp *e* Instagram — permissão negada, revisão reprovada ou
+> segredo rotacionado sem atualizar o Railway **derrubam os dois canais juntos**.
+> Na dúvida, pergunte: *"isso quebra WhatsApp e Instagram ao mesmo tempo?"* Se sim,
+> é do `meta`.
 
 **Por que este modelo existe aqui:** antes, cada assunto virava um chat separado.
 Com o número de projetos crescendo, isso ficou insustentável — abas demais,

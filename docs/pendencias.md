@@ -62,9 +62,32 @@ Verificado em 01/08 na branch de produção · origem: `HANDOFF-railway-build-e-
 
 ---
 
-## 📱 Canais Meta — o número novo do WhatsApp está travado
+## 📱 Aplicativo Meta — o número novo do WhatsApp está travado
+
+**Dono:** `meta` — especialista criado em 01/08 por decisão do CEO. O aplicativo é
+**um só** (`Foocci Whats`) e serve WhatsApp *e* Instagram: o que quebra nele
+derruba os dois canais juntos.
 
 Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
+
+### 🔴 Achado novo (01/08) — a URL dos Termos de Serviço aponta para o Facebook
+
+No painel do app, em *Configurações → Básico*, o campo **URL dos Termos de
+Serviço** está preenchido com **`https://www.facebook.com/`**.
+
+**A página certa existe e está publicada:** `src/app/termos/page.tsx` →
+`https://foocci.com.br/termos`. A de privacidade já aponta certo
+(`https://foocci.com.br/privacidade`), então é só esse campo que ficou para trás.
+
+**Por que importa:** numa revisão de app pela Meta, apontar os termos para o
+próprio Facebook é motivo de reprovação — e revisão reprovada trava permissão, que
+trava os dois canais. É conserto de 30 segundos, feito pelo CEO no painel.
+
+| Também visto na mesma tela | Situação |
+|---|---|
+| **Domínios do aplicativo — vazio** | Sem domínio declarado, fluxo de login pela Meta pode ser recusado. *Não confirmado se afeta o fluxo atual.* |
+| **Aba "Ações necessárias"** | É onde a Meta lista o que está pendente ou bloqueando. *Nunca foi lida nesta casa.* Vale abrir antes de qualquer pedido de permissão |
+| **Nome do app: "Foocci Whats"** | O app serve WhatsApp **e** Instagram. Cosmético, mas induz ao erro de achar que existe um segundo app para o IG — não existe |
 
 | Aberto | O que quebra se ninguém mexer |
 |---|---|
