@@ -135,10 +135,10 @@ export type Opportunity = {
 
 export type OverviewStats = {
   totalCustomers:         number;
-  ativoCustomers:         number; // lastOrderAt ≤ 30 days
-  mornoCustomers:         number; // lastOrderAt 31-60 days
-  frioCustomers:          number; // lastOrderAt > 60 days
-  perdidosCustomers:      number; // lastOrderAt ≥ lostMinDays days (default 120d) — subset of frioCustomers
+  ativoCustomers:         number; // QUENTE: lastOrderAt ≤ hotMaxDays (default 30d)
+  mornoCustomers:         number; // MORNO: hotMaxDays+1 .. warmMaxDays (default 31-60d)
+  frioCustomers:          number; // FRIO: warmMaxDays+1 .. lostMinDays (default 61-120d) — EXCLUDES perdidos
+  perdidosCustomers:      number; // PERDIDO: older than lostMinDays (default 120d+) AND has purchased (never = não conta)
   naoCompraramCustomers:  number; // identified (has phone) but NEVER purchased — prime first-order campaign target
   newCustomers:           number; // created within selected date range
   segments: Array<{ tier: CustomerTier; count: number }>;
@@ -254,15 +254,19 @@ export class CRMService {
 
   static async getCustomers(
     restaurantId: string,
-    filter?: "inactive" | "neverOrdered" | "quente" | "morno" | "frio" | "recent" | "all" | "firstTime" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante",
+    filter?: "inactive" | "neverOrdered" | "quente" | "morno" | "frio" | "perdido" | "recent" | "all" | "firstTime" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante",
     search?: string,
     page = 1,
     pageSize = 20,
   ): Promise<ServiceResult<PaginatedCustomers>> {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
-    const sixtyDaysAgo  = new Date(now.getTime() - 60 * 86_400_000);
-    const sevenDaysAgo  = new Date(now.getTime() - 7  * 86_400_000);
+    // Same config-driven thresholds the overview counts use, so a filtered list
+    // matches its KPI card. QUENTE | MORNO | FRIO | PERDIDO are mutually exclusive.
+    const segCfg = await getSegmentConfig(restaurantId);
+    const hotCutoff  = new Date(now.getTime() - segCfg.hotMaxDays  * 86_400_000);
+    const warmCutoff = new Date(now.getTime() - segCfg.warmMaxDays * 86_400_000);
+    const lostCutoff = new Date(now.getTime() - segCfg.lostMinDays * 86_400_000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
 
     let where: Record<string, unknown> = { restaurantId, isGuest: false };
 
@@ -270,25 +274,35 @@ export class CRMService {
       where = {
         ...where,
         isActive: true,
-        lastOrderAt: { lt: thirtyDaysAgo },
+        lastOrderAt: { lt: hotCutoff },
       };
     } else if (filter === "quente") {
       where = {
         ...where,
         isActive: true,
-        lastOrderAt: { gte: thirtyDaysAgo },
+        lastOrderAt: { gte: hotCutoff },
       };
     } else if (filter === "morno") {
       where = {
         ...where,
         isActive: true,
-        lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
+        lastOrderAt: { gte: warmCutoff, lt: hotCutoff },
       };
     } else if (filter === "frio") {
+      // Bounded: older than warm but not yet perdido — excludes the perdidos so a
+      // customer never shows in both the "Frios" and "Perdidos" lists.
       where = {
         ...where,
         isActive: true,
-        lastOrderAt: { lt: sixtyDaysAgo },
+        lastOrderAt: { gte: lostCutoff, lt: warmCutoff },
+      };
+    } else if (filter === "perdido") {
+      // Older than lostMinDays AND has purchased — `lt` excludes NULL, so "nunca
+      // comprou" is never classified as perdido.
+      where = {
+        ...where,
+        isActive: true,
+        lastOrderAt: { lt: lostCutoff },
       };
     } else if (filter === "neverOrdered") {
       where = {
@@ -665,8 +679,12 @@ export class CRMService {
     };
     const ativoCustomers = bucketNum("ativo");
     const mornoCustomers = bucketNum("morno");
-    const frioCustomers  = bucketNum("frio");
     const perdidosCustomers = perdidoRows[0] ? Number(perdidoRows[0].cnt) : 0;
+    // FRIO and PERDIDO must be mutually exclusive. The `frio` bucket above counts
+    // everyone older than warmCutoff (which STILL includes the perdidos, older than
+    // lostCutoff). Subtract the perdidos so each customer lands in exactly one
+    // temperature (quente | morno | frio | perdido | nunca comprou).
+    const frioCustomers = Math.max(0, bucketNum("frio") - perdidosCustomers);
     const naoCompraramCustomers = naoCompraramRows[0] ? Number(naoCompraramRows[0].cnt) : 0;
 
     const tierNum = (bucket: string) => {

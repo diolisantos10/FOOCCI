@@ -5,7 +5,7 @@ import { CRMService } from "@/services/crm/CRMService";
 import { z } from "zod";
 
 const querySchema = z.object({
-  filter: z.enum(["all", "inactive", "neverOrdered", "quente", "morno", "frio", "recent", "firstTime", "tier-bronze", "tier-prata", "tier-ouro", "tier-diamante"]).default("all"),
+  filter: z.enum(["all", "inactive", "neverOrdered", "quente", "morno", "frio", "perdido", "recent", "firstTime", "tier-bronze", "tier-prata", "tier-ouro", "tier-diamante"]).default("all"),
   search: z.string().max(100).optional(),
   page:     z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
