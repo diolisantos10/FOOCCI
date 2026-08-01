@@ -147,3 +147,38 @@ assimetria (garçom = item, CRM = pedido) é **intencional**, não inconsistênc
 ser "corrigida".
 
 — promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §f (commit `3693a509`)
+
+---
+
+## O motor antigo de automações está aposentado **por teste**, não por combinado
+
+`services/crm/tests/AutomationRetired.test.ts` alimenta o
+`AutomationSchedulerService` com automações **ligadas** (`isEnabled: true`,
+gatilhos `BIRTHDAY` e `POST_ORDER`) e exige que o resultado seja
+`automationsRun: 0`, `totalSent: 0`, `results: []`.
+
+Ou seja: **se alguém religar o motor legado, o CI cai.** As campanhas prontas
+recorrentes substituíram esse caminho — a tabela `cRMAutomation` continua sendo
+lida em vários lugares, mas o agendador não envia mais nada por ela.
+
+É o guardrail *"prompt é aviso; código é trava"* aplicado a uma remoção: matar um
+caminho sem trava é convite para ele voltar sozinho num merge distraído.
+
+— promovido em 2026-08-01 pelo PM · origem: verificação da branch de produção
+durante a mineração do `HANDOFF-railway-build-e-ui-promocoes.md`
+
+---
+
+## As automações de WhatsApp mudaram de endereço — e a busca mudou de lado
+
+A aba *Automações* saiu do CRM. Hoje elas vivem como aba
+**🤖 Automações WhatsApp** dentro do drawer de Promoções.
+
+Junto veio uma troca de arquitetura que engana quem lê só um arquivo: o
+`crm/page.tsx` **não busca mais** `cRMAutomation` no servidor. O dado agora é
+puxado pelo navegador, em `/api/crm/automations`, pela tela de Promoções.
+
+**A ausência no `crm/page.tsx` é intencional, não esquecimento.** O manual já
+descreve o caminho novo (`services/manual/howToGuidesContent.ts:599`).
+
+— promovido em 2026-08-01 pelo PM · origem: mesmo handoff (commit `f3f580f`)

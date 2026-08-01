@@ -210,3 +210,42 @@ busca do topo do console.** O CEO já colou o escopo na busca errada uma vez; é
 erro fácil de repetir, e vale avisar antes.
 
 — promovido em 2026-08-01 pelo PM · origem: `HANDOFF-google.md` §8 (commit `06bfaf3`)
+
+---
+
+## São DOIS painéis de QR do WhatsApp vivos — e só um está certo
+
+| Arquivo | Trata `pairingCode`? |
+|---|---|
+| `integracoes/whatsapp/WhatsAppIntegrationClient.tsx:210` | **sim** — ramo próprio, mostra o código |
+| `integracoes/IntegrationsCenterClient.tsx:337-345` | **não** — cai em `"connected"` |
+
+A rota `/api/evolution/qr` tem **três formatos de resposta**, não dois:
+
+```
+{ base64: "…" }              → imagem de QR
+{ pairingCode: "ABCD-EFGH", code: "…" }   → código de pareamento, SEM imagem
+{ error: "…" }               → falha
+```
+
+Quem só testa `base64` e usa o `else` como "conectado" **inventa uma conexão que
+não existe**. É o guardrail 1 dentro da interface: ausência de imagem não é
+informação de que conectou.
+
+**Ao mexer em qualquer painel de canal:** trate os três formatos explicitamente e
+**nunca** use `else` como estado de sucesso. Estado desconhecido é estado
+desconhecido.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-railway-build-e-ui-promocoes.md`,
+verificado na branch de produção
+
+---
+
+## `WhatsAppQRPanel` renderiza sem olhar se a integração está ativa — de propósito
+
+A prop `isActive` foi **removida deliberadamente**. O painel precisa aparecer
+justamente quando a integração está *"Não configurado"* — é ali que o lojista vai
+conectar. Se você encontrar `WhatsAppQRPanel({ isActive })` num branch antigo, não
+restaure: a remoção foi a correção.
+
+— promovido em 2026-08-01 pelo PM · origem: mesmo handoff (commit `edf8b86`)

@@ -33,6 +33,33 @@ O Garçom pode dar informação errada sobre restrição alimentar. É o único 
 desta lista em que o defeito não custa dinheiro nem reputação — custa a saúde
 de quem pediu. Os outros três P1 saíram na mesma varredura e são menos graves.
 
+### 2. O painel de WhatsApp em Integrações escreve "Conectado" quando NÃO está
+
+`src/app/(dashboard)/integracoes/IntegrationsCenterClient.tsx:337-345`
+
+Quando a Evolution devolve **código de pareamento** em vez de imagem de QR, a
+resposta é `{ pairingCode, code }` — sem `base64` e sem `error`. O painel só sabe
+tratar `base64`; sem ele, cai na última linha:
+
+```ts
+setQrState(qr.error === "not_configured" ? "error" : "connected");
+```
+
+**Resultado:** a tela diz **"Conectado"** para um lojista que não conectou nada.
+Ele fecha a tela achando que terminou, e o WhatsApp nunca funciona.
+
+Não trava, não dá erro, não gera log — mente e some. É o guardrail 1 ao contrário:
+o painel infere sucesso do silêncio.
+
+**O conserto já existe no repositório.** O outro painel de WhatsApp
+(`integracoes/whatsapp/WhatsAppIntegrationClient.tsx:210`) trata `pairingCode`
+corretamente, com o mesmo formato de resposta. É copiar o ramo que já funciona.
+
+> ⚠️ **São dois painéis de QR vivos ao mesmo tempo** — só um está certo. Ver a
+> vitrine do `canais`.
+
+Verificado em 01/08 na branch de produção · origem: `HANDOFF-railway-build-e-ui-promocoes.md`
+
 ---
 
 ## 📱 Canais Meta — o número novo do WhatsApp está travado
@@ -246,6 +273,22 @@ seguiu.
 | Garçom: ponto cego do simulador | Quando cai na IA, resposta vazia passa batida — o simulador aprova o silêncio |
 | Foocci: saudação com nome + menu colado por código | Hoje depende do modelo lembrar; tem que ser garantido por código |
 | Brain Fase 5 (parcial) | Falta consolidar as 6 filas, avaliar candidato e o LLM-judge online |
+| **O drawer de Promoções cobre 16px do menu lateral** | Já está acontecendo em produção, no desktop. Ver abaixo |
+| Aba Automações do drawer abre com os campos zerados | Os dados chegam por busca no navegador, sem estado de carregando. Por um instante parecem configurações perdidas |
+
+### O drawer de Promoções cobre 16px do menu lateral (desktop)
+
+O menu lateral tem **240px** (`Sidebar.tsx:102`, `w-60`). O drawer de Promoções
+começa em **224px** (`PromotionsClient.tsx:521,526,1012,1015`, `lg:left-56`).
+
+Os dois números foram escritos à mão, em arquivos diferentes, e **já divergiram**:
+o drawer entra 16px por cima da borda do menu. O handoff que registrou isso ainda
+descrevia como risco futuro — não é, já aconteceu.
+
+O conserto certo não é trocar `56` por `60`: é a largura virar **um valor só**,
+lido dos dois lados. Enquanto forem dois números soltos, eles divergem de novo.
+
+**Dono:** `interface`.
 
 ---
 
@@ -312,3 +355,13 @@ Isso bloqueia a definição das faixas de preço e o bloqueio por plano.
   parou de prometer pedido que não pode criar.
 - **A branch de trabalho estava 42 commits atrás** da padrão, e as duas travas
   acima estavam paradas nela sem chegar em produção. Resolvido no mesmo PR.
+- **O build do Railway (01/08)** — uma sessão encerrou sem saber se o deploy
+  tinha voltado, deixando aberto *"se o build ainda falha, produção está parada"*.
+  **Está no ar.** `/api/health` responde com o `commitSha` do merge mais recente e
+  `db: ok`. O `nixpacks.toml` com `npm ci --include=dev` está na branch padrão, e
+  `tailwindcss`, `postcss`, `autoprefixer` e o CLI do `prisma` estão todos em
+  `dependencies`. Nenhuma ação pendente.
+- **As automações de WhatsApp saíram do CRM** e viraram a aba
+  *🤖 Automações WhatsApp* dentro de Promoções. Está em produção, o manual já
+  descreve o caminho novo (`howToGuidesContent.ts:599`), e o motor antigo está
+  aposentado **por teste** (`AutomationRetired.test.ts`), não por combinado.
