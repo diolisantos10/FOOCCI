@@ -269,3 +269,32 @@ emergência de um P3009 e não pertence à mesma mudança — só sai depois de
 confirmar que a migração `20260518000001_add_distance_min_fee_km` está estável em
 produção. O comentário *"remove after confirmed stable"* vale **só** para esse
 bloco.
+
+---
+
+## Ler o arquivo inteiro antes de afirmar o que ele contém
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-site-comercial.md` §4
+(commit `79943f5`)
+
+Duas afirmações erradas na mesma sessão, pelo mesmo motivo — **leitura parcial
+tratada como leitura completa**:
+
+1. Uma primeira leitura do `tailwind.config.ts` devolveu só as cores `brand` e a
+   fonte. O arquivo tem 44 linhas e **também** define os sete tokens semânticos e a
+   filosofia da marca. A conclusão que ia sair era "laranja protagonista" — o
+   oposto do que o arquivo diz.
+2. Uma busca ampla por "PREMIUM" encontrou a palavra e concluiu que era nome de
+   plano. É de **outro** enum (`CRMMessageStyle`). O enum `Plan` real é
+   `{ STARTER, GROWTH, PRO }` — `prisma/schema.prisma:155-159`.
+
+**O que muda para todos:** busca **localiza**; ela não **conclui**. Achou a palavra?
+Abra o arquivo, leia o bloco inteiro e confirme a que estrutura ela pertence antes
+de afirmar qualquer coisa.
+
+O sinal de alerta é o que salvou os dois casos: **duas leituras do mesmo arquivo
+discordando entre si**. Quando isso acontecer, pare e releia — nunca escolha a que
+confirma o que você já ia escrever.
+
+É o guardrail "documentação não é evidência" um nível abaixo: **nem a sua própria
+leitura anterior é evidência.**

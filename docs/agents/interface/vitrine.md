@@ -76,3 +76,31 @@ sumiram**. Ele pode reconfigurar por cima de dados que estavam salvos.
 componente interno, não só para página.
 
 — promovido em 2026-08-01 pelo PM · origem: mesmo handoff
+
+---
+
+## A marca é 90% neutro + 10% laranja — e isso está escrito no código
+
+`tailwind.config.ts:26` carrega a filosofia do Brand Book em comentário:
+**"minimalismo premium — 90% neutro + 10% laranja"**.
+
+O laranja **`#F97316`** (`brand-500`) é **acento**, não protagonista. Hover é
+`#EA580C` (`brand-600`). O que domina a tela são os neutros:
+
+| Token | Valor | Papel |
+|---|---|---|
+| `ink` | `#0B0B0B` | títulos |
+| `ink2` | `#5C5C58` | corpo de texto |
+| `paper` | `#FFFFFF` | superfícies e cards |
+| `canvas` | `#F6F6F4` | fundo do app (off-white quente) |
+| `line` / `line2` | `#E9E9E6` / `#E5E5E5` | bordas |
+| `muted` | `#8A8A86` | texto secundário |
+
+Fonte **Inter**. Referências declaradas: Linear/Stripe/Vercel no painel,
+iFood/Rappi na loja.
+
+**Vale também para material de fora do produto** — site comercial, peça, apresentação.
+Uma sessão quase entregou briefing de site com "laranja protagonista"; teria
+produzido um site que não parece o app.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
