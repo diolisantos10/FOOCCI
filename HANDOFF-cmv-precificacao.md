@@ -239,5 +239,15 @@ Arquivos-chave desta frente:
 
 ---
 
+## 7. Adendo de última hora (20/07, durante o push deste documento)
+
+Enquanto este handoff era commitado, a linha remota recebeu commits de outra
+sessão que **evoluíram esta mesma frente**: linhas da ficha ganharam unidade
+própria (`RecipeLine.unit` + conversão em `src/services/menu/units.ts`,
+`lineCost`), surgiu adição de insumos em massa (`bulkIngredientsSchema`) e a
+Sidebar teve ajuste visual. As seções acima descrevem o estado até o commit
+`314a2321`; para o delta posterior, leia `git log 314a2321..` e os arquivos
+citados. As decisões, os porquês e as armadilhas continuam valendo.
+
 *Escrito por Claude (sessão de 19–20/07/2026) antes do encerramento. Commitado
 na branch `claude/remove-legacy-runner-q8iXa` — confira o hash no `git log`.*
