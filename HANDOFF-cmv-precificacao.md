@@ -121,6 +121,16 @@ Arquivos-chave desta frente:
    nome da nota** — o algoritmo de containment dá razão ao match total do
    conjunto menor ("Cream Cheese" ⊂ "QUEIJO CREAM CHEESE TRADICIONAL" = high,
    e está certo). O teste inicial esperava o contrário e estava errado.
+6. **`git push --force-with-lease` NÃO protege depois de um `git fetch`** —
+   aconteceu nesta sessão, no push deste próprio documento: fetch atualizou a
+   ref local (o "lease" passou a bater com o remoto), o `git rebase ... |
+   tail -1` MASCAROU a falha do rebase (o exit code vira o do tail), e o
+   force push substituiu o head remoto descartando por minutos um merge de
+   outra sessão (restaurado em seguida, nada se perdeu). Lições: (a) neste
+   repositório multi-sessão, evite `--force-with-lease` — se o push normal
+   for rejeitado, rebase e tente de novo; (b) nunca encadeie `rebase |
+   tail` com `&&` — o pipe engole o erro; (c) após QUALQUER force push,
+   confira com `git merge-base --is-ancestor <head-antigo-remoto> HEAD`.
 
 ## 4. O que ficou ABERTO (e o que quebra se ninguém mexer)
 
