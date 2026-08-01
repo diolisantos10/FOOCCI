@@ -109,18 +109,18 @@ export function Sidebar() {
         {/* Brand — Foocci logomark + wordmark, kept isolated as pure branding.
             The partner restaurant + logged-in user live in the TopBar account
             cluster (top-right), so this stays untouched. */}
-        <div className="flex items-center justify-between border-b border-line px-4 py-4">
+        <div className="relative flex items-center justify-center border-b border-line px-4 py-4">
           <Link href="/dashboard" onClick={close} className="flex items-center">
             {/* Só a logo (wordmark) — logo e anagrama nunca juntos. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/foocci/foocci-wordmark.png" alt="Foocci" className="h-7" />
           </Link>
-          {/* Close button — mobile only */}
+          {/* Close button — mobile only (absoluto pra não desalinhar a logo centralizada) */}
           <button
             type="button"
             onClick={close}
             aria-label="Fechar menu"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink2 lg:hidden"
+            className="absolute right-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[#F4F4F2] hover:text-ink2 lg:hidden"
           >
             ✕
           </button>
