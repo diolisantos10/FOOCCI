@@ -35,15 +35,14 @@ export default function TermosPage() {
         </p>
       </LegalBlock>
 
-      <LegalBlock heading="Status de pré-lançamento">
+      <LegalBlock heading="Solicitação de demonstração">
         <p>
-          O Foocci está em fase piloto e pré-lançamento. Neste momento, o site não
-          disponibiliza formulários, captação de leads, agendamento de demonstração ou
-          canais de venda ativos.
+          O site disponibiliza um formulário para você solicitar uma demonstração. As
+          informações enviadas por ali são tratadas conforme a Política de Privacidade.
         </p>
         <p>
-          Caso esses recursos sejam ativados futuramente, as informações enviadas por você
-          serão tratadas conforme a Política de Privacidade.
+          Enviar o formulário não cria contrato nem obrigação de contratação para nenhuma
+          das partes: é um pedido de contato.
         </p>
       </LegalBlock>
 

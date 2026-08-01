@@ -3,7 +3,7 @@
 /**
  * Sticky marketing header (shared across /site and /site/*). Client component:
  * tracks scroll (subtle border once scrolled) and toggles the mobile menu.
- * Pre-launch: shows a subtle "em breve" pill; primary CTA explains the product.
+ * Launch mode: no pre-launch pill; the primary CTA opens the demo request.
  */
 
 import { useEffect, useState } from "react";
@@ -41,9 +41,6 @@ export function MarketingHeader() {
             priority
             className="h-[22px] w-auto"
           />
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
-            em breve
-          </span>
         </Link>
 
         <nav className="hidden items-center gap-8 lg:flex" aria-label="Navegação principal">

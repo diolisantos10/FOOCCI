@@ -11,11 +11,11 @@ import { CtaBand } from "@/components/marketing/CtaBand";
 import { VisualStepCard } from "@/components/marketing/VisualStepCard";
 import { DotGrid, Eyebrow } from "@/components/marketing/premium";
 import { TrendingUpIcon, UsersIcon, RepeatIcon } from "@/components/marketing/icons";
-import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { COMO_FUNCIONA_URL, DEMO_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
-const TITLE = "Preços Foocci | Planos em definição para lançamento";
+const TITLE = "Planos Foocci | Um plano para cada momento do restaurante";
 const DESCRIPTION =
-  "Os planos do sistema Foocci serão definidos para o lançamento comercial, pensados para diferentes momentos e tamanhos de operação de restaurante.";
+  "O Foocci tem planos para diferentes momentos e tamanhos de operação. Peça uma demonstração e monte a proposta certa para o seu restaurante.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -54,11 +54,11 @@ export default function PrecosPage() {
   return (
     <>
       <PageHero
-        badge="Planos · em definição"
-        title="Planos em definição para o lançamento comercial."
-        subtitle="O Foocci está em fase piloto. Os planos oficiais serão definidos para diferentes momentos, canais e tamanhos de operação."
-        primaryLabel="Ver como o Foocci funciona"
-        primaryHref={COMO_FUNCIONA_URL}
+        badge="Planos"
+        title="Um plano para cada momento do seu restaurante."
+        subtitle="O valor depende do tamanho da operação e do que você vai usar. Peça uma demonstração e a gente apresenta a proposta certa — sem compromisso."
+        primaryLabel="Solicitar demonstração"
+        primaryHref={DEMO_URL}
         note={PRELAUNCH_NOTE}
       />
 
@@ -104,7 +104,7 @@ export default function PrecosPage() {
               Planos que acompanham o momento do seu restaurante.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-gray-600">
-              Os planos do sistema Foocci estão em definição para o lançamento comercial.
+              Você fala com a gente, a gente entende sua operação e monta a proposta.
               A ideia é acompanhar o momento do restaurante — do pedido direto à
               recorrência inteligente.
             </p>
@@ -144,9 +144,9 @@ export default function PrecosPage() {
       </section>
 
       <CtaBand
-        title="Quer entender o que o Foocci pode fazer pela sua operação?"
-        label="Conhecer como o Foocci funciona"
-        href={COMO_FUNCIONA_URL}
+        title="Quer saber quanto fica para o seu restaurante?"
+        label="Solicitar demonstração"
+        href={DEMO_URL}
       />
     </>
   );

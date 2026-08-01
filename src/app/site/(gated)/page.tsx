@@ -3,8 +3,8 @@
  *
  * "Hospitalidade digital inteligente" — thesis: relacionamento → recorrência →
  * faturamento. Editorial 11-section rhythm (see docs/foocci-site/
- * creative-direction-v3-hospitalidade.md). Pre-launch: gated + noindex via the
- * /site layout; no sales, no WhatsApp, no lead capture.
+ * creative-direction-v3-hospitalidade.md). Public since 2026-08-03: no gate,
+ * indexable via the /site layout, and the demo form captures real leads.
  *
  * Positioning (official): Foocci é um sistema inteligente de vendas,
  * relacionamento e fidelização para restaurantes.
@@ -27,11 +27,10 @@ import { FinalCTASection } from "@/components/marketing/FinalCTASection";
 
 const TITLE = "Foocci | Sistema inteligente de vendas e CRM para restaurantes";
 const DESCRIPTION =
-  "A Foocci está preparando uma nova forma de ajudar restaurantes a vender mais, atender melhor no WhatsApp, ativar CRM e aumentar recorrência.";
+  "O Foocci ajuda restaurantes a vender mais, atender melhor no WhatsApp, ativar o CRM e aumentar a recorrência — com cardápio, pedido, pagamento e relacionamento no mesmo lugar.";
 
-// PRE-LAUNCH: indexability (noindex, follow) is centralized in
-// src/app/site/layout.tsx for the whole /site subtree. At launch (~julho), flip
-// it there so the public pages become indexable.
+// Indexability (index, follow) is centralized in src/app/site/layout.tsx for the
+// whole /site subtree — do not set `robots` per page.
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
@@ -70,7 +69,7 @@ export default function SitePage() {
       <ProductModulesSection />
       {/* 8 · Comparativo Foocci vs chatbot comum */}
       <ComparisonSection />
-      {/* 9 · Pré-lançamento / planos */}
+      {/* 9 · Planos */}
       <PricingTeaserSection />
       {/* 10 · FAQ */}
       <FAQSection />

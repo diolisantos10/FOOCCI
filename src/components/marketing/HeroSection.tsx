@@ -61,7 +61,7 @@ export function HeroSection() {
           </div>
 
           <p className="mt-4 text-sm text-gray-500">
-            Produto em fase piloto. Lançamento comercial em breve.
+            Atendemos restaurantes de todos os tamanhos. Fale com a gente e veja funcionando no seu.
           </p>
         </div>
 

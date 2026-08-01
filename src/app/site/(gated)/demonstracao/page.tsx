@@ -1,10 +1,13 @@
 /**
- * /site/demonstracao — PRE-LAUNCH. Inherits /site/layout.tsx.
+ * /site/demonstracao — the commercial conversion page. Inherits /site/layout.tsx.
  *
- * The commercial demo is not open yet. There is intentionally NO lead form and
- * NO WhatsApp CTA here: the page presents a preview of the product experience
- * (composed showcase + a three-step flow + illustrative screens) and routes to
- * the educational page. Nothing fakes a submission or implies availability.
+ * This is where a restaurant owner asks for a demo. `DemoForm` posts to
+ * `/api/site/leads`, which PERSISTS the lead before attempting any notification —
+ * a lost e-mail must never mean a lost lead.
+ *
+ * Before launch this page had no form at all (pre-launch mode); the copy still
+ * used "em breve" everywhere. Kept the product preview sections — they are what
+ * makes the form worth filling.
  */
 
 import type { Metadata } from "next";
@@ -16,11 +19,12 @@ import { FoocciProductShowcase } from "@/components/marketing/FoocciProductShowc
 import { VisualStepCard } from "@/components/marketing/VisualStepCard";
 import { RelationshipRevenuePanel } from "@/components/marketing/RelationshipRevenuePanel";
 import { DotGrid, Halo, Eyebrow } from "@/components/marketing/premium";
-import { COMO_FUNCIONA_URL, PROPOSTA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { DemoForm } from "@/components/marketing/DemoForm";
 
-const TITLE = "Demonstração Foocci em breve | Conheça a proposta";
+const TITLE = "Solicitar demonstração | Foocci para restaurantes";
 const DESCRIPTION =
-  "A demonstração comercial do Foocci será aberta em breve. Enquanto isso, conheça a proposta, os pilares e o funcionamento do sistema.";
+  "Veja o Foocci funcionando com o cardápio do seu restaurante. Peça uma demonstração — sem compromisso.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -46,18 +50,18 @@ export default function DemonstracaoPage() {
   return (
     <>
       <InternalVisualHero
-        badge="Prévia · em breve"
+        badge="Demonstração sem compromisso"
         title={
           <>
-            Uma prévia da experiência <span className="text-brand-500">Foocci</span>.
+Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
           </>
         }
-        subtitle="Em breve, você poderá ver como o sistema Foocci transforma atendimento, pedido e relacionamento na prática. Enquanto isso, conheça a proposta e o funcionamento do sistema."
+        subtitle="A gente mostra, com o seu cardápio, como o Foocci transforma atendimento, pedido e relacionamento na prática. Preencha abaixo que entramos em contato."
         visual={<FoocciProductShowcase />}
-        primaryLabel="Ver como o Foocci funciona"
-        primaryHref={COMO_FUNCIONA_URL}
-        secondaryLabel="Conhecer a proposta"
-        secondaryHref={PROPOSTA_URL}
+        primaryLabel="Preencher e pedir demonstração"
+        primaryHref="#formulario"
+        secondaryLabel="Ver como o Foocci funciona"
+        secondaryHref={COMO_FUNCIONA_URL}
         note={PRELAUNCH_NOTE}
       />
 
@@ -108,13 +112,13 @@ export default function DemonstracaoPage() {
           </div>
 
           <p className="mt-8 text-center text-xs text-gray-400">
-            Telas ilustrativas do produto em fase piloto.
+            Telas ilustrativas do produto.
           </p>
         </div>
       </section>
 
       {/* What a future demo will show */}
-      <section aria-labelledby="demo-mostra-title" className="bg-white py-20">
+      <section id="formulario" aria-labelledby="demo-mostra-title" className="scroll-mt-20 bg-white py-20">
         <div className="mx-auto max-w-2xl px-5 lg:px-8">
           <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-sm ring-1 ring-gray-900/[0.03] sm:p-9">
             <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
@@ -132,17 +136,17 @@ export default function DemonstracaoPage() {
                 </li>
               ))}
             </ul>
-            <p className="mt-7 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
-              O formulário de interesse será ativado no lançamento comercial.
-            </p>
+            <div className="mt-7 border-t border-gray-100 pt-7">
+              <DemoForm includeChallenge />
+            </div>
           </div>
         </div>
       </section>
 
       <CtaBand
-        title="Quer entender se o Foocci faz sentido para o seu restaurante?"
-        label="Ver como o Foocci funciona"
-        href={COMO_FUNCIONA_URL}
+        title="Ainda com dúvida se o Foocci faz sentido para o seu restaurante?"
+        label="Pedir uma demonstração"
+        href="#formulario"
       />
     </>
   );

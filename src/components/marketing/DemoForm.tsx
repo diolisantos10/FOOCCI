@@ -3,18 +3,17 @@
 /**
  * Demo request form. Client component.
  *
- * IMPORTANT (documented): there is no lead-capture backend in this codebase, so
- * this form does NOT post to any API (no fake endpoints). Instead, when a sales
- * WhatsApp number is configured (`WHATSAPP_SALES_NUMBER` in config.ts), submit
- * opens WhatsApp with the typed details prefilled. While no number is set, the
- * submit button stays disabled with an honest note — nothing pretends to send.
+ * Posts to `/api/site/leads`, which stores the lead BEFORE notifying anyone. This
+ * form used to be inert on purpose (no backend existed, so it refused to pretend
+ * it sent anything); the endpoint arrived with the commercial launch.
  *
- * TODO(backend): wire a real lead-capture endpoint or CRM integration, then
- * enable the submit independently of the WhatsApp number.
+ * Three states, per DESIGN.md §6.1: idle, sending (button locked so a double tap
+ * cannot duplicate the lead), and either a success panel or an inline error that
+ * KEEPS everything the visitor typed. Wiping a filled form on a network blip is
+ * how a lead is lost after it was already won.
  */
 
 import { useState } from "react";
-import { whatsappUrl } from "./config";
 
 const TIPOS = [
   "Pizzaria",
@@ -43,21 +42,61 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
   const [tipo, setTipo] = useState("");
   const [desafio, setDesafio] = useState("");
 
-  const whatsappEnabled = whatsappUrl() !== null;
-  const canSubmit = whatsappEnabled && nome.trim() !== "" && whatsapp.trim() !== "";
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  const canSubmit = status !== "sending" && nome.trim() !== "" && whatsapp.trim() !== "";
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const message =
-      `Olá! Quero ver o Foocci funcionando no meu restaurante.\n` +
-      `Nome: ${nome}\n` +
-      `WhatsApp: ${whatsapp}\n` +
-      `Restaurante: ${restaurante}\n` +
-      `Cidade: ${cidade}\n` +
-      `Tipo: ${tipo}` +
-      (includeChallenge ? `\nPrincipal desafio: ${desafio}` : "");
-    const url = whatsappUrl(message);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    if (!canSubmit) return;
+
+    setStatus("sending");
+    setError(null);
+
+    try {
+      const res = await fetch("/api/site/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome,
+          whatsapp,
+          restaurante,
+          cidade,
+          tipo,
+          desafio: includeChallenge ? desafio : "",
+          origem: typeof window !== "undefined" ? window.location.pathname : "",
+        }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        // Nothing is cleared — the visitor keeps everything they typed.
+        setError(data?.error ?? "Não conseguimos enviar agora. Tente de novo em instantes.");
+        setStatus("idle");
+        return;
+      }
+
+      setStatus("sent");
+    } catch {
+      setError("Sem conexão. Verifique a internet e tente de novo.");
+      setStatus("idle");
+    }
+  }
+
+  if (status === "sent") {
+    return (
+      <div
+        role="status"
+        className="rounded-2xl border border-brand-200 bg-brand-50 p-7 text-center"
+      >
+        <p className="text-lg font-semibold text-[#0B0B0B]">Recebemos seu pedido! 🎉</p>
+        <p className="mt-2 text-base leading-relaxed text-gray-700">
+          Vamos entrar em contato pelo WhatsApp <strong>{whatsapp}</strong> para combinar a
+          demonstração.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -76,29 +115,26 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
         )}
       </div>
 
+      {error && (
+        <p
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {error}
+        </p>
+      )}
+
       <div className="pt-2">
-        {whatsappEnabled ? (
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-6 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Solicitar demonstração
-          </button>
-        ) : (
-          <>
-            {/* No WhatsApp number / lead backend configured yet — honest disabled state. */}
-            <button
-              type="button"
-              disabled
-              aria-disabled
-              className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-full bg-gray-200 px-6 py-3.5 text-base font-semibold text-gray-500"
-            >
-              Solicitar demonstração
-            </button>
-            <p className="mt-2 text-center text-sm text-gray-500">Envio disponível em breve.</p>
-          </>
-        )}
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-6 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {status === "sending" ? "Enviando…" : "Solicitar demonstração"}
+        </button>
+        <p className="mt-2 text-center text-sm text-gray-500">
+          Sem compromisso. Retornamos pelo WhatsApp.
+        </p>
       </div>
     </form>
   );

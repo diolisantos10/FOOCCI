@@ -24,6 +24,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/login(\/.*)?$/,                  // login + sub-pages
   /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
   /^\/api\/restaurants\/register$/,    // self-service registration
+  /^\/api\/site\/leads$/,              // public demo-request form (rate-limited per IP)
   /^\/api\/webhooks\/evolution$/,      // Evolution API webhook receiver (verified by HMAC)
   /^\/api\/webhooks\/meta\/whatsapp$/, // Meta WhatsApp Cloud API webhook (GET verify token + POST X-Hub-Signature-256)
   /^\/api\/webhooks\/instagram$/,      // Instagram Direct (Meta) webhook (GET verify token + POST X-Hub-Signature-256)
@@ -53,45 +54,12 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((pattern) => pattern.test(pathname));
 }
 
-// ── Private pre-launch gate for the marketing site (/site only) ─────────────
-// While Foocci is in pilot, the public marketing pages under /site are kept behind
-// a single shared password (env MARKETING_PREVIEW_PASSWORD). This runs in middleware
-// — the only place that can block a page BEFORE it renders/streams — but is scoped
-// strictly to /site and never affects product routes, auth, APIs or webhooks.
-// Fail-closed: no password configured → no access. The gate cookie stores
-// sha256(password); we recompute and compare (constant-time) with Web Crypto (Edge).
-const PREVIEW_COOKIE = "foocci_preview";
-
-function isMarketingPath(pathname: string): boolean {
-  return pathname === "/site" || pathname.startsWith("/site/");
-}
-
-// The gate page + login/logout endpoints must stay reachable without the cookie.
-function isMarketingOpenPath(pathname: string): boolean {
-  return pathname === "/site/entrar" || pathname === "/site/acesso" || pathname === "/site/sair";
-}
-
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}
-
-async function isMarketingPreviewAuthed(req: NextRequest): Promise<boolean> {
-  const password = process.env.MARKETING_PREVIEW_PASSWORD;
-  if (!password) return false; // not configured → fail closed
-  const cookie = req.cookies.get(PREVIEW_COOKIE)?.value;
-  if (!cookie) return false;
-  return constantTimeEqual(cookie, await sha256Hex(password));
-}
+// ── Marketing site (/site) is PUBLIC since the launch on 2026-08-03 ────────────
+// Until then these pages sat behind a shared password. The gate lived in TWO
+// places at once — here AND in `site/(gated)/layout.tsx` — because middleware is
+// the only layer that can block a page BEFORE it renders or streams. Both were
+// removed together; removing only one leaves the site shut with no error to
+// explain it. `/site` is now matched by PUBLIC_PATHS like any other public route.
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -105,9 +73,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Private preview entry point — /preview (and /preview/*) sends the reviewer to
-  // the gated marketing site at /site, where the password gate + noindex already
-  // live. Scoped EXACTLY to /preview; product routes are never touched.
+  // Legacy private-preview entry point. /preview (and /preview/*) still forwards
+  // to /site — the destination is simply public now. Kept so links shared during
+  // the preview period do not 404.
   if (pathname === "/preview" || pathname.startsWith("/preview/")) {
     const dest = req.nextUrl.clone();
     dest.pathname = pathname.replace(/^\/preview/, "/site");
@@ -123,19 +91,6 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/api/recover") ||
     pathname.startsWith("/api/admin/reset-owner")
   ) {
-    return NextResponse.next();
-  }
-
-  // Private pre-launch gate — ONLY for marketing pages under /site. Every other
-  // path (product, api, admin, qr, pedido, …) skips this block entirely.
-  if (isMarketingPath(pathname) && !isMarketingOpenPath(pathname)) {
-    if (!(await isMarketingPreviewAuthed(req))) {
-      const gate = req.nextUrl.clone();
-      gate.pathname = "/site/entrar";
-      gate.search = "";
-      return NextResponse.redirect(gate);
-    }
-    // Authenticated preview visitor — allow the marketing page through.
     return NextResponse.next();
   }
 

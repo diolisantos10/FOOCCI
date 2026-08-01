@@ -7,19 +7,18 @@
  * (`/site/entrar`) and the login/logout route handlers are reachable while every
  * marketing page sits behind the password gate.
  *
- * PRE-LAUNCH INDEXABILITY (single source of truth): the marketing site lives under
- * /site as a private preview and must NOT be indexed yet. `robots: noindex, follow`
- * applies to the whole subtree. LAUNCH (~julho): flip to `{ index: true, follow: true }`.
+ * INDEXABILITY (single source of truth for the subtree): the site went public on
+ * 2026-08-03, so `robots: index, follow`. It was `noindex` while the marketing area
+ * was a password-gated private preview.
  *
- * force-dynamic: the gate reads the preview cookie per request, so /site must never
- * be statically prerendered (a static render would freeze the gate and embed page
- * content in the flight payload).
+ * force-dynamic is kept: `/` renders the same marketing home, and the pages read
+ * request-scoped data. Static prerendering here has bitten this subtree before.
  */
 
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  robots: { index: false, follow: true },
+  robots: { index: true, follow: true },
 };
 
 export const dynamic = "force-dynamic";

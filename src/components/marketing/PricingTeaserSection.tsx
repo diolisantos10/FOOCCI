@@ -1,10 +1,19 @@
 /**
- * Pricing teaser (home) — pre-launch. Server component.
- * No prices and no "demonstração" language: plans are being defined for launch.
+ * Pricing teaser (home). Server component.
+ *
+ * Values are deliberately absent ("Valor sob consulta"): the three plan prices were
+ * not closed by launch day, and guardrail 7 + decision D3 forbid publishing an
+ * invented number. Adding them later is a content change here and in
+ * `/site/precos` — nothing else depends on it.
+ *
+ * ⚠️ These are COMMERCIAL names (Essencial / Crescimento / Performance). The
+ * database enum is `Plan { STARTER, GROWTH, PRO }` — same three tiers, different
+ * labels. Keep the mapping in that order; never print the enum on the site, and
+ * never print these names in the panel.
  */
 
 import { PrimaryCta } from "./Cta";
-import { COMO_FUNCIONA_URL } from "./config";
+import { DEMO_URL } from "./config";
 
 const PLANS = [
   { name: "Essencial", desc: "Para começar a vender melhor pelos canais diretos.", highlighted: false },
@@ -19,11 +28,11 @@ export function PricingTeaserSection() {
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Planos</span>
           <h2 id="planos-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Planos serão apresentados no lançamento comercial.
+Um plano para cada momento do seu restaurante.
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            O Foocci está em fase piloto. Os planos oficiais serão definidos para
-            diferentes momentos e tamanhos de operação.
+            O valor depende do tamanho da operação e do que você vai usar. Peça uma
+            demonstração e a gente monta a proposta certa — sem compromisso.
           </p>
         </div>
 
@@ -38,14 +47,14 @@ export function PricingTeaserSection() {
               <h3 className="text-xl font-semibold text-[#0B0B0B]">{plan.name}</h3>
               <p className="mt-2 text-base text-gray-600">{plan.desc}</p>
               <p className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600">
-                Em definição para o lançamento
+Valor sob consulta
               </p>
             </div>
           ))}
         </div>
 
         <div className="mt-10 flex justify-center">
-          <PrimaryCta label="Conhecer como o Foocci funciona" href={COMO_FUNCIONA_URL} />
+          <PrimaryCta label="Solicitar demonstração" href={DEMO_URL} />
         </div>
       </div>
     </section>
