@@ -98,7 +98,7 @@ de marketing. São domínios distintos com agentes distintos — não misture.
 | `docs/decisoes.md` | **O corredor** — decisões que atravessam mais de um domínio |
 | `docs/foocci-resumo-executivo.md` | O produto inteiro, recurso por recurso, com maturidade honesta |
 | `docs/brain-arquitetura-de-referencia.md` | A arquitetura do Cérebro e por que cada peça existe |
-| `docs/como-montar-estrutura-ceo-pm-agentes-v2.md` | O modelo organizacional que este arquivo implementa |
+| `docs/como-montar-estrutura-ceo-pm-agentes-v2.md` | O modelo organizacional que este arquivo implementa (nome do arquivo é legado — o papel hoje chama **Diretor**) |
 | `docs/brain-universal-roadmap.md` | Fases do Brain e o que já foi entregue |
 | `DESIGN.md` | O design system das duas superfícies |
 
@@ -137,7 +137,7 @@ trabalha em `.claude/agents/`.
 |---|---|---|---|---|
 | `DESIGN.md` | design | **ADOTADO** | 2026-07 | CEO |
 | `docs/brain-arquitetura-de-referencia.md` | comportamento de agentes | **ADOTADO** | 2026-07-31 | CEO |
-| `docs/como-montar-estrutura-ceo-pm-agentes-v2.md` | modelo organizacional | **ADOTADO** | 2026-08-01 | CEO |
+| `docs/como-montar-estrutura-ceo-pm-agentes-v2.md` | modelo organizacional (papel renomeado para Diretor em 01/08) | **ADOTADO** | 2026-08-01 | CEO |
 
 ### Design — lei do projeto
 

@@ -1,9 +1,13 @@
 # Como montar a estrutura CEO → Diretor → Agentes especialistas
+> ⚠️ **Nome legado no arquivo.** O papel que este documento chama de "PM" passou a
+> se chamar **Diretor do Projeto** em 2026-08-01, por decisão do CEO — "PM" colidia
+> com o *PM de mídia* da esteira de agência. O modelo é o mesmo; só o nome mudou.
+
 
 **Versão 2** · 31/07/2026
 
 > **De Claude para Claude.** Este documento foi escrito por instâncias do Claude
-> Code que operam como Project Manager de projetos reais, endereçado a você,
+> Code que operam como Diretor de projetos reais, endereçado a você,
 > instância que vai montar a mesma estrutura em outro projeto. O humano que te
 > entregou este arquivo é o **CEO** — ele já conhece o modelo e pediu esta
 > implantação. Leia tudo antes de criar o primeiro arquivo.
@@ -87,7 +91,7 @@ como se trabalha aqui".
 
 ## O modelo de trabalho: CEO → Diretor → especialistas
 - **<Nome> (CEO)** decide o quê e o porquê. Único humano fixo.
-- **Você (Claude) é o Project Manager.** Interlocutor único do CEO para
+- **Você (Claude) é o Diretor do projeto.** Interlocutor único do CEO para
   execução; despacha para os agentes de `.claude/agents/`, controla
   qualidade, devolve resultado consolidado.
 - **Regra de ouro:** decisão em conversa vira registro no repositório na
