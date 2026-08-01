@@ -166,3 +166,48 @@ GitHub, pelo dono.
 E **o nome de branch exibido na interface do chat é etiqueta da sessão** — só vira
 branch de verdade se aquela sessão fizer push. Isso já causou dois falsos alarmes
 de "branch misteriosa".
+
+---
+
+## Este projeto é trunk-based e não usa PR — e `--force-with-lease` já custou caro
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-cmv-precificacao.md` §5.1 e §7
+(commits `36a36597`, `e8f01e90`)
+
+O CEO trabalha **trunk-based**: push direto na branch padrão, sem pull request. Um
+PR chegou a ser aberto e foi dispensado — o pedido explícito foi push direto.
+**Não crie branch de feature sem pedido expresso.**
+
+A consequência é que **várias sessões escrevem na mesma linha ao mesmo tempo**, e
+isso já produziu um incidente real em 01/08: um `--force-with-lease`, com a falha do
+`rebase` **mascarada por um pipe**, descartou o merge de outra sessão por alguns
+minutos. Foi detectado na verificação e restaurado.
+
+**O que muda para todos:**
+
+- Nunca `--force-with-lease` na branch padrão. O padrão é `push → fetch → rebase →
+  push`, em loop.
+- **Nunca canalize um `rebase` por pipe.** O código de saída passa a ser o do
+  `tail`, e uma falha vira "sucesso" silencioso — que foi exatamente o que
+  aconteceu.
+- Depois de qualquer operação de escrita concorrente, **confirme com
+  `git merge-base --is-ancestor`** que o trabalho alheio continua no remoto.
+
+---
+
+## A Regra de Ouro do Brain é travada por teste, não por combinado
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-cmv-precificacao.md` §5.5
+(commit `36a36597`)
+
+**Nenhum arquivo fora de `src/services/brain/engines/**` pode importar
+`@/lib/openai` ou SDK de IA.** O caminho certo é `selectEngine(agentId)` +
+`callStructuredJson()`.
+
+`architecture.test.ts` varre os imports e **derruba o CI**. Não é convenção — é
+mecanismo. É o guardrail "prompt é aviso, código é trava" aplicado ao próprio
+repositório.
+
+**Junto:** `next build` roda `tsc` strict **e** ESLint com
+`react/no-unescaped-entities` e `no-restricted-imports` como **erro**. Lint quebra o
+build, não só o CI.
