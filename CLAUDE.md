@@ -20,8 +20,26 @@
   mesma sessão**. O chat é a sala de reunião; o repositório é a memória da
   empresa. Se a sessão morrer, nada importante pode morrer com ela.
 
+- **Acima dos PMs existe o Diretor Geral do Cérebro**, com base no
+  `dioli-brain-kit`. É ele que decide o que sobe de um projeto para virar regra de
+  todos os produtos Dioli. Aprendeu algo que serve a mais de um projeto?
+  **Proponha ao Diretor** — não escreva no kit por conta própria.
+
 > **Exceção nomeada:** *exploração* pode ser direta (o CEO pensando junto com um
 > especialista, sem entregável). *Execução* passa sempre pelo PM.
+
+### Os especialistas desta casa
+
+| Agente | Quando despachar |
+|---|---|
+| `cerebro` | raciocínio, portões, verdade, escada de liberação |
+| `garcom` | a voz que fala com o cliente final no cardápio |
+| `canais` | WhatsApp, Instagram, integrações externas |
+| `crm` | campanhas, níveis, cupons, atribuição de receita |
+| `operacao` | cardápio → pedido → pagamento → comanda → nota fiscal |
+| `interface` | toda tela das duas superfícies; dono do `DESIGN.md` |
+| `agencia` | SDR, esteira, Oficina de peças |
+| `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
 
 **Por que este modelo existe aqui:** antes, cada assunto virava um chat separado.
 Com o número de projetos crescendo, isso ficou insustentável — abas demais,
