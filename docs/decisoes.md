@@ -211,3 +211,61 @@ repositório.
 **Junto:** `next build` roda `tsc` strict **e** ESLint com
 `react/no-unescaped-entities` e `no-restricted-imports` como **erro**. Lint quebra o
 build, não só o CI.
+
+---
+
+## Commit ausente da branch padrão **não** prova que o trabalho não chegou
+
+**Registrado em** 2026-08-01 · **origem:** mineração do
+`HANDOFF-railway-build-e-ui-promocoes.md` (commit `4712538`)
+
+Os **seis** commits daquela sessão não são ancestrais da branch padrão. Pela
+verificação usual (`git merge-base --is-ancestor`), o trabalho nunca chegou em
+produção.
+
+**E no entanto está tudo lá:** o `nixpacks.toml` é byte a byte idêntico, os quatro
+pacotes estão em `dependencies`, o drawer com `lg:left-56` e a aba
+*🤖 Automações WhatsApp* rodam em produção hoje. O conteúdo entrou por outro
+caminho — outra sessão reaplicou, ou um rebase reescreveu os commits (é o mesmo
+efeito já registrado em *"`git log` numa branch compartilhada não é linha do
+tempo"*).
+
+**O que muda para todos:** a pergunta certa nunca é *"o commit está na branch?"* —
+é **"o comportamento está no código que roda?"**. Verifique por conteúdo:
+`git show <branch>:<arquivo>`, `git grep <padrão> <branch>`, `/api/health`.
+
+O erro simétrico é igualmente caro. Já aconteceu dos dois lados no mesmo dia:
+
+| Achado | Conclusão errada | Verdade |
+|---|---|---|
+| commit **não** é ancestral | "o trabalho se perdeu, vou refazer" | já estava em produção — refazer criaria conflito |
+| branch existe e parece pronta | "é só mergear" | reprovava no `tsc` (a `fresh-debug-session-C3qhF`) |
+
+---
+
+## O deploy roda com `NODE_ENV=production` — e isso apaga metade do `package.json`
+
+**Registrado em** 2026-08-01 · **origem:** mesmo handoff, §1 e §3
+
+O nixpacks instala com `NODE_ENV=production`, e nesse modo o `npm ci` **omite as
+`devDependencies`**. Um pacote que só existe ali simplesmente não chega no
+contêiner — e o build quebra com `Cannot find module`, apontando para um arquivo
+que está no git e compila perfeitamente na máquina.
+
+Duas travas estão na branch padrão e resolvem o caso:
+
+1. `nixpacks.toml` → `[phases.install] cmds = ["npm ci --include=dev"]`
+2. `tailwindcss`, `postcss`, `autoprefixer` e o **CLI** do `prisma` movidos para
+   `dependencies` (o CLI é usado em produção duas vezes: `prisma generate` no
+   build e `prisma migrate deploy` no start)
+
+**O que muda para todos:** *"passa localmente"* não é evidência de que o deploy
+passa — o ambiente local instala tudo. Antes de culpar o código por um
+`Module not found` no Railway, confira **em que lista do `package.json`** o pacote
+está.
+
+⚠️ **Não remova o bloco `[start]` do `nixpacks.toml`.** Ele é recuperação de
+emergência de um P3009 e não pertence à mesma mudança — só sai depois de
+confirmar que a migração `20260518000001_add_distance_min_fee_km` está estável em
+produção. O comentário *"remove after confirmed stable"* vale **só** para esse
+bloco.
