@@ -49,7 +49,7 @@ export default async function CRMPage({
     newCustomers: 0, segments: [],
     deliveryOnlyCustomers: 0, dineInOnlyCustomers: 0, bothChannelsCustomers: 0,
     contactableCustomers: 0, withEmailCustomers: 0, uncontactableCustomers: 0,
-    foocciAcquiredCustomers: 0,
+    foocciAcquiredCustomers: 0, activatableCustomers: 0,
   };
   let reviewLinks: { google: string | null; ifood: string | null } = { google: null, ifood: null };
 

@@ -150,6 +150,7 @@ export type OverviewStats = {
   withEmailCustomers:     number; // has an e-mail (alternative channel)
   uncontactableCustomers: number; // no valid phone AND no e-mail → unreachable ("inúteis")
   foocciAcquiredCustomers: number; // sourceSystem null → acquired through Foocci (not imported)
+  activatableCustomers:   number; // HAS phone + not opted out, but crmContactable=false → can be "turned on"
 };
 
 // ── CRM conversion proof (social proof) ───────────────────────────────────────
@@ -657,6 +658,7 @@ export class CRMService {
         with_email:      bigint;
         uncontactable:   bigint;
         foocci_acquired: bigint;
+        activatable:     bigint;
       }>>`
         SELECT
           COUNT(*) FILTER (WHERE "crmContactable" = true)                                AS contactable,
@@ -666,7 +668,12 @@ export class CRMService {
           COUNT(*) FILTER (WHERE EXISTS (
             SELECT 1 FROM orders o
             WHERE o."customerId" = customers.id AND o."importedAt" IS NULL
-          ))                                                                              AS foocci_acquired
+          ))                                                                              AS foocci_acquired,
+          -- Has a phone + not opted out, but sitting OFF (crmContactable=false):
+          -- the base that can be "turned on" for WhatsApp with one action.
+          COUNT(*) FILTER (WHERE "crmContactable" = false
+                             AND "hasOptedOut" = false
+                             AND phone IS NOT NULL AND phone <> '')                       AS activatable
         FROM customers
         WHERE "restaurantId" = ${restaurantId}
           AND "isGuest" = false
@@ -716,6 +723,7 @@ export class CRMService {
     const withEmailCustomers      = contactRow ? Number(contactRow.with_email)      : 0;
     const uncontactableCustomers  = contactRow ? Number(contactRow.uncontactable)   : 0;
     const foocciAcquiredCustomers = contactRow ? Number(contactRow.foocci_acquired) : 0;
+    const activatableCustomers    = contactRow ? Number(contactRow.activatable)     : 0;
 
     return serviceOk({
       totalCustomers,
@@ -738,7 +746,49 @@ export class CRMService {
       withEmailCustomers,
       uncontactableCustomers,
       foocciAcquiredCustomers,
+      activatableCustomers,
     });
+  }
+
+  // ── Activate the contactable base (turn ON for WhatsApp) ──────────────────────
+  //
+  // Flips crmContactable=true for every non-guest customer that HAS a phone and
+  // has NOT opted out but is currently sitting off (crmContactable=false) — the
+  // imported base that never entered WhatsApp campaigns. This is what makes a
+  // "avisar 100% da base" campaign actually have an audience.
+  //
+  // SAFE BY DESIGN:
+  //   • Never touches opted-out customers (LGPD/consent respected).
+  //   • Never touches customers without a phone (nothing to message).
+  //   • dryRun=true (default) only COUNTS — nothing is written — so the owner
+  //     sees exactly how many will be turned on before committing.
+  //   • Enabling contactability does NOT send anything; every send still passes
+  //     the full safety pipeline (quiet hours, caps, dedupe, per-contact E.164).
+  //   • Fully reversible (a customer can be turned off again).
+  static async activateContactableBase(
+    restaurantId: string,
+    opts: { dryRun?: boolean } = {},
+  ): Promise<ServiceResult<{ dryRun: boolean; activatable: number; activated: number }>> {
+    const dryRun = opts.dryRun ?? true;
+    const where = {
+      restaurantId,
+      isGuest:        false,
+      hasOptedOut:    false,
+      crmContactable: false,
+      phone:          { not: null },
+    };
+    try {
+      const activatable = await prisma.customer.count({ where });
+      if (dryRun || activatable === 0) {
+        return serviceOk({ dryRun, activatable, activated: 0 });
+      }
+      const res = await prisma.customer.updateMany({ where, data: { crmContactable: true } });
+      return serviceOk({ dryRun: false, activatable, activated: res.count });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[CRMService.activateContactableBase]", err);
+      return serviceFail(`Falha ao ativar a base de contatos: ${detail}`, 500);
+    }
   }
 
   // ── Permanently delete "useless" contacts ────────────────────────────────────
