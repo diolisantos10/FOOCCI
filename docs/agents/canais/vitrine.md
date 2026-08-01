@@ -142,3 +142,41 @@ O token do IG é **criptografado em repouso e nunca retornado pela API**. O
 `graph-check` descriptografa no servidor só para bater na Graph, e não loga o token.
 
 — promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §e e §f.4 (commit `18a5ed7`)
+
+---
+
+## A Evolution é o default E o fallback — não é só "o padrão"
+
+Em `src/services/whatsapp/activeProvider.ts`: sem
+`whatsappProvider === "META_CLOUD_API"` cai na Evolution, **e qualquer erro de
+banco no lookup também cai na Evolution**.
+
+Ela é a rede de segurança do envio, não uma opção entre duas. Removê-la sem
+substituir os dois caminhos derruba o envio quando o banco tossir.
+
+**E a Meta só é usada quando `metaCrmEnabled && connectionStatus === "CONNECTED"`.**
+Um restaurante "com Meta configurada" que não esteja `CONNECTED` continua na
+Evolution — não conclua pelo nome do campo.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
+
+---
+
+## Os dois webhooks de entrada NÃO são simétricos
+
+Confirmado por leitura do código:
+
+| Webhook | Linhas | O que carrega |
+|---|---|---|
+| `api/webhooks/meta/whatsapp/route.ts` | ~225 | **só Brain** + suporte |
+| `api/webhooks/evolution/route.ts` | ~274 | pedido por texto, opt-out, carrinho, atribuição, **BuildOS** |
+
+O comentário no código da Meta diz *"feed the same agent pipeline"*. **Hoje "the
+same pipeline" é só o Brain.** Quem ler o comentário e acreditar vai concluir que
+há paridade — e não há.
+
+**Não há caminho BuildOS pela Meta hoje.** Ele é dirigido por scripts
+(`buildos:bootstrap`, `buildos:verify`, `buildos:test-command`) **e por comandos que
+chegam pelo webhook da Evolution**.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e e §f (commit `cfc346c`)

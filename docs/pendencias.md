@@ -57,6 +57,41 @@ Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
 
 ---
 
+## 🔌 Descontinuar a Evolution (#44) — é migração, não delete
+
+**Travado em duas perguntas que só o CEO responde.** Minerado de
+`HANDOFF-painel-e-evolution.md` (commit `cfc346c`), em 01/08/2026.
+
+**O que quebra se alguém simplesmente apagar a Evolution hoje:** o WhatsApp perde
+**pedido por texto, opt-out, recuperação de carrinho, atribuição de receita do CRM
+e os comandos do BuildOS**. Tudo isso só existe no webhook da Evolution.
+
+A razão, confirmada por leitura do código: **os dois webhooks de entrada não são
+simétricos.** O da Meta (`api/webhooks/meta/whatsapp/route.ts`, ~225 linhas) importa
+só o Brain e o suporte. O da Evolution (~274 linhas) é quem carrega todo o resto. O
+comentário do código da Meta diz *"feed the same agent pipeline"* — mas hoje "the
+same pipeline" é **só o Brain**.
+
+**As duas perguntas travando:**
+1. A Meta está conectada e ativa **para todos os restaurantes**, ou só alguns?
+   *(este é o dado que falta)*
+2. **BuildOS:** migrar para a Meta, manter só na Evolution, ou aposentar?
+
+**Etapa 0, segura para começar já:** portar a paridade de entrada — o que o webhook
+da Evolution faz e o da Meta não faz. É **aditivo**, não mexe em default de
+produção, e não depende das respostas acima.
+
+---
+
+## 🧍 Dependem do Dioli — ninguém mais consegue
+
+| Item | O que quebra |
+|---|---|
+| **#36 · `MERCADO_PAGO_WEBHOOK_SECRET` não está no Railway** | `/api/health` mostra `mpWebhookSecret: false`. O webhook do Mercado Pago **não tem assinatura verificada** — confirmação de pagamento sem validação de origem |
+| **#29 · Token + homologação fiscal (NFC-e via Focus NFe)** | **Nenhuma nota fiscal real é emitida.** A máquina inteira (etapas 0–5b) está pronta e desligada, esperando o token |
+
+---
+
 ## 🟡 Fila normal
 
 | O que | Por que importa |

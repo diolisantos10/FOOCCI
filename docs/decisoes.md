@@ -111,3 +111,38 @@ simplesmente param de rodar e ninguém percebe até faltar o resultado delas.
 
 Vale para o robô do manual, os simuladores, o refresh de token do Instagram e as
 varreduras de qualidade.
+
+---
+
+## Três nomes de branch circulam — só um chega em produção
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-painel-e-evolution.md` §f
+(commit `cfc346c`)
+
+Toda sessão nova se confunde com isto:
+
+| Branch | O que é de verdade |
+|---|---|
+| `claude/remove-legacy-runner-q8iXa` | **A que auto-deploya no Railway** → `foocci.com.br`. É a padrão do repositório |
+| `claude/foocci-brain-vaamrx` | branch de trabalho citada no `CLAUDE.md` |
+| `claude/inspiring-bardeen-hsx9wk` | apareceu na abertura de uma sessão; **não é nenhuma das duas** |
+
+**O que muda para todos:** o que chega em produção é o que entra em
+`claude/remove-legacy-runner-q8iXa`. O padrão que funciona é branch de feature →
+`merge --no-ff` na de deploy → push → **conferir o `commitSha` no `/api/health`**.
+
+---
+
+## `/api/health` é o oráculo de deploy — e diz mais que "ok"
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-painel-e-evolution.md` §f
+(commit `cfc346c`)
+
+Ele devolve `commitSha`, `branch`, `db` e um bloco `checks` com
+`mpWebhookSecret`, `encryptionKey`, `nextauthSecret`, `openaiKey`, `databaseUrl`.
+
+**O que muda para todos:** é o jeito mais rápido de saber **o que falta de variável
+de ambiente em produção sem abrir o Railway**. Hoje o único `false` ali é
+`mpWebhookSecret`.
+
+Use-o para confirmar que um merge chegou no ar — não confie no verde do deploy.
