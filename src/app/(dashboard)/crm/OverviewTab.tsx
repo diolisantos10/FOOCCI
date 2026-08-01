@@ -476,7 +476,7 @@ export function OverviewTab({
   opportunitiesCount: number;
   actions?: CrmAction[];
   onNavigateToTab?: (tab: "campanhas" | "customers") => void;
-  onSegmentClick?: (filter: "quente" | "morno" | "frio" | "novos" | "nao-compraram") => void;
+  onSegmentClick?: (filter: "quente" | "morno" | "frio" | "perdido" | "novos" | "nao-compraram") => void;
   loading: boolean;
   datePreset: DateFilterPreset;
   customFrom: string;
@@ -522,14 +522,17 @@ export function OverviewTab({
   const WARM_DAYS = seg.warmMaxDays;
   const LOST_DAYS = seg.lostMinDays;
 
-  // Temperature bar calculations
-  const tempTotal = stats.ativoCustomers + stats.mornoCustomers + stats.frioCustomers;
-  const ativoPct  = tempTotal > 0 ? Math.round((stats.ativoCustomers / tempTotal) * 100) : 0;
-  const mornoPct  = tempTotal > 0 ? Math.round((stats.mornoCustomers / tempTotal) * 100) : 0;
-  const frioPct   = tempTotal > 0 ? Math.round((stats.frioCustomers  / tempTotal) * 100) : 0;
-
+  // Temperature share — denominator is customers who EVER bought
+  // (quente+morno+frio+perdido). These four are now mutually exclusive, so the
+  // percentages sum to 100%. "Não compraram" is a separate axis (never bought)
+  // and is intentionally NOT in this base.
   const perdidosCustomers = stats.perdidosCustomers ?? 0;
-  const perdidoPct = tempTotal > 0 ? Math.round((perdidosCustomers / tempTotal) * 100) : 0;
+  const buyersTotal = stats.ativoCustomers + stats.mornoCustomers + stats.frioCustomers + perdidosCustomers;
+  const pctOf     = (n: number) => (buyersTotal > 0 ? Math.round((n / buyersTotal) * 100) : 0);
+  const ativoPct  = pctOf(stats.ativoCustomers);
+  const mornoPct  = pctOf(stats.mornoCustomers);
+  const frioPct   = pctOf(stats.frioCustomers);
+  const perdidoPct = pctOf(perdidosCustomers);
 
   const totalSegmented = stats.segments.reduce((s, x) => s + x.count, 0);
 
@@ -602,7 +605,7 @@ export function OverviewTab({
           label="Frios"
           value={stats.frioCustomers.toLocaleString("pt-BR")}
           pct={frioPct}
-          sub={`Mais de ${WARM_DAYS} dias sem comprar`}
+          sub={`${WARM_DAYS + 1}–${LOST_DAYS} dias sem comprar`}
           accent="red"
           loading={loading}
           onClick={onSegmentClick ? () => onSegmentClick("frio") : undefined}
@@ -615,8 +618,8 @@ export function OverviewTab({
           sub={`Mais de ${LOST_DAYS} dias sem comprar`}
           accent="gray"
           loading={loading}
-          onClick={onSegmentClick ? () => onSegmentClick("frio") : undefined}
-          ctaLabel={onSegmentClick ? "Ver frios" : undefined}
+          onClick={onSegmentClick ? () => onSegmentClick("perdido") : undefined}
+          ctaLabel={onSegmentClick ? "Ver perdidos" : undefined}
         />
         <KPICard
           label={newCustomersLabel}

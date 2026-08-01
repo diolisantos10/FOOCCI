@@ -46,7 +46,8 @@ const CUSTOMER_FILTER_LABELS: Record<string, string> = {
   all:           "Todos os clientes",
   quente:        "🔥 Quentes (≤30d)",
   morno:         "🌡️ Mornos (31–60d)",
-  frio:          "🥶 Frios (60d+)",
+  frio:          "🥶 Frios (61–120d)",
+  perdido:       "💤 Perdidos (120d+)",
   inactive:      "Inativos 30d+",
   neverOrdered:  "Nunca pediu",
   firstTime:     "1º pedido",
@@ -4907,7 +4908,7 @@ function WhatsAppSendModal({
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
-type CRMFilter = "all" | "inactive" | "quente" | "morno" | "frio" | "neverOrdered" | "firstTime" | "recent" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante";
+type CRMFilter = "all" | "inactive" | "quente" | "morno" | "frio" | "perdido" | "neverOrdered" | "firstTime" | "recent" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante";
 
 function CustomersTab({
   initialCustomers,
@@ -6071,7 +6072,7 @@ export function CRMClient({
     setTab("campanhas");
   }
 
-  function handleSegmentClick(filter: "quente" | "morno" | "frio" | "novos" | "nao-compraram") {
+  function handleSegmentClick(filter: "quente" | "morno" | "frio" | "perdido" | "novos" | "nao-compraram") {
     const crmFilter: CRMFilter =
       filter === "novos"         ? "firstTime"    :
       filter === "nao-compraram" ? "neverOrdered" :
