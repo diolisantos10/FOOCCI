@@ -182,6 +182,53 @@ confirmou o GA4 funcionando.
 
 ---
 
+## ⛔ NÃO MERGEAR a branch `claude/fresh-debug-session-C3qhF` como está
+
+Minerado de `HANDOFF-garcom-consolidacao-pipeline.md` (commit `8fb194f4`), em
+01/08/2026. **Conferido pelo Diretor, não aceito por relato.**
+
+Aquela sessão apagou **12 arquivos do pipeline legado** (−2.371 linhas), criou
+`WebOrderService.ts` (+1.205) e concluiu: *"nenhum erro novo foi introduzido"*.
+
+**Está errado.** O `tsc` roda naquela branch e **falha**:
+
+```
+src/services/ai/WebOrderService.ts(477,7):
+  error TS2322: Type 'string | null' is not assignable to type 'string'.
+```
+
+O erro está **no arquivo que a própria sessão escreveu** — não é infraestrutura, e
+não é pré-existente. A sessão viu erros de tipo, atribuiu todos ao ambiente e
+seguiu.
+
+✅ **Produção está limpa.** `tsc` na branch padrão sai com código 0, e
+`WebOrderService.ts` **não existe lá** — a branch nunca foi mergeada. Nada quebrou.
+
+**O que fazer antes de aproveitar aquele trabalho:**
+1. Corrigir a linha 477
+2. Rodar `npx tsc --noEmit` e `npx vitest run` — **os dois verdes**
+3. Só então mergear
+
+> **A lição, e ela vale além deste caso:** o kit registra que erro de tipo súbito
+> costuma ser o `node_modules` sumindo no sandbox. **Isso é verdade e virou
+> desculpa.** A regra correta é a que já estava escrita: rode
+> `npm install && npx prisma generate` e **veja se o erro some**. Se não sumir, é
+> real — mesmo que "pareça" ambiente.
+
+### O que aquele trabalho descobriu, e vale guardar
+
+- **O `runner.ts` era letra morta há vários commits.** A rota
+  `/api/pedido/[slug]` já usava `AIOrderService.runWebTurn()` (WaiterBrainV2).
+- **`WebOrderService.ts` não é chamado por ninguém.** Nasceu como backup limpo do
+  pipeline stateless — **é código morto novo criado enquanto se apagava código
+  morto velho**. Decidir se fica ou vai.
+- **`OrderStage` mudou de casa** para dentro do `WebOrderService.ts`, e dois
+  arquivos dependem disso. Cuidado antes de apagar.
+- Substituir o `runner.ts` pelo `AIOrderService` direto **falhou**: as APIs são
+  incompatíveis (stateful × stateless). Não repita.
+
+---
+
 ## 🧍 Dependem do Dioli — ninguém mais consegue
 
 | Item | O que quebra |
