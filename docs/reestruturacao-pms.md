@@ -10,6 +10,23 @@
 > **A troca:** uma porta por projeto. Você fala com o PM; o PM decide quais
 > especialistas aquele projeto precisa, despacha, cobra qualidade e registra. O
 > repositório vira a memória — não o chat.
+>
+> **E uma porta acima de todas:** o **Diretor Geral do Cérebro** — com quem o CEO
+> fala sobre *todos* os projetos ao mesmo tempo (§3.1).
+
+---
+
+## 0. ⚠️ A regra que não tem volta
+
+**Nenhum chat é fechado antes de ter sido exportado e minerado.**
+
+Fechar um chat é irreversível. Todo o resto deste plano pode ser refeito — um
+`CLAUDE.md` mal escrito se reescreve, um especialista mal recortado se conserta.
+Uma conversa apagada não volta.
+
+A ordem é sempre: **exportar → minerar → conferir que desceu → só então fechar.**
+O PM do projeto confirma por escrito que o conteúdo virou decisão, pendência ou
+regra antes de qualquer aba ser encerrada.
 
 ---
 
@@ -77,31 +94,72 @@ esta casa e quem trabalha nela"*, e delega ao kit tudo que é regra de companhia
 
 ---
 
-## 3. Os PMs — quem ganha um, e quando
+## 3. Os papéis
 
-| # | Projeto | O que é | Estado hoje |
-|---|---|---|---|
-| 1 | **foocci** | Sistema operacional do restaurante (vendas, CRM, IA) | ✅ PM montado em 01/08, 8 especialistas |
-| 2 | **foocci_manager** | POS/ERP — produto separado, hub de canais | 1 commit; blueprint pronto em `desenho-v1.md` |
-| 3 | **dioli-agency-os-1** | O OS da agência | 88 commits, já aponta pro kit, README nunca escrito |
-| 4 | **diolidigital** | Presença/site da Dioli | a mapear |
-| 5 | **cityjobs** | Canal pago de vagas via Instagram Stories | 1 commit, MVP substituindo Tally+Make+Sheets |
-| 6 | **multi-ai-council** | "Conselho": várias IAs respondem cego, um relator junta | 1 commit |
-| — | **dioli-brain-kit** | **A casa.** Não é projeto — não ganha PM, ganha **curador** | 15 commits |
+```
+CEO (Dioli)
+ │   decide o quê e o porquê
+ ▼
+DIRETOR GERAL DO CÉREBRO          ← a sessão da casa (dioli-brain-kit)
+ │   o único interlocutor sobre TODOS os projetos ao mesmo tempo
+ ▼
+PM de cada projeto                ← uma sessão por projeto
+ │   traduz, despacha, controla qualidade, registra
+ ▼
+Especialistas (.claude/agents/)   ← o PM decide quais o projeto precisa
+```
+
+### 3.1 O Diretor Geral do Cérebro ⭐
+
+**Decidido pelo CEO em 01/08/2026.** Existe porque um PM enxerga um projeto, e
+alguém precisa enxergar a companhia.
+
+**Base:** `dioli-brain-kit` — a casa. É lá que mora a doutrina, e é de lá que ele
+opera.
+
+**O que é dele:**
+
+- **A doutrina.** O que um projeto aprende e serve para todos sobe ao kit. Ele
+  decide o que vira regra de companhia e o que fica local — e **promoção ao kit é
+  ato dele com aval do CEO**, nunca de um PM sozinho.
+- **A coerência entre projetos.** Quando dois projetos resolvem o mesmo problema
+  de formas diferentes, é ele que percebe e decide qual vale.
+- **A conversa larga com o CEO.** Prioridade entre projetos, o que começa, o que
+  para, o que dorme. Um PM não tem como responder isso — ele só vê a própria casa.
+- **A implantação dos PMs novos** e a manutenção dos moldes.
+
+**O que NÃO é dele:** executar dentro dos projetos. Trabalho de projeto é do PM
+daquele projeto. Diretor que vira operário perde a única visão que justifica o
+cargo.
+
+**Por que o kit não ganha PM:** PM traduz pedido de negócio em execução. O kit não
+tem negócio — tem doutrina. O papel certo ali é este.
+
+---
+
+## 4. Os PMs — quem ganha um, e quando
+
+| Projeto | O que é | PM |
+|---|---|---|
+| **foocci** | Sistema operacional do restaurante (vendas, CRM, IA) | ✅ montado 01/08 — 8 especialistas |
+| **dioli-agency-os-1** | O OS da agência | ✅ já tem sessão que é o PM; aponta pro kit |
+| **dioli-brain-kit** | **A casa** — doutrina, moldes, casos | — é a base do **Diretor Geral** |
+| **diolidigital** | Presença/produto digital da Dioli | ⬜ **criar** |
+| **foocci_manager** | POS/ERP — produto separado, hub de canais | ⬜ **criar** (blueprint pronto) |
+| **cityjobs** | Canal pago de vagas via Instagram Stories | ⬜ criar |
+| **multi-ai-council** | "Conselho": várias IAs respondem cego, um relator junta | ⬜ criar |
 
 **Adormecidos** — `Dioli_Political`, `secretario`, `Dropshipping-Factory` (parado
 desde abril). Ganham PM quando acordarem; montar agora é cerimônia.
 
-### Por que o kit não ganha PM
-
-PM existe para traduzir pedido de negócio em execução. O kit não tem negócio — ele
-tem **doutrina**. O papel dele é curadoria: quando um projeto aprende algo que
-serve para todos, **o PM daquele projeto propõe ao kit**, e a promoção é ato
-humano. É a mesma regra da vitrine, um nível acima.
+> **A conferir com o CEO:** ele indicou que dois projetos já estão cobertos — um
+> com sessão que já funciona como PM, outro que "já nasceu com a informação nova".
+> A leitura acima é a mais provável (agency-os e o kit). Se um dos quatro marcados
+> como "criar" já tiver sessão fazendo esse papel, ele sai da fila.
 
 ---
 
-## 4. Os chats — o que dá e o que não dá
+## 5. Os chats — o que dá e o que não dá
 
 **Não existe forma de um PM ler as suas conversas.** Nem por branch, nem por
 token, nem por identificador de workspace. A ferramenta não existe. Qualquer
@@ -135,7 +193,7 @@ Você responde o buraco, não o inventário.
 
 ---
 
-## 5. A ordem de execução
+## 6. A ordem de execução
 
 **Fase 1 — A casa (primeiro, senão os 6 PMs nascem tortos).**
 1. Levar `como-montar-estrutura-ceo-pm-agentes-v2.md` para o kit como
@@ -157,7 +215,7 @@ sessão. É a única parte que não é código, e é a que decide se isso sobrev
 
 ---
 
-## 6. O que só o CEO pode dar
+## 7. O que só o CEO pode dar
 
 Três perguntas por projeto, ~5 minutos cada. O repositório diz **o que existe**;
 não diz **o que importa**.
@@ -169,7 +227,7 @@ não diz **o que importa**.
 
 ---
 
-## 7. O risco real deste plano
+## 8. O risco real deste plano
 
 Não é técnico. É de hábito.
 
