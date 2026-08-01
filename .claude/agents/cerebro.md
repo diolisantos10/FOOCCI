@@ -76,4 +76,4 @@ Estado das fases: `docs/brain-universal-roadmap.md`.
 1. O resultado no formato pedido, com **arquivo:linha** para cada afirmação.
 2. **Registro de oficina** — o que tentou, o que quebrou, o que aprendeu.
 3. **Proposta de vitrine**, só quando houver aprendizado durável: o bloco pronto
-   com proveniência (data, origem, commit). Você propõe; **quem promove é o PM**.
+   com proveniência (data, origem, commit). Você propõe; **quem promove é o Diretor**.

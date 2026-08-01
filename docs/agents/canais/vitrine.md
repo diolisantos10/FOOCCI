@@ -1,6 +1,6 @@
 # Vitrine — canais
 
-> Curada pelo PM. Qualquer agente lê; **só o PM escreve**.
+> Curada pelo Diretor. Qualquer agente lê; **só o Diretor escreve**.
 
 ---
 
@@ -15,7 +15,7 @@ desde 23/07 sem ninguém notar.
 
 Nunca use o selo como evidência de saúde de canal.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §e (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §e (commit `18a5ed7`)
 
 ---
 
@@ -29,7 +29,7 @@ Nunca use o selo como evidência de saúde de canal.
 **A ordem obrigatória é:** o dono reconecta pela UI (login pessoal do Instagram) →
 **só então** resubscribe, se ainda faltar.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §c (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §c (commit `18a5ed7`)
 
 ---
 
@@ -46,7 +46,7 @@ não na expiração.
 *Não confirmado* qual das duas causas: a troca falhou nas 3 tentativas daquele dia,
 ou o fix `115d357` ainda não estava deployado em 25/07.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §f.1 (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §f.1 (commit `18a5ed7`)
 
 ---
 
@@ -62,7 +62,7 @@ uma sessão inteira de tentativas idênticas.
 Causa mais provável: **o chip ainda tem conta WhatsApp ativa**. O destravamento é
 apagar a conta no aparelho e esperar ~1h. *Não confirmado.*
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §c e §e (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §c e §e (commit `18a5ed7`)
 
 ---
 
@@ -85,7 +85,7 @@ aqui.
 para nunca apagar o número LIVE do restaurante, mas confirme o `phoneNumberId`
 mesmo assim.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §e e §f.2 (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §e e §f.2 (commit `18a5ed7`)
 
 ---
 
@@ -97,7 +97,7 @@ carregada** — não faz busca no banco só de Instagram.
 **Aba vazia ≠ "não existe conversa de Instagram".** Pode ser só que nenhuma esteja
 na janela recente. Não conclua ausência a partir dela.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §e (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §e (commit `18a5ed7`)
 
 ---
 
@@ -118,7 +118,7 @@ Ordem das causas, conforme `InstagramChannelService.handleWebhookEvent`:
 7. mensagem sem texto **e** sem anexo
 8. remetente fora do allowlist — **só quando `scope ≠ RESTAURANT_WIDE`**
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §f.5 (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §f.5 (commit `18a5ed7`)
 
 ---
 
@@ -141,7 +141,7 @@ GET não funciona — use os de cima, que existem.
 O token do IG é **criptografado em repouso e nunca retornado pela API**. O
 `graph-check` descriptografa no servidor só para bater na Graph, e não loga o token.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-canais-meta.md` §e e §f.4 (commit `18a5ed7`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-canais-meta.md` §e e §f.4 (commit `18a5ed7`)
 
 ---
 
@@ -158,7 +158,7 @@ substituir os dois caminhos derruba o envio quando o banco tossir.
 Um restaurante "com Meta configurada" que não esteja `CONNECTED` continua na
 Evolution — não conclua pelo nome do campo.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
 
 ---
 
@@ -179,7 +179,7 @@ há paridade — e não há.
 (`buildos:bootstrap`, `buildos:verify`, `buildos:test-command`) **e por comandos que
 chegam pelo webhook da Evolution**.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e e §f (commit `cfc346c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-painel-e-evolution.md` §e e §f (commit `cfc346c`)
 
 ---
 
@@ -194,7 +194,7 @@ E a fonte de verdade sobre a configuração é o **verificador embutido** em
 Integrações → Google → **"Avançado"** — mais confiável que adivinhar o que está
 setado no Railway. Antes de investigar "por que não conecta", olhe ali primeiro.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-google.md` §7 (commit `06bfaf3`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-google.md` §7 (commit `06bfaf3`)
 
 ---
 
@@ -209,7 +209,7 @@ abre ao lado, com um campo "adicionar manualmente" no fim) — **não é a barra
 busca do topo do console.** O CEO já colou o escopo na busca errada uma vez; é um
 erro fácil de repetir, e vale avisar antes.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-google.md` §8 (commit `06bfaf3`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-google.md` §8 (commit `06bfaf3`)
 
 ---
 
@@ -236,7 +236,7 @@ informação de que conectou.
 **nunca** use `else` como estado de sucesso. Estado desconhecido é estado
 desconhecido.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-railway-build-e-ui-promocoes.md`,
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-railway-build-e-ui-promocoes.md`,
 verificado na branch de produção
 
 ---
@@ -248,4 +248,4 @@ justamente quando a integração está *"Não configurado"* — é ali que o loj
 conectar. Se você encontrar `WhatsAppQRPanel({ isActive })` num branch antigo, não
 restaure: a remoção foi a correção.
 
-— promovido em 2026-08-01 pelo PM · origem: mesmo handoff (commit `edf8b86`)
+— promovido em 2026-08-01 pelo Diretor · origem: mesmo handoff (commit `edf8b86`)

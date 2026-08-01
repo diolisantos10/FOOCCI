@@ -1,6 +1,6 @@
 # Vitrine — manual, treinamentos e onboarding
 
-> Curada pelo PM. Qualquer agente lê; **só o PM escreve**.
+> Curada pelo Diretor. Qualquer agente lê; **só o Diretor escreve**.
 
 ---
 
@@ -18,7 +18,7 @@ Slugs **fora** do padrão `guia-*` não são tocados pelo seed.
 grep -c 'slug: "guia-' src/services/manual/howToGuidesContent.ts   # 36 em 01/08
 ```
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-manual.md` §3 e §6 (commit `5b1c885c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §3 e §6 (commit `5b1c885c`)
 
 ---
 
@@ -37,7 +37,7 @@ lojista.
 3. O canário acima
 4. Aba 📈 Perguntas: **gap novo = o próximo guia a escrever**
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-manual.md` §7 (commit `5b1c885c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §7 (commit `5b1c885c`)
 
 ---
 
@@ -50,7 +50,7 @@ E há **três listas gêmeas** em `HelpWidget.tsx` que mapeiam pergunta → guia
 vocabulário: `SUGGESTIONS`, `CONTEXT_GUIDES`, `ONBOARDING_STEPS`.
 **Renomeou um guia? Revise as três.**
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-manual.md` §6 e §7 (commit `5b1c885c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §6 e §7 (commit `5b1c885c`)
 
 ---
 
@@ -63,7 +63,7 @@ consegui acessar o assistente"*.
 **Mudar o texto do fallback no HelpAssistant zera os gaps artificialmente** — o
 painel mostra melhora onde não houve nenhuma.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-manual.md` §6 (commit `5b1c885c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §6 (commit `5b1c885c`)
 
 ---
 
@@ -77,7 +77,7 @@ silêncio** — só loga `[manual-sync] ADMIN_SECRET not set`.
 E **atraso do cron não é falha**: o agendamento é 06:07 UTC, mas o GitHub costuma
 rodar atrasado (a de 21/07 saiu às 08:41 UTC).
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-manual.md` §6 e §7 (commit `5b1c885c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §6 e §7 (commit `5b1c885c`)
 
 ---
 
@@ -93,4 +93,4 @@ rodar atrasado (a de 21/07 saiu às 08:41 UTC).
 **O robô mantém o próprio mapa:** quando cria guia de tela nova, ele adiciona a
 linha no playbook sozinho (fez isso com `guia-precificacao`).
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-manual.md` §7 (commit `5b1c885c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §7 (commit `5b1c885c`)

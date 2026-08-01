@@ -60,4 +60,4 @@ Documentos: `docs/crm-*.md`, `docs/raio-x-crm.md`.
 1. O resultado, com **arquivo:linha**.
 2. **Registro de oficina.**
 3. **Proposta de vitrine** quando houver aprendizado durável, com proveniência.
-   Quem promove é o PM.
+   Quem promove é o Diretor.

@@ -1,5 +1,24 @@
 # FICHA TÉCNICA — FOOCCI (CRM Restaurante)
 
+> ## ⚠️ DOCUMENTO DESATUALIZADO — não use para descobrir repositório ou escopo
+>
+> Parado em **2026-04-29**. Dois erros que já enganaram sessão:
+>
+> - **O repositório é `diolisantos10/FOOCCI`**, não `CRM_RESTURANTE` (foi renomeado).
+>   O diretório também não é `/home/user/CRM_RESTURANTE`.
+> - **O escopo aqui é estreito demais.** Este arquivo descreve a Foocci como
+>   "CRM de WhatsApp com agente de IA". Ela é um **sistema operacional de
+>   restaurante** inteiro — loja, cardápio, pedido, pagamento, comanda, nota, CRM,
+>   analytics, atendimento — mais a esteira de agência como segundo produto.
+>
+> A branch padrão que ele cita (`claude/remove-legacy-runner-q8iXa`) **está certa** —
+> confirmado pelo `/api/health`.
+>
+> **A fonte corrente é o `CLAUDE.md` + `docs/pendencias.md`.** O que sobrevive aqui
+> é o detalhe da fatia de IA do WhatsApp, que continua útil.
+>
+> — marcado em 2026-08-01 pelo Diretor · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
+
 > Documento de referência completo para qualquer IA ou desenvolvedor assumindo este projeto.
 > Última atualização: 2026-04-29 — branch `claude/remove-legacy-runner-q8iXa`
 
@@ -80,7 +99,7 @@ src/
 ## 4. MODELO DE DADOS (Prisma — modelos principais)
 
 ### Restaurant
-Tenant raiz. Tem `slug` único (usado nas URLs públicas), `plan` (STARTER/GROWTH/PREMIUM), e relação 1:1 com `RestaurantBrandConfig`.
+Tenant raiz. Tem `slug` único (usado nas URLs públicas), `plan` (STARTER/GROWTH/**PRO** — não "PREMIUM"; ver `docs/pendencias.md`), e relação 1:1 com `RestaurantBrandConfig`.
 
 ### RestaurantBrandConfig
 Configuração completa do agente de IA para o restaurante:

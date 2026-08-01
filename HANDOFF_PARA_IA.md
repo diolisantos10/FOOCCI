@@ -1,5 +1,18 @@
 # BRIEFING DE HANDOFF — FOOCCI
 
+> ## ⚠️ DOCUMENTO DESATUALIZADO — não cole isto numa sessão nova
+>
+> - **O repositório é `diolisantos10/FOOCCI`**, não `CRM_RESTURANTE`, e o diretório
+>   não é `/home/user/CRM_RESTURANTE`.
+> - **O escopo descrito aqui é muito mais estreito que o produto real.**
+> - A branch padrão que ele cita **está certa** (`claude/remove-legacy-runner-q8iXa`).
+>
+> **O que colar numa sessão nova hoje:** nada. O `CLAUDE.md` carrega sozinho, e ele
+> aponta para `docs/pendencias.md` e para as salas dos especialistas. Era essa a
+> função deste arquivo, e ela foi substituída.
+>
+> — marcado em 2026-08-01 pelo Diretor · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
+
 > Cole este documento no início da conversa com a nova IA.
 
 ---

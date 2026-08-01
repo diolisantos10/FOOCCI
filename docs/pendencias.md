@@ -262,6 +262,61 @@ seguiu.
 |---|---|
 | **#36 · `MERCADO_PAGO_WEBHOOK_SECRET` não está no Railway** | `/api/health` mostra `mpWebhookSecret: false`. O webhook do Mercado Pago **não tem assinatura verificada** — confirmação de pagamento sem validação de origem |
 | **#29 · Token + homologação fiscal (NFC-e via Focus NFe)** | **Nenhuma nota fiscal real é emitida.** A máquina inteira (etapas 0–5b) está pronta e desligada, esperando o token |
+| **Lista `[PREENCHER]` do site comercial** | O web designer **não fecha o site** sem ela. Ver a seção do site comercial abaixo |
+
+---
+
+## 🌐 Site comercial — o briefing existe e não está em lugar nenhum
+
+### ⚠️ RISCO IMEDIATO: o briefing só existe na conversa
+
+A sessão que produziu o briefing do site **não salvou o texto no repositório** — foi
+veto explícito do CEO na hora (ele quis mandar direto ao designer, sem versionar).
+
+**A consequência mudou de tamanho quando esse chat entrou na fila de arquivamento:**
+enquanto ele estava aberto, o texto estava a um scroll de distância. Fechado, some.
+
+**Antes de arquivar aquele chat:** mandar o briefing ao designer **ou** colar o texto
+aqui para virar arquivo. É a regra do `docs/arquivo/README.md` — nenhum chat é
+fechado antes de minerado, e o entregável daquele chat é justamente o que não
+desceu.
+
+### O que o CEO precisa preencher
+
+Preço e escopo dos 3 planos · CTA principal (demo × teste grátis × WhatsApp) ·
+URL de login · domínio · depoimentos e casos reais · logos de clientes · contato
+comercial · CNPJ/razão social · IDs de Analytics/Pixel · arquivos de logotipo.
+
+Nada disso pode ser preenchido com número de exemplo que vaze como real — o
+produto está em piloto (guardrail 7).
+
+### As quatro decisões do briefing, que ninguém deve desfazer sem falar com o CEO
+
+| # | Decisão | Por que existe |
+|---|---|---|
+| D1 | O site é **B2B**, para donos de restaurante | O ângulo é *"pare de pagar comissão de marketplace e seja dono dos seus clientes"*. Virar B2C quebra o funil |
+| D2 | O briefing não é versionado | Escolha do CEO. Não reabrir sem pedido — mas ver o risco acima |
+| D3 | Preço, depoimento e métrica ficam `[PREENCHER]` | Número inventado em site é passivo comercial |
+| D4 | Três pilares: **Venda mais · Fidelize e reative · Decida com dados** | É a espinha da home. Mudar os pilares muda o site inteiro |
+
+### ⛔ O 3º plano chama `PRO`, não "PREMIUM"
+
+`prisma/schema.prisma:155-159` → `enum Plan { STARTER, GROWTH, PRO }`. Confirmado
+também na migração inicial.
+
+O "PREMIUM" que aparece numa busca ampla é de **outro** enum (`CRMMessageStyle`).
+Se a página de preços disser PREMIUM, o cliente escolhe um rótulo que o sistema
+não reconhece.
+
+### A Foocci não é um "chatbot de WhatsApp" — e o material antigo diz que é
+
+Vender só a IA subvende o produto. A superfície real, levantada das rotas: loja de
+delivery e cardápio de mesa, painel com cardápio/pedidos/impressão, CRM inteiro
+(campanhas, fidelidade, atribuição, carrinho abandonado), analytics, inbox de
+atendimento, marca, canais, integrações, admin global — **mais** a esteira de
+agência como segundo produto.
+
+Origem: `HANDOFF-site-comercial.md` (commit `79943f5`) · verificado em 01/08
 
 ---
 

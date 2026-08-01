@@ -1,7 +1,7 @@
 # O corredor — decisões que atravessam domínios
 
 > Decisão que afeta mais de um especialista não mora na sala de nenhum deles.
-> Mora aqui. **Só o PM escreve neste arquivo.**
+> Mora aqui. **Só o Diretor escreve neste arquivo.**
 >
 > Sem o corredor, uma decisão que toca três domínios vira três versões dela — cada
 > uma na vitrine do seu dono, todas se achando certas, e em um mês elas se
@@ -13,7 +13,7 @@
 
 ## Toda proteção decide pelo estado, não por reflexo
 
-**Decidido em** 2026-07-31 · **por** CEO + PM · **origem:** incidente da Nicole
+**Decidido em** 2026-07-31 · **por** CEO + Diretor · **origem:** incidente da Nicole
 (commit `3ec378b3`)
 
 Um portão que reprova precisa escolher a resposta olhando o **estado da
@@ -30,7 +30,7 @@ a outra acha que não.
 
 ## Mentir sobre si mesmo é uma categoria de erro separada
 
-**Decidido em** 2026-07-31 · **por** PM · **origem:** mesmo incidente
+**Decidido em** 2026-07-31 · **por** Diretor · **origem:** mesmo incidente
 
 Verificador de fato (preço, cardápio, entrega) **não pega** agente que encena uma
 capacidade que não tem. O agente não mentiu sobre o restaurante — mentiu sobre si
@@ -44,7 +44,7 @@ isso vira trava em código, não linha de perfil.
 
 ## Prompt é aviso; código é trava
 
-**Decidido em** 2026-07-31 · **por** PM · **origem:** "não prometa pedido" estava
+**Decidido em** 2026-07-31 · **por** Diretor · **origem:** "não prometa pedido" estava
 no perfil do agente e não segurou
 
 Para o que causa dano real, exija o mecanismo — gate, validação, restrição de
@@ -59,7 +59,7 @@ o agente `qualidade` não tem permissão de escrita.
 
 ## Um estado sem prazo é um vazamento
 
-**Decidido em** 2026-07 · **por** PM · **origem:** comanda parada em `CLAIMED`
+**Decidido em** 2026-07 · **por** Diretor · **origem:** comanda parada em `CLAIMED`
 para sempre; carrinho abandonado eterno; falha permanente retentada sem fim
 
 Todo estado intermediário — "em processamento", "reservado", "aguardando" — nasce
@@ -73,9 +73,9 @@ campanha. Estado novo sem prazo não passa em revisão.
 ## O repositório é a memória; o chat é a sala de reunião
 
 **Decidido em** 2026-08-01 · **por** CEO · **origem:** a reestruturação
-CEO → PM → especialistas
+CEO → Diretor → especialistas
 
-Cada projeto passa a ter **um PM**, que é a ponte única do CEO. Assuntos deixam de
+Cada projeto passa a ter **um Diretor**, que é a ponte única do CEO. Assuntos deixam de
 virar chats separados: viram despacho para especialista, e o resultado vira
 registro no repositório **na mesma sessão**.
 
@@ -87,7 +87,7 @@ oficina do agente, se for do domínio; aqui, se atravessar domínios.
 
 ## Documentação não é evidência
 
-**Decidido em** 2026-07 · **por** PM · **origem:** o comentário do Carteiro
+**Decidido em** 2026-07 · **por** Diretor · **origem:** o comentário do Carteiro
 descrevia re-tentativa que o servidor nunca implementou
 
 Verificação se faz contra o código em execução. Comentário, README e documento
@@ -269,3 +269,32 @@ emergência de um P3009 e não pertence à mesma mudança — só sai depois de
 confirmar que a migração `20260518000001_add_distance_min_fee_km` está estável em
 produção. O comentário *"remove after confirmed stable"* vale **só** para esse
 bloco.
+
+---
+
+## Ler o arquivo inteiro antes de afirmar o que ele contém
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-site-comercial.md` §4
+(commit `79943f5`)
+
+Duas afirmações erradas na mesma sessão, pelo mesmo motivo — **leitura parcial
+tratada como leitura completa**:
+
+1. Uma primeira leitura do `tailwind.config.ts` devolveu só as cores `brand` e a
+   fonte. O arquivo tem 44 linhas e **também** define os sete tokens semânticos e a
+   filosofia da marca. A conclusão que ia sair era "laranja protagonista" — o
+   oposto do que o arquivo diz.
+2. Uma busca ampla por "PREMIUM" encontrou a palavra e concluiu que era nome de
+   plano. É de **outro** enum (`CRMMessageStyle`). O enum `Plan` real é
+   `{ STARTER, GROWTH, PRO }` — `prisma/schema.prisma:155-159`.
+
+**O que muda para todos:** busca **localiza**; ela não **conclui**. Achou a palavra?
+Abra o arquivo, leia o bloco inteiro e confirme a que estrutura ela pertence antes
+de afirmar qualquer coisa.
+
+O sinal de alerta é o que salvou os dois casos: **duas leituras do mesmo arquivo
+discordando entre si**. Quando isso acontecer, pare e releia — nunca escolha a que
+confirma o que você já ia escrever.
+
+É o guardrail "documentação não é evidência" um nível abaixo: **nem a sua própria
+leitura anterior é evidência.**
