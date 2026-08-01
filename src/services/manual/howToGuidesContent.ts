@@ -184,16 +184,19 @@ No **WhatsApp oficial da Meta**, para enviar **campanhas de marketing** (mensage
     description: "Como o Foocci protege seu número de bloqueios ao enviar campanhas.",
     content: `# Limites de envio e proteção contra bloqueio
 
-Para o WhatsApp **não bloquear** seu número por envio em massa, o Foocci aplica regras de segurança automáticas, que você vê na configuração do WhatsApp/CRM.
+Para o WhatsApp **não bloquear** seu número por envio em massa, o Foocci aplica regras de segurança automáticas. Você as vê em **Marketing → CRM → Configurações**, no cartão **Regras de Segurança**.
 
-## Aquecimento (warmup)
-Número novo começa enviando **pouco** e vai aumentando aos poucos, dia após dia. Isso imita um uso natural e reduz o risco de bloqueio.
+## Limite de mensagens por dia (o teto da Meta)
+O quadro verde **🟢 Limite oficial da Meta** mostra **"X msgs/dia hoje"** — é o teto **oficial da Meta** para o seu WhatsApp Business. Ele **sobe sozinho** conforme a **qualidade** e o histórico do seu número (quando a Meta informa, a tela diz se a qualidade está **alta**, **média** ou **baixa**), sem risco de bloqueio. Esse limite é **por dia** e **reseta todo dia**.
 
-## Limite de contatos
-Você pode definir um **teto de contatos** para o CRM alcançar. Serve para controlar quanto está sendo enviado e o custo.
+## Limite de contatos (no total, para sempre)
+É outro limite, e não se confunde com o de cima: o teto de pessoas **diferentes** que o CRM pode abordar na **vida toda**. Ele **acumula e nunca zera sozinho**. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas — e **0 = sem limite**. O quadro **Contatos restantes** mostra "X de Y"; quando acaba, aparece **"Limite de contatos atingido"** e o CRM para de abordar gente nova até você aumentar o **Máximo de pessoas**.
 
 ## Controle manual
-Por padrão, as **proteções ficam ligadas** (modo seguro). Existe a opção de **controle manual** ("eu assumo a responsabilidade") para quem quer definir os próprios limites — use com cuidado.
+Por padrão, as **proteções ficam ligadas** (modo seguro): o ritmo de envio fica congelado em **Intervalo por cliente** de 24 h, no máximo **5 por cliente/semana**, **sem envio das 21h às 8h**, **delay de 5–45 s** entre mensagens e fim de semana permitido. Para mexer em qualquer um deles — ou no teto de contatos — ligue **Assumir controle manual (eu me responsabilizo)**; aí a tela avisa **⚠️ Controle manual ativo** e o risco passa a ser seu.
+
+## Proteções que nunca desligam
+Quem pediu para sair (opt-out) nunca mais recebe; sem telefone válido ninguém recebe; a mesma campanha não chega duas vezes para a mesma pessoa; e quem já recebeu algo hoje espera o intervalo (só o aniversário passa na frente).
 
 ## Boas práticas
 - Não dispare para listas enormes de uma vez, principalmente com número novo.
@@ -292,10 +295,22 @@ Para gerar o Pix automaticamente no checkout:
     slug: "guia-criar-campanha-crm",
     title: "Como criar uma campanha / promoção no CRM",
     area: "CRM",
-    description: "Ligar campanhas prontas ou criar a sua (manual ou por IA) e acompanhar o resultado.",
+    description: "Ler a Visão Geral, ligar campanhas prontas ou criar a sua (manual ou por IA), acompanhar o resultado e conferir as Regras de Segurança.",
     content: `# Como criar uma campanha / promoção no CRM
 
-Vá no menu lateral em **Marketing → CRM** e abra a aba **Campanhas**.
+Vá no menu lateral em **Marketing → CRM**. No topo ficam as abas **Visão Geral**, **Campanhas**, **Migração**, **Cupons**, **Conversões**, **Clientes**, **Programa de Relacionamento**, **Avaliações** e **Configurações**.
+
+## Antes: o que a Visão Geral te mostra
+A aba **Visão Geral** abre em **Hoje** e é o resumo do CRM, de cima para baixo:
+
+1. **Os números da sua base** (não dependem do período): **Clientes na base**, **Quentes**, **Mornos**, **Frios**, **Perdidos**, **Novos hoje** (o nome muda com o período: "Novos (7 dias)", "Novos este mês"…) e **Não compraram** ("Cadastraram mas nunca pediram"). Cada quadro é clicável e leva pra lista já filtrada (**Ver quentes**, **Ver mornos**, **Ver frios**, **Ver novos**, **Ver e criar campanha**).
+2. **A régua de período**: **Hoje**, **Últimos 7 dias**, **Esta semana**, **Este mês**, **Este ano** e **Personalizado** (abre duas datas com "até" e o botão **Aplicar**). Ela vale dos blocos abaixo pra baixo.
+3. **Receita gerada pelo CRM** — os quadros **Receita atribuída** (campanhas + automações), **Mensagens enviadas**, **Converteram** (% dos enviados) e **Cupons usados**, mais o gráfico com os botões **Barras** e **Linha**.
+4. **Campanhas mais rentáveis** — "Top 5 por receita no período selecionado", em cinco quadradinhos com a posição (**1º**, **2º**…), o nome da campanha, quanto ela fez em R$, quantas mensagens foram **enviadas** e quantos **pedidos** saíram. **Ver todas →** abre a aba Campanhas. Sem resultado no período: **"Nenhuma campanha gerou receita comprovada neste período."** — troque o período pra ver mais.
+5. **Clientes mais valiosos** — "Quem mais gastou com o restaurante", com valor, nº de pedidos, último pedido, o selo do nível e **Ver ficha →**.
+6. **Programa de relacionamento** — os quatro níveis em números grandes: **🥉 Bronze**, **🥈 Prata**, **🥇 Ouro** e **💎 Diamante**, cada um com **% da base**.
+
+Para criar campanha, abra a aba **Campanhas**.
 
 ## 1. Escolha o período que você quer olhar
 Na régua **Período:** clique em **Hoje**, **Ontem**, **Últimos 7 dias**, **Semana passada**, **Últimos 30 dias**, **Este mês**, **Personalizado** (aí aparecem os campos de data "até") ou **Total**.
@@ -328,6 +343,19 @@ Clique em **Preencher manual**. A campanha nasce **pausada** de propósito e abr
 
 ## 5. Ligar e acompanhar
 Em **Campanhas ativas** ("campanhas em execução, agendadas ou recorrentes") cada campanha tem **Pausar** / **Retomar** e o detalhe pelo **Gerenciar**. Em **Ver histórico geral** você vê os **Envios recentes (ao vivo)**, com data e hora.
+
+## 6. Os dois limites (aba Configurações → Regras de Segurança)
+Na aba **Configurações**, o cartão **Regras de Segurança** tem **dois** limites que não se confundem:
+
+**a) Limite de mensagens por dia — 🟢 Limite oficial da Meta.** É o teto **oficial da Meta** para o seu WhatsApp Business, mostrado como **"X msgs/dia hoje"**. Ele **sobe sozinho** conforme a qualidade e o histórico do seu número, sem risco de bloqueio — e, quando a Meta informa, a tela ainda diz a **qualidade do número** (alta, média ou baixa). Abaixo ficam os valores congelados do modo seguro, só pra você ver: **Limite diário**, **Intervalo por cliente** (24 h), **Máx. por cliente/semana** (5), **Horário sem envio** (21h–8h), **Delay entre envios** (5–45 s) e **Fim de semana** (permitido).
+
+**b) Limite de contatos (no total, para sempre).** É o teto de pessoas **diferentes** que o CRM pode abordar na **vida toda**. Cuidado para não confundir: o de cima é **por dia** e reseta todo dia; este **acumula e nunca zera sozinho**. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. **0 = sem limite.** Ao lado, **Contatos restantes** mostra "X de Y" com a barrinha de uso.
+
+Quando o teto acaba, a barra fica amarela e aparece o aviso **"Limite de contatos atingido — N pessoas já abordadas"**: para falar com clientes novos, ligue o **Assumir controle manual (eu me responsabilizo)** ali em cima e aumente o **Máximo de pessoas** (ou coloque **0 = sem limite**). No modo seguro esse campo fica **🔒 travado**.
+
+No rodapé do cartão, as **Proteções sempre ativas**: quem pediu para sair (opt-out) nunca mais recebe, sem telefone válido ninguém recebe, a mesma campanha não chega duas vezes pra mesma pessoa e quem já recebeu algo hoje espera o intervalo (só o aniversário passa na frente).
+
+Ao final, clique em **Salvar configurações**.
 
 > Se preferir montar a mensagem antes, salve um rascunho em **Modelos salvos** e depois clique em **Usar em campanha** — ali você define **Nome da campanha**, **Público alvo**, **Mensagem sugerida**, **Cupom vinculado** e o tipo: **Envio único**, **Agendada** (Data + Hora) ou **Recorrente**.`,
   },
@@ -449,13 +477,12 @@ O gráfico de barras do faturamento. Em **Hoje**/**Ontem** cada barra é uma hor
 Ao lado do gráfico, o "diário" do período — os melhores números, em frase curta: quanto faturou acima (ou abaixo) da janela anterior, o **Campeão** de vendas, o **Pico** de horário (ou o **Melhor dia**), ticket médio que subiu, clientes novos, carrinhos recuperados, dinheiro a mais com sugestões e conversão. Aparecem até 6, só o que tiver número no período. Sem vendas ainda, aparece **Sem destaques ainda**.
 
 ## Origem do faturamento
-De onde veio **cada real** do período, num gráfico de rosca com o **total** no meio. A legenda ao lado mostra valor e % de cada origem:
+De onde veio **cada real** do período ("de onde veio cada real no período"), num gráfico de rosca com o **total** no meio. Hoje são **três** origens, e a legenda ao lado mostra o valor em R$, a % e uma dica de cada uma:
 - **CRM** — campanhas e automações.
-- **Indicações** — vieram indicados.
-- **Clientes novos** — primeira compra.
-- **Orgânico** — o cliente pediu por conta própria.
+- **Garçom / Indicações** — recomendou ou indicou (foi o agente do Foocci que puxou a venda).
+- **Espontânea** — cliente por conta própria.
 
-Cada pedido entra em uma origem só, então a soma fecha com o **Faturamento** lá de cima. Passando o mouse na fatia, ela diz o valor e a %.
+Cada pedido entra em uma origem só, então a soma fecha com o **Faturamento** lá de cima. Passando o mouse na fatia, ela diz a origem, o valor e a %. Sem venda no período, aparece **Sem faturamento no período** ("Quando entrarem vendas, mostro de onde cada real veio").
 
 ## Foocci em ação
 O que o Foocci fez por você — e cada quadro leva pra tela onde você age: **Vendas no upsell** (vai pro Analytics), **Carrinhos recuperados** (recuperados/abandonados, vai pro CRM) e **Clientes quentes (CRM)**, com mornos e frios embaixo.
@@ -710,7 +737,8 @@ Pronto: loja no ar. 🎉 Depois, explore **Agentes IA** (personalidade do atendi
 Como dono, você enxerga e controla tudo. Rotina sugerida:
 
 ## Todo dia (5 min)
-- **Início**: confira **Saúde do negócio** (faturamento, pedidos, ticket médio) e o bloco **O que fazer agora**.
+- **Início**: confira **Saúde do negócio** (faturamento, pedidos, ticket médio) e o bloco **Destaques** — o diário do período, ao lado do gráfico.
+- **Origem do faturamento**: veja de onde veio cada real — **CRM**, **Garçom / Indicações** ou **Espontânea**.
 - **Foocci em ação**: veja o que a IA vendeu (upsell), carrinhos recuperados e clientes quentes.
 
 ## Toda semana (30 min)
