@@ -1,10 +1,28 @@
 # Pendências — o que está aberto
 
-> Última atualização: 31/07/2026, logo após o merge do PR #40.
->
-> Lista curta e viva do que ainda não foi feito. Cada linha diz **o que quebra
-> se ninguém mexer** — não só o nome da tarefa. Atualize ao concluir ou
-> repriorizar.
+> Última atualização: 01/08/2026.
+
+---
+
+## 🔴 ACONTECENDO AGORA — cliente perdendo mensagem em silêncio
+
+### O Instagram do restaurante de sushi está fora do ar desde 23/07
+`tokenValid: false` (erro 190, *"Session expired 25-Jul"*), e o
+`lastWebhookAt` parado em 23/07. **O cliente perde 100% das DMs do Instagram** — e
+não há aviso nenhum.
+
+**A tela mente:** a UI de integração mostra **"Conectado / Ativo"** com o token
+morto. O sinal real está no card **Diagnóstico**: *"Conta conectada: pendente"* e o
+"Último Direct recebido" parado.
+
+**Só o dono resolve** — exige login pessoal do Instagram:
+`/integracoes/instagram` → **Desconectar** → **"Entrar com Instagram"** → login.
+
+> ⚠️ **E logo depois, confira uma coisa.** A conexão de 25/07 nasceu com token
+> **curto** (~1h40 em vez de 60 dias). Ao reconectar, rode `graph-check` e veja a
+> validade do novo token: se vier ~60 dias, ótimo. **Se vier curto de novo, o bug
+> real é a troca para long-lived falhando em produção** — não a expiração. É aí
+> que se deve investigar.
 
 ---
 
@@ -14,6 +32,28 @@
 O Garçom pode dar informação errada sobre restrição alimentar. É o único item
 desta lista em que o defeito não custa dinheiro nem reputação — custa a saúde
 de quem pediu. Os outros três P1 saíram na mesma varredura e são menos graves.
+
+---
+
+## 📱 Canais Meta — o número novo do WhatsApp está travado
+
+Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
+
+| Aberto | O que quebra se ninguém mexer |
+|---|---|
+| **Número novo preso no `request-code` (erro `136024`)** | O número nunca verifica, nunca registra, e o CRM não atende por ele |
+| **Cron de refresh do token do IG — não confirmado se roda** | Todo token de IG expira em ~60 dias **sem aviso**, e a queda de julho se repete |
+| **PIN de 2FA do WhatsApp foi colado em texto num chat** | Rotacionar depois do registro |
+
+> **A mensagem do `136024` mente.** Ela diz *"servidores temporariamente
+> indisponíveis, espere 1 hora"*, mas vem com `is_transient: false` — ou seja,
+> **é permanente**. Repetir não resolve; foram várias tentativas idênticas.
+> A causa mais provável é o **chip ainda ter uma conta WhatsApp ativa**:
+> Config → Conta → Apagar minha conta, e esperar ~1h. *Não confirmado.*
+> Método `VOICE` em vez de `SMS` **nunca foi testado**.
+
+> 🚫 **NÃO mexer no número que está no ar hoje** enquanto o novo não estiver
+> funcionando. É o número que está atendendo o restaurante agora.
 
 ---
 

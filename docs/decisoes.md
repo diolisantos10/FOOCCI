@@ -95,3 +95,19 @@ descrevem intenção — e intenção diverge silenciosamente do que roda.
 
 **O que muda para todos:** toda afirmação em entrega de especialista vem com
 **arquivo:linha**. Alerta e relatório carregam a própria evidência.
+
+---
+
+## A branch padrão deste repositório não é `main` — e os crons dependem disso
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-canais-meta.md` §e (commit `18a5ed7`)
+
+A branch padrão é `claude/remove-legacy-runner-q8iXa`. O gatilho `on: schedule` do
+GitHub Actions **só dispara a partir da branch padrão**.
+
+**O que muda para todos:** trocar a branch padrão sem migrar os workflows **quebra
+todos os crons em silêncio** — nenhum erro, nenhum aviso, as tarefas noturnas
+simplesmente param de rodar e ninguém percebe até faltar o resultado delas.
+
+Vale para o robô do manual, os simuladores, o refresh de token do Instagram e as
+varreduras de qualidade.
