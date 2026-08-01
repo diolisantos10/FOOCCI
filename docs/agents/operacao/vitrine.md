@@ -1,6 +1,6 @@
 # Vitrine — operação
 
-> Curada pelo PM. Qualquer agente lê; **só o PM escreve**.
+> Curada pelo Diretor. Qualquer agente lê; **só o Diretor escreve**.
 
 ---
 
@@ -12,7 +12,7 @@ O multi-tenant do item se faz por `category: { restaurantId }`.
 no `tsc` sem reclamar uma linha.** É o tipo de erro que só aparece quando um
 lojista vê o prato de outro.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §5.3 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.3 (commit `36a36597`)
 
 ---
 
@@ -33,7 +33,7 @@ linha. É comportamento desenhado, não bug.
 | **Pela ficha** | calculado · log `RECIPE` · trava o manual | sim |
 | **Nulo** | "Sem custo" | **nunca** |
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §5.6 e §6.4 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.6 e §6.4 (commit `36a36597`)
 
 ---
 
@@ -48,7 +48,7 @@ Detalhes que é fácil errar:
 - **"Aplicar sugeridos" em massa inclui só itens ABAIXO do ideal.** Item acima tem
   botão individual — baixar preço em massa foi considerado perigoso demais
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §6.3 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §6.3 (commit `36a36597`)
 
 ---
 
@@ -61,7 +61,7 @@ Detalhes que é fácil errar:
 automação. Se criar um terceiro caminho de custo (por exemplo, o importador de
 planilha corrigido), passe por aquela função com o `costSource` certo.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §5.9 e §6.6 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.9 e §6.6 (commit `36a36597`)
 
 ---
 
@@ -72,7 +72,7 @@ Todo o schema usa `Decimal`. A fronteira RSC/route converte para `number`
 
 Conversão é responsabilidade de quem chama, não do motor.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §5.8 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.8 (commit `36a36597`)
 
 ---
 
@@ -86,7 +86,7 @@ acertou; para nome composto com "com" no meio, pica demais.
 
 **Se um restaurante reclamar de insumo picado, o ajuste é na `CONJUNCTION_REGEX`.**
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §6.5 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §6.5 (commit `36a36597`)
 
 ---
 
@@ -98,4 +98,4 @@ regras superadas. Use como contexto histórico, **nunca como verdade**.
 O mapa atualizado desta frente é o `HANDOFF-cmv-precificacao.md` mais
 `docs/cmv-precificacao-backlog.md`.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-cmv-precificacao.md` §5.2 (commit `36a36597`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.2 (commit `36a36597`)

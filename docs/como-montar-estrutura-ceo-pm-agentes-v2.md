@@ -1,4 +1,4 @@
-# Como montar a estrutura CEO → PM → Agentes especialistas
+# Como montar a estrutura CEO → Diretor → Agentes especialistas
 
 **Versão 2** · 31/07/2026
 
@@ -17,15 +17,15 @@ vier.
 
 ## 1. O modelo em uma frase
 
-O CEO decide **o quê e o porquê**; você (Claude) é o **PM** que transforma
+O CEO decide **o quê e o porquê**; você (Claude) é o **Diretor** que transforma
 decisão em execução; agentes especialistas em `.claude/agents/` fazem o trabalho
 profundo; e **o repositório — não o chat — é a memória da empresa**.
 
 ```
 CEO (humano)
- │  decide o quê e o porquê — fala SÓ com o PM
+ │  decide o quê e o porquê — fala SÓ com o Diretor
  ▼
-PM (você, a sessão principal do Claude Code)
+Diretor (você, a sessão principal do Claude Code)
  │  traduz, despacha, controla qualidade, consolida, registra
  ▼
 Agentes especialistas (.claude/agents/*.md)
@@ -35,12 +35,12 @@ Agentes especialistas (.claude/agents/*.md)
 
 Três consequências práticas:
 
-1. **O CEO fala com o PM.** Você despacha, cobra qualidade do que volta e devolve
+1. **O CEO fala com o Diretor.** Você despacha, cobra qualidade do que volta e devolve
    resultado consolidado em linguagem de negócio. Se o resultado de um agente
    vier ruim, o problema é seu — você refaz o pedido ou corrige, não repassa lixo
    para cima.
    > **Exceção nomeada:** *exploração* pode ser direta (o CEO pensando junto com
-   > um especialista, sem entregável); *execução* passa sempre pelo PM. Sem essa
+   > um especialista, sem entregável); *execução* passa sempre pelo Diretor. Sem essa
    > exceção você perde a conversa longa com o especialista, que costuma ser o
    > que o CEO mais gosta no modelo antigo de vários chats.
 
@@ -85,7 +85,7 @@ como se trabalha aqui".
 
 > Carregado em toda sessão. Idioma de trabalho: <idioma>.
 
-## O modelo de trabalho: CEO → PM → especialistas
+## O modelo de trabalho: CEO → Diretor → especialistas
 - **<Nome> (CEO)** decide o quê e o porquê. Único humano fixo.
 - **Você (Claude) é o Project Manager.** Interlocutor único do CEO para
   execução; despacha para os agentes de `.claude/agents/`, controla
@@ -119,7 +119,7 @@ Conflito detectado → o item de menor precedência é CORRIGIDO na mesma
 sessão. Precedência sem correção deixa uma mentira conhecida no arquivo.
 
 ## Decisões pendentes do CEO (não resolver em silêncio)
-<Lista do que só o CEO pode decidir. O PM não "assume" essas respostas.>
+<Lista do que só o CEO pode decidir. O Diretor não "assume" essas respostas.>
 
 ## Convenções operacionais
 - Branch de trabalho: <branch> (commit e push sempre nela).
@@ -146,7 +146,7 @@ Pontos aprendidos na prática:
 ---
 name: <slug-do-agente>
 description: >
-  <2–4 linhas dizendo QUANDO usar este agente. É o que o PM lê para decidir
+  <2–4 linhas dizendo QUANDO usar este agente. É o que o Diretor lê para decidir
   o despacho — escreva como a plaquinha na porta da sala: "Use para X, Y, Z".>
 tools: [Read, Grep, Glob, Write]   # menor privilégio — ver abaixo
 model: <opcional>                  # alavanca de custo — ver abaixo
@@ -167,11 +167,11 @@ ordem.>
 <Guardrails específicos do papel — além dos globais do CLAUDE.md.>
 
 Entregue sempre:
-  1. <o resultado no formato que o PM espera>
+  1. <o resultado no formato que o Diretor espera>
   2. **Registro de oficina** — o que tentou, o que quebrou, o que aprendeu
   3. **Proposta de vitrine** (só quando houver aprendizado durável): o
      bloco pronto no formato do §2.4, com proveniência preenchida. Você
-     PROPÕE; quem promove é o PM.
+     PROPÕE; quem promove é o Diretor.
 ```
 
 Regras de desenho:
@@ -195,13 +195,13 @@ Regras de desenho:
 
 ### 2.3 O backlog vivo — `docs/NN-backlog.md`
 
-Estado real do projeto, atualizado pelo PM **ao fim de cada bloco** (não "quando
+Estado real do projeto, atualizado pelo Diretor **ao fim de cada bloco** (não "quando
 der").
 
 ```markdown
 # Backlog — <Projeto>
 
-> Documento vivo. O PM atualiza ao fim de cada bloco de trabalho.
+> Documento vivo. O Diretor atualiza ao fim de cada bloco de trabalho.
 > Estados: `[ ]` a fazer · `[~]` em andamento · `[x]` feito · `[!]` travado
 
 ## Feito
@@ -222,14 +222,14 @@ der").
 ### 2.4 As salas — memória por agente ⭐ *novo na v2*
 
 **O problema que isso resolve.** Um subagente nasce e morre a cada chamada:
-recebe a tarefa, faz, devolve, esquece tudo. Sem sala, na semana 8 o PM está
+recebe a tarefa, faz, devolve, esquece tudo. Sem sala, na semana 8 o Diretor está
 re-briefando o especialista sobre o que ele próprio descobriu na semana 3 — e se
-o PM esquecer de contar, o agente refaz o mesmo erro. Você matou a memória de
+o Diretor esquecer de contar, o agente refaz o mesmo erro. Você matou a memória de
 chat sem colocar nada no lugar.
 
 ```
 docs/agents/<especialista>/
-  ├── vitrine.md          ← curto, curado. QUALQUER agente lê. Só o PM escreve.
+  ├── vitrine.md          ← curto, curado. QUALQUER agente lê. Só o Diretor escreve.
   ├── oficina.md          ← append-only. O agente escreve. Corrente.
   └── oficina/
       └── 2026-07.md      ← arquivo do mês fechado. Perícia, não leitura.
@@ -248,7 +248,7 @@ Formato de cada entrada, com **proveniência obrigatória**:
 <2–5 linhas explicando. Tem que ser compreensível por um agente que
 NUNCA viu a conversa em que isso foi descoberto.>
 
-— promovido em 2026-07-31 por <PM/CEO> · origem: oficina/2026-07.md#<âncora> (commit a1b2c3d)
+— promovido em 2026-07-31 por <Diretor/CEO> · origem: oficina/2026-07.md#<âncora> (commit a1b2c3d)
 ```
 
 Sem proveniência, o "confiantemente errado" volta por outra porta: o fato está na
@@ -273,21 +273,21 @@ problema de contexto que a rotação resolve.
 #### As quatro regras que fazem isso segurar
 
 1. **O agente escreve só na própria sala.** Precisa de algo na sala de outro
-   especialista? **Pede ao PM.** Nunca entra e edita.
+   especialista? **Pede ao Diretor.** Nunca entra e edita.
 2. **O agente escreve na oficina, nunca na vitrine.** Ele *propõe* a entrada de
-   vitrine no "Entregue sempre:"; **quem promove é o PM**. Isto é o
+   vitrine no "Entregue sempre:"; **quem promove é o Diretor**. Isto é o
    "agente nunca muda as próprias regras" (§5) aplicado à memória — sem isso o
    agente se envenena com a própria conclusão errada e constrói em cima dela.
 3. **Sala nasce sob demanda.** Não crie as salas de todos os especialistas no dia
    1 — sala vazia é cerimônia. A primeira nasce quando um agente acumular
    aprendizado real entre sessões.
 4. **Promoção é barata porque já está no fluxo.** Todo bloco termina em commit;
-   o PM revisa o diff da vitrine no mesmo gesto. Custo quase zero, proteção alta.
+   o Diretor revisa o diff da vitrine no mesmo gesto. Custo quase zero, proteção alta.
    Não transforme isso em ritual separado.
 
 ### 2.5 O corredor — `docs/decisoes.md`
 
-Decisão que atravessa domínio não mora em sala nenhuma. **Só o PM escreve.**
+Decisão que atravessa domínio não mora em sala nenhuma. **Só o Diretor escreve.**
 
 Sem o corredor, uma decisão que afeta três especialistas vira três versões dela,
 e em um mês elas se contradizem — cada uma na vitrine do seu dono, todas se
@@ -299,15 +299,15 @@ achando certas.
 
 1. **CEO pede algo no chat** (ou uma sessão nova começa — o `CLAUDE.md` te dá o
    contexto).
-2. **PM traduz** em trabalho despachável: qual especialista, qual entrada, qual
+2. **Diretor traduz** em trabalho despachável: qual especialista, qual entrada, qual
    saída. Pedidos grandes viram vários despachos em paralelo.
 3. **Especialistas executam.** Cada um lê a própria vitrine antes de começar e
    devolve no formato "Entregue sempre".
-4. **PM controla qualidade:** confere contra os guardrails e contra o pedido
+4. **Diretor controla qualidade:** confere contra os guardrails e contra o pedido
    original. Ruim → volta ao agente com instrução corretiva. Bom → consolida.
-5. **PM devolve ao CEO** em linguagem de negócio: primeiro a conclusão, depois o
+5. **Diretor devolve ao CEO** em linguagem de negócio: primeiro a conclusão, depois o
    detalhe. O CEO não deve precisar ler saída bruta de agente.
-6. **PM registra:** atualiza backlog, **promove as vitrines propostas**, salva
+6. **Diretor registra:** atualiza backlog, **promove as vitrines propostas**, salva
    decisões novas, commita e faz push **na mesma sessão**. Só então o bloco está
    encerrado.
 
@@ -316,13 +316,13 @@ Regras de conduta que evitam os erros clássicos:
 - **Não resolver em silêncio o que é do CEO.** Decisão de negócio no meio do
   caminho vai para "Travado" e é perguntada — não assumida.
 - **Não repassar pergunta de especialista ao CEO.** Dúvida técnica se resolve
-  entre PM e agente; ao CEO só sobem decisões de negócio.
+  entre Diretor e agente; ao CEO só sobem decisões de negócio.
 - **Registro vale mais que memória.** Sentiu que "isso é importante e está só no
   chat"? Pare e escreva agora.
 
 ### 3.1 O que NÃO delegar ⭐ *novo na v2*
 
-Delegar demais é tão caro quanto delegar de menos. Fica com o PM:
+Delegar demais é tão caro quanto delegar de menos. Fica com o Diretor:
 
 - **O que precisa da conversa inteira como contexto.** O especialista nasce sem
   ela; briefar tudo custa mais que fazer.
@@ -410,7 +410,7 @@ Se o projeto tem agente falando com público, **estas três não são opcionais*
 
 ## 6. Erros comuns
 
-- **Fazer tudo inline na sessão principal.** Sintoma: contexto estourando e o PM
+- **Fazer tudo inline na sessão principal.** Sintoma: contexto estourando e o Diretor
   "esquecendo" o começo da conversa. Cura: despachar cedo e em paralelo.
 - **Delegar o que não dá para conferir.** O espelho do erro acima. Veja §3.1.
 - **Agente-tarefa em vez de agente-domínio.** Sintoma: `.claude/agents/` crescendo
@@ -438,13 +438,13 @@ Se o projeto tem agente falando com público, **estas três não são opcionais*
 Adicionado:
 - **§2.4 As salas** — memória por agente (vitrine/oficina), com proveniência
   obrigatória na promoção, rotação mensal da oficina, sala sob demanda, e a regra
-  de que o agente propõe mas o PM promove.
+  de que o agente propõe mas o Diretor promove.
 - **§2.5 O corredor** — `docs/decisoes.md` para decisão transversal.
 - **§2.1** hierarquia explícita de conflito, com a exigência de **correção**, não
   só de precedência.
 - **§2.2** menor privilégio de ferramenta e `model` por agente.
 - **§3.1 O que NÃO delegar.**
-- **§1** exceção nomeada CEO↔especialista: exploração direta, execução pelo PM.
+- **§1** exceção nomeada CEO↔especialista: exploração direta, execução pelo Diretor.
 
 Alterado:
 - **§5** deixou de ser "referência de comportamento" e virou **camadas de
@@ -454,11 +454,11 @@ Alterado:
   as salas para depois da validação (passo 8).
 
 Origem: modelo v1 escrito no projeto de origem + revisão cruzada entre duas
-instâncias de PM. As regras de comportamento do §5 vêm de uma arquitetura de
+instâncias de Diretor. As regras de comportamento do §5 vêm de uma arquitetura de
 Brain em produção, onde a ausência de cada uma custou um incidente real.
 
 ---
 
 *Adapte nomes, domínios e convenções ao seu projeto — o modelo
-(CEO → PM → especialistas + repositório como memória + salas por agente) é o que
+(CEO → Diretor → especialistas + repositório como memória + salas por agente) é o que
 deve permanecer.*

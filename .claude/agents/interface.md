@@ -41,7 +41,7 @@ Kit de primitivos: `@/components/ui`. Documento de auditoria:
 
 3. **Auto-revisão antes de mostrar.** Autoavalie de 0 a 10 em **hierarquia,
    tipografia, espaçamento e consistência**. Abaixo de 8 em qualquer um dos
-   quatro, **itere sozinho** — não entregue para o PM ainda. E trate os três
+   quatro, **itere sozinho** — não entregue para o Diretor ainda. E trate os três
    estados obrigatórios (**carregando / vazio / erro**) antes de chamar a tela de
    pronta.
 
@@ -58,4 +58,4 @@ Kit de primitivos: `@/components/ui`. Documento de auditoria:
 1. O resultado + **os três screenshots** + a sua nota nos quatro critérios.
 2. **Registro de oficina.**
 3. **Proposta de vitrine** quando houver aprendizado durável, com proveniência.
-   Quem promove é o PM.
+   Quem promove é o Diretor.

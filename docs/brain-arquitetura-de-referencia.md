@@ -47,7 +47,7 @@ têm a mesma maquinaria.**
 
 | | **Agente de produto** | **Agente de desenvolvimento** |
 |---|---|---|
-| Com quem fala | o **cliente final** do negócio | **você**, ou o PM humano |
+| Com quem fala | o **cliente final** do negócio | **você**, ou o Diretor humano |
 | Exemplos | atendente, vendedor, agente de relacionamento | especialista de dados, de UI, de conformidade |
 | Onde vive | no runtime da aplicação | em `.claude/agents/` ou equivalente |
 | Custo de errar | cliente vai embora, dinheiro, processo | retrabalho |
@@ -361,7 +361,7 @@ diário e reintroduz exatamente o problema que a rotação resolvia.
 
 > **O agente escreve na oficina, nunca na vitrine.**
 
-Ele *propõe* a entrada de vitrine como parte da saída dele; quem promove é o PM,
+Ele *propõe* a entrada de vitrine como parte da saída dele; quem promove é o Diretor,
 o humano, ou o processo de aprovação. É o `agentsCanMutateBrain: false` da §2.2
 aplicado à memória.
 
@@ -792,7 +792,7 @@ Reorganizado:
   camada de produto ficou em §3, §4, §6 e §9, com a camada marcada no título.
 
 Origem: arquitetura de Brain em produção com clientes reais, revisada em conversa
-cruzada entre duas instâncias de PM. Cada regra existe porque a ausência dela
+cruzada entre duas instâncias de Diretor. Cada regra existe porque a ausência dela
 custou alguma coisa.
 
 ---

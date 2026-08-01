@@ -1,6 +1,6 @@
 # Vitrine — crm
 
-> Curada pelo PM. Qualquer agente lê; **só o PM escreve**.
+> Curada pelo Diretor. Qualquer agente lê; **só o Diretor escreve**.
 
 ---
 
@@ -20,7 +20,7 @@ Para adicionar **um botão** de período você toca todas:
 mês fechado precisa **sobrescrever `from` E `to`** — senão o fim do período vaza
 para hoje, silenciosamente.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
 
 ---
 
@@ -37,7 +37,7 @@ anterior**, não contra ontem.
 Ao adicionar um período novo, **decida conscientemente qual é o `prev`** — não
 herde por acidente.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e e §f (commit `cfc346c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-painel-e-evolution.md` §e e §f (commit `cfc346c`)
 
 ---
 
@@ -51,7 +51,7 @@ herde por acidente.
 **Se a atribuição do CRM "sumir", o problema quase sempre está numa dessas cinco** —
 não na tela que mostra o número.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §f (commit `cfc346c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-painel-e-evolution.md` §f (commit `cfc346c`)
 
 ---
 
@@ -63,7 +63,7 @@ por trabalho recente.**
 Mexer na dep array desse `useEffect` pode **reintroduzir um bug de aba inicial** já
 corrigido. Se for consertar, confirme o comportamento da aba antes e depois.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
 
 ---
 
@@ -82,7 +82,7 @@ Para exibir o teto real: **`effective.dailyGlobalCap`**.
 E mudar os defaults para "consertar" o número é beco sem saída: eles são só
 fallback do modo manual.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §c e §e (commit `3693a509`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-crm.md` §c e §e (commit `3693a509`)
 
 ---
 
@@ -106,7 +106,7 @@ O importador Saipos/Nemo grava `phone=null`, `crmContactable=false`,
 `contactStatus="SEM_TELEFONE"` para quem realmente não tem telefone
 (`SaiposNemoImportService.ts` ~1261).
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §c e §f (commit `3693a509`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-crm.md` §c e §f (commit `3693a509`)
 
 ---
 
@@ -120,7 +120,7 @@ O importador Saipos/Nemo grava `phone=null`, `crmContactable=false`,
 - **A cota de distribuição AUDIENCE virou peso, não teto** — mas o dashboard ainda
   a exibe como "Limite/dia". Não trate o número exibido como limite rígido.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §e (commit `3693a509`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-crm.md` §e (commit `3693a509`)
 
 ---
 
@@ -131,7 +131,7 @@ O importador Saipos/Nemo grava `phone=null`, `crmContactable=false`,
 **Se alguém reintroduzir número fixo em qualquer um dos dois, a lista deixa de
 bater com os cards** — e ninguém sabe qual dos dois está certo.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §e (commit `3693a509`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-crm.md` §e (commit `3693a509`)
 
 ---
 
@@ -146,7 +146,7 @@ Está no código, mas o raciocínio é do CEO. Quem for mexer precisa saber que 
 assimetria (garçom = item, CRM = pedido) é **intencional**, não inconsistência a
 ser "corrigida".
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §f (commit `3693a509`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-crm.md` §f (commit `3693a509`)
 
 ---
 
@@ -164,7 +164,7 @@ lida em vários lugares, mas o agendador não envia mais nada por ela.
 É o guardrail *"prompt é aviso; código é trava"* aplicado a uma remoção: matar um
 caminho sem trava é convite para ele voltar sozinho num merge distraído.
 
-— promovido em 2026-08-01 pelo PM · origem: verificação da branch de produção
+— promovido em 2026-08-01 pelo Diretor · origem: verificação da branch de produção
 durante a mineração do `HANDOFF-railway-build-e-ui-promocoes.md`
 
 ---
@@ -181,4 +181,4 @@ puxado pelo navegador, em `/api/crm/automations`, pela tela de Promoções.
 **A ausência no `crm/page.tsx` é intencional, não esquecimento.** O manual já
 descreve o caminho novo (`services/manual/howToGuidesContent.ts:599`).
 
-— promovido em 2026-08-01 pelo PM · origem: mesmo handoff (commit `f3f580f`)
+— promovido em 2026-08-01 pelo Diretor · origem: mesmo handoff (commit `f3f580f`)

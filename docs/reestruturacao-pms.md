@@ -1,13 +1,13 @@
-# A reestruturação: um PM por projeto
+# A reestruturação: um Diretor por projeto
 
 **01/08/2026** · Desenho pedido pelo CEO · **Casa final deste documento:
-`dioli-brain-kit`** (aqui é rascunho de trabalho até o kit receber a camada de PM)
+`dioli-brain-kit`** (aqui é rascunho de trabalho até o kit receber a camada de Diretor)
 
 > **O problema, na frase do CEO:** *"cada projeto tem um chat, e aí eu fico
 > abrindo vários chats por assunto, e tratando de forma unilateral. Está ficando
 > desgastante porque a quantidade de projetos está aumentando."*
 >
-> **A troca:** uma porta por projeto. Você fala com o PM; o PM decide quais
+> **A troca:** uma porta por projeto. Você fala com o Diretor; o Diretor decide quais
 > especialistas aquele projeto precisa, despacha, cobra qualidade e registra. O
 > repositório vira a memória — não o chat.
 >
@@ -25,7 +25,7 @@ Fechar um chat é irreversível. Todo o resto deste plano pode ser refeito — u
 Uma conversa apagada não volta.
 
 A ordem é sempre: **exportar → minerar → conferir que desceu → só então fechar.**
-O PM do projeto confirma por escrito que o conteúdo virou decisão, pendência ou
+O Diretor do projeto confirma por escrito que o conteúdo virou decisão, pendência ou
 regra antes de qualquer aba ser encerrada.
 
 ---
@@ -85,7 +85,7 @@ A regra é uma pergunta só: **se eu aprender isso, quantos projetos precisam
 saber?**
 
 - **Mais de um → kit.** Filosofia, guardrails de comportamento, o modelo
-  CEO→PM→especialistas, moldes de código, lições de incidente.
+  CEO→Diretor→especialistas, moldes de código, lições de incidente.
 - **Só este → projeto.** O que o produto é, quem são seus especialistas, o que
   está aberto, suas decisões locais.
 
@@ -103,15 +103,15 @@ CEO (Dioli)
 DIRETOR GERAL DO CÉREBRO          ← a sessão da casa (dioli-brain-kit)
  │   o único interlocutor sobre TODOS os projetos ao mesmo tempo
  ▼
-PM de cada projeto                ← uma sessão por projeto
+Diretor de cada projeto                ← uma sessão por projeto
  │   traduz, despacha, controla qualidade, registra
  ▼
-Especialistas (.claude/agents/)   ← o PM decide quais o projeto precisa
+Especialistas (.claude/agents/)   ← o Diretor decide quais o projeto precisa
 ```
 
 ### 3.1 O Diretor Geral do Cérebro ⭐
 
-**Decidido pelo CEO em 01/08/2026.** Existe porque um PM enxerga um projeto, e
+**Decidido pelo CEO em 01/08/2026.** Existe porque um Diretor enxerga um projeto, e
 alguém precisa enxergar a companhia.
 
 **Base:** `dioli-brain-kit` — a casa. É lá que mora a doutrina, e é de lá que ele
@@ -121,28 +121,28 @@ opera.
 
 - **A doutrina.** O que um projeto aprende e serve para todos sobe ao kit. Ele
   decide o que vira regra de companhia e o que fica local — e **promoção ao kit é
-  ato dele com aval do CEO**, nunca de um PM sozinho.
+  ato dele com aval do CEO**, nunca de um Diretor sozinho.
 - **A coerência entre projetos.** Quando dois projetos resolvem o mesmo problema
   de formas diferentes, é ele que percebe e decide qual vale.
 - **A conversa larga com o CEO.** Prioridade entre projetos, o que começa, o que
-  para, o que dorme. Um PM não tem como responder isso — ele só vê a própria casa.
-- **A implantação dos PMs novos** e a manutenção dos moldes.
+  para, o que dorme. Um Diretor não tem como responder isso — ele só vê a própria casa.
+- **A implantação dos Diretores novos** e a manutenção dos moldes.
 
-**O que NÃO é dele:** executar dentro dos projetos. Trabalho de projeto é do PM
+**O que NÃO é dele:** executar dentro dos projetos. Trabalho de projeto é do Diretor
 daquele projeto. Diretor que vira operário perde a única visão que justifica o
 cargo.
 
-**Por que o kit não ganha PM:** PM traduz pedido de negócio em execução. O kit não
+**Por que o kit não ganha Diretor:** Diretor traduz pedido de negócio em execução. O kit não
 tem negócio — tem doutrina. O papel certo ali é este.
 
 ---
 
-## 4. Os PMs — quem ganha um, e quando
+## 4. Os Diretores — quem ganha um, e quando
 
-| Projeto | O que é | PM |
+| Projeto | O que é | Diretor |
 |---|---|---|
 | **foocci** | Sistema operacional do restaurante (vendas, CRM, IA) | ✅ montado 01/08 — 8 especialistas |
-| **dioli-agency-os-1** | O OS da agência | ✅ já tem sessão que é o PM; aponta pro kit |
+| **dioli-agency-os-1** | O OS da agência | ✅ já tem sessão que é o Diretor; aponta pro kit |
 | **dioli-brain-kit** | **A casa** — doutrina, moldes, casos | — é a base do **Diretor Geral** |
 | **diolidigital** | Presença/produto digital da Dioli | ⬜ **criar** |
 | **foocci_manager** | POS/ERP — produto separado, hub de canais | ⬜ **criar** (blueprint pronto) |
@@ -150,10 +150,10 @@ tem negócio — tem doutrina. O papel certo ali é este.
 | **multi-ai-council** | "Conselho": várias IAs respondem cego, um relator junta | ⬜ criar |
 
 **Adormecidos** — `Dioli_Political`, `secretario`, `Dropshipping-Factory` (parado
-desde abril). Ganham PM quando acordarem; montar agora é cerimônia.
+desde abril). Ganham Diretor quando acordarem; montar agora é cerimônia.
 
 > **A conferir com o CEO:** ele indicou que dois projetos já estão cobertos — um
-> com sessão que já funciona como PM, outro que "já nasceu com a informação nova".
+> com sessão que já funciona como Diretor, outro que "já nasceu com a informação nova".
 > A leitura acima é a mais provável (agency-os e o kit). Se um dos quatro marcados
 > como "criar" já tiver sessão fazendo esse papel, ele sai da fila.
 
@@ -161,7 +161,7 @@ desde abril). Ganham PM quando acordarem; montar agora é cerimônia.
 
 ## 5. Os chats — o que dá e o que não dá
 
-**Não existe forma de um PM ler as suas conversas.** Nem por branch, nem por
+**Não existe forma de um Diretor ler as suas conversas.** Nem por branch, nem por
 token, nem por identificador de workspace. A ferramenta não existe. Qualquer
 desenho que dependa disso está morto na origem.
 
@@ -169,7 +169,7 @@ O que funciona é o caminho que o próprio CEO propôs: **exportar**.
 
 ```
 1. EXPORTAR   você baixa a conversa e joga em docs/arquivo/<assunto>.md
-2. MINERAR    o PM lê e distribui: decisão → decisoes.md · aberto → pendencias.md
+2. MINERAR    o Diretor lê e distribui: decisão → decisoes.md · aberto → pendencias.md
               · regra de domínio → vitrine do especialista · regra de companhia
               → proposta ao kit
 3. ARQUIVAR   o bruto vira perícia. NINGUÉM lê de novo.
@@ -186,8 +186,8 @@ Muita coisa **já desceu**. O `foocci_manager` tem o blueprint inteiro em
 arquitetura datada. O Foocci tem 58 documentos que são o resíduo daqueles chats.
 O kit tem `casos/` com raio-x por projeto.
 
-**Regra prática:** exporte o chat **só se** o PM, depois de ler o repositório,
-disser que falta alguma coisa. Cada PM entrega uma **lista de buracos** — curta e
+**Regra prática:** exporte o chat **só se** o Diretor, depois de ler o repositório,
+disser que falta alguma coisa. Cada Diretor entrega uma **lista de buracos** — curta e
 específica, do tipo *"achei a decisão X mas não achei por que você escolheu Y"*.
 Você responde o buraco, não o inventário.
 
@@ -195,7 +195,7 @@ Você responde o buraco, não o inventário.
 
 ## 6. A ordem de execução
 
-**Fase 1 — A casa (primeiro, senão os 6 PMs nascem tortos).**
+**Fase 1 — A casa (primeiro, senão os 6 Diretores nascem tortos).**
 1. Levar `como-montar-estrutura-ceo-pm-agentes-v2.md` para o kit como
    `docs/08-modelo-ceo-pm-agentes.md`.
 2. Criar `templates/CLAUDE.md.modelo` e `templates/agente.md.modelo`.
@@ -206,7 +206,7 @@ Você responde o buraco, não o inventário.
 (candidato: o especialista `garcom` no P1 dietético, a pendência mais perigosa
 aberta). Se ranger, conserta **uma vez** — não seis.
 
-**Fase 3 — Os cinco PMs restantes**, um por vez, na ordem de uso. Para cada um:
+**Fase 3 — Os cinco Diretores restantes**, um por vez, na ordem de uso. Para cada um:
 raio-x do repositório → `CLAUDE.md` → especialistas → pendências → **lista de
 buracos** para o CEO.
 
@@ -235,5 +235,5 @@ A estrutura inteira falha se, na primeira urgência, abrir-se um chat novo "só
 dessa vez". A partir daí a memória volta a morrer na sessão e o repositório vira
 um museu de uma reorganização que não pegou.
 
-**O sinal de que pegou:** o CEO passa uma semana sem abrir aba nova, e um PM
+**O sinal de que pegou:** o CEO passa uma semana sem abrir aba nova, e um Diretor
 começa uma sessão já sabendo o que estava aberto sem ninguém contar.

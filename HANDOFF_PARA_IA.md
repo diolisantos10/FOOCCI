@@ -11,7 +11,7 @@
 > aponta para `docs/pendencias.md` e para as salas dos especialistas. Era essa a
 > função deste arquivo, e ela foi substituída.
 >
-> — marcado em 2026-08-01 pelo PM · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
+> — marcado em 2026-08-01 pelo Diretor · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
 
 > Cole este documento no início da conversa com a nova IA.
 

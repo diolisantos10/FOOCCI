@@ -17,7 +17,7 @@
 > **A fonte corrente é o `CLAUDE.md` + `docs/pendencias.md`.** O que sobrevive aqui
 > é o detalhe da fatia de IA do WhatsApp, que continua útil.
 >
-> — marcado em 2026-08-01 pelo PM · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
+> — marcado em 2026-08-01 pelo Diretor · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
 
 > Documento de referência completo para qualquer IA ou desenvolvedor assumindo este projeto.
 > Última atualização: 2026-04-29 — branch `claude/remove-legacy-runner-q8iXa`
@@ -99,7 +99,7 @@ src/
 ## 4. MODELO DE DADOS (Prisma — modelos principais)
 
 ### Restaurant
-Tenant raiz. Tem `slug` único (usado nas URLs públicas), `plan` (STARTER/GROWTH/PREMIUM), e relação 1:1 com `RestaurantBrandConfig`.
+Tenant raiz. Tem `slug` único (usado nas URLs públicas), `plan` (STARTER/GROWTH/**PRO** — não "PREMIUM"; ver `docs/pendencias.md`), e relação 1:1 com `RestaurantBrandConfig`.
 
 ### RestaurantBrandConfig
 Configuração completa do agente de IA para o restaurante:

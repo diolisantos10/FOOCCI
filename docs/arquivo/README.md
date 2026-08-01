@@ -21,7 +21,7 @@ O modelo antigo era um chat por assunto. Funcionava com dois projetos; com nove
 virou insustentável — abas demais, nenhuma conversando com a outra, e o
 aprendizado morrendo junto com a sessão que o produziu.
 
-A troca é: **uma porta por projeto**. O PM lê o repositório, não o histórico de
+A troca é: **uma porta por projeto**. O Diretor lê o repositório, não o histórico de
 conversa. Para isso, o que estava só no chat precisa descer para cá — uma vez.
 
 ---
@@ -32,21 +32,21 @@ conversa. Para isso, o que estava só no chat precisa descer para cá — uma ve
 1. EXPORTAR   o CEO baixa a conversa e a joga aqui como
               docs/arquivo/AAAA-MM-DD-<assunto>.md
 
-2. MINERAR    o PM lê e DISTRIBUI cada coisa para o lugar certo:
+2. MINERAR    o Diretor lê e DISTRIBUI cada coisa para o lugar certo:
                 decisão que vale            → docs/decisoes.md
                 trabalho ainda aberto       → docs/pendencias.md
                 regra de um domínio         → vitrine do especialista dono
                 regra de mais de um projeto → PROPOSTA ao Diretor Geral (kit)
                 fato sobre o produto        → docs/foocci-resumo-executivo.md
 
-3. ARQUIVAR   o PM escreve no topo do arquivo o bloco de conclusão abaixo,
+3. ARQUIVAR   o Diretor escreve no topo do arquivo o bloco de conclusão abaixo,
               commita, e SÓ ENTÃO o CEO pode fechar aquela aba.
 ```
 
-### O bloco que o PM escreve no topo do arquivo minerado
+### O bloco que o Diretor escreve no topo do arquivo minerado
 
 ```markdown
-> **MINERADO em AAAA-MM-DD por <PM>.** Commit: <sha>
+> **MINERADO em AAAA-MM-DD por <Diretor>.** Commit: <sha>
 > Desceu para: <lista dos arquivos que receberam conteúdo>
 > Nada mais aqui é leitura corrente.
 ```
@@ -75,7 +75,7 @@ Muita coisa já desceu sozinha. Este repositório tem quase 60 documentos em `do
 são o resíduo daqueles chats.** Foi de lá que saiu quase tudo que está nas fichas
 dos oito especialistas.
 
-**Regra prática:** exporte o chat **só se** o PM, depois de ler o repositório,
-disser que falta alguma coisa. O PM entrega uma **lista de buracos** — curta e
+**Regra prática:** exporte o chat **só se** o Diretor, depois de ler o repositório,
+disser que falta alguma coisa. O Diretor entrega uma **lista de buracos** — curta e
 específica, do tipo *"achei a decisão X mas não achei por que você escolheu Y"*.
 O CEO responde o buraco, não o inventário.

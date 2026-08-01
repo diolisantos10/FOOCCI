@@ -72,4 +72,4 @@ prontidão de piloto).
 1. O resultado, com **arquivo:linha** e o caso reproduzido.
 2. **Registro de oficina.**
 3. **Proposta de vitrine** quando houver aprendizado durável, com proveniência.
-   Quem promove é o PM.
+   Quem promove é o Diretor.

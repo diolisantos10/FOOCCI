@@ -1,6 +1,6 @@
 # Vitrine — interface
 
-> Curada pelo PM. Qualquer agente lê; **só o PM escreve**.
+> Curada pelo Diretor. Qualquer agente lê; **só o Diretor escreve**.
 >
 > A lei do design é o `DESIGN.md`. Esta sala guarda o que se aprendeu **fazendo** —
 > armadilha de layout, decisão de estrutura, coisa que já quebrou.
@@ -24,7 +24,7 @@ resolve por fluxo (grid/flex) em vez de deslocamento fixo.
 
 Corrigir só o número deixa a armadilha armada para a próxima mudança.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-railway-build-e-ui-promocoes.md`,
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-railway-build-e-ui-promocoes.md`,
 verificado na branch de produção
 
 ---
@@ -42,7 +42,7 @@ contêiner, não do texto.
 Se alguém propuser "voltar para um painel lateral estreito", isso desfaz uma
 decisão do dono, não um acidente.
 
-— promovido em 2026-08-01 pelo PM · origem: mesmo handoff (commits `f3f580f`, `4d43511`)
+— promovido em 2026-08-01 pelo Diretor · origem: mesmo handoff (commits `f3f580f`, `4d43511`)
 
 ---
 
@@ -59,7 +59,7 @@ No desktop não acontece: ali o menu é `lg:static lg:z-auto` — sai da pilha d
 **com o menu mobile aberto**. É o estado que ninguém testa, e é justamente onde os
 `z-index` colidem.
 
-— promovido em 2026-08-01 pelo PM · origem: mesmo handoff
+— promovido em 2026-08-01 pelo Diretor · origem: mesmo handoff
 
 ---
 
@@ -75,7 +75,7 @@ sumiram**. Ele pode reconfigurar por cima de dados que estavam salvos.
 É o estado obrigatório *carregando* do `DESIGN.md` §6.1 valendo também para
 componente interno, não só para página.
 
-— promovido em 2026-08-01 pelo PM · origem: mesmo handoff
+— promovido em 2026-08-01 pelo Diretor · origem: mesmo handoff
 
 ---
 
@@ -103,4 +103,4 @@ iFood/Rappi na loja.
 Uma sessão quase entregou briefing de site com "laranja protagonista"; teria
 produzido um site que não parece o app.
 
-— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
+— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)

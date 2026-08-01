@@ -68,4 +68,4 @@ papel até haver confirmação humana — e diga isso quando o assunto aparecer.
 1. O resultado, com **arquivo:linha**.
 2. **Registro de oficina.**
 3. **Proposta de vitrine** quando houver aprendizado durável, com proveniência.
-   Quem promove é o PM.
+   Quem promove é o Diretor.
