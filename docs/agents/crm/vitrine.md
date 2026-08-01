@@ -64,3 +64,86 @@ Mexer na dep array desse `useEffect` pode **reintroduzir um bug de aba inicial**
 corrigido. Se for consertar, confirme o comportamento da aba antes e depois.
 
 — promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e (commit `cfc346c`)
+
+---
+
+## O limite exibido não é o limite aplicado — leia `effective`, nunca o cru
+
+`DEFAULT_SAFETY_CONFIG.dailyGlobalCap = 200` e `globalDailyLimit = 50` **não são o
+teto aplicado** no modo seguro: `applyEffectiveSafety` sobrescreve (900 com Meta
+oficial, ou a rampa de aquecimento).
+
+`GET /api/settings/crm-safety` devolve o `dailyGlobalCap` **cru no topo** e também
+os blocos `effective` e `warmup`. **Ler o cru é a armadilha** — foi exatamente o
+bug do "900 que não aparecia".
+
+Para exibir o teto real: **`effective.dailyGlobalCap`**.
+
+E mudar os defaults para "consertar" o número é beco sem saída: eles são só
+fallback do modo manual.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §c e §e (commit `3693a509`)
+
+---
+
+## "Campanha nunca envia" quase sempre é contactabilidade, não bug
+
+A base importada entra com **`crmContactable=false`** (fila de enriquecimento) —
+`MasterDatasetV2Service.ts` ~801 diz literalmente *"crmContactable=false. NÃO
+entram em campanhas WhatsApp"*. Audiência 0, nada sai, nenhum erro.
+
+**Antes de afirmar a causa, rode o diagnóstico** (auth admin):
+
+```
+GET /api/admin/diagnostics/audience-breakdown?restaurantId=<id>
+```
+
+Compare **`noPhone` × `notContactable` × `eligible`** — são três coisas diferentes
+e já foram confundidas: houve diagnóstico de "a base não tem telefone" quando o
+telefone existia e faltava contactabilidade.
+
+O importador Saipos/Nemo grava `phone=null`, `crmContactable=false`,
+`contactStatus="SEM_TELEFONE"` para quem realmente não tem telefone
+(`SaiposNemoImportService.ts` ~1261).
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §c e §f (commit `3693a509`)
+
+---
+
+## Três coisas do CRM que parecem uma e são outra
+
+- **`maxAgeHours=6` do carrinho é VALIDADE, não atraso.** O atraso é
+  `inactivityMinutes=2`. Confundir leva a consertar a coisa errada.
+- **`CartRecoveryScheduler` só roda com `NODE_ENV=production`**
+  (`CartRecoveryScheduler.ts` ~72). Em dev ou staging **parece quebrado** e não
+  está. O backup é um GitHub Actions a cada 5 min.
+- **A cota de distribuição AUDIENCE virou peso, não teto** — mas o dashboard ainda
+  a exibe como "Limite/dia". Não trate o número exibido como limite rígido.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §e (commit `3693a509`)
+
+---
+
+## A lista de clientes e os cards do overview têm que usar a mesma régua
+
+`getCustomers` foi alinhado a `getSegmentConfig` — antes usava **30/60 hardcoded**.
+
+**Se alguém reintroduzir número fixo em qualquer um dos dois, a lista deixa de
+bater com os cards** — e ninguém sabe qual dos dois está certo.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §e (commit `3693a509`)
+
+---
+
+## A atribuição de receita é assimétrica de propósito
+
+- **Garçom** → o **produto específico** do upsell, não o pedido inteiro
+- **CRM** → conversão pós-mensagem, **pedido inteiro**
+- **Indicação** → pedido inteiro
+- **Espontânea** → o resto
+
+Está no código, mas o raciocínio é do CEO. Quem for mexer precisa saber que a
+assimetria (garçom = item, CRM = pedido) é **intencional**, não inconsistência a
+ser "corrigida".
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-crm.md` §f (commit `3693a509`)
