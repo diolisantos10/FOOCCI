@@ -180,3 +180,33 @@ há paridade — e não há.
 chegam pelo webhook da Evolution**.
 
 — promovido em 2026-08-01 pelo PM · origem: `HANDOFF-painel-e-evolution.md` §e e §f (commit `cfc346c`)
+
+---
+
+## O card de avaliação do Google "disponível" não significa dado real
+
+Se a API v4 do Meu Negócio não estiver liberada para o projeto, o card mostra um
+**aviso âmbar educado** — que é fácil confundir com *"ainda não tem avaliação"*.
+
+**Leia a mensagem antes de concluir que não há avaliações.**
+
+E a fonte de verdade sobre a configuração é o **verificador embutido** em
+Integrações → Google → **"Avançado"** — mais confiável que adivinhar o que está
+setado no Railway. Antes de investigar "por que não conecta", olhe ali primeiro.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-google.md` §7 (commit `06bfaf3`)
+
+---
+
+## A Google Cloud Console mudou — os tutoriais antigos não batem mais
+
+Agora é **"Google Auth Platform"**, com menus: *Visão geral / Branding /
+Público-alvo / Clientes / Acesso a dados / Central de verificação / Configurações*.
+Não existe mais a "Tela de consentimento OAuth" como uma tela única.
+
+⚠️ **O campo de escopo fica DENTRO do painel "Adicionar ou remover escopos"** (que
+abre ao lado, com um campo "adicionar manualmente" no fim) — **não é a barra de
+busca do topo do console.** O CEO já colou o escopo na busca errada uma vez; é um
+erro fácil de repetir, e vale avisar antes.
+
+— promovido em 2026-08-01 pelo PM · origem: `HANDOFF-google.md` §8 (commit `06bfaf3`)

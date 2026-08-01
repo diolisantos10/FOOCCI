@@ -157,6 +157,31 @@ próprio cliente, sem aviso. O conserto é mapear para `MenuItem.cost`.
 
 ---
 
+## 🔵 Integração Google — funciona, mas o token morre a cada 7 dias
+
+Minerado de `HANDOFF-google.md` (commit `06bfaf3`), em 01/08/2026. O OAuth, o GA4
+e o Meu Negócio **já estavam construídos de verdade** — não eram mock. O CEO
+confirmou o GA4 funcionando.
+
+| Aberto | O que quebra se ninguém mexer |
+|---|---|
+| **⏳ Tela de consentimento OAuth ainda em "Testing"** | Só e-mails cadastrados como teste conseguem conectar, e **o token expira em 7 dias**. Todo restaurante real vai reconectar **toda semana**. Publicar dispara a verificação do Google para o escopo restrito `business.manage` — pode levar dias ou semanas, então **começar cedo** |
+| **API v4 do Meu Negócio não liberada** | O código de ler e responder avaliação **não tem efeito nenhum** até a liberação. A tela mostra aviso âmbar e para aí. *Não confirmado se o pedido de acesso foi enviado.* |
+| **`GOOGLE_INTEGRATION_ENABLED` não foi setada** | Hoje não importa (cai no fallback, que já é `true`). Mas se alguém setar como `"false"` por engano, o botão volta a "Em breve" **sem pista nenhuma do porquê** — essa variável tem prioridade sobre a presença das credenciais |
+
+> **Presuma que as fases de publicar/verificar o app e liberar a API v4 estão do
+> zero.** A última interação foi o CEO pedindo o passo a passo de novo — sinal de
+> que ainda não executou.
+
+### 🔑 Dois segredos ainda sem confirmação de rotação
+
+| Credencial | Situação |
+|---|---|
+| **Client secret do Google** (`GOCSPX-…`) | Colado em texto no chat. *Não confirmado se foi rotacionado.* ⚠️ **Se rotacionar e não atualizar o Railway, o OAuth quebra em silêncio na próxima renovação** — sem log óbvio do porquê |
+| **Railway Project Token** | O CEO disse que ia revogar. *Não confirmado.* Enquanto não revogar, dá **acesso de escrita às variáveis de ambiente do projeto inteiro** — não só do serviço Foocci |
+
+---
+
 ## 🧍 Dependem do Dioli — ninguém mais consegue
 
 | Item | O que quebra |
