@@ -23,7 +23,7 @@
 
 export type Period =
   | "today" | "yesterday" | "this_week" | "7d"
-  | "current_month" | "30d" | "custom";
+  | "current_month" | "last_month" | "30d" | "custom";
 
 export type BucketGranularity = "hour" | "day";
 
@@ -183,6 +183,22 @@ export function computePeriodRange(
       rangeStart, rangeEnd: now,
       prevStart,  prevEnd,
       period, label: "Este mês", prevLabel: "vs. mesmo período mês anterior",
+      days, isToday: false, granularity: "day",
+    };
+  }
+
+  // ── last_month (mês anterior — mês-calendário fechado) ─────────────────────
+  if (period === "last_month") {
+    const y = brtNow.getUTCFullYear();
+    const m = brtNow.getUTCMonth(); // mês atual (0-indexed)
+    const rangeStart = new Date(Date.UTC(y, m - 1, 1, 3, 0, 0)); // 1º do mês passado
+    const rangeEnd   = new Date(Date.UTC(y, m,     1, 3, 0, 0)); // 1º do mês atual (fim exclusivo)
+    const prevStart  = new Date(Date.UTC(y, m - 2, 1, 3, 0, 0)); // mês retrasado
+    const days = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86_400_000));
+    return {
+      rangeStart, rangeEnd,
+      prevStart, prevEnd: rangeStart,
+      period, label: "Mês anterior", prevLabel: "vs. mês retrasado",
       days, isToday: false, granularity: "day",
     };
   }

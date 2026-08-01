@@ -3902,7 +3902,7 @@ function customActionToTemplate(action: CustomActionRow): ActionTemplate {
   };
 }
 
-type CrmPeriodKey = "total" | "today" | "yesterday" | "week7" | "lastweek" | "days30" | "month" | "custom";
+type CrmPeriodKey = "total" | "today" | "yesterday" | "week7" | "lastweek" | "days30" | "month" | "last_month" | "custom";
 
 const CRM_PERIODS: { id: CrmPeriodKey; label: string }[] = [
   { id: "today",     label: "Hoje"           },
@@ -3911,6 +3911,7 @@ const CRM_PERIODS: { id: CrmPeriodKey; label: string }[] = [
   { id: "lastweek",  label: "Semana passada" },
   { id: "days30",    label: "Últimos 30 dias"},
   { id: "month",     label: "Este mês"       },
+  { id: "last_month", label: "Mês anterior"  },
   { id: "custom",    label: "Personalizado"  },
   { id: "total",     label: "Total"          },
 ];
@@ -3937,6 +3938,10 @@ function crmPeriodRange(key: CrmPeriodKey, customFrom?: string, customTo?: strin
       return { from: lastMonday.toISOString(), to: lastSunday.toISOString() };
     }
     case "month": return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to: now.toISOString() };
+    case "last_month": return {
+      from: new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(),
+      to:   endOfDay(new Date(now.getFullYear(), now.getMonth(), 0)).toISOString(),
+    };
     case "custom":
       if (!customFrom || !customTo) return null;
       return { from: startOfDay(new Date(customFrom)).toISOString(), to: endOfDay(new Date(customTo)).toISOString() };
@@ -6002,6 +6007,9 @@ export function CRMClient({
         fromIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       } else if (preset === "year") {
         fromIso = new Date(now.getFullYear(), 0, 1).toISOString();
+      } else if (preset === "last_month") {
+        fromIso = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+        toIso   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999).toISOString();
       } else {
         fromIso = new Date(cfrom!).toISOString();
         toIso   = new Date(cto!).toISOString();

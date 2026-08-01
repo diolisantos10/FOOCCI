@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   try {
     const sp        = req.nextUrl.searchParams;
     const rawPeriod = sp.get("period") ?? "today";
-    const periodKey = (["today","yesterday","this_week","7d","current_month","30d","custom"].includes(rawPeriod)
+    const periodKey = (["today","yesterday","this_week","7d","current_month","last_month","30d","custom"].includes(rawPeriod)
       ? rawPeriod : "today") as Period;
 
     const pr = computePeriodRange(periodKey, sp.get("startDate"), sp.get("endDate"));
