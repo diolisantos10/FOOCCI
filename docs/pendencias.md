@@ -15,11 +15,6 @@ O Garçom pode dar informação errada sobre restrição alimentar. É o único 
 desta lista em que o defeito não custa dinheiro nem reputação — custa a saúde
 de quem pediu. Os outros três P1 saíram na mesma varredura e são menos graves.
 
-### 2. Agência: 28 de 31 portões são decoração
-Os gates existem no código e **não rodam**. Quem lê a lista acredita que a peça
-passou por 31 conferências; passou por 3. É pior que não ter portão nenhum,
-porque a falsa confiança é o que faz ninguém conferir na mão.
-
 ---
 
 ## 🟡 Fila normal
@@ -28,10 +23,27 @@ porque a falsa confiança é o que faz ninguém conferir na mão.
 |---|---|
 | Garçom: "tem lasanha?" casa com yakisoba | O matcher difuso aproxima demais e o cliente recebe outro prato |
 | Garçom: ponto cego do simulador | Quando cai na IA, resposta vazia passa batida — o simulador aprova o silêncio |
-| Agência: verdade do cliente montada no cliente | Deveria ser lida no servidor; do jeito atual dá para adulterar |
-| Agência: escada por departamento | Falta o caminho sombra → allowlist → wide, que já existe nos outros agentes |
 | Foocci: saudação com nome + menu colado por código | Hoje depende do modelo lembrar; tem que ser garantido por código |
 | Brain Fase 5 (parcial) | Falta consolidar as 6 filas, avaliar candidato e o LLM-judge online |
+
+---
+
+## 🚚 Mudou de casa — eram daqui e não eram
+
+Três pendências estavam listadas aqui como "Agência" e **pertencem ao Dioli
+Digital**, não ao Foocci. Verificado em 01/08: o Foocci não tem nenhuma ocorrência
+de `autoCheckable` no código; as 31 checagens com 28 desligadas estão em
+`diolidigital/lib/dioli-brain/quality-gates.ts`.
+
+| O que | Foi para |
+|---|---|
+| 28 de 31 portões são decoração (**P0**) | pendências do Dioli Digital |
+| Verdade do cliente montada no cliente | pendências do Dioli Digital |
+| Escada por departamento | pendências do Dioli Digital |
+
+O Foocci tem a sua própria esteira de agência (`src/services/brain/sdr`,
+`src/services/brain/oficina`) — o que confundiu. São coisas diferentes com nome
+parecido, e é exatamente o tipo de erro que a camada de Diretor existe para pegar.
 
 ---
 
