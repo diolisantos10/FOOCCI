@@ -60,6 +60,7 @@ respondendo por ele. Na maioria dos casos não precisa.
 | `crm` | campanhas, níveis, cupons, atribuição de receita |
 | `operacao` | cardápio → pedido → pagamento → comanda → nota fiscal |
 | `interface` | toda tela das duas superfícies; dono do `DESIGN.md` |
+| `manual` | guias, assistente de ajuda, robô noturno de sync, onboarding do lojista |
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
 
@@ -199,9 +200,13 @@ leem como verdade.
 
 - **Branch padrão do repositório:** `claude/remove-legacy-runner-q8iXa` — é ela
   que o deploy e o robô noturno seguem.
-- **Branch de trabalho:** `claude/foocci-brain-vaamrx`. Commit e push sempre nela;
-  PR para a padrão. **Depois de um PR mergeado, reinicie a branch a partir da
-  padrão** em vez de empilhar em cima de histórico já mergeado.
+- **Branch de trabalho: uma por bloco**, aberta a partir da padrão, com PR para a
+  padrão. **Não existe "a" branch de trabalho fixa** — os PRs #44–#53 saíram cada
+  um da sua (`claude/pm-canais`, `claude/pm-crm`, `claude/pm-cmv`, …). Depois do
+  merge, **reinicie a partir da padrão** em vez de empilhar em cima de histórico já
+  mergeado.
+  > ⚠️ `claude/foocci-brain-vaamrx` era a branch citada aqui e **está esgotada**:
+  > 39 commits atrás da padrão, zero à frente, tudo já mergeado. Não use.
 - **Antes de codar, confira se a branch de trabalho não ficou para trás.** Já
   aconteceu de duas correções P0 ficarem 42 commits presas sem chegar em produção.
 - **Verificação de um bloco:** `npx tsc --noEmit` limpo + `npx vitest run` verde.

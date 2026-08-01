@@ -85,6 +85,30 @@ oficina do agente, se for do domínio; aqui, se atravessar domínios.
 
 ---
 
+## Sala sem dono é memória que ninguém mantém — o `manual` virou o 9º especialista
+
+**Decidido em** 2026-08-01 · **por** CEO (*"pode seguir com todos os fixes"*) ·
+**origem:** auditoria de coerência na primeira sessão do Diretor
+
+`docs/agents/manual/vitrine.md` existia com seis entradas curadas, e
+`docs/pendencias.md` tinha uma seção inteira de manual e treinamentos — mas **não
+existia agente `manual`** em `.claude/agents/`. Eram oito, e ele não estava entre
+eles.
+
+Uma sala sem dono quebra duas regras ao mesmo tempo: o agente só escreve na
+**própria** sala (então ninguém podia escrever naquela), e a área não tinha quem
+respondesse por ela quando uma pendência aparecesse.
+
+**Corrigido criando `.claude/agents/manual.md`** — guias, assistente do widget,
+robô noturno de sync e onboarding do lojista.
+
+**O que muda para todos:** vitrine e agente nascem **juntos**. Antes de promover a
+primeira entrada de uma sala nova, confirme que existe agente com aquele nome — e
+antes de criar um agente, confirme que a área não é de um dos que já existem.
+Sala órfã é o sintoma barato de um problema caro: área sem responsável.
+
+---
+
 ## Documentação não é evidência
 
 **Decidido em** 2026-07 · **por** Diretor · **origem:** o comentário do Carteiro
@@ -114,22 +138,32 @@ varreduras de qualidade.
 
 ---
 
-## Três nomes de branch circulam — só um chega em produção
+## Só uma branch chega em produção — as outras dezenas são blocos de trabalho
 
 **Registrado em** 2026-08-01 · **origem:** `HANDOFF-painel-e-evolution.md` §f
-(commit `cfc346c`)
+(commit `cfc346c`) · **corrigido em** 2026-08-01 pelo Diretor
 
-Toda sessão nova se confunde com isto:
+O remoto tem **mais de trinta** branches. Isso é normal — é o fluxo de branch por
+bloco, não bagunça. Só uma delas importa para produção:
 
 | Branch | O que é de verdade |
 |---|---|
 | `claude/remove-legacy-runner-q8iXa` | **A que auto-deploya no Railway** → `foocci.com.br`. É a padrão do repositório |
-| `claude/foocci-brain-vaamrx` | branch de trabalho citada no `CLAUDE.md` |
-| `claude/inspiring-bardeen-hsx9wk` | apareceu na abertura de uma sessão; **não é nenhuma das duas** |
+| `claude/pm-*`, `cmv-*`, e as demais | branches de bloco. Verifique se já entraram antes de tratar como trabalho perdido |
+| `claude/foocci-brain-vaamrx` | ⚠️ **esgotada.** Era citada como "a" branch de trabalho no `CLAUDE.md`; hoje está 39 commits atrás da padrão e **zero à frente**. Não use — abra uma nova |
+| `claude/inspiring-bardeen-hsx9wk` | já foi registrada aqui como "branch misteriosa". **Não é:** é uma branch de bloco e o trabalho dela **já está na padrão** (`d4eac6f`, o CEP na nota do caixa) |
 
 **O que muda para todos:** o que chega em produção é o que entra em
-`claude/remove-legacy-runner-q8iXa`. O padrão que funciona é branch de feature →
-`merge --no-ff` na de deploy → push → **conferir o `commitSha` no `/api/health`**.
+`claude/remove-legacy-runner-q8iXa`. O padrão que funciona é branch de bloco →
+PR → `merge --no-ff` na de deploy → push → **conferir o `commitSha` no
+`/api/health`**.
+
+**Antes de chamar uma branch de órfã, misteriosa ou perdida**, rode o teste de uma
+linha — ele desarmou os dois falsos alarmes acima:
+
+```
+git merge-base --is-ancestor origin/<branch> origin/claude/remove-legacy-runner-q8iXa
+```
 
 ---
 
@@ -169,21 +203,33 @@ de "branch misteriosa".
 
 ---
 
-## Este projeto é trunk-based e não usa PR — e `--force-with-lease` já custou caro
+## O fluxo é branch por bloco → PR → padrão — e esta entrada dizia o contrário
 
-**Registrado em** 2026-08-01 · **origem:** `HANDOFF-cmv-precificacao.md` §5.1 e §7
-(commits `36a36597`, `e8f01e90`)
+**Registrado em** 2026-08-01 · **corrigido em** 2026-08-01 pelo Diretor
+**Origem:** `HANDOFF-cmv-precificacao.md` §5.1 e §7 (commits `36a36597`,
+`e8f01e90`) · **corrigido contra** a API do GitHub e o histórico da branch padrão
 
-O CEO trabalha **trunk-based**: push direto na branch padrão, sem pull request. Um
-PR chegou a ser aberto e foi dispensado — o pedido explícito foi push direto.
-**Não crie branch de feature sem pedido expresso.**
+Esta entrada afirmava *"o projeto é trunk-based, não usa PR, não crie branch de
+feature sem pedido expresso"*. **É falso** — e estava no arquivo de maior
+precedência que os agentes leem como verdade.
 
-A consequência é que **várias sessões escrevem na mesma linha ao mesmo tempo**, e
-isso já produziu um incidente real em 01/08: um `--force-with-lease`, com a falha do
-`rebase` **mascarada por um pipe**, descartou o merge de outra sessão por alguns
-minutos. Foi detectado na verificação e restaurado.
+O que a verificação mostra: os PRs **#44 a #53** foram abertos em 01/08, **todos**
+com base em `claude/remove-legacy-runner-q8iXa`, cada um saindo da **sua própria
+branch de bloco** — `claude/pm-canais`, `claude/pm-crm`, `claude/pm-cmv`,
+`claude/pm-manual`, `claude/pm-google`, `claude/pm-categorias`,
+`claude/pm-painel`, `claude/pm-consolidacao`. Branch por bloco não é exceção
+pedida: é o padrão da casa.
 
-**O que muda para todos:**
+**O que muda para todos:** abra uma branch para o seu bloco, faça PR para a
+padrão, e **nunca empilhe trabalho novo em branch já mergeada** — reinicie a
+partir da padrão.
+
+### As travas de escrita concorrente continuam valendo
+
+Elas vieram de um incidente real, não da premissa errada acima. **Várias sessões
+escrevem na mesma linha ao mesmo tempo**, e em 01/08 um `--force-with-lease`, com
+a falha do `rebase` **mascarada por um pipe**, descartou o merge de outra sessão
+por alguns minutos. Foi detectado na verificação e restaurado.
 
 - Nunca `--force-with-lease` na branch padrão. O padrão é `push → fetch → rebase →
   push`, em loop.
@@ -192,6 +238,13 @@ minutos. Foi detectado na verificação e restaurado.
   aconteceu.
 - Depois de qualquer operação de escrita concorrente, **confirme com
   `git merge-base --is-ancestor`** que o trabalho alheio continua no remoto.
+
+> **A lição de segunda ordem, e ela é a mais cara:** esta entrada esteve errada por
+> um dia inteiro e ninguém pegou, porque o corredor é lido como **verdade** e não
+> como afirmação verificável. Entrada de corredor que descreve **processo** — fluxo
+> de branch, quem aprova o quê, como se publica — envelhece muito mais rápido que
+> entrada que descreve **comportamento de código**. Carimbe a origem e reverifique
+> antes de obedecer.
 
 ---
 

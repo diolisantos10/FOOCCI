@@ -146,6 +146,9 @@ Minerado de `HANDOFF-manual.md` (commit `5b1c885c`), em 01/08/2026.
 | **Bíblia interna no assistente — decisão de produto** | Os 14 capítulos internos têm `agentVisibility=false`. Se ninguém decidir, **nada quebra**: o assistente segue respondendo só pelos guias |
 | **`Carteiro-Manual.txt` é estático** | Fica em `public/downloads/`, e **o robô noturno não cobre `public/`**. Se a tela de Impressoras mudar, esse arquivo precisa ser atualizado na mão |
 
+**Dono:** `manual` — o especialista foi criado em 01/08. Até então esta seção
+**não tinha responsável**, e a sala já existia sem agente.
+
 ### 🌿 Branches órfãs — veredito por branch
 
 | Branch | Veredito |
@@ -401,6 +404,20 @@ Isso bloqueia a definição das faixas de preço e o bloqueio por plano.
 ---
 
 ## ✅ Fechado recentemente
+
+- **Auditoria de coerência da casa** (01/08, primeira sessão do Diretor). Três
+  incoerências corrigidas, todas em arquivos que os agentes leem como verdade:
+  1. **O corredor mentia sobre o fluxo de trabalho.** Dizia *"trunk-based, não usa
+     PR, não crie branch de feature"* — os PRs **#44–#53** provam o contrário, cada
+     um saindo da sua branch de bloco. As travas de escrita concorrente
+     (`--force-with-lease`, rebase por pipe) **continuam valendo** e foram
+     preservadas.
+  2. **`claude/foocci-brain-vaamrx` estava fixada no `CLAUDE.md` como "a" branch de
+     trabalho e está esgotada** (39 commits atrás, zero à frente). A convenção
+     agora é uma branch por bloco.
+  3. **`claude/inspiring-bardeen-hsx9wk` não é "branch misteriosa"** — o trabalho
+     dela já está na padrão (`d4eac6f`). O falso alarme fica desarmado no corredor,
+     com o comando de uma linha que o desarma.
 
 - **B1 — chave `ANTHROPIC_API_KEY`** (30/07). O robô noturno do manual saiu do
   papel: manual de 30/07 verde, agendada de 31/07 idem, com o passo da IA
