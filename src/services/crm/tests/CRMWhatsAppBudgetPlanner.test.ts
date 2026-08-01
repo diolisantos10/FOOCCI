@@ -344,4 +344,32 @@ describe("AUDIENCE distribution — daily budget proportional to audience size",
     expect(plan.perCampaign[0]!.dailyQuota).toBe(50);
     expect(plan.perCampaign[1]!.dailyQuota).toBe(50);
   });
+
+  // ── Requisito do dono: se tem demanda, a cota por campanha não pode ser trava ──
+  it("does NOT trap a demanding campaign at its proportional quota while budget remains", () => {
+    // "A" already sent its proportional share (50) but there are still 50 of the
+    // daily budget left and "A" has plenty of audience. In AUDIENCE mode the quota
+    // is a weight, not a ceiling — "A" must keep getting allocation, never blocked
+    // with CAMPAIGN_DAILY_QUOTA_REACHED while global budget is available.
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config: cfg({ globalDailyLimit: 100, globalCycleLimit: 100 }),
+      globalSentToday: 50, instanceConnected: true,
+      campaigns: [camp("A", 500, 50), camp("B", 500, 0)],
+    });
+    const byId = Object.fromEntries(plan.perCampaign.map((p) => [p.campaignId, p]));
+    expect(byId.A!.allocated).toBeGreaterThan(0);
+    expect(byId.A!.reason).toBeUndefined();
+  });
+
+  it("EQUAL mode still treats the quota as a hard per-campaign ceiling (trava intencional)", () => {
+    // Same numbers, but EQUAL/PRIORITY/MANUAL keep the per-campaign clamp on purpose.
+    const plan = CRMWhatsAppBudgetPlanner.plan({
+      config: cfg({ globalDailyLimit: 100, globalCycleLimit: 100, distributionMode: "EQUAL" }),
+      globalSentToday: 50, instanceConnected: true,
+      campaigns: [camp("A", 500, 50), camp("B", 500, 0)],
+    });
+    const byId = Object.fromEntries(plan.perCampaign.map((p) => [p.campaignId, p]));
+    expect(byId.A!.allocated).toBe(0);
+    expect(byId.A!.reason).toBe("CAMPAIGN_DAILY_QUOTA_REACHED");
+  });
 });

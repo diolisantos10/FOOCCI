@@ -80,9 +80,26 @@ export async function PATCH(req: NextRequest) {
     });
 
     // Return the live consumed count too so the "saldo" display stays correct
-    // right after saving (used count is unaffected by saving the total).
-    const contactBudgetUsed = await getConsumedContactCount(ctx.restaurantId);
-    return ok({ ...config, contactBudgetUsed });
+    // right after saving (used count is unaffected by saving the total). Also
+    // recompute `effective`/`warmup` (mirrors GET) so the UI keeps showing the
+    // ENFORCED daily limit — e.g. 900 on Meta official — instead of falling back
+    // to the raw saved number the instant after a save.
+    const [contactBudgetUsed, ageDays, metaCfg] = await Promise.all([
+      getConsumedContactCount(ctx.restaurantId),
+      getNumberAgeDays(ctx.restaurantId),
+      prisma.metaWhatsAppConfig.findUnique({
+        where:  { restaurantId: ctx.restaurantId },
+        select: { metaCrmEnabled: true, connectionStatus: true },
+      }).catch(() => null),
+    ]);
+    const metaOfficial = metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED";
+    const effective = applyEffectiveSafety(config, ageDays, { metaOfficial });
+    return ok({
+      ...config,
+      contactBudgetUsed,
+      warmup:    { ageDays, safeDailyLimit: metaOfficial ? effective.dailyGlobalCap : warmupDailyLimit(ageDays), metaOfficial },
+      effective,
+    });
   } catch (err) {
     console.error("[PATCH /api/settings/crm-safety]", err);
     return serverError();

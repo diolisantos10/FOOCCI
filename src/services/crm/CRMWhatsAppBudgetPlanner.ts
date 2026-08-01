@@ -308,10 +308,21 @@ export class CRMWhatsAppBudgetPlanner {
         ? computeAudienceQuotas(config.globalDailyLimit, campaigns.map((c) => c.remainingAudience), order)
         : equalQuotas;
 
-    // Per-campaign capacity this cycle = what's left of the daily quota, bounded
-    // by the remaining audience (no point allocating a slot nobody can receive).
+    // Per-campaign capacity this cycle.
+    // EQUAL/PRIORITY/MANUAL: bounded by what's left of the campaign's daily quota
+    // AND its remaining audience — the quota is a hard per-campaign ceiling.
+    // AUDIENCE (default): the quota is only a *weight* for the proportional split,
+    // NOT a ceiling. Capacity is bounded solely by the remaining audience, so a
+    // high-demand campaign can absorb the whole remaining daily budget when the
+    // others don't consume their share (no per-campaign trava). The global daily
+    // budget still caps the total via `allowedTotalThisCycle` below, and the shared
+    // cycle limit still paces each run — a campaign can't burst the whole day at once.
+    const isAudience = config.distributionMode === "AUDIENCE";
     const quotaRemaining = campaigns.map((c, i) => Math.max(0, (dailyQuotas[i] ?? 0) - c.alreadySentToday));
-    const capacity = campaigns.map((c, i) => Math.max(0, Math.min(quotaRemaining[i] ?? 0, c.remainingAudience)));
+    const capacity = campaigns.map((c, i) =>
+      isAudience
+        ? Math.max(0, c.remainingAudience)
+        : Math.max(0, Math.min(quotaRemaining[i] ?? 0, c.remainingAudience)));
 
     const totalCapacity = capacity.reduce((s, v) => s + v, 0);
     const allowedTotalThisCycle = Math.min(config.globalCycleLimit, remainingDailyBudget, totalCapacity);
@@ -323,9 +334,11 @@ export class CRMWhatsAppBudgetPlanner {
       const quota = dailyQuotas[i] ?? 0;
       let reason: BudgetBlockReason | undefined;
       if (alloc === 0) {
-        if ((quotaRemaining[i] ?? 0) <= 0) reason = "CAMPAIGN_DAILY_QUOTA_REACHED";
-        else if (c.remainingAudience <= 0) reason = "NO_ELIGIBLE_RECIPIENTS";
-        else                               reason = "GLOBAL_CYCLE_LIMIT_REACHED";
+        // In AUDIENCE mode the daily quota is not a ceiling, so it never "reaches" —
+        // a 0 allocation there is about audience or the shared cycle budget, not quota.
+        if (!isAudience && (quotaRemaining[i] ?? 0) <= 0) reason = "CAMPAIGN_DAILY_QUOTA_REACHED";
+        else if (c.remainingAudience <= 0)                reason = "NO_ELIGIBLE_RECIPIENTS";
+        else                                              reason = "GLOBAL_CYCLE_LIMIT_REACHED";
       }
       return {
         campaignId:       c.campaignId,
