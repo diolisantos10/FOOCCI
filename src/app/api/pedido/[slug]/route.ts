@@ -17,7 +17,7 @@ import { ok, badRequest, serverError } from "@/lib/api-response";
 import { AIOrderService } from "@/services/ai/AIOrderService";
 import type { V2Event, V2CatalogItem } from "@/services/ai/WaiterBrainV2";
 import { getBestSellerMap, applyBestSellers } from "@/services/ai/waiter/bestSellers";
-import type { OrderStage } from "@/lib/agent/types";
+import type { OrderStage } from "@/services/ai/WebOrderService";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
 import { REPEAT_ORDER_INTENT_RE, buildRepeatOrderReply } from "@/services/order/RepeatOrderService";

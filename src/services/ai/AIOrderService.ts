@@ -40,7 +40,7 @@ import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult
 import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
-import type { OrderStage } from "@/lib/agent/types";
+import type { OrderStage } from "@/services/ai/WebOrderService";
 
 // ─── web turn types (replaces runner.ts) ──────────────────────
 
