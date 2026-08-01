@@ -83,6 +83,32 @@ produção, e não depende das respostas acima.
 
 ---
 
+## 📣 CRM — a campanha "Almoço" não dispara, e falta um clique
+
+Minerado de `HANDOFF-crm.md` (commit `3693a509`), em 01/08/2026.
+
+**A causa não é bug de campanha.** É contactabilidade: a base importada entra com
+`crmContactable=false` (fila de enriquecimento), a audiência fica **0** e nada sai
+— sem erro nenhum aparecendo. Os clientes **têm** telefone; a primeira hipótese
+("base sem telefone") estava errada e foi corrigida pelo dono.
+
+| Aberto | O que quebra se ninguém mexer |
+|---|---|
+| **"Ativar base" — clique manual do dono** | Clientes → *Saúde da base de contatos* → **"Ativar base"**. Enquanto ninguém clicar, a campanha fica com audiência 0 **e nunca dispara** |
+| **Redeploy dos merges #41 e #43** | Sem ele o painel mostra o cálculo velho (Frios 96%, "Mais de 60 dias"). **Sinal de que pegou:** o card "Frios" passa a dizer **"61–120 dias"** |
+| **Número Meta oficial** | O teto de 900 só vale com `metaCrmEnabled=true` **e** `connectionStatus="CONNECTED"`. Sem os dois vale a rampa de aquecimento (máx 250) — e a expectativa de volume fica errada |
+
+**O diagnóstico que decide a discussão antes dela começar** (auth admin):
+`GET /api/admin/diagnostics/audience-breakdown?restaurantId=<id>` → compare
+`noPhone` × `notContactable` × `eligible`.
+
+> **Regra de negócio do dono, que não estava no código:** a campanha "Almoço" é
+> **perene, 1× por cliente**, pegando cliente novo automaticamente. **Isso já é
+> suportado** pelo dedupe de "já recebeu esta campanha". Não reprojete — só ative
+> a base.
+
+---
+
 ## 🧍 Dependem do Dioli — ninguém mais consegue
 
 | Item | O que quebra |
