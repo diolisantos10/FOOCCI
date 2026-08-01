@@ -146,3 +146,23 @@ de ambiente em produção sem abrir o Railway**. Hoje o único `false` ali é
 `mpWebhookSecret`.
 
 Use-o para confirmar que um merge chegou no ar — não confie no verde do deploy.
+
+---
+
+## Push na branch padrão é rejeitado na primeira tentativa — e isso é normal
+
+**Registrado em** 2026-08-01 · **origem:** `HANDOFF-manual.md` §6 (commit `5b1c885c`)
+
+Várias sessões commitam na mesma branch ao mesmo tempo. O padrão obrigatório é o
+loop: **`push → fetch → rebase → push`**.
+
+E **403 ao empurrar fora da própria branch é comportamento esperado**, não erro de
+rede: a credencial git de uma sessão web é escopada à branch dela. Não insista.
+
+**O que muda para todos:** apagar branch alheia daqui **nunca funciona** — nem por
+`git push --delete`, nem pelas ferramentas do GitHub. O único caminho é a UI do
+GitHub, pelo dono.
+
+E **o nome de branch exibido na interface do chat é etiqueta da sessão** — só vira
+branch de verdade se aquela sessão fizer push. Isso já causou dois falsos alarmes
+de "branch misteriosa".

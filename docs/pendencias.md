@@ -109,6 +109,30 @@ Minerado de `HANDOFF-crm.md` (commit `3693a509`), em 01/08/2026.
 
 ---
 
+## 📚 Manual e treinamentos
+
+Minerado de `HANDOFF-manual.md` (commit `5b1c885c`), em 01/08/2026.
+
+| Aberto | O que quebra se ninguém mexer |
+|---|---|
+| **Export de produção nunca rodado** | Se existir capítulo digitado à mão no admin com slug `guia-*`, **cada deploy o sobrescreve** pelo código. *Não confirmado* se há conteúdo em risco — rodar `GET /api/admin/manual/export` antes de assumir que não há |
+| **Bíblia interna no assistente — decisão de produto** | Os 14 capítulos internos têm `agentVisibility=false`. Se ninguém decidir, **nada quebra**: o assistente segue respondendo só pelos guias |
+| **`Carteiro-Manual.txt` é estático** | Fica em `public/downloads/`, e **o robô noturno não cobre `public/`**. Se a tela de Impressoras mudar, esse arquivo precisa ser atualizado na mão |
+
+### 🌿 Branches órfãs — veredito por branch
+
+| Branch | Veredito |
+|---|---|
+| `eloquent-franklin` · `cmv-pricing-page` | **Ocas** — trabalho já re-landado. Reverificar antes de apagar |
+| **`food-manager-kickoff`** | ⛔ **NÃO APAGAR** — 1.374 commits únicos do produto paralelo "Foocci Manager" |
+| `sons-background-topbar` · `sound-topbar-chip` | Surgiram ~01/08, **conteúdo não avaliado** |
+
+> **Como provar que uma branch é oca antes de apagar:** trabalho re-landado tem
+> hash diferente, então `git cherry` **engana**. Compare os patches (`git show <a>`
+> vs `git show <b>`) e os `--stat`.
+
+---
+
 ## 🧍 Dependem do Dioli — ninguém mais consegue
 
 | Item | O que quebra |
