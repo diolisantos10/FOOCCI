@@ -5,6 +5,50 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-01
+- **Arquivos que dispararam** (mudanças depois do sync de 31/07, telas do lojista):
+  - `src/app/(dashboard)/dashboard/DashboardClient.tsx` — **Origem do faturamento** virou
+    **3 variáveis**: as antigas quatro fatias (CRM / Indicações / Clientes novos / Orgânico)
+    deram lugar a **CRM**, **Garçom / Indicações** e **Espontânea**, com a legenda em coluna
+    única (commit `afc942be`).
+  - `src/app/(dashboard)/crm/CRMClient.tsx`, `OverviewTab.tsx`, `CrmAgentPanel.tsx` (removido)
+    — CRM P1–P6 + faxina: **Regras de Segurança** passaram a mostrar o **limite oficial da
+    Meta** (com a qualidade do número) no lugar do "🔒 Modo seguro ativo" com a escadinha
+    20→40→80→150→250; o **Limite de contatos** ganhou o rótulo "(no total, para sempre)" e o
+    aviso de **limite atingido**; a Visão Geral trocou a tabela vitalícia de campanhas pelos
+    quadradinhos **Campanhas mais rentáveis** (top 5 por período) e o **Programa de
+    relacionamento** virou big numbers com "% da base"; o painel do agente de CRM saiu da
+    tela do lojista (commits `2e2091be`, `913d4b1e`, `2d43cb17`, `c8a79ce8`, `c82c979d`,
+    `666e29a5`, `6b94f9bc`).
+- **Guias atualizados:**
+  - `guia-painel-inicial` — seção **Origem do faturamento** reescrita com as **três** origens
+    reais do código (**CRM** — campanhas e automações; **Garçom / Indicações** — recomendou ou
+    indicou; **Espontânea** — cliente por conta própria) e o estado vazio **"Sem faturamento
+    no período"**.
+  - `guia-criar-campanha-crm` — ganhou a abertura **"Antes: o que a Visão Geral te mostra"**
+    (os 7 quadros da base, a régua Hoje/Últimos 7 dias/Esta semana/Este mês/Este ano/
+    Personalizado com **Aplicar**, **Receita gerada pelo CRM**, **Campanhas mais rentáveis**
+    top 5 com **Ver todas →**, **Clientes mais valiosos** e **Programa de relacionamento** em
+    Bronze/Prata/Ouro/Diamante com "% da base") e a nova seção **"Os dois limites"**
+    (🟢 Limite oficial da Meta × Limite de contatos "no total, para sempre", aviso de limite
+    atingido, **Assumir controle manual**, **Proteções sempre ativas**, **Salvar
+    configurações**). A lista de abas do CRM entrou na introdução.
+  - `guia-limites-envio-whatsapp` — reescrito para o cartão real: saiu o "Aquecimento
+    (warmup)" (a escadinha não é mais mostrada na tela) e entraram o **🟢 Limite oficial da
+    Meta** com a qualidade do número, o **Limite de contatos** vitalício, os valores
+    congelados do modo seguro (24 h por cliente, 5/semana, 21h–8h, delay 5–45 s) e o aviso
+    **⚠️ Controle manual ativo**.
+  - `guia-treinamento-dono` — a rotina diária citava o bloco **"O que fazer agora"**, que não
+    existe mais na tela Início; passou a citar **Destaques** e a **Origem do faturamento**
+    com as três origens.
+- **Sem mudança:** `src/components/layout/Sidebar.tsx` mudou só o visual da marca (só o
+  wordmark, centralizado, com o ✕ de fechar absoluto no mobile) — nenhum rótulo de navegação
+  mudou, então nenhum guia foi tocado por causa dele. Nenhuma rota nova em `(dashboard)/` →
+  nenhum guia criado e nenhuma linha nova no mapa do playbook.
+- **Verificação:** `npm run type-check` — OK.
+
+---
+
 ## 2026-07-31
 - **Arquivos que dispararam** (mudanças depois do sync de 30/07, telas do lojista):
   - `src/app/(dashboard)/dashboard/DashboardClient.tsx` — painel **Destaques** (diário do
