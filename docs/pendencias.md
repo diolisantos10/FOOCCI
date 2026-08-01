@@ -133,6 +133,30 @@ Minerado de `HANDOFF-manual.md` (commit `5b1c885c`), em 01/08/2026.
 
 ---
 
+## 🧮 CMV e precificação
+
+Minerado de `HANDOFF-cmv-precificacao.md` (commits `36a36597` e `e8f01e90`), em
+01/08/2026.
+
+### 🔴 O importador de planilha pode apagar o cardápio inteiro
+
+`src/app/api/menu/import/route.ts` (`PRECO_PREFIXES`, ~linha 56) trata a coluna
+**"custo" como PREÇO DE VENDA**. É defeito pré-existente.
+
+**Se um lojista importar planilha com coluna "custo" achando que está alimentando
+o CMV, ele sobrescreve o preço de venda do cardápio todo.** Perda real, feita pelo
+próprio cliente, sem aviso. O conserto é mapear para `MenuItem.cost`.
+
+| Aberto | O que quebra se ninguém mexer |
+|---|---|
+| **Analytics ainda nega que existe CMV** | `AnalyticsAgentService.ts:213` responde *"não temos CMV cadastrado"*. O dado **existe agora** — o agente nega um número que o lojista acabou de preencher. Para o cliente, parece bug |
+| **Variações não têm custo** | A precificação usa só o custo base. Cardápio muito baseado em variação mostra CMV incompleto — **o número mente por omissão**, sem quebrar nada |
+| **Leitura de nota nunca testada com nota real** | Sem chave de IA no ambiente daquela sessão. Se o primeiro teste em produção falhar com cupom amassado, o ajuste é `INVOICE_EXTRACT_MODEL=gpt-4o` (o default é o modelo do Brain, `gpt-4o-mini`) |
+| **Imagem só funciona no piloto OPENAI** | Se o roteamento do Brain mover o `invoice-reader` para Claude ou Gemini, a leitura de nota falha — **com erro claro, de propósito** |
+| **CMV do período é digitado à mão** | Estoque inicial, compras e estoque final. Sem integração com compras, o termômetro só vale quando o lojista atualiza. Risco de leitura velha, não de quebra |
+
+---
+
 ## 🧍 Dependem do Dioli — ninguém mais consegue
 
 | Item | O que quebra |
