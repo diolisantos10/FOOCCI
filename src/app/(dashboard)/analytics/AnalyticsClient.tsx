@@ -204,13 +204,14 @@ function today() {
   return new Date(new Date().toLocaleDateString("en-CA"));
 }
 
-type Preset = "today" | "yesterday" | "7d" | "30d" | "90d" | "year" | "custom";
+type Preset = "today" | "yesterday" | "7d" | "30d" | "last_month" | "90d" | "year" | "custom";
 
 const PRESETS: { id: Preset; label: string }[] = [
   { id: "today",     label: "Hoje" },
   { id: "yesterday", label: "Ontem" },
   { id: "7d",        label: "7 dias" },
   { id: "30d",       label: "30 dias" },
+  { id: "last_month", label: "Mês anterior" },
   { id: "90d",       label: "90 dias" },
   { id: "year",      label: "12 meses" },
   { id: "custom",    label: "Personalizado" },
@@ -223,6 +224,11 @@ function presetRange(preset: Preset): { from: string; to: string } {
     case "yesterday": return { from: toISO(addDays(t, -1)), to: toISO(addDays(t, -1)) };
     case "7d":        return { from: toISO(addDays(t, -6)), to: toISO(t) };
     case "30d":       return { from: toISO(addDays(t,-29)), to: toISO(t) };
+    case "last_month": {
+      const first = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+      const last  = new Date(t.getFullYear(), t.getMonth(), 0); // último dia do mês passado
+      return { from: toISO(first), to: toISO(last) };
+    }
     case "90d":       return { from: toISO(addDays(t,-89)), to: toISO(t) };
     case "year":      return { from: toISO(addDays(t,-364)), to: toISO(t) };
     default:          return { from: toISO(addDays(t,-29)), to: toISO(t) };

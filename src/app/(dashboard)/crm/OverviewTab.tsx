@@ -16,7 +16,7 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: stri
 
 // ── Date filter ───────────────────────────────────────────────────────────────
 
-export type DateFilterPreset = "today" | "week7" | "week" | "total" | "month" | "year" | "custom";
+export type DateFilterPreset = "today" | "week7" | "week" | "total" | "month" | "last_month" | "year" | "custom";
 
 // ── Action Center config ──────────────────────────────────────────────────────
 
@@ -538,6 +538,7 @@ export function OverviewTab({
     { id: "week7",  label: "Últimos 7 dias" },
     { id: "week",   label: "Esta semana"    },
     { id: "month",  label: "Este mês"       },
+    { id: "last_month", label: "Mês anterior" },
     { id: "year",   label: "Este ano"       },
     { id: "custom", label: "Personalizado"  },
   ];
@@ -559,6 +560,7 @@ export function OverviewTab({
     datePreset === "week7"  ? "Novos (7 dias)"        :
     datePreset === "week"   ? "Novos esta semana"     :
     datePreset === "month"  ? "Novos este mês"        :
+    datePreset === "last_month" ? "Novos no mês anterior" :
     datePreset === "year"   ? "Novos este ano"        :
     datePreset === "custom" ? "Novos no período"      :
                               "Novos clientes";

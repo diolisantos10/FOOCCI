@@ -8,7 +8,7 @@ import { Card, SectionTitle, Stat, Pill, Button, EmptyState } from "@/components
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type PeriodKey = "today" | "yesterday" | "this_week" | "7d" | "current_month" | "30d" | "custom";
+type PeriodKey = "today" | "yesterday" | "this_week" | "7d" | "current_month" | "last_month" | "30d" | "custom";
 
 interface TopProduct { name: string; quantity: number; revenue: number; imageUrl: string | null; categoryName: string | null }
 interface ChartBucket { bucketKey: string; label: string; revenue: number; orders: number }
@@ -65,7 +65,8 @@ function getGreeting(): string {
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Hoje" }, { key: "yesterday", label: "Ontem" },
   { key: "this_week", label: "Esta semana" }, { key: "7d", label: "7 dias" },
-  { key: "current_month", label: "Este mês" }, { key: "30d", label: "30 dias" },
+  { key: "current_month", label: "Este mês" }, { key: "last_month", label: "Mês anterior" },
+  { key: "30d", label: "30 dias" },
   { key: "custom", label: "Personalizado" },
 ];
 

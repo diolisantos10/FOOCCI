@@ -37,3 +37,30 @@ describe("weekday gender", () => {
     expect(computePeriodRange("today", null, null, SUN).prevLabel).toBe("vs. domingo passado");
   });
 });
+
+describe("last_month → closed previous calendar month", () => {
+  // "now" = 2026-03-15 → mês anterior = fevereiro (2026-02).
+  const MAR = new Date("2026-03-15T18:00:00.000Z");
+  const r = computePeriodRange("last_month", null, null, MAR);
+
+  it("spans exactly the previous month (Feb 1 → Mar 1 exclusive)", () => {
+    expect(r.rangeStart.toISOString()).toBe("2026-02-01T03:00:00.000Z");
+    expect(r.rangeEnd.toISOString()).toBe("2026-03-01T03:00:00.000Z");
+    expect(r.days).toBe(28); // fevereiro 2026
+  });
+
+  it("compares against the month before that (Jan)", () => {
+    expect(r.prevStart.toISOString()).toBe("2026-01-01T03:00:00.000Z");
+    expect(r.prevEnd.getTime()).toBe(r.rangeStart.getTime());
+    expect(r.label).toBe("Mês anterior");
+    expect(r.prevLabel).toBe("vs. mês retrasado");
+  });
+
+  it("wraps the year for January (last_month = December)", () => {
+    const JAN = new Date("2026-01-10T18:00:00.000Z");
+    const j = computePeriodRange("last_month", null, null, JAN);
+    expect(j.rangeStart.toISOString()).toBe("2025-12-01T03:00:00.000Z");
+    expect(j.rangeEnd.toISOString()).toBe("2026-01-01T03:00:00.000Z");
+    expect(j.prevStart.toISOString()).toBe("2025-11-01T03:00:00.000Z");
+  });
+});
