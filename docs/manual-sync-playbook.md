@@ -69,7 +69,7 @@ que faz upsert por `slug` como `isPublished=true` + `agentVisibility=true`.
 | guia-canais-links | Canais | `src/app/(dashboard)/canais/**` |
 | guia-personalizar-marca | Marca | `src/app/(dashboard)/marca/page.tsx` |
 | guia-fotos-cardapio | Fotos do Cardápio | `src/app/(dashboard)/menu-enhancement/EnhancementClient.tsx` |
-| guia-conectar-whatsapp | Integrações · WhatsApp | `src/app/(dashboard)/integracoes/whatsapp/**` |
+| guia-conectar-whatsapp | Integrações · WhatsApp | `src/app/(dashboard)/integracoes/whatsapp/**`, `src/app/(dashboard)/integracoes/IntegrationsCenterClient.tsx` (painel `WhatsAppQRPanel`) |
 | guia-integracoes | Integrações | `src/app/(dashboard)/integracoes/**` |
 | guia-configurar-pagamentos | Configurações · Pagamentos | `src/app/(dashboard)/settings/payments/**` |
 | guia-area-entrega-taxas | Configurações · Delivery | `src/app/(dashboard)/settings/delivery/**` |

@@ -57,23 +57,44 @@ Clique em **Salvar alterações**.
     slug: "guia-conectar-whatsapp",
     title: "Como conectar o WhatsApp",
     area: "WHATSAPP",
-    description: "Conectar o número do restaurante via QR Code.",
+    description: "Conectar o número do restaurante por QR Code ou código de pareamento, e como saber se conectou de verdade.",
     content: `# Como conectar o WhatsApp
 
-Vá no menu lateral em **Integrações** e abra o cartão do **WhatsApp**.
+Vá no menu lateral em **Plataforma → Integrações** e abra o cartão do **WhatsApp**. No topo do formulário fica o painel verde **Conectar WhatsApp**.
 
-1. Clique em **Conectar WhatsApp**.
-2. Aguarde alguns segundos enquanto o QR Code é gerado (cerca de 5–10s — não feche a página).
-3. Quando aparecer **"Escaneie com o WhatsApp do restaurante"**, no celular:
-   1. Abra o **WhatsApp** no celular.
-   2. Toque em **Configurações → Aparelhos conectados**.
-   3. Toque em **Conectar aparelho** e aponte para o QR Code da tela.
-4. Quando o status mudar para **Conectado**, está pronto.
+## Passo a passo
+1. Clique em **Gerar QR Code**. A tela mostra **Gerando QR Code…**.
+2. Espere alguns segundos. **Não feche a página** — a tela fica se atualizando sozinha a cada 30 segundos para o código não vencer.
+3. A partir daí, o WhatsApp pode te devolver **uma de duas coisas** — siga a que aparecer na tela.
 
-- Se o QR expirar, clique em **Atualizar QR Code**.
-- Para trocar de número, use **Reconectar**; para encerrar, **Desconectar**.
+### Caminho A — apareceu o QR Code
+Com o celular do restaurante:
+1. Abra o **WhatsApp**.
+2. Toque em **Configurações → Aparelhos conectados**.
+3. Toque em **Conectar aparelho** e aponte a câmera para o QR da tela.
 
-> O WhatsApp conectado é o que o atendimento e os agentes usam para falar com seus clientes.`,
+Se o código vencer antes de você escanear, clique em **Atualizar QR**.
+
+### Caminho B — apareceu um código de números
+Às vezes a tela diz **"O WhatsApp mandou um código de pareamento em vez do QR"** e mostra um código grande. Nesse caso não tem o que escanear — você **digita** o código:
+1. No celular, abra o **WhatsApp**.
+2. Vá em **Configurações → Aparelhos conectados → Conectar aparelho**.
+3. Toque em **Conectar com número de telefone** e digite o código que está na tela.
+
+Precisa de outro código? Clique em **Gerar outro código**.
+
+## O que cada mensagem da tela quer dizer
+- **"O WhatsApp ainda está preparando o código. Aguarde…"** — normal, é só esperar; a tela se vira sozinha.
+- **"WhatsApp já está conectado!"** (com a bolinha verde) — pronto, esse é o único aviso que significa conectado de verdade.
+- **"Não deu para confirmar o estado da conexão."** — atenção: isso **não** quer dizer que conectou. Clique em **Tentar de novo**. Se insistir, confira as credenciais em **Integrações → WhatsApp**.
+- **"Integração não configurada. Salve as credenciais primeiro."** — preencha e salve os campos do formulário (**Nome da instância**, **URL do servidor Evolution** e a chave) antes de tentar conectar.
+
+## Conferir ou encerrar depois
+No rodapé do cartão, **Testar conexão** confere se está tudo de pé (o botão vira **Testando…**). Para encerrar, o dono tem o botão **Desconectar** — ele pede confirmação e desativa as credenciais.
+
+> Enquanto a tela não disser **"WhatsApp já está conectado!"**, considere que **não conectou** — não feche achando que terminou. Já aconteceu de lojista sair da tela achando que estava pronto e o WhatsApp nunca funcionar.
+
+> O WhatsApp conectado é o que o atendimento e os agentes usam para falar com seus clientes. Para o WhatsApp **oficial da Meta** (mais estável, com modelos aprovados), veja o guia **"Como conectar o WhatsApp oficial da Meta"**.`,
   },
   {
     slug: "guia-whatsapp-oficial-meta",
@@ -304,7 +325,7 @@ Vá no menu lateral em **Marketing → CRM**. No topo ficam as abas **Visão Ger
 A aba **Visão Geral** abre em **Hoje** e é o resumo do CRM, de cima para baixo:
 
 1. **Os números da sua base** (não dependem do período): **Clientes na base**, **Quentes**, **Mornos**, **Frios**, **Perdidos**, **Novos hoje** (o nome muda com o período: "Novos (7 dias)", "Novos este mês"…) e **Não compraram** ("Cadastraram mas nunca pediram"). Cada quadro é clicável e leva pra lista já filtrada (**Ver quentes**, **Ver mornos**, **Ver frios**, **Ver novos**, **Ver e criar campanha**).
-2. **A régua de período**: **Hoje**, **Últimos 7 dias**, **Esta semana**, **Este mês**, **Este ano** e **Personalizado** (abre duas datas com "até" e o botão **Aplicar**). Ela vale dos blocos abaixo pra baixo.
+2. **A régua de período**: **Hoje**, **Últimos 7 dias**, **Esta semana**, **Este mês**, **Mês anterior**, **Este ano** e **Personalizado** (abre duas datas com "até" e o botão **Aplicar**). Ela vale dos blocos abaixo pra baixo. Escolhendo **Mês anterior** (o mês fechado, do dia 1º ao último dia do mês passado), o quadro de novos clientes passa a se chamar **Novos no mês anterior**.
 3. **Receita gerada pelo CRM** — os quadros **Receita atribuída** (campanhas + automações), **Mensagens enviadas**, **Converteram** (% dos enviados) e **Cupons usados**, mais o gráfico com os botões **Barras** e **Linha**.
 4. **Campanhas mais rentáveis** — "Top 5 por receita no período selecionado", em cinco quadradinhos com a posição (**1º**, **2º**…), o nome da campanha, quanto ela fez em R$, quantas mensagens foram **enviadas** e quantos **pedidos** saíram. **Ver todas →** abre a aba Campanhas. Sem resultado no período: **"Nenhuma campanha gerou receita comprovada neste período."** — troque o período pra ver mais.
 5. **Clientes mais valiosos** — "Quem mais gastou com o restaurante", com valor, nº de pedidos, último pedido, o selo do nível e **Ver ficha →**.
@@ -312,8 +333,29 @@ A aba **Visão Geral** abre em **Hoje** e é o resumo do CRM, de cima para baixo
 
 Para criar campanha, abra a aba **Campanhas**.
 
+## Antes ainda: sua base precisa estar ligada para o WhatsApp (aba Clientes)
+Se você montar uma campanha para toda a base e a audiência aparecer **zerada**, o problema quase sempre é este: a base que você **importou** entra desligada para o WhatsApp. Ela tem o telefone, mas ainda não entra em campanha.
+
+Abra a aba **Clientes**. No topo fica o cartão **Saúde da base de contatos**, com o **Base total** no canto direito e três quadros:
+- **Contactáveis (WhatsApp)** — "Têm telefone válido para campanha". É essa gente que a campanha enxerga.
+- **Com e-mail** — "Canal alternativo de contato".
+- **Conquistados pelo Foocci** — "Fizeram pedido real pelo app/cardápio (fora da base importada)".
+
+Se houver quem ativar, aparece logo abaixo o aviso **"N clientes com telefone, mas desligados para WhatsApp"**, explicando que é a base importada que ainda não entra em campanha, com o alerta em amarelo: **"⚠️ Avise apenas quem consentiu. Ativar contatos importados sem opt-in pode gerar bloqueio no WhatsApp / questões de LGPD — a responsabilidade é sua."**
+
+Para ligar:
+1. Clique em **Ativar N para WhatsApp**.
+2. Leia a confirmação que abre ("Ativar N cliente(s) para WhatsApp?") e confirme. O botão passa a **Ativando…**.
+3. Quando terminar aparece **"✓ N clientes ativados para WhatsApp."** — **recarregue a página** para os números atualizarem. A campanha passa a enxergar essa audiência no próximo ciclo.
+
+O que essa ação faz e o que **não** faz: ela liga **apenas** quem tem telefone e **não** pediu para sair (opt-out) — quem pediu opt-out continua fora. **Nenhuma mensagem é enviada na hora**: os clientes só passam a entrar nas campanhas, e todo envio continua respeitando horário, limites diários e a regra de 1× por campanha.
+
+Se der problema, a tela diz: **"Não foi possível ativar agora. Tente novamente."** ou **"Falha de rede. Tente novamente."** — é só clicar de novo.
+
 ## 1. Escolha o período que você quer olhar
-Na régua **Período:** clique em **Hoje**, **Ontem**, **Últimos 7 dias**, **Semana passada**, **Últimos 30 dias**, **Este mês**, **Personalizado** (aí aparecem os campos de data "até") ou **Total**.
+Na régua **Período:** clique em **Hoje**, **Ontem**, **Últimos 7 dias**, **Semana passada**, **Últimos 30 dias**, **Este mês**, **Mês anterior**, **Personalizado** (aí aparecem os campos de data "até") ou **Total**.
+
+> **Mês anterior** é o mês fechado — do dia 1º ao último dia do mês passado. Use ele pra ver quanto o CRM rendeu no mês que acabou, sem precisar digitar as datas.
 
 O bloco **Receita gerada pelo CRM** responde ao período escolhido, com os quadros **Receita atribuída**, **Mensagens enviadas**, **Converteram** (% dos enviados) e **Cupons usados**. O gráfico tem os botões **Barras** e **Linha**.
 
@@ -462,7 +504,9 @@ Ao final, clique em **Salvar persona da marca**.`,
 No menu lateral, **Início** é o resumo do seu negócio. O topo dá bom dia (ou boa tarde/boa noite), mostra a data e avisa que é **visão em tempo real** — com o período **Hoje**, os números se atualizam sozinhos a cada 2 minutos.
 
 ## Primeiro, escolha o período
-No canto de cima ficam os botões **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **30 dias** e **Personalizado** (esse último abre duas datas, "de … **até** …").
+No canto de cima ficam os botões **Hoje**, **Ontem**, **Esta semana**, **7 dias**, **Este mês**, **Mês anterior**, **30 dias** e **Personalizado** (esse último abre duas datas, "de … **até** …").
+
+> **Mês anterior** é o mês fechado — do dia 1º ao último dia do mês passado. É o botão pra usar quando você quer fechar o mês sem ficar escolhendo data na mão. Ele se compara com o mês retrasado.
 
 Essa escolha vale pra **tela toda**: todo número, gráfico e destaque abaixo é do período escolhido e se compara com a janela anterior.
 
@@ -567,7 +611,9 @@ Em **Vendas → Agentes IA → WhatsApp Host**, role até a base de conhecimento
     description: "Ler KPIs, abas e perguntar ao analista de dados.",
     content: `# Como entender seus números (Analytics)
 
-No menu lateral, **Vendas → Analytics**. Escolha o período (**Hoje, Ontem, 7 dias, 30 dias, 90 dias, 12 meses, Personalizado**) e navegue pelas abas:
+No menu lateral, **Vendas → Analytics**. Escolha o período (**Hoje, Ontem, 7 dias, 30 dias, Mês anterior, 90 dias, 12 meses, Personalizado**) e navegue pelas abas:
+
+> **Mês anterior** pega o mês fechado inteiro — do dia 1º ao último dia do mês passado. Serve pra fechar o mês sem digitar data.
 
 - **Visão Geral** — KPIs (Receita, Pedidos, Ticket médio, Novos clientes, Cancelamentos), receita incremental do Foocci, eficiência operacional e o **Diagnóstico do período**.
 - **Analista** — faça uma pergunta em linguagem natural (ex: "Por que as vendas caíram?") e receba resposta baseada nos seus dados.

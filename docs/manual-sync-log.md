@@ -5,6 +5,47 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-02
+- **Arquivos que dispararam** (janela de 26h, telas do lojista):
+  - `src/app/(dashboard)/dashboard/DashboardClient.tsx`, `analytics/AnalyticsClient.tsx`,
+    `crm/CRMClient.tsx`, `crm/OverviewTab.tsx` — o preset **"Mês anterior"** (mês fechado,
+    do 1º ao último dia do mês passado) entrou nas **quatro réguas de período** do sistema,
+    e na Visão Geral do CRM o quadro de novos passa a se chamar **"Novos no mês anterior"**
+    (commit `9f078e29`).
+  - `src/app/(dashboard)/crm/ContactBaseHealthPanel.tsx`, `crm/page.tsx` — o cartão **Saúde
+    da base de contatos** (aba **Clientes**) ganhou o aviso **"N clientes com telefone, mas
+    desligados para WhatsApp"** e o botão **"Ativar N para WhatsApp"**, com confirmação,
+    alerta de LGPD, estado **Ativando…** e o sucesso **"✓ N clientes ativados para
+    WhatsApp."**. É o que destrava campanha com audiência 0 (commit `4c76f40f`).
+  - `src/app/(dashboard)/integracoes/IntegrationsCenterClient.tsx` — o painel **Conectar
+    WhatsApp** parou de anunciar conexão que não existe: ganhou o **código de pareamento**
+    ("Conectar com número de telefone" + **Gerar outro código**), o estado de espera ("O
+    WhatsApp ainda está preparando o código. Aguarde…") e o estado honesto **"Não deu para
+    confirmar o estado da conexão."** com **Tentar de novo** (commit `ddedbd08`).
+- **Guias atualizados:**
+  - `guia-painel-inicial` — **Mês anterior** na régua de período, com a explicação de mês
+    fechado e comparação contra o mês retrasado.
+  - `guia-analytics` — **Mês anterior** na lista de períodos.
+  - `guia-criar-campanha-crm` — **Mês anterior** nas duas réguas (Visão Geral e Campanhas) +
+    rótulo "Novos no mês anterior"; e a seção nova **"Antes ainda: sua base precisa estar
+    ligada para o WhatsApp (aba Clientes)"**, com os três quadros do cartão, o passo a passo
+    do **Ativar N para WhatsApp**, o que a ação não faz (não envia nada, não mexe em opt-out)
+    e as duas mensagens de erro reais.
+  - `guia-conectar-whatsapp` — reescrito com os rótulos reais (**Gerar QR Code**, **Atualizar
+    QR**, **Gerar outro código**, **Tentar de novo**, **Testar conexão**, **Desconectar**),
+    os dois caminhos (QR **ou** código de pareamento) e a leitura de cada mensagem da tela —
+    incluindo o aviso de que só **"WhatsApp já está conectado!"** significa conectado. O
+    guia dizia "Clique em Conectar WhatsApp" e "Atualizar QR Code", que não são os rótulos
+    do código.
+- **Disparou mas não gerou guia:** `src/app/(dashboard)/menu/upload/page.tsx` — o commit
+  `fcf948ad` só acrescentou os campos `custoRaw`/`custo` ao tipo `RowResult`; a tela
+  (colunas Foto, Categoria, Nome do Item, Descrição, Preço) não mudou. Nada a reescrever.
+- **Playbook:** a linha do `guia-conectar-whatsapp` no mapa passou a citar também
+  `IntegrationsCenterClient.tsx` (painel `WhatsAppQRPanel`) — o painel de QR mora lá, não em
+  `integracoes/whatsapp/**`, e por isso a mudança teria sido mapeada só para `guia-integracoes`.
+
+---
+
 ## 2026-08-01
 - **Arquivos que dispararam** (mudanças depois do sync de 31/07, telas do lojista):
   - `src/app/(dashboard)/dashboard/DashboardClient.tsx` — **Origem do faturamento** virou
