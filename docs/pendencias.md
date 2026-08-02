@@ -70,6 +70,18 @@ derruba os dois canais juntos.
 
 Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
 
+### ✅ Existe tela para as credenciais: `/admin/meta` (02/08)
+
+As credenciais do aplicativo saíram do "só o Railway sabe". Estão em **Admin →
+Sistema → 🔑 Aplicativo Meta**, criptografadas, com **"Testar conexão com a Meta"**
+que devolve a resposta da própria Meta.
+
+**Falta o CEO colar os valores lá** — enquanto não colar, tudo continua lendo o
+Railway exatamente como antes (a resolução é banco primeiro, ambiente depois).
+
+> ⚠️ **Ao colar, não passe a Chave Secreta por conversa, documento ou mensagem.**
+> Ela é chave mestra. Vai direto do painel da Meta para o campo da tela.
+
 ### 🔴 Achado novo (01/08) — a URL dos Termos de Serviço aponta para o Facebook
 
 No painel do app, em *Configurações → Básico*, o campo **URL dos Termos de

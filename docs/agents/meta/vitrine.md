@@ -10,6 +10,38 @@
 
 ---
 
+## As credenciais do app agora resolvem BANCO primeiro, Railway depois
+
+Desde 02/08 existe `/admin/meta`. As credenciais do aplicativo vivem em
+`meta_app_credentials` (singleton), criptografadas com a mesma `ENCRYPTION_KEY` já
+usada pelo token do Instagram.
+
+**A ordem é deliberada:** valor salvo na tela **vence** a variável de ambiente;
+linha vazia **não muda nada**. Por isso subir isso não podia quebrar um deploy que
+já funcionava — e não quebrou.
+
+**Leia sempre `MetaAppCredentialsService.getResolved()`**, nunca `process.env.META_*`
+direto. Quem ler o env vai sub-reportar: a tela pode ter um valor que o env não tem.
+Os cinco consumidores foram migrados (`webhooks/meta/whatsapp`, `MetaOnboardingService`,
+`MetaWhatsAppCloudProvider`, `admin/meta/diag`, `integracoes/whatsapp/meta/diagnostics`).
+
+Três regras estão **travadas por teste**, não por combinado
+(`MetaAppCredentialsService.test.ts`):
+
+1. **Campo em branco = MANTÉM, nunca apaga.** A tela só mostra segredo mascarado; se
+   Salvar limpasse o que está em branco, abrir a tela e salvar apagaria tudo que o
+   operador não consegue ver. Limpar é ação explícita.
+2. **Segredo que não descriptografa cai no env**, não estoura. Uma linha corrompida
+   não pode derrubar todo o envio de WhatsApp — é o guardrail 5 (a proteção não pode
+   ser mais destrutiva que o problema).
+3. **Tabela inexistente não quebra nada** — cai no env. Protege o intervalo entre o
+   deploy do código e a migração rodar.
+
+— promovido em 2026-08-02 pelo Diretor · origem: construção da tela `/admin/meta`,
+verificada com `tsc` limpo e 4601 testes verdes
+
+---
+
 ## A tela diz "Ativo" com o token MORTO
 
 O selo **"Conectado / Ativo"** não prova nada. Um token expirado há dias continua

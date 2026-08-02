@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ConversationStatus } from "@prisma/client";
-import { metaWebhookVerifyToken, metaAppSecret } from "@/services/whatsapp/metaFlag";
+import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 import { verifyMetaChallenge, validateMetaSignature, normalizeMetaWebhook } from "@/services/whatsapp/providers/metaWebhook";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "@/services/whatsapp/brain/WhatsAppBrainRuntimeService";
@@ -22,9 +22,10 @@ import { isSupportPhoneNumberId, handleInboundSupport } from "@/services/support
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
+  const creds = await MetaAppCredentialsService.getResolved();
   const challenge = verifyMetaChallenge(
     { mode: sp.get("hub.mode"), token: sp.get("hub.verify_token"), challenge: sp.get("hub.challenge") },
-    metaWebhookVerifyToken(),
+    creds.webhookVerifyToken,
   );
   if (challenge != null) return new NextResponse(challenge, { status: 200 });
   return new NextResponse("Forbidden", { status: 403 });
@@ -35,9 +36,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // Signature check — FAIL CLOSED. A missing app secret must reject (not accept
   // unsigned, spoofable payloads that could inject inbound messages into any tenant).
-  const secret = metaAppSecret();
+  const secret = (await MetaAppCredentialsService.getResolved()).appSecret;
   if (!secret) {
-    console.error("[webhook/meta/whatsapp] META_APP_SECRET not set — rejecting unsigned webhook");
+    console.error("[webhook/meta/whatsapp] app secret not set (admin screen nor META_APP_SECRET) — rejecting unsigned webhook");
     return NextResponse.json({ ok: false, error: "webhook not configured" }, { status: 401 });
   }
   if (!validateMetaSignature(raw, req.headers.get("x-hub-signature-256"), secret)) {

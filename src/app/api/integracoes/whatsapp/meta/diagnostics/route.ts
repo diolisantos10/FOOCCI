@@ -7,7 +7,8 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { isMetaWhatsAppEnabled, metaWebhookVerifyToken, metaAppSecret, metaAppId, metaConfigId, META_GRAPH_VERSION } from "@/services/whatsapp/metaFlag";
+import { isMetaWhatsAppEnabled, META_GRAPH_VERSION } from "@/services/whatsapp/metaFlag";
+import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 
@@ -19,6 +20,10 @@ export async function GET(req: NextRequest) {
   try {
     const rid = ctx.restaurantId;
     const waConv = { restaurantId: rid, channel: "WHATSAPP" as const };
+
+    // App-level credentials now resolve database-first, env second — the admin screen
+    // can set them without a deploy, so reading process.env here would under-report.
+    const appCreds = await MetaAppCredentialsService.getResolved();
 
     const [restaurant, metaPublic, evoStatus, lastInbound, lastOutbound, templateRequiredFailures, approvedTemplates] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: rid }, select: { whatsappProvider: true, allowWhatsAppProviderFallback: true, fallbackProvider: true } }),
@@ -45,21 +50,22 @@ export async function GET(req: NextRequest) {
         lastError:         metaPublic?.lastError ?? null,
         tokenPreview:      metaPublic?.tokenPreview ?? null,
       },
-      webhookConfigured:  !!metaWebhookVerifyToken() && !!metaAppSecret(),
-      // Env readiness for activation — booleans only, never secret values. Use this
-      // to confirm which Meta vars are set. NEXT_PUBLIC_* are baked at BUILD time, so
-      // the browser needs a fresh deploy after they change (this reflects runtime env).
+      webhookConfigured:  !!appCreds.webhookVerifyToken && !!appCreds.appSecret,
+      // Readiness for activation — booleans only, never secret values. Reflects the
+      // RESOLVED credentials (admin screen first, Railway env second), so a value saved
+      // in the admin screen shows up here without a deploy. NEXT_PUBLIC_* are baked at
+      // BUILD time, so the browser still needs a fresh deploy after those change.
       env: {
         featureEnabled:     isMetaWhatsAppEnabled(),
-        appId:              !!metaAppId(),
-        appSecret:          !!metaAppSecret(),
-        configId:           !!metaConfigId(),
-        webhookVerifyToken: !!metaWebhookVerifyToken(),
+        appId:              !!appCreds.appId,
+        appSecret:          !!appCreds.appSecret,
+        configId:           !!appCreds.configId,
+        webhookVerifyToken: !!appCreds.webhookVerifyToken,
         testPhone:          !!process.env.META_TEST_PHONE,
-        graphVersion:       META_GRAPH_VERSION,
+        graphVersion:       appCreds.graphVersion ?? META_GRAPH_VERSION,
         publicAppId:        !!process.env.NEXT_PUBLIC_META_APP_ID,
         publicConfigId:     !!process.env.NEXT_PUBLIC_META_CONFIG_ID,
-        signatureEnforced:  !!metaAppSecret(), // inbound POST is signature-checked only when set
+        signatureEnforced:  !!appCreds.appSecret, // inbound POST is signature-checked only when set
       },
       approvedTemplates,
       templateRequiredFailures,
