@@ -111,6 +111,17 @@ trava os dois canais. É conserto de 30 segundos, feito pelo CEO no painel.
 
 ## 🔌 Sair da Evolution e ficar só na Meta — DECIDIDO, é migração
 
+> 🔨 **REIVINDICADO — a Etapa 0 está sendo executada pelo Diretor Geral desde
+> 02/08.** Branch `claude/meta-paridade`.
+>
+> **Diretor do Foocci: não pegue este item.** Some ao que estiver por perto ou
+> escolha outro. Quando eu terminar, esta reivindicação sai daqui — reivindicação
+> eterna vira ruído que todo mundo aprende a ignorar.
+>
+> Reivindiquei porque hoje nós dois escrevemos no mesmo arquivo na mesma hora e o
+> merge saiu limpo **por sorte, não por desenho**. Protocolo em
+> `dioli-brain-kit/docs/11-backlog-do-diretor-geral.md`.
+
 > ✅ **O CEO fechou a direção em 02/08: o provedor é a Meta, e a Evolution sai.**
 > A decisão está no corredor (`docs/decisoes.md`). O que segue abaixo é o **como**,
 > e continua valendo: **é migração, não delete.**
