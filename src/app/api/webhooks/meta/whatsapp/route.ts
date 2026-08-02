@@ -19,6 +19,7 @@ import { verifyMetaChallenge, validateMetaSignature, normalizeMetaWebhook } from
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "@/services/whatsapp/brain/WhatsAppBrainRuntimeService";
 import { isSupportPhoneNumberId, handleInboundSupport } from "@/services/support/SupportWhatsAppService";
+import { InboundGuardsService } from "@/services/whatsapp/inbound/InboundGuardsService";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -157,11 +158,37 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
       data:  { lastMessageAt: m.timestamp, unreadCount: { increment: 1 } },
     });
 
-    // Feed the same agent pipeline Evolution uses: the Brain (default front door)
-    // answers TEXT messages and replies THROUGH the selected provider (Meta here).
-    // Fire-and-forget and self-guarding (Brain skips human-handled / AI-locked
-    // conversations). Order intent / Pix logic is unchanged.
-    if (isWhatsAppBrainEnabled() && m.type === "text" && (m.text ?? "").trim()) {
+    // ── Guardas de entrada ──────────────────────────────────────────────────
+    // Até 02/08 este bloco chamava o Cérebro direto, com um comentário dizendo
+    // que alimentava "o mesmo pipeline da Evolution". Não alimentava: opt-out,
+    // atribuição de CRM, resgate de carrinho e a política central de IA (que
+    // carrega a trava de Staff/Fornecedor, P0-A) ficavam TODOS de fora.
+    //
+    // Na prática isso significava que um cliente da Meta podia responder "PARAR"
+    // e continuar recebendo, e que a IA respondia em conversa marcada como
+    // não-cliente. Agora as guardas rodam antes de qualquer agente.
+    const isText = m.type === "text" && Boolean((m.text ?? "").trim());
+    const guards = await InboundGuardsService.apply({
+      conversationId: conv.id,
+      restaurantId:   cfg.restaurantId,
+      customerId:     conv.customerId,
+      messageText:    m.text ?? null,
+      isTextMessage:  isText,
+    });
+
+    if (!guards.aiMayRespond) {
+      // Log com o motivo concreto — guardrail 6, o alerta carrega a própria
+      // evidência. "A IA não respondeu" sem o porquê é o suporte mais caro que
+      // existe.
+      console.info(
+        `[webhook/meta/whatsapp] IA não responde nesta conversa (${guards.reason}) conv=${conv.id}`,
+      );
+      continue;
+    }
+
+    // Cérebro é a porta de entrada padrão para texto, e responde PELO provedor
+    // selecionado (Meta aqui). Fire-and-forget; ele também se protege sozinho.
+    if (isWhatsAppBrainEnabled() && isText) {
       void WhatsAppBrainRuntimeService.respond(conv.id).catch((err) =>
         console.error("[webhook/meta/whatsapp] brain dispatch failed", err),
       );
@@ -173,7 +200,7 @@ async function findOrCreateConversation(
   restaurantId: string,
   fromPhone:    string,
   profileName:  string | null,
-): Promise<{ id: string }> {
+): Promise<{ id: string; customerId: string | null }> {
   const tail = fromPhone.slice(-8);
   const existing = await prisma.conversation.findFirst({
     where: {
@@ -186,7 +213,7 @@ async function findOrCreateConversation(
       ],
     },
     orderBy: { lastMessageAt: "desc" },
-    select:  { id: true, customerPhone: true },
+    select:  { id: true, customerPhone: true, customerId: true },
   });
   if (existing) {
     // Self-heal the channel phone: Meta's wa_id (fromPhone) is the authoritative,
@@ -221,6 +248,6 @@ async function findOrCreateConversation(
       customerName:  customer?.name ?? profileName ?? fromPhone,
       contextType:   "INBOUND",
     },
-    select: { id: true },
+    select: { id: true, customerId: true },
   });
 }

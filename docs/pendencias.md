@@ -111,6 +111,8 @@ trava os dois canais. É conserto de 30 segundos, feito pelo CEO no painel.
 
 ## 🔌 Sair da Evolution e ficar só na Meta — DECIDIDO, é migração
 
+
+
 > ✅ **O CEO fechou a direção em 02/08: o provedor é a Meta, e a Evolution sai.**
 > A decisão está no corredor (`docs/decisoes.md`). O que segue abaixo é o **como**,
 > e continua valendo: **é migração, não delete.**
@@ -140,20 +142,43 @@ Levantado em 02/08 comparando `webhooks/evolution/route.ts` +
 
 | O que falta na Meta | Quem faz na Evolution | O que se perde |
 |---|---|---|
-| **Opt-out de entrada** | `ContactSafetyService.applyInboundOptOut` | Cliente responde "PARAR" e **continua recebendo**. Risco de bloqueio do número |
-| **Pedido por texto** | `handleInboundForOrdering` + `WhatsAppTextOrderingConfigService` | Cliente pede por mensagem e ninguém atende |
-| **Atribuição de receita do CRM** | `markCrmReplyIfApplicable` | Campanha vira venda e o sistema **não sabe** que foi ela |
-| **Passar para humano** | `markConversationNeedsHuman` | Conversa que precisa de gente fica presa com a IA |
-| **Política de quando a IA responde** | `shouldAiRespond` | A IA responde em hora que não devia |
-| **Comandos do BuildOS** | `handleBuildCommand` | Os comandos internos param |
+| ✅ **Opt-out de entrada** | `ContactSafetyService.applyInboundOptOut` | ~~Cliente responde "PARAR" e continua recebendo~~ — **portado em 02/08** |
+| ✅ **Atribuição de receita do CRM** | `markCrmReplyIfApplicable` | ~~Campanha vira venda e o sistema não sabe~~ — **portado em 02/08** |
+| ✅ **Passar para humano** | `markConversationNeedsHuman` | ~~Conversa de resgate presa com a IA~~ — **portado em 02/08** |
+| ✅ **Política de quando a IA responde** | `shouldAiRespond` | ~~Trava de Staff/Fornecedor ignorada~~ — **portado em 02/08** |
+| 🔨 **Pedido por texto** | `handleInboundForOrdering` + `WhatsAppTextOrderingConfigService` | Cliente pede por mensagem e ninguém atende. **Etapa 0b — em aberto** |
+| ⛔ **Comandos do BuildOS** | `handleBuildCommand` | **Não será portado.** Ver decisão abaixo |
 
 O webhook da Meta importa hoje **só** o Cérebro e o suporte. O comentário no código
 dele diz *"feed the same agent pipeline"* — **e não alimenta.** É a frase mais
 perigosa do arquivo, porque descreve intenção como se fosse fato.
 
-**Etapa 0 (segura, pode começar já):** portar essas seis para o webhook da Meta.
-É **aditivo** — não mexe em default de produção, não toca a Evolution, e não
-depende da pergunta do BuildOS. Sem ela, migrar restaurante é derrubar cliente.
+### ✅ Etapa 0a — as quatro guardas de segurança, FEITAS em 02/08
+
+`src/services/whatsapp/inbound/InboundGuardsService.ts`, ligado no webhook da Meta.
+Aditivo: **não altera uma linha do caminho da Evolution**, que segue atendendo
+todos os restaurantes.
+
+Travado por 11 testes, e o mais importante deles prova que **falha inesperada
+nega** — nunca libera a IA por omissão.
+
+> **Achado no caminho, e é mais grave do que a migração:** a trava de
+> Staff/Fornecedor (P0-A) **nunca valeu na Meta**. Quem já estava na Meta tinha a
+> IA respondendo em conversa marcada como não-cliente. Agora vale.
+
+### 🔨 Etapa 0b — pedido por texto (em aberto)
+
+É a única das seis que falta, e é a maior: muda **qual agente** responde, não só
+se ele pode. Precisa da árvore de roteamento (`getMessageAwareRoutingDecision` →
+`handleInboundForOrdering`) com o mesmo contrato de fallback do caminho antigo.
+
+### ⛔ BuildOS não será portado — decisão de 02/08
+
+Perguntado ao CEO, a resposta foi *"não sei o que que é isso"*. São comandos
+internos por WhatsApp; se o dono não sabe que existem, ninguém os usa.
+
+**Fica na Evolution e morre junto com ela.** Se alguém sentir falta, reabrimos —
+mas não se gasta migração com função que não tem usuário.
 
 ---
 
