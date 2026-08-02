@@ -84,27 +84,41 @@ Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
 > (`Restaurant.whatsappProvider`) é **`EVOLUTION`**, então **todo restaurante
 > existente está nela** até ser trocado um a um.
 
-**Travado em duas perguntas que só o CEO responde.** Minerado de
-`HANDOFF-painel-e-evolution.md` (commit `cfc346c`), em 01/08/2026.
+### ✅ A pergunta que travava foi respondida (02/08)
 
-**O que quebra se alguém simplesmente apagar a Evolution hoje:** o WhatsApp perde
-**pedido por texto, opt-out, recuperação de carrinho, atribuição de receita do CRM
-e os comandos do BuildOS**. Tudo isso só existe no webhook da Evolution.
+> **CEO:** *"hoje temos a integração nativa do WhatsApp da Meta — todos serão assim."*
 
-A razão, confirmada por leitura do código: **os dois webhooks de entrada não são
-simétricos.** O da Meta (`api/webhooks/meta/whatsapp/route.ts`, ~225 linhas) importa
-só o Brain e o suporte. O da Evolution (~274 linhas) é quem carrega todo o resto. O
-comentário do código da Meta diz *"feed the same agent pipeline"* — mas hoje "the
-same pipeline" é **só o Brain**.
+A integração nativa da Meta **existe e está em uso hoje**. O destino é todos os
+restaurantes nela.
 
-**As duas perguntas travando:**
-1. A Meta está conectada e ativa **para todos os restaurantes**, ou só alguns?
-   *(este é o dado que falta)*
-2. **BuildOS:** migrar para a Meta, manter só na Evolution, ou aposentar?
+⚠️ **Atenção ao tempo verbal: "serão", não "estão".** O padrão do banco continua
+`EVOLUTION`. Ninguém deve assumir que um restaurante já migrou — **confira o
+`whatsappProvider` dele** antes de qualquer conclusão.
 
-**Etapa 0, segura para começar já:** portar a paridade de entrada — o que o webhook
-da Evolution faz e o da Meta não faz. É **aditivo**, não mexe em default de
-produção, e não depende das respostas acima.
+Segue aberta a segunda pergunta: **BuildOS** — migrar para a Meta, manter só na
+Evolution, ou aposentar?
+
+### O buraco medido: seis coisas que SÓ a Evolution faz hoje
+
+Levantado em 02/08 comparando `webhooks/evolution/route.ts` +
+`WebhookProcessorService.ts` contra `webhooks/meta/whatsapp/route.ts`.
+
+| O que falta na Meta | Quem faz na Evolution | O que se perde |
+|---|---|---|
+| **Opt-out de entrada** | `ContactSafetyService.applyInboundOptOut` | Cliente responde "PARAR" e **continua recebendo**. Risco de bloqueio do número |
+| **Pedido por texto** | `handleInboundForOrdering` + `WhatsAppTextOrderingConfigService` | Cliente pede por mensagem e ninguém atende |
+| **Atribuição de receita do CRM** | `markCrmReplyIfApplicable` | Campanha vira venda e o sistema **não sabe** que foi ela |
+| **Passar para humano** | `markConversationNeedsHuman` | Conversa que precisa de gente fica presa com a IA |
+| **Política de quando a IA responde** | `shouldAiRespond` | A IA responde em hora que não devia |
+| **Comandos do BuildOS** | `handleBuildCommand` | Os comandos internos param |
+
+O webhook da Meta importa hoje **só** o Cérebro e o suporte. O comentário no código
+dele diz *"feed the same agent pipeline"* — **e não alimenta.** É a frase mais
+perigosa do arquivo, porque descreve intenção como se fosse fato.
+
+**Etapa 0 (segura, pode começar já):** portar essas seis para o webhook da Meta.
+É **aditivo** — não mexe em default de produção, não toca a Evolution, e não
+depende da pergunta do BuildOS. Sem ela, migrar restaurante é derrubar cliente.
 
 ---
 

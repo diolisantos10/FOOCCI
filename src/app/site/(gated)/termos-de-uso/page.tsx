@@ -35,6 +35,17 @@ export default function TermosPage() {
         </p>
       </LegalBlock>
 
+      <LegalBlock heading="Estes termos cobrem o site; o produto tem os seus próprios">
+        <p>
+          Este documento trata do uso do <strong>site comercial</strong>. Os termos de
+          uso do <strong>sistema Foocci</strong> — a relação com o restaurante
+          contratante — estão em{" "}
+          <a href="/termos" className="font-semibold text-brand-600 underline">
+            foocci.com.br/termos
+          </a>.
+        </p>
+      </LegalBlock>
+
       <LegalBlock heading="Solicitação de demonstração">
         <p>
           O site disponibiliza um formulário para você solicitar uma demonstração. As

@@ -29,6 +29,18 @@ export default function PoliticaPage() {
         </p>
       </LegalBlock>
 
+      <LegalBlock heading="Esta página cobre o site; o produto tem a sua própria">
+        <p>
+          Este documento trata do <strong>site comercial</strong> — o formulário de
+          demonstração e mais nada. O tratamento de dados <strong>dentro do sistema
+          Foocci</strong> (dados do restaurante, dos clientes finais, WhatsApp,
+          pagamentos, notas fiscais e IA) é bem mais amplo e está em{" "}
+          <a href="/privacidade" className="font-semibold text-brand-600 underline">
+            foocci.com.br/privacidade
+          </a>.
+        </p>
+      </LegalBlock>
+
       <LegalBlock heading="Quem somos e o que este site faz">
         <p>
           Este site apresenta o Foocci, sistema de vendas, relacionamento e fidelização
