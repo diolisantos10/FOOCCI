@@ -81,16 +81,20 @@ o CI.
 
 ### O que só o CEO pode fazer, em ordem de urgência
 
-1. 🔴 **Revogar o Railway Project Token** exposto em conversa (seção abaixo).
-2. 🔴 **Reconectar o Instagram do sushi** — nove dias sem receber DM. Exige login
-   pessoal; não existe caminho por API.
-3. 🟠 **Corrigir a URL dos Termos de Serviço** no painel da Meta — hoje aponta para
-   `facebook.com` e **reprova App Review**.
-   > 💡 **Ou libere isso para mim:** *Meta → Configurações do app → Avançado* tem
-   > uma chave que permite alterar configurações do app **por API**. Ligada, eu
-   > conserto esse campo e os domínios sozinho. Ver a vitrine do `meta`.
-4. 🟠 **Decidir sobre a chave de administrador do Foocci** — sem ela o Diretor não
-   entra no admin em sessão nova, e volta a depender de você para tudo.
+1. 🔴 **Reconectar o Instagram do sushi** — dez dias sem receber DM. Exige login
+   pessoal; não existe caminho por API. *(CEO vai falar com o dono do restaurante.)*
+2. 🔴 **Preços e planos** — o site já está público mostrando "Em definição".
+3. 🔴 **Token da Focus NFe** — nenhuma nota fiscal é emitida sem ele.
+4. 🟠 **`MERCADO_PAGO_WEBHOOK_SECRET` no Railway** — o pagamento funciona; o que
+   falta é conferir se o aviso de "pago" veio mesmo do Mercado Pago.
+
+> ✅ **Resolvido em 02/08:** os campos de App Review da Meta (Termos, Domínios) —
+> o CEO liberou a escrita por API e o Diretor corrigiu.
+>
+> 🔓 **Decisão do CEO (02/08): o Railway Project Token NÃO será revogado.** Ele
+> autorizou o Diretor a usá-lo. O risco segue registrado — o token está em texto
+> num chat e dá escrita nas variáveis do projeto inteiro — mas a decisão é dele e
+> está tomada. **Não reabrir.**
 
 ### O que continua aberto e pesa no lançamento
 
@@ -135,22 +139,24 @@ amanhã. O diagnóstico está pronto para a decisão sair em minutos.
 
 ---
 
-## 🔴 ROTACIONAR AGORA — um Railway Project Token foi colado em chat (02/08)
+## 🔓 Railway Project Token — o CEO decidiu manter (02/08)
 
-Durante a sessão do Diretor de 02/08, um **Railway Project Token** foi colado em
-texto na conversa para desbloquear o trabalho. Ele funciona e dá **escrita nas
-variáveis de ambiente do projeto inteiro** — não só do serviço Foocci.
+Um Railway Project Token foi colado em texto na conversa. O Diretor recomendou
+revogar; **o CEO decidiu manter e autorizou o uso**. Decisão registrada, não
+reaberta.
 
-**É o terceiro segredo que esta casa perde assim** (antes: o PIN de 2FA do WhatsApp
-e o client secret do Google — **nenhum dos dois com rotação confirmada até hoje**).
+O que fica valendo, para quem ler isto depois:
 
-**Ação do CEO, e não dá para delegar:** Railway → projeto Foocci → Tokens → revogar
-o token e emitir outro. Se for para o Diretor usar de novo, o valor novo entra como
-**variável de ambiente da sessão**, nunca em conversa.
+- O token dá **escrita nas variáveis de ambiente do projeto inteiro**, não só do
+  serviço Foocci.
+- Ele está em texto num histórico de conversa. Quem tiver aquele histórico, tem o
+  token.
+- **PIN de 2FA do WhatsApp** e **client secret do Google** foram expostos do mesmo
+  jeito antes, e nenhum dos dois tem rotação confirmada.
 
-> O padrão que se repete não é distração: é que **não existia lugar seguro** para
-> pôr credencial. Por isso a tela `/admin/meta` foi construída. Falta o equivalente
-> para o acesso do próprio Diretor.
+> A causa raiz não é descuido: **não existe lugar seguro para a credencial de
+> acesso do próprio Diretor.** Para a Meta isso foi resolvido com `/admin/meta`.
+> Para o acesso do Diretor, ainda não.
 
 ---
 
