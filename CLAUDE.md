@@ -24,6 +24,11 @@
   `dioli-brain-kit`. É ele que decide o que sobe de um projeto para virar regra de
   todos os produtos Dioli. Aprendeu algo que serve a mais de um projeto?
   **Proponha ao Diretor Geral** — não escreva no kit por conta própria.
+- **Conversas não se falam.** Você não alcança o Diretor Geral nem outro Diretor por
+  mensagem — cada sessão é uma ilha. Dúvida de doutrina que os documentos não
+  respondem vai escrita em **`docs/perguntas-ao-diretor-geral.md`**, e você **segue
+  trabalhando no que não depende dela**. Nunca prometa "vou perguntar e te aviso":
+  isso é encenar capacidade que você não tem.
 
 > **Exceção nomeada:** *exploração* pode ser direta (o CEO pensando junto com um
 > especialista, sem entregável). *Execução* passa sempre pelo Diretor.
@@ -96,6 +101,7 @@ de marketing. São domínios distintos com agentes distintos — não misture.
 |---|---|
 | `docs/pendencias.md` | **O que está aberto agora.** Leia sempre no início da sessão. |
 | `docs/decisoes.md` | **O corredor** — decisões que atravessam mais de um domínio |
+| `docs/perguntas-ao-diretor-geral.md` | Canal assíncrono de dúvida de doutrina — leia antes de perguntar de novo |
 | `docs/foocci-resumo-executivo.md` | O produto inteiro, recurso por recurso, com maturidade honesta |
 | `docs/brain-arquitetura-de-referencia.md` | A arquitetura do Cérebro e por que cada peça existe |
 | `docs/como-montar-estrutura-ceo-pm-agentes-v2.md` | O modelo organizacional que este arquivo implementa (nome do arquivo é legado — o papel hoje chama **Diretor**) |
