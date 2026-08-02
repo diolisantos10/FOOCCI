@@ -4,6 +4,39 @@
 
 ---
 
+## 🎨 ORDEM DE SERVIÇO do Diretor Geral — repaginar o site para converter (02/08)
+
+**Para o Diretor do Foocci.** Pedido do CEO: *"um site um pouco mais agressivo,
+sofisticado, sem perder a essência dele"*, com a análise competitiva virando
+argumento na página. As campanhas pagas começam **amanhã**.
+
+**O passo a passo completo, com o material novo, está em
+`docs/foocci-site/os-repaginacao-comercial.md`.** Seis passos, em ordem obrigatória.
+
+**O resumo:**
+
+| Passo | O quê |
+|---|---|
+| 1 | Cortar a home de 12 seções para 7 — sua auditoria mediu 19 telas de rolagem no celular |
+| 2 | **Calculadora de comissão evitada** — a peça de maior conversão do site |
+| 3 | Publicar a tabela de preços nova (aprovada pelo CEO) |
+| 4 | Espalhar os sete diferenciais pelo resto do site |
+| 5 | Tom agressivo = número na cara, não adjetivo. Sofisticado = `DESIGN.md`, sem mais cor |
+| 6 | Verificar: 375/768/1280, autoavaliação 8+ nos quatro, tsc e testes |
+
+**O que entra de novo e você ainda não tinha:** a conta do iFood 2026 (15,2% com
+entrega própria, 26,5% com a deles), a ancoragem dos quatro contratos (≈R$ 700
+contra R$ 429), os sete diferenciais em ordem de força, e as cinco lacunas nossas
+com a resposta pronta para cada uma.
+
+> ⛔ **O bloqueio que continua:** o sistema **não trava por plano**. A página pode
+> mostrar os planos, mas **a venda segue 1:1 pelo CEO** — nada de cadastro
+> self-service escolhendo faixa. Se você julgar que publicar preço sem gating é
+> risco alto demais, **escreva a objeção em `docs/perguntas-ao-diretor-geral.md`**
+> em vez de decidir sozinho contra o pedido do CEO.
+
+---
+
 ## 📋 ORDEM DE SERVIÇO do Diretor Geral — levantar o custo real por restaurante (02/08)
 
 **Para o Diretor do Foocci.** Autorizada pelo CEO: *"pode levantar"*.
