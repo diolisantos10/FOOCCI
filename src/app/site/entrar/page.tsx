@@ -1,32 +1,28 @@
 /**
- * /site/entrar — private preview gate page.
+ * /site/entrar — the private-preview password screen. NEUTRALIZED at launch.
  *
- * Lives OUTSIDE the (gated) group, so it is reachable while every marketing page is
- * gated. Renders the branded password screen. If already authenticated, sends the
- * visitor on to the site. noindex like the rest of /site.
+ * The site is public since 2026-08-03, so this page has nothing left to guard. It
+ * is not deleted: `PreviewGate` and `previewAuth` stay in the repo so a future
+ * private preview is a small change here plus restoring the gate.
+ *
+ * Why it must NOT keep rendering the password form: it lives OUTSIDE the (gated)
+ * group, so it stayed publicly reachable after the gate came down — and the whole
+ * /site subtree is now indexable. A visitor (or Google) landing here would find a
+ * password prompt on a site that has no password.
+ *
+ * To bring the preview back: restore the gate in `site/(gated)/layout.tsx` AND in
+ * `middleware.ts` — it lived in both — then render <PreviewGate /> here again.
  */
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { PreviewGate } from "@/components/marketing/preview/PreviewGate";
-import { isPreviewAuthed, isPreviewConfigured } from "@/components/marketing/preview/previewAuth";
 
 export const metadata: Metadata = {
-  title: { absolute: "Prévia privada | Foocci" },
   robots: { index: false, follow: true },
 };
 
 export const dynamic = "force-dynamic";
 
-/** Only allow returning to internal /site paths (no open redirect). */
-function safeNext(next?: string): string {
-  if (next && next.startsWith("/site") && !next.startsWith("/site/entrar")) return next;
-  return "/site";
-}
-
-export default function EntrarPage({ searchParams }: { searchParams: { next?: string } }) {
-  if (isPreviewAuthed()) {
-    redirect(safeNext(searchParams?.next));
-  }
-  return <PreviewGate configured={isPreviewConfigured()} next={safeNext(searchParams?.next)} />;
+export default function EntrarPage() {
+  redirect("/site");
 }

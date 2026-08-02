@@ -29,33 +29,61 @@ export default function PoliticaPage() {
         </p>
       </LegalBlock>
 
-      <LegalBlock heading="Status de pré-lançamento">
+      <LegalBlock heading="Esta página cobre o site; o produto tem a sua própria">
         <p>
-          O Foocci está em fase piloto e pré-lançamento. Neste momento, o site apresenta a
-          proposta e informações institucionais e não possui formulários de captação,
-          agendamento de demonstração, canais de venda ou atendimento por WhatsApp ativos.
-        </p>
-        <p>
-          Recursos de contato, demonstração e comerciais poderão ser ativados em uma etapa
-          futura. Quando isso acontecer, esta Política será atualizada para descrever os
-          dados tratados.
-        </p>
-      </LegalBlock>
-
-      <LegalBlock heading="Dados que poderão ser coletados">
-        <p>
-          Como não há formulários ativos hoje, o site não coleta dados de cadastro neste
-          momento. Quando recursos de demonstração ou contato forem disponibilizados,
-          poderemos coletar dados informados por você, como nome, WhatsApp, nome do
-          restaurante, cidade e tipo de restaurante.
+          Este documento trata do <strong>site comercial</strong> — o formulário de
+          demonstração e mais nada. O tratamento de dados <strong>dentro do sistema
+          Foocci</strong> (dados do restaurante, dos clientes finais, WhatsApp,
+          pagamentos, notas fiscais e IA) é bem mais amplo e está em{" "}
+          <a href="/privacidade" className="font-semibold text-brand-600 underline">
+            foocci.com.br/privacidade
+          </a>.
         </p>
       </LegalBlock>
 
-      <LegalBlock heading="WhatsApp e canais de contato">
+      <LegalBlock heading="Quem somos e o que este site faz">
         <p>
-          Não há canal de WhatsApp comercial ativo neste momento. Caso um canal de contato
-          seja disponibilizado futuramente, as informações compartilhadas serão tratadas
-          apenas para responder e dar andamento ao seu contato.
+          Este site apresenta o Foocci, sistema de vendas, relacionamento e fidelização
+          para restaurantes, e permite que você solicite uma demonstração informando seus
+          dados de contato.
+        </p>
+      </LegalBlock>
+
+      <LegalBlock heading="Dados que coletamos">
+        <p>
+          Coletamos apenas o que você digita no formulário de demonstração:{" "}
+          <strong>nome e WhatsApp</strong> (obrigatórios) e, se você quiser informar,{" "}
+          <strong>nome do restaurante, cidade, tipo de restaurante e principal desafio</strong>.
+          Registramos também a data do envio e a página de origem.
+        </p>
+        <p>
+          <strong>Finalidade:</strong> entrar em contato para combinar a demonstração e
+          apresentar uma proposta comercial. Não usamos esses dados para outra coisa, não
+          vendemos e não compartilhamos com terceiros para fins de marketing.
+        </p>
+        <p>
+          <strong>Base legal (LGPD, art. 7º, V):</strong> execução de procedimentos
+          preliminares a pedido do titular — você nos procurou para pedir a demonstração.
+        </p>
+        <p>
+          <strong>Compartilhamento operacional:</strong> os dados ficam no banco de dados do
+          Foocci e o aviso de novo contato é enviado por um serviço de e-mail contratado,
+          exclusivamente para nos notificar.
+        </p>
+      </LegalBlock>
+
+      <LegalBlock heading="Seus direitos">
+        <p>
+          Você pode pedir acesso, correção ou exclusão dos seus dados a qualquer momento,
+          bastando responder a mensagem que enviarmos ou usar o contato desta Política.
+          Atendemos sem custo e sem exigir justificativa.
+        </p>
+      </LegalBlock>
+
+      <LegalBlock heading="WhatsApp">
+        <p>
+          Ao informar seu WhatsApp você concorda que a gente entre em contato por lá para
+          tratar da demonstração. É só pedir que paramos de enviar mensagens.
         </p>
       </LegalBlock>
 
@@ -97,7 +125,7 @@ export default function PoliticaPage() {
 
       <LegalBlock heading="Contato">
         <p>
-          Enquanto o site está em pré-lançamento, esta Política pode ser atualizada antes da
+          Esta Política pode ser atualizada; quando isso acontecer publicamos a nova versão antes da
           abertura comercial. Dúvidas sobre privacidade serão tratadas pelos canais oficiais
           do Foocci quando disponibilizados.
         </p>

@@ -4720,3 +4720,34 @@ enum FiscalDocumentStatus {
   CONTINGENCIA // emitida offline, pendente de transmissão
   ERRO // falha de transporte/gateway — retryable
 }
+
+// ═══════════════════════════════════════════
+// SITE LEAD — captação do site comercial (/site/demonstracao)
+// ═══════════════════════════════════════════
+
+/// Um pedido de demonstração vindo do site público.
+///
+/// NÃO é multi-tenant: o lead chega antes de existir restaurante. É a única
+/// tabela do schema sem `restaurantId`, e isso é proposital.
+///
+/// A rota de captura grava AQUI antes de tentar qualquer notificação. Se o
+/// e-mail falhar, o lead continua existindo — a notificação é aviso, não cofre.
+model SiteLead {
+  id          String   @id @default(cuid())
+  nome        String
+  whatsapp    String
+  restaurante String?
+  cidade      String?
+  tipo        String?
+  desafio     String?
+  /// Página de onde o formulário foi enviado (ex.: "/site/demonstracao").
+  origem      String?
+  /// null = ainda não notificado; data = quando o aviso saiu.
+  notifiedAt  DateTime?
+  /// Última falha de notificação, para o alerta carregar a própria evidência.
+  notifyError String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([notifiedAt])
+}

@@ -35,15 +35,25 @@ export default function TermosPage() {
         </p>
       </LegalBlock>
 
-      <LegalBlock heading="Status de pré-lançamento">
+      <LegalBlock heading="Estes termos cobrem o site; o produto tem os seus próprios">
         <p>
-          O Foocci está em fase piloto e pré-lançamento. Neste momento, o site não
-          disponibiliza formulários, captação de leads, agendamento de demonstração ou
-          canais de venda ativos.
+          Este documento trata do uso do <strong>site comercial</strong>. Os termos de
+          uso do <strong>sistema Foocci</strong> — a relação com o restaurante
+          contratante — estão em{" "}
+          <a href="/termos" className="font-semibold text-brand-600 underline">
+            foocci.com.br/termos
+          </a>.
+        </p>
+      </LegalBlock>
+
+      <LegalBlock heading="Solicitação de demonstração">
+        <p>
+          O site disponibiliza um formulário para você solicitar uma demonstração. As
+          informações enviadas por ali são tratadas conforme a Política de Privacidade.
         </p>
         <p>
-          Caso esses recursos sejam ativados futuramente, as informações enviadas por você
-          serão tratadas conforme a Política de Privacidade.
+          Enviar o formulário não cria contrato nem obrigação de contratação para nenhuma
+          das partes: é um pedido de contato.
         </p>
       </LegalBlock>
 

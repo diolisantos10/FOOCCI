@@ -10,7 +10,7 @@ const PRODUTO = [
   { href: "/site/como-funciona", label: "Como funciona" },
   { href: "/site#solucoes", label: "Soluções" },
   { href: "/site#crm", label: "CRM" },
-  { href: "/site/precos", label: "Preços" },
+  { href: "/site/precos", label: "Planos" },
   { href: "/site/demonstracao", label: "Demonstração" },
 ];
 
@@ -59,16 +59,13 @@ export function MarketingFooter() {
                 height={50}
                 className="h-6 w-auto"
               />
-              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
-                em breve
-              </span>
             </Link>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-gray-600">
               Foocci — sistema inteligente de vendas, relacionamento e fidelização
               para restaurantes.
             </p>
             <p className="mt-3 text-xs font-medium text-gray-400">
-              Em fase piloto · Lançamento comercial em breve.
+              Cardápio, pedido, pagamento e relacionamento no mesmo sistema.
             </p>
           </div>
 

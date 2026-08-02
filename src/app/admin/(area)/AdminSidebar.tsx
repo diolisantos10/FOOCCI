@@ -37,6 +37,7 @@ export function AdminSidebar() {
     {
       title: "Operação",
       items: [
+        { href: "/admin/leads",              label: "Contatos do site", icon: "📨" },
         { href: "/admin/restaurants",        label: "Restaurantes", icon: "🏪" },
         { href: "/admin/preflight",          label: "Pré-piloto",   icon: "✅" },
         { href: "/admin/manual-operacional", label: "Manual",       icon: "📖" },

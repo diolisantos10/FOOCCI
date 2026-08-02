@@ -1,5 +1,18 @@
 # Foocci — Modo Pré-Lançamento (Site Público)
 
+> ## 📕 HISTÓRICO — o site foi lançado em 2026-08-03
+>
+> Este documento descreve como o site operava **antes** do lançamento comercial e
+> continua útil para entender por que cada coisa estava desligada. **Não é mais o
+> estado atual.**
+>
+> A fonte corrente é **[`lancamento-v1.md`](./lancamento-v1.md)**, que registra o
+> que mudou, o que ficou de fora e a armadilha do portão duplo.
+>
+> ⛔ **Alerta que sobrevive deste arquivo:** a `MARKETING_PREVIEW_PASSWORD` **não
+> controla mais nada**. Apagá-la não fecha o site; configurá-la não o reabre atrás
+> de senha. O portão era código, e foi removido.
+
 > Versão 1 · 2026-06-04 (atualizado 2026-06-05) · Aplica-se a `/site` e `/site/*`.
 > Status: **pré-lançamento (piloto).** Abertura comercial prevista para ~julho.
 
