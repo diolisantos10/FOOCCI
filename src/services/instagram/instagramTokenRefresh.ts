@@ -48,11 +48,41 @@ export async function refreshInstagramTokenForRestaurant(restaurantId: string): 
  * unknown). Instagram allows refreshing a token that is ≥24h old and not yet expired, so
  * running this daily keeps every connection alive indefinitely.
  */
-export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<{ checked: number; refreshed: number; results: RefreshOneResult[] }> {
-  const rows = await prisma.instagramChannelConfig.findMany({
-    where:  { enabled: true, pageAccessTokenEncrypted: { not: null } },
-    select: { restaurantId: true, metadata: true },
-  }).catch(() => []);
+export interface RefreshSweepResult {
+  checked:   number;
+  refreshed: number;
+  results:   RefreshOneResult[];
+  /** Every Instagram config that exists, enabled or not. */
+  totalConfigs: number;
+  /** Configs that exist but were skipped — enabled=false, or no stored token. */
+  ineligible: Array<{ restaurantId: string; reason: string }>;
+  /**
+   * True when this run deserves a human. The daily job used to answer
+   * `{checked:0, refreshed:0}` with HTTP 200 and the workflow printed "✅ executado" —
+   * an alarm that never fires. A restaurant whose token died drops out of the query
+   * (enabled=false / token cleared), so the very failure the job exists to prevent
+   * makes the job go quiet. That is guardrail 2 inverted: forgetting a gate must never
+   * read as "approved".
+   */
+  needsAttention: boolean;
+  /** Why attention is needed — the alert carries its own evidence (guardrail 6). */
+  attention: string[];
+}
+
+export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<RefreshSweepResult> {
+  const all = await prisma.instagramChannelConfig.findMany({
+    select: { restaurantId: true, metadata: true, enabled: true, pageAccessTokenEncrypted: true, lastError: true },
+  }).catch(() => [] as Array<{ restaurantId: string; metadata: unknown; enabled: boolean; pageAccessTokenEncrypted: string | null; lastError: string | null }>);
+
+  const rows       = all.filter((r) => r.enabled && r.pageAccessTokenEncrypted);
+  const ineligible = all
+    .filter((r) => !r.enabled || !r.pageAccessTokenEncrypted)
+    .map((r) => ({
+      restaurantId: r.restaurantId,
+      reason: !r.enabled
+        ? `canal desabilitado${r.lastError ? ` — último erro: ${r.lastError.slice(0, 120)}` : ""}`
+        : "sem token guardado — precisa de reconexão manual pelo dono",
+    }));
 
   const cutoff = Date.now() + withinDays * 24 * 60 * 60 * 1000;
   const results: RefreshOneResult[] = [];
@@ -68,5 +98,23 @@ export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<{
     results.push(await refreshInstagramTokenForRestaurant(row.restaurantId));
   }
 
-  return { checked: rows.length, refreshed: results.filter((r) => r.refreshed).length, results };
+  const attention: string[] = [];
+  for (const bad of ineligible) {
+    attention.push(`Instagram do restaurante ${bad.restaurantId} não está sendo renovado: ${bad.reason}.`);
+  }
+  for (const r of results) {
+    if (!r.refreshed) {
+      attention.push(`Renovação falhou para ${r.restaurantId}: ${r.reason ?? "motivo não informado"}.`);
+    }
+  }
+
+  return {
+    checked:   rows.length,
+    refreshed: results.filter((r) => r.refreshed).length,
+    results,
+    totalConfigs: all.length,
+    ineligible,
+    needsAttention: attention.length > 0,
+    attention,
+  };
 }

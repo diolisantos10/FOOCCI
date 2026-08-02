@@ -41,8 +41,20 @@ jobs:
             -d '{}' -o /tmp/ig-refresh.json -w "%{http_code}" > /tmp/code.txt
           set -e
           HTTP=$(cat /tmp/code.txt)
-          echo "← HTTP      : $HTTP"
-          echo "← checked   : $(jq -r '.checked' /tmp/ig-refresh.json 2>/dev/null)"
-          echo "← refreshed : $(jq -r '.refreshed' /tmp/ig-refresh.json 2>/dev/null)"
+          echo "← HTTP         : $HTTP"
+          echo "← totalConfigs : $(jq -r '.totalConfigs // "?"' /tmp/ig-refresh.json 2>/dev/null)"
+          echo "← checked      : $(jq -r '.checked' /tmp/ig-refresh.json 2>/dev/null)"
+          echo "← refreshed    : $(jq -r '.refreshed' /tmp/ig-refresh.json 2>/dev/null)"
           if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::refresh non-2xx ($HTTP)."; exit 1; fi
-          echo "✅ Instagram token refresh executado."
+
+          # This job ran green every single day while a client's Instagram was dead for
+          # ten days. The account had dropped out of the query, so the sweep answered
+          # {checked:0, refreshed:0} and the step printed "✅ executado".
+          # A gate that cannot fail is not a gate — fail loudly, with the reason attached.
+          NEEDS=$(jq -r '.needsAttention // false' /tmp/ig-refresh.json 2>/dev/null)
+          if [[ "$NEEDS" == "true" ]]; then
+            jq -r '.attention[]? | "::error::" + .' /tmp/ig-refresh.json 2>/dev/null
+            echo "::error::Instagram token refresh precisa de atenção humana — veja as linhas acima."
+            exit 1
+          fi
+          echo "✅ Instagram token refresh executado sem pendências."

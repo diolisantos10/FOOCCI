@@ -76,6 +76,49 @@ verificada em seguida por leitura
 
 ---
 
+## A renovação do Instagram rodava verde todo dia — e não renovava nada
+
+**Verificado em 02/08 no histórico do GitHub Actions:** o workflow
+`instagram-token-refresh` roda **todos os dias desde 24/07**, sempre `success`.
+Inclusive nos dez dias em que o cliente estava sem receber DM nenhuma.
+
+Chamando o endpoint ao vivo, a resposta era:
+
+```
+{"ok":true,"checked":0,"refreshed":0,"results":[]}
+```
+
+**Por que zero:** a varredura consulta só `enabled: true` **e** com token guardado.
+Quando o token morre, o canal é desabilitado e o token some — então **a conta
+quebrada desaparece da consulta**. O trabalho que o job existe para fazer é
+exatamente o que faz o job ficar quieto.
+
+É o guardrail 2 invertido: **esquecer o portão passou a significar "aprovado".**
+
+### O que mudou (02/08)
+
+`refreshExpiringInstagramTokens` passa a devolver:
+
+| Campo | Para quê |
+|---|---|
+| `totalConfigs` | quantas contas existem, habilitadas **ou não** |
+| `ineligible[]` | as que ficaram de fora, **com o motivo e o último erro** |
+| `needsAttention` | true quando alguma coisa precisa de humano |
+| `attention[]` | o caso concreto, em português (guardrail 6) |
+
+E o workflow **falha** com `::error::` quando `needsAttention` é true — antes ele
+imprimia *"✅ executado"* em qualquer cenário.
+
+**O silêncio continua permitido num caso só:** ninguém usa Instagram
+(`totalConfigs: 0`). Alertar todo dia quem nunca conectou vira ruído que ninguém lê.
+
+Travado por 4 testes, incluindo o cenário exato da queda de julho.
+
+— promovido em 2026-08-02 pelo Diretor · origem: verificação do histórico real do
+Actions + chamada ao vivo do endpoint em produção
+
+---
+
 ## As credenciais do app agora resolvem BANCO primeiro, Railway depois
 
 Desde 02/08 existe `/admin/meta`. As credenciais do aplicativo vivem em

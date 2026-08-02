@@ -371,7 +371,7 @@ Conferido pelo diagnóstico do admin: **0 avisos de App Review**.
 | Aberto | O que quebra se ninguém mexer |
 |---|---|
 | **Número novo preso no `request-code` (erro `136024`)** | O número nunca verifica, nunca registra, e o CRM não atende por ele |
-| **Cron de refresh do token do IG — não confirmado se roda** | Todo token de IG expira em ~60 dias **sem aviso**, e a queda de julho se repete |
+| ✅ **Cron de refresh do token do IG** | **Confirmado em 02/08: roda todo dia desde 24/07, sempre verde — e não renovava nada.** A conta quebrada sai da consulta, então `checked:0` e o workflow imprimia sucesso. Agora ele **falha** com o motivo quando alguma conta fica de fora |
 | **PIN de 2FA do WhatsApp foi colado em texto num chat** | Rotacionar depois do registro |
 
 > **A mensagem do `136024` mente.** Ela diz *"servidores temporariamente
