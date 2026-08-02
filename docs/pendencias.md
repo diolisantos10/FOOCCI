@@ -4,6 +4,64 @@
 
 ---
 
+## 🤝 ENTREGA DO DIRETOR GERAL AO DIRETOR DO FOOCCI (02/08)
+
+O CEO me corrigiu, e ele está certo: **eu passei o dia executando dentro deste
+repositório enquanto você estava ativo nele.** Isso inverte a estrutura que eu
+mesmo escrevi — a execução do Foocci é sua. Estou saindo. Isto é o que fica na
+sua mão.
+
+### 🎁 Existe um site comercial pronto que NÃO está mergeado
+
+**Branch `claude/lancamento-site`.** O site (`/site`, 7 páginas) sai da prévia
+privada e vira site público. Verificado: `tsc` 0, build 0, testes verdes,
+screenshots em 390/768/1440.
+
+**Não mergeei porque merge = no ar na hora, e o CEO marcou o lançamento para
+segunda.** Ele decide o momento; a decisão não é minha nem sua.
+
+O que essa branch faz, e a armadilha dentro dela:
+
+> ⛔ **Apagar `MARKETING_PREVIEW_PASSWORD` no Railway NÃO abre o site — fecha de
+> vez.** O portão falha fechado, e estava em **dois** lugares (`middleware.ts` e
+> `site/(gated)/layout.tsx`). Liberar sempre foi mudança de código, nunca de
+> variável. Quem tentar pelo Railway some com o site sem erro nenhum.
+
+Também nela: raiz `/` passa a abrir o site; formulário de demonstração que
+**grava o lead antes de notificar**; lista em `/admin/leads`; `robots.txt` e
+`sitemap.xml` (não existiam — e `/robots.txt` respondia **307 para /login**).
+Detalhe completo em `docs/foocci-site/lancamento-v1.md`.
+
+### 🔨 Etapa 0b — a última das seis, e é sua
+
+A Etapa 0a está em produção (`fbdc11e9`): opt-out, atribuição de CRM, resgate de
+carrinho e a política de IA agora valem na Meta.
+
+**Falta o pedido por texto.** É a maior porque muda **qual agente** responde, não
+só se ele pode: precisa da árvore `getMessageAwareRoutingDecision` →
+`handleInboundForOrdering` com o mesmo contrato de fallback do caminho antigo — um
+`handled=true` sem resposta enviada **não** pode bloquear o agente antigo.
+
+### 📋 O que eu fiz aqui e por que você não deve refazer
+
+| O quê | Onde |
+|---|---|
+| Guardas de entrada da Meta (Etapa 0a) | `services/whatsapp/inbound/InboundGuardsService.ts` — em produção |
+| Painel de QR que dizia "Conectado" sem estar | `IntegrationsCenterClient.tsx` — em produção |
+| Decisão "só Meta" com os números medidos | `docs/decisoes.md` |
+| Canal de escalada | `docs/perguntas-ao-diretor-geral.md` |
+
+### 📣 E a regra que eu furei, agora escrita
+
+**O Diretor Geral não executa dentro de projeto que tem Diretor ativo.** Ele
+decide doutrina, coerência entre projetos, e prioridade *entre* projetos. Se ele
+achar um defeito aqui, ele **escreve a ordem de serviço** — não abre o editor.
+
+Está registrada em `dioli-brain-kit/docs/11-backlog-do-diretor-geral.md`. Se eu
+voltar a furar, me cobre pelo arquivo.
+
+---
+
 ## 🚀 A CAMINHO DO LANÇAMENTO (segunda-feira) — leia isto primeiro
 
 Sessão do Diretor de 02/08, com o CEO fora. Ordem recebida: *"passe um raio-x em
