@@ -10,29 +10,41 @@
 
 ---
 
-## Dá para editar as configurações do app por API — só está DESLIGADO
+## Editar as configurações do app por API FUNCIONA — a chave está ligada
 
-Tentar `POST /{app-id}` com `terms_of_service_url` devolve:
+Até 02/08 a Graph API respondia:
 
 ```
 (#10) Changing app settings through API calls has been disabled for this app.
-Go to your app's advanced settings to enable this.
 ```
 
-**Isso não é "não dá" — é "está desligado".** Existe uma chave em
-**Meta → Configurações do app → Avançado** que libera alteração por API. Enquanto
-ela estiver desligada, todo campo de configuração do app é botão manual do CEO.
+Não era "não dá" — era "está desligado". **O CEO ligou a chave em
+*Meta → Configurações do app → Avançado* e a escrita passou a funcionar**
+(`{"success":true}`).
 
-**Ligada, o Diretor conserta sozinho** os campos que reprovam App Review — Termos
-de Serviço, Domínios do aplicativo, URL de exclusão de dados.
+**O que o Diretor consegue fazer sozinho agora:**
 
-⚠️ **A chave corta os dois lados:** quem tiver `META_APP_SECRET` passa a poder
-alterar a configuração do app, não só ler. É decisão do CEO, não do Diretor.
+```
+POST https://graph.facebook.com/v21.0/{appId}
+  ?access_token={appId}|{appSecret}
+  &terms_of_service_url=...  &app_domains[0]=...  &privacy_policy_url=...
+```
 
-*Verificado em 02/08 contra a Graph API v21.0, com as credenciais reais.*
+⚠️ **A chave corta os dois lados:** quem tiver o `META_APP_SECRET` altera a
+configuração do app, não só lê. Se o segredo vazar, o estrago cresce.
 
-— promovido em 2026-08-02 pelo Diretor · origem: tentativa real de escrita na
-Graph API durante a sessão
+**Corrigido por API em 02/08**, com os três avisos de App Review zerados:
+
+| Campo | Antes | Agora |
+|---|---|---|
+| Termos de Serviço | `https://www.facebook.com/` ❌ | `https://foocci.com.br/termos` ✅ |
+| Domínios do aplicativo | vazio ❌ | `["foocci.com.br"]` ✅ |
+| Política de Privacidade | já correto | `https://foocci.com.br/privacidade` ✅ |
+
+Conferido pelo diagnóstico do próprio admin: **0 avisos**.
+
+— promovido em 2026-08-02 pelo Diretor · origem: escrita real na Graph API v21.0,
+verificada em seguida por leitura
 
 ---
 
@@ -41,9 +53,10 @@ Graph API durante a sessão
 | Campo | Estado |
 |---|---|
 | App | **`Foocci Whats`** · `893641126399955` · aceito pela Meta ✅ |
-| Termos de Serviço | ❌ **`https://www.facebook.com/`** — a página própria existe (`foocci.com.br/termos`) e não está sendo usada. **Reprova App Review** |
+| Termos de Serviço | ✅ `https://foocci.com.br/termos` *(corrigido por API em 02/08)* |
 | Política de Privacidade | ✅ `https://foocci.com.br/privacidade` |
-| Domínios do aplicativo | ❌ vazio |
+| Domínios do aplicativo | ✅ `["foocci.com.br"]` *(corrigido por API em 02/08)* |
+| Avisos de App Review | ✅ **zero** |
 | `META_CONFIG_ID` | `1571394541276497` (Railway) |
 | `INSTAGRAM_APP_ID` | `2198678317551576` (Railway) |
 

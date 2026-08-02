@@ -247,23 +247,26 @@ Railway exatamente como antes (a resolução é banco primeiro, ambiente depois)
 > ⚠️ **Ao colar, não passe a Chave Secreta por conversa, documento ou mensagem.**
 > Ela é chave mestra. Vai direto do painel da Meta para o campo da tela.
 
-### 🔴 Achado novo (01/08) — a URL dos Termos de Serviço aponta para o Facebook
+### ✅ RESOLVIDO (02/08) — os três campos que reprovavam App Review
 
-No painel do app, em *Configurações → Básico*, o campo **URL dos Termos de
-Serviço** está preenchido com **`https://www.facebook.com/`**.
+O CEO ligou a chave em *Meta → Configurações do app → Avançado*, e o Diretor
+corrigiu **por API**:
 
-**A página certa existe e está publicada:** `src/app/termos/page.tsx` →
-`https://foocci.com.br/termos`. A de privacidade já aponta certo
-(`https://foocci.com.br/privacidade`), então é só esse campo que ficou para trás.
+| Campo | Antes | Agora |
+|---|---|---|
+| Termos de Serviço | `https://www.facebook.com/` | `https://foocci.com.br/termos` |
+| Domínios do aplicativo | vazio | `foocci.com.br` |
+| Política de Privacidade | já correto | `https://foocci.com.br/privacidade` |
 
-**Por que importa:** numa revisão de app pela Meta, apontar os termos para o
-próprio Facebook é motivo de reprovação — e revisão reprovada trava permissão, que
-trava os dois canais. É conserto de 30 segundos, feito pelo CEO no painel.
+Conferido pelo diagnóstico do admin: **0 avisos de App Review**.
 
-| Também visto na mesma tela | Situação |
+> A partir de agora, campo de configuração do app é conserto do Diretor, não
+> tarefa manual do CEO. ⚠️ Em troca, quem tiver o `META_APP_SECRET` **altera** a
+> configuração, não só lê.
+
+| Ainda aberto na mesma tela | Situação |
 |---|---|
-| **Domínios do aplicativo — vazio** | Sem domínio declarado, fluxo de login pela Meta pode ser recusado. *Não confirmado se afeta o fluxo atual.* |
-| **Aba "Ações necessárias"** | É onde a Meta lista o que está pendente ou bloqueando. *Nunca foi lida nesta casa.* Vale abrir antes de qualquer pedido de permissão |
+| **Aba "Ações necessárias"** | É onde a Meta lista o que está pendente ou bloqueando. *Nunca foi lida nesta casa.* |
 | **Nome do app: "Foocci Whats"** | O app serve WhatsApp **e** Instagram. Cosmético, mas induz ao erro de achar que existe um segundo app para o IG — não existe |
 
 | Aberto | O que quebra se ninguém mexer |
