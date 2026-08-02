@@ -71,8 +71,61 @@ const DIETARY_BLOCK_MAP: Record<string, string[]> = {
 };
 
 /**
- * Returns true if an item conflicts with any of the customer's dietary
- * restrictions or allergies and should be excluded from suggestions.
+ * How safe an item is for a customer who declared a restriction.
+ *
+ * `unknown` is the state that was missing, and its absence was the dietary P1: the
+ * filter matched keywords against the item name plus its ingredients, so an item with
+ * NO ingredients registered never matched anything — and not matching was read as
+ * "safe". A dish named "Risoto do Chef" with an empty ingredient list went straight to
+ * a customer who had declared "sem lactose".
+ *
+ * That is guardrail 1 inverted — absence of information treated as information — and
+ * here the cost is not money or reputation. It is the health of whoever ordered.
+ */
+export type DietarySafety = "safe" | "blocked" | "unknown";
+
+/**
+ * Classifies an item against the customer's restrictions.
+ *
+ * Returns `unknown` when the customer declared a restriction AND the item has no
+ * ingredients registered: we cannot prove it conflicts, and we equally cannot prove it
+ * is safe. An `unknown` item must never be presented as suitable — it either stays out
+ * of the suggestion, or goes out with an explicit "preciso confirmar".
+ */
+export function classifyDietarySafety(
+  itemName:     string,
+  ingredients:  string | null | undefined,
+  dietary:      string[],
+  allergies:    string[],
+): DietarySafety {
+  const restrictions = [...dietary, ...allergies].filter((r) => r && r.trim());
+  // Nothing declared → nothing to prove.
+  if (restrictions.length === 0) return "safe";
+
+  const text = `${itemName} ${ingredients ?? ""}`.toLowerCase();
+
+  for (const restriction of restrictions) {
+    const lower = restriction.toLowerCase().trim();
+
+    // Direct match: restriction term appears literally in the item text
+    if (text.includes(lower)) return "blocked";
+
+    // Mapped blockers: restriction maps to specific ingredient keywords
+    const blockers = DIETARY_BLOCK_MAP[lower] ?? [];
+    if (blockers.some((b) => text.includes(b))) return "blocked";
+  }
+
+  // Nothing matched — but that only means "safe" if there was something to read.
+  const hasIngredients = !!ingredients && ingredients.trim().length > 0;
+  return hasIngredients ? "safe" : "unknown";
+}
+
+/**
+ * Returns true if an item must NOT be offered to this customer.
+ *
+ * Both `blocked` and `unknown` exclude it. Staying quiet about a dish is recoverable;
+ * a wrong reassurance to someone with an allergy is not — so when the two are in
+ * tension, silence wins.
  */
 export function isBlockedByDietary(
   itemName:     string,
@@ -80,20 +133,7 @@ export function isBlockedByDietary(
   dietary:      string[],
   allergies:    string[],
 ): boolean {
-  const text = `${itemName} ${ingredients ?? ""}`.toLowerCase();
-
-  for (const restriction of [...dietary, ...allergies]) {
-    const lower = restriction.toLowerCase().trim();
-
-    // Direct match: restriction term appears literally in the item text
-    if (text.includes(lower)) return true;
-
-    // Mapped blockers: restriction maps to specific ingredient keywords
-    const blockers = DIETARY_BLOCK_MAP[lower] ?? [];
-    if (blockers.some((b) => text.includes(b))) return true;
-  }
-
-  return false;
+  return classifyDietarySafety(itemName, ingredients, dietary, allergies) !== "safe";
 }
 
 // ── Already-suggested product tracking ───────────────────────────────────────
