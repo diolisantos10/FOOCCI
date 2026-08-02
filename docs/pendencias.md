@@ -85,8 +85,9 @@ o CI.
    pessoal; não existe caminho por API. *(CEO vai falar com o dono do restaurante.)*
 2. 🔴 **Preços e planos** — o site já está público mostrando "Em definição".
 3. 🔴 **Token da Focus NFe** — nenhuma nota fiscal é emitida sem ele.
-4. 🟠 **`MERCADO_PAGO_WEBHOOK_SECRET` no Railway** — o pagamento funciona; o que
-   falta é conferir se o aviso de "pago" veio mesmo do Mercado Pago.
+4. ~~`MERCADO_PAGO_WEBHOOK_SECRET`~~ — **não é o que parecia.** Ver a seção do
+   Mercado Pago abaixo: o segredo global **não cabe** neste modelo de negócio, e o
+   risco de "pagamento falso" **não existe**.
 
 > ✅ **Resolvido em 02/08:** os campos de App Review da Meta (Termos, Domínios) —
 > o CEO liberou a escrita por API e o Diretor corrigiu.
@@ -157,6 +158,58 @@ O que fica valendo, para quem ler isto depois:
 > A causa raiz não é descuido: **não existe lugar seguro para a credencial de
 > acesso do próprio Diretor.** Para a Meta isso foi resolvido com `/admin/meta`.
 > Para o acesso do Diretor, ainda não.
+
+---
+
+## 💳 Mercado Pago — a pendência do `mpWebhookSecret` estava mal descrita (02/08)
+
+`/api/health` mostra `mpWebhookSecret: false` desde sempre, e isso vinha sendo
+tratado como *"confirmação de pagamento sem validação de origem"*. **Está errado, e
+a leitura do código inteiro desmente.**
+
+### Não existe risco de pagamento falso
+
+O webhook **não confia no corpo da notificação**. Ele extrai apenas o **ID do
+pagamento** e vai **buscar o status na API do Mercado Pago**, autenticado com o
+token daquele restaurante
+(`api.mercadopago.com/v1/payments/{id}`, `webhook/route.ts` §Step 5).
+
+Só confirma se **a própria API do MP** responder aprovado. Um aviso forjado não
+carrega status nenhum que o sistema aceite — no máximo faz o Foocci perguntar ao
+Mercado Pago sobre um ID, e a resposta vem do Mercado Pago.
+
+### O segredo global não cabe neste modelo
+
+**Regra de negócio confirmada pelo CEO em 02/08:** *"cada restaurante conecta a
+forma de pagamento que quiser; nós apenas disponibilizamos as integrações."*
+
+O `accessToken` do MP é **por restaurante**, criptografado em
+`integrationConfig` (`provider: "mercadopago"`). Cada restaurante usa a **própria
+aplicação** no Mercado Pago — e portanto a **própria assinatura secreta**.
+
+**Uma variável de ambiente global só funcionaria se todos os webhooks viessem de
+uma aplicação da Foocci.** Não vêm. Preencher `MERCADO_PAGO_WEBHOOK_SECRET` com o
+segredo de *alguém* faria o webhook **rejeitar os avisos de todos os outros
+restaurantes** — uma proteção que quebra mais do que protege (guardrail 5).
+
+### O risco que sobra é real, mas é outro
+
+Sem assinatura, qualquer um que descubra a URL pode **disparar processamento**: o
+caminho lento varre **todos** os `integrationConfig` ativos chamando a API do MP em
+cada um. Um atacante com IDs aleatórios gera muita chamada externa. É **custo e
+ruído**, não fraude.
+
+### O conserto certo, quando for a hora
+
+Guardar a assinatura **junto do token de cada restaurante** (mesmo `configBlob`, já
+criptografado) e verificar contra a do restaurante resolvido. Enquanto não houver
+segredo cadastrado, seguir aceitando — quem não configurou não pode parar de
+receber confirmação de pagamento.
+
+> **A lição, e ela vale além deste caso:** `false` num health check diz que **um
+> valor não está setado** — não diz que existe um buraco. A gravidade veio de
+> alguém supor o que a ausência significava, e a suposição atravessou várias
+> sessões sem que ninguém lesse o webhook.
 
 ---
 
