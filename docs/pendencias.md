@@ -4,6 +4,95 @@
 
 ---
 
+## 📋 ORDEM DE SERVIÇO do Diretor Geral — levantar o custo real por restaurante (02/08)
+
+**Para o Diretor do Foocci.** Autorizada pelo CEO: *"pode levantar"*.
+**Isto destrava a precificação inteira.**
+
+### Por que é urgente
+
+O parecer do conselho de IAs sobre preço trava em **três números que ninguém tem**:
+custo de tokens de IA por pedido, infraestrutura por restaurante ativo, e horas de
+suporte. O plano previa **60 dias de planilha manual** para descobrir.
+
+**Provavelmente não precisa.** `AIInteractionLog` já grava, por turno:
+
+```
+promptTokens · completionTokens · totalTokens · estimatedCostUsd (Decimal 10,6)
+restaurantId · customerId · conversationId · turnNumber
+```
+
+Gravado por `src/services/ai/AIInteractionLogger.ts`, desde antes desta conversa.
+**Se estiver populado, o custo de IA por pedido é uma consulta — não uma planilha
+de dois meses.**
+
+### O que fazer
+
+**1 · Confirmar que o dado existe e é confiável** *(antes de qualquer conclusão)*
+
+- Quantas linhas de `AIInteractionLog` existem, por restaurante e por mês?
+- `estimatedCostUsd` está **preenchido** ou vem null? Vem de tabela de preço de
+  qual modelo, e ela está atualizada?
+- Cobre **todos** os caminhos de IA — Garçom do cardápio, WhatsApp, CRM, Cérebro —
+  ou só alguns? **Um caminho fora da conta subestima o custo, e subestimar custo
+  é o erro que quebra o preço de entrada.**
+
+> ⚠️ **Se o campo vier vazio ou parcial, o achado é esse** — e é mais valioso que
+> um número errado. Reporte a lacuna; não estime por cima.
+
+**2 · Ligar consumo a pedido**
+
+Custo de IA por **pedido concluído**, não por turno. É a métrica do plano de preço:
+as faixas são degraus de pedidos/mês.
+
+**3 · Somar o que não é IA**
+
+Mensagens (Meta/Evolution), documentos fiscais, e infraestrutura rateada por
+restaurante ativo.
+
+**4 · Entregar uma tela, não uma planilha**
+
+`/admin/margem`: por restaurante, por ciclo — custo de IA, mensagens, documentos,
+infra, e a margem se ele pagasse cada uma das três faixas.
+
+> **Por que tela e não planilha:** o plano do conselho pedia preenchimento manual
+> semanal por 90 dias. A regra de ouro do CEO é *"não quero fazer nada manual"* —
+> registrada em `dioli-brain-kit/docs/09-como-trabalhar-aqui.md` §2.1. Plano que
+> depende de disciplina manual dele **não vai ser executado**, e aí a decisão de
+> preço sai sem dado. Automatizar não é luxo: é o que faz o plano existir.
+
+### Como saber que ficou bom
+
+O CEO abre a tela e diz, **em menos de um minuto**, quanto custa o restaurante que
+está no ar hoje — e se R$149 cobre.
+
+---
+
+## 💰 Decisão do CEO — pedido de salão por QR NÃO conta no limite (02/08)
+
+**Pergunta que travava o contrato fundador:** *"pedido de salão via QR conta no
+degrau de pedidos concluídos da faixa?"*
+
+**Resposta do CEO:** **não.** *"QR code só pra ver cardápio, não gasta nada."*
+
+**O raciocínio, e é o certo:** o degrau de pedidos existe para acompanhar **custo**,
+e o custo que cresce é o de IA, mensagem e documento fiscal. Cliente que só abre o
+cardápio na mesa não dispara nada disso.
+
+**O que muda:**
+
+- O contrato fundador pode ser fechado — era a decisão que o travava.
+- A regra de limite escreve, com estas palavras: *"pedido feito na mesa pelo QR do
+  cardápio não entra na conta"*.
+- O contador do painel precisa **separar os dois**, senão o lojista vê um número que
+  não bate com a regra e a primeira migração de faixa vira discussão.
+
+> ⚠️ **Cuidado ao implementar:** se o QR do salão evoluir para **pedido com IA**, o
+> custo passa a existir e esta decisão precisa voltar ao CEO. A isenção é por
+> **ausência de custo**, não por ser QR.
+
+---
+
 ## 📋 ORDEM DE SERVIÇO do Diretor Geral — cofre de acesso do Diretor (02/08)
 
 **Para o Diretor do Foocci.** Escrita, não executada: a execução aqui é sua.
