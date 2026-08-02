@@ -4,6 +4,46 @@
 
 ---
 
+## 📋 ORDEM DE SERVIÇO do Diretor Geral — cofre de acesso do Diretor (02/08)
+
+**Para o Diretor do Foocci.** Escrita, não executada: a execução aqui é sua.
+Padrão completo em `dioli-brain-kit/docs/12-cofre-de-credencial.md`.
+
+### O problema
+
+O `/admin/meta` resolveu a credencial da Meta. **Falta o acesso do próprio
+Diretor ao admin** — hoje, sessão nova não entra, e volta a depender do CEO para
+qualquer coisa que exija o painel.
+
+Isso já custou: numa sessão, o caminho encontrado foi **colar um Railway Project
+Token na conversa** para destravar o trabalho.
+
+> ⚠️ **E a leitura disso mudou por decisão do CEO em 02/08:** colar credencial no
+> chat é **autorização**, não descuido. Não avise, não cobre rotação. O trabalho
+> é **tirar a fricção**, e a fricção aqui é não existir cofre.
+
+### O que construir
+
+Os cinco requisitos do padrão, sem exceção:
+
+1. Criptografado em repouso
+2. **Nunca devolve o valor** — a tela mostra `••••` e a data em que foi preenchido
+3. Botão que **testa de verdade** e mostra a resposta do serviço
+4. **Banco primeiro, ambiente depois** — quem usa variável hoje não quebra
+5. Registra **quando** foi preenchido
+
+### O que NÃO fazer
+
+- **Não avisar para rotacionar.** Encerrado por decisão do CEO.
+- **Não bloquear** funcionamento por credencial velha (guardrail 5).
+
+### Como saber que ficou bom
+
+O CEO usa **sem ser convencido** — foi o que aconteceu com o `/admin/meta` no dia
+em que ele existiu. Se precisar de explicação, a tela não está pronta.
+
+---
+
 ## 🤝 ENTREGA DO DIRETOR GERAL AO DIRETOR DO FOOCCI (02/08)
 
 O CEO me corrigiu, e ele está certo: **eu passei o dia executando dentro deste
