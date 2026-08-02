@@ -18,6 +18,9 @@ const rowSchema = z.object({
   ingredients: z.string().optional().default(""),
   precoRaw: z.string(),
   preco: z.number().min(0),
+  // Optional so a client that predates the cost column keeps working unchanged.
+  custoRaw: z.string().optional().default(""),
+  custo: z.number().min(0).nullable().optional().default(null),
   showInDelivery: z.boolean().optional().default(true),
   showInDineIn: z.boolean().optional().default(true),
   hasVariants: z.boolean().optional().default(false),
@@ -190,6 +193,11 @@ export async function POST(req: NextRequest) {
               description:         row.descricao         || null,
               ingredients:         row.ingredients       || null,
               price:               row.preco,
+              // Safe to set directly here: this path only CREATES items (an existing
+              // name is skipped as a duplicate), so there is no previous cost to audit
+              // and no reprice to trigger. Changing the cost of an EXISTING item must
+              // still go through updateCostsWithReprice.
+              cost:                row.custo ?? null,
               imageUrl:            row.foto              || null,
               isActive:            true,
               isAvailable:         true,

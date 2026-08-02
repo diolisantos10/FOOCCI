@@ -191,6 +191,13 @@ export interface AgentServiceData {
   operations?: OperationalEfficiencyReport;
   attribution?: AttributionSummary;
   hasMarginQuestion?: boolean;
+  /**
+   * How many menu items already have a cost filled in. Undefined means "not checked"
+   * and is treated as zero — the margin limitation used to be stated unconditionally,
+   * so the agent told merchants "we have no CMV registered" right after they had
+   * finished registering it. Denying a number the customer just typed reads as a bug.
+   */
+  itemsWithCost?: number;
 }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -207,11 +214,24 @@ export function buildGroundedAnswer(data: AgentServiceData): AnalyticsAgentAnswe
   const followUp:     string[] = [];
   const sources:      string[] = [];
 
-  // ── Margin limitation (always added when margin keywords detected) ──────────
+  // ── Margin limitation — only when the cost really is missing ────────────────
+  // This used to fire on every margin question regardless of the data, so a merchant
+  // who had just filled in their costs was told the costs did not exist.
   if (data.hasMarginQuestion) {
-    limitations.push(
-      "Ainda não temos CMV/margem cadastrados, então consigo analisar receita, não lucro líquido.",
-    );
+    const withCost = data.itemsWithCost ?? 0;
+    if (withCost === 0) {
+      limitations.push(
+        "Ainda não temos CMV/margem cadastrados, então consigo analisar receita, não lucro líquido.",
+      );
+    } else {
+      // Say what we have and what is still missing — a partial cardápio gives a real
+      // but incomplete CMV, and the merchant has to know which of the two they are
+      // looking at (guardrail 7: never sell a pilot number as finished).
+      limitations.push(
+        `O CMV é calculado sobre os ${withCost} item(ns) que já têm custo cadastrado. ` +
+          "Item sem custo fica de fora da conta, então a margem sai incompleta enquanto o cardápio não estiver todo preenchido.",
+      );
+    }
   }
 
   // ── iFood integration note ──────────────────────────────────────────────────
@@ -787,11 +807,29 @@ export async function answerQuestion(
     if (attribution) rawData.attribution = attribution;
   }
 
+  // ── Does this restaurant actually have costs registered? ───────────────────
+  // Only asked when the question is about margin, so the normal path pays nothing.
+  // NOTE: MenuItem has no restaurantId — the tenant scope goes through the category.
+  // Querying it any other way leaks one restaurant's menu into another's answer, and
+  // `tsc` would not say a word about it.
+  let itemsWithCost = 0;
+  if (hasMarginQuestion) {
+    try {
+      itemsWithCost = await prisma.menuItem.count({
+        where: { cost: { not: null }, category: { restaurantId } },
+      });
+    } catch (err) {
+      // Counting failed → fall through as "no cost data". Stating the limitation when
+      // it may not apply is the safe direction; claiming a margin we cannot back is not.
+      console.error("[AnalyticsAgent] cost count failed", err);
+    }
+  }
+
   // ── Build deterministic answer ─────────────────────────────────────────────
   const serviceData: AgentServiceData = {
     intent, periodLabel, question,
     overview, prevKpi, diagnosis, retention, operations, attribution,
-    hasMarginQuestion,
+    hasMarginQuestion, itemsWithCost,
   };
   const groundedAnswer = buildGroundedAnswer(serviceData);
 

@@ -11,6 +11,15 @@ export type RowResult = {
   ingredients: string;
   precoRaw: string;
   preco: number;
+  /**
+   * Cost of goods, when the spreadsheet has a cost column. Kept SEPARATE from `preco`
+   * on purpose: until 2026-08-02 a column named "custo" was detected as the sale price,
+   * so a merchant importing costs to feed the CMV overwrote the sale price of the whole
+   * menu — real, silent data loss caused by the customer themselves.
+   * `null` means the sheet had no cost column, which is different from a cost of zero.
+   */
+  custoRaw: string;
+  custo: number | null;
   showInDelivery: boolean;
   showInDineIn: boolean;
   hasVariants: boolean;

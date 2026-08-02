@@ -137,6 +137,24 @@ describe("G — margin/profit question", () => {
     const answer = buildGroundedAnswer(data);
     expect(answer.limitations.some((l) => l.toLowerCase().includes("cmv") || l.toLowerCase().includes("margem"))).toBe(true);
   });
+
+  it("stops claiming there is no CMV once items actually have a cost", () => {
+    // The old behaviour denied the data unconditionally, so a merchant who had just
+    // filled in their costs was told the costs did not exist. For them it reads as a bug.
+    const data: AgentServiceData = {
+      intent:            "SALES_OVERVIEW",
+      periodLabel:       "Nos últimos 30 dias",
+      question:          "qual minha margem?",
+      hasMarginQuestion: true,
+      itemsWithCost:     12,
+    };
+    const answer = buildGroundedAnswer(data);
+
+    expect(answer.limitations.some((l) => /não temos cmv|nao temos cmv/i.test(l))).toBe(false);
+    // It must still say the CMV is partial — a menu half filled gives a real but
+    // incomplete margin, and the merchant has to know which one they are reading.
+    expect(answer.limitations.some((l) => l.includes("12") && /incompleta|custo/i.test(l))).toBe(true);
+  });
 });
 
 // ─── H. UNKNOWN_UNSUPPORTED ──────────────────────────────────────────────────
