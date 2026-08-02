@@ -213,31 +213,42 @@ erro fácil de repetir, e vale avisar antes.
 
 ---
 
-## São DOIS painéis de QR do WhatsApp vivos — e só um está certo
+## A rota de QR tem OITO formatos de resposta — e o `else` já mentiu por causa disso
 
-| Arquivo | Trata `pairingCode`? |
+> ✅ Os dois painéis foram alinhados em 02/08. A regra abaixo é o que fica.
+
+`/api/evolution/qr` responde:
+
+| Formato | Significa |
 |---|---|
-| `integracoes/whatsapp/WhatsAppIntegrationClient.tsx:210` | **sim** — ramo próprio, mostra o código |
-| `integracoes/IntegrationsCenterClient.tsx:337-345` | **não** — cai em `"connected"` |
+| `{ base64 }` | imagem de QR pronta |
+| `{ pairingCode, code }` | código de pareamento, **sem imagem** |
+| `{ connected: true }` | **a única coisa que prova conexão** |
+| `{ generating: true }` | ainda produzindo — **espere, continue perguntando** |
+| `{ restarting: true }` | idem |
+| `{ error: "not_configured" }` | faltam credenciais |
+| `{ error: "instance_not_found" }` | instância apagada no provedor |
+| `{ error: "qr_shape_unknown" \| "evolution_error" }` | falha declarada |
 
-A rota `/api/evolution/qr` tem **três formatos de resposta**, não dois:
+Um painel tratava só `base64` e usava o `else` como sucesso. Resultado: **código de
+pareamento e "ainda gerando" viravam "WhatsApp já está conectado!"** para um
+lojista que não tinha conectado nada.
 
-```
-{ base64: "…" }              → imagem de QR
-{ pairingCode: "ABCD-EFGH", code: "…" }   → código de pareamento, SEM imagem
-{ error: "…" }               → falha
-```
+É o guardrail 1 dentro da interface: **ausência de imagem não é informação de que
+conectou.**
 
-Quem só testa `base64` e usa o `else` como "conectado" **inventa uma conexão que
-não existe**. É o guardrail 1 dentro da interface: ausência de imagem não é
-informação de que conectou.
+**Ao mexer em qualquer painel de canal:**
 
-**Ao mexer em qualquer painel de canal:** trate os três formatos explicitamente e
-**nunca** use `else` como estado de sucesso. Estado desconhecido é estado
-desconhecido.
+1. Trate cada formato explicitamente.
+2. **Nunca** use `else` como sucesso — estado desconhecido é estado desconhecido, e
+   a tela deve dizer isso ao lojista.
+3. Separe "espere" de "acabou": tratar transitório como final para o polling e
+   congela o lojista num estado errado.
 
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-railway-build-e-ui-promocoes.md`,
-verificado na branch de produção
+Travado por `src/app/api/evolution/qr/route.contract.test.ts`.
+
+— promovido em 2026-08-01, atualizado em 02/08 pelo Diretor · origem:
+`HANDOFF-railway-build-e-ui-promocoes.md` + a correção do próprio painel
 
 ---
 

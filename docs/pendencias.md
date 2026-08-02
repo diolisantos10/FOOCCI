@@ -33,32 +33,22 @@ O Garçom pode dar informação errada sobre restrição alimentar. É o único 
 desta lista em que o defeito não custa dinheiro nem reputação — custa a saúde
 de quem pediu. Os outros três P1 saíram na mesma varredura e são menos graves.
 
-### 2. O painel de WhatsApp em Integrações escreve "Conectado" quando NÃO está
+### ~~2. O painel de WhatsApp em Integrações escreve "Conectado" quando NÃO está~~ ✅ RESOLVIDO em 02/08
 
-`src/app/(dashboard)/integracoes/IntegrationsCenterClient.tsx:337-345`
+Corrigido em `IntegrationsCenterClient.tsx`. A investigação achou **mais** do que
+o relato original dizia: a rota `/api/evolution/qr` tem **oito** formatos de
+resposta, não três — e **dois deles significam "espere, ainda estou gerando"**.
+Esses também caíam no `else` e viravam "Conectado".
 
-Quando a Evolution devolve **código de pareamento** em vez de imagem de QR, a
-resposta é `{ pairingCode, code }` — sem `base64` e sem `error`. O painel só sabe
-tratar `base64`; sem ele, cai na última linha:
+Agora cada formato tem tratamento próprio, **só a flag explícita `connected: true`
+pode dizer conectado**, e o que não for reconhecido vira estado honesto de
+*desconhecido* — com o aviso de que **não** quer dizer que conectou.
 
-```ts
-setQrState(qr.error === "not_configured" ? "error" : "connected");
-```
+Travado por `src/app/api/evolution/qr/route.contract.test.ts`, que prova inclusive
+que um campo novo no futuro cai em desconhecido, nunca em sucesso.
 
-**Resultado:** a tela diz **"Conectado"** para um lojista que não conectou nada.
-Ele fecha a tela achando que terminou, e o WhatsApp nunca funciona.
-
-Não trava, não dá erro, não gera log — mente e some. É o guardrail 1 ao contrário:
-o painel infere sucesso do silêncio.
-
-**O conserto já existe no repositório.** O outro painel de WhatsApp
-(`integracoes/whatsapp/WhatsAppIntegrationClient.tsx:210`) trata `pairingCode`
-corretamente, com o mesmo formato de resposta. É copiar o ramo que já funciona.
-
-> ⚠️ **São dois painéis de QR vivos ao mesmo tempo** — só um está certo. Ver a
-> vitrine do `canais`.
-
-Verificado em 01/08 na branch de produção · origem: `HANDOFF-railway-build-e-ui-promocoes.md`
+> Este painel é da **Evolution** e é transitório — a Meta não usa QR. Foi
+> corrigido para ninguém se perder durante a migração, não para investir nele.
 
 ---
 
