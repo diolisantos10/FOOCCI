@@ -141,7 +141,7 @@ o CI.
 
 - **Nenhuma nota fiscal é emitida** (#29 — falta o token da Focus NFe). A máquina
   inteira está pronta e desligada.
-- **`mpWebhookSecret` ausente** — webhook do Mercado Pago sem assinatura verificada.
+- ~~`mpWebhookSecret` ausente~~ — **reclassificado em 02/08.** Não há risco de pagamento falso (o status vem da API do MP, não do aviso), e o segredo global não cabe no modelo por-restaurante. Ver a seção do Mercado Pago.
 - **Impressão física nunca confirmada numa loja de verdade.**
 - **Faixas de preço e bloqueio por plano** — é o que o CEO fecha amanhã.
 - **Um teste da suíte é instável** (detalhe abaixo). Antes de lançar, isso ensina a
