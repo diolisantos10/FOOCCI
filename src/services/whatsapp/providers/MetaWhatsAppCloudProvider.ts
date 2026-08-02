@@ -10,7 +10,8 @@ import type {
   ConnectionStatus, WebhookValidationResult, NormalizedWebhookResult,
 } from "./types";
 import { MetaConfigService, type MetaConfigResolved } from "../MetaConfigService";
-import { metaGraphUrl, metaAppSecret } from "../metaFlag";
+import { metaGraphUrl } from "../metaFlag";
+import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 import {
   buildMetaTextPayload, buildMetaTemplatePayload, buildMetaMediaPayload, toMetaRecipient,
   extractMetaMessageId, maskGraphResponse,
@@ -51,9 +52,9 @@ export class MetaWhatsAppCloudProvider implements WhatsAppProvider {
   }
 
   /** Validates X-Hub-Signature-256 against the app secret (provider-neutral entry). */
-  validateWebhook(rawBody: string, headers: Record<string, string | null>): WebhookValidationResult {
+  async validateWebhook(rawBody: string, headers: Record<string, string | null>): Promise<WebhookValidationResult> {
     const sig = headers["x-hub-signature-256"] ?? headers["X-Hub-Signature-256"] ?? null;
-    const secret = metaAppSecret();
+    const secret = (await MetaAppCredentialsService.getResolved()).appSecret;
     if (!secret) return { valid: false, reason: "META_APP_SECRET_MISSING" };
     return validateMetaSignature(rawBody, sig, secret)
       ? { valid: true }

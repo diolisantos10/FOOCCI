@@ -1389,6 +1389,49 @@ model MetaWhatsAppConfig {
   @@map("meta_whatsapp_configs")
 }
 
+// App-level Meta credentials — the ONE Foocci app inside Meta (`Foocci Whats`), which
+// serves WhatsApp AND Instagram at the same time. Until now these lived only as Railway
+// env vars, so changing them required a deploy and a person with Railway access.
+//
+// Singleton by construction: `id` defaults to "singleton" and is the primary key, so a
+// second row cannot be created by accident.
+//
+// Secrets are AES-256-GCM encrypted at rest and NEVER returned by the API — the admin
+// screen only ever receives masked previews (`maskSecret`). Env vars remain the fallback:
+// a row here overrides them, an empty row changes nothing. That ordering is deliberate —
+// it means shipping this model cannot break a working production deploy.
+model MetaAppCredentials {
+  id String @id @default("singleton")
+
+  // WhatsApp / app-level
+  appId               String? // public — not a secret, stored plain
+  appSecret           String? // AES-256-GCM encrypted — MASTER KEY, never returned
+  configId            String? // Embedded Signup configuration id
+  coexistenceConfigId String? // Embedded Signup config for the coexistence flow
+  webhookVerifyToken  String? // AES-256-GCM encrypted
+  graphVersion        String? // e.g. "v21.0" — falls back to META_GRAPH_VERSION
+
+  // Instagram — same Meta app, separate credential pair
+  igAppId              String? // public
+  igAppSecret          String? // AES-256-GCM encrypted
+  igWebhookVerifyToken String? // AES-256-GCM encrypted
+
+  // Optional system-user token: lets the Director operate the Graph API without
+  // borrowing a restaurant's token. Long-lived, high blast radius — encrypted.
+  systemUserToken String? // AES-256-GCM encrypted
+
+  // Result of the last "Testar conexão" run, so the screen can show real state
+  // instead of a green badge that proves nothing (the Instagram lesson).
+  lastTestAt    DateTime?
+  lastTestOk    Boolean?
+  lastTestError String?
+
+  updatedAt DateTime @updatedAt
+  updatedBy String? // who saved last — "admin" for now; audit hook for later
+
+  @@map("meta_app_credentials")
+}
+
 // Approved Meta message templates per restaurant. Business-initiated WhatsApp sends
 // OUTSIDE the 24h customer-service window must use an APPROVED template; this is the
 // minimal registry CRM/automation can resolve a template from. Additive, Meta-only.

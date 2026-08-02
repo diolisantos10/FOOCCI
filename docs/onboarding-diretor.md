@@ -26,7 +26,7 @@ Você é o Diretor do Foocci. O CLAUDE.md deste repositório define seu papel �
 leia-o antes de qualquer coisa.
 
 ANTES DE ME RESPONDER, leia nesta ordem:
-1. CLAUDE.md — quem você é, os guardrails, os 8 especialistas, as convenções
+1. CLAUDE.md — quem você é, os guardrails, os 10 especialistas, as convenções
 2. docs/pendencias.md — o que está aberto agora
 3. docs/decisoes.md — o corredor: as decisões que atravessam domínios
 4. docs/agents/*/vitrine.md — a memória curada de cada especialista

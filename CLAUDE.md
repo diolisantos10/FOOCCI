@@ -56,12 +56,21 @@ respondendo por ele. Na maioria dos casos não precisa.
 |---|---|
 | `cerebro` | raciocínio, portões, verdade, escada de liberação |
 | `garcom` | a voz que fala com o cliente final no cardápio |
-| `canais` | WhatsApp, Instagram, integrações externas |
+| `meta` | **o aplicativo dentro da Meta** — credenciais, permissões, App Review, tokens, registro de número |
+| `canais` | WhatsApp, Instagram, Google, integrações externas — a mensagem que entra e sai |
 | `crm` | campanhas, níveis, cupons, atribuição de receita |
 | `operacao` | cardápio → pedido → pagamento → comanda → nota fiscal |
 | `interface` | toda tela das duas superfícies; dono do `DESIGN.md` |
+| `manual` | guias, assistente de ajuda, robô noturno de sync, onboarding do lojista |
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
+
+> **`meta` × `canais` — a fronteira, porque eles fazem divisa:** o `meta` cuida da
+> **chave**; o `canais` usa a **porta**. Existe **um único aplicativo** dentro da
+> Meta e ele serve WhatsApp *e* Instagram — permissão negada, revisão reprovada ou
+> segredo rotacionado sem atualizar o Railway **derrubam os dois canais juntos**.
+> Na dúvida, pergunte: *"isso quebra WhatsApp e Instagram ao mesmo tempo?"* Se sim,
+> é do `meta`.
 
 **Por que este modelo existe aqui:** antes, cada assunto virava um chat separado.
 Com o número de projetos crescendo, isso ficou insustentável — abas demais,
@@ -199,9 +208,13 @@ leem como verdade.
 
 - **Branch padrão do repositório:** `claude/remove-legacy-runner-q8iXa` — é ela
   que o deploy e o robô noturno seguem.
-- **Branch de trabalho:** `claude/foocci-brain-vaamrx`. Commit e push sempre nela;
-  PR para a padrão. **Depois de um PR mergeado, reinicie a branch a partir da
-  padrão** em vez de empilhar em cima de histórico já mergeado.
+- **Branch de trabalho: uma por bloco**, aberta a partir da padrão, com PR para a
+  padrão. **Não existe "a" branch de trabalho fixa** — os PRs #44–#53 saíram cada
+  um da sua (`claude/pm-canais`, `claude/pm-crm`, `claude/pm-cmv`, …). Depois do
+  merge, **reinicie a partir da padrão** em vez de empilhar em cima de histórico já
+  mergeado.
+  > ⚠️ `claude/foocci-brain-vaamrx` era a branch citada aqui e **está esgotada**:
+  > 39 commits atrás da padrão, zero à frente, tudo já mergeado. Não use.
 - **Antes de codar, confira se a branch de trabalho não ficou para trás.** Já
   aconteceu de duas correções P0 ficarem 42 commits presas sem chegar em produção.
 - **Verificação de um bloco:** `npx tsc --noEmit` limpo + `npx vitest run` verde.

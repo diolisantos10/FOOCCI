@@ -73,8 +73,11 @@ export interface WhatsAppProvider {
   sendMedia?(input: SendMediaInput): Promise<SendResult>;
   getConnectionStatus(restaurantId: string): Promise<ConnectionStatus>;
   healthCheck(restaurantId: string): Promise<ConnectionStatus>;
-  /** Validate an inbound webhook (signature / verify token). Provider-specific. */
-  validateWebhook?(rawBody: string, headers: Record<string, string | null>): WebhookValidationResult;
+  /**
+   * Validate an inbound webhook (signature / verify token). Provider-specific.
+   * Async because the app secret may live in the database (admin screen), not only in env.
+   */
+  validateWebhook?(rawBody: string, headers: Record<string, string | null>): Promise<WebhookValidationResult>;
   /** Normalize an inbound webhook payload into the internal shape. */
   normalizeIncomingWebhook?(payload: unknown): NormalizedWebhookResult;
 }

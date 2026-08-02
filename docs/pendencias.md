@@ -62,9 +62,44 @@ Verificado em 01/08 na branch de produção · origem: `HANDOFF-railway-build-e-
 
 ---
 
-## 📱 Canais Meta — o número novo do WhatsApp está travado
+## 📱 Aplicativo Meta — o número novo do WhatsApp está travado
+
+**Dono:** `meta` — especialista criado em 01/08 por decisão do CEO. O aplicativo é
+**um só** (`Foocci Whats`) e serve WhatsApp *e* Instagram: o que quebra nele
+derruba os dois canais juntos.
 
 Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
+
+### ✅ Existe tela para as credenciais: `/admin/meta` (02/08)
+
+As credenciais do aplicativo saíram do "só o Railway sabe". Estão em **Admin →
+Sistema → 🔑 Aplicativo Meta**, criptografadas, com **"Testar conexão com a Meta"**
+que devolve a resposta da própria Meta.
+
+**Falta o CEO colar os valores lá** — enquanto não colar, tudo continua lendo o
+Railway exatamente como antes (a resolução é banco primeiro, ambiente depois).
+
+> ⚠️ **Ao colar, não passe a Chave Secreta por conversa, documento ou mensagem.**
+> Ela é chave mestra. Vai direto do painel da Meta para o campo da tela.
+
+### 🔴 Achado novo (01/08) — a URL dos Termos de Serviço aponta para o Facebook
+
+No painel do app, em *Configurações → Básico*, o campo **URL dos Termos de
+Serviço** está preenchido com **`https://www.facebook.com/`**.
+
+**A página certa existe e está publicada:** `src/app/termos/page.tsx` →
+`https://foocci.com.br/termos`. A de privacidade já aponta certo
+(`https://foocci.com.br/privacidade`), então é só esse campo que ficou para trás.
+
+**Por que importa:** numa revisão de app pela Meta, apontar os termos para o
+próprio Facebook é motivo de reprovação — e revisão reprovada trava permissão, que
+trava os dois canais. É conserto de 30 segundos, feito pelo CEO no painel.
+
+| Também visto na mesma tela | Situação |
+|---|---|
+| **Domínios do aplicativo — vazio** | Sem domínio declarado, fluxo de login pela Meta pode ser recusado. *Não confirmado se afeta o fluxo atual.* |
+| **Aba "Ações necessárias"** | É onde a Meta lista o que está pendente ou bloqueando. *Nunca foi lida nesta casa.* Vale abrir antes de qualquer pedido de permissão |
+| **Nome do app: "Foocci Whats"** | O app serve WhatsApp **e** Instagram. Cosmético, mas induz ao erro de achar que existe um segundo app para o IG — não existe |
 
 | Aberto | O que quebra se ninguém mexer |
 |---|---|
@@ -145,6 +180,9 @@ Minerado de `HANDOFF-manual.md` (commit `5b1c885c`), em 01/08/2026.
 | **Export de produção nunca rodado** | Se existir capítulo digitado à mão no admin com slug `guia-*`, **cada deploy o sobrescreve** pelo código. *Não confirmado* se há conteúdo em risco — rodar `GET /api/admin/manual/export` antes de assumir que não há |
 | **Bíblia interna no assistente — decisão de produto** | Os 14 capítulos internos têm `agentVisibility=false`. Se ninguém decidir, **nada quebra**: o assistente segue respondendo só pelos guias |
 | **`Carteiro-Manual.txt` é estático** | Fica em `public/downloads/`, e **o robô noturno não cobre `public/`**. Se a tela de Impressoras mudar, esse arquivo precisa ser atualizado na mão |
+
+**Dono:** `manual` — o especialista foi criado em 01/08. Até então esta seção
+**não tinha responsável**, e a sala já existia sem agente.
 
 ### 🌿 Branches órfãs — veredito por branch
 
@@ -401,6 +439,20 @@ Isso bloqueia a definição das faixas de preço e o bloqueio por plano.
 ---
 
 ## ✅ Fechado recentemente
+
+- **Auditoria de coerência da casa** (01/08, primeira sessão do Diretor). Três
+  incoerências corrigidas, todas em arquivos que os agentes leem como verdade:
+  1. **O corredor mentia sobre o fluxo de trabalho.** Dizia *"trunk-based, não usa
+     PR, não crie branch de feature"* — os PRs **#44–#53** provam o contrário, cada
+     um saindo da sua branch de bloco. As travas de escrita concorrente
+     (`--force-with-lease`, rebase por pipe) **continuam valendo** e foram
+     preservadas.
+  2. **`claude/foocci-brain-vaamrx` estava fixada no `CLAUDE.md` como "a" branch de
+     trabalho e está esgotada** (39 commits atrás, zero à frente). A convenção
+     agora é uma branch por bloco.
+  3. **`claude/inspiring-bardeen-hsx9wk` não é "branch misteriosa"** — o trabalho
+     dela já está na padrão (`d4eac6f`). O falso alarme fica desarmado no corredor,
+     com o comando de uma linha que o desarma.
 
 - **B1 — chave `ANTHROPIC_API_KEY`** (30/07). O robô noturno do manual saiu do
   papel: manual de 30/07 verde, agendada de 31/07 idem, com o passo da IA

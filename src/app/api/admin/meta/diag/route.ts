@@ -12,7 +12,8 @@ import { checkAdminRequest } from "@/lib/admin-auth";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
-import { metaAppId, metaGraphUrl } from "@/services/whatsapp/metaFlag";
+import { metaGraphUrl } from "@/services/whatsapp/metaFlag";
+import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 
 function mask(v: string | null): string {
   if (!v) return "—";
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   if (!checkAdminRequest(req)) return unauthorized();
   try {
     const rows = await prisma.metaWhatsAppConfig.findMany({ select: { restaurantId: true } });
-    const ourAppId = metaAppId();
+    const ourAppId = (await MetaAppCredentialsService.getResolved()).appId;
     const out = [];
 
     for (const row of rows) {

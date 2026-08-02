@@ -17,9 +17,13 @@ vi.mock("@/services/whatsapp/brain/WhatsAppBrainRuntimeService", () => ({
   WhatsAppBrainRuntimeService: { respond: vi.fn() },
   isWhatsAppBrainEnabled: () => false,
 }));
-vi.mock("@/services/whatsapp/metaFlag", () => ({
-  metaWebhookVerifyToken: () => "the-verify-token",
-  metaAppSecret: () => undefined,
+// App-level credentials now resolve database-first / env-second through this service,
+// so the route reads it instead of metaFlag. The contract under test is unchanged:
+// correct verify token → 200, anything else → 403.
+vi.mock("@/services/meta/MetaAppCredentialsService", () => ({
+  MetaAppCredentialsService: {
+    getResolved: async () => ({ webhookVerifyToken: "the-verify-token", appSecret: undefined }),
+  },
 }));
 
 import { GET } from "./route";

@@ -4,14 +4,14 @@
  * tokens (Graph responses are masked).
  */
 
-import { metaAppId, metaAppSecret, metaGraphUrl } from "./metaFlag";
+import { metaGraphUrl } from "./metaFlag";
+import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 import { maskGraphResponse } from "./providers/metaPayload";
 
 export async function exchangeCodeForToken(
   code: string,
 ): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
-  const appId = metaAppId();
-  const secret = metaAppSecret();
+  const { appId, appSecret: secret } = await MetaAppCredentialsService.getResolved();
   if (!appId || !secret) return { ok: false, error: "Serviço Meta não disponível no momento. Fale com o suporte Foocci." };
   try {
     const res = await fetch(
@@ -36,8 +36,7 @@ export async function exchangeCodeForToken(
  * Best-effort: returns { expiresAt: null } on any failure (never blocks onboarding).
  */
 export async function inspectTokenExpiry(accessToken: string): Promise<{ expiresAt: Date | null }> {
-  const appId = metaAppId();
-  const secret = metaAppSecret();
+  const { appId, appSecret: secret } = await MetaAppCredentialsService.getResolved();
   if (!appId || !secret) return { expiresAt: null };
   try {
     const appToken = `${appId}|${secret}`;

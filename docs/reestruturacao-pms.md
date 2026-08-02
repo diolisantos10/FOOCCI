@@ -141,7 +141,7 @@ tem negócio — tem doutrina. O papel certo ali é este.
 
 | Projeto | O que é | Diretor |
 |---|---|---|
-| **foocci** | Sistema operacional do restaurante (vendas, CRM, IA) | ✅ montado 01/08 — 8 especialistas |
+| **foocci** | Sistema operacional do restaurante (vendas, CRM, IA) | ✅ montado 01/08 — 10 especialistas |
 | **dioli-agency-os-1** | O OS da agência | ✅ já tem sessão que é o Diretor; aponta pro kit |
 | **dioli-brain-kit** | **A casa** — doutrina, moldes, casos | — é a base do **Diretor Geral** |
 | **diolidigital** | Presença/produto digital da Dioli | ⬜ **criar** |
