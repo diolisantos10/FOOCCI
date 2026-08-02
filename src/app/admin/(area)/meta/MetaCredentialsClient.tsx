@@ -60,29 +60,40 @@ interface FieldDef {
   placeholder?: string;
 }
 
-const WHATSAPP_FIELDS: FieldDef[] = [
-  { key: "appId", label: "ID do Aplicativo", hint: "Público — aparece nas URLs de login.", secret: false, valueKey: "appId" },
-  { key: "appSecret", label: "Chave Secreta do Aplicativo", hint: "A chave mestra. Quem a tem faz qualquer coisa em nome da Foocci.", secret: true, previewKey: "appSecretPreview" },
-  { key: "configId", label: "ID da configuração (Embedded Signup)", secret: false, valueKey: "configId" },
-  { key: "coexistenceConfigId", label: "ID da configuração de coexistência", hint: "Para número que continua no celular. Em branco usa o ID acima.", secret: false, valueKey: "coexistenceConfigId" },
-  { key: "webhookVerifyToken", label: "Token de verificação do webhook", secret: true, previewKey: "webhookVerifyTokenPreview" },
-  { key: "graphVersion", label: "Versão da Graph API", hint: "Em branco usa v21.0.", secret: false, valueKey: "graphVersion", placeholder: "v21.0" },
-];
-
-const INSTAGRAM_FIELDS: FieldDef[] = [
-  { key: "igAppId", label: "ID do Aplicativo (Instagram)", secret: false, valueKey: "igAppId" },
-  { key: "igAppSecret", label: "Chave Secreta (Instagram)", secret: true, previewKey: "igAppSecretPreview" },
-  { key: "igWebhookVerifyToken", label: "Token de verificação do webhook (Instagram)", secret: true, previewKey: "igWebhookVerifyTokenPreview" },
+/**
+ * Only these two are asked for up front. The first version of this screen showed ten
+ * fields at once and the answer from the person meant to fill it was "I don't know
+ * where to find these" — a form nobody can complete is a form that does not work.
+ *
+ * Everything else has a working default or is only needed for a flow that is not turned
+ * on, so it moved behind "Avançado".
+ */
+const ESSENTIAL_FIELDS: FieldDef[] = [
+  {
+    key: "appId",
+    label: "ID do Aplicativo",
+    hint: "Meta → Configurações do app → Básico → primeiro campo, em cima à esquerda. É só número.",
+    secret: false,
+    valueKey: "appId",
+  },
+  {
+    key: "appSecret",
+    label: "Chave Secreta do Aplicativo",
+    hint: 'Mesma tela, do lado direito. Clique em "Mostrar", confirme a senha do Facebook e copie. É uma sequência de letras e números.',
+    secret: true,
+    previewKey: "appSecretPreview",
+  },
 ];
 
 const ADVANCED_FIELDS: FieldDef[] = [
-  {
-    key: "systemUserToken",
-    label: "Token de usuário do sistema",
-    hint: "Opcional. Permite operar a Graph API sem pegar emprestado o token de um restaurante.",
-    secret: true,
-    previewKey: "systemUserTokenPreview",
-  },
+  { key: "configId", label: "ID da configuração (Embedded Signup)", hint: "Só existe se você criou uma configuração de cadastro incorporado. NÃO é o ID do aplicativo.", secret: false, valueKey: "configId" },
+  { key: "coexistenceConfigId", label: "ID da configuração de coexistência", hint: "Para número que continua funcionando no celular. Em branco usa o de cima.", secret: false, valueKey: "coexistenceConfigId" },
+  { key: "webhookVerifyToken", label: "Token de verificação do webhook", hint: "Uma senha que você inventa e repete no painel da Meta ao cadastrar o webhook.", secret: true, previewKey: "webhookVerifyTokenPreview" },
+  { key: "graphVersion", label: "Versão da Graph API", hint: "Em branco usa v21.0. Só mexa se a Meta pedir.", secret: false, valueKey: "graphVersion", placeholder: "v21.0" },
+  { key: "igAppId", label: "ID do Aplicativo (Instagram)", hint: "Só se o Instagram usar credenciais próprias. Em branco usa as de cima.", secret: false, valueKey: "igAppId" },
+  { key: "igAppSecret", label: "Chave Secreta (Instagram)", secret: true, previewKey: "igAppSecretPreview" },
+  { key: "igWebhookVerifyToken", label: "Token de verificação do webhook (Instagram)", secret: true, previewKey: "igWebhookVerifyTokenPreview" },
+  { key: "systemUserToken", label: "Token de usuário do sistema", hint: "Opcional. Permite operar sem pegar emprestado o token de um restaurante.", secret: true, previewKey: "systemUserTokenPreview" },
 ];
 
 const SOURCE_LABEL: Record<CredentialSource, { text: string; className: string }> = {
@@ -299,20 +310,39 @@ export function MetaCredentialsClient() {
       {/* Formulário */}
       <section className="mt-6 space-y-5">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-500">
-          WhatsApp e aplicativo
+          Os dois campos que importam
         </h2>
-        {WHATSAPP_FIELDS.map(renderField)}
+        <p className="-mt-2 text-sm text-gray-400">
+          São os únicos que existem na tela da Meta. Todo o resto tem valor padrão que
+          funciona — só mexa se alguém pedir.
+        </p>
+        {ESSENTIAL_FIELDS.map(renderField)}
       </section>
 
-      <section className="mt-8 space-y-5">
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-500">Instagram</h2>
-        {INSTAGRAM_FIELDS.map(renderField)}
-      </section>
+      {/* O ID da configuração NÃO é o ID do aplicativo. Colar o mesmo número nos dois
+          é um erro fácil e silencioso — nada quebra, o cadastro incorporado é que não
+          funciona, e depois ninguém liga uma coisa à outra. */}
+      {data?.configId && data.configId === data.appId ? (
+        <div className="mt-4 rounded-xl border border-amber-900/60 bg-amber-950/30 p-3">
+          <p className="text-sm text-amber-200/90">
+            ⚠️ O <strong>ID da configuração</strong> está com o mesmo número do{" "}
+            <strong>ID do Aplicativo</strong>. São coisas diferentes. Se você não criou
+            uma configuração de cadastro incorporado na Meta, esse campo deve ficar{" "}
+            <strong>vazio</strong> — abra &quot;Avançado&quot; e limpe.
+          </p>
+        </div>
+      ) : null}
 
-      <section className="mt-8 space-y-5">
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-500">Avançado</h2>
-        {ADVANCED_FIELDS.map(renderField)}
-      </section>
+      <details className="mt-8 rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-300">
+          Avançado — provavelmente você não precisa disto
+        </summary>
+        <p className="mt-2 text-sm text-gray-500">
+          Nenhum destes aparece na tela da Meta que você abriu. Todos já têm padrão que
+          funciona, ou pertencem a fluxos que não estão ligados.
+        </p>
+        <div className="mt-5 space-y-5">{ADVANCED_FIELDS.map(renderField)}</div>
+      </details>
 
       {/* Ações */}
       <div className="sticky bottom-0 mt-8 flex flex-col gap-3 border-t border-gray-800 bg-gray-950/95 py-4 sm:flex-row sm:items-center">

@@ -73,6 +73,37 @@ function collectWarnings(app: GraphAppResponse): string[] {
   return warnings;
 }
 
+/**
+ * Turns a Graph error into something the person holding the credentials can act on.
+ * Meta's raw text is preserved at the end — it is the evidence — but the sentence that
+ * comes first says which of the two fields to fix.
+ */
+function explainGraphError(err: { message?: string; type?: string; code?: number }): string {
+  const raw = err.message ?? "erro desconhecido";
+  const detail = ` (Meta disse: "${raw}"${err.code ? `, código ${err.code}` : ""})`;
+
+  // 190 on an app access token means appId and appSecret don't belong together — the
+  // pair is wrong, not the permissions.
+  if (err.code === 190 || /access token signature|malformed access token/i.test(raw)) {
+    return (
+      "A Chave Secreta não confere com o ID do Aplicativo. Quase sempre é a chave: " +
+      'abra Meta → Configurações do app → Básico, clique em "Mostrar" ao lado da Chave ' +
+      "Secreta, copie o valor inteiro e cole de novo — sem espaço no começo ou no fim." +
+      detail
+    );
+  }
+
+  if (err.code === 4 || err.code === 17 || /rate limit/i.test(raw)) {
+    return "A Meta está limitando as consultas no momento. Espere alguns minutos e teste de novo." + detail;
+  }
+
+  if (err.code === 803 || /does not exist|cannot be loaded/i.test(raw)) {
+    return "O ID do Aplicativo não foi encontrado na Meta. Confira se copiou o número certo." + detail;
+  }
+
+  return "A Meta recusou as credenciais." + detail;
+}
+
 export const MetaAppHealthService = {
   /**
    * Verifies the stored credentials against Meta and reads the app's own settings.
@@ -106,9 +137,10 @@ export const MetaAppHealthService = {
     }
 
     if (app.error) {
-      // Meta's message is the useful part — an alert without the concrete case is noise.
-      const error = `Meta recusou as credenciais: ${app.error.message ?? "erro desconhecido"}` +
-        (app.error.code ? ` (código ${app.error.code})` : "");
+      // Meta's own message is kept — an alert without the concrete case is noise — but
+      // it is prefixed with what to actually do. "código 190" tells the person holding
+      // the credentials nothing about which of the two fields to fix.
+      const error = explainGraphError(app.error);
       await MetaAppCredentialsService.recordTest(false, error).catch(() => {});
       return { ok: false, error, warnings: [] };
     }
