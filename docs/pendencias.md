@@ -1,6 +1,56 @@
 # Pendências — o que está aberto
 
-> Última atualização: 01/08/2026.
+> Última atualização: 02/08/2026.
+
+---
+
+## 🚀 A CAMINHO DO LANÇAMENTO (segunda-feira) — leia isto primeiro
+
+Sessão do Diretor de 02/08, com o CEO fora. Ordem recebida: *"passe um raio-x em
+tudo e resolva o que tiver pra resolver"*.
+
+### O que foi resolvido e já está em produção
+
+| Item | Por que era grave |
+|---|---|
+| **Importador de planilha apagava o cardápio** | Coluna "custo" virava preço de venda. Silencioso, irreversível, **feito pelo próprio cliente**. Era o pior defeito em aberto para receber lojista novo |
+| **P1 dietético do Garçom** | Item sem ingredientes cadastrados passava como **seguro** para quem declarou restrição. O único defeito da lista que custa saúde |
+| **Analytics negava o CMV** | Respondia *"não temos CMV cadastrado"* a quem tinha acabado de cadastrar |
+| **Credenciais da Meta cruzadas** | O `configId` e o `igAppId` estavam com o número do App ID, encobrindo os valores certos do Railway. Corrigido em produção |
+
+Os três primeiros estão **travados por teste** — reintroduzir qualquer um derruba
+o CI.
+
+### O que só o CEO pode fazer, em ordem de urgência
+
+1. 🔴 **Revogar o Railway Project Token** exposto em conversa (seção abaixo).
+2. 🔴 **Reconectar o Instagram do sushi** — nove dias sem receber DM. Exige login
+   pessoal; não existe caminho por API.
+3. 🟠 **Corrigir a URL dos Termos de Serviço** no painel da Meta — hoje aponta para
+   `facebook.com` e **reprova App Review**.
+   > 💡 **Ou libere isso para mim:** *Meta → Configurações do app → Avançado* tem
+   > uma chave que permite alterar configurações do app **por API**. Ligada, eu
+   > conserto esse campo e os domínios sozinho. Ver a vitrine do `meta`.
+4. 🟠 **Decidir sobre a chave de administrador do Foocci** — sem ela o Diretor não
+   entra no admin em sessão nova, e volta a depender de você para tudo.
+
+### O que continua aberto e pesa no lançamento
+
+- **Nenhuma nota fiscal é emitida** (#29 — falta o token da Focus NFe). A máquina
+  inteira está pronta e desligada.
+- **`mpWebhookSecret` ausente** — webhook do Mercado Pago sem assinatura verificada.
+- **Impressão física nunca confirmada numa loja de verdade.**
+- **Faixas de preço e bloqueio por plano** — é o que o CEO fecha amanhã.
+- **Um teste da suíte é instável** (detalhe abaixo). Antes de lançar, isso ensina a
+  equipe a ignorar CI vermelho.
+- **3 P1 do Garçom** da mesma varredura do dietético seguem abertos, não
+  reavaliados.
+
+### Pedido em aberto do CEO
+
+*"Repasse o site para saber se temos como melhorar o design."* **Não foi feito
+nesta sessão** — o tempo foi para os defeitos que chegam no cliente. Fica como o
+primeiro item de amanhã, junto com a precificação.
 
 ---
 
