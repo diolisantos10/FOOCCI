@@ -1,33 +1,43 @@
 /**
- * Foocci public marketing website — Creative Direction V3 (route: `/site`).
+ * Foocci public marketing website (route: `/site`).
  *
- * "Hospitalidade digital inteligente" — thesis: relacionamento → recorrência →
- * faturamento. Editorial 11-section rhythm (see docs/foocci-site/
- * creative-direction-v3-hospitalidade.md). Public since 2026-08-03: no gate,
- * indexable via the /site layout, and the demo form captures real leads.
+ * REPAGINAÇÃO COMERCIAL (2026-08-02) — `docs/foocci-site/os-repaginacao-comercial.md`.
  *
- * Positioning (official): Foocci é um sistema inteligente de vendas,
- * relacionamento e fidelização para restaurantes.
+ * The page used to have ELEVEN sections and 19 phone-screens of scroll, and it never
+ * said what Foocci has that the competition does not. It described the product; it did
+ * not argue. Now it argues, in seven sections, in the order the OS defines:
+ *
+ *   1. The thesis — four contracts that don't talk, or one that does
+ *   2. The commission calculator — the owner does the maths on their own numbers
+ *   3. The anchoring — ~R$ 700 apart vs one contract
+ *   4. The three differentiators nobody else publishes
+ *   5. How it works, in three steps (the detail lives in /site/como-funciona)
+ *   6. Plans
+ *   7. Proof + final CTA
+ *
+ * What was deliberately dropped: JourneySection, IntelligenceSection,
+ * HospitalitySection, ProblemSection, DemoSection, RevenueRelationshipSection,
+ * ProductModulesSection, ComparisonSection and FAQSection. Several said the same thing
+ * with different cards, and repeated white-card blocks flatten the hierarchy. The
+ * components still exist and are used by the inner pages.
+ *
+ * The essence stays: the hero keeps the host scene, and the numbers are there to prove
+ * the story, not to replace it.
  */
 
 import type { Metadata } from "next";
 
 import { HeroSection } from "@/components/marketing/HeroSection";
-import { JourneySection } from "@/components/marketing/JourneySection";
-import { IntelligenceSection } from "@/components/marketing/IntelligenceSection";
-import { HospitalitySection } from "@/components/marketing/HospitalitySection";
-import { ProblemSection } from "@/components/marketing/ProblemSection";
-import { DemoSection } from "@/components/marketing/DemoSection";
-import { RevenueRelationshipSection } from "@/components/marketing/RevenueRelationshipSection";
-import { ProductModulesSection } from "@/components/marketing/ProductModulesSection";
-import { ComparisonSection } from "@/components/marketing/ComparisonSection";
+import { CommissionCalculator } from "@/components/marketing/CommissionCalculator";
+import { FourContractsSection } from "@/components/marketing/FourContractsSection";
+import { DifferentiatorsSection } from "@/components/marketing/DifferentiatorsSection";
+import { HowItWorksSection } from "@/components/marketing/HowItWorksSection";
 import { PricingTeaserSection } from "@/components/marketing/PricingTeaserSection";
-import { FAQSection } from "@/components/marketing/FAQSection";
 import { FinalCTASection } from "@/components/marketing/FinalCTASection";
 
-const TITLE = "Foocci | Sistema inteligente de vendas e CRM para restaurantes";
+const TITLE = "Foocci | Pare de pagar comissão e seja dono dos seus clientes";
 const DESCRIPTION =
-  "O Foocci ajuda restaurantes a vender mais, atender melhor no WhatsApp, ativar o CRM e aumentar a recorrência — com cardápio, pedido, pagamento e relacionamento no mesmo lugar.";
+  "Cardápio, pedido, atendimento por IA e CRM de fidelidade em um contrato só — e conversando entre si. Calcule quanto você paga de comissão ao marketplace hoje.";
 
 // Indexability (index, follow) is centralized in src/app/site/layout.tsx for the
 // whole /site subtree — do not set `robots` per page.
@@ -51,29 +61,19 @@ export const metadata: Metadata = {
 export default function SitePage() {
   return (
     <>
-      {/* 1 · Hero emocional premium (anfitrião) */}
+      {/* 1 · A tese */}
       <HeroSection />
-      {/* 2 · Jornada visual — relacionamento → recorrência */}
-      <JourneySection />
-      {/* 3 · Inteligência trabalhando (produto: showcase + cards conectados) */}
-      <IntelligenceSection />
-      {/* 4 · Mais que tecnologia, hospitalidade */}
-      <HospitalitySection />
-      {/* 4 · Problema: restaurantes perdem relacionamento */}
-      <ProblemSection />
-      {/* 5 · Foocci como sistema inteligente (preview do produto) */}
-      <DemoSection />
-      {/* 6 · Relacionamento que vira faturamento (âncora escura, #crm) */}
-      <RevenueRelationshipSection />
-      {/* 7 · Módulos (#solucoes) */}
-      <ProductModulesSection />
-      {/* 8 · Comparativo Foocci vs chatbot comum */}
-      <ComparisonSection />
-      {/* 9 · Planos */}
+      {/* 2 · A conta que fecha a venda */}
+      <CommissionCalculator />
+      {/* 3 · Quatro contratos ou um */}
+      <FourContractsSection />
+      {/* 4 · O que só tem aqui */}
+      <DifferentiatorsSection />
+      {/* 5 · Como funciona, em 3 passos */}
+      <HowItWorksSection />
+      {/* 6 · Planos */}
       <PricingTeaserSection />
-      {/* 10 · FAQ */}
-      <FAQSection />
-      {/* 11 · CTA final com mascote */}
+      {/* 7 · Prova + CTA final */}
       <FinalCTASection />
     </>
   );

@@ -30,7 +30,7 @@ function Column({ title, links }: { title: string; links: { href: string; label:
   return (
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">{title}</h3>
-      <ul className="mt-4 space-y-3">
+      <ul className="mt-3 space-y-2">
         {links.map((l) => (
           <li key={l.label}>
             <Link href={l.href} className={`rounded-md text-sm text-gray-600 hover:text-brand-600 ${FOCUS}`}>
@@ -48,8 +48,8 @@ export function MarketingFooter() {
 
   return (
     <footer className="border-t border-gray-200 bg-white">
-      <div className="mx-auto max-w-6xl px-5 py-14 lg:px-8">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mx-auto max-w-6xl px-5 py-10 lg:px-8 lg:py-14">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-10">
           <div className="lg:col-span-1">
             <Link href="/site" className={`inline-flex items-center gap-2.5 rounded-md ${FOCUS}`} aria-label="Foocci">
               <Image
@@ -74,7 +74,7 @@ export function MarketingFooter() {
           <Column title="Legal" links={LEGAL} />
         </div>
 
-        <div className="mt-12 border-t border-gray-200 pt-6">
+        <div className="mt-8 border-t border-line pt-5 lg:mt-12">
           <p className="text-xs text-gray-500">© {year} Foocci. Todos os direitos reservados.</p>
         </div>
       </div>

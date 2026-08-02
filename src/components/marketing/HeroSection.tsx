@@ -21,7 +21,7 @@ import { hasAsset, SITE_ASSETS } from "./siteAssets";
 export function HeroSection() {
   return (
     <section aria-labelledby="hero-title" className="relative overflow-hidden bg-white">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-10 lg:min-h-[37rem] lg:grid-cols-[1fr_1.1fr] lg:gap-8 lg:px-8 lg:pb-20 lg:pt-14">
+      <div className="mx-auto grid max-w-7xl items-center gap-6 px-5 pb-10 pt-8 lg:min-h-[37rem] lg:grid-cols-[1fr_1.1fr] lg:gap-8 lg:px-8 lg:pb-20 lg:pt-14">
         {/* ── Left: message (per mockup) ─────────────────────────────────────── */}
         <div className="relative z-10 text-center lg:max-w-xl lg:text-left">
           <span className="inline-flex items-center gap-3">
@@ -31,36 +31,36 @@ export function HeroSection() {
 
           <h1
             id="hero-title"
-            className="mt-4 text-[2.2rem] font-semibold leading-[1.08] tracking-tight text-[#0B0B0B] sm:text-[2.8rem] lg:text-[3.3rem]"
+            className="mt-4 text-[2.2rem] font-semibold leading-[1.08] tracking-tight text-ink sm:text-[2.8rem] lg:text-[3.3rem]"
           >
-            Transformando pedidos em experiências que fazem{" "}
-            <span className="text-brand-500">clientes voltarem.</span>
+            Todo mundo vende um pedaço.{" "}
+            <span className="text-brand-500">A Foocci faz os quatro conversarem.</span>
           </h1>
 
-          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-gray-600 sm:text-lg lg:mx-0">
-            Foocci é o{" "}
-            <strong className="font-semibold text-gray-800">
-              sistema inteligente de vendas, relacionamento e fidelização
-            </strong>{" "}
-            que coloca seu restaurante no centro da experiência do cliente.
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
+            Cardápio, pedido, atendimento por IA e CRM de fidelidade são{" "}
+            <strong className="font-semibold text-ink">quatro contratos</strong> que não
+            trocam uma informação entre si. Aqui é um só — e o cliente do delivery é o
+            mesmo que o CRM reconhece e a IA atende pelo nome.
           </p>
 
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row lg:mt-8 lg:justify-start">
             <PrimaryCta
               className="w-full gap-2.5 sm:w-auto"
               withArrow={false}
-              label="Ver como o Foocci funciona"
+              href="#calculadora"
+              label="Calcule quanto você paga de comissão"
               icon={<PlayCircleIcon className="h-5 w-5" />}
             />
             <SecondaryCta
               className="w-full gap-2.5 sm:w-auto"
               label={FOLLOW_LAUNCH_LABEL}
               href={DEMO_URL}
-              icon={<CalendarIcon className="h-5 w-5 text-gray-500" />}
+              icon={<CalendarIcon className="h-5 w-5 text-muted" />}
             />
           </div>
 
-          <p className="mt-4 text-sm text-gray-500">
+          <p className="mt-3 text-sm text-muted lg:mt-4">
             Atendemos restaurantes de todos os tamanhos. Fale com a gente e veja funcionando no seu.
           </p>
         </div>

@@ -23,7 +23,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <main className="flex-1">{children}</main>
       <MarketingFooter />
       {/* breathing room so the mobile sticky CTA never covers footer content */}
-      <div aria-hidden className="h-20 lg:hidden" />
+      <div aria-hidden className="h-16 lg:hidden" />
       <StickyMobileCta />
     </div>
   );

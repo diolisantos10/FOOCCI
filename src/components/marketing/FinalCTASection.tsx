@@ -11,7 +11,7 @@ import { PRELAUNCH_NOTE } from "./config";
 
 export function FinalCTASection() {
   return (
-    <section aria-labelledby="fechamento-title" className="bg-gray-50 py-20 lg:py-24">
+    <section aria-labelledby="fechamento-title" className="bg-canvas py-12 lg:py-24">
       <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
         {/* Transparent cutout — the mascot floats free on the section bg, so the
             solid version's off-white canvas would read as a faint box here. */}
@@ -21,17 +21,17 @@ export function FinalCTASection() {
           aria-hidden
           width={448}
           height={852}
-          className="mx-auto mb-6 h-24 w-auto drop-shadow-sm"
+          className="mx-auto mb-4 h-20 w-auto drop-shadow-sm lg:mb-6 lg:h-24"
         />
-        <h2 id="fechamento-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+        <h2 id="fechamento-title" className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           Uma nova forma de vender, relacionar e fidelizar está chegando.
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-gray-600">
+        <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-ink2 lg:mt-4 lg:text-lg">
           O Foocci está sendo preparado para ajudar restaurantes a transformar
           atendimento, pedidos e clientes em uma operação mais inteligente.
         </p>
 
-        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row lg:mt-8">
           <PrimaryCta className="w-full sm:w-auto" />
           <SecondaryCta className="w-full sm:w-auto" />
         </div>

@@ -4,38 +4,59 @@
 
 ---
 
-## 🎨 ORDEM DE SERVIÇO do Diretor Geral — repaginar o site para converter (02/08)
+## ✅ Site repaginado para converter — EXECUTADO em 02/08
 
-**Para o Diretor do Foocci.** Pedido do CEO: *"um site um pouco mais agressivo,
-sofisticado, sem perder a essência dele"*, com a análise competitiva virando
-argumento na página. As campanhas pagas começam **amanhã**.
+OS `docs/foocci-site/os-repaginacao-comercial.md`. Cinco dos seis passos feitos e no ar.
 
-**O passo a passo completo, com o material novo, está em
-`docs/foocci-site/os-repaginacao-comercial.md`.** Seis passos, em ordem obrigatória.
-
-**O resumo:**
-
-| Passo | O quê |
+| Antes | Depois |
 |---|---|
-| 1 | Cortar a home de 12 seções para 7 — sua auditoria mediu 19 telas de rolagem no celular |
-| 2 | **Calculadora de comissão evitada** — a peça de maior conversão do site |
-| 3 | Publicar a tabela de preços nova (aprovada pelo CEO) |
-| 4 | Espalhar os sete diferenciais pelo resto do site |
-| 5 | Tom agressivo = número na cara, não adjetivo. Sofisticado = `DESIGN.md`, sem mais cor |
-| 6 | Verificar: 375/768/1280, autoavaliação 8+ nos quatro, tsc e testes |
+| 12 seções · **19 telas** de rolagem no celular | 7 seções · **8,3 telas** |
+| Descrevia o produto | Argumenta com número |
+| Nenhuma menção ao que temos e o concorrente não | Três diferenciais, cada um abrindo pelo medo |
 
-**O que entra de novo e você ainda não tinha:** a conta do iFood 2026 (15,2% com
-entrega própria, 26,5% com a deles), a ancoragem dos quatro contratos (≈R$ 700
-contra R$ 429), os sete diferenciais em ordem de força, e as cinco lacunas nossas
-com a resposta pronta para cada uma.
+**O que entrou:**
+- **Calculadora de comissão** (`/site#calculadora`) — o dono digita o faturamento e vê
+  quanto paga por mês. Percentuais em **um** arquivo (`lib/site/commissionRates.ts`),
+  **com a fonte renderizada na página**, e 8 testes travando a conta contra a tabela
+  da OS. O valor calculado viaja para o formulário de demonstração.
+- **Ancoragem** quatro contratos (~R$ 700) contra um (R$ 429), em tabela única —
+  a primeira versão repetia a lista em dois cards e custava duas telas.
+- **Três diferenciais**: IA impedida de mentir · número não queima · resgate antes de
+  perder.
+- Herói com a tese; "como funciona" de 6 para 3 passos.
 
-> ⛔ **O bloqueio que continua:** o sistema **não trava por plano**. A página pode
-> mostrar os planos, mas **a venda segue 1:1 pelo CEO** — nada de cadastro
-> self-service escolhendo faixa. Se você julgar que publicar preço sem gating é
-> risco alto demais, **escreva a objeção em `docs/perguntas-ao-diretor-geral.md`**
-> em vez de decidir sozinho contra o pedido do CEO.
+**Drift do `DESIGN.md` corrigido de passagem** (a regra é corrigir ao tocar, nunca
+ampliar): `gray-*` cru e `#0B0B0B` literal viraram `ink`/`ink2`/`muted`/`line` no
+herói, no CTA final, em "como funciona" e nos planos.
+
+### ⚠️ Duas coisas que ficaram, e são do CEO
+
+**1 · Faltam dois preços.** A OS manda "substituir `/site/precos` pela tabela nova, já
+revisada pelo CEO" — **essa tabela não está no repositório**. Só o Crescimento tem
+valor fechado (R$ 429, citado na própria OS).
+
+`lib/site/plans.ts` é a fonte única: Essencial e Performance estão `null` e a página
+mostra *"Valor sob consulta"*. **Preencher os dois valores ali publica a tabela** —
+nada mais precisa mudar. Não inventei número: D3 e guardrail 7.
+
+> Isso já evitou um erro visível: a ancoragem mostrava **R$ 429** e o card do mesmo
+> plano dizia *"sob consulta"*, a três telas de distância. Agora os dois leem o mesmo
+> arquivo.
+
+**2 · A home ficou em 8,3 telas, não em 8.** A OS pede 8 ou menos. Cortei de 19 para
+8,3 (−56%) e parei: o que falta são ~250px, e daqui em diante o corte começa a comer
+respiro que o `DESIGN.md` exige. Prefiro entregar 8,3 legível a 8,0 espremido — mas a
+meta é sua, e se quiser os 8 eu tiro do rodapé (838px no celular) ou de uma seção.
+
+**Passo 4 não foi feito:** espalhar os sete diferenciais por `/site/como-funciona` e
+`/site/sobre`. Ficou para a próxima janela.
+
+**Verificado:** 375/768/1280 com screenshot · `scrollWidth` exato nos três (zero
+rolagem lateral) · acessibilidade limpa · `tsc` 0 · lint 0 · 4.651 testes verdes.
 
 ---
+
+
 
 ## 📋 ORDEM DE SERVIÇO do Diretor Geral — levantar o custo real por restaurante (02/08)
 
