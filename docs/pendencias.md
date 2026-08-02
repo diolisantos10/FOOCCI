@@ -84,7 +84,15 @@ Minerado de `HANDOFF-canais-meta.md` (commit `18a5ed7`), em 01/08/2026.
 
 ---
 
-## 🔌 Descontinuar a Evolution (#44) — é migração, não delete
+## 🔌 Sair da Evolution e ficar só na Meta — DECIDIDO, é migração
+
+> ✅ **O CEO fechou a direção em 02/08: o provedor é a Meta, e a Evolution sai.**
+> A decisão está no corredor (`docs/decisoes.md`). O que segue abaixo é o **como**,
+> e continua valendo: **é migração, não delete.**
+>
+> Medido em 02/08 — **239 arquivos** citam Evolution, e o padrão do banco
+> (`Restaurant.whatsappProvider`) é **`EVOLUTION`**, então **todo restaurante
+> existente está nela** até ser trocado um a um.
 
 **Travado em duas perguntas que só o CEO responde.** Minerado de
 `HANDOFF-painel-e-evolution.md` (commit `cfc346c`), em 01/08/2026.
