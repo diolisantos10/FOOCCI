@@ -47,10 +47,35 @@ morto. O sinal real está no card **Diagnóstico**: *"Conta conectada: pendente"
 
 ## 🔴 Prioridade — erro aqui chega no cliente
 
-### 1. Garçom: o P1 dietético (mais 3 P1 da mesma varredura)
-O Garçom pode dar informação errada sobre restrição alimentar. É o único item
-desta lista em que o defeito não custa dinheiro nem reputação — custa a saúde
-de quem pediu. Os outros três P1 saíram na mesma varredura e são menos graves.
+### ✅ 1. Garçom: o P1 dietético — RESOLVIDO em 02/08
+
+**A causa concreta, achada no código:** `isBlockedByDietary` casava a restrição
+contra **nome + ingredientes**. Item **sem ingredientes cadastrados** não casava com
+nada — e "não casou" voltava como **seguro**. Um *"Risoto do Chef"* de lista vazia ia
+para quem declarou "sem lactose".
+
+Agora existe um terceiro estado, `unknown`, que **também exclui** o item: não dá para
+provar que conflita, nem que é seguro. Cliente sem restrição declarada continua vendo
+o cardápio inteiro (guardrail 5). Travado por 9 testes.
+
+> **Os outros 3 P1 da mesma varredura seguem abertos** — eram descritos como menos
+> graves e não foram reavaliados nesta sessão.
+
+### 🟠 Um teste da suíte é INSTÁVEL — e isso é perigoso perto do lançamento
+
+Em 02/08, `npx vitest run` reprovou **1 de 4633** e, nas **duas** rodadas seguintes,
+passou inteiro sem nenhuma mudança de código.
+
+O suspeito é `src/services/whatsapp/ordering/tests/WhatsAppOrderingW9.test.ts`: ele
+avalia cenários **por score** (*"0 FAILs e score ≥ 95"*) e dispara chamadas de Prisma
+sem `DATABASE_URL`, engolidas por `.catch()`.
+
+**Por que importa agora:** teste que às vezes reprova ensina a equipe a ignorar o CI
+vermelho. Aí o dia em que ele reprovar de verdade, ninguém olha — e o portão que
+existe para segurar defeito vira ruído (guardrail 6).
+
+*Não reproduzido de propósito nesta sessão — registrado com a evidência para quem
+pegar.*
 
 ### ~~2. O painel de WhatsApp em Integrações escreve "Conectado" quando NÃO está~~ ✅ RESOLVIDO em 02/08
 
