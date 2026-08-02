@@ -4,6 +4,46 @@
 
 ---
 
+## "Manda pouco" pode ser SEGMENTO CONGELADO, não teto de envio
+
+Em 02/08 o CEO reportou que saía cupom de menos. A leitura óbvia — subir o teto
+diário — estava errada, e teria aumentado risco de bloqueio sem resolver nada.
+
+**O que o `audience-breakdown` mostrou:**
+
+| Segmento | Armazenado | Ao vivo |
+|---|---|---|
+| PERDIDO | **0** | **3.035** |
+| FRIO | 0 | 166 |
+| MORNO | 0 | 57 |
+| SEM_PEDIDOS | 4.926 | 1.739 |
+
+**Campanha segmenta pelo valor ARMAZENADO.** Com ele congelado, quase toda a base
+aparecia como *"sem pedidos"* e as campanhas de reativação encontravam **zero
+gente** — sem erro nenhum, exatamente como a armadilha de contactabilidade.
+
+**A causa:** `rebuildRestaurantCustomerMetrics` existia e **nenhuma rota o chamava.**
+Não havia como disparar em produção. Criado `POST /api/admin/crm/rebuild-metrics`
+(admin, escopado a um restaurante). Rodado: **5.093 clientes recalculados**, drift
+zerado, **3.228 clientes voltaram a ser alcançáveis**.
+
+**A regra que fica:** antes de mexer em teto de envio, rode o
+`audience-breakdown` e compare **`storedSegments` × `liveSegments`**. São **três**
+causas diferentes de "não sai mensagem", e elas se parecem:
+
+1. **`notContactable`** — base importada esperando enriquecimento
+2. **`storedSegments` congelado** — a segmentação não acompanha o tempo passando
+3. **teto diário** — o único que realmente tem a ver com limite
+
+Só a terceira se resolve mexendo em limite. As duas primeiras se resolvem sem
+tocar em uma única proteção do número.
+
+— promovido em 2026-08-02 pelo Diretor · origem: diagnóstico ao vivo em produção,
+com o rebuild executado e conferido depois
+
+---
+
+
 ## "A régua de período" não é um componente — são 3+ implementações independentes
 
 Para adicionar **um botão** de período você toca todas:
