@@ -322,9 +322,27 @@ function SelectField({
 
 // ── Per-provider config forms ─────────────────────────────────────────────────
 
+/**
+ * Evolution connection panel — TRANSITIONAL. Foocci is moving to the Meta Cloud
+ * API; this exists for restaurants still on Evolution during the migration.
+ *
+ * It used to report "connected" whenever no QR image came back. `/api/evolution/qr`
+ * has THREE shapes, not two — `{base64}`, `{pairingCode, code}` and `{error}` — so a
+ * pairing code (no image, no error) landed in the `else` and printed
+ * "WhatsApp já está conectado!" to an owner who had connected nothing. They closed
+ * the screen believing they were done, and the WhatsApp never worked: no error, no
+ * log, nothing to investigate.
+ *
+ * Guardrail 1 applied to a screen: the absence of an image is not information that
+ * a connection exists. Every shape is now handled explicitly and the `else` is an
+ * honest unknown state, never success.
+ */
 function WhatsAppQRPanel() {
   const [qrBase64, setQrBase64]   = useState<string | null>(null);
-  const [qrState, setQrState]     = useState<"idle" | "loading" | "shown" | "connected" | "error">("idle");
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [qrState, setQrState]     = useState<
+    "idle" | "loading" | "shown" | "pairing" | "connected" | "waiting" | "unknown" | "error"
+  >("idle");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = () => {
@@ -334,17 +352,64 @@ function WhatsAppQRPanel() {
   const fetchQR = async () => {
     const res  = await fetch("/api/evolution/qr");
     const data = await res.json().catch(() => ({}));
-    const qr   = (data?.data ?? data) as { base64?: string | null; error?: string };
+    const qr   = (data?.data ?? data) as {
+      base64?: string | null;
+      pairingCode?: string | null;
+      connected?: boolean;
+      generating?: boolean;
+      restarting?: boolean;
+      error?: string;
+    };
 
+    // 1 · QR image
     if (qr.base64) {
       setQrBase64(qr.base64);
+      setPairingCode(null);
       setQrState("shown");
-    } else {
-      // No QR → instance is already open or error
-      setQrBase64(null);
-      setQrState(qr.error === "not_configured" ? "error" : "connected");
-      stopPolling();
+      return;
     }
+
+    // 2 · Pairing code instead of an image — a connection still has to happen.
+    if (qr.pairingCode) {
+      setPairingCode(qr.pairingCode);
+      setQrBase64(null);
+      setQrState("pairing");
+      return;
+    }
+
+    // 3 · Only an explicit flag may claim success.
+    if (qr.connected) {
+      setQrBase64(null);
+      setPairingCode(null);
+      setQrState("connected");
+      stopPolling();
+      return;
+    }
+
+    // 4 · Transient: Evolution is still producing the QR. KEEP POLLING — these two
+    //     are the reason the old `else` was so wrong. They mean "wait", and the
+    //     panel was reading them as "connected".
+    if (qr.generating || qr.restarting) {
+      setQrBase64(null);
+      setPairingCode(null);
+      setQrState("waiting");
+      return;
+    }
+
+    // 5 · Declared failure.
+    if (qr.error) {
+      setQrBase64(null);
+      setPairingCode(null);
+      setQrState(qr.error === "not_configured" ? "error" : "unknown");
+      stopPolling();
+      return;
+    }
+
+    // 6 · Anything else is unknown — and unknown is NOT connected.
+    setQrBase64(null);
+    setPairingCode(null);
+    setQrState("unknown");
+    stopPolling();
   };
 
   const handleConnect = async () => {
@@ -403,11 +468,58 @@ function WhatsAppQRPanel() {
         </div>
       )}
 
+      {qrState === "pairing" && pairingCode && (
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-center text-sm text-green-800">
+            O WhatsApp mandou um <strong>código de pareamento</strong> em vez do QR.
+          </p>
+          <p className="rounded-xl border border-green-200 bg-paper px-5 py-3 font-mono text-2xl font-semibold tracking-[0.2em] text-green-800">
+            {pairingCode}
+          </p>
+          <p className="text-center text-[11px] text-green-700">
+            Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar aparelho →
+            <strong> Conectar com número de telefone</strong> e digite o código acima.
+          </p>
+          <button
+            type="button"
+            onClick={handleConnect}
+            className="rounded-lg border border-green-300 bg-paper px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
+          >
+            Gerar outro código
+          </button>
+        </div>
+      )}
+
+      {qrState === "waiting" && (
+        <div className="flex items-center gap-2 text-sm text-green-700">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+          O WhatsApp ainda está preparando o código. Aguarde…
+        </div>
+      )}
+
       {qrState === "connected" && (
         <p className="flex items-center gap-2 text-sm font-medium text-green-700">
           <span className="h-2 w-2 rounded-full bg-green-500" />
           WhatsApp já está conectado!
         </p>
+      )}
+
+      {/* Honest unknown — never rendered as success. */}
+      {qrState === "unknown" && (
+        <div className="text-sm text-amber-700">
+          <p className="font-medium">Não deu para confirmar o estado da conexão.</p>
+          <p className="mt-1 text-xs">
+            Isso <strong>não</strong> quer dizer que conectou. Tente de novo; se
+            insistir, confira as credenciais em Integrações → WhatsApp.
+          </p>
+          <button
+            type="button"
+            onClick={handleConnect}
+            className="mt-2 rounded-lg border border-amber-300 bg-paper px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 transition"
+          >
+            Tentar de novo
+          </button>
+        </div>
       )}
 
       {qrState === "error" && (

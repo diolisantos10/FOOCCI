@@ -33,32 +33,22 @@ O Garçom pode dar informação errada sobre restrição alimentar. É o único 
 desta lista em que o defeito não custa dinheiro nem reputação — custa a saúde
 de quem pediu. Os outros três P1 saíram na mesma varredura e são menos graves.
 
-### 2. O painel de WhatsApp em Integrações escreve "Conectado" quando NÃO está
+### ~~2. O painel de WhatsApp em Integrações escreve "Conectado" quando NÃO está~~ ✅ RESOLVIDO em 02/08
 
-`src/app/(dashboard)/integracoes/IntegrationsCenterClient.tsx:337-345`
+Corrigido em `IntegrationsCenterClient.tsx`. A investigação achou **mais** do que
+o relato original dizia: a rota `/api/evolution/qr` tem **oito** formatos de
+resposta, não três — e **dois deles significam "espere, ainda estou gerando"**.
+Esses também caíam no `else` e viravam "Conectado".
 
-Quando a Evolution devolve **código de pareamento** em vez de imagem de QR, a
-resposta é `{ pairingCode, code }` — sem `base64` e sem `error`. O painel só sabe
-tratar `base64`; sem ele, cai na última linha:
+Agora cada formato tem tratamento próprio, **só a flag explícita `connected: true`
+pode dizer conectado**, e o que não for reconhecido vira estado honesto de
+*desconhecido* — com o aviso de que **não** quer dizer que conectou.
 
-```ts
-setQrState(qr.error === "not_configured" ? "error" : "connected");
-```
+Travado por `src/app/api/evolution/qr/route.contract.test.ts`, que prova inclusive
+que um campo novo no futuro cai em desconhecido, nunca em sucesso.
 
-**Resultado:** a tela diz **"Conectado"** para um lojista que não conectou nada.
-Ele fecha a tela achando que terminou, e o WhatsApp nunca funciona.
-
-Não trava, não dá erro, não gera log — mente e some. É o guardrail 1 ao contrário:
-o painel infere sucesso do silêncio.
-
-**O conserto já existe no repositório.** O outro painel de WhatsApp
-(`integracoes/whatsapp/WhatsAppIntegrationClient.tsx:210`) trata `pairingCode`
-corretamente, com o mesmo formato de resposta. É copiar o ramo que já funciona.
-
-> ⚠️ **São dois painéis de QR vivos ao mesmo tempo** — só um está certo. Ver a
-> vitrine do `canais`.
-
-Verificado em 01/08 na branch de produção · origem: `HANDOFF-railway-build-e-ui-promocoes.md`
+> Este painel é da **Evolution** e é transitório — a Meta não usa QR. Foi
+> corrigido para ninguém se perder durante a migração, não para investir nele.
 
 ---
 
@@ -119,29 +109,51 @@ trava os dois canais. É conserto de 30 segundos, feito pelo CEO no painel.
 
 ---
 
-## 🔌 Descontinuar a Evolution (#44) — é migração, não delete
+## 🔌 Sair da Evolution e ficar só na Meta — DECIDIDO, é migração
 
-**Travado em duas perguntas que só o CEO responde.** Minerado de
-`HANDOFF-painel-e-evolution.md` (commit `cfc346c`), em 01/08/2026.
+> ✅ **O CEO fechou a direção em 02/08: o provedor é a Meta, e a Evolution sai.**
+> A decisão está no corredor (`docs/decisoes.md`). O que segue abaixo é o **como**,
+> e continua valendo: **é migração, não delete.**
+>
+> Medido em 02/08 — **239 arquivos** citam Evolution, e o padrão do banco
+> (`Restaurant.whatsappProvider`) é **`EVOLUTION`**, então **todo restaurante
+> existente está nela** até ser trocado um a um.
 
-**O que quebra se alguém simplesmente apagar a Evolution hoje:** o WhatsApp perde
-**pedido por texto, opt-out, recuperação de carrinho, atribuição de receita do CRM
-e os comandos do BuildOS**. Tudo isso só existe no webhook da Evolution.
+### ✅ A pergunta que travava foi respondida (02/08)
 
-A razão, confirmada por leitura do código: **os dois webhooks de entrada não são
-simétricos.** O da Meta (`api/webhooks/meta/whatsapp/route.ts`, ~225 linhas) importa
-só o Brain e o suporte. O da Evolution (~274 linhas) é quem carrega todo o resto. O
-comentário do código da Meta diz *"feed the same agent pipeline"* — mas hoje "the
-same pipeline" é **só o Brain**.
+> **CEO:** *"hoje temos a integração nativa do WhatsApp da Meta — todos serão assim."*
 
-**As duas perguntas travando:**
-1. A Meta está conectada e ativa **para todos os restaurantes**, ou só alguns?
-   *(este é o dado que falta)*
-2. **BuildOS:** migrar para a Meta, manter só na Evolution, ou aposentar?
+A integração nativa da Meta **existe e está em uso hoje**. O destino é todos os
+restaurantes nela.
 
-**Etapa 0, segura para começar já:** portar a paridade de entrada — o que o webhook
-da Evolution faz e o da Meta não faz. É **aditivo**, não mexe em default de
-produção, e não depende das respostas acima.
+⚠️ **Atenção ao tempo verbal: "serão", não "estão".** O padrão do banco continua
+`EVOLUTION`. Ninguém deve assumir que um restaurante já migrou — **confira o
+`whatsappProvider` dele** antes de qualquer conclusão.
+
+Segue aberta a segunda pergunta: **BuildOS** — migrar para a Meta, manter só na
+Evolution, ou aposentar?
+
+### O buraco medido: seis coisas que SÓ a Evolution faz hoje
+
+Levantado em 02/08 comparando `webhooks/evolution/route.ts` +
+`WebhookProcessorService.ts` contra `webhooks/meta/whatsapp/route.ts`.
+
+| O que falta na Meta | Quem faz na Evolution | O que se perde |
+|---|---|---|
+| **Opt-out de entrada** | `ContactSafetyService.applyInboundOptOut` | Cliente responde "PARAR" e **continua recebendo**. Risco de bloqueio do número |
+| **Pedido por texto** | `handleInboundForOrdering` + `WhatsAppTextOrderingConfigService` | Cliente pede por mensagem e ninguém atende |
+| **Atribuição de receita do CRM** | `markCrmReplyIfApplicable` | Campanha vira venda e o sistema **não sabe** que foi ela |
+| **Passar para humano** | `markConversationNeedsHuman` | Conversa que precisa de gente fica presa com a IA |
+| **Política de quando a IA responde** | `shouldAiRespond` | A IA responde em hora que não devia |
+| **Comandos do BuildOS** | `handleBuildCommand` | Os comandos internos param |
+
+O webhook da Meta importa hoje **só** o Cérebro e o suporte. O comentário no código
+dele diz *"feed the same agent pipeline"* — **e não alimenta.** É a frase mais
+perigosa do arquivo, porque descreve intenção como se fosse fato.
+
+**Etapa 0 (segura, pode começar já):** portar essas seis para o webhook da Meta.
+É **aditivo** — não mexe em default de produção, não toca a Evolution, e não
+depende da pergunta do BuildOS. Sem ela, migrar restaurante é derrubar cliente.
 
 ---
 

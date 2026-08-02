@@ -386,3 +386,50 @@ confirma o que você já ia escrever.
 
 É o guardrail "documentação não é evidência" um nível abaixo: **nem a sua própria
 leitura anterior é evidência.**
+
+---
+
+## O WhatsApp da Foocci passa a ser SÓ a Meta — a Evolution sai
+
+**Decidido em** 2026-08-02 · **por** CEO · **origem:** conversa com o Diretor
+durante o preparo do lançamento
+
+Direção fechada: **o único provedor de WhatsApp é a Meta Cloud API.** Tudo que for
+Evolution deve ser eliminado.
+
+**O que isso NÃO significa:** apagar hoje. A eliminação é migração, e apagar sem
+migrar derruba WhatsApp de quem está no ar. Os números medidos em 02/08:
+
+| Fato | Número |
+|---|---|
+| Arquivos que citam Evolution | **239** |
+| Provedor padrão no banco (`Restaurant.whatsappProvider`) | **`EVOLUTION`** |
+| Provedor de reserva (`fallbackProvider`) | **`EVOLUTION`** |
+
+Ou seja: **todo restaurante existente está na Evolution** até ser trocado
+explicitamente. O default nasceu assim de propósito, para a adoção da Meta ser
+aditiva.
+
+**O que quebra se alguém apagar a Evolution antes de portar** (confirmado por
+leitura, registrado em `docs/pendencias.md`): pedido por texto, opt-out,
+recuperação de carrinho, atribuição de receita do CRM e os comandos do BuildOS.
+Os dois webhooks **não são simétricos** — o da Meta chama só o Cérebro; o da
+Evolution carrega todo o resto.
+
+**O que muda para todos, a partir de agora:**
+
+1. **Nada novo nasce na Evolution.** Recurso novo de WhatsApp se constrói na Meta.
+   Se só der para fazer na Evolution, é sinal de que falta paridade — reporte,
+   não contorne.
+2. **Mexeu em algo da Evolution? Só para conserto de segurança, correção de
+   mentira em tela, ou para portar para a Meta.** Não invista em melhoria ali.
+3. **A ordem da eliminação é fixa:** (a) portar a paridade de entrada para o
+   webhook da Meta — aditivo, não mexe em produção; (b) trocar o default e migrar
+   restaurante por restaurante, com confirmação; (c) só então apagar código.
+   Pular (a) é derrubar cliente.
+4. **O painel de QR/código de pareamento é da Evolution.** A Meta não usa QR. Ele
+   é transitório e morre no fim da migração — corrigi a mentira dele em 02/08 para
+   que ninguém se perca durante a transição, não para investir nele.
+
+**Ainda travado, e é do CEO:** a Meta está ativa para **todos** os restaurantes ou
+só alguns? Sem esse dado a etapa (b) não começa.
