@@ -4,6 +4,41 @@
 
 ---
 
+## 🔏 Commits saem "Unverified" no GitHub — a chave de assinatura não existe
+
+Um hook cobra, a cada encerramento de sessão, que os commits aparecem como
+**Unverified**. O conserto que ele sugere (`--amend --reset-author`, ou rebase em
+toda a lista) **não resolve** — e o caminho é perigoso. Registrado aqui para não
+virar ruído recorrente.
+
+**O diagnóstico, verificado em 02/08:**
+
+| O que | Estado |
+|---|---|
+| `user.email` / `user.name` | ✅ `noreply@anthropic.com` / `Claude` — já corretos |
+| `commit.gpgsign` | ✅ `true`, formato `ssh` |
+| Chave pública (`/home/claude/.ssh/commit_signing_key.pub`) | ⚠️ existe e está **vazia (0 bytes)** |
+| Chave **privada** | ❌ **não existe** |
+
+O ambiente foi preparado para assinar e a chave nunca foi provisionada. Por isso
+**todo** commit sai sem assinatura — os desta sessão e os das outras.
+
+**Por que não reescrevi o histórico:**
+
+1. **Não adiantaria.** Sem chave privada, `--amend` produz um commit igualmente não
+   assinado. O e-mail, que é o outro motivo possível, **já está certo**.
+2. **Seria perigoso.** Os commits já estão na branch padrão e em produção.
+   Reescrevê-los exige force-push numa branch onde **várias sessões escrevem ao mesmo
+   tempo** — exatamente o que o corredor proíbe, depois do incidente de 01/08 em que
+   um `--force-with-lease` descartou o merge de outra sessão.
+
+**O conserto real, e é de infraestrutura:** provisionar a chave privada de assinatura
+no ambiente e registrar a pública na conta do GitHub. Enquanto não houver, "Unverified"
+é o estado esperado — **não é sinal de commit adulterado**. O conteúdo está íntegro,
+o autor está correto, e o que está no ar foi conferido pelo `/api/health`.
+
+---
+
 ## ✅ Site repaginado para converter — EXECUTADO em 02/08
 
 OS `docs/foocci-site/os-repaginacao-comercial.md`. Cinco dos seis passos feitos e no ar.
