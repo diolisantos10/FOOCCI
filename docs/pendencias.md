@@ -46,11 +46,34 @@ o CI.
 - **3 P1 do Garçom** da mesma varredura do dietético seguem abertos, não
   reavaliados.
 
-### Pedido em aberto do CEO
+### 🎨 Site comercial — revisado em 02/08, com screenshots
 
-*"Repasse o site para saber se temos como melhorar o design."* **Não foi feito
-nesta sessão** — o tempo foi para os defeitos que chegam no cliente. Fica como o
-primeiro item de amanhã, junto com a precificação.
+**Veredito: o site está bem construído. O problema é comprimento, não qualidade.**
+
+| O que | Estado |
+|---|---|
+| Rolagem horizontal no celular | ✅ **zero** nas três páginas |
+| Acessibilidade (alt, nome de botão/link) | ✅ **limpa** |
+| Uso da marca (90% neutro + 10% laranja) | ✅ correto |
+| **Altura da home no celular** | 🔴 **15.509px ≈ 19 telas de rolagem** |
+
+**A recomendação, e ela depende do CEO porque é conteúdo de marketing:** cortar a
+home de 12 seções para 6–8. Hoje há **11 `h2`** e vários blocos repetindo a mesma
+estrutura de cards brancos — a hierarquia achata e o visitante não chega nos planos
+nem no CTA final.
+
+Corte proposto, sem tocar nos quatro pilares do briefing (D1–D4):
+1. Fundir *"Por trás de cada experiência"* com *"Mais que tecnologia"* — dizem a
+   mesma coisa com cards diferentes.
+2. Fundir *"O problema"* com a comparação *"não é um chatbot"* — são o mesmo
+   argumento, separados por sete telas.
+3. Levar o grid de 8 soluções para `/site/como-funciona`, deixando 3 na home.
+
+**Não executei.** Reordenar a home é decisão de marketing do CEO, e ele revisa
+amanhã. O diagnóstico está pronto para a decisão sair em minutos.
+
+> Os planos aparecem como *"Em definição para o lançamento"* — é o `[PREENCHER]`
+> que o CEO fecha amanhã junto com a precificação.
 
 ---
 

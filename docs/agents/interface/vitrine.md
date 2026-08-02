@@ -7,7 +7,37 @@
 
 ---
 
-## Medida de layout escrita à mão em dois arquivos já divergiu
+## O site comercial, medido (02/08) — o problema é comprimento, não qualidade
+
+Auditoria com Playwright em 375 / 768 / 1280, com o gate de prévia aberto.
+
+| Página | Altura no celular | Seções |
+|---|---|---|
+| `/site` (home) | **15.509px ≈ 19 telas** | 12 |
+| `/site/precos` | 5.013px ≈ 6 telas | 5 |
+| `/site/como-funciona` | 6.303px ≈ 8 telas | 5 |
+
+**O que está certo e não deve ser mexido:**
+- **Zero rolagem horizontal** nas três páginas (`scrollWidth` = 375, exato).
+- **Acessibilidade limpa:** nenhuma imagem sem `alt`, nenhum botão ou link sem nome
+  acessível. Isso é raro e foi feito de propósito.
+- A marca segue o **90% neutro + 10% laranja**; o laranja aparece como acento.
+
+**O único achado real: a home tem 19 telas de rolagem no celular.** Landing B2B
+converte melhor entre 6 e 8. Com 12 seções e 11 `h2`, a página repete a mesma
+estrutura de cards brancos várias vezes — a hierarquia achata e o visitante não
+chega nos planos nem no CTA final.
+
+> ⚠️ **Armadilha de auditoria, e ela quase virou defeito reportado:** um detector
+> ingênuo de "elemento mais largo que a viewport" acusa **5 elementos** nessas
+> páginas. Todos são **decoração de fundo** — `pointer-events-none absolute -z-10`
+> com gradiente radial em blur, propositalmente maiores que a tela e **cortados
+> pelo pai**. O sinal que vale é **`document.documentElement.scrollWidth`**, não o
+> retângulo de cada elemento. Medir a peça isolada e ignorar o recorte do
+> contêiner produz alarme falso.
+
+— promovido em 2026-08-02 pelo Diretor · origem: auditoria com screenshots em três
+tamanhos, na véspera do lançamento
 
 O menu lateral tem `w-60` (**240px**) em `components/layout/Sidebar.tsx:102`.
 O drawer de Promoções começa em `lg:left-56` (**224px**), em quatro pontos de
