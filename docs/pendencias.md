@@ -4,6 +4,25 @@
 
 ---
 
+## 🔴 ROTACIONAR AGORA — um Railway Project Token foi colado em chat (02/08)
+
+Durante a sessão do Diretor de 02/08, um **Railway Project Token** foi colado em
+texto na conversa para desbloquear o trabalho. Ele funciona e dá **escrita nas
+variáveis de ambiente do projeto inteiro** — não só do serviço Foocci.
+
+**É o terceiro segredo que esta casa perde assim** (antes: o PIN de 2FA do WhatsApp
+e o client secret do Google — **nenhum dos dois com rotação confirmada até hoje**).
+
+**Ação do CEO, e não dá para delegar:** Railway → projeto Foocci → Tokens → revogar
+o token e emitir outro. Se for para o Diretor usar de novo, o valor novo entra como
+**variável de ambiente da sessão**, nunca em conversa.
+
+> O padrão que se repete não é distração: é que **não existia lugar seguro** para
+> pôr credencial. Por isso a tela `/admin/meta` foi construída. Falta o equivalente
+> para o acesso do próprio Diretor.
+
+---
+
 ## 🔴 ACONTECENDO AGORA — cliente perdendo mensagem em silêncio
 
 ### O Instagram do restaurante de sushi está fora do ar desde 23/07
@@ -240,18 +259,30 @@ Minerado de `HANDOFF-manual.md` (commit `5b1c885c`), em 01/08/2026.
 Minerado de `HANDOFF-cmv-precificacao.md` (commits `36a36597` e `e8f01e90`), em
 01/08/2026.
 
-### 🔴 O importador de planilha pode apagar o cardápio inteiro
+### ✅ RESOLVIDO (02/08) — o importador de planilha não apaga mais o cardápio
 
-`src/app/api/menu/import/route.ts` (`PRECO_PREFIXES`, ~linha 56) trata a coluna
-**"custo" como PREÇO DE VENDA**. É defeito pré-existente.
+`PRECO_PREFIXES` continha `"custo"` e `"cost"`, então planilha com coluna "custo"
+sobrescrevia o **preço de venda** do cardápio inteiro.
 
-**Se um lojista importar planilha com coluna "custo" achando que está alimentando
-o CMV, ele sobrescreve o preço de venda do cardápio todo.** Perda real, feita pelo
-próprio cliente, sem aviso. O conserto é mapear para `MenuItem.cost`.
+**O que mudou:**
+- Custo saiu da lista de preço e ganhou detecção própria (`CUSTO_PREFIXES`),
+  **testada antes** do preço — assim `"valor de custo"` não é engolido por `"valor"`.
+- O custo agora é gravado em `MenuItem.cost`, alimentando o CMV de verdade.
+- Planilha **só com custo** passa a acusar *"falta a coluna Preço"* em vez de
+  destruir dado.
+- Custo ilegível **não invalida a linha** — o cardápio precisa do preço para
+  funcionar; custo ruim só deixa o CMV em branco.
+
+Travado por `src/app/api/menu/import/route.test.ts` (5 testes, com planilhas
+`.xlsx` de verdade). Reintroduzir "custo" na lista de preço derruba o CI.
+
+> Gravar `cost` no importador é seguro **porque este caminho só CRIA item** — nome
+> repetido é pulado como duplicata. Mudar custo de item **existente** continua
+> obrigado a passar por `updateCostsWithReprice` (ver vitrine do `operacao`).
 
 | Aberto | O que quebra se ninguém mexer |
 |---|---|
-| **Analytics ainda nega que existe CMV** | `AnalyticsAgentService.ts:213` responde *"não temos CMV cadastrado"*. O dado **existe agora** — o agente nega um número que o lojista acabou de preencher. Para o cliente, parece bug |
+| ~~Analytics nega que existe CMV~~ | ✅ **RESOLVIDO 02/08.** A limitação disparava em toda pergunta de margem, sem olhar o dado. Agora conta os itens com custo (escopado por categoria — `MenuItem` não tem `restaurantId`) e só nega quando é zero. Havendo custo, avisa que o CMV é **parcial** e sobre quantos itens — guardrail 7. Travado por teste |
 | **Variações não têm custo** | A precificação usa só o custo base. Cardápio muito baseado em variação mostra CMV incompleto — **o número mente por omissão**, sem quebrar nada |
 | **Leitura de nota nunca testada com nota real** | Sem chave de IA no ambiente daquela sessão. Se o primeiro teste em produção falhar com cupom amassado, o ajuste é `INVOICE_EXTRACT_MODEL=gpt-4o` (o default é o modelo do Brain, `gpt-4o-mini`) |
 | **Imagem só funciona no piloto OPENAI** | Se o roteamento do Brain mover o `invoice-reader` para Claude ou Gemini, a leitura de nota falha — **com erro claro, de propósito** |

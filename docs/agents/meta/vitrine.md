@@ -10,6 +10,59 @@
 
 ---
 
+## Dá para editar as configurações do app por API — só está DESLIGADO
+
+Tentar `POST /{app-id}` com `terms_of_service_url` devolve:
+
+```
+(#10) Changing app settings through API calls has been disabled for this app.
+Go to your app's advanced settings to enable this.
+```
+
+**Isso não é "não dá" — é "está desligado".** Existe uma chave em
+**Meta → Configurações do app → Avançado** que libera alteração por API. Enquanto
+ela estiver desligada, todo campo de configuração do app é botão manual do CEO.
+
+**Ligada, o Diretor conserta sozinho** os campos que reprovam App Review — Termos
+de Serviço, Domínios do aplicativo, URL de exclusão de dados.
+
+⚠️ **A chave corta os dois lados:** quem tiver `META_APP_SECRET` passa a poder
+alterar a configuração do app, não só ler. É decisão do CEO, não do Diretor.
+
+*Verificado em 02/08 contra a Graph API v21.0, com as credenciais reais.*
+
+— promovido em 2026-08-02 pelo Diretor · origem: tentativa real de escrita na
+Graph API durante a sessão
+
+---
+
+## O que está em vigor hoje, verificado ao vivo (02/08)
+
+| Campo | Estado |
+|---|---|
+| App | **`Foocci Whats`** · `893641126399955` · aceito pela Meta ✅ |
+| Termos de Serviço | ❌ **`https://www.facebook.com/`** — a página própria existe (`foocci.com.br/termos`) e não está sendo usada. **Reprova App Review** |
+| Política de Privacidade | ✅ `https://foocci.com.br/privacidade` |
+| Domínios do aplicativo | ❌ vazio |
+| `META_CONFIG_ID` | `1571394541276497` (Railway) |
+| `INSTAGRAM_APP_ID` | `2198678317551576` (Railway) |
+
+> ⚠️ **A armadilha que já aconteceu:** em 02/08 o CEO colou o **ID do Aplicativo**
+> nos campos de `configId` **e** `igAppId` da tela do admin. Como o banco vence o
+> ambiente, os dois valores corretos do Railway ficaram encobertos — e o
+> `igAppId` errado ficou pareado com o `igAppSecret` certo, **cruzando as
+> credenciais do Instagram**. Nada quebrou com erro; teria falhado calado.
+>
+> **Corrigido limpando os três campos** (`configId`, `igAppId`,
+> `coexistenceConfigId`), que voltaram ao valor do Railway. A tela agora avisa
+> quando `configId == appId`.
+>
+> **A lição:** *precedência banco-sobre-ambiente é poderosa e silenciosa.* Um valor
+> colado errado na tela **encobre** um valor certo que já funcionava. Sempre confira
+> a coluna de fonte (`salvo aqui` × `via Railway`) depois de salvar.
+
+---
+
 ## As credenciais do app agora resolvem BANCO primeiro, Railway depois
 
 Desde 02/08 existe `/admin/meta`. As credenciais do aplicativo vivem em

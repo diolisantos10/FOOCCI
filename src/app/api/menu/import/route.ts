@@ -14,6 +14,7 @@ type ColMap = {
   nome?: number;
   descricao?: number;
   preco?: number;
+  custo?: number;
   ingredients?: number;
   showInDelivery?: number;
   showInDineIn?: number;
@@ -53,11 +54,28 @@ const PALADAR_KEYS     = new Set(["perfil_paladar","perfilpaladar","paladar","pe
 const HARMONIZ_KEYS    = new Set(["harmonizacao_sugerida","harmonizacaosugerida","harmonizacao","harmonização sugerida","harmonizacao sugerida"]);
 const ALERGENOS_KEYS   = new Set(["alergenos_detalhados","alergenosdetalhados","alergenos","alérgenos","alergenos detalhados"]);
 const STORY_KEYS       = new Set(["storytelling_ia","storytellingia","storytelling","narrativa ia","storytelling ia"]);
-const PRECO_PREFIXES   = ["preco","price","valor","value","custo","cost"];
+/**
+ * Sale price. "custo"/"cost" USED TO BE IN THIS LIST — that was the defect: a merchant
+ * importing a sheet with a "custo" column to feed the CMV had the sale price of the
+ * entire menu overwritten with their cost. Silent, irreversible, and done by the
+ * customer's own hand.
+ */
+const PRECO_PREFIXES   = ["preco","price","valor","value"];
+
+/**
+ * Cost of goods — checked BEFORE the price prefixes, and deliberately more specific.
+ * "valor de custo" starts with "valor", so price would otherwise swallow it; cost
+ * winning the tie is the safe direction, because a cost misread as a price destroys
+ * data while a price misread as a cost only leaves the CMV wrong.
+ */
+const CUSTO_PREFIXES   = ["custo","cost","cmv","valor de custo","preco de custo","custo unitario","custo unitário"];
 
 function matchesSet(k: string, exact: Set<string>): boolean { return exact.has(k); }
 function matchesPricePrefix(k: string): boolean {
   return PRECO_PREFIXES.some((p) => k === p || k.startsWith(p + " "));
+}
+function matchesCostPrefix(k: string): boolean {
+  return CUSTO_PREFIXES.some((p) => k === p || k.startsWith(p + " ")) || /\bcusto\b/.test(k);
 }
 
 function detectColumns(headerRow: unknown[]): ColMap {
@@ -80,6 +98,8 @@ function detectColumns(headerRow: unknown[]): ColMap {
     else if (matchesSet(k, HARMONIZ_KEYS))  map.harmonizacaoSugerida = i;
     else if (matchesSet(k, ALERGENOS_KEYS)) map.alergenosDetalhados = i;
     else if (matchesSet(k, STORY_KEYS))     map.storytellingIA = i;
+    // Cost is tested BEFORE price on purpose — see CUSTO_PREFIXES.
+    else if (map.custo === undefined && matchesCostPrefix(k)) map.custo = i;
     else if (map.preco === undefined && matchesPricePrefix(k)) map.preco = i;
   });
   return map;
@@ -143,6 +163,8 @@ async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
     const ingredients = get(colMap.ingredients);
     const rawCell     = colMap.preco !== undefined ? row[colMap.preco] : "";
     const precoRaw    = String(rawCell ?? "").trim();
+    const rawCostCell = colMap.custo !== undefined ? row[colMap.custo] : "";
+    const custoRaw    = String(rawCostCell ?? "").trim();
 
     // Boolean helpers
     const parseBool = (idx: number | undefined, defaultVal: boolean): boolean => {
@@ -180,6 +202,14 @@ async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
       errors.push(precoRaw ? `Preço inválido: "${precoRaw}"` : "Preço ausente");
     }
 
+    // Cost is optional. An unreadable cost must NOT invalidate the row — the sale price
+    // is what the menu needs to work; a bad cost only leaves the CMV blank.
+    let custo: number | null = null;
+    if (custoRaw) {
+      const parsed = normalizePrice(rawCostCell);
+      if (parsed.valid) custo = parsed.value;
+    }
+
     const status: RowStatus = errors.length > 0 ? "error" : "valid";
 
     if (status === "valid" && categoria) {
@@ -192,6 +222,7 @@ async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
     rows.push({
       rowIndex, foto, categoria, nome, descricao, ingredients,
       precoRaw, preco,
+      custoRaw, custo,
       showInDelivery, showInDineIn, hasVariants,
       servingSize, portionInfo, code,
       tagFunil, perfilPaladar, harmonizacaoSugerida,

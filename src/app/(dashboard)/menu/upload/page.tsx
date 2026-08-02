@@ -17,6 +17,9 @@ type RowResult = {
   descricao: string;
   precoRaw: string;
   preco: number;
+  /** Optional cost column. null when the sheet has no cost column at all. */
+  custoRaw?: string;
+  custo?: number | null;
   status: RowStatus;
   errors: string[];
 };

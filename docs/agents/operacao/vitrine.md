@@ -4,6 +4,35 @@
 
 ---
 
+## O importador de planilha: custo e preço são colunas SEPARADAS, e a ordem de detecção importa
+
+Até 02/08, `PRECO_PREFIXES` continha `"custo"` e `"cost"`. Uma planilha com coluna
+"custo" **sobrescrevia o preço de venda do cardápio inteiro** — perda irreversível,
+provocada pelo próprio lojista, sem erro nenhum aparecendo.
+
+**Como ficou:**
+
+- `CUSTO_PREFIXES` é testado **antes** de `PRECO_PREFIXES`. É deliberado:
+  `"valor de custo"` começa com `"valor"` e seria engolido pelo preço.
+- **O empate vai para o custo, sempre.** Custo lido como preço **destrói dado**;
+  preço lido como custo só deixa o CMV errado. Os dois erros não são simétricos —
+  escolha a direção recuperável.
+- Custo ilegível **não invalida a linha**. O cardápio precisa do preço para
+  funcionar.
+- Planilha só com custo acusa *"falta a coluna Preço"* em vez de destruir.
+
+**Gravar `cost` direto no importador é permitido** porque este caminho **só cria**
+item (nome repetido é pulado como duplicata): não há custo anterior para auditar
+nem reprice a disparar. Mudar custo de item **existente** continua obrigado a
+passar por `updateCostsWithReprice`.
+
+Travado por `src/app/api/menu/import/route.test.ts` — 5 testes com `.xlsx` reais.
+
+— promovido em 2026-08-02 pelo Diretor · origem: conserto do P0 registrado em
+`HANDOFF-cmv-precificacao.md`, verificado com a suíte inteira verde
+
+---
+
 ## `MenuItem` não tem `restaurantId` — o escopo é pela categoria
 
 O multi-tenant do item se faz por `category: { restaurantId }`.
