@@ -81,7 +81,7 @@ export function ContactBaseHealthPanel({
         <KPICard
           label="Contactáveis (WhatsApp)"
           value={stats.contactableCustomers.toLocaleString("pt-BR")}
-          pct={stats.totalCustomers > 0 ? Math.round((stats.contactableCustomers / stats.totalCustomers) * 100) : 0}
+          pct={`${stats.totalCustomers > 0 ? Math.round((stats.contactableCustomers / stats.totalCustomers) * 100) : 0}%`}
           sub="Têm telefone válido para campanha"
           accent="green"
           loading={loading}

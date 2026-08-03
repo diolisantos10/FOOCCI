@@ -65,7 +65,7 @@ export function KPICard({
   onClick?: () => void;
   ctaLabel?: string;
   /** Optional share-of-base percentage, shown as a chip next to the value. */
-  pct?: number;
+  pct?: string;
 }) {
   const accentClass = {
     green:  "text-green-700",
@@ -88,7 +88,7 @@ export function KPICard({
         <div className="flex items-baseline gap-1.5">
           <p className={`text-2xl font-extrabold ${accentClass}`}>{value}</p>
           {pct !== undefined && (
-            <span className="text-xs font-semibold text-muted">{pct}%</span>
+            <span className="text-xs font-semibold text-muted">{pct}</span>
           )}
         </div>
       )}
@@ -522,17 +522,24 @@ export function OverviewTab({
   const WARM_DAYS = seg.warmMaxDays;
   const LOST_DAYS = seg.lostMinDays;
 
-  // Temperature share — denominator is customers who EVER bought
-  // (quente+morno+frio+perdido). These four are now mutually exclusive, so the
-  // percentages sum to 100%. "Não compraram" is a separate axis (never bought)
-  // and is intentionally NOT in this base.
+  // Peso sobre a BASE TOTAL — decisão do CEO (03/08): todo card carrega o seu
+  // percentual da base de clientes, incluindo "Não compraram" e "Novos". As
+  // cinco faixas exclusivas (quente+morno+frio+perdido+não compraram) somam
+  // ~100% da base; "Novos" é eixo de período (sobreposto), mostrado como
+  // informação. Abaixo de 1% exibe uma casa decimal para não virar "0%".
   const perdidosCustomers = stats.perdidosCustomers ?? 0;
-  const buyersTotal = stats.ativoCustomers + stats.mornoCustomers + stats.frioCustomers + perdidosCustomers;
-  const pctOf     = (n: number) => (buyersTotal > 0 ? Math.round((n / buyersTotal) * 100) : 0);
-  const ativoPct  = pctOf(stats.ativoCustomers);
-  const mornoPct  = pctOf(stats.mornoCustomers);
-  const frioPct   = pctOf(stats.frioCustomers);
+  const pctOf = (n: number): string => {
+    if (stats.totalCustomers <= 0) return "0%";
+    const p = (n / stats.totalCustomers) * 100;
+    if (p > 0 && p < 1) return `${p.toFixed(1).replace(".", ",")}%`;
+    return `${Math.round(p)}%`;
+  };
+  const ativoPct   = pctOf(stats.ativoCustomers);
+  const mornoPct   = pctOf(stats.mornoCustomers);
+  const frioPct    = pctOf(stats.frioCustomers);
   const perdidoPct = pctOf(perdidosCustomers);
+  const novosPct   = pctOf(stats.newCustomers);
+  const naoCompraramPct = pctOf(stats.naoCompraramCustomers ?? 0);
 
   const totalSegmented = stats.segments.reduce((s, x) => s + x.count, 0);
 
@@ -626,6 +633,7 @@ export function OverviewTab({
         <KPICard
           label={newCustomersLabel}
           value={stats.newCustomers.toLocaleString("pt-BR")}
+          pct={novosPct}
           sub={newCustomersSub}
           accent="blue"
           loading={loading}
@@ -635,6 +643,7 @@ export function OverviewTab({
         <KPICard
           label="Não compraram"
           value={(stats.naoCompraramCustomers ?? 0).toLocaleString("pt-BR")}
+          pct={naoCompraramPct}
           sub="Cadastraram mas nunca pediram"
           accent="purple"
           loading={loading}
