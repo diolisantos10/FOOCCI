@@ -32,7 +32,15 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
-## 🔴 0º · CORREÇÃO DO CEO — a interface era OUTRA. Nova OS: `OS-loja-qr-com-checkout.md`
+## ✅ 0º · Loja QR com checkout — EXECUTADA em 03/08, no ar
+
+A interface corrigida está em produção: plano de entrada abre o **catálogo puro
+com carrinho e checkout** (retirada E entrega confirmadas em teste, zero
+conversa, zero IA); planos com Garçom seguem no chat, intocados. Um link só —
+a mesma flag do gate decide. `/qr` da mesa continua vitrine. Evidência completa
+dentro da OS.
+
+## (original) 0º · CORREÇÃO DO CEO — a interface era OUTRA
 
 **Seu trabalho de hoje estava certo contra a OS — a OS é que traduziu errado o
 CEO** (erro do Diretor Geral, assumido lá dentro). O CEO corrigiu em 03/08 à

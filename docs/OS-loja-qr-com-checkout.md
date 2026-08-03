@@ -75,3 +75,23 @@ Quando o dono descreve uma interface apontando para uma tela que existe
 barata de reaproveitar**. Reuso de código é decisão de engenharia; a cara do
 produto é decisão do dono. A OS que traduziu o pedido otimizou a variável
 errada.
+
+
+---
+
+## 6 · ✅ FECHADA — 03/08/2026, com evidência
+
+| Critério | Evidência |
+|---|---|
+| 1 · Primeira tela: categorias + pratos, zero conversa | 375/768/1280: chips de categoria (incl. "Mais vendidos"), cards com preço, **zero elemento de conversa**, zero rolagem lateral |
+| 2 · Compra por clique nas duas modalidades | Loja local real: **retirada CONFIRMADA** e **entrega CONFIRMADA**, nas rotas provadas (`identify-customer` → `finalize`), screenshots por etapa |
+| 3 · Estados + white-label | vazio/erro/fechado tratados; cor da marca do restaurante em header, chips, preço e botões |
+| 4 · `/qr` da mesa intocado | Conferido: segue vitrine, sem carrinho |
+| 5 · Verificação | `tsc` 0 · lint 0 · 4669 testes verdes · **produção**: `pizzaria-testando` (entrada) renderiza a loja nova; `sushi-cazza` (IA) segue no chat |
+
+**Como ficou o roteamento:** um link só (`/pedido/[slug]`). A MESMA flag do gate
+de plano decide a experiência — plano com Garçom → chat; plano de entrada → loja
+QR com checkout. Zero chamadas de IA disparadas pela loja nova.
+
+Auto-revisão visual (DESIGN.md): hierarquia 9 · tipografia 8 · espaçamento 8 ·
+consistência 9.
