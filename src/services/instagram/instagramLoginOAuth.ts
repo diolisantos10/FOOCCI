@@ -243,7 +243,15 @@ export interface CallbackResult {
   restaurantId: string | null;
   reason: string | null;
   username: string | null;
+  /** How long the stored token lasts. null = unknown. A durable connection is ~60 days. */
+  tokenExpiresInSeconds?: number | null;
+  /** True when the long-lived exchange fell back to a short token (dies in ~1h). The
+   *  connection still forms, but it is NOT healthy — the panel must say so, not show green. */
+  shortLived?: boolean;
 }
+
+/** A token below this is treated as short-lived (the ~1h fallback), not a real 60-day token. */
+export const DURABLE_TOKEN_MIN_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 export async function handleInstagramLoginCallback(
   input: { state: string; code?: string | null; error?: string | null; redirectUri: string | null },
@@ -272,6 +280,18 @@ export async function handleInstagramLoginCallback(
     const profile = await graph.exchange({ code: input.code, redirectUri: input.redirectUri, creds });
     if (!profile.igUserId) throw new Error("Não foi possível identificar a conta do Instagram.");
 
+    // Durability gate. The long-lived exchange (ig_exchange_token) can fall back to the
+    // ~1h short token — the exact failure that killed Sushi Cazza on 25-Jul. When that
+    // happens the connection still forms, so without this the panel would show a green
+    // "conectado" that dies within the hour and drops every DM in silence. Surface it as
+    // an error on the config (Diagnóstico card + daily refresh alert carry the evidence),
+    // and clear any stale error on a genuinely durable reconnect.
+    const shortLived =
+      typeof profile.expiresInSeconds === "number" && profile.expiresInSeconds < DURABLE_TOKEN_MIN_SECONDS;
+    const lastError = shortLived
+      ? "Conexão instável: o Instagram devolveu um token de curta duração (expira em ~1h) em vez do token de 60 dias. Reconecte a conta; se repetir, a troca long-lived está falhando em produção."
+      : null;
+
     const result = await upsertInstagramConfig(row.restaurantId, {
       instagramBusinessAccountId: profile.igUserId,
       facebookPageId: null,
@@ -283,6 +303,7 @@ export async function handleInstagramLoginCallback(
       scope: "RESTAURANT_WIDE",
       enabled: true,
       paused: false,
+      lastError,
       metadata: {
         connectedVia: INSTAGRAM_LOGIN_PLATFORM,
         connectedAt: new Date().toISOString(),
@@ -299,7 +320,14 @@ export async function handleInstagramLoginCallback(
     if (!result.ok) {
       return { ok: false, restaurantId: row.restaurantId, reason: result.error ?? "Não foi possível salvar a configuração.", username: profile.username };
     }
-    return { ok: true, restaurantId: row.restaurantId, reason: null, username: profile.username };
+    return {
+      ok: true,
+      restaurantId: row.restaurantId,
+      reason: null,
+      username: profile.username,
+      tokenExpiresInSeconds: profile.expiresInSeconds ?? null,
+      shortLived,
+    };
   } catch (err) {
     const reason = err instanceof Error ? err.message.slice(0, 200) : "erro ao conectar com o Instagram";
     await prisma.metaOAuthState.update({ where: { id: row.id }, data: { status: "CONSUMED", error: reason } }).catch(() => undefined);
