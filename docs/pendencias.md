@@ -4,6 +4,14 @@
 
 ---
 
+> 🪧 **REIVINDICAÇÃO ATIVA — Diretor Geral, 03/08 (noite), com agentes.**
+> Construindo a **V1 do fluxo de compra** (frente já minha, OS
+> `OS-fluxo-de-compra-do-plano.md`): schema `PlanSubscription` + trilha de
+> aceite, e serviço Mercado Pago Assinaturas. **Arquivos:** `prisma/schema.prisma`
+> (modelos novos apenas, aditivo), `src/services/billing/**` (pasta nova),
+> testes. **Não toco** em `/pedido`, `/qr`, site, nem em nada da OS corretiva da
+> loja — essa frente é do Diretor. Apago ao terminar.
+
 ## 💳 FLUXO DE COMPRA DO PLANO — estrutura levantada, OS aberta (03/08)
 
 Ordem do CEO. **Hoje um cliente que quer pagar não tem onde**: sem botão, sem
