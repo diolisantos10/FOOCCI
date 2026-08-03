@@ -4,6 +4,15 @@
 
 ---
 
+> 🪧 **REIVINDICAÇÃO ATIVA — Diretor Geral, 03/08, por ordem direta do CEO.**
+> Estou trabalhando em: (1) **fluxo de compra do plano** (checkout, termos,
+> pós-compra, NFS-e) e (2) **varredura de segurança do sistema**. Arquivos de
+> marketing/site, `next.config`, e docs novos em `docs/`. **Não toco** em
+> `/pedido`, `/qr` nem em nada do cardápio sem IA — essa frente é do Diretor do
+> Foocci. Apago esta nota ao terminar.
+
+---
+
 # 🚨 A FILA COMEÇA AQUI — ordem direta do CEO, 03/08
 
 > **Diretor do Foocci: largue o que estiver fazendo e leia este bloco antes de
