@@ -12,7 +12,7 @@
  *      defend in front of the restaurant owner.
  *
  * Origin: docs/foocci-site/os-repaginacao-comercial.md §2.2, public research of
- * 2026-08-02.
+ * 2026-08-02. The internal document names the marketplace; the PUBLIC PAGE must not.
  */
 
 export interface CommissionRate {
@@ -23,9 +23,19 @@ export interface CommissionRate {
   breakdown: string;
 }
 
-/** Where the percentages came from — rendered on the page, never hidden. */
+/**
+ * Where the percentages came from — rendered on the page, never hidden.
+ *
+ * The marketplace is NOT named here, by decision of the CEO on 2026-08-03: naming a
+ * competitor in a comparison on a public commercial page invites a lawsuit, and the
+ * argument does not need the name to work. The owner reading it knows exactly which
+ * marketplace charges them.
+ *
+ * The rates are still the real, published ones — the source stays citable without the
+ * brand. If anyone asks in a sales meeting, the number is defensible.
+ */
 export const COMMISSION_SOURCE = {
-  label: "Tabela pública do iFood, consultada em 02/08/2026",
+  label: "Tabelas públicas dos principais marketplaces de delivery, consultadas em 08/2026",
   checkedAt: "2026-08-02",
 } as const;
 
@@ -37,7 +47,7 @@ export const COMMISSION_RATES: Record<"own" | "marketplace", CommissionRate> = {
   },
   marketplace: {
     rate: 0.265,
-    label: "Entrega do iFood",
+    label: "Entrega do marketplace",
     breakdown: "comissão, taxa de pagamento e logística do marketplace",
   },
 };

@@ -63,8 +63,18 @@ describe("published rates carry their origin", () => {
   });
 
   it("the source is stated and dated — a number without origin is invented", () => {
-    expect(COMMISSION_SOURCE.label).toMatch(/iFood/i);
+    expect(COMMISSION_SOURCE.label.trim().length).toBeGreaterThan(10);
     expect(COMMISSION_SOURCE.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("never names a competitor — decisão do CEO, é risco jurídico", () => {
+    // Naming a marketplace in a comparison on a public commercial page invites a
+    // lawsuit. The argument works without the name, so the name does not go up.
+    const publicText = [
+      COMMISSION_SOURCE.label,
+      ...Object.values(COMMISSION_RATES).flatMap((r) => [r.label, r.breakdown]),
+    ].join(" ");
+    expect(publicText).not.toMatch(/ifood|rappi|uber\s*eats|99food/i);
   });
 });
 
