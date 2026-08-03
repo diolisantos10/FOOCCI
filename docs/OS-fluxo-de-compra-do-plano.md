@@ -73,15 +73,14 @@ A boa notícia do levantamento: **a Foocci já opera uma conta-mãe no Focus NFe
 para notas dos lojistas. O mesmo provedor emite NFS-e. O código de emissão é
 pequeno perto do que já existe.
 
-**O que só o CEO pode fornecer/decidir (sem isso, nada de nota):**
-1. **CNPJ da Foocci** cadastrado na conta Focus como emissor de NFS-e;
-2. **Inscrição municipal** e município de emissão;
-3. **Código de serviço (LC 116)** — tipicamente 1.05/1.03 (licenciamento de
-   software / SaaS), a confirmar com o contador;
-4. Alíquota de ISS do município / regime (Simples?).
-
-> Isto é burocracia de contador + painel Focus, não código. O código fica pronto
-> esperando esses quatro dados.
+**ATUALIZADO 03/08 — o CEO enviou o CCMEI e a situação real é mais séria:** o
+CNPJ 59.120.811/0001-79 é **MEI com CNAE de comércio de VESTUÁRIO**, sem
+secundários. Como está, **não pode emitir nota de software** — e software não é
+atividade permitida no MEI (2026). Caminho, porquê e ordem em
+**`docs/juridico/parecer-cnpj-e-caminho-fiscal.md`**: desenquadrar para SLU-ME
+com CNAE 6203-1/00, via contador. Até lá a emissão fica travada; aceite e
+cobrança podem ser construídos em paralelo. A minuta do contrato já existe:
+**`docs/juridico/termo-de-contratacao-foocci.md`**.
 
 ### Peça 5 — Pós-compra
 
