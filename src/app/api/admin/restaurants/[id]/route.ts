@@ -26,6 +26,10 @@ const patchSchema = z.object({
   name:     z.string().min(1).max(120).optional(),
   isActive: z.boolean().optional(),
   plan:     z.enum(["STARTER", "GROWTH", "PRO"]).optional(),
+  // AI Waiter override: true = grant regardless of plan (grandfather/courtesy),
+  // false = revoke regardless of plan, null = follow the plan. Without this field
+  // the override column is unmanageable — flipping it would need direct SQL.
+  aiWaiterEnabled: z.boolean().nullable().optional(),
 });
 
 export async function PATCH(
@@ -67,9 +71,10 @@ export async function PATCH(
       ...(parsed.data.name     !== undefined && { name:     parsed.data.name }),
       ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
       ...(parsed.data.plan     !== undefined && { plan:     parsed.data.plan }),
+      ...(parsed.data.aiWaiterEnabled !== undefined && { aiWaiterEnabled: parsed.data.aiWaiterEnabled }),
     },
     select: {
-      id: true, name: true, isActive: true, plan: true, updatedAt: true,
+      id: true, name: true, isActive: true, plan: true, aiWaiterEnabled: true, updatedAt: true,
     },
   });
 
