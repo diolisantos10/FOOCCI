@@ -40,6 +40,9 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/l(\/.*)?$/,                      // Public tracking short links — 302 to /pedido or /qr with UTM params
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
   /^\/api\/payments\/mercadopago\/webhook$/, // Mercado Pago webhook (public — MP servers have no JWT)
+  /^\/contratar(\/.*)?$/,                // Public plan-contract acceptance page (token-gated by construction)
+  /^\/api\/billing\/accept$/,           // Terms acceptance (rate-limited; requires unguessable token)
+  /^\/api\/billing\/mp-webhook$/,       // MP PLATFORM billing webhook (verified by refetch with our token)
   /^\/api\/payments\/sumup\/webhook$/, // SumUp webhook (public — re-verified via SumUp API before confirming)
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)
   /^\/api\/v1(\/.*)?$/,                // Public external API — auth handled per-route via Bearer API key (ApiKeyService)
