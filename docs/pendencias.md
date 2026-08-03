@@ -32,6 +32,28 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
+## 🤖 P0 do canal (03/08, noite) · Agente de CRM — casa PRONTA, ligação PREPARADA e travada no CEO
+
+`docs/OS-crm-agente-ligar-e-dar-casa.md`, chegada pelo canal dos Diretores (PR #69).
+
+- **Tarefa B (casa na interface): executada.** Casa única em `/admin/agentes/crm`
+  (rota antiga `/admin/crm-agente` redireciona) com os 5 blocos: degrau, últimas
+  decisões (`agent:crm`), prova A/B honesta, controles (confirm digitado + botão
+  de pânico) e próximo passo. De carona, dois bugs reais: a tela antiga estava
+  morta para admin (middleware barrava antes da rota — agora rotas `/api/admin/*`)
+  e o shell do admin não tinha mobile (drawer novo; a 375px sobravam 167px úteis).
+  tsc limpo, 4698 testes verdes, screenshots 375/768/1280 + vazios + drawer.
+- **Tarefa A (ALLOWLIST): preparada, NÃO promovida.** Rollback provado em local
+  (banco real, 6ms, sorteio intacto), roteiro executável na sala do `crm`
+  (`docs/agents/crm/oficina.md`), normalização do 9º dígito provada nos 2 sentidos.
+  **Pré-cheques que condicionam o 1º envio:** provider do alvo não pode ser Meta
+  oficial (o agente não compõe ali, por desenho); `CRM_BRAIN_SHADOW_ENABLED=true`
+  no Railway; telefones do time precisam existir na audiência.
+- **Aguardando o CEO:** lista de telefones do time + restaurante alvo (provável
+  Sushi Cazza, a confirmar). Sem isso, nada é promovido — trava intencional.
+- Varredura rápida das demais páginas do admin no drawer mobile novo: na fila do
+  `qualidade` (o shell mudou para todas; só a casa foi conferida página a página).
+
 ## ✅ 0º-C · Site — bloco do Garçom com telas reais + argumento "zero app" (03/08)
 
 Entregue no mesmo dia, no ar em `/site/como-funciona`:
@@ -104,6 +126,17 @@ com carrinho e checkout** (retirada E entrega confirmadas em teste, zero
 conversa, zero IA); planos com Garçom seguem no chat, intocados. Um link só —
 a mesma flag do gate decide. `/qr` da mesa continua vitrine. Evidência completa
 dentro da OS.
+
+**Complemento de 03/08 (pedido do CEO):** a loja sem IA ganhou **link próprio** —
+`/pedido/[slug]?modo=loja` força o catálogo em **qualquer** plano (o parâmetro só
+remove a IA, nunca a liga; trava por plano intocada) — e a tela Cardápio agora
+mostra **três cartões de QR**: Salão (vitrine) → Loja (pedido sem conversa) →
+Delivery (pedido com Garçom). Verificado: tsc + vitest (4690 testes) verdes,
+screenshots 375/768/1280, e a rota provada em tela (chat vs. catálogo no mesmo
+restaurante PRO). De carona: o QRCard cortava conteúdo em grid desde antes
+(breakpoint de viewport × largura de coluna) — corrigido; aprendizado promovido à
+vitrine do `interface`. Na branch `claude/foocci-director-onboarding-lhindy`,
+aguardando merge para a padrão.
 
 ## (original) 0º · CORREÇÃO DO CEO — a interface era OUTRA
 

@@ -119,6 +119,81 @@ export function compararBracos(agente: Braco, controle: Braco): ComparacaoAB {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  As últimas decisões do agente — o "o que ele está fazendo" da casa dele
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DecisaoRecente {
+  quando: Date;
+  /** SOMBRA = registrou sem enviar (brainShadowLog). ENVIO_REAL = saiu de verdade (campaignExecution). */
+  origem: "SOMBRA" | "ENVIO_REAL";
+  /** A situação que ele estava resolvendo (intent do runner ou nome da campanha). */
+  situacao: string;
+  /** O que ele enviou — ou enviaria, em sombra. */
+  mensagem: string;
+  /** Só em SOMBRA: veredito de coerência do crítico (PASS | FAIL | NEEDS_REVIEW). */
+  coerencia: string | null;
+  /** Só em SOMBRA: confiança declarada do raciocínio. */
+  confianca: number | null;
+  /** Só em ENVIO_REAL: status do envio (SENT | DELIVERED | READ | …). */
+  status: string | null;
+  /** Só em ENVIO_REAL: o cliente converteu depois da mensagem? */
+  converteu: boolean | null;
+}
+
+/**
+ * As últimas decisões do agente, misturando sombra e envio real em ordem
+ * cronológica. Em SHADOW_ONLY só existem linhas de sombra; quando a allowlist
+ * liga, os envios reais (variantKey = agent:crm) entram na mesma lista.
+ * READ-ONLY como o resto do arquivo. Falha de leitura devolve lista vazia.
+ */
+export async function lerDecisoesRecentes(restaurantId: string, limit = 12): Promise<DecisaoRecente[]> {
+  const take = Math.min(Math.max(1, limit), 50);
+
+  const [sombra, reais] = await Promise.all([
+    prisma.brainShadowLog.findMany({
+      where: { restaurantId, agentId: "crm" },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: { createdAt: true, intent: true, coherence: true, confidence: true, wouldReply: true },
+    }).catch(() => []),
+    prisma.campaignExecution.findMany({
+      where: { restaurantId, variantKey: CHAVE_DO_AGENTE },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        createdAt: true, status: true, messageText: true, converted: true,
+        campaign: { select: { name: true } },
+      },
+    }).catch(() => []),
+  ]);
+
+  const linhas: DecisaoRecente[] = [
+    ...sombra.map((s): DecisaoRecente => ({
+      quando: s.createdAt,
+      origem: "SOMBRA",
+      situacao: s.intent,
+      mensagem: s.wouldReply,
+      coerencia: s.coherence,
+      confianca: s.confidence,
+      status: null,
+      converteu: null,
+    })),
+    ...reais.map((r): DecisaoRecente => ({
+      quando: r.createdAt,
+      origem: "ENVIO_REAL",
+      situacao: r.campaign?.name ?? "campanha",
+      mensagem: r.messageText ?? "",
+      coerencia: null,
+      confianca: null,
+      status: String(r.status),
+      converteu: r.converted,
+    })),
+  ];
+
+  return linhas.sort((a, b) => b.quando.getTime() - a.quando.getTime()).slice(0, take);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  O relatório
 // ─────────────────────────────────────────────────────────────────────────────
 
