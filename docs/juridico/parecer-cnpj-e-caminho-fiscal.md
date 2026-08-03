@@ -1,0 +1,84 @@
+# Parecer — o CNPJ atual e o caminho para faturar o Foocci
+
+> 03/08/2026 · Diretor Geral, a pedido do CEO ("jurídico é você").
+> **Honestidade de escopo:** este parecer é a melhor análise técnica que consigo
+> fazer, com fontes citadas — mas não sou advogado inscrito na OAB nem contador
+> registrado. Para o contrato valer briga judicial e para o ato fiscal ser
+> protocolado certo, uma revisão humana (advogado + contador) continua valendo o
+> preço. Enquanto ela não acontece, isto aqui é muito melhor do que nada — que
+> era o estado anterior.
+
+---
+
+## 1 · O que o documento e a Receita dizem
+
+| Campo | Valor |
+|---|---|
+| Titular | Diego de Oliveira Santos · CPF 071.294.354-45 |
+| CNPJ | **59.120.811/0001-79** · ATIVA · abertura 27/01/2025 |
+| Enquadramento | **MEI** (Simples Nacional) |
+| Endereço | Rua Itápolis 1167, Pacaembu, São Paulo/SP |
+| **CNAE principal** | **4781-4/00 — Comércio varejista de artigos do VESTUÁRIO e acessórios** |
+| CNAEs secundários | **nenhum** |
+
+Fonte: CCMEI enviado pelo CEO + consulta pública à base da Receita (BrasilAPI)
+em 03/08/2026.
+
+## 2 · O problema, sem rodeio
+
+**Este CNPJ, como está, vende roupa.** Ele não pode emitir nota fiscal de
+licenciamento de software (Foocci) nem de serviços de marketing (agência):
+
+1. **CNAE errado** — nota emitida em atividade não registrada é nota irregular;
+2. **E não dá para simplesmente adicionar o CNAE certo**, porque
+   **desenvolvimento e licenciamento de software NÃO estão na lista de
+   atividades permitidas ao MEI** (2026). Existe projeto para incluir
+   (PLP 25/2026), aprovado em comissão mas **não concluído** — hoje não vale.
+3. **Teto do MEI: R$ 81.000/ano.** Mesmo que coubesse, a matemática estoura
+   rápido: 10 clientes no Crescimento (R$ 429) = R$ 51,5 mil/ano só aí; somando
+   Performance e agência, o teto cai no primeiro ano bom.
+
+## 3 · O caminho recomendado
+
+**Desenquadrar do MEI e virar ME no Simples Nacional** — de preferência como
+**SLU (Sociedade Limitada Unipessoal)**: sócio único, sem exigência de capital
+alto, e **separa o patrimônio pessoal do Diego do risco da empresa** (o MEI não
+separa — hoje uma dívida da empresa alcança bens pessoais).
+
+CNAEs a registrar (confirmar com o contador):
+
+| CNAE | O quê | Para |
+|---|---|---|
+| **6203-1/00** | Licenciamento de programas de computador não customizáveis | **Foocci (SaaS) — principal** |
+| 6202-3/00 | Desenvolvimento e licenciamento de programas customizáveis | projetos sob medida |
+| 7319-0/99 ou 7311-4/00 | Publicidade / agenciamento | esteira de agência |
+
+Efeitos práticos do desenquadramento: contabilidade obrigatória (contador
+mensal, ~R$ 200–400), imposto pelo Simples anexo III ou V (fator R — com
+pró-labore adequado, tende ao anexo III, ~6% na faixa inicial), e **NFS-e
+emitida normalmente** — inclusive pela conta Focus NFe que o sistema já tem.
+
+> ⚠️ **Prazo de efeito do desenquadramento** varia conforme o motivo (voluntário
+> × exercício de atividade vedada) — é exatamente o tipo de detalhe para o
+> contador protocolar certo. Não afirmo prazo aqui para não afirmar errado.
+
+## 4 · O que fazer, em ordem
+
+1. **CEO → contador** (esta semana): desenquadramento/transformação em SLU-ME,
+   CNAEs da tabela, inscrição municipal em SP para NFS-e. É um serviço padrão.
+2. **Enquanto isso, nada impede**: fechar clientes, colher aceite do contrato,
+   ativar assinatura no Mercado Pago (o recebimento em si não depende do CNAE) —
+   **a emissão da nota** é o que espera o registro certo. Faturar sem nota é
+   decisão de risco do CEO; a recomendação é alinhar o registro antes do
+   primeiro pagamento recorrente.
+3. **Quando o CNPJ estiver ajustado**: cadastrar a empresa na conta-mãe Focus
+   NFe e ligar a emissão automática (código pronto na OS do fluxo de compra).
+
+## 5 · Fontes
+
+- CCMEI enviado pelo CEO (03/08/2026) e consulta pública Receita/BrasilAPI.
+- Sobre software não caber no MEI e o PLP 25/2026:
+  [Meu Contador Online](https://www.meucontadoronline.com.br/blog/desenvolvedor-de-software-pode-ser-mei/),
+  [Contabilidade.com](https://contabilidade.com/blog/desenvolvedor-pode-ser-mei-em-2026-veja-como-abrir-cnpj-escolher-o-cnae-ideal-e-pagar-menos-impostos/),
+  [Conta Junto](https://contajunto.com/desenvolvedor-pode-ser-mei-em-2026-entenda-qual-empresa-abrir/),
+  [Econtrol](https://econtrolcontabilidade.com.br/desenvolvedor-de-software-pode-ser-mei-entenda-o-que-diz-a-legislacao-e-quais-alternativas-existem/).
