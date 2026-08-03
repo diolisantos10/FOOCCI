@@ -11,9 +11,10 @@
  * an OpenAI call, making them fast and cost-free.
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma }      from "@/lib/prisma";
 import { ok, badRequest, serverError } from "@/lib/api-response";
+import { aiWaiterIncluded } from "@/lib/plan-features";
 import { AIOrderService } from "@/services/ai/AIOrderService";
 import type { V2Event, V2CatalogItem } from "@/services/ai/WaiterBrainV2";
 import { getBestSellerMap, applyBestSellers } from "@/services/ai/waiter/bestSellers";
@@ -124,9 +125,22 @@ export async function POST(
 
     const restaurant = await prisma.restaurant.findUnique({
       where:  { slug },
-      select: { id: true },
+      select: { id: true, plan: true, aiWaiterEnabled: true },
     });
     if (!restaurant) return badRequest("Restaurante não encontrado.");
+
+    // Plan gate — the AI Waiter is a paid feature and this route is its ONLY entry
+    // from the public store. Without this check the gate is contract text, and the
+    // token bill for a plan that "does not include AI" lands on us (guardrail 4:
+    // prompt é aviso, código é trava).
+    //
+    // 403 with a machine-readable body, no customer-facing prose: the storefront
+    // treats any failure here silently — checkout proceeds click-driven, the greeting
+    // path never calls this route when the plan lacks the Waiter. The customer must
+    // never see "seu restaurante não pagou".
+    if (!aiWaiterIncluded(restaurant)) {
+      return NextResponse.json({ success: false, error: "ai_not_included" }, { status: 403 });
+    }
 
     let body: PedidoChatRequest;
     try { body = await req.json(); } catch { return badRequest("Invalid JSON body."); }

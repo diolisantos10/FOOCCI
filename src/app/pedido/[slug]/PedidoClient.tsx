@@ -438,6 +438,14 @@ interface Props {
   pixOnlineEnabled?: boolean;
   /** Show the online "Cartão de crédito" option — true only when SumUp is active. */
   cardOnlineEnabled?: boolean;
+  /**
+   * Whether this restaurant's plan includes the AI Waiter. When false the store is
+   * click-driven end to end: no AI network calls, no chat composer, no suggestion
+   * button — and the server enforces the same gate with a 403, so this flag is
+   * presentation, not security. Defaults to true so nothing changes for callers
+   * that predate the entry plan.
+   */
+  aiIncluded?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2423,6 +2431,7 @@ export function PedidoClient({
   repeatMenuItems: repeatMenuItemsProp,
   pixOnlineEnabled = true,
   cardOnlineEnabled = false,
+  aiIncluded = true,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -3487,6 +3496,20 @@ export function PedidoClient({
       const categoryIntro = options?.categoryIntro;
       const displayText   = options?.displayText;
 
+      // Plan without the AI Waiter: this function is the only place that talks to the
+      // AI, so the whole conversation layer is cut here, before any network. The one
+      // AI-mediated funnel transition — "Finalizar pedido" waiting for the upsell
+      // turn — degrades to opening the operational checkout directly. Everything else
+      // (item added, idle nudge, typed text) is simply dropped: with no Waiter there
+      // is nobody to answer, and a fake reply would be the store lying about itself.
+      if (!aiIncluded) {
+        if (checkoutPendingRef.current) {
+          checkoutPendingRef.current = false;
+          proceedToCheckoutRef.current();
+        }
+        return;
+      }
+
       setUi("thinking");
       const trimmed = text.trim();
 
@@ -3646,7 +3669,7 @@ export function PedidoClient({
         setUi("idle");
       }
     },
-    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId, categories, applyAiActive],
+    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId, categories, applyAiActive, aiIncluded],
   );
 
   // ── Deterministic message helpers ─────────────────────────────────
@@ -3713,12 +3736,21 @@ export function PedidoClient({
     greetedRef.current = true;
     fireGtag("view_menu", { restaurant: restaurantName, ...getUtm() });
     const name = identifiedName;
-    const greeting = name
-      ? `Oi, ${name}! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`
-      : `Oi! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`;
-    // Clean opening: "Quero uma sugestão" + (para quem já pediu) "Pedir
-    // novamente" ao lado. "Pedir novamente" abre a categoria "Comprar novamente".
+    // Without the Waiter, the greeting must not offer help nobody will give
+    // ("eu te ajudo a escolher" with no AI behind it is the store lying about
+    // itself) and must not show "Quero uma sugestão". "Pedir novamente" stays —
+    // it opens a menu category, no AI involved.
     const canRepeat = Boolean(repeatOrder && repeatOrder.items.length > 0);
+    const greeting = aiIncluded
+      ? (name
+          ? `Oi, ${name}! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`
+          : `Oi! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`)
+      : (name
+          ? `Oi, ${name}! 👋\nFica à vontade pra olhar o cardápio. É só tocar no prato para adicionar.`
+          : `Oi! 👋\nFica à vontade pra olhar o cardápio. É só tocar no prato para adicionar.`);
+    const openingOptions = aiIncluded
+      ? buildOpeningOptions({ canRepeat })
+      : buildOpeningOptions({ canRepeat }).filter((o) => o.value !== SUGGESTION_OPTION_VALUE);
     setMessages((prev) => [
       ...prev,
       {
@@ -3726,13 +3758,13 @@ export function PedidoClient({
         role: "assistant" as const,
         content: greeting,
         ts: new Date(),
-        options: buildOpeningOptions({ canRepeat }),
+        ...(openingOptions.length > 0 ? { options: openingOptions } : {}),
       },
     ]);
     // Fire ON_ENTRY to the server for Atendimento logging + early conversationId
     // init. Non-fatal — ordering continues if this fails.
     const sid = sessionIdRef.current;
-    if (sid) {
+    if (sid && aiIncluded) {
       fetch(`/api/pedido/${slug}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5650,7 +5682,10 @@ export function PedidoClient({
   // ── Input area ────────────────────────────────────────────────────
   // Text input is hidden during the two entry phases (identifying / choosing) —
   // those phases own the bottom control surface with their own dedicated panels.
-  const showInput = (stage === "BROWSE" && entryPhase === "browsing")
+  // Sem o Garçom, o composer de BROWSE ("Peça uma sugestão…") é uma caixa que
+  // ninguém responde — some. O input de ASK_NAME fica: é o funil operacional
+  // pedindo o nome, não conversa com IA.
+  const showInput = (stage === "BROWSE" && entryPhase === "browsing" && aiIncluded)
     || stage === "ASK_NAME";
   const inputPlaceholder =
     stage === "ASK_NAME"        ? "Seu nome…" :

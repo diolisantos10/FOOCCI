@@ -20,6 +20,7 @@ import { channelPrice } from "@/services/menu/MenuPricingService";
 import { PEDIDO_ITEM_SELECT, mapPedidoItem } from "@/services/menu/pedidoMenuItem";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 import { getPublicSiteUrl } from "@/lib/public-url";
+import { aiWaiterIncluded } from "@/lib/plan-features";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,7 @@ export default async function PedidoPage({
     where: { slug },
     select: {
       id: true, name: true, logoUrl: true, phone: true, timezone: true,
+      plan: true, aiWaiterEnabled: true,
       isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true,
       storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true } },
     },
@@ -481,6 +483,7 @@ gtag('config', '${ga4Id}');
 
       <PedidoClient
         slug={slug}
+        aiIncluded={aiWaiterIncluded(restaurant)}
         restaurantName={restaurant.name}
         logoUrl={
           (brandConfig?.brandPersona != null && typeof brandConfig.brandPersona === "object"

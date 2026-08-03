@@ -34,6 +34,12 @@ model Restaurant {
   // Master switch do Agente de CRM. false = CRM roda 100% na mão (sem IA).
   crmAgentEnabled Boolean  @default(true)
   plan            Plan     @default(STARTER)
+  // Whether the AI Waiter is available on this restaurant's public store.
+  // NULL = derive from plan (STARTER → no, GROWTH/PRO → yes). The migration
+  // grandfathers every restaurant existing at rollout to TRUE: Sushi Cazza — the
+  // live customer — is on STARTER *with* the Waiter running, and a naive
+  // plan-only gate would have shut down its AI in production (guardrail 5).
+  aiWaiterEnabled Boolean?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
