@@ -3849,12 +3849,14 @@ export function MenuManager({
   restaurantSlug,
   restaurantId: _restaurantId,
   qrUrl,
+  lojaUrl,
   pedidoUrl,
 }: {
   initialCategories: Category[];
   restaurantSlug: string;
   restaurantId: string;
   qrUrl: string;
+  lojaUrl: string;
   pedidoUrl: string;
 }) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
@@ -4014,6 +4016,14 @@ export function MenuManager({
             subtitle="Cardápio digital — sem pedido"
             downloadName={`salao-qr-${restaurantSlug}.png`}
             tip="Cole nas mesas para que os clientes consultem o cardápio. Leitura apenas — sem carrinho ou checkout."
+          />
+          <QRCard
+            url={lojaUrl}
+            slug={restaurantSlug}
+            label="QR Code Loja"
+            subtitle="Pedido online — sem conversa"
+            downloadName={`loja-qr-${restaurantSlug}.png`}
+            tip="O cliente vê o catálogo, monta o carrinho e paga online, sem chat. Ideal para quem prefere pedir direto."
           />
           <QRCard
             url={pedidoUrl}
