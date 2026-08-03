@@ -121,6 +121,7 @@ model Restaurant {
   ingredients             Ingredient[]
   fiscalConfig            FiscalConfig?
   fiscalDocuments         FiscalDocument[]
+  planSubscriptions       PlanSubscription[]
 
   @@map("restaurants")
 }
@@ -1411,9 +1412,9 @@ model SiteSettings {
   id String @id @default("singleton")
 
   /// GA4 measurement id, e.g. "G-XXXXXXXXXX". Public by nature — it ships to the browser.
-  gaMeasurementId String?
+  gaMeasurementId        String?
   /// Meta Pixel id. Also public by nature.
-  metaPixelId     String?
+  metaPixelId            String?
   /// Google Search Console HTML verification token, when verifying by meta tag.
   googleSiteVerification String?
 
@@ -2042,27 +2043,27 @@ model PrintAgent {
 //  and acks (PRINTED/FAILED). Additive: no agent paired → jobs simply wait.
 
 model PrintJob {
-  id           String    @id @default(cuid())
-  restaurantId String
-  orderId      String? // source order (null for test prints) — traceability + dedupe
-  stationKey   String? // which station this came from (CAIXA, COZINHA_1, …)
-  printerName  String // target Windows printer
-  title        String // short label (e.g. "Pedido #123" / "TESTE")
-  body         String // the ticket text to print
+  id            String    @id @default(cuid())
+  restaurantId  String
+  orderId       String? // source order (null for test prints) — traceability + dedupe
+  stationKey    String? // which station this came from (CAIXA, COZINHA_1, …)
+  printerName   String // target Windows printer
+  title         String // short label (e.g. "Pedido #123" / "TESTE")
+  body          String // the ticket text to print
   /// PENDING → na fila · CLAIMED → entregue ao Carteiro, com prazo de ack
   /// PRINTED → saiu papel · DEAD → esgotou as tentativas, precisa de gente.
   /// Não existe estado terminal de falha silenciosa: CLAIMED sem ack volta
   /// para PENDING quando o prazo vence (era aqui que a comanda sumia).
-  status       String    @default("PENDING") // PENDING | CLAIMED | PRINTED | DEAD
-  error        String?
+  status        String    @default("PENDING") // PENDING | CLAIMED | PRINTED | DEAD
+  error         String?
   /// Quantas vezes o job já saiu para o Carteiro. Conta no CLAIM, não no ack:
   /// job que foi entregue e sumiu também gastou tentativa.
-  attempts     Int       @default(0)
+  attempts      Int       @default(0)
   /// Antes disto o job não é servido de novo — o respiro entre as tentativas.
   nextAttemptAt DateTime?
-  createdAt    DateTime  @default(now())
-  claimedAt    DateTime?
-  printedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  claimedAt     DateTime?
+  printedAt     DateTime?
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -2158,7 +2159,7 @@ model StoreProfile {
   brandTone          String? // como a marca fala
 
   /// De onde veio este cliente (indicação, inbound, prospecção…).
-  leadSource String?
+  leadSource    String?
   /// Anotações da equipe. NUNCA exposto ao lojista — só no admin.
   internalNotes String? @db.Text
 
@@ -4767,7 +4768,7 @@ enum FiscalDocumentStatus {
 /// A rota de captura grava AQUI antes de tentar qualquer notificação. Se o
 /// e-mail falhar, o lead continua existindo — a notificação é aviso, não cofre.
 model SiteLead {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   nome        String
   whatsapp    String
   restaurante String?
@@ -4780,8 +4781,107 @@ model SiteLead {
   notifiedAt  DateTime?
   /// Última falha de notificação, para o alerta carregar a própria evidência.
   notifyError String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([createdAt])
   @@index([notifiedAt])
+}
+
+// ═══════════════════════════════════════════
+//  BILLING DA PLATAFORMA — assinatura de plano da PRÓPRIA Foocci
+// ═══════════════════════════════════════════
+
+/// Uma contratação de plano por um restaurante-cliente da Foocci.
+///
+/// NÃO é multi-tenant no sentido usual: como o SiteLead, nasce ANTES de o
+/// restaurante existir no sistema (a venda é 1:1 — o CEO fecha no WhatsApp e o
+/// restaurante pode ser provisionado depois). Por isso `restaurantId` é opcional.
+///
+/// O fluxo V1 (assistido) anda por status: DRAFT → AGUARDANDO_ACEITE (link
+/// enviado) → ACEITO (termo registrado com trilha) → AGUARDANDO_PAGAMENTO
+/// (link MP criado) → ATIVA (webhook confirmou) → INADIMPLENTE/CANCELADA.
+model PlanSubscription {
+  id               String                 @id @default(cuid())
+  restaurantId     String?
+  customerName     String
+  customerCnpj     String?
+  customerEmail    String?
+  customerWhatsapp String
+  plan             Plan
+  cycle            BillingCycle
+  /// Centavos, como todo dinheiro nesta casa.
+  priceCents       Int
+  status           PlanSubscriptionStatus @default(DRAFT)
+
+  /// Token do link público de aceite (/contratar/[token]). Único e não adivinhável.
+  acceptToken String @unique
+
+  /// Trilha do aceite — sem ela o aceite não vale nada numa disputa.
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+  termsAcceptedIp String?
+  termsAcceptedBy String?
+
+  /// Vínculo com o Mercado Pago Assinaturas (preapproval).
+  mpPreapprovalId String?
+  mpInitPoint     String?
+
+  activatedAt DateTime?
+  canceledAt  DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  restaurant Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  invoices   PlanInvoice[]
+
+  @@index([status])
+  @@index([mpPreapprovalId])
+  @@map("plan_subscriptions")
+}
+
+enum BillingCycle {
+  MENSAL
+  TRIMESTRAL
+  ANUAL
+}
+
+enum PlanSubscriptionStatus {
+  DRAFT
+  AGUARDANDO_ACEITE
+  ACEITO
+  AGUARDANDO_PAGAMENTO
+  ATIVA
+  INADIMPLENTE
+  CANCELADA
+}
+
+/// Uma cobrança confirmada da assinatura → uma NFS-e a emitir.
+///
+/// Reusa FiscalDocumentStatus dos documentos dos lojistas: PENDENTE aqui também
+/// significa "criada e ainda não transmitida" — inclusive enquanto o CNPJ da
+/// Foocci não puder emitir (MEI de vestuário; ver docs/juridico/). A fila
+/// acumula e emite tudo quando a SLU-ME sair. Nada se perde.
+model PlanInvoice {
+  id             String               @id @default(cuid())
+  subscriptionId String
+  amountCents    Int
+  /// Competência da cobrança, ex. "2026-08".
+  referenceMonth String
+  status         FiscalDocumentStatus @default(PENDENTE)
+  /// Referência (ref) usada no Focus NFe — idempotência da emissão.
+  providerRef    String?              @unique
+  pdfUrl         String?
+  xmlUrl         String?
+  errorMessage   String?
+  /// ID do pagamento no MP que originou esta cobrança (dedupe de webhook).
+  mpPaymentId    String?              @unique
+  emittedAt      DateTime?
+  createdAt      DateTime             @default(now())
+
+  subscription PlanSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("plan_invoices")
 }
