@@ -13,7 +13,7 @@
  */
 
 import { PrimaryCta } from "./Cta";
-import { DEMO_URL } from "./config";
+import { AGENDAR_URL } from "./config";
 import { PLANS } from "@/lib/site/plans";
 import { formatBRL } from "@/lib/site/commissionRates";
 
@@ -62,7 +62,7 @@ Um plano para cada momento do seu restaurante.
         </div>
 
         <div className="mt-7 flex justify-center">
-          <PrimaryCta label="Solicitar demonstração" href={DEMO_URL} />
+          <PrimaryCta label="Agendar demonstração" href={AGENDAR_URL} />
         </div>
       </div>
     </section>

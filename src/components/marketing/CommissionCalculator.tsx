@@ -24,7 +24,7 @@ import {
   calculateCommission,
   formatBRL,
 } from "@/lib/site/commissionRates";
-import { DEMO_URL } from "./config";
+import { AGENDAR_URL } from "./config";
 
 type Delivery = keyof typeof COMMISSION_RATES;
 
@@ -53,9 +53,7 @@ export function CommissionCalculator() {
   // of showing a result that weakens the case.
   const tooSmall = hasValue && revenue < 1_000;
 
-  const demoHref = hasValue && !tooSmall
-    ? `${DEMO_URL}?faturamento=${revenue}&comissao=${Math.round(result.monthlyCommission)}`
-    : DEMO_URL;
+  const demoHref = AGENDAR_URL;
 
   return (
     <section id="calculadora" className="bg-canvas py-12 sm:py-20">

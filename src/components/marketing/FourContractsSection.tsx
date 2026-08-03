@@ -12,7 +12,7 @@
 import Link from "next/link";
 import { SEPARATE_STACK_MONTHLY, formatBRL } from "@/lib/site/commissionRates";
 import { planByIdOrNull } from "@/lib/site/plans";
-import { DEMO_URL } from "./config";
+import { AGENDAR_URL } from "./config";
 
 const SEPARATE = [
   { name: "Cardápio digital", note: "seu pedido, fora do marketplace" },
@@ -111,7 +111,7 @@ export function FourContractsSection() {
 
         <div className="mt-7 text-center">
           <Link
-            href={DEMO_URL}
+            href={AGENDAR_URL}
             className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
           >
             Ver funcionando no meu restaurante

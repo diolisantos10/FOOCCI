@@ -13,7 +13,7 @@
 
 import Image from "next/image";
 import { PrimaryCta, SecondaryCta } from "./Cta";
-import { FOLLOW_LAUNCH_LABEL, DEMO_URL } from "./config";
+import { FOLLOW_LAUNCH_LABEL, AGENDAR_URL } from "./config";
 import { PlayCircleIcon, CalendarIcon } from "./icons";
 import { Eyebrow } from "./premium";
 import { hasAsset, SITE_ASSETS } from "./siteAssets";
@@ -55,7 +55,7 @@ export function HeroSection() {
             <SecondaryCta
               className="w-full gap-2.5 sm:w-auto"
               label={FOLLOW_LAUNCH_LABEL}
-              href={DEMO_URL}
+              href={AGENDAR_URL}
               icon={<CalendarIcon className="h-5 w-5 text-muted" />}
             />
           </div>

@@ -11,7 +11,7 @@ import { CtaBand } from "@/components/marketing/CtaBand";
 import { VisualStepCard } from "@/components/marketing/VisualStepCard";
 import { DotGrid, Eyebrow } from "@/components/marketing/premium";
 import { TrendingUpIcon, UsersIcon, RepeatIcon } from "@/components/marketing/icons";
-import { COMO_FUNCIONA_URL, DEMO_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { COMO_FUNCIONA_URL, AGENDAR_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
 const TITLE = "Planos Foocci | Um plano para cada momento do restaurante";
 const DESCRIPTION =
@@ -57,8 +57,8 @@ export default function PrecosPage() {
         badge="Planos"
         title="Um plano para cada momento do seu restaurante."
         subtitle="O valor depende do tamanho da operação e do que você vai usar. Peça uma demonstração e a gente apresenta a proposta certa — sem compromisso."
-        primaryLabel="Solicitar demonstração"
-        primaryHref={DEMO_URL}
+        primaryLabel="Agendar demonstração"
+        primaryHref={AGENDAR_URL}
         note={PRELAUNCH_NOTE}
       />
 
@@ -145,8 +145,8 @@ export default function PrecosPage() {
 
       <CtaBand
         title="Quer saber quanto fica para o seu restaurante?"
-        label="Solicitar demonstração"
-        href={DEMO_URL}
+        label="Agendar demonstração"
+        href={AGENDAR_URL}
       />
     </>
   );

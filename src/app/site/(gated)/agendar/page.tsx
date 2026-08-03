@@ -12,9 +12,9 @@ import { CheckIcon } from "@/components/marketing/icons";
 import { Eyebrow } from "@/components/marketing/premium";
 import { SchedulerWidget } from "@/components/marketing/SchedulerWidget";
 
-const TITLE = "Agendar uma conversa | Foocci para restaurantes";
+const TITLE = "Agendar demonstração | Foocci para restaurantes";
 const DESCRIPTION =
-  "Escolha um horário e converse ao vivo com quem faz o Foocci. Uma chamada curta, direta e sem compromisso.";
+  "Escolha um horário e veja o Foocci funcionando ao vivo, com quem faz o produto. Uma chamada curta, direta e sem compromisso.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -35,13 +35,13 @@ export default function AgendarPage() {
         <div className="grid items-start gap-10 lg:grid-cols-[5fr_6fr] lg:gap-14">
           {/* Copy */}
           <div>
-            <Eyebrow>Conversa ao vivo</Eyebrow>
+            <Eyebrow>Demonstração ao vivo</Eyebrow>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-5xl">
-              Converse com quem <span className="text-brand-500">faz o Foocci</span>.
+              Agende sua <span className="text-brand-500">demonstração</span>.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Uma chamada curta e direta, com o fundador. Você escolhe o horário,
-              a gente liga no dia marcado e mostra o sistema funcionando.
+              a gente liga no dia marcado e mostra o Foocci funcionando na tela.
             </p>
             <ul className="mt-8 space-y-3">
               {O_QUE_ROLA.map((item) => (

@@ -26,7 +26,7 @@ import { DemoForm } from "@/components/marketing/DemoForm";
 
 export const dynamic = "force-dynamic";
 
-const TITLE = "Solicitar demonstração | Foocci para restaurantes";
+const TITLE = "Demonstração | Foocci para restaurantes";
 const DESCRIPTION =
   "Veja o Foocci funcionando com o cardápio do seu restaurante. Peça uma demonstração — sem compromisso.";
 

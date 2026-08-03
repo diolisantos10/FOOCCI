@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LOGIN_URL, NAV_LINKS, FOLLOW_LAUNCH_LABEL, DEMO_URL } from "./config";
+import { LOGIN_URL, NAV_LINKS, FOLLOW_LAUNCH_LABEL, AGENDAR_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
@@ -63,7 +63,7 @@ export function MarketingHeader() {
             Entrar
           </Link>
           <Link
-            href={DEMO_URL}
+            href={AGENDAR_URL}
             className={`inline-flex items-center rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 ${FOCUS}`}
           >
             {FOLLOW_LAUNCH_LABEL}
@@ -103,7 +103,7 @@ export function MarketingHeader() {
                 Entrar
               </Link>
               <Link
-                href={DEMO_URL}
+                href={AGENDAR_URL}
                 onClick={() => setOpen(false)}
                 className={`inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600 ${FOCUS}`}
               >
