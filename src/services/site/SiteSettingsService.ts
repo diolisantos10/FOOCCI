@@ -28,6 +28,22 @@ const EMPTY: SiteSettings = {
 };
 
 /**
+ * The launch GA4 property, created by the CEO on 2026-08-03. Hardcoded as the LAST
+ * fallback (database and env var both override it) so the tag cannot silently drop
+ * off the live site during the launch window — which is exactly what happened when
+ * two analytics implementations collided on 03/08 and the mounted one lost its id.
+ *
+ * Production-only: in dev/test the default stays off so local browsing never
+ * pollutes the launch numbers. To retire it, delete the constant — by then the id
+ * should live in the database via /admin/site-analytics.
+ */
+const LAUNCH_GA_ID = "G-VERBSTGMDV";
+
+function launchDefault(): string | null {
+  return process.env.NODE_ENV === "production" ? LAUNCH_GA_ID : null;
+}
+
+/**
  * These values are interpolated into a <script> tag, so they are whitelisted rather
  * than escaped. A GA4 id is `G-` plus alphanumerics; a pixel id is digits. Anything
  * else is dropped — a malformed id would otherwise be a script-injection vector on
@@ -63,10 +79,11 @@ export const SiteSettingsService = {
         select: { gaMeasurementId: true, metaPixelId: true, googleSiteVerification: true },
       });
     } catch {
-      // Table may not exist yet (migration not applied). The site renders without
-      // analytics rather than 500-ing on every request.
+      // Table may not exist yet (migration not applied). The site renders with the
+      // launch default rather than 500-ing on every request.
       return {
-        gaMeasurementId: cleanGa(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID),
+        gaMeasurementId:
+          cleanGa(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID) ?? launchDefault(),
         metaPixelId: cleanPixel(process.env.NEXT_PUBLIC_META_PIXEL_ID),
         googleSiteVerification: cleanVerification(process.env.GOOGLE_SITE_VERIFICATION),
       };
@@ -74,7 +91,9 @@ export const SiteSettingsService = {
 
     return {
       gaMeasurementId:
-        cleanGa(row?.gaMeasurementId) ?? cleanGa(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID),
+        cleanGa(row?.gaMeasurementId) ??
+        cleanGa(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID) ??
+        launchDefault(),
       metaPixelId:
         cleanPixel(row?.metaPixelId) ?? cleanPixel(process.env.NEXT_PUBLIC_META_PIXEL_ID),
       googleSiteVerification:

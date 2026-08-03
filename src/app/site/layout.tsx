@@ -14,14 +14,22 @@
  * force-dynamic is kept: `/` renders the same marketing home, and the pages read
  * request-scoped data. Static prerendering here has bitten this subtree before.
  *
- * ANALYTICS: this is also the single mount point of the Google tag. It sits here —
- * and not in the root layout — so the tag covers every marketing page and the bare
- * domain (`/` redirects to `/site`) while staying off the owner panel and off the
- * restaurants' white-label stores. See `GoogleTag.tsx` for why that boundary matters.
+ * ANALYTICS: this is the SINGLE mount point of SiteAnalytics (GA4 + Meta Pixel,
+ * ids resolved at request time by SiteSettingsService — database, then env, then
+ * the launch default). It sits here, and not in the root layout, on purpose:
+ * the owner panel is authenticated product usage, not marketing traffic, and the
+ * customer-facing store (/pedido, /qr) is white-label — those visitors are the
+ * restaurant's diners, not our leads, and Foocci analytics has no business on a
+ * page carrying the restaurant's brand.
+ *
+ * On 03/08 two analytics implementations were built in parallel and one merge
+ * unmounted the other. If you are about to add a tracking tag anywhere under
+ * /site: it goes through SiteAnalytics + SiteSettingsService, not a new component.
  */
 
 import type { Metadata } from "next";
-import { GoogleTag } from "@/components/marketing/GoogleTag";
+import { SiteAnalytics } from "@/components/marketing/SiteAnalytics";
+import { SiteSettingsService } from "@/services/site/SiteSettingsService";
 
 export const metadata: Metadata = {
   robots: { index: true, follow: true },
@@ -29,10 +37,12 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function SiteLayout({ children }: { children: React.ReactNode }) {
+export default async function SiteLayout({ children }: { children: React.ReactNode }) {
+  const settings = await SiteSettingsService.getResolved();
+
   return (
     <>
-      <GoogleTag />
+      <SiteAnalytics settings={settings} />
       {children}
     </>
   );
