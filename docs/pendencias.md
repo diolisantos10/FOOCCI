@@ -1,6 +1,74 @@
 # Pendências — o que está aberto
 
-> Última atualização: 02/08/2026.
+> Última atualização: 03/08/2026.
+
+---
+
+# 🚨 A FILA COMEÇA AQUI — ordem direta do CEO, 03/08
+
+> **Diretor do Foocci: largue o que estiver fazendo e leia este bloco antes de
+> qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
+> está aberta, commite, e venha para cá.
+
+## 1º · O cardápio sem IA do plano de entrada — **AGORA**
+
+**Ordem do CEO, 03/08, palavras dele:**
+
+> *"Urgentemente a gente precisa desse cardápio. Já pede pra ele fazer e colocar na
+> fila dele."*
+
+**A ordem de serviço completa está em
+`docs/OS-cardapio-sem-ia-plano-de-entrada.md`.** Leia inteira antes de abrir o
+editor — ela tem uma medição que muda o tamanho do trabalho e uma armadilha que
+custa caro se ignorada.
+
+### O resumo, para você decidir se vale ler tudo (vale)
+
+O plano de entrada **não inclui o Garçom de IA**. Sem ele, o restaurante desse plano
+**não tem hoje nenhuma tela capaz de receber um pedido** — `/qr/[slug]` é vitrine
+por desenho (o cabeçalho do próprio arquivo diz *read-only*, e são 949 linhas com
+zero carrinho).
+
+**Mas o checkout não precisa ser construído.** `/pedido/[slug]` já abre em `BROWSE`,
+suas 39 transições de etapa estão todas em handler de clique ou retorno de
+pagamento, e das ~25 chamadas de rede da tela **apenas 2 vão à IA** — `finalize`,
+PIX, cartão, cupom e frete têm rota própria. **O dinheiro não passa pelo Garçom.**
+
+**Decisão do CEO já tomada e registrada dentro da OS: é a opção A — loja sem IA,
+pelo link.** Não é o pedido na mesa. Não reabra essa escolha.
+
+### ⚠️ O passo 1 não se pula
+
+Antes de escrever uma linha: rodar `/pedido/[slug]` com a camada de IA neutralizada
+e **tentar comprar de verdade**, ponta a ponta, até a confirmação.
+
+A medição acima é **indício forte, não prova** — ninguém executou com a IA
+desligada. Se o funil não completar, **pare e escreva o que encontrou**. Não saia
+reconstruindo por cima de uma hipótese do Diretor Geral. Registre o resultado com
+evidência: guardrail 2, verificação sem registro não aconteceu.
+
+### O que vem junto, e paga duas dívidas
+
+O passo 3 da OS é a **trava por plano em código**. Hoje nada bloqueia: um
+restaurante do plano barato usaria o Garçom e **nós pagaríamos o token dele**.
+Guardrail 4 — prompt é aviso, código é trava. É a mesma trava que faltava para
+publicar preço com segurança.
+
+## 2º · O resto do site — o CEO vai mandar as demandas
+
+Ele avisou que **vai passar mais demandas do site** em seguida. Elas entram **depois**
+do cardápio, não no lugar dele.
+
+Do que já está escrito e ficou pendente da repaginação: o **passo 4** da
+`os-repaginacao-comercial.md` (espalhar os sete diferenciais por
+`/site/como-funciona` e `/site/sobre`).
+
+## ⛔ E uma trava que continua valendo
+
+Enquanto o passo 1 do cardápio não fechar com evidência, **o plano de entrada não
+pode prometer no site** "receber pedidos" nem "pagamento online". Guardrail 7 — não
+vender como pronto o que não está. É o erro mais caro daqui, porque quem descobre é
+o cliente que já pagou.
 
 ---
 
