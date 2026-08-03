@@ -7,6 +7,34 @@
 
 ---
 
+## Rota de plateia dupla precisa do middleware como cúmplice
+
+Uma rota que promete atender duas plateias (tenant E admin) morre em silêncio se
+o middleware barrar uma delas antes de a rota rodar: a tela antiga do agente de
+CRM consumia `/api/crm/*`, o cookie de admin tomava 401 do NextAuth **antes** do
+`resolverEscopoDoAgente`, e a tela ficou morta em produção sem erro visível.
+Tela de admin consome rota `/api/admin/*`; a lógica compartilhada vive no
+serviço, nunca na rota.
+
+— promovido em 2026-08-03 pelo Diretor · origem: bloco da casa do Agente de CRM
+(OS-crm-agente-ligar-e-dar-casa, oficina de 2026-08-03)
+
+---
+
+## O admin agora tem drawer mobile — e o mapa de camadas mudou
+
+O shell do admin era `aside w-52` fixo: a 375px sobravam 167px úteis e **toda**
+página do admin estourava. Agora é topbar + drawer (backdrop `z-40`, menu `z-50`,
+`lg:static` no desktop). Overlay novo no admin se confere **com o drawer aberto**
+— mesma lição do painel do lojista. E screenshot de admin: o `fullPage` do
+Playwright não enxerga scroll interno de shell fixo — soltar o shell e medir
+`main.scrollWidth`, não o documento.
+
+— promovido em 2026-08-03 pelo Diretor · origem: mesmo bloco (bug medido:
+`main.scrollWidth` 296 × `clientWidth` 167 a 375px)
+
+---
+
 ## Breakpoint de viewport não serve para componente que vive em grid
 
 O `sm:` olha a **viewport**, mas quem manda na quebra é a **largura do cartão**:

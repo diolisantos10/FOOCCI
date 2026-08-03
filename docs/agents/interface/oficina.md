@@ -41,3 +41,65 @@ exist"), `npm run db:seed` (rodar `prisma generate` antes, senão o client fica
 dessincronizado do schema).
 
 — interface, OS do terceiro cardápio (branch `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## 2026-08-03 — A casa do Agente de CRM (OS P0 §3): unificação em /admin/agentes/crm
+
+**Decisão de rota.** A casa é `/admin/agentes/crm` — a família `/admin/agentes/*`
+já existia (`waiter`, `analytics`, `training`) e a rota nem tinha página (só
+`/testes`, do centro de qualidade, que ficou intocado). `/admin/crm-agente`
+virou `redirect()` para a casa; o link único do AdminSidebar aponta para a rota
+nova. Conteúdo da tela antiga (toggles por campanha, automações, frases campeãs)
+preservado dentro da casa como seção "Campanhas e automações", recebendo o
+restaurante do seletor único por prop.
+
+**Achado 1 — a tela antiga já estava QUEBRADA para admin puro, e ninguém viu.**
+`/admin/crm-agente` consumia as rotas tenant (`/api/crm/agent`,
+`/api/crm/automations`), que ficam atrás do middleware de NextAuth. Cookie de
+admin não passa por lá: o middleware devolve 401 **antes** de a rota rodar o
+`resolverEscopoDoAgente` — exatamente o caminho "admin declara o restaurante"
+que a rota implementa com cuidado. O comentário da rota prometia "duas plateias,
+uma rota"; o middleware desmentia. Lição: **rota de plateia dupla
+(tenant + admin) só funciona se o middleware souber disso** — no Foocci, admin
+consome rota `/api/admin/*` (fora do matcher de NextAuth) chamando o MESMO
+serviço. Foi o que a casa passou a fazer (`/api/admin/crm/agent/activation`
+ganhou masterEnabled + filtro de ruído; nasceu `/api/admin/crm/automations`).
+
+**Achado 2 — o shell do admin não tinha NENHUM comportamento mobile.** O
+`aside w-52` fixo deixava 167px úteis num viewport de 375px e TODA página do
+admin estourava na horizontal (`main.scrollWidth` 296 vs `clientWidth` 167,
+medido). Correção contida: topbar mobile + drawer (backdrop `z-40`, aside
+`z-50`, `lg:static` — mesmo padrão do painel do lojista), uma classe no
+layout (`flex-col lg:flex-row`). Desktop intacto; conferido com o drawer
+ABERTO (a lição da vitrine sobre camadas).
+
+**Achado 3 — screenshot fullPage não enxerga scroll interno.** O admin rola
+dentro do `<main>` (`h-screen overflow-hidden`), então `fullPage: true`
+devolve só a altura do viewport. Para capturar a página inteira: soltar o
+shell antes do shot (`height:auto; overflow:visible` no shell e no main) — e
+medir overflow ANTES, no `main.scrollWidth`, não no documento.
+
+**Achado 4 — meta longa no `SectionTitle` espreme o título no 375.** O kit põe
+título e meta na mesma linha flex; meta comprida quebrou "O DEGRAU" e "PRÓXIMO
+PASSO" no meio. Correção: informação que importa ("neste degrau desde …") vira
+Pill no corpo do card; meta fica curta ou sai.
+
+**Honestidade visual:** lift do A/B só ganha cor de resultado (verde/vermelho)
+com veredito conclusivo; com `AMOSTRA_INSUFICIENTE`/`EMPATE` fica neutro ao
+lado do pill azul "Ainda não conclui" — número sem cor de conclusão.
+
+**Provas colhidas:** rollback via rota admin (ALLOWLIST→SHADOW_ONLY, success),
+promoção recusada pelos gates no servidor (evidência de sombra 5/20 — a escada
+não se força pela tela), redirect da rota antiga verificado com Playwright,
+screenshots 375/768/1280 + estados vazios, `tsc` limpo, 4698 testes verdes.
+
+**Propostas de vitrine** (promoção é do Diretor):
+1. "Rota de plateia dupla precisa do middleware como cúmplice" (Achado 1 — já
+   custou uma tela morta em produção sem erro visível).
+2. "O admin agora tem drawer mobile; overlays novos conferem com ele aberto"
+   (Achado 2, atualiza o mapa de camadas da vitrine).
+3. "fullPage do Playwright não vê scroll interno de shell fixo" (Achado 3 —
+   receita de screenshot do admin difere da do painel).
+
+— interface, OS-crm-agente-ligar-e-dar-casa §3 (branch `claude/foocci-director-onboarding-lhindy`)
