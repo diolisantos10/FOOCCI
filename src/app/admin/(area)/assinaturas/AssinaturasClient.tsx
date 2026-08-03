@@ -328,6 +328,18 @@ export function AssinaturasClient() {
                           atualizar
                         </button>
                       ) : null}
+                      {inv.status === "PENDENTE" || inv.status === "ERRO" ? (
+                        <button
+                          onClick={() => {
+                            const url = window.prompt("Link do PDF da nota (opcional — Enter para pular):") || undefined;
+                            void act(s.id, "mark-invoice-emitted", { invoiceId: inv.id, ...(url ? { pdfUrl: url } : {}) });
+                          }}
+                          className="underline"
+                          title="Emitiu à mão no Emissor Nacional (gov.br)? Registre aqui para a fila não mentir."
+                        >
+                          marcar emitida (manual)
+                        </button>
+                      ) : null}
                       {inv.errorMessage ? <span className="text-muted">— {inv.errorMessage.slice(0, 120)}</span> : null}
                     </div>
                   ))}
