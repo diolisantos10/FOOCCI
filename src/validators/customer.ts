@@ -16,9 +16,12 @@ export const createCustomerSchema = z.object({
 export const updateCustomerSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   phone: z.string().regex(phoneRegex).optional(),
-  email: z.string().email().optional().or(z.literal("")),
-  birthDate: z.string().datetime().optional().or(z.literal("")),
-  notes: z.string().max(1000).optional(),
+  // Accept "", null and undefined for the optional email — the edit form sends
+  // `null` to clear it, and an empty string is the same intent. Without the
+  // `.nullable()` a customer with a blank email could never be saved at all.
+  email: z.string().email().nullable().optional().or(z.literal("")),
+  birthDate: z.string().datetime().nullable().optional().or(z.literal("")),
+  notes: z.string().max(1000).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
