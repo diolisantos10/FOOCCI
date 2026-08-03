@@ -41,6 +41,17 @@ export async function GET(req: NextRequest) {
   const connectedVia = (config.metadata?.connectedVia as string) ?? null;
   const base = connectedVia === "instagram_login" ? GRAPH_INSTAGRAM_BASE : GRAPH_FACEBOOK_BASE;
 
+  // Token lifetime — the load-bearing signal after a reconnect. `tokenValid` (a live /me
+  // boolean) can NOT tell a durable 60-day token from a doomed ~1h one: both answer /me
+  // fine while alive. So surface the stored expiry too, or "check the new token is ~60
+  // days" is impossible to actually do. A short remaining lifetime on a FRESH connect is
+  // the fingerprint of the ig_exchange_token fallback that killed Sushi Cazza on 25-Jul.
+  const tokenExpiresAtRaw = typeof config.metadata?.tokenExpiresAt === "string" ? config.metadata.tokenExpiresAt : null;
+  const expMs = tokenExpiresAtRaw ? Date.parse(tokenExpiresAtRaw) : NaN;
+  const expiresInDays = Number.isFinite(expMs) ? Math.round(((expMs - Date.now()) / (24 * 60 * 60 * 1000)) * 10) / 10 : null;
+  // < 7 remaining days on a token that should be ~60 is the short-lived fallback.
+  const tokenLooksShortLived = expiresInDays !== null && expiresInDays < 7;
+
   // 1) Token validity + account identity.
   const me = await graphGet(base, "me?fields=id,username,account_type,name", token);
 
@@ -65,6 +76,10 @@ export async function GET(req: NextRequest) {
     graphBase: base,
     instagramBusinessAccountId: igId,
     tokenValid: me.ok,
+    tokenExpiresAt: tokenExpiresAtRaw,
+    expiresInDays,
+    tokenLooksShortLived,
+    lastError: config.lastError,
     me: me.json,
     subscribedApps: subs.json,
     subscribedAppsOk: subs.ok,
