@@ -67,7 +67,26 @@ Isso mistura duas coisas que são **produtos diferentes, com funis diferentes**:
 | Saída | pedido de entrega | **comanda na cozinha** |
 | Custo | pequeno — a máquina existe | **construção real** — funil novo |
 
-**Recomendação do Diretor Geral: fazer A primeiro, e fazer A agora.**
+### ✅ DECIDIDO PELO CEO — 02/08/2026
+
+> *"para o plano de entrada é o cardápio sem IA, como tínhamos combinado."*
+
+**É a opção A.** O plano de entrada entrega a **loja sem IA** — catálogo navegável,
+carrinho e checkout, pelo link. **Não é o pedido na mesa.**
+
+A opção B (mesa, preço de salão, comanda) continua sendo produto desejável, mas
+**não entra neste bloco** e não bloqueia o lançamento. Só volta à mesa depois que A
+estiver no ar e verificado.
+
+Isto é decisão de dono tomada — **não reabra**. Se a execução mostrar que A é
+inviável, isso é fato novo: escreva o fato em
+`docs/perguntas-ao-diretor-geral.md` e leve ao CEO. Não troque para B por conta
+própria.
+
+---
+
+**Recomendação original do Diretor Geral (confirmada pelo CEO): fazer A primeiro, e
+fazer A agora.**
 
 Motivo: A é quase só desligar e arrumar. B é produto novo. E o restaurante do plano
 de entrada precisa **vender** — o link que ele manda no WhatsApp e coloca na bio
