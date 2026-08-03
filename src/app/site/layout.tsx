@@ -13,9 +13,15 @@
  *
  * force-dynamic is kept: `/` renders the same marketing home, and the pages read
  * request-scoped data. Static prerendering here has bitten this subtree before.
+ *
+ * ANALYTICS: this is also the single mount point of the Google tag. It sits here —
+ * and not in the root layout — so the tag covers every marketing page and the bare
+ * domain (`/` redirects to `/site`) while staying off the owner panel and off the
+ * restaurants' white-label stores. See `GoogleTag.tsx` for why that boundary matters.
  */
 
 import type { Metadata } from "next";
+import { GoogleTag } from "@/components/marketing/GoogleTag";
 
 export const metadata: Metadata = {
   robots: { index: true, follow: true },
@@ -24,5 +30,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      <GoogleTag />
+      {children}
+    </>
+  );
 }
