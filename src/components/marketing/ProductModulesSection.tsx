@@ -18,7 +18,7 @@ import { DotGrid, Halo, PremiumCard } from "./premium";
 
 const MODULES = [
   { icon: MenuBookIcon, title: "Cardápio Digital Inteligente", benefit: "Uma experiência de pedido visual, simples e feita para conversão." },
-  { icon: SparklesIcon, title: "Pedido Guiado com IA", benefit: "A Foocci ajuda o cliente a escolher e concluir o pedido com menos atrito." },
+  { icon: SparklesIcon, title: "Pedido Guiado com IA", benefit: "O Foocci ajuda o cliente a escolher e concluir o pedido com menos atrito." },
   { icon: ChatIcon, title: "WhatsApp Inteligente", benefit: "Atendimento com mais contexto, organização e continuidade." },
   { icon: UsersIcon, title: "CRM para Restaurantes", benefit: "Clientes, histórico, recorrência e oportunidades em um só lugar." },
   { icon: MegaphoneIcon, title: "Campanhas e Reativação", benefit: "Mensagens mais inteligentes para clientes certos, no momento certo." },

@@ -8,7 +8,7 @@
 // diferenciais precisam ter. O detalhe completo mora em /site/como-funciona.
 const STEPS = [
   "O cliente chega pelo WhatsApp, pelo QR na mesa ou pelo link — sem passar por marketplace.",
-  "A Foocci conduz o pedido, sugere o complemento certo e registra quem é aquele cliente.",
+  "O Foocci conduz o pedido, sugere o complemento certo e registra quem é aquele cliente.",
   "O CRM traz ele de volta antes de esfriar, e você vê no painel quanto isso trouxe de volta.",
 ];
 

@@ -29,7 +29,7 @@ export function ComparisonSection() {
         <SectionHeading
           id="comparacao-title"
           eyebrow="Comparação"
-          title="A Foocci não é um chatbot. É uma operação comercial inteligente."
+          title="O Foocci não é um chatbot. É uma operação comercial inteligente."
         />
 
         <div className="mt-12 grid gap-5 md:grid-cols-2">

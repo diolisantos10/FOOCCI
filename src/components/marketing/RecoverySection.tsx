@@ -25,7 +25,7 @@ export function RecoverySection() {
           id="recuperacao-title"
           eyebrow="Recuperação"
           title="Nem todo pedido perdido precisa continuar perdido."
-          subtitle="A Foocci ajuda a identificar oportunidades de recuperação, como clientes que começaram um pedido, sumiram ou ficaram muito tempo sem comprar."
+          subtitle="O Foocci ajuda a identificar oportunidades de recuperação, como clientes que começaram um pedido, sumiram ou ficaram muito tempo sem comprar."
         />
 
         {/* Flow: Oportunidade → Mensagem → Retorno → Pedido */}

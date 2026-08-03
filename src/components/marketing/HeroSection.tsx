@@ -34,7 +34,7 @@ export function HeroSection() {
             className="mt-4 text-[2.2rem] font-semibold leading-[1.08] tracking-tight text-ink sm:text-[2.8rem] lg:text-[3.3rem]"
           >
             Todo mundo vende um pedaço.{" "}
-            <span className="text-brand-500">A Foocci faz os quatro conversarem.</span>
+            <span className="text-brand-500">O Foocci faz os quatro conversarem.</span>
           </h1>
 
           <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
