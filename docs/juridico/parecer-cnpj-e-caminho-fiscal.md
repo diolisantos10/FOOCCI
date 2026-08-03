@@ -74,7 +74,38 @@ emitida normalmente** — inclusive pela conta Focus NFe que o sistema já tem.
 3. **Quando o CNPJ estiver ajustado**: cadastrar a empresa na conta-mãe Focus
    NFe e ligar a emissão automática (código pronto na OS do fluxo de compra).
 
-## 5 · Fontes
+## 5 · Adendo (03/08, mesma noite) — "não vendemos software, vendemos serviços digitais"
+
+O CEO levantou a tese e pediu validação na lei. Validei procurando o ângulo a
+favor. **A tese não se sustenta, por três motivos:**
+
+1. **A lista do MEI é fechada e por ocupação, não por rótulo.** Não existe a
+   categoria "serviços digitais" — existem ~470 ocupações nominais (Resolução
+   CGSN 140/2018, Anexo XI). O que decide não é como chamamos a venda, é se a
+   atividade **realmente exercida** corresponde a uma ocupação listada.
+2. **O que o Foocci vende, para a lei tributária, tem nome:** acesso a programa
+   de computador mediante assinatura = **licenciamento/cessão de uso de
+   software** (LC 116, item 1.05). É assim que o fisco classifica SaaS,
+   independentemente do nome comercial. Essa atividade **não está** na lista do
+   MEI.
+3. **Usar ocupação "parecida" é exatamente o cenário de autuação.** A
+   orientação pública é expressa: cadastrar como digitador, técnico ou editor
+   de listas para faturar o que na prática é software gera **desenquadramento
+   de ofício retroativo, cobrança dos impostos como ME desde o início, com
+   juros e multa**. Sairia mais caro que o contador.
+
+E mesmo se coubesse: o CNAE atual é **vestuário** (teria que mudar de qualquer
+jeito) e o teto de R$ 81 mil/ano seguiria estrangulando o crescimento no
+primeiro ano bom. **A recomendação não muda: SLU-ME.** A notícia boa continua a
+mesma — é um processo barato, padrão, e nada impede de vender enquanto corre.
+
+Fontes do adendo:
+[Company Hero — marketing/NF no MEI](https://www.companyhero.com/blog/marketing-nota-fiscal-mei),
+[Instacont — ocupação para dev no MEI e o risco do "parecido"](https://instacont.com.br/qual-ocupacao-principal-colocar-no-mei-para-desenvolvedor-de-software/),
+[Contabilizei — tabela oficial de atividades 2026](https://www.contabilizei.com.br/contabilidade-online/atividades-mei-tabela/),
+[Contabilidade.com — digitador MEI e desenquadramento](https://contabilidade.com/blog/cnae-8219999-digitador-a-independente-pode-ser-mei-quanto-paga-e-quando-desenquadrar-do-mei/).
+
+## 6 · Fontes
 
 - CCMEI enviado pelo CEO (03/08/2026) e consulta pública Receita/BrasilAPI.
 - Sobre software não caber no MEI e o PLP 25/2026:
