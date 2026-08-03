@@ -13,12 +13,15 @@
  *
  * force-dynamic is kept: `/` renders the same marketing home, and the pages read
  * request-scoped data. Static prerendering here has bitten this subtree before.
+ *
+ * ANALYTICS: this is also the single mount point of the Google tag. It sits here —
+ * and not in the root layout — so the tag covers every marketing page and the bare
+ * domain (`/` redirects to `/site`) while staying off the owner panel and off the
+ * restaurants' white-label stores. See `GoogleTag.tsx` for why that boundary matters.
  */
 
 import type { Metadata } from "next";
-
-import { SiteAnalytics } from "@/components/marketing/SiteAnalytics";
-import { SiteSettingsService } from "@/services/site/SiteSettingsService";
+import { GoogleTag } from "@/components/marketing/GoogleTag";
 
 export const metadata: Metadata = {
   robots: { index: true, follow: true },
@@ -26,19 +29,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-/**
- * Analytics is wired HERE, at the /site root, so it covers every marketing page
- * including the ones added later. The ids are read at request time from the database
- * (admin screen) with the env var as fallback — a `NEXT_PUBLIC_*` value is frozen at
- * build time, and needing a deploy to change a measurement id is how it ends up never
- * being set.
- */
-export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const settings = await SiteSettingsService.getResolved();
-
+export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <SiteAnalytics settings={settings} />
+      <GoogleTag />
       {children}
     </>
   );
