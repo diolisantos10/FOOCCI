@@ -201,7 +201,24 @@ Quando fechar, o Diretor avisa o CEO com a evidência, e aí sim a linha entra.
 
 ---
 
-## 6. Registro
+## 6. ✅ FECHADA — 03/08/2026, com evidência
+
+| Critério de fechamento | Evidência |
+|---|---|
+| **Passo 1** — funil completa sem IA | Compra real em loja local: pedido CONFIRMED, R$ 28,90. O furo achado (botão "Finalizar" morria sem a IA) foi consertado e está em produção |
+| **Passo 2** — verificado nas três telas | 375/768/1280: saudação sem promessa de IA ("É só tocar no prato para adicionar"), sem botão "Quero uma sugestão", sem composer de conversa, **zero chamadas à rota de IA** disparadas pela tela. Funil completo por clique no mobile: pedido **#O2VKA1, Aceito** |
+| **Passo 3** — negação por plano provada por teste | 8 testes de unidade + prova em produção: `pizzaria-testando` (STARTER, sem override) → **403 ai_not_included**; `sushi-cazza` (avô) → **200 com a IA viva** |
+
+**A cláusula de avô era obrigatória e está travada por teste:** o cliente vivo é
+STARTER *com* o Garçom. A migração gravou TRUE para todo restaurante existente no
+rollout; a regra de plano vale para quem entrar depois. O override é gerenciável
+pelo admin (`PATCH /api/admin/restaurants/[id]`, campo `aiWaiterEnabled`).
+
+**O que isso destrava:** o plano de entrada pode prometer "receber pedidos" no
+site — com a linha de pagamento online ainda condicionada ao teste com pagamento
+real, que não foi feito (o funil provado foi retirada + dinheiro).
+
+## 6.1 Registro original
 
 - Aberta por: Diretor Geral do Cérebro · 02/08/2026
 - Origem: o CEO percebeu que o plano sem IA fica sem superfície de venda

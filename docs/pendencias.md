@@ -32,7 +32,19 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
-## 1º · O cardápio sem IA do plano de entrada — **AGORA**
+## ✅ 1º · O cardápio sem IA — FECHADO em 03/08, com evidência
+
+Os três passos da OS fechados: funil provado sem IA (pedido local CONFIRMED e
+**#O2VKA1 Aceito** por clique, zero chamadas de IA em 375/768/1280), loja
+falando por si (saudação nova, sem botão de sugestão, sem composer), e a trava
+por plano **em código e provada em produção**: STARTER sem override → 403;
+o cliente vivo (avô) → 200 com a IA intacta. Detalhe e evidência dentro da OS.
+
+Sobras registradas: `draft` do carrinho devolvendo 400 `invalid_payload` em
+alguns payloads (recuperação de carrinho pode estar perdendo rascunhos) e um
+aviso de hidratação dev-only na abertura da loja.
+
+## (original) 1º · O cardápio sem IA do plano de entrada
 
 **Ordem do CEO, 03/08, palavras dele:**
 
