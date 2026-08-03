@@ -1389,6 +1389,34 @@ model MetaWhatsAppConfig {
   @@map("meta_whatsapp_configs")
 }
 
+// Analytics of FOOCCI'S OWN commercial site — not a restaurant's.
+//
+// The Google integration that already existed is per-restaurant (`GoogleIntegrationConfig`,
+// keyed by restaurantId): it shows a merchant THEIR GA4 and their Google Business. There
+// was nothing at all for foocci.com.br itself, so the day paid campaigns started there
+// was no way to measure them.
+//
+// Read at RUNTIME on purpose. A `NEXT_PUBLIC_*` env var is baked at build time, so
+// changing the measurement id would need a fresh deploy — and the person who has the id
+// is the CEO, not whoever can trigger a deploy.
+//
+// Singleton by construction, same as meta_app_credentials.
+model SiteSettings {
+  id String @id @default("singleton")
+
+  /// GA4 measurement id, e.g. "G-XXXXXXXXXX". Public by nature — it ships to the browser.
+  gaMeasurementId String?
+  /// Meta Pixel id. Also public by nature.
+  metaPixelId     String?
+  /// Google Search Console HTML verification token, when verifying by meta tag.
+  googleSiteVerification String?
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("site_settings")
+}
+
 // App-level Meta credentials — the ONE Foocci app inside Meta (`Foocci Whats`), which
 // serves WhatsApp AND Instagram at the same time. Until now these lived only as Railway
 // env vars, so changing them required a deploy and a person with Railway access.

@@ -17,12 +17,29 @@
 
 import type { Metadata } from "next";
 
+import { SiteAnalytics } from "@/components/marketing/SiteAnalytics";
+import { SiteSettingsService } from "@/services/site/SiteSettingsService";
+
 export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
 export const dynamic = "force-dynamic";
 
-export default function SiteLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+/**
+ * Analytics is wired HERE, at the /site root, so it covers every marketing page
+ * including the ones added later. The ids are read at request time from the database
+ * (admin screen) with the env var as fallback — a `NEXT_PUBLIC_*` value is frozen at
+ * build time, and needing a deploy to change a measurement id is how it ends up never
+ * being set.
+ */
+export default async function SiteLayout({ children }: { children: React.ReactNode }) {
+  const settings = await SiteSettingsService.getResolved();
+
+  return (
+    <>
+      <SiteAnalytics settings={settings} />
+      {children}
+    </>
+  );
 }

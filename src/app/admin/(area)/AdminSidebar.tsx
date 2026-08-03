@@ -63,7 +63,8 @@ export function AdminSidebar() {
     {
       title: "Sistema",
       items: [
-        { href: "/admin/meta",     label: "Aplicativo Meta", icon: "🔑" },
+        { href: "/admin/meta",           label: "Aplicativo Meta",   icon: "🔑" },
+        { href: "/admin/site-analytics", label: "Analytics do site", icon: "📈" },
         { href: "/admin/build-os", label: "Build OS",        icon: "🛠️" },
       ],
     },
