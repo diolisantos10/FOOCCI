@@ -32,18 +32,19 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
-## 🔜 0º-C · Site — argumento "zero app" + bloco do Garçom (ordem do CEO, 03/08)
+## ✅ 0º-C · Site — bloco do Garçom com telas reais + argumento "zero app" (03/08)
 
-Duas frentes abertas, na fila:
+Entregue no mesmo dia, no ar em `/site/como-funciona`:
 
-1. **Argumento "sem baixar app"** (CEO, 03/08: "grande dor dos clientes"): o
-   cliente final usa tudo pelo navegador — não baixa app, não ocupa espaço no
-   celular, não cria mais uma senha. Colocar como diferencial no site (home
-   e/ou como-funciona), no vocabulário do cliente final. CEO pediu "daqui a
-   pouco", não imediato.
-2. **Bloco do Garçom em /site/como-funciona**: o CEO vai mandar prints do
-   atendimento (WhatsApp/Garçom). Mesmo padrão da seção "O CRM na prática"
-   (CrmRealShowcase): reconstrução em código, números reais, nomes trocados.
+1. **"O Garçom na prática"**: os 5 prints REAIS que o CEO capturou no celular
+   (chegada reconhecida → sugestão → upsell de fechamento → pagamento →
+   confirmação) publicados como imagem em `/public/site/waiter/`, editados sob
+   autorização expressa do CEO — restaurante virou "Sushi da Vila", telefone
+   virou "Diego"; barra do navegador com foocci.com.br mantida de propósito.
+   Edição via script Pillow; varredura confirma zero vazamento do nome/telefone
+   reais.
+2. **"Ninguém quer baixar mais um app"**: o diferencial zero-app como bloco de
+   destaque dentro da seção (sem baixar, sem ocupar memória, sem criar conta).
 
 ## ✅ 0º-B · Site — agendamento real + página de demonstração em vídeo (03/08)
 

@@ -24,6 +24,7 @@ import { VisualStepCard } from "@/components/marketing/VisualStepCard";
 import { VisualStoryBlock } from "@/components/marketing/VisualStoryBlock";
 import { MascotHostScene } from "@/components/marketing/MascotHostScene";
 import { CrmRealShowcase } from "@/components/marketing/CrmRealShowcase";
+import { WaiterRealShowcase } from "@/components/marketing/WaiterRealShowcase";
 import { DotGrid, Eyebrow, PremiumCard } from "@/components/marketing/premium";
 import { PROPOSTA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
@@ -84,7 +85,10 @@ export default function ComoFuncionaPage() {
         </div>
       </section>
 
-      {/* 2. O CRM na prática — telas reais reconstruídas dos prints do painel */}
+      {/* 2. O Garçom na prática — telas reais do pedido no celular (prints do CEO) */}
+      <WaiterRealShowcase />
+
+      {/* 3. O CRM na prática — telas reais reconstruídas dos prints do painel */}
       <CrmRealShowcase />
 
       {/* 3. Backstage — premium visual story block (mascot host + context cards) */}
