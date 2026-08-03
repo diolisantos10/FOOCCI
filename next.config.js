@@ -59,6 +59,12 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: [
+          // Force HTTPS for two years after the first visit. Without this, a
+          // network attacker can serve the first http:// request of a session
+          // and strip the redirect. No includeSubDomains: other subdomains of
+          // foocci.com.br are not verified to serve HTTPS, and HSTS mistakes
+          // lock browsers out for the full max-age.
+          { key: "Strict-Transport-Security", value: "max-age=63072000" },
           // Prevent cross-origin framing (clickjacking). SAMEORIGIN instead of
           // DENY allows the Waiter Lab iframe to embed /pedido/* on the same host.
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
