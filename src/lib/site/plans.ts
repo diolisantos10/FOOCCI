@@ -27,7 +27,7 @@ export const PLANS: Plan[] = [
   {
     id: "essencial",
     name: "Essencial",
-    monthly: null,
+    monthly: 179,
     onlyHere: "Seu cardápio e seus pedidos fora do marketplace, com o cliente virando seu.",
     forWho: "Para quem está começando a vender direto.",
   },
@@ -41,7 +41,7 @@ export const PLANS: Plan[] = [
   {
     id: "performance",
     name: "Performance",
-    monthly: null,
+    monthly: 899,
     onlyHere: "CMV com ficha técnica e reprecificação automática por canal.",
     forWho: "Para quem opera com margem apertada e muitos canais.",
   },
