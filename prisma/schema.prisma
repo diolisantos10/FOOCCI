@@ -4788,6 +4788,55 @@ model SiteLead {
 }
 
 // ═══════════════════════════════════════════
+// AGENDA COMERCIAL — horários do CEO para chamadas de demonstração (/site/agendar)
+// ═══════════════════════════════════════════
+
+/// Um horário que o CEO abriu para uma chamada curta de apresentação do produto.
+///
+/// Como o SiteLead, NÃO é multi-tenant: quem agenda ainda não é cliente.
+/// Slot livre = `bookedAt` null. A reserva é transacional (updateMany condicional)
+/// para dois visitantes nunca levarem o mesmo horário.
+model MeetingSlot {
+  id          String    @id @default(cuid())
+  /// Início da chamada (UTC no banco; exibido em America/Sao_Paulo).
+  startsAt    DateTime
+  durationMin Int       @default(20)
+
+  // ── Reserva (null = livre) ──
+  bookedAt    DateTime?
+  nome        String?
+  whatsapp    String?
+  restaurante String?
+
+  /// Notificação ao CEO — mesmo contrato do SiteLead: gravar antes, avisar depois.
+  notifiedAt  DateTime?
+  notifyError String?
+  createdAt   DateTime  @default(now())
+
+  @@index([startsAt])
+  @@index([bookedAt])
+}
+
+// ═══════════════════════════════════════════
+// VÍDEOS DE DEMONSTRAÇÃO — conteúdo da página /site/demonstracao
+// ═══════════════════════════════════════════
+
+/// Um vídeo de demonstração do produto (YouTube), gerenciado pelo admin.
+/// `published` false = rascunho: não aparece no site.
+model DemoVideo {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  /// URL do YouTube (watch, youtu.be ou shorts) — o embed é derivado dela.
+  youtubeUrl  String
+  sortOrder   Int      @default(0)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([published, sortOrder])
+}
+
+// ═══════════════════════════════════════════
 //  BILLING DA PLATAFORMA — assinatura de plano da PRÓPRIA Foocci
 // ═══════════════════════════════════════════
 

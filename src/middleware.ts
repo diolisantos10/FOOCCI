@@ -25,6 +25,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
   /^\/api\/restaurants\/register$/,    // self-service registration
   /^\/api\/site\/leads$/,              // public demo-request form (rate-limited per IP)
+  /^\/api\/site\/agenda(\/book)?$/,    // public meeting scheduler: list free slots + book one (rate-limited per IP)
   /^\/robots\.txt$/,                   // crawler rules — must never redirect to /login
   /^\/sitemap\.xml$/,                  // marketing sitemap
   /^\/api\/webhooks\/evolution$/,      // Evolution API webhook receiver (verified by HMAC)

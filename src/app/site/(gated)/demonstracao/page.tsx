@@ -11,6 +11,8 @@
  */
 
 import type { Metadata } from "next";
+import { prisma } from "@/lib/prisma";
+import { youtubeEmbedUrl } from "@/lib/site/youtube";
 import { InternalVisualHero } from "@/components/marketing/InternalVisualHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { CheckIcon, UsersIcon, SparklesIcon, RepeatIcon } from "@/components/marketing/icons";
@@ -19,8 +21,10 @@ import { FoocciProductShowcase } from "@/components/marketing/FoocciProductShowc
 import { VisualStepCard } from "@/components/marketing/VisualStepCard";
 import { RelationshipRevenuePanel } from "@/components/marketing/RelationshipRevenuePanel";
 import { DotGrid, Halo, Eyebrow } from "@/components/marketing/premium";
-import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { AGENDAR_LABEL, AGENDAR_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 import { DemoForm } from "@/components/marketing/DemoForm";
+
+export const dynamic = "force-dynamic";
 
 const TITLE = "Solicitar demonstração | Foocci para restaurantes";
 const DESCRIPTION =
@@ -46,7 +50,21 @@ const WILL_SHOW = [
   "Qual configuração faz sentido para o seu tipo de restaurante.",
 ];
 
-export default function DemonstracaoPage() {
+export default async function DemonstracaoPage() {
+  // Vídeos publicados no admin (/admin/demo-videos). Sem vídeo → a seção não
+  // existe: melhor página sem seção do que seção com quadro vazio.
+  const videos = (
+    await prisma.demoVideo.findMany({
+      where:   { published: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select:  { id: true, title: true, description: true, youtubeUrl: true },
+    })
+  )
+    .map((v) => ({ ...v, embedUrl: youtubeEmbedUrl(v.youtubeUrl) }))
+    .filter((v): v is typeof v & { embedUrl: string } => v.embedUrl !== null);
+
+  const hasVideos = videos.length > 0;
+
   return (
     <>
       <InternalVisualHero
@@ -56,14 +74,95 @@ export default function DemonstracaoPage() {
 Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
           </>
         }
-        subtitle="A gente mostra, com o seu cardápio, como o Foocci transforma atendimento, pedido e relacionamento na prática. Preencha abaixo que entramos em contato."
+        subtitle={
+          hasVideos
+            ? "Assista ao Foocci funcionando de verdade nos vídeos abaixo — e, se quiser conversar, agende uma chamada curta com quem faz o produto."
+            : "A gente mostra, com o seu cardápio, como o Foocci transforma atendimento, pedido e relacionamento na prática. Preencha abaixo que entramos em contato."
+        }
         visual={<FoocciProductShowcase />}
-        primaryLabel="Preencher e pedir demonstração"
-        primaryHref="#formulario"
-        secondaryLabel="Ver como o Foocci funciona"
-        secondaryHref={COMO_FUNCIONA_URL}
+        primaryLabel={hasVideos ? "Assistir à demonstração" : "Preencher e pedir demonstração"}
+        primaryHref={hasVideos ? "#videos" : "#formulario"}
+        secondaryLabel={AGENDAR_LABEL}
+        secondaryHref={AGENDAR_URL}
         note={PRELAUNCH_NOTE}
       />
+
+      {/* Demonstração em vídeo — só existe quando há vídeo publicado */}
+      {hasVideos && (
+        <section id="videos" aria-labelledby="videos-title" className="scroll-mt-20 bg-white py-20 lg:py-24">
+          <div className="mx-auto max-w-5xl px-5 lg:px-8">
+            <div className="mx-auto max-w-2xl text-center">
+              <Eyebrow>Demonstração em vídeo</Eyebrow>
+              <h2 id="videos-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+                Veja o Foocci funcionando.
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-gray-600">
+                Sem agendar nada: aperte o play e veja o sistema por dentro, do
+                painel do restaurante ao pedido no celular do cliente.
+              </p>
+            </div>
+
+            <div className="mt-12 space-y-10">
+              {/* O primeiro vídeo é o principal — tela cheia da coluna */}
+              <figure>
+                <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+                  <iframe
+                    src={videos[0]!.embedUrl}
+                    title={videos[0]!.title}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    className="aspect-video w-full"
+                  />
+                </div>
+                <figcaption className="mt-3 text-center">
+                  <span className="text-base font-semibold text-[#0B0B0B]">{videos[0]!.title}</span>
+                  {videos[0]!.description && (
+                    <span className="block text-sm text-gray-500">{videos[0]!.description}</span>
+                  )}
+                </figcaption>
+              </figure>
+
+              {videos.length > 1 && (
+                <div className="grid gap-8 sm:grid-cols-2">
+                  {videos.slice(1).map((v) => (
+                    <figure key={v.id}>
+                      <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+                        <iframe
+                          src={v.embedUrl}
+                          title={v.title}
+                          loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          className="aspect-video w-full"
+                        />
+                      </div>
+                      <figcaption className="mt-3">
+                        <span className="text-sm font-semibold text-[#0B0B0B]">{v.title}</span>
+                        {v.description && <span className="block text-sm text-gray-500">{v.description}</span>}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-12 text-center">
+              <a
+                href={AGENDAR_URL}
+                className="inline-flex items-center justify-center rounded-full bg-brand-500 px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
+              >
+                Gostou? {AGENDAR_LABEL.toLowerCase()}
+              </a>
+              <p className="mt-2 text-sm text-gray-500">
+                Chamada curta, ao vivo, com o fundador — você escolhe o horário.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Three-step experience flow */}
       <section aria-labelledby="fluxo-title" className="relative overflow-hidden bg-white py-20 lg:py-24">

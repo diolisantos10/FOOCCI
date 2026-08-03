@@ -32,6 +32,30 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
+## ✅ 0º-B · Site — agendamento real + página de demonstração em vídeo (03/08)
+
+Ordem do CEO: os botões do site eram nebulosos ("ver demonstração" que não
+mostrava nada; "agendar" sem agenda). Entregue na mesma sessão, no ar:
+
+1. **Agenda virtual** (`/site/agendar` + `/admin/agenda`): o CEO abre horários
+   em lote (data + horas, duração 15–45min) no admin; o site mostra só os
+   livres; o visitante escolhe dia/hora e deixa nome + WhatsApp. Reserva é
+   atômica (dois disputando → um vence, o outro recebe aviso honesto). Aviso
+   por e-mail via Resend (mesmo contrato do lead: **gravar antes, avisar
+   depois** — o painel é o cofre). Sem horário livre → aponta o formulário.
+2. **Demonstração em vídeo** (`/site/demonstracao` + `/admin/demo-videos`): o
+   CEO grava (tela do sistema, celular pedindo no Garçom), sobe no YouTube e
+   cola o link no admin. Publicado aparece na página, na ordem; embed via
+   youtube-nocookie. **Sem vídeo publicado a seção não existe** — a página
+   segue como era. Rascunho nunca vaza (verificado).
+3. CTAs religados: nav ganhou "Agendar conversa"; hero da demonstração aponta
+   assistir (quando houver vídeo) e agendar.
+
+**Depende do CEO:** ① abrir os primeiros horários em `/admin/agenda`;
+② gravar os vídeos e colar os links em `/admin/demo-videos` (podem ficar "não
+listados" no YouTube). Sem isso as duas páginas ficam nos estados de fallback
+(honestos, mas vazios).
+
 ## ✅ 0º-A · Garçom — os 4 problemas do teste do CEO no sushi-cazza (03/08)
 
 O CEO testou e achou 4 problemas. Diagnóstico e correção na mesma sessão:

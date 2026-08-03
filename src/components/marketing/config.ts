@@ -27,6 +27,9 @@ export const WHATSAPP_SALES_NUMBER: string | null = null;
 export const COMO_FUNCIONA_URL = "/site/como-funciona";
 export const PROPOSTA_URL = "/site/sobre";
 export const DEMO_URL = "/site/demonstracao";
+/** Agendamento real: o visitante escolhe um horário livre da agenda do fundador. */
+export const AGENDAR_URL = "/site/agendar";
+export const AGENDAR_LABEL = "Agendar uma conversa";
 
 /** CTA copy. */
 export const PRIMARY_CTA_LABEL = "Ver como o Foocci funciona";
@@ -58,4 +61,5 @@ export const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/site#crm", label: "CRM" },
   { href: "/site/precos", label: "Planos" },
   { href: "/site/demonstracao", label: "Demonstração" },
+  { href: "/site/agendar", label: "Agendar conversa" },
 ];
