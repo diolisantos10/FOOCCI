@@ -32,7 +32,19 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
-## ✅ 1º · O cardápio sem IA — FECHADO em 03/08, com evidência
+## 🔴 0º · CORREÇÃO DO CEO — a interface era OUTRA. Nova OS: `OS-loja-qr-com-checkout.md`
+
+**Seu trabalho de hoje estava certo contra a OS — a OS é que traduziu errado o
+CEO** (erro do Diretor Geral, assumido lá dentro). O CEO corrigiu em 03/08 à
+noite: a loja do plano de entrada é **a interface do QR (catálogo puro, zero
+chat) ganhando carrinho e checkout de delivery/retirada** — não a tela do
+`/pedido` sem IA. A parte cara do que você fez hoje **sobrevive inteira**: o
+funil provado sem IA, o conserto do Finalizar, a trava por plano e o override
+são exatamente a máquina que a UI nova vai chamar. O que muda é a casca visual.
+Especificação completa e critérios de pronto na OS nova. **Ela passa na frente
+de tudo.**
+
+## ✅ 1º · O cardápio sem IA — FECHADO em 03/08, com evidência (⚠️ superado pelo item 0º acima na parte VISUAL; a mecânica vale)
 
 Os três passos da OS fechados: funil provado sem IA (pedido local CONFIRMED e
 **#O2VKA1 Aceito** por clique, zero chamadas de IA em 375/768/1280), loja
