@@ -115,6 +115,37 @@ Entregar **onde exatamente trava**, se travar. Três resultados possíveis:
 Guardrail 2: registre o resultado com evidência. Verificação sem registro não
 aconteceu.
 
+### ✅ PASSO 1 EXECUTADO — 03/08, com evidência
+
+**Método:** loja local com o código atual + banco Postgres local semeado
+(restaurante `loja-teste-entrada`, plano STARTER, 4 itens), navegador real em
+375px, e as **duas** chamadas de IA (`POST /api/pedido/{slug}`) **bloqueadas na
+rede** — a simulação exata do plano sem Garçom.
+
+**Resultado: o funil COMPLETA.** Identificação por WhatsApp → cadastro de nome →
+catálogo → item no carrinho → Finalizar → Retirada → Confirmar pedido →
+**`orders`: 1 linha, `status=CONFIRMED`, `total=28.90`**. Zero erros 5xx.
+
+**Mas a hipótese da §2.2 estava errada num ponto, e era exatamente o que trava:**
+
+> `PedidoClient.tsx:4213` — o botão **"Finalizar pedido" dispara um turno de IA**
+> (`ON_CHECKOUT_STARTED`) e só avança quando o Garçom responde
+> `CHECKOUT_SUPPORT` (linha ~3602). Com a IA fora: *"Ops! Tivemos um problema"* —
+> **e a trava de clique-rápido ficava presa, matando o botão até recarregar a
+> página.** O cliente montava o carrinho e não tinha como pagar.
+
+**Conserto aplicado (mesmo dia):** no `catch` da chamada de IA, se havia checkout
+pendente, a tela **pula o upsell e abre o checkout operacional direto**
+(`proceedToCheckout()`). A IA vira o que sempre deveria ser ali: enfeite opcional
+sobre um caminho de dinheiro que não depende dela. Todo o resto do funil já era
+por clique, como a OS media.
+
+**Estado após o passo 1:** a loja sem IA **vende**. Restam os passos 2 (acabamento
+de vitrine — abertura sem conversa, upsell por regra) e 3 (trava por plano no
+servidor).
+
+---
+
 ### Passo 2 — O que a tela precisa quando ninguém está conversando
 
 Hoje o Garçom faz três trabalhos invisíveis que somem junto com ele. Sem

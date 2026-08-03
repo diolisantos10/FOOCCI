@@ -3624,6 +3624,20 @@ export function PedidoClient({
           setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
         }
       } catch {
+        // "Finalizar pedido" is the ONE funnel transition that goes through the AI
+        // (ON_CHECKOUT_STARTED → wait for CHECKOUT_SUPPORT). When that call fails —
+        // AI down, or the restaurant's plan simply doesn't include the Waiter — the
+        // money path must not die with it: skip the upsell and open the operational
+        // checkout directly. Everything after this point is click-driven and AI-free.
+        //
+        // Found on 2026-08-03 while proving the plano-de-entrada store: with the AI
+        // blocked, the click showed "Ops!" AND left checkoutPendingRef stuck true, so
+        // the rapid-click guard silently killed the button until a full page reload.
+        if (checkoutPendingRef.current) {
+          checkoutPendingRef.current = false;
+          proceedToCheckoutRef.current();
+          return;
+        }
         setMessages((prev) => [
           ...prev,
           { id: uid(), role: "assistant" as const, content: "Ops! Tivemos um problema. Tente novamente.", ts: new Date() },
