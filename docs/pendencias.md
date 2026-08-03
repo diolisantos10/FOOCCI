@@ -105,6 +105,17 @@ conversa, zero IA); planos com Garçom seguem no chat, intocados. Um link só �
 a mesma flag do gate decide. `/qr` da mesa continua vitrine. Evidência completa
 dentro da OS.
 
+**Complemento de 03/08 (pedido do CEO):** a loja sem IA ganhou **link próprio** —
+`/pedido/[slug]?modo=loja` força o catálogo em **qualquer** plano (o parâmetro só
+remove a IA, nunca a liga; trava por plano intocada) — e a tela Cardápio agora
+mostra **três cartões de QR**: Salão (vitrine) → Loja (pedido sem conversa) →
+Delivery (pedido com Garçom). Verificado: tsc + vitest (4690 testes) verdes,
+screenshots 375/768/1280, e a rota provada em tela (chat vs. catálogo no mesmo
+restaurante PRO). De carona: o QRCard cortava conteúdo em grid desde antes
+(breakpoint de viewport × largura de coluna) — corrigido; aprendizado promovido à
+vitrine do `interface`. Na branch `claude/foocci-director-onboarding-lhindy`,
+aguardando merge para a padrão.
+
 ## (original) 0º · CORREÇÃO DO CEO — a interface era OUTRA
 
 **Seu trabalho de hoje estava certo contra a OS — a OS é que traduziu errado o

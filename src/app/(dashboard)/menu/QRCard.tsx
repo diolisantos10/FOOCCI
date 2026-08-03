@@ -10,6 +10,7 @@ export function QRCard({
   subtitle = "Compartilhe com seus clientes",
   downloadName,
   tip = "Imprima o QR code e cole nas mesas, embalagens ou stories. Qualquer alteração no cardápio aparece instantaneamente.",
+  layout = "row",
 }: {
   url: string;
   slug: string;
@@ -17,6 +18,13 @@ export function QRCard({
   subtitle?: string;
   downloadName?: string;
   tip?: string;
+  /**
+   * "row"     — QR ao lado das ações a partir de `sm` (cartão em largura cheia, ex.: web-menu).
+   * "stacked" — QR sempre acima das ações. Use quando o cartão vive num grid de
+   *   2–3 colunas: o breakpoint `sm` olha a viewport, mas quem manda é a largura
+   *   do cartão — em coluna de ~350px o layout em linha estoura e corta o conteúdo.
+   */
+  layout?: "row" | "stacked";
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
@@ -26,7 +34,7 @@ export function QRCard({
       QRCode.toCanvas(canvasRef.current, url, {
         width: 180,
         margin: 2,
-        color: { dark: "#111827", light: "#ffffff" },
+        color: { dark: "#0B0B0B", light: "#ffffff" }, // dark = token `ink`
       });
     }
   }, [url]);
@@ -54,7 +62,7 @@ export function QRCard({
           📲
         </div>
         <div>
-          <p className="text-sm font-bold text-ink">{label}</p>
+          <p className="text-sm font-semibold text-ink">{label}</p>
           <p className="text-[11px] text-muted">{subtitle}</p>
         </div>
         <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-semibold text-green-700">
@@ -63,9 +71,15 @@ export function QRCard({
       </div>
 
       {/* Body */}
-      <div className="flex flex-col items-center gap-5 px-5 py-6 sm:flex-row sm:items-start">
+      <div
+        className={
+          layout === "stacked"
+            ? "flex flex-col items-center gap-5 px-5 py-6"
+            : "flex flex-col items-center gap-5 px-5 py-6 sm:flex-row sm:items-start"
+        }
+      >
         {/* QR Code */}
-        <div className="shrink-0 rounded-2xl bg-paper p-3 shadow-sm ring-1 ring-gray-100">
+        <div className="shrink-0 rounded-2xl bg-paper p-3 shadow-sm ring-1 ring-line">
           <canvas ref={canvasRef} className="block rounded-xl" />
         </div>
 
@@ -81,7 +95,7 @@ export function QRCard({
                 readOnly
                 value={url}
                 onFocus={(e) => e.target.select()}
-                className="min-w-0 flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink2 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className="min-w-0 flex-1 rounded-xl border border-line2 bg-paper px-3 py-2 font-mono text-xs text-ink2 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
             </div>
           </div>

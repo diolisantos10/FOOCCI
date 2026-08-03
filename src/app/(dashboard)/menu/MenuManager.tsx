@@ -4006,12 +4006,15 @@ export function MenuManager({
 
   return (
     <div className="space-y-4">
-      {/* QR access cards */}
+      {/* QR access cards — os três cardápios, do mais simples ao mais completo.
+          layout="stacked": em coluna de grid (~320–500px) o corpo em linha do
+          QRCard estoura e corta o conteúdo; empilhado cabe em qualquer largura. */}
       {restaurantSlug && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <QRCard
             url={qrUrl}
             slug={restaurantSlug}
+            layout="stacked"
             label="QR Code Salão"
             subtitle="Cardápio digital — sem pedido"
             downloadName={`salao-qr-${restaurantSlug}.png`}
@@ -4020,6 +4023,7 @@ export function MenuManager({
           <QRCard
             url={lojaUrl}
             slug={restaurantSlug}
+            layout="stacked"
             label="QR Code Loja"
             subtitle="Pedido online — sem conversa"
             downloadName={`loja-qr-${restaurantSlug}.png`}
@@ -4028,6 +4032,7 @@ export function MenuManager({
           <QRCard
             url={pedidoUrl}
             slug={restaurantSlug}
+            layout="stacked"
             label="QR Code Delivery"
             subtitle="Pedido online completo"
             downloadName={`delivery-qr-${restaurantSlug}.png`}
