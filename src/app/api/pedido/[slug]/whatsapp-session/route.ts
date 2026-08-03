@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { verifyWaToken } from "@/lib/wa-token";
-import { phoneCandidates } from "@/lib/phone";
+import { phoneCandidates, customerFirstName, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 
 export async function GET(
   req: NextRequest,
@@ -46,12 +46,13 @@ export async function GET(
     const customer = candidates.length > 0
       ? await prisma.customer.findFirst({
           where: { restaurantId: restaurant.id, phone: { in: candidates } },
+          orderBy: CUSTOMER_LOOKUP_ORDER, // duplicata sem histórico nunca vence o cadastro rico
           select: { id: true, name: true, phone: true },
         })
       : null;
 
     if (customer) {
-      const firstName = customer.name.trim().split(/\s+/)[0] ?? null;
+      const firstName = customerFirstName(customer.name);
       return NextResponse.json({
         ok:         true,
         phone:      customer.phone,

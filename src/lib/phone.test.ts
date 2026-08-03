@@ -88,3 +88,42 @@ describe("toE164", () => {
     expect(toE164("5511999990000")).toBe("+5511999990000");
   });
 });
+
+describe("customerFirstName — nome-fantasma não é nome (regra do 2026-08-03)", () => {
+  it("extrai o primeiro nome de um nome real", async () => {
+    const { customerFirstName } = await import("@/lib/phone");
+    expect(customerFirstName("Dioli Santos")).toBe("Dioli");
+    expect(customerFirstName("  Ana  ")).toBe("Ana");
+  });
+
+  it("devolve null para vazio, null e undefined", async () => {
+    const { customerFirstName } = await import("@/lib/phone");
+    expect(customerFirstName("")).toBeNull();
+    expect(customerFirstName("   ")).toBeNull();
+    expect(customerFirstName(null)).toBeNull();
+    expect(customerFirstName(undefined)).toBeNull();
+  });
+
+  it("devolve null quando o 'nome' é um telefone (nome-fantasma dos upserts antigos)", async () => {
+    const { customerFirstName } = await import("@/lib/phone");
+    expect(customerFirstName("+5511999990000")).toBeNull();
+    expect(customerFirstName("5511999990000")).toBeNull();
+    expect(customerFirstName("(11) 99999-0000")).toBeNull();
+    expect(customerFirstName("11 99999 0000")).toBeNull();
+  });
+
+  it("não descarta nome legítimo que contém dígitos no meio", async () => {
+    const { customerFirstName } = await import("@/lib/phone");
+    expect(customerFirstName("João 2º")).toBe("João");
+  });
+});
+
+describe("CUSTOMER_LOOKUP_ORDER — o cadastro com histórico sempre vence", () => {
+  it("ordena por totalOrders desc e desempata pelo cadastro mais antigo", async () => {
+    const { CUSTOMER_LOOKUP_ORDER } = await import("@/lib/phone");
+    expect(CUSTOMER_LOOKUP_ORDER).toEqual([
+      { totalOrders: "desc" },
+      { createdAt: "asc" },
+    ]);
+  });
+});

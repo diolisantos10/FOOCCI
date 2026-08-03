@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
-import { phoneCandidates, toE164 } from "@/lib/phone";
+import { phoneCandidates, toE164, customerFirstName, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 
 export async function POST(
   req: NextRequest,
@@ -52,6 +52,7 @@ export async function POST(
         phone:        { in: candidates },
         isActive:     true,
       },
+      orderBy: CUSTOMER_LOOKUP_ORDER, // duplicata sem histórico nunca vence o cadastro rico
       select: {
         id:          true,
         name:        true,
@@ -62,10 +63,17 @@ export async function POST(
     });
 
     if (existing) {
-      const firstName = existing.name.trim().split(/\s+/)[0]!;
+      let firstName = customerFirstName(existing.name);
+      // Cadastro com nome-fantasma e o cliente informou o nome real → corrige.
+      if (!firstName && rawName.length >= 2) {
+        await prisma.customer
+          .update({ where: { id: existing.id }, data: { name: rawName } })
+          .catch(() => { /* best-effort */ });
+        firstName = rawName.split(/\s+/)[0]!;
+      }
       return NextResponse.json({
         found:         true,
-        name:          firstName,
+        name:          firstName ?? undefined,
         customerId:    existing.id,
         orderCount:    existing.totalOrders ?? 0,
         totalSpent:    existing.totalSpend ? Number(existing.totalSpend) : 0,

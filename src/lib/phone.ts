@@ -60,6 +60,36 @@ export function phoneCandidates(raw: string): string[] {
   return [...set];
 }
 
+/**
+ * Deterministic order for every customer lookup that matches `phoneCandidates()`.
+ *
+ * Why this must exist: the pre-fix 9th-digit bug (see phoneCandidates above)
+ * created duplicate customer rows for the same person — one rich (name, orders)
+ * and one empty. A `findFirst` without `orderBy` returns an ARBITRARY row, so the
+ * lookup was a lottery: resolve the empty duplicate and the customer loses their
+ * name and their "Comprar novamente" history. The rich row must always win.
+ */
+export const CUSTOMER_LOOKUP_ORDER = [
+  { totalOrders: "desc" as const },
+  { createdAt:   "asc"  as const },
+];
+
+/**
+ * Extracts the display first name from a customer record, treating "phantom"
+ * names as absent. Historical code paths created customers with name = their own
+ * phone number (WhatsApp upsert fallbacks); a phone is not a name, and returning
+ * it as one hides the fact that we never learned the customer's real name.
+ */
+export function customerFirstName(name: string | null | undefined): string | null {
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) return null;
+  // Phone-like: no letters at all and 8+ digits (covers "+5511…", "(11) 9…", etc.)
+  const hasLetter = /\p{L}/u.test(trimmed);
+  const digitCount = (trimmed.match(/\d/g) ?? []).length;
+  if (!hasLetter && digitCount >= 8) return null;
+  return trimmed.split(/\s+/)[0] ?? null;
+}
+
 /** Normalise to +55XXXXXXXXXXX (E.164) where possible; otherwise return raw digits. */
 export function toE164(raw: string): string {
   const digits = raw.replace(/\D/g, "");

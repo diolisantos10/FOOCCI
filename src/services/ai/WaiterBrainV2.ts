@@ -218,13 +218,12 @@ export interface V2Output {
   pinnedCardId?: string;         // ID of the harmonically suggested item (shown with ⭐)
   /**
    * Card-rendering policy for this response (internal — consumed by the validator):
-   *   "category"       → user asked for options/a category: show ALL relevant available
-   *                      cards (only a high technical-safety ceiling applies).
+   *   "category"       → options/categoria e upsell de fim de funil: mostra TODOS os
+   *                      cards relevantes disponíveis (só teto técnico de segurança).
    *   "recommendation" → consultative pick: concise, ordered, soft cap.
-   *   "upsell"         → passive upsell: small relevant subset.
    * Unset is treated as "category" (never hide available cards by default).
    */
-  cardScope?: "category" | "recommendation" | "upsell";
+  cardScope?: "category" | "recommendation";
 }
 
 // ─── sales intelligence types ────────────────────────────────
@@ -1140,10 +1139,10 @@ export function searchMenuByQuery(
     // Only applies when the user did NOT explicitly ask for an accessory.
     if (!isAccessoryReq && isAccessoryItem(item)) score -= 100;
 
-    // Future sales data hook — bonuses when restaurant provides real metrics
-    if (item.isBestSeller)                                              score += 12;
-    if (item.restaurantPriority != null && item.restaurantPriority > 0) score += Math.min(15, item.restaurantPriority / 5);
-    if (item.popularityScore    != null && item.popularityScore    > 0) score += Math.min(10, Math.floor(item.popularityScore * 10));
+    // Sales metrics (best-seller / priority / popularity) are TIE-BREAKERS only,
+    // applied in the sort below via byBestSeller. They must never ADD score: an
+    // item with zero textual relation to the query would otherwise qualify on
+    // popularity alone and pollute category asks with unrelated products.
 
     if (score > 0) {
       if (score > topScore) topScore = score;
@@ -2154,7 +2153,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
           requiresAI:  false,
           aiDirective: "",
           pinnedCardId,
-          cardScope:   "upsell",
+          cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
           memoryPatch: { checkoutUpsellStage: "drink_shown" },
         };
       }
@@ -2180,7 +2179,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
           requiresAI:  false,
           aiDirective: "",
           pinnedCardId,
-          cardScope:   "upsell",
+          cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
           memoryPatch: { checkoutUpsellStage: "dessert_shown" },
         };
       }
@@ -2198,7 +2197,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
         options:     [],
         requiresAI:  false,
         aiDirective: "",
-        cardScope:   "upsell",
+        cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
         memoryPatch: { checkoutUpsellStage: "extras_shown" },
       };
     }
@@ -2740,7 +2739,8 @@ function handleUserMessage(input: V2Input): V2Output {
       !ca.hasDrink   ? "asks_for_drink"   :
       !ca.hasDessert ? "asks_for_dessert" :
                        "asks_for_pairing";
-    const cards = rankProducts(catalog, intent, cartItemIds, 5, suggestedIds);
+    // Regra do CEO (2026-08-03): fim de funil mostra 100% da categoria.
+    const cards = rankProducts(catalog, intent, cartItemIds, OPTIONS_CARD_LIMIT, suggestedIds);
     if (cards.length > 0) {
       return {
         message:     "Pra fechar bem, essas opções combinam com seu pedido 👇",
@@ -3304,9 +3304,11 @@ const VALID_MODES = new Set<WaiterMode>(["BROWSE", "SUGGESTION", "INTERVENTION",
 // ALL relevant available products (organized, not hidden). Only a high technical
 // safety ceiling applies there. Consultative recommendation stays concise; passive
 // upsell shows a small relevant subset.
-const CATEGORY_CARD_CAP       = 50; // technical safety only — NOT a product limit
-const RECOMMENDATION_CARD_CAP = 12; // broad recommendation: show a fuller set (8–12)
-const UPSELL_CARD_CAP         = 6;  // passive upsell: small relevant subset
+const CATEGORY_CARD_CAP       = 200; // technical safety only — NOT a product limit
+const RECOMMENDATION_CARD_CAP = 12;  // broad recommendation: show a fuller set (8–12)
+// Regra do CEO (2026-08-03): o upsell de fim de funil (bebidas/sobremesas/extras
+// no checkout) mostra 100% dos cards da categoria — o antigo teto de 6 foi
+// aposentado e o escopo "upsell" não existe mais.
 
 // Broad/open intents should surface MORE options (8–12). Contextual intents
 // (pairing/checkout/specific) stay small via their own limits.
@@ -3325,7 +3327,6 @@ const OPTIONS_CARD_LIMIT = CATEGORY_CARD_CAP;
 /** Final card ceiling for a response, by its declared scope. Unset → category (show all). */
 function capForCardScope(scope?: V2Output["cardScope"]): number {
   if (scope === "recommendation") return RECOMMENDATION_CARD_CAP;
-  if (scope === "upsell")         return UPSELL_CARD_CAP;
   return CATEGORY_CARD_CAP;
 }
 

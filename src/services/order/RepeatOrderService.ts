@@ -18,7 +18,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
-import { phoneCandidates } from "@/lib/phone";
+import { phoneCandidates, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 
 // Statuses that represent a real, confirmed order worth repeating.
 // Excludes PENDING (not yet confirmed), AWAITING_PAYMENT (pending Pix),
@@ -219,6 +219,7 @@ async function resolveCustomerId(
   if (phone && phone.trim()) {
     const c = await prisma.customer.findFirst({
       where: { restaurantId, phone: { in: phoneCandidates(phone) } },
+      orderBy: CUSTOMER_LOOKUP_ORDER, // duplicata sem histórico nunca vence o cadastro rico
       select: { id: true },
     });
     return c?.id ?? null;

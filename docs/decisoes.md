@@ -433,3 +433,29 @@ Evolution carrega todo o resto.
 
 **Ainda travado, e é do CEO:** a Meta está ativa para **todos** os restaurantes ou
 só alguns? Sem esse dado a etapa (b) não começa.
+
+## Cards do Garçom: categoria mostra tudo; fim de funil mostra 100% da categoria
+
+**Data:** 2026-08-03 · **Decidido por:** CEO (em teste real no sushi-cazza) ·
+**Registrado por:** Diretor do Foocci
+
+Duas regras de produto, ditas pelo CEO como regra ("Isso é regra"):
+
+1. **Pergunta de categoria mostra tudo — e só o que é da categoria.** "Tem
+   sushi?" apresenta TODOS os itens de sushi, sem limite de quantidade. E nada
+   que não seja sushi: métricas de venda (best-seller, prioridade, popularidade)
+   **nunca qualificam** um item sem relação textual com a pergunta — elas só
+   desempatam a ordem entre itens que já são relevantes. O bug que motivou a
+   regra: os bônus de venda somavam pontos ANTES do filtro de relevância, então
+   um best-seller de outra categoria entrava na resposta só por ser best-seller.
+
+2. **Upsell de fim de funil mostra 100% da categoria.** Ao finalizar o pedido,
+   as etapas de bebidas, sobremesas e extras apresentam TODOS os cards da
+   categoria — o antigo teto de 6 cards foi aposentado. Upsell consultivo no
+   meio do fluxo continua conciso; a regra vale para o funil de fechamento.
+
+**Onde vive:** `src/services/ai/WaiterBrainV2.ts` (busca `searchMenuByQuery`,
+funil `handleCheckoutStarted`, teto `capForCardScope`). **Travado por teste:**
+`src/services/ai/tests/WaiterBrainV2.card-policy.test.ts` ("Regra CEO ①/②").
+O teto técnico de segurança da categoria subiu de 50 para 200 cards — é proteção
+contra catálogo patológico, não limite de produto.

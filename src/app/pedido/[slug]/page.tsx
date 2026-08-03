@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 import { LojaClient } from "./LojaClient";
 import { isCardEnabled } from "@/services/payment/PaymentRouter";
-import { phoneCandidates } from "@/lib/phone";
+import { phoneCandidates, customerFirstName, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
@@ -143,6 +143,7 @@ export default async function PedidoPage({
     if (candidates.length > 0) {
       const customer = await prisma.customer.findFirst({
         where: { restaurantId: restaurant.id, phone: { in: candidates } },
+        orderBy: CUSTOMER_LOOKUP_ORDER, // duplicata sem histórico nunca vence o cadastro rico
         select: {
           id: true,
           name: true,
@@ -156,7 +157,7 @@ export default async function PedidoPage({
       });
       if (customer) {
         knownCustomerPhone = customer.phone;
-        knownCustomerName = customer.name.trim().split(/\s+/)[0] ?? null;
+        knownCustomerName = customerFirstName(customer.name);
         knownCustomerId = customer.id;
         const addr = customer.addresses[0];
         if (addr) {
@@ -198,7 +199,7 @@ export default async function PedidoPage({
             select: { id: true, name: true },
           });
           knownCustomerId = upserted.id;
-          if (!knownCustomerName) knownCustomerName = upserted.name.trim().split(/\s+/)[0] ?? null;
+          if (!knownCustomerName) knownCustomerName = customerFirstName(upserted.name);
         } catch (err) {
           console.error("[pedido/page] customer upsert failed (non-fatal)", err);
           // Auto-identify will retry client-side

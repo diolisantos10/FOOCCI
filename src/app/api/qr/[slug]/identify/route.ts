@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
-import { phoneCandidates, toE164 } from "@/lib/phone";
+import { phoneCandidates, toE164, customerFirstName, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 
 const VISIT_SOURCES = new Set([
   "instagram", "whatsapp", "google", "qrcode", "crm", "manual", "direct", "other",
@@ -71,13 +71,23 @@ export async function POST(
         phone: { in: candidates },
         isActive: true,
       },
+      orderBy: CUSTOMER_LOOKUP_ORDER, // duplicata sem histórico nunca vence o cadastro rico
       select: { id: true, name: true },
     });
 
     if (existing) {
       logVisit(restaurant.id, existing.id, body.source);
-      const firstName = existing.name.trim().split(/\s+/)[0]!;
-      return NextResponse.json({ found: true, name: firstName, customerId: existing.id });
+      let firstName = customerFirstName(existing.name);
+      // Cadastro com nome-fantasma (vazio ou igual ao telefone) e o cliente
+      // informou o nome real agora → corrige o cadastro em vez de ignorar.
+      if (!firstName && rawName.length >= 2) {
+        await prisma.customer
+          .update({ where: { id: existing.id }, data: { name: rawName } })
+          .catch(() => { /* best-effort — a identificação não pode falhar por isso */ });
+        firstName = rawName.split(/\s+/)[0]!;
+      }
+      // Sem nome legível → found sem name; o front pede o nome e reenvia.
+      return NextResponse.json({ found: true, name: firstName ?? undefined, customerId: existing.id });
     }
 
     // New customer — create in CRM if name was provided

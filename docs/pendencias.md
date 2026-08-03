@@ -32,6 +32,33 @@ mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
 > qualquer outro.** Se você já estiver no meio de outra coisa, termine a fatia que
 > está aberta, commite, e venha para cá.
 
+## ✅ 0º-A · Garçom — os 4 problemas do teste do CEO no sushi-cazza (03/08)
+
+O CEO testou e achou 4 problemas. Diagnóstico e correção na mesma sessão:
+
+1. **"Tem sushi?" mostrou coisa que não é sushi.** Causa: bônus de venda
+   (best-seller/prioridade/popularidade) somavam pontos ANTES do filtro de
+   relevância na busca — item de outra categoria entrava só por ser best-seller.
+   Corrigido: métrica de venda agora só desempata a ordem, nunca qualifica.
+2. **Só 5 bebidas no fim do pedido.** Causa: teto de 6 cards do escopo "upsell".
+   Regra nova do CEO ("Isso é regra"): bebidas/sobremesas/extras no fechamento
+   mostram **100% dos cards da categoria**. Teto de 6 aposentado; teto técnico
+   da categoria subiu de 50→200. Registrado em `docs/decisoes.md` + vitrine do
+   garcom, travado por teste.
+3. **Número reconhecido, mas sem o nome.** 4. **"Comprar novamente" sumiu.**
+   Causa comum provável (investigação do especialista garcom): os 5 lookups de
+   cliente por telefone eram `findFirst` **sem orderBy** — quando o bug histórico
+   do 9º dígito deixou cadastro duplicado (um rico, um vazio), a busca era
+   loteria e podia resolver o vazio (sem nome, sem histórico). Corrigido:
+   `CUSTOMER_LOOKUP_ORDER` (totalOrders desc) nos 5 pontos + nome-fantasma
+   (nome = telefone) tratado como ausência de nome + quando o cliente informa o
+   nome real, o cadastro fantasma é corrigido na hora.
+
+**Fica aberto:** as duplicatas antigas continuam no banco (o fix faz a rica
+vencer sempre; mesclar duplicatas é migração de dados — decisão à parte). Se o
+CEO testar de novo e o nome ainda não aparecer, o cadastro rico dele pode também
+estar sem nome — aí o app vai **pedir o nome uma vez** e corrigir para sempre.
+
 ## ✅ 0º · Loja QR com checkout — EXECUTADA em 03/08, no ar
 
 A interface corrigida está em produção: plano de entrada abre o **catálogo puro

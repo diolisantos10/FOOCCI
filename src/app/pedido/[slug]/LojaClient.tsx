@@ -164,9 +164,16 @@ export function LojaClient({
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Não consegui validar o telefone.");
       if (json.found) {
-        setCustName(json.name ?? custName);
         setCustId(json.customerId ?? null);
-        setStep("method");
+        const resolvedName = json.name ?? custName.trim();
+        if (resolvedName) {
+          setCustName(resolvedName);
+          setStep("method");
+        } else {
+          // Cadastro existe mas sem nome legível — pede o nome; o reenvio corrige o cadastro.
+          setNeedName(true);
+          if (needName) setError("Digite seu nome para continuar.");
+        }
       } else if (json.customerId) {
         // New customer created with the provided name.
         setCustId(json.customerId);

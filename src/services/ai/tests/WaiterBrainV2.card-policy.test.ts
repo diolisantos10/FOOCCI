@@ -13,6 +13,7 @@ import {
   decide,
   bestSellerScore,
   byBestSeller,
+  createWaiterMemory,
   type V2CatalogItem,
 } from "../WaiterBrainV2";
 import { applyBestSellers, type BestSellerMap } from "../waiter/bestSellers";
@@ -137,5 +138,56 @@ describe("best-seller helpers", () => {
     const catalog: V2CatalogItem[] = [{ id: "y1", name: "Y1", categoryName: "C", price: 1 }];
     applyBestSellers(catalog, new Map());
     expect(catalog[0]!.salesCount ?? null).toBeNull();
+  });
+});
+
+// ── Regra do CEO (2026-08-03) ─────────────────────────────────────────────────
+// ① Pergunta de categoria mostra TUDO da categoria e SÓ o que é da categoria:
+//    métricas de venda (best-seller/prioridade/popularidade) nunca qualificam um
+//    item sem relação textual com a pergunta — são apenas desempate de ordem.
+// ② Upsell de fim de funil (bebidas/sobremesas/extras no checkout) mostra 100%
+//    dos cards da categoria — o antigo teto de 6 foi aposentado.
+
+describe("Regra CEO ① — busca não inclui item irrelevante por bônus de venda", () => {
+  const POLLUTED: V2CatalogItem[] = [
+    ...HOT_ROLLS,
+    // Sem relação textual com "hot roll", mas com todos os bônus de venda possíveis.
+    { id: "pastel-best", name: "Pastel de Queijo", categoryName: "Salgados", price: 12, sortOrder: 30, isBestSeller: true, popularityScore: 0.95, restaurantPriority: 100, salesCount: 500 },
+    { id: "caipi-best",  name: "Caipirinha",       categoryName: "Drinks",   price: 22, sortOrder: 31, isBestSeller: true, popularityScore: 0.9 },
+  ];
+
+  it("'tem hot roll?' NÃO traz best-sellers de outras categorias", () => {
+    const out = decide({ event: "ON_USER_MESSAGE", cartItemIds: [], cartValue: 0, catalog: POLLUTED, message: "tem hot roll?" });
+    expect(out.cards).not.toContain("pastel-best");
+    expect(out.cards).not.toContain("caipi-best");
+    // E continua trazendo TODOS os hot rolls
+    for (const hr of HOT_ROLLS) expect(out.cards).toContain(hr.id);
+  });
+});
+
+describe("Regra CEO ② — checkout mostra 100% da categoria no upsell final", () => {
+  // 10 bebidas (> o antigo teto de 6) para o corte ser detectável.
+  const DRINKS: V2CatalogItem[] = Array.from({ length: 10 }, (_, i) => ({
+    id: `beb-${i + 1}`, name: `Bebida ${i + 1}`, categoryName: "Bebidas", price: 8 + i, sortOrder: 40 + i,
+  }));
+  const DESSERTS: V2CatalogItem[] = Array.from({ length: 9 }, (_, i) => ({
+    id: `sob-${i + 1}`, name: `Sobremesa ${i + 1}`, categoryName: "Sobremesas", price: 15 + i, sortOrder: 60 + i,
+  }));
+  const FOOD: V2CatalogItem = { id: "combo-1", name: "Combinado 20 peças", categoryName: "Combinados", price: 79, sortOrder: 1 };
+  const CHECKOUT_CATALOG = [FOOD, ...DRINKS, ...DESSERTS];
+
+  it("etapa de bebidas apresenta TODAS as bebidas da categoria (10, não 6)", () => {
+    const out = decide({ event: "ON_CHECKOUT_STARTED", cartItemIds: ["combo-1"], cartValue: 79, catalog: CHECKOUT_CATALOG });
+    const bebidas = out.cards.filter((id) => id.startsWith("beb-"));
+    expect(bebidas).toHaveLength(DRINKS.length);
+  });
+
+  it("etapa de sobremesas apresenta TODAS as sobremesas da categoria", () => {
+    const out = decide({
+      event: "ON_CHECKOUT_STARTED", cartItemIds: ["combo-1", "beb-1"], cartValue: 87, catalog: CHECKOUT_CATALOG,
+      memory: { ...createWaiterMemory(), checkoutUpsellStage: "drink_shown" },
+    });
+    const sobremesas = out.cards.filter((id) => id.startsWith("sob-"));
+    expect(sobremesas).toHaveLength(DESSERTS.length);
   });
 });
