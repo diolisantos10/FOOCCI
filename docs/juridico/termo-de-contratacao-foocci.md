@@ -43,7 +43,7 @@ vigente na data da contratação, que integra este Termo. O valor contratado fic
 
 3.2. Reajuste: anual, pelo **IPCA acumulado** (ou índice que o substitua), ou na
 renovação de ciclo — o que ocorrer depois. Mudanças de preço de tabela valem
-para renovações, nunca retroativamente. **IPCA acumulado** (confirmado pelo CEO, 03/08).
+para renovações, nunca retroativamente.
 
 3.3. Degustação: **primeiro mês com 50% de desconto** (confirmado pelo CEO, 03/08). Aplicada na primeira cobrança da assinatura.
 
@@ -148,4 +148,4 @@ período.
 
 ---
 
-*Versão v1-minuta · 03/08/2026 · pendente de revisão final do CEO e advogado.*
+*Versão v1 · aprovada pelo CEO em 03/08/2026 · `TERMS_VERSION = v1-2026-08-03`.*
