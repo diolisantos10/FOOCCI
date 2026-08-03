@@ -13,10 +13,21 @@
  *
  * force-dynamic is kept: `/` renders the same marketing home, and the pages read
  * request-scoped data. Static prerendering here has bitten this subtree before.
+ *
+ * ANALYTICS: this is the SINGLE mount point of SiteAnalytics (GA4 + Meta Pixel,
+ * ids resolved at request time by SiteSettingsService — database, then env, then
+ * the launch default). It sits here, and not in the root layout, on purpose:
+ * the owner panel is authenticated product usage, not marketing traffic, and the
+ * customer-facing store (/pedido, /qr) is white-label — those visitors are the
+ * restaurant's diners, not our leads, and Foocci analytics has no business on a
+ * page carrying the restaurant's brand.
+ *
+ * On 03/08 two analytics implementations were built in parallel and one merge
+ * unmounted the other. If you are about to add a tracking tag anywhere under
+ * /site: it goes through SiteAnalytics + SiteSettingsService, not a new component.
  */
 
 import type { Metadata } from "next";
-
 import { SiteAnalytics } from "@/components/marketing/SiteAnalytics";
 import { SiteSettingsService } from "@/services/site/SiteSettingsService";
 
@@ -26,13 +37,6 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-/**
- * Analytics is wired HERE, at the /site root, so it covers every marketing page
- * including the ones added later. The ids are read at request time from the database
- * (admin screen) with the env var as fallback — a `NEXT_PUBLIC_*` value is frozen at
- * build time, and needing a deploy to change a measurement id is how it ends up never
- * being set.
- */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const settings = await SiteSettingsService.getResolved();
 
