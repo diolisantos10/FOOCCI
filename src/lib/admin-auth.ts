@@ -6,11 +6,26 @@
  * either the cookie or the legacy x-admin-secret header.
  */
 
-import { createHash } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 
 export const ADMIN_COOKIE = "foocci-admin-token";
+
+/**
+ * Constant-time string comparison. A plain `===` on a secret returns at the
+ * first differing byte, which leaks how much of a guess was right through
+ * response timing. Network jitter makes exploiting this hard, but the fix
+ * costs one line — and this helper guards EVERY admin route, so it is the one
+ * place where the cheap version is worth doing right. Hashing both sides
+ * first also removes the length leak (timingSafeEqual throws on unequal
+ * lengths, which would itself be an oracle).
+ */
+function safeEqual(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 /** Derives a stable session token from the current ADMIN_SECRET. */
 export function makeAdminToken(): string {
@@ -22,7 +37,7 @@ export function makeAdminToken(): string {
 /** Returns true if `token` matches the current ADMIN_SECRET-derived value. */
 export function isValidAdminToken(token: string | undefined): boolean {
   const expected = makeAdminToken();
-  return !!expected && !!token && expected === token;
+  return !!expected && !!token && safeEqual(expected, token);
 }
 
 /**
@@ -50,7 +65,7 @@ export function checkAdminRequest(req: NextRequest): boolean {
 
   // Header-based (legacy + server-to-server)
   const header = req.headers.get("x-admin-secret");
-  if (header === envSecret) return true;
+  if (header && safeEqual(header, envSecret)) return true;
 
   // Cookie-based (browser sessions)
   const cookie = req.cookies.get(ADMIN_COOKIE)?.value;

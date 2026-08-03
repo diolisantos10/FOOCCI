@@ -4,6 +4,28 @@
 
 ---
 
+## 💳 FLUXO DE COMPRA DO PLANO — estrutura levantada, OS aberta (03/08)
+
+Ordem do CEO. **Hoje um cliente que quer pagar não tem onde**: sem botão, sem
+contrato de assinatura (os termos atuais não citam plano pago — zero ocorrências),
+sem cobrança recorrente, sem registro de assinante, sem NFS-e, sem pós-compra.
+**A OS completa, com as 6 peças, a ordem e as dependências, está em
+`docs/OS-fluxo-de-compra-do-plano.md`.** Recomendação: V1 assistido (CEO fecha
+1:1 → aceite de termos → link de assinatura Mercado Pago → NFS-e via a conta
+Focus NFe que JÁ existe). Duas dependências do CEO: revisão jurídica do termo e
+os 4 dados fiscais (CNPJ/inscrição municipal/código de serviço/ISS).
+
+## 🛡️ SEGURANÇA — varredura feita, crítico corrigido (03/08)
+
+Relatório completo em `docs/seguranca-varredura-2026-08.md`. Resumo: base boa
+(negação por padrão, HMAC nos webhooks, multi-tenant, rate limit). Corrigido
+hoje: **next-auth com vulnerabilidade crítica** (4.24.7→4.24.15), comparação de
+admin em tempo constante, HSTS. Na fila do Diretor: trocar `xlsx` (vuln sem fix,
+mitigada por auth), cookie de admin com expiração, CSP com nonce, e o check de
+`npm audit` crítico no CI.
+
+---
+
 # 🚨 A FILA COMEÇA AQUI — ordem direta do CEO, 03/08
 
 > **Diretor do Foocci: largue o que estiver fazendo e leia este bloco antes de
