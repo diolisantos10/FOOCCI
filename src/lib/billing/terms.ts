@@ -6,12 +6,16 @@
  * STRING that gets stamped on every acceptance — bump the version whenever the text
  * changes, or old acceptances become claims about a text nobody can reproduce.
  *
- * v1-minuta: the CEO's ⬜ decisions are not closed yet, so the open items carry the
- * proposed defaults and the version name says "minuta". Before the FIRST real
- * acceptance the CEO must confirm them (or accept the defaults knowingly).
+ * v1 (03/08/2026): the CEO CONFIRMED the open decisions — reajuste = IPCA,
+ * inadimplência = 15 dias (painel) / 30 dias (total), degustação = 50% no 1º mês.
+ * The uptime SLA was DELIBERATELY LEFT OUT of the customer contract on the
+ * Diretor Geral's recommendation: a hard % (e.g. "99%") for an operation that
+ * depends on Meta/gateway/Railway is a breach trap; 99% stays an INTERNAL
+ * operational target, not a contractual promise. This version string is stamped
+ * on every acceptance — bump it whenever the text changes.
  */
 
-export const TERMS_VERSION = "v1-minuta-2026-08-03";
+export const TERMS_VERSION = "v1-2026-08-03";
 
 export const TERMS_SECTIONS: { title: string; body: string }[] = [
   {
