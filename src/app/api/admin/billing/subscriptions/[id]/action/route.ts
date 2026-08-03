@@ -15,10 +15,20 @@ import { MercadoPagoPlatformBilling } from "@/services/billing/MercadoPagoPlatfo
 import { PlanNfseService } from "@/services/billing/PlanNfseService";
 
 const actionSchema = z.object({
-  action: z.enum(["mp-link", "activate", "record-charge", "cancel", "emit-invoices", "refresh-invoice"]),
+  action: z.enum([
+    "mp-link",
+    "activate",
+    "record-charge",
+    "cancel",
+    "emit-invoices",
+    "refresh-invoice",
+    "mark-invoice-emitted",
+  ]),
   invoiceId: z.string().optional(),
   amountCents: z.number().int().positive().optional(),
   referenceMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  /** Link do PDF/da nota emitida manualmente (Emissor Nacional do MEI). */
+  pdfUrl: z.string().url().max(500).optional(),
 });
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -67,6 +77,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (action === "refresh-invoice" && parsed.data.invoiceId) {
       const r = await PlanNfseService.refreshStatus(parsed.data.invoiceId);
       return NextResponse.json({ ok: r.ok, detail: r.detail });
+    }
+
+    if (action === "mark-invoice-emitted" && parsed.data.invoiceId) {
+      // Modo MEI manual (decisão do CEO, 03/08): a nota é emitida à mão no
+      // Emissor Nacional (gov.br) e registrada aqui para a fila não mentir.
+      // A fila continua sendo a lista de conferência: PENDENTE = falta emitir.
+      const inv = await prisma.planInvoice.findUnique({ where: { id: parsed.data.invoiceId } });
+      if (!inv || inv.subscriptionId !== sub.id) {
+        return NextResponse.json({ ok: false, error: "Cobrança não encontrada" }, { status: 404 });
+      }
+      await prisma.planInvoice.update({
+        where: { id: inv.id },
+        data: {
+          status: "AUTORIZADA",
+          emittedAt: new Date(),
+          providerRef: inv.providerRef ?? `manual-${inv.id}`,
+          pdfUrl: parsed.data.pdfUrl ?? inv.pdfUrl,
+          errorMessage: null,
+        },
+      });
+      return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ ok: false, error: "Ação não reconhecida" }, { status: 400 });

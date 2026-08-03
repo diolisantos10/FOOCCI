@@ -105,7 +105,39 @@ Fontes do adendo:
 [Contabilizei — tabela oficial de atividades 2026](https://www.contabilizei.com.br/contabilidade-online/atividades-mei-tabela/),
 [Contabilidade.com — digitador MEI e desenquadramento](https://contabilidade.com/blog/cnae-8219999-digitador-a-independente-pode-ser-mei-quanto-paga-e-quando-desenquadrar-do-mei/).
 
-## 6 · Fontes
+## 6 · DECISÃO DO CEO — 03/08, madrugada: lançar faturando no MEI
+
+Ouvido o parecer (§2–§5), o CEO decidiu: **"vamos lançar no MEI como serviço"**.
+É decisão de dono, informada, e fica registrada como tal — junto com o que a
+torna operável e o risco que ela carrega.
+
+**O que precisa acontecer para ser sequer possível** (hoje o cadastro é só
+comércio de vestuário e o Emissor Nacional não oferece nota de serviço sem
+ocupação de serviço):
+
+1. No **Portal do Empreendedor** (gov.br/mei → Atualização Cadastral — grátis,
+   na hora, sem contador): **adicionar ocupação(ões) secundária(s) de
+   SERVIÇO** da lista permitida, escolhendo a que melhor descreva o trabalho
+   real. A lista é pesquisável no próprio portal. Nenhuma descreve
+   licenciamento de SaaS com exatidão — essa distância é exatamente o risco
+   residual da decisão.
+2. Emitir as notas no **Emissor Nacional de NFS-e** (gov.br) — manual, grátis.
+3. No sistema: a fila de cobranças (`/admin/assinaturas`) é a lista de
+   conferência; cada nota emitida à mão é registrada pelo botão **"marcar
+   emitida (manual)"** com o link do PDF. A emissão automática via Focus segue
+   desligada.
+
+**O risco aceito, para constar:** faturar SaaS sob ocupação aproximada é
+passível de desenquadramento de ofício retroativo com recálculo, juros e multa
+(§5). Com faturamento inicial pequeno, a exposição financeira é pequena e
+diminui a cada mês que a migração para SLU-ME avança. **A recomendação de
+migrar para SLU-ME continua de pé e em paralelo** — esta decisão é sobre não
+esperar a burocracia para começar a vender, não sobre ficar no MEI.
+
+**Teto vigiado:** R$ 81 mil/ano somando TUDO que o CNPJ fatura. A carteira de
+assinaturas dá o número do Foocci; o CEO soma o resto.
+
+## 7 · Fontes
 
 - CCMEI enviado pelo CEO (03/08/2026) e consulta pública Receita/BrasilAPI.
 - Sobre software não caber no MEI e o PLP 25/2026:
