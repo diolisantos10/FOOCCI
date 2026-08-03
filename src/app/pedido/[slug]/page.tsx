@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import Script from "next/script";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
+import { LojaClient } from "./LojaClient";
 import { isCardEnabled } from "@/services/payment/PaymentRouter";
 import { phoneCandidates } from "@/lib/phone";
 import { verifyWaToken } from "@/lib/wa-token";
@@ -481,9 +482,10 @@ gtag('config', '${ga4Id}');
         </>
       )}
 
+      {aiWaiterIncluded(restaurant) ? (
       <PedidoClient
         slug={slug}
-        aiIncluded={aiWaiterIncluded(restaurant)}
+        aiIncluded={true}
         restaurantName={restaurant.name}
         logoUrl={
           (brandConfig?.brandPersona != null && typeof brandConfig.brandPersona === "object"
@@ -519,6 +521,32 @@ gtag('config', '${ga4Id}');
         repeatOrder={repeatOrder}
         repeatMenuItems={repeatMenuItems}
       />
+      ) : (
+      /* Plano de entrada: a loja é a interface do QR com checkout — catálogo puro,
+         zero elemento de conversa (OS-loja-qr-com-checkout). A máquina embaixo são
+         as MESMAS rotas /api/pedido/* provadas sem IA (pedido #O2VKA1). */
+      <LojaClient
+        slug={slug}
+        restaurantName={restaurant.name}
+        logoUrl={
+          (brandConfig?.brandPersona != null && typeof brandConfig.brandPersona === "object"
+            ? (brandConfig.brandPersona as Record<string, unknown>).logoUrl as string | undefined
+            : undefined) ??
+          restaurant.logoUrl ??
+          null
+        }
+        brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
+        categories={allCategories}
+        deliveryEnabled={deliveryConfig?.enabled ?? false}
+        pickupEnabled={deliveryConfig?.pickupEnabled ?? true}
+        deliveryFee={checkoutDeliveryFee}
+        knownCustomerPhone={knownCustomerPhone}
+        knownCustomerName={knownCustomerName}
+        knownCustomerId={knownCustomerId}
+        restaurantIsOpen={restaurantIsOpen}
+        closedMessage={closedMessage}
+      />
+      )}
     </>
   );
 }
