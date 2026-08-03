@@ -1,9 +1,10 @@
-# TERMO DE CONTRATAÇÃO DO SERVIÇO FOOCCI — minuta v1
+# TERMO DE CONTRATAÇÃO DO SERVIÇO FOOCCI — v1 (aprovado 03/08/2026)
 
-> **Status: MINUTA para revisão do CEO.** Escrita em 03/08/2026 pelo Diretor
-> Geral a partir da tabela de planos aprovada. Campos `[⬜ …]` são decisões ou
-> dados pendentes. Ao aprovar, esta minuta vira a tela de aceite do fluxo de
-> compra — com registro de quem aceitou, quando e qual versão.
+> **Status: APROVADO pelo CEO em 03/08/2026** (`TERMS_VERSION = v1-2026-08-03`).
+> As cinco decisões abertas foram fechadas: reajuste IPCA · degustação 50% no 1º
+> mês · suspensão 15/30 dias · SLA de disponibilidade mantido FORA do contrato
+> (alvo interno de 99%, não promessa contratual — recomendação do Diretor Geral).
+> Restam apenas os dados que dependem da transformação do CNPJ em SLU-ME.
 >
 > Nota de identificação da contratada: hoje o CNPJ 59.120.811/0001-79 está
 > enquadrado como MEI com CNAE de vestuário — ver
@@ -42,9 +43,9 @@ vigente na data da contratação, que integra este Termo. O valor contratado fic
 
 3.2. Reajuste: anual, pelo **IPCA acumulado** (ou índice que o substitua), ou na
 renovação de ciclo — o que ocorrer depois. Mudanças de preço de tabela valem
-para renovações, nunca retroativamente. `[⬜ CEO confirma índice]`
+para renovações, nunca retroativamente. **IPCA acumulado** (confirmado pelo CEO, 03/08).
 
-3.3. Degustação: `[⬜ CEO define — ex.: primeiro mês com 50% de desconto]`.
+3.3. Degustação: **primeiro mês com 50% de desconto** (confirmado pelo CEO, 03/08). Aplicada na primeira cobrança da assinatura.
 
 ## 4. Pagamento e inadimplência
 
@@ -53,8 +54,8 @@ Nota fiscal de serviço emitida a cada cobrança confirmada.
 
 4.2. Em caso de falha de pagamento: (i) novas tentativas automáticas por até 7
 dias; (ii) aviso no painel e por e-mail/WhatsApp; (iii) persistindo por
-`[⬜ 15]` dias, suspensão do acesso ao painel administrativo; (iv) persistindo
-por `[⬜ 30]` dias, suspensão total e faculdade de rescisão.
+**15** dias, suspensão do acesso ao painel administrativo; (iv) persistindo
+por **30** dias, suspensão total e faculdade de rescisão.
 
 4.3. **O canal de vendas do Restaurante é o último a ser afetado**: a loja e o
 atendimento ao cliente final permanecem no ar durante o período do item (iii) —
@@ -85,8 +86,11 @@ Pagamentos dependem do gateway contratado. Indisponibilidades causadas por
 esses terceiros não constituem falha da Foocci, que se obriga a **avisar com
 transparência e atuar na restauração** com prioridade.
 
-6.2. Disponibilidade-alvo da plataforma: `[⬜ 99%]` mensal, excluídas
-manutenções programadas (avisadas com 24h) e os eventos do item 6.1.
+6.2. A Foocci empenha-se em manter a plataforma disponível e a restaurar o
+serviço com prioridade, excluídas manutenções programadas (avisadas com 24h) e
+os eventos do item 6.1. *(Nota interna: alvo operacional de 99%/mês — não é
+promessa contratual, para não criar quebra de contrato por instabilidade de
+terceiros que não controlamos.)*
 
 ## 7. Inteligência artificial — limites declarados
 
