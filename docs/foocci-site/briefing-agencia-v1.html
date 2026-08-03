@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Foocci — Documento Executivo para a Agência</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Inter, -apple-system, "Segoe UI", Roboto, sans-serif; color:#0B0B0B; font-size:10.5pt; line-height:1.55; }
+  .capa { padding:60px 0 30px; border-bottom:4px solid #F97316; margin-bottom:28px; }
+  .logo { font-size:30pt; font-weight:600; letter-spacing:-1px; }
+  .logo span { color:#F97316; }
+  .capa h1 { font-size:17pt; font-weight:600; margin-top:14px; }
+  .capa .meta { color:#8A8A86; margin-top:8px; font-size:9.5pt; }
+  h2 { font-size:13.5pt; font-weight:600; margin:26px 0 10px; padding-top:6px; border-top:1px solid #E9E9E6; }
+  h2 .n { color:#F97316; margin-right:6px; }
+  h3 { font-size:11pt; font-weight:600; margin:14px 0 6px; }
+  p { margin-bottom:8px; }
+  .lead { font-size:11.5pt; }
+  .destaque { background:#FFF7ED; border-left:4px solid #F97316; padding:12px 16px; border-radius:0 10px 10px 0; margin:12px 0; }
+  .cinza { background:#F6F6F4; padding:12px 16px; border-radius:10px; margin:12px 0; }
+  table { width:100%; border-collapse:collapse; margin:10px 0 14px; font-size:9.5pt; }
+  th { text-align:left; font-weight:600; border-bottom:2px solid #0B0B0B; padding:6px 8px; }
+  td { border-bottom:1px solid #E9E9E6; padding:7px 8px; vertical-align:top; }
+  .num { font-weight:600; color:#EA580C; white-space:nowrap; }
+  ol.dif { counter-reset:d; list-style:none; }
+  ol.dif li { counter-increment:d; margin-bottom:10px; padding-left:34px; position:relative; }
+  ol.dif li::before { content:counter(d); position:absolute; left:0; top:1px; width:24px; height:24px; background:#F97316; color:#fff; font-weight:600; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:10pt; }
+  ol.dif b { display:block; }
+  ul { margin:0 0 10px 18px; }
+  li { margin-bottom:4px; }
+  .duas { display:flex; gap:14px; }
+  .duas > div { flex:1; }
+  .pode { border:1px solid #16a34a33; background:#f0fdf4; border-radius:10px; padding:12px 14px; }
+  .naopode { border:1px solid #dc262633; background:#fef2f2; border-radius:10px; padding:12px 14px; }
+  .pode h3 { color:#15803d; margin-top:0; } .naopode h3 { color:#b91c1c; margin-top:0; }
+  .fonte { color:#8A8A86; font-size:8.5pt; }
+  .quebra { page-break-before:always; }
+  footer { margin-top:30px; padding-top:10px; border-top:1px solid #E9E9E6; color:#8A8A86; font-size:8.5pt; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+
+<div class="capa">
+  <div class="logo">f<span>oo</span>cci</div>
+  <h1>Documento Executivo — Briefing para a Agência</h1>
+  <div class="meta">03 de agosto de 2026 · Confidencial — uso interno da agência · Complementa o brand book já entregue</div>
+</div>
+
+<h2><span class="n">1.</span>O que é o Foocci, em um parágrafo</h2>
+<p class="lead">O Foocci é o <b>sistema operacional do restaurante</b>: cardápio digital com pedidos e pagamento, atendimento automático por inteligência artificial no WhatsApp, CRM que traz o cliente de volta, e a operação de salão — comanda, impressão, nota fiscal — <b>num único contrato, conversando entre si</b>. O concorrente vende cada peça separada; o Foocci vende o conjunto funcionando junto.</p>
+<div class="destaque"><b>A frase de posicionamento:</b> o restaurante vende pelo canal <u>dele</u>, para o cliente que é <u>dele</u> — em vez de alugar os dois do marketplace, a 15–27% por pedido.</div>
+
+<h2><span class="n">2.</span>A tese de mercado (os números que sustentam a campanha)</h2>
+<table>
+  <tr><th>Fato</th><th>Número</th><th>Uso na campanha</th></tr>
+  <tr><td>Comissão de marketplace com entrega própria</td><td class="num">15,2%</td><td rowspan="2">A dor. Um restaurante de R$ 30 mil/mês entrega <b>R$ 4,5–8 mil por mês</b> ao marketplace</td></tr>
+  <tr><td>Comissão com entrega do marketplace</td><td class="num">26,5%</td></tr>
+  <tr><td>Stack de 4 contratos separados (cardápio + CRM + PDV + IA)</td><td class="num">≈ R$ 700/mês</td><td>A âncora de preço: o Crescimento faz mais por <b>R$ 429</b> (−39%)</td></tr>
+  <tr><td>Migração conservadora ao canal próprio nos primeiros meses</td><td class="num">20–35%</td><td>A conta do ROI: 20% de R$ 30 mil migrados = <b>R$ 912+/mês</b> de comissão evitada — o plano se paga 2×</td></tr>
+</table>
+<p class="fonte">Fontes: tabelas públicas dos principais marketplaces de delivery, consultadas em 08/2026 (a mesma fonte está renderizada na calculadora do site). ⚠️ Regra inegociável: <b>nunca nomear o concorrente</b> em peça pública — o dono sabe de quem estamos falando.</p>
+
+<h2><span class="n">3.</span>Para quem vendemos</h2>
+<p><b>Restaurante pequeno e médio brasileiro, dono-operador.</b> Ele vive no WhatsApp, sente a comissão do marketplace todo mês, já tentou "ter canal próprio" com cardápio digital solto e desistiu porque dava trabalho e não vendia. Decide rápido quando vê <b>conta em reais</b>, desconfia de promessa de tecnologia, e tem medo real de <b>ter o número de WhatsApp bloqueado</b>. A maioria vai ler tudo <b>pelo celular</b>.</p>
+
+<h2><span class="n">4.</span>Os sete diferenciais, em ordem de força</h2>
+<ol class="dif">
+  <li><b>A IA é impedida de mentir.</b> Todo texto do agente passa por um verificador contra o cardápio real, e simuladores testam o atendimento toda madrugada. <i>O argumento é contraintuitivo e é o mais forte: não é "ter IA" — é provar que ela não inventa preço nem prato.</i> Ninguém no mercado publica como garante isso.</li>
+  <li><b>O número de WhatsApp não queima.</b> Silêncio 21h–8h, teto diário de envios, descanso por cliente, atraso aleatório e registro imutável de quem já foi contatado. É o medo nº 1 de quem já tentou vender por WhatsApp — e quase ninguém enfrenta.</li>
+  <li><b>Resgate antes de perder.</b> O CRM age quando o cliente quente está <i>esfriando</i> — não depois que sumiu, como a reativação comum.</li>
+  <li><b>Preço por canal.</b> O mesmo prato com preço próprio para delivery, salão e marketplace.</li>
+  <li><b>CMV com ficha técnica e reprecificação automática</b> — vendido como produto separado por outras empresas; aqui vem dentro do Performance.</li>
+  <li><b>A comanda não some.</b> Cinco tentativas de impressão, roteamento por estação, alarme que insiste. Cozinha que não perde pedido.</li>
+  <li><b>Os quatro sistemas num contrato, conversando</b> — o pedido alimenta o CRM, o CRM alimenta a IA, a IA vende de volta.</li>
+</ol>
+
+<div class="quebra"></div>
+
+<h2><span class="n">5.</span>Planos e preços</h2>
+<table>
+  <tr><th>Plano</th><th>Mensal</th><th>"Só aqui você tem"</th><th>Para quem</th></tr>
+  <tr><td><b>Essencial</b></td><td class="num">R$ 179</td><td>Cardápio e pedidos fora do marketplace, com o cliente virando seu</td><td>Quem está começando a vender direto</td></tr>
+  <tr><td><b>Crescimento</b> ⭐</td><td class="num">R$ 429</td><td>O CRM que traz o cliente de volta antes de ele sumir + o Garçom de IA</td><td>Quem já vende e quer recorrência</td></tr>
+  <tr><td><b>Performance</b></td><td class="num">R$ 899</td><td>CMV com ficha técnica e reprecificação automática por canal</td><td>Quem opera com margem apertada e muitos canais</td></tr>
+</table>
+<ul>
+  <li>Ciclos <b>mensal, trimestral e anual</b> — anual economiza de R$ 358 (Essencial) a R$ 1.798 (Performance)/ano.</li>
+  <li><b>Sem fidelidade, sem multa de cancelamento</b> — pode e deve ser usado como argumento.</li>
+  <li>Condição de lançamento (degustação do 1º mês) em definição — <b>não prometer em peça até o CEO fechar</b>.</li>
+  <li>Status: tabela aprovada internamente; o site ainda exibe "sob consulta" em dois planos até a publicação.</li>
+</ul>
+
+<h2><span class="n">6.</span>O que a campanha pode e não pode dizer</h2>
+<div class="duas">
+  <div class="pode">
+    <h3>✅ Pode (e deve)</h3>
+    <ul>
+      <li>Número na cara, sempre com a conta: comissão em reais/ano, economia da migração</li>
+      <li>"IA que não inventa" — com a explicação do verificador</li>
+      <li>"Seu número não queima" — com as proteções nomeadas</li>
+      <li>"Sem fidelidade" e "o cliente é seu, o dado é seu"</li>
+      <li>Quem atende hoje é quem construiu (fundador) — virtude, não fraqueza</li>
+    </ul>
+  </div>
+  <div class="naopode">
+    <h3>⛔ Não pode</h3>
+    <ul>
+      <li><b>Nomear concorrente</b> em comparação pública (decisão do CEO — risco jurídico)</li>
+      <li>Urgência falsa ("últimas vagas", contador regressivo inventado)</li>
+      <li>Prometer <b>integração com iFood</b>, totem ou app de garçom — não temos (resposta pronta: "nossa aposta é te tirar de lá, não integrar melhor")</li>
+      <li>Prometer degustação/desconto ainda não fechado</li>
+      <li>Superlativo sem fonte ("o melhor", "o nº 1")</li>
+    </ul>
+  </div>
+</div>
+<div class="cinza"><b>Tom (do brand book, reforçado):</b> agressivo = <b>número na cara com fonte</b>, não adjetivo. Direto, sem tecnojargão, falando com dono de restaurante e não com investidor. Grafia da marca: <b>"o Foocci"</b> (masculino).</div>
+
+<h2><span class="n">7.</span>Objeções e respostas prontas</h2>
+<table>
+  <tr><th>Objeção</th><th>Resposta</th></tr>
+  <tr><td>"Não quero sair do iFood"</td><td>Não precisa sair — comece migrando 20% dos pedidos para o canal próprio; a calculadora mostra a economia. Temos até preço específico para o canal marketplace</td></tr>
+  <tr><td>"IA responde errado, já vi"</td><td>A nossa é verificada contra o cardápio a cada resposta e testada toda madrugada por clientes simulados. Ela não pode inventar</td></tr>
+  <tr><td>"Vão bloquear meu WhatsApp"</td><td>Proteções automáticas: janela de silêncio, teto diário, descanso por cliente. Foi desenhado para isso não acontecer</td></tr>
+  <tr><td>"Empresa nova, e se sumir?"</td><td>Sem fidelidade + seus dados exportáveis a qualquer momento. O risco de testar é um mês</td></tr>
+</table>
+
+<h2><span class="n">8.</span>Funil, CTA e ativos</h2>
+<ul>
+  <li><b>CTA único de toda peça: a demonstração</b> — formulário em <b>foocci.com.br/site/demonstracao</b> (leads caem direto no painel; a venda é fechada 1:1 pelo fundador via WhatsApp).</li>
+  <li><b>Calculadora de comissão</b> em foocci.com.br/site#calculadora — a peça de maior conversão; ótima para landing de tráfego pago.</li>
+  <li><b>Site completo no ar</b>: foocci.com.br (Google Analytics ativo; Pixel da Meta entra quando a campanha começar).</li>
+  <li><b>Brand book: já entregue à agência</b> — paleta 90% neutro + 10% laranja (#F97316), Inter 400/600, minimalismo premium.</li>
+</ul>
+
+<footer>
+  <div>Foocci · foocci.com.br · CNPJ 59.120.811/0001-79</div>
+  <div>v1 · 03/08/2026 · dúvidas: Diego (fundador)</div>
+</footer>
+
+</body>
+</html>
