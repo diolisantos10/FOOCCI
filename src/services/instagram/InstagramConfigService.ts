@@ -67,6 +67,9 @@ export interface InstagramConfigPatch {
   appId?: string | null;
   appSecretRef?: string | null;
   allowlistedExternalUserIds?: string[];
+  /** Diagnóstico signal. Set to a message to make the Integrations card show a problem;
+   *  set to null to clear a stale error (e.g. a healthy reconnect after a dead token). */
+  lastError?: string | null;
   /** Non-secret display metadata (connectedAt, page/IG names). Merged, never tokens. */
   metadata?: Record<string, unknown> | null;
 }
@@ -168,6 +171,7 @@ export async function upsertInstagramConfig(restaurantId: string, patch: Instagr
   if (patch.appId !== undefined) data.appId = patch.appId;
   if (patch.appSecretRef !== undefined) data.appSecretRef = patch.appSecretRef;
   if (patch.allowlistedExternalUserIds !== undefined) data.allowlistedExternalUserIds = patch.allowlistedExternalUserIds;
+  if (patch.lastError !== undefined) data.lastError = patch.lastError;
 
   // Token: encrypt before storage. Never store plaintext; never log.
   if (patch.pageAccessToken !== undefined && patch.pageAccessToken !== "") {

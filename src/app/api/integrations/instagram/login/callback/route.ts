@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
     redirectUri: instagramLoginRedirectUri(req.nextUrl.origin),
   });
 
-  settings.searchParams.set("ig", result.ok ? "connected" : "error");
+  // A short-lived token means the connection formed but is NOT durable (it dies in ~1h).
+  // Distinguish it from a healthy connect so the panel can warn instead of showing green.
+  const status = !result.ok ? "error" : result.shortLived ? "connected_shortlived" : "connected";
+  settings.searchParams.set("ig", status);
   return NextResponse.redirect(settings);
 }
