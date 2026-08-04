@@ -16,7 +16,7 @@
  *   slug                    — restaurant slug, exact match (default: sushi-cazza)
  *   phone                   — E.164 test phone, e.g. +5511999990000
  *                             Required for customer/draft/waToken steps.
- *   liveTest                — "true" sends to test phone via Evolution (default: false)
+ *   liveTest                — "true" envia ao telefone de teste pela Meta (padrão: false)
  *   inactivityMinutes       — minutes of inactivity to simulate (default: 2, max: 60)
  *   includeOtherRestaurants — "true" runs the dry-run globally across ALL
  *                             restaurants (default: false → scoped to this slug,
@@ -34,8 +34,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { signWaToken, verifyWaToken } from "@/lib/wa-token";
 import { signRecoveryToken } from "@/lib/recovery-token";
 import { isGuestIdentifier } from "@/lib/guest";
@@ -57,7 +57,7 @@ interface QAStep {
 }
 
 interface LiveTestOutcome {
-  evolutionAccepted: boolean;
+  accepted: boolean;
   detail:            string;
   externalMessageId?: string;
 }
@@ -126,7 +126,8 @@ export async function GET(req: NextRequest) {
   let restaurantId: string | null = null;
   let restaurantName: string      = slug;
   let restaurantSlug: string      = slug;
-  let evolutionConfig: { instanceName: string; baseUrl: string; apiKey: string } | null = null;
+  let channelConfigured = false;
+  let channelId: string | null = null;
   let isOpen                      = false;
   let phone: string | null        = null;
   let customerId: string | null   = null;
@@ -154,19 +155,20 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── Step 2: Evolution config active ─────────────────────────────────────────
+  // ── Step 2: config do canal (Meta) ──────────────────────────────────────────
   if (restaurantId && !failedStep) {
-    const evoResult = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!evoResult.ok) {
-      addFail("evolution_config", "No active Evolution / WhatsApp config for this restaurant");
+    // `null` cobre "não configurado" E "banco tossiu": nos dois casos o passo
+    // REPROVA. Ausência de informação não é aprovação (guardrail 1).
+    const cfg = await MetaConfigService.getResolved(restaurantId).catch(() => null);
+    if (!cfg) {
+      addFail("whatsapp_config", "Sem config ativa da Meta para este restaurante (ou leitura falhou)");
     } else {
-      evolutionConfig = evoResult.data;
-      addPass("evolution_config", `Active — instance: ${evolutionConfig.instanceName}`, {
-        instanceName: evolutionConfig.instanceName,
-      });
+      channelConfigured = true;
+      channelId = cfg.phoneNumberId;
+      addPass("whatsapp_config", `Ativa — phone_number_id: ${channelId}`, { channelId });
     }
   } else if (!failedStep) {
-    addSkip("evolution_config", "Skipped — restaurant not found");
+    addSkip("whatsapp_config", "Skipped — restaurant not found");
   }
 
   // ── Step 3: Business hours ──────────────────────────────────────────────────
@@ -457,7 +459,7 @@ export async function GET(req: NextRequest) {
         : dryRunResult.skippedDailyLimit  > 0 ? "skipped_daily_limit"
         : dryRunResult.skippedOrderedAfter > 0 ? "skipped_ordered_after"
         : dryRunResult.skippedPendingPayment > 0 ? "skipped_pending_payment"
-        : dryRunResult.skippedNoConfig    > 0 ? "skipped_no_evolution_config"
+        : dryRunResult.skippedNoConfig    > 0 ? "skipped_no_whatsapp_config"
         : dryRunResult.skippedAlreadySent > 0 ? "skipped_already_sent"
         : checked === 0                        ? "no_eligible_drafts_in_db"
         : "unknown";
@@ -476,7 +478,7 @@ export async function GET(req: NextRequest) {
   // ── Step 10: liveTest send (test phone only) ────────────────────────────────
   if (liveTest) {
     const canSend =
-      !!evolutionConfig &&
+      channelConfigured &&
       !!customerId &&
       !!phone &&
       !!draftId &&
@@ -499,47 +501,58 @@ export async function GET(req: NextRequest) {
           `Você precisa de alguma ajuda para concluir?\n\n` +
           `👉 Retomar pedido: ${shortUrl}`;
 
-        const sendResult = await EvolutionClient.sendTextMessage(evolutionConfig!, toPhone, message);
-
-        // Stamp draft — idempotent anti-spam guard (same as production path)
-        const now = new Date();
-        await prisma.orderDraft.update({
-          where: { id: draftId! },
-          data:  { recoveryAttempts: { increment: 1 }, lastRecoveryAt: now },
+        const sendResult = await WhatsAppMessagingService.sendText({
+          restaurantId: restaurantId!, to: toPhone, text: message,
         });
 
-        liveTestResult = {
-          evolutionAccepted: true,
-          detail:            "Message accepted by Evolution API",
-          externalMessageId: sendResult.key.id,
-        };
-        addPass("live_send", `Evolution accepted — sent to ****${toPhone.slice(-4)}. recoveryAttempts incremented.`, {
-          phoneMasked:       maskPhone(phone!),
-          externalMessageId: sendResult.key.id,
-        });
-        console.info("[CartRecoveryQA] live send accepted", {
-          restaurantId,
-          restaurantName,
-          draftId,
-          phoneMasked: maskPhone(phone!),
-          externalMessageId: sendResult.key.id,
-        });
+        if (!sendResult.ok) {
+          // Recusa da Meta (inclusive BLOCKED por fora da janela de 24h) é FALHA
+          // declarada — nunca um "passou" silencioso.
+          const detail = sendResult.blockReason ?? sendResult.error ?? sendResult.errorCode ?? "envio recusado";
+          liveTestResult = { accepted: false, detail };
+          addFail("live_send", `Envio pela Meta recusado (${sendResult.status}): ${detail}`);
+          console.error("[CartRecoveryQA] live send recusado", { restaurantId, draftId, status: sendResult.status, detail });
+        } else {
+          // Stamp draft — idempotent anti-spam guard (same as production path)
+          const now = new Date();
+          await prisma.orderDraft.update({
+            where: { id: draftId! },
+            data:  { recoveryAttempts: { increment: 1 }, lastRecoveryAt: now },
+          });
+
+          liveTestResult = {
+            accepted:          true,
+            detail:            "Mensagem aceita pela Meta Cloud API",
+            externalMessageId: sendResult.providerMessageId ?? undefined,
+          };
+          addPass("live_send", `Meta aceitou — enviado para ****${toPhone.slice(-4)}. recoveryAttempts incrementado.`, {
+            phoneMasked:       maskPhone(phone!),
+            externalMessageId: sendResult.providerMessageId,
+          });
+          console.info("[CartRecoveryQA] live send accepted", {
+            restaurantId,
+            restaurantName,
+            draftId,
+            phoneMasked: maskPhone(phone!),
+            externalMessageId: sendResult.providerMessageId,
+          });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        liveTestResult = { evolutionAccepted: false, detail: msg };
-        addFail("live_send", `Evolution send failed: ${msg}`);
+        liveTestResult = { accepted: false, detail: msg };
+        addFail("live_send", `Envio pela Meta falhou: ${msg}`);
         console.error("[CartRecoveryQA] live send failed", { restaurantId, draftId, error: msg });
       }
     } else {
       const skipReason =
-        !evolutionConfig             ? "no Evolution config"
+        !channelConfigured           ? "sem config da Meta"
         : !customerId || !phone      ? "no phone/customer"
         : !draftId                   ? "no draft"
         : failedStep                 ? `earlier step failed: ${failedStep}`
         : !isOpen                    ? "restaurant_closed — recovery deferred until reopening"
         : dryRunResult?.eligible === 0 ? "0 eligible in dryRun"
         : "unknown";
-      liveTestResult = { evolutionAccepted: false, detail: `Skipped — ${skipReason}` };
+      liveTestResult = { accepted: false, detail: `Skipped — ${skipReason}` };
       const stepFn = !isOpen ? addWarn : addSkip;
       stepFn("live_send", `Live send skipped — ${skipReason}`);
     }

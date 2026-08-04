@@ -147,7 +147,7 @@ const AREA_MATCHERS: Array<{ area: string; keywords: string[] }> = [
   { area: "auth",         keywords: ["auth", "login", "senha", "permissao", "permissoes", "admin secret", "token", "sessao", "autenticacao"] },
   { area: "database",     keywords: ["banco", "database", "migration", "tabela", "prisma", "sql"] },
   { area: "waiter",       keywords: ["waiter", "garcom", "/pedido", "pedido", "atendente", "waiterbrain"] },
-  { area: "whatsapp",     keywords: ["whatsapp", "evolution", "webhook", "wa "] },
+  { area: "whatsapp",     keywords: ["whatsapp", "meta", "webhook", "wa "] },
   { area: "crm",          keywords: ["crm", "campanha", "automacao", "recuperacao", "lead"] },
   { area: "menu",         keywords: ["cardapio", "menu", "produto", "item do cardapio"] },
   { area: "delivery",     keywords: ["entrega", "delivery", "frete", "zona de entrega"] },

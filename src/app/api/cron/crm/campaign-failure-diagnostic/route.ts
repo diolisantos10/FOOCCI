@@ -18,8 +18,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { classifyExecution, type ExecutionCategory, type Retryability } from "@/services/crm/crmExecutionClassification";
 
 function checkCronAuth(req: NextRequest): { ok: true } | { ok: false; status: 401 | 503; error: string } {
@@ -33,7 +33,9 @@ function checkCronAuth(req: NextRequest): { ok: true } | { ok: false; status: 40
 /** Categorise a provider 400 body into an actionable sub-reason. */
 function classifyBody(text: string): string {
   const t = text.toLowerCase();
-  // Evolution/Baileys wraps a dropped/unhealthy session in a 400 — transient, retry after reconnect.
+  // Sessão caída/instável do provedor antigo vinha como 400 — transitório. Estes
+  // padrões são mantidos porque ainda existem linhas ANTIGAS no banco com esses
+  // corpos: apagar a classificação faria o histórico virar "desconhecido".
   if (t.includes("connection closed") || t.includes("connection terminated") || t.includes("lost connection") ||
       t.includes("cannot read properties of undefined") || t.includes("reading 'id'") || t.includes("socket") ||
       t.includes("websocket") || t.includes("baileys") || t.includes("stream errored") ||
@@ -76,30 +78,35 @@ export async function POST(req: NextRequest) {
     });
     if (!campaign) return NextResponse.json({ error: "campaign_not_found" }, { status: 404 });
 
-    // Evolution config (no secrets) — confirm instance/endpoint shape.
-    const cfg = await EvolutionConfigService.getSnapshot(restaurant.id).catch(() => null);
-    const instanceName = cfg?.ok ? cfg.data.instanceName : "unknown";
+    // Config da Meta (sem segredo) — só a presença e o phone_number_id.
+    const cfg = await MetaConfigService.getResolved(restaurant.id).catch(() => null);
+    const channelId = cfg?.phoneNumberId ?? "unknown";
 
-    // Read-only live instance state (GET /instance/connectionState). No secret exposed.
-    let instanceState = "unknown";
-    let instanceConnected = false;
-    let instanceCheckError: string | null = null;
-    if (cfg?.ok) {
+    // Estado do canal, só leitura. Não sabemos = "unknown", nunca "conectado".
+    let channelState = "unknown";
+    let channelConnected = false;
+    let channelCheckError: string | null = null;
+    if (cfg) {
       try {
-        const st = await EvolutionClient.getInstanceStatus(cfg.data);
-        instanceState = st.state;
-        instanceConnected = st.state === "open";
+        const st = await WhatsAppMessagingService.getConnectionStatus(restaurant.id);
+        channelConnected = st.connected;
+        channelState     = st.connected ? "connected" : "disconnected";
       } catch (e) {
-        instanceCheckError = e instanceof Error ? e.message.slice(0, 120) : "unreachable";
+        channelCheckError = e instanceof Error ? e.message.slice(0, 120) : "unreachable";
       }
     }
 
-    const code = `EVOLUTION_HTTP_${status}`;
+    // Linhas antigas de campanha guardam o código do provedor anterior; as novas
+    // guardam o da Meta. O diagnóstico precisa achar as duas — histórico não se
+    // apaga só porque o provedor mudou.
+    const code = `META_HTTP_${status}`;
+    const legacyCode = `EVOLUTION_HTTP_${status}`;
     const execs = await prisma.campaignExecution.findMany({
       where: {
         campaignId: campaign.id,
         OR: [
           { errorMessage: code },
+          { errorMessage: legacyCode },
           { failedReason: { contains: `HTTP ${status}` } },
           ...(status === "400" ? [{ failedReason: { contains: "Bad Request" } as never }] : []),
         ],
@@ -170,23 +177,24 @@ export async function POST(req: NextRequest) {
       restaurant: { slug: restaurant.slug, name: restaurant.name },
       campaign:   { id: campaign.id, name: campaign.name, audience: campaign.totalAudience, sent: campaign.totalSent, totalFailed: campaign.totalFailed },
       provider: {
-        endpoint:     `POST /message/sendText/${instanceName}`,
-        payloadShape: '{ "number": "<E.164 digits>", "text": "<message>" }',
-        instanceName,
+        endpoint:     `POST /${channelId}/messages (Graph API)`,
+        payloadShape: '{ "messaging_product": "whatsapp", "to": "<E.164 digits>", "type": "text", ... }',
+        channelId,
       },
-      instance: {
-        name:      instanceName,
-        state:     instanceState,            // open | close | connecting | unknown
-        connected: instanceConnected,
-        checkError: instanceCheckError,
+      channel: {
+        id:         channelId,
+        state:      channelState,            // connected | disconnected | unknown
+        connected:  channelConnected,
+        checkError: channelCheckError,
       },
       classification: {
         byCategory:     Object.fromEntries([...catCounts.entries()].sort((a, b) => b[1] - a[1])),
         byRetryability: Object.fromEntries([...retryCounts.entries()].sort((a, b) => b[1] - a[1])),
         recoverableCount,
       },
-      // Safe to reprocess only when the instance is connected AND there are recoverable rows.
-      safeToReprocess: instanceConnected && recoverableCount > 0,
+      // Só é seguro reprocessar com o canal CONECTADO e com linhas recuperáveis.
+      // "unknown" não conta como conectado — guardrail 1.
+      safeToReprocess: channelConnected && recoverableCount > 0,
       status,
       total: execs.length,
       message: { empty: messageEmpty, length: campaign.message?.length ?? 0 },

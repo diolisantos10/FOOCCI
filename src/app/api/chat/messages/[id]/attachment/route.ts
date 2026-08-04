@@ -3,19 +3,21 @@
  *
  * Authenticated media proxy for inbound WhatsApp attachments.
  *
- * WhatsApp media `url` fields point to AES-encrypted `.enc` blobs that the
- * browser cannot open. This route fetches the decrypted bytes from Evolution
- * (server-side, using the restaurant's stored credentials) and streams them
- * back with the correct Content-Type so staff can view images/files inline.
+ * Mídia de WhatsApp não abre direto no navegador. Esta rota baixa os bytes pela
+ * Graph API da Meta (server-side, com o token guardado do restaurante) e devolve
+ * com o Content-Type certo, para a equipe ver imagem/arquivo na hora.
  *
- * Evolution credentials never reach the client — only the decrypted bytes do.
+ * O token nunca chega ao cliente — só os bytes decodificados.
+ *
+ * ⚠️ Mídia ANTIGA, recebida pela Evolution antes de 04/08/2026, não tem
+ * `metaMediaId` e **não pode mais ser baixada**: o provedor que guardava aquele
+ * blob saiu do Foocci. A rota devolve 404 declarado em vez de 500 — a mensagem
+ * continua visível na Central, só o anexo é que não abre.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { downloadMetaMedia } from "@/services/whatsapp/metaMedia";
 
 interface WaMediaMeta {
@@ -65,40 +67,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return new NextResponse(new Uint8Array(dl.buffer), { status: 200, headers: mediaHeaders(contentType, meta.fileName) });
   }
 
-  // Evolution media → decrypt via the stored Evolution credentials.
-  if (!meta.whatsappMedia || !message.externalMessageId || !meta.remoteJid) {
-    return new NextResponse(null, { status: 404 });
+  // Sem `metaMediaId` só sobra mídia legada da Evolution — sem provedor para
+  // buscar o blob. 404 honesto (o anexo não existe mais para nós), nunca 500.
+  if (meta.whatsappMedia) {
+    console.info(`[chat/messages/attachment] anexo legado sem metaMediaId (msg ${params.id}) — não há de onde baixar`);
   }
-
-  const configResult = await EvolutionConfigService.getSnapshot(ctx.restaurantId);
-  if (!configResult.ok) return new NextResponse(null, { status: 502 });
-
-  try {
-    const { base64, mimetype } = await EvolutionClient.getBase64FromMediaMessage(
-      configResult.data,
-      {
-        id:        message.externalMessageId,
-        remoteJid: meta.remoteJid,
-        fromMe:    meta.fromMe ?? false,
-      },
-    );
-
-    if (!base64) return new NextResponse(null, { status: 502 });
-
-    const buffer      = Buffer.from(base64, "base64");
-    const contentType = mimetype || meta.mimetype || "application/octet-stream";
-
-    const headers: Record<string, string> = {
-      "Content-Type":  contentType,
-      "Cache-Control": "private, max-age=3600",
-    };
-    if (meta.fileName) {
-      headers["Content-Disposition"] = `inline; filename="${meta.fileName.replace(/"/g, "")}"`;
-    }
-
-    return new NextResponse(new Uint8Array(buffer), { status: 200, headers });
-  } catch (err) {
-    console.error("[chat/messages/attachment] media download failed", err);
-    return new NextResponse(null, { status: 502 });
-  }
+  return new NextResponse(null, { status: 404 });
 }
