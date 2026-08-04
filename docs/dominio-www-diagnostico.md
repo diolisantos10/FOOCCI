@@ -1,6 +1,30 @@
 # Domínio — o diagnóstico (e é o inverso do que estava na lista)
 
 > 30/07/2026. Medido de fora, do container e de um resolvedor público.
+> **Atualizado em 04/08/2026** — ver "Estado atual" logo abaixo.
+
+---
+
+## Estado atual (04/08/2026)
+
+| Peça | Estado | Evidência |
+|---|---|---|
+| **Redirect `www` → apex no código** | ✅ **NO AR** | middleware 308 preservando caminho/query; deploy confirmado (`34a633c`) |
+| **DNS do `www` (Hostinger)** | ✅ **FEITO pelo CEO** | `CNAME www → o8p24ufo.up.railway.app`, Status 0 no DoH (era NXDOMAIN) |
+| **Domínio `www` registrado no Railway** | ❌ **PENDENTE** | `https://www.foocci.com.br` falha o TLS: *no alternative certificate subject name matches* — não existe certificado para o `www` |
+
+**O que a falha de TLS significa:** o Railway só emite certificado para hostname
+registrado como Custom Domain no serviço. Como o DNS agora resolve, restam duas
+leituras: (a) o `www` ainda não foi adicionado no Railway, ou (b) foi adicionado
+agora e o certificado está sendo emitido (costuma levar minutos). De fora não dá
+para distinguir — só a API/painel do Railway responde isso.
+
+**Bloqueio operacional:** esta sessão **não tem credencial do Railway** — sem CLI
+instalado, sem `RAILWAY_TOKEN` no ambiente, sem nada em `.env`, e não há conector
+MCP do Railway. A API pública do Railway (`backboard.railway.com/graphql/v2`)
+**é alcançável daqui** (HTTP 200), então com um token de conta o Diretor executa
+o registro do domínio por API, sem depender do painel. Enquanto o token não
+existir, este passo é do CEO no painel.
 
 ---
 
