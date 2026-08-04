@@ -800,6 +800,12 @@ export function LojaClient({
             <>
               <h3 className="text-lg font-bold text-gray-900">Confira seu pedido</h3>
               <CartLineList cart={cart} onChangeQty={changeQty} />
+              <CheckoutCoupons
+                wallet={wallet}
+                appliedCoupon={appliedCoupon}
+                onApply={applyCoupon}
+                onRemove={() => setAppliedCoupon(null)}
+              />
               <div className="mt-2 space-y-1 border-t border-gray-100 pt-3 text-sm">
                 {method === "delivery" && (
                   <div className="flex justify-between text-gray-600"><span>Entrega</span><span>{deliveryFee != null ? fmt(fee) : "a combinar"}</span></div>
@@ -858,6 +864,141 @@ export function LojaClient({
 
 const inputCls   = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
 const inputSmCls = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
+
+/**
+ * Cupons dentro do checkout (pedido do CEO, 04/08).
+ *
+ * Antes, o cupom só existia no drawer "Minha conta" — quem chegava à revisão
+ * não tinha como usar um, e nada na tela dizia que cupom existia. Aqui ele
+ * aparece onde o total é decidido.
+ *
+ * Os quatro estados da carteira viram quatro respostas HONESTAS. O caso que
+ * mais importa é o `locked`: as rotas de cupom exigem prova de posse do
+ * telefone (waToken do link do WhatsApp), então para quem só digitou o número
+ * não dá para listar cupons — seriam cupons de terceiros. Mostrar "nenhum
+ * cupom" nesse caso seria transformar ausência de acesso em ausência de cupom,
+ * que é exatamente o guardrail 1. Então a tela diz o que é e como destravar.
+ */
+function CheckoutCoupons({
+  wallet,
+  appliedCoupon,
+  onApply,
+  onRemove,
+}: {
+  wallet: WalletState;
+  appliedCoupon: WalletCoupon | null;
+  onApply: (c: WalletCoupon) => void;
+  onRemove: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+
+  const moldura = "mt-3 rounded-2xl border border-gray-100 bg-gray-50/60 px-3.5 py-3";
+
+  if (wallet.status === "loading") {
+    return (
+      <div className={moldura} aria-label="Carregando seus cupons">
+        <div className="h-4 w-32 animate-pulse rounded-full bg-gray-200" />
+      </div>
+    );
+  }
+
+  if (wallet.status === "locked") {
+    return (
+      <div className={moldura}>
+        <p className="text-xs font-semibold text-gray-700">🎟️ Cupons</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+          Seus cupons aparecem aqui quando você abre a loja pelo link que o
+          restaurante te manda no WhatsApp.
+        </p>
+      </div>
+    );
+  }
+
+  if (wallet.status === "error") {
+    return (
+      <div className={moldura}>
+        <p className="text-xs font-semibold text-gray-700">🎟️ Cupons</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+          Não conseguimos carregar seus cupons agora. Seu pedido segue normal —
+          se tiver cupom, avise o restaurante.
+        </p>
+      </div>
+    );
+  }
+
+  if (wallet.coupons.length === 0) {
+    return (
+      <div className={moldura}>
+        <p className="text-xs font-semibold text-gray-700">🎟️ Cupons</p>
+        <p className="mt-0.5 text-[11px] text-gray-500">
+          Você não tem cupom disponível no momento.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={moldura}>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold text-gray-700">🎟️ Cupons</span>
+          <span className="mt-0.5 block truncate text-[11px] text-gray-500">
+            {appliedCoupon
+              ? `Em uso: ${appliedCoupon.label}`
+              : `${wallet.coupons.length} disponíve${wallet.coupons.length === 1 ? "l" : "is"}`}
+          </span>
+        </span>
+        <span
+          className="shrink-0 text-[11px] font-bold"
+          style={{ color: "var(--brand-primary)" }}
+        >
+          {aberto ? "Fechar" : appliedCoupon ? "Trocar" : "Escolher"}
+        </span>
+      </button>
+
+      {aberto && (
+        <ul className="mt-2.5 space-y-2">
+          {wallet.coupons.map((c) => {
+            const emUso = appliedCoupon?.id === c.id;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => { if (emUso) { onRemove(); } else { onApply(c); setAberto(false); } }}
+                  className={`flex w-full items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-left transition ${
+                    emUso ? "border-transparent ring-2" : "border-gray-100 hover:bg-gray-50"
+                  }`}
+                  style={emUso ? ({ ["--tw-ring-color" as string]: "var(--brand-primary)" } as React.CSSProperties) : undefined}
+                >
+                  <span aria-hidden="true" className="text-lg">{c.isReward ? "🎁" : "🎟️"}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-gray-900">{c.label}</span>
+                    <span className="block text-[10px] text-gray-400">
+                      {c.expiresAt
+                        ? `Válido até ${new Date(c.expiresAt).toLocaleDateString("pt-BR")}`
+                        : "Sem validade"}
+                    </span>
+                  </span>
+                  <span
+                    className="shrink-0 text-[11px] font-bold"
+                    style={{ color: emUso ? undefined : "var(--brand-primary)" }}
+                  >
+                    {emUso ? "Remover" : "Usar"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /** Linhas do carrinho com controle de quantidade — usada na sacola e na revisão. */
 function CartLineList({ cart, onChangeQty }: { cart: CartLine[]; onChangeQty: (index: number, delta: number) => void }) {

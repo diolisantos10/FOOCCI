@@ -48,6 +48,13 @@ o varredor é fatiado. Não deixar como está.
 
 ## 📱 Cupons/endereços na Loja para quem DIGITA o telefone — depende de OTP (canais)
 
+> **Atualização 04/08 (tarde):** o CEO pediu a opção de cupom **dentro do
+> checkout** — feito: bloco na etapa "Confira seu pedido", com escolha, troca e
+> remoção, e o total/botão já descontando. Isso **aumenta a urgência do OTP**:
+> agora existe um lugar visível onde o cliente que só digitou o telefone lê
+> "seus cupons aparecem quando você abre pelo link do WhatsApp". Antes o limite
+> ficava escondido no drawer; hoje ele está no caminho da compra.
+
 Nota do topo marketplace (04/08): o drawer "Minha conta" da Loja mostra cupons
 e endereços reais via rotas gated por prova de posse do telefone (waToken) —
 quem chega pelo **link do WhatsApp** tem a experiência completa; quem só digita
