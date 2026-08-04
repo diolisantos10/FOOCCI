@@ -1,40 +1,29 @@
 /**
- * activeProvider — routes outbound WhatsApp sends through the restaurant's ACTIVE
- * provider (Restaurant.whatsappProvider): Meta Cloud API or Evolution.
+ * activeProvider — envia WhatsApp pela Meta Cloud API. É o único provedor.
  *
- * WHY: transactional senders (order notifications, ordering runtime, review requests,
- * cart recovery, AI replies) were hardcoded to EvolutionClient. After a restaurant
- * migrates its number to the official Meta Cloud API, Evolution is dead for that
- * number — every hardcoded send fails (seen live: HTTP 400 / silent bot). Routing by
- * the active provider keeps Evolution-only restaurants untouched and makes migrated
- * restaurants send through Meta.
+ * HISTÓRIA, para ninguém reintroduzir o que saiu: até 04/08/2026 este módulo
+ * escolhia entre Meta e Evolution conforme `Restaurant.whatsappProvider`, com a
+ * Evolution como PADRÃO e como reserva em caso de falha de banco. A Evolution
+ * era uma muleta do começo, usada enquanto a homologação da Meta não saía. A
+ * homologação saiu, o CEO confirmou que NENHUM restaurante depende mais dela, e
+ * ela foi eliminada do sistema.
  *
- * Both providers implement the same WhatsAppProvider interface and normalize/validate
- * the recipient themselves.
+ * A regra agora é absoluta: **toda mensagem sai pelo aplicativo homologado.**
+ * Não existe caminho alternativo, nem em erro — um caminho alternativo não
+ * homologado é exatamente o risco de banimento que a homologação eliminou. Se a
+ * Meta não puder enviar, o certo é falhar e avisar, nunca sair por outro lugar.
  */
 
-import { prisma } from "@/lib/prisma";
 import type { WhatsAppProvider, SendResult } from "./providers/types";
-import { EvolutionWhatsAppProvider } from "./providers/EvolutionWhatsAppProvider";
 import { MetaWhatsAppCloudProvider } from "./providers/MetaWhatsAppCloudProvider";
 
-/** Resolve the provider selected for this restaurant (defaults to Evolution). */
-export async function activeWhatsAppProvider(restaurantId: string): Promise<WhatsAppProvider> {
-  let providerName: string | null = null;
-  try {
-    const r = await prisma.restaurant.findUnique({
-      where:  { id: restaurantId },
-      select: { whatsappProvider: true },
-    });
-    providerName = r?.whatsappProvider ?? null;
-  } catch {
-    // Lookup failure → fall back to Evolution (the historical default) so a
-    // transient DB error never turns into a completely un-routable send.
-    providerName = null;
-  }
-  return providerName === "META_CLOUD_API"
-    ? new MetaWhatsAppCloudProvider()
-    : new EvolutionWhatsAppProvider();
+/**
+ * O provedor do restaurante — sempre a Meta.
+ * Continua async e recebendo o restaurantId por compatibilidade com as dezenas
+ * de chamadas que já a aguardam; não há mais consulta a banco para decidir.
+ */
+export async function activeWhatsAppProvider(_restaurantId: string): Promise<WhatsAppProvider> {
+  return new MetaWhatsAppCloudProvider();
 }
 
 /** One-call text send through the active provider. */
