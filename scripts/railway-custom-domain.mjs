@@ -202,10 +202,46 @@ function alertarDivergenciaDeDns(entry) {
   return true;
 }
 
+/**
+ * Lista apenas os NOMES das variáveis do serviço — nunca os valores.
+ *
+ * Serve para responder "existe credencial de DNS guardada em algum lugar?" sem
+ * precisar pedir nada a humano. Os nomes já são públicos no `.env.example` deste
+ * repositório, então imprimi-los não revela nada novo; os valores nunca saem.
+ */
+async function listarNomesDeVariaveis(target) {
+  const result = await gql(
+    `query Variables($projectId: String!, $environmentId: String!, $serviceId: String!) {
+       variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+     }`,
+    target,
+    { tolerate: true },
+  );
+  const vars = result?.data?.variables;
+  if (!vars) {
+    console.log('\n🔑 Não consegui listar as variáveis (o token não tem esse alcance).');
+    return;
+  }
+  const nomes = Object.keys(vars).sort();
+  console.log(`\n🔑 ${nomes.length} variáveis no serviço (somente nomes):`);
+  console.log(nomes.map((n) => `   · ${n}`).join('\n'));
+
+  const dns = nomes.filter((n) => /HOSTINGER|CLOUDFLARE|DNS|DOMAIN|NAMECHEAP|GODADDY|REGISTRAR/i.test(n));
+  console.log(
+    dns.length
+      ? `\n🎯 Candidatas a credencial de DNS: ${dns.join(', ')}`
+      : '\n🎯 Nenhuma credencial de DNS guardada aqui.',
+  );
+}
+
 async function main() {
   console.log(`\n🎯 Domínio alvo: ${DOMAIN}\n`);
 
   const target = await resolveTarget();
+
+  if (process.env.LISTAR_VARIAVEIS === '1') {
+    await listarNomesDeVariaveis(target);
+  }
 
   const before = await listCustomDomains(target);
   if (before) {

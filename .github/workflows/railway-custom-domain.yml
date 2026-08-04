@@ -62,6 +62,10 @@ jobs:
           DOMAIN: ${{ github.event.inputs.domain || 'www.foocci.com.br' }}
           SERVICE_NAME: ${{ github.event.inputs.service_name || 'FOOCCI' }}
           ENVIRONMENT_NAME: ${{ github.event.inputs.environment_name || 'production' }}
+          # Lista só os NOMES das variáveis do serviço (nunca os valores), para
+          # saber se já existe credencial de DNS guardada — e assim resolver
+          # domínio ponta a ponta sem depender de ninguém abrir painel.
+          LISTAR_VARIAVEIS: '1'
         run: node scripts/railway-custom-domain.mjs
 
       - name: Conferir se o domínio já responde
