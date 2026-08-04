@@ -324,7 +324,12 @@ Vá no menu lateral em **Marketing → CRM**. No topo ficam as abas **Visão Ger
 ## Antes: o que a Visão Geral te mostra
 A aba **Visão Geral** abre em **Hoje** e é o resumo do CRM, de cima para baixo:
 
-1. **Os números da sua base** (não dependem do período): **Clientes na base**, **Quentes**, **Mornos**, **Frios**, **Perdidos**, **Novos hoje** (o nome muda com o período: "Novos (7 dias)", "Novos este mês"…) e **Não compraram** ("Cadastraram mas nunca pediram"). Cada quadro é clicável e leva pra lista já filtrada (**Ver quentes**, **Ver mornos**, **Ver frios**, **Ver novos**, **Ver e criar campanha**).
+1. **Os números da sua base** (não dependem do período): **Clientes na base** ("Inclui Foocci + importados"), **Quentes**, **Mornos**, **Frios**, **Perdidos**, **Novos hoje** (o nome muda com o período: "Novos (7 dias)", "Novos este mês", "Novos no mês anterior"…) e **Não compraram** ("Cadastraram mas nunca pediram"). Cada quadro é clicável e leva pra lista já filtrada (**Ver quentes**, **Ver mornos**, **Ver frios**, **Ver perdidos**, **Ver novos**, **Ver e criar campanha**).
+
+   **Como ler o percentualzinho ao lado do número.** Todos os quadros — menos o **Clientes na base**, que é o total — mostram, do lado do número, **quanto aquele grupo pesa na sua base inteira**. É sempre a mesma conta: aquele grupo dividido por **Clientes na base**. Então **Quentes 40%** quer dizer "40% de toda a minha base está quente", não "40% de quem já comprou".
+   - As cinco faixas que não se misturam — **Quentes**, **Mornos**, **Frios**, **Perdidos** e **Não compraram** — somam mais ou menos **100%** da base. Cada cliente está em uma delas, e só em uma. Se a soma não fechar em 100 na bucha, é arredondamento.
+   - **Novos** é a exceção: ele conta quem se cadastrou **no período** escolhido, então essa gente também aparece em uma das cinco faixas acima. O percentual dele é só informação ("os novos deste mês são 6% da minha base") — não entre na soma.
+   - Grupo pequeno **não vira 0%**: abaixo de 1% a tela mostra uma casa decimal (**0,2%**), para você ver que existe alguém ali.
 2. **A régua de período**: **Hoje**, **Últimos 7 dias**, **Esta semana**, **Este mês**, **Mês anterior**, **Este ano** e **Personalizado** (abre duas datas com "até" e o botão **Aplicar**). Ela vale dos blocos abaixo pra baixo. Escolhendo **Mês anterior** (o mês fechado, do dia 1º ao último dia do mês passado), o quadro de novos clientes passa a se chamar **Novos no mês anterior**.
 3. **Receita gerada pelo CRM** — os quadros **Receita atribuída** (campanhas + automações), **Mensagens enviadas**, **Converteram** (% dos enviados) e **Cupons usados**, mais o gráfico com os botões **Barras** e **Linha**.
 4. **Campanhas mais rentáveis** — "Top 5 por receita no período selecionado", em cinco quadradinhos com a posição (**1º**, **2º**…), o nome da campanha, quanto ela fez em R$, quantas mensagens foram **enviadas** e quantos **pedidos** saíram. **Ver todas →** abre a aba Campanhas. Sem resultado no período: **"Nenhuma campanha gerou receita comprovada neste período."** — troque o período pra ver mais.
@@ -679,17 +684,40 @@ No menu lateral, **Plataforma → Fotos do Cardápio** (acesso de Dono/Gerente).
     slug: "guia-cardapio-digital-qr",
     title: "Como compartilhar o cardápio digital (QR Code e link)",
     area: "GENERAL",
-    description: "Baixar o QR e copiar o link do cardápio para clientes.",
+    description: "Os três QR Codes da tela Cardápio (Salão, Cardápio sem IA e Delivery): qual usar em cada lugar, como baixar e como copiar o link.",
     content: `# Como compartilhar o cardápio digital (QR Code e link)
 
-No menu lateral, **Vendas → Cardápio**. No topo há dois QR Codes:
+No menu lateral, **Vendas → Cardápio**. No topo da tela ficam **três** cartões de QR Code, do mais simples ao mais completo. Cada um abre um link diferente — escolha pelo que você quer que o cliente faça.
 
-- **QR Code Salão** — cardápio digital **só para consulta** (sem pedido). Cole nas mesas. Abre em /qr/seu-restaurante.
-- **QR Code Delivery** — **pedido online completo** (o cliente conversa, monta o pedido e paga). Compartilhe no WhatsApp/Instagram. Abre em /pedido/seu-restaurante.
+## Os três cartões
 
-Em cada card: **⬇ Baixar QR** (para imprimir), **📋 Copiar link** (para enviar) e **👁 Visualizar**.
+**1. QR Code Salão** — "Cardápio digital — sem pedido"
+O cliente lê o cardápio e pronto: **não tem carrinho nem checkout**. A dica do cartão diz o resto: *"Cole nas mesas para que os clientes consultem o cardápio. Leitura apenas — sem carrinho ou checkout."*
+Use para: mesas, balcão, vitrine. Substitui o cardápio de papel.
 
-> Cada alteração no Cardápio aparece **na hora** no cardápio digital. Para medir de onde vêm os acessos, gere versões rastreáveis em **Canais**.`,
+**2. QR Code Cardápio sem IA** — "Pedido online — sem IA"
+O cliente vê o catálogo, escolhe os itens, monta o carrinho e **paga online — sem conversar com ninguém**. A dica do cartão: *"O cliente vê o catálogo, monta o carrinho e paga online, sem IA. Ideal para quem prefere pedir direto."*
+Use para: quem quer pedir rápido, no jeito de aplicativo, sem bate-papo. O link tem o trecho **?modo=loja** no fim — é ele que garante a versão sem IA, mesmo que o seu plano tenha o agente ligado.
+
+**3. QR Code Delivery** — "Pedido online completo"
+É a experiência completa, **com o agente de IA**: o cliente conversa, o agente sugere, monta o pedido e ele paga online. A dica do cartão: *"Compartilhe para delivery e retirada. O cliente conversa com o agente, monta o pedido e paga online."*
+Use para: bio do Instagram, status e conversas de WhatsApp, delivery e retirada.
+
+> Os três cartões mostram o selo **Ativo** no canto direito do topo: os links já estão no ar, não há nada para "ligar".
+
+## O que fazer em cada cartão
+Todos os três funcionam igual:
+
+1. **Link público** — o link aparece na caixinha; clique nele e o texto já vem selecionado.
+2. **📋 Copiar link** — copia para colar onde você quiser. O botão vira **✓ Copiado!** por dois segundos para você ter certeza.
+3. **⬇ Baixar QR** — salva a imagem do QR Code (PNG) no seu computador ou celular, pronta para imprimir. O arquivo já vem com nome que diz qual é: *salao-qr…*, *cardapio-sem-ia-qr…* ou *delivery-qr…*.
+4. **👁 Visualizar** — abre o cardápio numa aba nova, exatamente como o cliente vê. Confira aqui antes de imprimir ou divulgar.
+
+## Dicas de uso
+- **Imprima o QR do Salão** e cole nas mesas; guarde o do Delivery para o digital (bio, status, respostas automáticas).
+- **Faça o teste você mesmo:** leia o QR com o celular antes de mandar para a gráfica.
+- Cada alteração no Cardápio (preço, foto, item esgotado) aparece **na hora** nos três links — o QR impresso não precisa ser trocado.
+- Para saber **de onde** vêm os acessos e os pedidos, gere versões rastreáveis em **Marketing → Canais** em vez de espalhar o link cru.`,
   },
   {
     slug: "guia-configuracoes",
@@ -766,7 +794,7 @@ Bem-vindo ao Foocci! 🚀 Siga esta trilha na ordem — em cada etapa, você pod
 **Integrações → WhatsApp**: clique em **Conectar WhatsApp** e escaneie o QR Code com o celular do restaurante. O agente de IA passa a atender por lá.
 
 ## 7. Divulgue o cardápio
-**Vendas → Cardápio** (topo): baixe o **QR Code Salão** para as mesas e copie o link do **QR Code Delivery** para a bio do Instagram e o WhatsApp.
+**Vendas → Cardápio** (topo): são três cartões de QR. Baixe o **QR Code Salão** para as mesas e copie o link do **QR Code Delivery** para a bio do Instagram e o WhatsApp. O do meio, **QR Code Cardápio sem IA**, é o mesmo pedido online sem o bate-papo — bom para quem prefere escolher direto no catálogo.
 
 ## 8. Faça um pedido de teste
 Abra o link do delivery no seu celular, monte um pedido e finalize. Ele vai aparecer em **Vendas → Pedidos** — clique em **Confirmar** e avance o status até **Entregue**.

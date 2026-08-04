@@ -5,6 +5,46 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-04
+- **Arquivos que dispararam** (janela de 26h, telas do lojista):
+  - `src/app/(dashboard)/menu/MenuManager.tsx`, `src/app/(dashboard)/menu/QRCard.tsx`,
+    `src/app/(dashboard)/menu/page.tsx` — a tela **Cardápio** passou de **dois** para **três**
+    cartões de QR. O do meio nasceu como "QR Code Loja" (commit `eedee0c2`, link próprio com
+    `?modo=loja`), ganhou layout empilhado junto com os outros dois (commit `31dfefc8`) e foi
+    renomeado por decisão do CEO para **QR Code Cardápio sem IA** — subtítulo "Pedido online —
+    sem IA", arquivo `cardapio-sem-ia-qr-<slug>.png` (commit `3f06f093`).
+  - `src/app/(dashboard)/crm/OverviewTab.tsx`, `crm/ContactBaseHealthPanel.tsx` — na **Visão
+    Geral** do CRM **todos** os quadros passaram a mostrar o peso em % (inclusive **Novos** e
+    **Não compraram**), e o denominador mudou de "quem já comprou" para a **base total de
+    clientes**; abaixo de 1% a tela exibe uma casa decimal ("0,2%") em vez de arredondar para
+    0% (commit `0f800d19`).
+- **Guias atualizados:**
+  - `guia-cardapio-digital-qr` — reescrito. O guia dizia "no topo há **dois** QR Codes" e agora
+    são três: documentados os rótulos reais dos cartões (**QR Code Salão** "Cardápio digital —
+    sem pedido", **QR Code Cardápio sem IA** "Pedido online — sem IA", **QR Code Delivery**
+    "Pedido online completo"), a dica de cada um, o selo **Ativo**, o campo **Link público**, os
+    três botões (**📋 Copiar link** → **✓ Copiado!**, **⬇ Baixar QR**, **👁 Visualizar**), o nome
+    do arquivo baixado e o que o **?modo=loja** faz (força a versão sem IA em qualquer plano).
+  - `guia-criar-campanha-crm` — o item "Os números da sua base" ganhou o bloco **"Como ler o
+    percentualzinho ao lado do número"**: base do cálculo = **Clientes na base** (o único quadro
+    sem %), as cinco faixas exclusivas somando ~100%, **Novos** como eixo de período sobreposto
+    (percentual só informativo) e a casa decimal abaixo de 1%. Corrigido também o CTA
+    **Ver perdidos**, que faltava na lista.
+  - `guia-primeiros-passos` — o passo "Divulgue o cardápio" citava só dois cartões; agora
+    menciona os três, com o **QR Code Cardápio sem IA** no meio.
+- **Disparou mas não gerou guia:** `guia-cadastrar-produto` — o `MenuManager.tsx` mudou só no
+  bloco dos cartões de QR. Todos os rótulos do guia (**+ Nova categoria**, **Criar categoria**,
+  **+ Novo Produto**, **Criar produto**, **+ Adicionar item**, **Editar item**, **+ Adicionar
+  variante / grupo de opções / adicional**, **Salvar alterações**, **Excluir produto**) foram
+  conferidos no JSX e continuam iguais. Nada a reescrever.
+- **Nenhuma rota nova** em `(dashboard)/` → nenhum guia criado.
+- **Playbook:** a linha do `guia-cardapio-digital-qr` no mapa passou a citar
+  `src/app/(dashboard)/menu/QRCard.tsx` — o componente que renderiza os cartões nasceu ontem e
+  não estava mapeado.
+- **Verificação:** `npm run type-check` — OK.
+
+---
+
 ## 2026-08-02
 - **Arquivos que dispararam** (janela de 26h, telas do lojista):
   - `src/app/(dashboard)/dashboard/DashboardClient.tsx`, `analytics/AnalyticsClient.tsx`,
