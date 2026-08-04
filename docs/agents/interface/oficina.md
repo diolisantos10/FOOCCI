@@ -319,3 +319,113 @@ tipografia 9, espaçamento 8, consistência 9.
 
 — interface, ajuste da faixa social da Loja (branch
 `claude/foocci-director-onboarding-lhindy`, sem commit — Diretor revisa)
+
+---
+
+## 04/08 — A aba de degustação, o risco jurídico de /precos e o destino de /como-funciona
+
+**Contexto:** site aberto com campanha paga rodando. Três frentes numa passagem,
+branch `claude/foocci-brain-vaamrx`.
+
+### 1. `/site/experimente` — a degustação (nova)
+
+Página nova + `loading.tsx` + `src/lib/site/demoTasting.ts` (leitura do estado da
+vitrine) + teste da parte pura. Entrou no menu entre "Soluções" e "Planos e
+preços", no rodapé e no sitemap.
+
+**Decisão: ABA NOVA, não iframe.** Quatro motivos, na ordem em que pesam:
+(1) a loja é `fixed inset-0` e os dois modos rendem componentes DIFERENTES —
+catálogo com barra fixa × conversa que cresce sem fim —, então não existe uma
+altura de iframe certa para os dois; (2) a 375px a loja já é a tela inteira,
+e um app de tela cheia dentro de uma faixa de 335px demonstra o produto na pior
+versão dele; (3) a loja guarda carrinho e carteira em local/sessionStorage e abre
+links de WhatsApp — em iframe de outra origem o navegador particiona esse
+armazenamento e a degustação quebra em silêncio; (4) moldura em página de vendas
+lê-se como vídeo, aba nova lê-se como "está rodando". O custo (perder o visitante
+para outra aba) é pago com `rel="noopener"` e com esta página viva atrás, com os
+botões de contratar.
+
+**Aprendizado — "link para o produto" numa página de campanha exige portão de
+existência, não confiança no slug.** A primeira versão escrevia os três endereços
+da vitrine e acendia os botões sempre. Com o restaurante fora do ar (`isDemo`
+ausente ou zero item), os três CTAs viravam 404 pago. O screenshot do estado
+`empty` foi o que denunciou: o aviso "está sendo preparada" aparecia no cartão
+lateral E os três botões continuavam clicáveis logo abaixo — o texto dizia uma
+coisa e a interface oferecia outra. Agora `getTastingState()` confere tenant +
+`isDemo` + contagem de itens, e o CTA vira um `CtaEmPreparo` de mesma silhueta.
+**Aviso em texto não é portão; o portão é o botão não existir.**
+
+**Aprendizado — o estado `error` não pode apagar os botões.** Consulta que falha
+não é prova de que a loja caiu (guardrail 1). Só o VAZIO comprovado apaga; no
+erro os links continuam (são endereços públicos estáveis) com a nota honesta
+"não conseguimos conferir agora" + "Tentar de novo".
+
+**Horário da padaria, resolvido do lado da página.** A vitrine abre 6h e fecha
+20h/21h (13h no domingo) — quem visita às 22h bate numa loja com envio pausado.
+Sem tocar no dado do restaurante: o estado real é lido do banco com as MESMAS
+funções de `@/lib/business-hours` que a loja usa (o aviso nunca diverge do que a
+loja mostra), a página mostra a semana agrupada ("Segunda a quinta · 06:00–20:00")
+e, quando fechada, empurra para o cardápio de mesa (QR), que **não consulta
+horário** e funciona 24h. Recomendação de abrir a vitrine 24h subiu ao Diretor.
+
+**Fotos.** `photoCount` é lido; enquanto for 0 a página declara "as fotos estão em
+produção" e vende o que está em teste (o atendimento). Com fotos, a linha some
+sozinha — nada a reescrever.
+
+**Aprendizado — breakpoint de comparação é `md`, não `lg`.** Os dois cartões
+"sem IA × com IA" nasceram `lg:grid-cols-2`: a 768px empilhavam, e comparação
+empilhada deixa de ser comparação. `md:grid-cols-2` põe os dois lado a lado já no
+tablet. Na tabela de contraste, a virada certa foi outra: 2 colunas com rótulo
+ACIMA no celular (comparar exige lado a lado, mesmo a 375px) e 3 colunas de
+tabela de verdade a partir de `sm`, com a coluna do Garçom tingida por uma faixa
+`absolute` decorativa — tingir célula a célula com `divide` produz emenda.
+
+### 2. `/site/precos` — risco jurídico
+
+A página afirmava três vezes a comissão do concorrente como fato ("R$ 20 mil no
+iFood paga R$ 3.040" = 15,2%), sem fonte. Adotado o padrão da calculadora da home:
+`ASSUMED_RATE_PERCENT = 23` em `commissionRates.ts` (fonte única, agora lida
+também pela calculadora, que antes tinha o "23" próprio), e o bloco "Faz a conta"
+passou de string escrita a **conta calculada** da premissa + do preço real do
+plano. Nenhum número comparativo é mais digitado. Nota de origem junto dos
+cartões (não escondida no rodapé) e link "Fazer a conta com os meus números" →
+`/site#calculadora`. As faixas de "Substitui" viraram estimativa de mercado
+declarada. O nome do marketplace sobreviveu só onde ele é **canal de venda do
+lojista** (preço por canal) — uso descritivo, não comparativo.
+
+**Aprendizado — premissa duplicada é premissa divergente.** O "23" existia solto
+na calculadora; se a página de planos ganhasse o seu, o mesmo site teria duas
+suposições diferentes para a mesma coisa. Número comparativo mora em constante.
+
+### 3. `/site/como-funciona` — enxugada, não aposentada
+
+Ela carregava `WaiterRealShowcase` e `CrmRealShowcase`, que viraram o coração de
+`/site/atendimento-com-ia` e `/site/crm`. Os dois saíram; ficou o que é só dela
+(jornada, bastidor, ciclo — o argumento de INTEGRAÇÃO) e entrou um índice de três
+cartões para as páginas dedicadas + a degustação. Aposentar por redirect foi
+recusado: URL indexada com conteúdo próprio, linkada no rodapé, no `StickyMobileCta`
+e em dois pontos de `/site/sobre` — trocar isso por um 308 com campanha rodando é
+perder posição de busca e um passo do funil. Drift corrigido de passagem:
+`bg-gray-50`→`canvas`, `text-gray-500`→`muted`, `#0B0B0B` literal→`ink`. O import
+morto de `COMO_FUNCIONA_URL` em `/precos` saiu.
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` 395 arquivos / **4948 verdes**.
+Screenshots 375/768/1280 das três páginas + os estados **fechado**, **vazio** e
+**carregando** da degustação. Zero rolagem horizontal nos nove
+(`scrollWidth == viewport` exato), zero imagem sem `alt`, zero interativo sem nome
+acessível. Alturas no celular: experimente **5.079px (~6,3 telas)**, como-funciona
+7.024px, precos 11.993px (esta última já era longa — fica registrada como dívida,
+não foi escopo).
+
+**Nota de bancada:** um `git stash -u` para medir a linha de base pegou junto o
+trabalho EM ANDAMENTO de outra frente no mesmo working tree (`src/components/help/**`,
+`src/services/**`). O `pop` restaurou tudo, mas foi sorte. **Com duas frentes na
+mesma árvore, não se usa stash** — a linha de base se mede pelo `git show HEAD:arquivo`
+ou num worktree separado.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, bloco da degustação + trava jurídica de /precos + enxugada de
+/como-funciona (branch `claude/foocci-brain-vaamrx`)

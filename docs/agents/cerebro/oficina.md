@@ -81,3 +81,93 @@ capacidade, não de fato.
 - `npx tsc --noEmit` acusa erros em `src/app/contratar/novo/CheckoutClient.tsx` e
   `src/app/site/(gated)/precos/page.tsx` — ambos da Frente 1, arquivos que outro
   agente estava editando no mesmo worktree durante este bloco.
+
+---
+
+## 2026-08-04 — Passo 3: o agente PROPÕE (e a trava de mentir sobre si mesmo)
+
+**Pedido:** fazer o agente de suporte AGIR sem quebrar a Regra de Ouro. Primeira
+ação real: subir o cardápio. Antes de qualquer ação, construir o verificador de
+capacidade — a dívida que eu mesmo registrei na entrada anterior (item 5).
+
+### O que tentei e o que descobri
+
+**1. Onde a chave de ação tinha que morar: no contrato genérico, não no suporte.**
+Cogitei devolver a chave por um campo do `HelpAnswer` e deixar o Brain intacto.
+Rejeitei: aí o *mapeamento* pergunta→ação viraria código do chamador — regex ou
+if/else — e isso é cérebro paralelo (Lei 1). Quem escolhe a ação tem que ser o
+raciocínio. Então `proposableActions` entrou em `BrainReasoningRequest`
+(`BrainTypes.ts:93`) e `proposedActionKey` em `BrainReasoningResult`
+(`BrainTypes.ts:139`). A IA escolhe entre chaves; o Brain valida contra a lista
+(`BrainReasoner.ts:210`) e descarta o que não casar **exatamente** — sem
+normalizar, sem trim criativo, sem "quase certo". Chave descartada vira nota de
+segurança, não silêncio.
+
+**2. `runtimeTouched: false` não protege de nada sozinho — e eu quase confiei nele.**
+A invariante diz que o Brain não mexe no runtime. Ela não diz nada sobre o Brain
+*afirmar* que mexeu. As duas perguntas são mesmo separadas: o
+`SnapshotCoherenceVerifier` olha "R$ 89,90 existe na base?"; "já subi seu
+cardápio" não tem número nenhum e passa liso pelo verificador de fato inteiro.
+
+**3. O lastro precisou ser por VERBO, não por "algo rodou".**
+Primeira versão do `CapabilityCoherenceVerifier`: se a lista de execuções está
+vazia, qualquer pretérito reprova; se tem alguma coisa, libera. Furo óbvio — o
+executor prepara a *prévia* e o agente diz "já publiquei na loja". Passei a
+exigir casamento por lema: cada execução declara `backsClaims` (o que ELA
+autoriza afirmar) e a afirmação só passa se o verbo canônico estiver lá.
+`menu_import_preview` autoriza "preparar/gerar/processar" e **não** autoriza
+"publicar" nem "subir" — está no catálogo, com teste
+(`CapabilityCoherenceVerifier.test.ts`, "afirmação FORA do que a execução dá
+lastro").
+
+**4. O `\b` do JavaScript é ASCII — e isso ia matar o detector em silêncio.**
+`\bexcluí\b` **nunca** casa, porque "í" não é caractere de palavra para o motor
+de regex. O detector teria um buraco por acidente de codificação, e ninguém
+notaria: teste verde, agente mentindo. Troquei por lookarounds acentuadas
+(`CapabilityCoherenceVerifier.ts:111-112`), com um teste que usa "Excluí" de
+propósito. **Detector que falha calado é pior que detector nenhum.**
+
+**5. A metade que deixa passar deu mais trabalho que a que barra.**
+Verbo de LEITURA não podia entrar: o exemplo canônico do próprio perfil é
+"Verifiquei a conexão do WhatsApp…", e barrar isso quebraria o diagnóstico
+inteiro. Decidi cobrir só MUTAÇÃO, e escrevi o limite no cabeçalho como escolha,
+não como esquecimento. Negação também precisou de tratamento por oração — "Não
+apaguei nada, mas cadastrei o produto" tem uma frase honesta e uma afirmação; por
+isso a quebra é em vírgula/"mas", não só em ponto final.
+
+**6. Onde o portão reprova por omissão — de propósito.**
+`helpAssistant.ts:206` exige `doesNotClaimUnexecutedAction === true`. Não
+`!== false`. Se o campo não vier (portão que não rodou), reprova. Tem teste que
+apaga o campo do objeto para provar isso ("BARRA POR OMISSÃO"). Mesmo tratamento
+em `SupportIncidentReasoner.ts:154`, onde a consequência é mais suave e melhor:
+cai na explicação determinística em vez de emudecer.
+
+**7. Achado no caminho: a aba técnica usava a fala da IA sem olhar coerência NENHUMA.**
+`SupportIncidentReasoner` copiava `idealResponse` para `explanation` checando só
+`reasoningMode === "LLM"` — nem o veredito de fato inventado era consultado.
+Coloquei o portão de capacidade; **o portão de FATO continua não sendo aplicado
+ali** e isso é dívida real, não minha de escopo hoje: fica registrado.
+
+### O que quebrou
+
+- Fixture antiga do `SupportIncidentReasoner.test.ts` não declarava o veredito de
+  capacidade → o gate estrito reprovou e o teste caiu. Foi o gate funcionando: um
+  fixture que não declara o veredito É um portão que não registrou resultado.
+- `WaiterBrainReasoningAdapter` parou de compilar quando o campo virou
+  obrigatório. Resisti à tentação de preencher `true` fixo (seria aprovar por
+  omissão com cara de código): passei a calcular o veredito ali também
+  (`WaiterBrainReasoningAdapter.ts:27`).
+- Primeira tentativa de "provar que em sombra nada executa" era um teste vazio: o
+  runner nunca é chamado em lugar nenhum, então `not.toHaveBeenCalled()` não
+  provava nada. Abri `SupportActionLadder.test.ts` com o catálogo simulado para
+  mostrar que o caminho de execução EXISTE e que é a escada que o segura.
+
+### Achados fora do meu escopo (para o Diretor)
+
+- `src/services/quality/noSideEffects.test.ts` continua estourando timeout — os
+  auditores tentam Postgres e o sandbox não tem credencial. Pré-existente,
+  ambiental, já reportado na entrada anterior.
+- Outro agente commitou arquivos meus em `91f84e51` ("A padaria de vitrine nasce
+  sozinha em todo deploy") — `BrainTypes.ts` e o `CapabilityCoherenceVerifier`
+  entraram numa mensagem de commit que não fala deles. Worktree compartilhado com
+  `git add -A`. O conteúdo está íntegro; a trilha é que ficou mentirosa.

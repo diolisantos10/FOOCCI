@@ -41,6 +41,18 @@ export const CRM_URL = "/site/crm";
 export const SOLUCOES_URL = "/site/solucoes";
 export const PRECOS_URL = "/site/precos";
 /**
+ * A DEGUSTAÇÃO (04/08): a única página que não descreve o produto — leva o visitante
+ * para dentro dele, na padaria de demonstração `foocci-bakery`. Fica entre "Soluções"
+ * e "Planos e preços" no menu de propósito: é o último passo antes do preço.
+ */
+export const EXPERIMENTE_URL = "/site/experimente";
+/**
+ * A calculadora de comissão, na home. É o único lugar do site onde a taxa do
+ * marketplace é EDITÁVEL — por isso todo número comparativo de outra página aponta
+ * para cá ("faça a conta com os seus números") em vez de afirmar a taxa de alguém.
+ */
+export const CALCULADORA_URL = "/site#calculadora";
+/**
  * Caminho único de conversão (decisão do CEO, 04/08): TODO CTA comercial leva ao
  * FORMULÁRIO de `/site/demonstracao`, onde o cliente deixa os dados e a gente entra
  * em contato. Não há mais agenda de horários nem "falar com o fundador" — o rótulo
@@ -73,13 +85,16 @@ export function ctaTarget(href: string): { href: string } & Record<string, strin
 }
 
 /**
- * Menu do site. Cinco destinos, nesta ordem — os dois carros-chefe primeiro. O
- * "Pedir uma demonstração" NÃO entra aqui: ele é o botão de ação laranja do header
- * (mais limpo do que repetir o CTA como item de menu). Ver `MarketingHeader`.
+ * Menu do site. Cinco destinos, nesta ordem — os dois carros-chefe primeiro, depois
+ * o resto, depois EXPERIMENTAR e só então o preço: é o funil (o que faz → veja tudo →
+ * teste → compre). O "Pedir uma demonstração" NÃO entra aqui: ele é o botão de ação
+ * laranja do header (mais limpo do que repetir o CTA como item de menu). Ver
+ * `MarketingHeader`.
  */
 export const NAV_LINKS: { href: string; label: string }[] = [
   { href: ATENDIMENTO_IA_URL, label: "Atendimento com IA" },
   { href: CRM_URL, label: "CRM" },
   { href: SOLUCOES_URL, label: "Soluções" },
+  { href: EXPERIMENTE_URL, label: "Experimente" },
   { href: PRECOS_URL, label: "Planos e preços" },
 ];

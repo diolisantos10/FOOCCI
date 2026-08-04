@@ -93,8 +93,9 @@ export default function SupportTechChat() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-canvas">
-      <div className="flex-1 space-y-3 overflow-y-auto px-3.5 py-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-canvas">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
         {/* Cabeçalho do agente */}
         <div className="rounded-2xl border border-line bg-paper p-3.5">
           <p className="text-[13.5px] font-semibold text-ink">🛠️ Assistência técnica</p>
@@ -141,7 +142,7 @@ export default function SupportTechChat() {
                 </span>
               )}
               {diag.suspectedSubsystem && (
-                <span className="rounded-full bg-paper px-2 py-0.5 text-[10.5px] font-medium text-ink2 border border-line">
+                <span className="rounded-full bg-paper px-2 py-0.5 text-[10.5px] font-semibold text-ink2 border border-line">
                   {diag.suspectedSubsystem}
                 </span>
               )}
@@ -172,11 +173,12 @@ export default function SupportTechChat() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Input */}
-      <div className="shrink-0 border-t border-line bg-paper px-3 py-2.5">
-        <div className="flex items-end gap-2">
+      <div className="shrink-0 border-t border-line bg-paper px-4 py-3 sm:px-5">
+        <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
           <textarea
             value={report}
             onChange={(e) => setReport(e.target.value)}

@@ -2,6 +2,10 @@
 const pkg = require("./package.json");
 
 const nextConfig = {
+  // Permite rodar um segundo `next dev` (agente/preview) sem disputar o mesmo
+  // diretório de build do servidor principal. Sem a variável, nada muda.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
+
   env: {
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION ?? pkg.version,
   },
@@ -75,7 +79,7 @@ const nextConfig = {
           // Disable unused browser features
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), payment=()",
+            value: "camera=(), microphone=(self), geolocation=(), payment=()",
           },
           // DNS prefetch control
           { key: "X-DNS-Prefetch-Control", value: "off" },

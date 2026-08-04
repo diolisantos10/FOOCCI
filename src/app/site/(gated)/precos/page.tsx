@@ -19,6 +19,24 @@
  * com checkout self-service, tabela duplicada vira cobrança diferente do
  * anunciado. O "preço fundador" saiu: por decisão do CEO (04/08) ele não existe
  * no motor, e anunciar desconto que o motor não aplica é o mesmo furo ao contrário.
+ *
+ * ⚠️ TRAVA JURÍDICA (04/08) — vale para TODO número desta página que fale de outra
+ * empresa. Publicidade comparativa é lícita no Brasil se o dado for **verdadeiro,
+ * comprovável e não depreciativo**. Nós não conseguimos comprovar a tabela de
+ * ninguém — contrato de marketplace varia por restaurante, por praça e por acordo.
+ * Então esta página NÃO afirma taxa de concorrente. Ela:
+ *
+ *   1. Declara a taxa como PREMISSA, lida de `ASSUMED_RATE_PERCENT` (fonte única,
+ *      a mesma da calculadora da home), com o convite para o dono ajustar.
+ *   2. CALCULA os números do "Faz a conta" a partir dessa premissa e do preço real
+ *      do plano — nenhum valor é digitado à mão, então nenhum pode divergir.
+ *   3. Rotula as faixas de preço de categorias de serviço ("Substitui") como
+ *      estimativa de mercado, com nota de rodapé — não como tabela de fornecedor.
+ *   4. Mantém o tom factual. O nome do marketplace só aparece onde ele é CANAL DE
+ *      VENDA do próprio lojista (preço por canal), nunca como alvo de comparação.
+ *
+ * Antes de 04/08 esta página dizia "Restaurante de R$ 20 mil/mês no iFood paga
+ * R$ 3.040 de comissão" — 15,2% afirmados como fato, sem fonte, três vezes.
  */
 
 import type { Metadata } from "next";
@@ -32,7 +50,13 @@ import {
   TrendingUpIcon,
   RepeatIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, COMO_FUNCIONA_URL, DEMO_CTA_LABEL } from "@/components/marketing/config";
+import { DEMO_URL, DEMO_CTA_LABEL, CALCULADORA_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
+import {
+  ASSUMED_RATE_PERCENT,
+  ASSUMED_RATE,
+  MIGRATION_RANGE,
+  formatBRL as formatBRLReais,
+} from "@/lib/site/commissionRates";
 import {
   SITE_PLAN_IDS,
   SITE_PLAN_TO_CODE,
@@ -74,7 +98,13 @@ type Plan = {
   limit: string;
   limitSub: string;
   onlyHere: string[];
-  roi: string;
+  /**
+   * O faturamento de EXEMPLO do bloco "Faz a conta", em reais por mês. É o único
+   * número desse bloco que fica escrito: comissão, economia e retorno são
+   * CALCULADOS da premissa declarada (`ASSUMED_RATE_PERCENT`) e do preço real do
+   * plano. Número comparativo digitado à mão é número que envelhece mentindo.
+   */
+  roiRevenue: number;
   substitui: string;
   inheritLabel?: string;
   groups: FeatureGroupData[];
@@ -92,8 +122,9 @@ const PLANS: Plan[] = [
       "Preço diferente por canal, no mesmo prato — delivery, salão e iFood com três preços.",
       "A comanda não some: não imprimiu, volta pra fila 5×, o alarme repete até alguém aceitar, e só um aparelho toca.",
     ],
-    roi: "Um restaurante que fatura R$ 20 mil/mês no iFood paga R$ 3.040 de comissão. Migrando 20% pro canal direto, economiza R$ 608/mês — o plano se paga 3,4×.",
-    substitui: "O cardápio digital que você contrataria por R$ 110–224/mês. E faz mais.",
+    roiRevenue: 20_000,
+    substitui:
+      "O cardápio digital que você contrataria à parte — serviços dessa categoria costumam custar entre R$ 110 e R$ 224/mês. E faz mais.",
     groups: [
       {
         label: "Seu canal de venda",
@@ -147,8 +178,9 @@ const PLANS: Plan[] = [
       "A IA é impedida de mentir: um verificador barra o que não bate com o cardápio, e toda madrugada um simulador testa o agente.",
       "Resgate antes de perder o cliente: quente esfriando → morno → frio.",
     ],
-    roi: "Um restaurante que fatura R$ 40 mil/mês no iFood paga R$ 6.080 de comissão. Migrando 20%, economiza R$ 1.216/mês — o plano se paga 2,8× (com a entrega do iFood, 4,9×).",
-    substitui: "Cardápio digital (R$ 110–224) + atendimento por IA (R$ 50–500) + CRM de fidelidade. Uns R$ 500/mês em três serviços que não trocam dado.",
+    roiRevenue: 40_000,
+    substitui:
+      "Cardápio digital, atendimento por IA e CRM de fidelidade, comprados separados: três serviços que costumam somar uns R$ 500/mês — e que não trocam dado entre si.",
     inheritLabel: "Tudo do Essencial, mais:",
     groups: [
       {
@@ -207,8 +239,9 @@ const PLANS: Plan[] = [
       "A IA escreve a campanha sozinha com o contexto de cada cliente — e explica, em português, por que as vendas caíram.",
       "Fidelidade que expira: de Bronze a Diamante com janela móvel, brinde com estoque real.",
     ],
-    roi: "Um restaurante que fatura R$ 150 mil/mês no iFood paga R$ 22.800 de comissão. Migrando 20%, economiza R$ 4.560/mês — o plano se paga 5,1×.",
-    substitui: "Tudo acima, mais o PDV (a partir de R$ 240) e o módulo de CMV. Uns R$ 700/mês em quatro serviços.",
+    roiRevenue: 150_000,
+    substitui:
+      "Tudo acima, mais o PDV e o módulo de CMV: quatro serviços que costumam somar uns R$ 700/mês.",
     inheritLabel: "Tudo do Crescimento, mais:",
     groups: [
       {
@@ -301,6 +334,59 @@ const ADDONS = [
   { name: "Gestão pela agência", price: "Sob consulta", desc: "É serviço com hora humana." },
   { name: "Implantação", price: "R$ 299 / 599 / 1.490", desc: "Única, por faixa. Metade no trimestral, grátis no anual à vista." },
 ];
+
+/* ── "Faz a conta" — premissa declarada, números calculados ──────────────────
+   Nenhum valor deste bloco é digitado: a comissão sai da PREMISSA (que o dono
+   pode ajustar na calculadora da home), a economia sai da faixa conservadora de
+   migração, e o retorno sai do preço real do plano. Trocar a premissa em
+   `commissionRates.ts` reescreve os três cartões de uma vez. */
+
+const MIGRATION_PCT = Math.round(MIGRATION_RANGE.low * 100);
+
+function roiNumbers(revenue: number, planMonthlyCents: number) {
+  const commission = revenue * ASSUMED_RATE;
+  const savings = commission * MIGRATION_RANGE.low;
+  const planMonthly = planMonthlyCents / 100;
+  return {
+    revenue: formatBRLReais(revenue),
+    commission: formatBRLReais(commission),
+    savings: formatBRLReais(savings),
+    payback: (savings / planMonthly).toLocaleString("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }),
+  };
+}
+
+function RoiBlock({ revenue, planMonthlyCents }: { revenue: number; planMonthlyCents: number }) {
+  const n = roiNumbers(revenue, planMonthlyCents);
+  return (
+    <div className="mt-4 rounded-2xl border border-line bg-canvas p-4">
+      <div className="flex items-center gap-2">
+        <TrendingUpIcon className="h-4 w-4 text-ink2" />
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink2">Faz a conta</p>
+      </div>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink2">
+        Considerando uma comissão de{" "}
+        <strong className="font-semibold text-ink tabular-nums">{ASSUMED_RATE_PERCENT}%</strong>{" "}
+        <span className="text-muted">— ajuste para a sua —</span>, quem fatura{" "}
+        <strong className="font-semibold text-ink tabular-nums">{n.revenue}</strong>/mês no
+        aplicativo paga <strong className="font-semibold text-ink tabular-nums">{n.commission}</strong>{" "}
+        de comissão. Levando <strong className="font-semibold text-ink">{MIGRATION_PCT}%</strong>{" "}
+        desse movimento para o canal direto, ficam{" "}
+        <strong className="font-semibold text-ink tabular-nums">{n.savings}</strong>/mês no caixa —{" "}
+        <strong className="font-semibold text-ink tabular-nums">{n.payback}×</strong> a mensalidade
+        deste plano.
+      </p>
+      <a
+        href={CALCULADORA_URL}
+        className="mt-2.5 inline-block text-[12px] font-semibold text-brand-600 underline decoration-brand-100 underline-offset-4 hover:text-brand-700"
+      >
+        Fazer a conta com os meus números
+      </a>
+    </div>
+  );
+}
 
 /* ── Peças ────────────────────────────────────────────────────────────────── */
 
@@ -413,14 +499,8 @@ function PlanCard({ plan }: { plan: Plan }) {
         </ul>
       </div>
 
-      {/* ROI */}
-      <div className="mt-4 rounded-2xl border border-line bg-canvas p-4">
-        <div className="flex items-center gap-2">
-          <TrendingUpIcon className="h-4 w-4 text-ink2" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink2">Faz a conta</p>
-        </div>
-        <p className="mt-2 text-[13px] leading-relaxed text-ink2">{plan.roi}</p>
-      </div>
+      {/* ROI — premissa declarada, números calculados (ver trava jurídica no topo) */}
+      <RoiBlock revenue={plan.roiRevenue} planMonthlyCents={monthly} />
 
       {/* Substitui */}
       <p className="mt-4 text-[13px] leading-relaxed text-muted">
@@ -456,8 +536,11 @@ export default function PrecosPage() {
         subtitle="Cada plano abre pelo que só ele tem. Sem comissão sobre as suas vendas — você paga um valor fixo, e pronto."
         primaryLabel="Contratar agora"
         primaryHref={checkoutUrl("crescimento")}
-        secondaryLabel="Pedir uma demonstração"
-        secondaryHref={DEMO_URL}
+        /* Quem chega no preço sem ter visto o produto trava aqui. O segundo botão
+           é a saída sem atrito: a degustação, que não pede dado nenhum. O pedido de
+           demonstração continua em cada cartão e na faixa final. */
+        secondaryLabel="Experimentar antes"
+        secondaryHref={EXPERIMENTE_URL}
       />
 
       {/* 1. Os três planos */}
@@ -479,6 +562,26 @@ export default function PrecosPage() {
               Fale com a gente
             </a>{" "}
             — montamos o plano certo pra sua operação.
+          </p>
+
+          {/*
+            A ORIGEM DE CADA NÚMERO QUE NÃO É NOSSO. Sem esta nota, os cartões
+            afirmam a tabela de terceiros — que é exatamente o que não podemos
+            comprovar. Ela fica junto dos cartões, não escondida no rodapé.
+          */}
+          <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-relaxed text-muted">
+            Os {ASSUMED_RATE_PERCENT}% do “Faz a conta” são uma{" "}
+            <strong className="font-semibold">premissa nossa</strong>, não a tabela de nenhum
+            aplicativo — cada contrato é diferente, confira o seu extrato e{" "}
+            <a
+              href={CALCULADORA_URL}
+              className="font-semibold text-ink2 underline decoration-line2 underline-offset-2 hover:text-brand-600"
+            >
+              refaça a conta com os seus números
+            </a>
+            . A faixa de {MIGRATION_PCT}% de migração é conservadora e varia por restaurante: não é
+            promessa de resultado. As faixas citadas em “Substitui” são estimativas de mercado para
+            categorias de serviço equivalentes, não a tabela de um fornecedor específico.
           </p>
         </div>
       </section>

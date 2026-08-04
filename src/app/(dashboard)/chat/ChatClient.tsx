@@ -267,7 +267,7 @@ export function ChatClient({ userId }: { userId: string }) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex overflow-hidden" style={{ height: "calc(100vh - 56px)" }}>
+    <div className="flex overflow-hidden" style={{ height: "calc(100vh - 56px - var(--assistant-bar, 0px))" }}>
 
       {/* ── LEFT PANEL ──────────────────────────────────────────────────── */}
       <aside className={`

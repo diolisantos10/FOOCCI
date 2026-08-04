@@ -24,7 +24,19 @@ type BtnProps = {
   block?: boolean;
   /** Optional leading icon (mockup: play / calendar). */
   icon?: React.ReactNode;
+  /**
+   * Abre em outra aba mesmo sendo link INTERNO. `ctaTarget` só faz isso para URL
+   * externa, e a degustação (`/site/experimente`) precisa exatamente disso: manda o
+   * visitante para dentro da loja de demonstração sem perder a página de vendas —
+   * que é onde estão os botões de contratar.
+   */
+  newTab?: boolean;
 };
+
+/** `target="_blank"` sempre acompanhado de `rel` — janela nova sem `opener` aberto. */
+function tabProps(newTab: boolean) {
+  return newTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
+}
 
 export function PrimaryCta({
   className = "",
@@ -33,10 +45,12 @@ export function PrimaryCta({
   withArrow = true,
   block = false,
   icon,
+  newTab = false,
 }: BtnProps) {
   return (
     <a
       {...ctaTarget(href)}
+      {...tabProps(newTab)}
       className={`inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 px-6 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
         block ? "w-full" : ""
       } ${className}`}
@@ -55,10 +69,12 @@ export function SecondaryCta({
   withArrow = false,
   block = false,
   icon,
+  newTab = false,
 }: BtnProps) {
   return (
     <a
       {...ctaTarget(href)}
+      {...tabProps(newTab)}
       className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
         block ? "w-full" : ""
       } ${className}`}

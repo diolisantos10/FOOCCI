@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,11 +24,27 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-ui/types/**/*.ts"
+  ],
   "//note-scripts-excluded": "Ops/dev scripts (scripts/**) are NOT application code — they have their own tsconfig.scripts.json and run via ts-node. Excluding them keeps the production `next build` typecheck limited to repo app code, so a local/untracked script (e.g. an ad-hoc pilot script copied in via `railway up`) can never break a production deploy.",
   "//note-secretario-excluded": "secretario/** é um serviço standalone (deploy próprio no Railway com Root Directory = secretario) — tem package.json e tsconfig próprios; não faz parte do app Next.",
-  "exclude": ["node_modules", "vitest.config.ts", "src/**/*.test.ts", "src/**/*.test.tsx", "src/services/ai/tests", "scripts", "secretario"]
+  "exclude": [
+    "node_modules",
+    "vitest.config.ts",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/services/ai/tests",
+    "scripts",
+    "secretario"
+  ]
 }

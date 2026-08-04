@@ -5,6 +5,10 @@
 :root {
   --foreground-rgb: 11, 11, 11;
   --background-rgb: 255, 255, 255;
+
+  /* Altura da barra do Assistente no topo do painel (AssistantBar).
+     Telas de altura fixa descontam ESTE token — nunca um número repetido. */
+  --assistant-bar: 3.25rem; /* 52px */
 }
 
 body {
