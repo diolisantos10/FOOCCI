@@ -66,3 +66,38 @@ página por página, copy por copy. Interativo — precisa do gosto do CEO.
 2. **Em paralelo, no fundo:** Diretor scopa a Frente 1 (checkout) e traz o plano;
    começa a Frente 3 (padaria) que não depende de input externo; e a Frente 2
    (suporte) arranca quando o CEO mandar os prints do "Ross Gator".
+
+---
+
+# Levantamento de terreno (04/08) — o que já existe
+
+## Frente 1 — Checkout: ~50% pronto, falta a ponta pública e a costura
+**Já existe:** assinatura recorrente no Mercado Pago (`createPreapproval`), aceite de
+contrato com trilha (versão/data/IP/nome, `src/lib/billing/terms.ts`), página
+`/contratar/[token]`, webhook que ativa/cancela, criação de restaurante+dono
+atômica (`RestaurantService.register`), e onboarding de 7 passos.
+**NÃO existe (construir):** botão de comprar no site; endpoint público que cria a
+assinatura; **página pós-pagamento** (`/contratar/obrigado` é referenciada e dá 404);
+**a costura pagamento → conta criada** (`PlanSubscription.restaurantId` nunca é
+preenchido — é o buraco central); mapa plano-do-site → enum; senha/primeiro login;
+**e-mail transacional (zero infra)**.
+**Riscos:** (1) dupla cobrança — `createPreapproval` sem checar se já existe;
+(2) ativa sem aceite — `activate()` não verifica `termsAcceptedAt`; (3) webhook de
+billing não verifica assinatura HMAC (piora quando ele criar contas);
+(4) **COMERCIAL: os descontos anunciados no site (anual R$149, 1º mês 50%, fundador)
+não existem no motor de preço** — risco de cobrar diferente do anunciado.
+
+## Frente 2 — Agente de suporte: ~70% pronto
+**Já existe:** um agente `suporte-tecnico` REGISTRADO no Brain, com perfil,
+quality gate, mapa de modos de falha (incluindo **impressora**, com runbook de 6
+passos em linguagem de lojista), probe read-only do sistema e escada de remediação;
+37 guias do lojista; retrieval; widget com sugestões contextuais e trilha de
+onboarding; consulta de estado real da impressora (`lastSeenAt`).
+**NÃO existe (construir):** a UI padrão Gator 2.0 (barra no topo, tela cheia);
+**capacidade de AGIR** (hoje o Brain só fala — a Regra de Ouro `runtimeTouched:false`);
+**chamado + e-mail** (não há model de ticket nem infra de e-mail; a escalação atual
+só muda um status e ninguém é notificado); fusão dos dois cérebros (a aba "Ajuda"
+chama a OpenAI direto, fora do Brain).
+**Decisão do Diretor:** primeira ação real = **subir cardápio** via `/api/menu/import`,
+que já é 2 etapas (preview → o lojista confirma) — o agente propõe, o humano
+confirma, a Regra de Ouro fica intacta. Sem bypass.
