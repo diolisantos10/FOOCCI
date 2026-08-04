@@ -23,6 +23,13 @@
  *
  * The essence stays: the hero keeps the host scene, and the numbers are there to prove
  * the story, not to replace it.
+ *
+ * REENQUADRAMENTO DO GANCHO (2026-08-04, ordem do CEO). A ordem das seções não mudou —
+ * o que mudou foi de quem é o ponto de vista. O hero falava do NOSSO posicionamento de
+ * mercado ("todo mundo vende um pedaço") antes de tocar na dor do dono. Agora abre com
+ * a pergunta que o dono já se faz — quanto o marketplace leva — e emenda direto na
+ * calculadora, que responde com o que sobra no bolso dele. A tese dos quatro serviços
+ * que não se falam continua no site, na `FourContractsSection` (3), que é onde ela cabe.
  */
 
 import type { Metadata } from "next";
@@ -35,9 +42,9 @@ import { HowItWorksSection } from "@/components/marketing/HowItWorksSection";
 import { PricingTeaserSection } from "@/components/marketing/PricingTeaserSection";
 import { FinalCTASection } from "@/components/marketing/FinalCTASection";
 
-const TITLE = "Foocci | Pare de pagar comissão e seja dono dos seus clientes";
+const TITLE = "Foocci | Calcule quanto sobra no seu bolso todo mês";
 const DESCRIPTION =
-  "Cardápio, pedido, atendimento por IA e CRM de fidelidade em um serviço só — e conversando entre si. Calcule quanto você paga de comissão ao marketplace hoje.";
+  "Descubra em 30 segundos quanto a comissão do delivery leva do seu faturamento — e quanto sobraria com o Foocci, num valor fixo por mês. Cardápio, pedido, atendimento por IA e CRM em um serviço só.";
 
 // Indexability (index, follow) is centralized in src/app/site/layout.tsx for the
 // whole /site subtree — do not set `robots` per page.

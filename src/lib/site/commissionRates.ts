@@ -24,15 +24,29 @@ export interface CommissionRate {
 }
 
 /**
+ * O nome do marketplace, EM UM LUGAR SÓ.
+ *
+ * HISTÓRICO, porque as duas decisões são do CEO e se contradizem — quem mexer aqui
+ * precisa saber disso:
+ *   - 2026-08-03: o marketplace NÃO era nomeado em lugar nenhum do site (nomear
+ *     concorrente em comparação numa página comercial pública é exposição jurídica).
+ *   - 2026-08-04: o CEO pediu o nome no gancho da home e no comparativo da
+ *     calculadora — a pergunta "quanto o iFood leva" é o que faz o dono parar.
+ *
+ * A decisão nova venceu por ser posterior e explícita, mas o nome vive nesta
+ * constante: se a exposição jurídica pesar mais que o gancho, some do site inteiro
+ * numa linha. Nunca escreva o nome direto no componente.
+ *
+ * As porcentagens abaixo continuam sendo as tabelas públicas dos principais
+ * marketplaces — a fonte é renderizada na página, com nome ou sem.
+ */
+export const MARKETPLACE_NAME = "iFood";
+
+/**
  * Where the percentages came from — rendered on the page, never hidden.
  *
- * The marketplace is NOT named here, by decision of the CEO on 2026-08-03: naming a
- * competitor in a comparison on a public commercial page invites a lawsuit, and the
- * argument does not need the name to work. The owner reading it knows exactly which
- * marketplace charges them.
- *
- * The rates are still the real, published ones — the source stays citable without the
- * brand. If anyone asks in a sales meeting, the number is defensible.
+ * The rates are the real, published ones. If anyone asks in a sales meeting, the
+ * number is defensible.
  */
 export const COMMISSION_SOURCE = {
   label: "Tabelas públicas dos principais marketplaces de delivery, consultadas em 08/2026",

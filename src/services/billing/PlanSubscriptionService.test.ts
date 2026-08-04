@@ -1,20 +1,46 @@
 /**
- * Trava terminal do CR A1 — nível serviço.
+ * Duas travas do `activate`, ambas no MESMO update atômico:
  *
- * `activate` NUNCA pode reativar uma assinatura CANCELADA. A trava é o
- * `updateMany` atômico com `status notIn TERMINAL_STATUSES`: não há janela entre
- * ler e gravar para um webhook ressuscitar uma sub recém-cancelada. É código
- * puro — nada aqui toca o Mercado Pago nem o MP_PLATFORM_ACCESS_TOKEN.
+ *  1. CR A1 — trava terminal: uma assinatura CANCELADA nunca reativa por evento
+ *     externo (`status notIn TERMINAL_STATUSES`).
+ *  2. G4 — trava de contrato: não ativa sem `termsAcceptedAt`. Sem ela, quem
+ *     pulasse a tela de aceite e pagasse ficava ATIVO sem contrato assinado.
+ *
+ * Estar no `where` do UPDATE (e não num `if` antes dele) é o que fecha a janela
+ * entre ler e gravar. É código puro — nada aqui toca o Mercado Pago.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const db = vi.hoisted(() => ({
-  planSubscription: { updateMany: vi.fn() },
+  planSubscription: { updateMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
+const mp = vi.hoisted(() => ({ createPreapproval: vi.fn(), cancelPreapproval: vi.fn(), updatePreapprovalAmount: vi.fn() }));
+vi.mock("./MercadoPagoPlatformBilling", () => ({
+  MercadoPagoPlatformBilling: mp,
+  isPlatformBillingConfigured: () => true,
+}));
+
 import { PlanSubscriptionService, isTerminalStatus, TERMINAL_STATUSES } from "./PlanSubscriptionService";
+
+const ACEITA = {
+  id: "sub_1",
+  status: "AGUARDANDO_PAGAMENTO",
+  customerName: "Ana",
+  customerEmail: "ana@rest.com",
+  customerWhatsapp: "11999999999",
+  plan: "GROWTH",
+  cycle: "MENSAL",
+  priceCents: 42900,
+  firstChargeCents: 21450,
+  acceptToken: "tok_abcdefghijklmno",
+  termsAcceptedAt: new Date("2026-08-04T10:00:00Z"),
+  mpPreapprovalId: null,
+  mpInitPoint: null,
+  fullAmountSyncedAt: null,
+};
 
 beforeEach(() => vi.clearAllMocks());
 

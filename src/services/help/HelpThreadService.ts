@@ -161,11 +161,26 @@ export class HelpThreadService {
     }
   }
 
-  /** Escalate to the Foocci team — last resort. Flips the thread to HUMAN. */
+  /**
+   * Escalate to the Foocci team — last resort. Abre um CHAMADO numerado, avisa o
+   * time por e-mail e vira a conversa para HUMAN.
+   *
+   * Antes de 04/08/2026 isto só mudava o status: ninguém era notificado e o time
+   * descobria olhando o inbox. Agora o chamado é o cofre (persistido primeiro) e
+   * o e-mail é o alerta (best-effort). Se o e-mail falhar, o chamado continua de
+   * pé com o motivo registrado em `notifyError` — a escalada NUNCA se perde.
+   */
   static async escalate(
     restaurantId: string,
     userId: string,
-  ): Promise<ServiceResult<{ thread: HelpThreadDTO; message: HelpMessageDTO }>> {
+    reason?: string,
+  ): Promise<
+    ServiceResult<{
+      thread: HelpThreadDTO;
+      message: HelpMessageDTO;
+      ticket: { code: string; notified: boolean } | null;
+    }>
+  > {
     try {
       const thread = await this.getOrCreate(restaurantId, userId);
 
@@ -174,15 +189,50 @@ export class HelpThreadService {
         where: { id: thread.id },
         data: { status: "ESCALATED", mode: "HUMAN", lastMessageAt: new Date() },
       });
+
+      // Evidência do chamado: a conversa real, não um "abriram um chamado".
+      const [history, restaurant] = await Promise.all([
+        prisma.helpMessage.findMany({
+          where: { threadId: thread.id },
+          orderBy: { createdAt: "asc" },
+          take: 40,
+        }),
+        prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
+      ]);
+      const lastQuestion =
+        [...history].reverse().find((m) => m.role === "USER")?.content ?? "Pedido de ajuda humana";
+
+      // O chamado é o cofre. Se ele falhar, a escalada não pode fingir sucesso —
+      // mas a conversa JÁ está com humano, então avisamos e seguimos.
+      let ticket: { code: string; notified: boolean } | null = null;
+      try {
+        const opened = await SupportTicketService.open({
+          restaurantId,
+          restaurantName: restaurant?.name ?? null,
+          userId,
+          threadId: thread.id,
+          subject: lastQuestion.slice(0, 200),
+          reason: reason?.trim() || "O lojista pediu para falar com a equipe Foocci.",
+          transcript: history.map((m) => ({ role: m.role, content: m.content })),
+        });
+        ticket = { code: opened.code, notified: opened.notified };
+        if (opened.notifyError) {
+          console.error("[HelpThreadService.escalate] aviso não enviado:", opened.notifyError);
+        }
+      } catch (err) {
+        console.error("[HelpThreadService.escalate] falha ao abrir chamado:", err);
+      }
+
       const sys = await prisma.helpMessage.create({
         data: {
           threadId: thread.id,
           role: "SYSTEM",
-          content:
-            "Tudo certo — encaminhei sua conversa para a equipe Foocci. Em breve alguém responde por aqui. 💬",
+          content: ticket
+            ? `Tudo certo — abri o chamado ${ticket.code} e encaminhei sua conversa para a equipe Foocci. Em breve alguém responde por aqui. 💬`
+            : "Tudo certo — encaminhei sua conversa para a equipe Foocci. Em breve alguém responde por aqui. 💬",
         },
       });
-      return serviceOk({ thread: threadDTO(updated), message: msgDTO(sys) });
+      return serviceOk({ thread: threadDTO(updated), message: msgDTO(sys), ticket });
     } catch (err) {
       console.error("[HelpThreadService.escalate]", err);
       return serviceFail("Falha ao encaminhar para a equipe", 500);
