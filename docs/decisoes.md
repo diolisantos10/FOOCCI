@@ -461,8 +461,31 @@ Evolution carrega todo o resto.
    é transitório e morre no fim da migração — corrigi a mentira dele em 02/08 para
    que ninguém se perca durante a transição, não para investir nele.
 
-**Ainda travado, e é do CEO:** a Meta está ativa para **todos** os restaurantes ou
-só alguns? Sem esse dado a etapa (b) não começa.
+**RESPONDIDO pelo CEO em 04/08:** perguntado quantos restaurantes ainda dependiam
+da Evolution, respondeu **"NENHUM"**. Some a etapa (b) — não há migração a fazer,
+só remoção. E veio a ordem, repetida três vezes: *"EXTRAÇÃO TOTAL, NÃO QUERO UM
+CÓDIGO DESSA EVOLUTION DENTRO DO FOOCCI"*.
+
+**Executado em 04/08** por quatro frentes em paralelo (meta, crm, operação,
+canais), com o Diretor consolidando:
+
+- O roteamento virou Meta e só Meta. O buraco mais grave estava aqui: em falha de
+  banco o código **caía na Evolution como reserva** — uma falha momentânea mandava
+  mensagem pelo canal não homologado, exatamente o risco que a homologação existe
+  para eliminar. Não há mais caminho alternativo, nem em erro.
+- `WhatsAppProviderId` e `CRMProviderMode` viraram tipos de **um valor só**:
+  reintroduzir um segundo canal é erro de compilação, não decisão de configuração.
+  É o guardrail 4 aplicado — prompt é aviso, código é trava.
+- A **rampa de aquecimento** (20→250 msgs/dia por idade do número) saiu junto: ela
+  protegia uma sessão Web não oficial de banimento e, no aplicativo homologado, só
+  segurava venda sem reduzir risco.
+
+**A armadilha desta remoção, registrada para quem vier depois:** o normalizador e
+o validador de telefone do projeto inteiro se chamam `normalizePhoneForEvolution`
+e `isValidEvolutionPhone` (`src/lib/crm/normalizePhone.ts`) — e hoje estão no
+caminho de envio da **Meta**. Quem varrer o repositório por "evolution" e apagar
+sem ler derruba a validação de telefone de **todo** envio. Renomear é passo
+separado, depois da extração, exatamente para não virar incidente.
 
 ## Cards do Garçom: categoria mostra tudo; fim de funil mostra 100% da categoria
 
