@@ -354,3 +354,102 @@ responder primeiro 'que canal a tela usou?'. E toda falha de validação do chec
 WhatsApp carrega replyText — falha sem resposta vira 'pedido anotado' falso."*
 Origem: este bloco, E2E real na pizzaria-demo, branch
 `claude/foocci-director-onboarding-lhindy`.
+
+---
+
+## 2026-08-04 · Foocci Bakery — a padaria de degustação (Frente 3 do lançamento)
+
+**Contexto:** o CEO quer que o visitante do site experimente as três superfícies de
+atendimento antes de comprar. Parte 1 (esta): criar a padaria e o cardápio. Parte 2
+(aba de degustação no site) é da `interface`. Worktree a partir de
+`claude/foocci-brain-vaamrx`.
+
+**Terreno levantado antes de escrever qualquer linha:**
+- `RestaurantService.register()` (`src/services/restaurant/RestaurantService.ts:33`)
+  cria restaurante + dono numa transação e dispara os defaults **fire-and-forget**.
+  Não serve para seed: se `createRestaurantDefaults` falhar, ninguém fica sabendo e
+  o restaurante nasce meio configurado. O seed chama
+  `RestaurantDefaultsService.createRestaurantDefaults()` direto, **aguardando** — o
+  serviço já é idempotente por construção (`RestaurantDefaultsService.ts:22`).
+- `scripts/import-sushi-cazza.ts` é o padrão de import idempotente que existia:
+  `findFirst` + create/update, porque `MenuCategory` **não tem unique em
+  (restaurantId, name)**. Reaproveitado em vez de inventar caminho.
+- `prisma/seed.ts` (pizzaria-demo) só cria restaurante+dono, sem cardápio.
+- `prisma migrate deploy` **não sobe num banco vazio** neste repo (a cadeia de
+  migrações quebra em `relation "orders" does not exist`). Para banco novo, é
+  `prisma db push`. Registrado porque isso já vai custar tempo de alguém.
+
+**O que ficou pronto:**
+1. `prisma/schema.prisma:34` — `Restaurant.isDemo Boolean @default(false)` +
+   migração `prisma/migrations/20260804090000_restaurant_is_demo/migration.sql`.
+2. `src/lib/demo-restaurant.ts` — filtros canônicos (`REAL_RESTAURANTS_ONLY`),
+   `assertNotDemoRestaurant()` com **falha fechada** (restaurante inexistente
+   também não passa: ausência não é prova, guardrail 1).
+3. `src/services/billing/PlanSubscriptionService.ts:62` — a trava ligada no ponto
+   que cobra: `create()` recusa vincular restaurante de vitrine, ANTES da escrita.
+4. `src/app/api/admin/restaurants/route.ts:41,83` — `isDemo` na resposta da lista.
+5. `scripts/foocci-bakery.data.ts` — 7 categorias, 40 itens, 31 variantes, 10
+   adicionais, 7 grupos de opção (29 opções). Com `ingredients`, `tagFunil`,
+   `perfilPaladar`, `alergenosDetalhados`, `storytellingIA` e `harmonizacaoSugerida`
+   preenchidos — é o que o Garçom lê para responder alérgeno e sugerir par.
+6. `scripts/seed-foocci-bakery.ts` (`npm run bakery:seed`) — idempotente, com
+   `--dry-run` e `--prune`.
+7. `scripts/foocci-bakery-images.ts` (`npm run bakery:imagens`) — geração de foto
+   pelo `gpt-image-1`, mesmo modelo e mesmo armazenamento
+   (`src/services/imageEnhancement/storage.ts`) já usados pelo realce. Nenhuma
+   dependência nova, nenhuma foto baixada de terceiro.
+
+**Decisões que valem registro:**
+- **A marca de demonstração é COLUNA, não convenção de slug.** Slug é nome; nome
+  se renomeia e não serve de filtro de banco. Guardrail 4 aplicado a dado.
+- **Preço: um só por item, sem preço por canal.** Padaria cobra o mesmo no salão e
+  no delivery, e canal com preço diferente é exatamente onde esta casa já errou
+  cobrança. Preço base = variante mais barata (vira o "a partir de").
+- **Campo fiscal e CNPJ ficam VAZIOS.** Nota fiscal não admite chute, e NCM errado
+  numa vitrine é NCM errado copiado por um lojista que confia na vitrine.
+- **Custo (`cost`) é FICTÍCIO e está declarado como tal** no cabeçalho do arquivo de
+  dados. A lei "markup em cima de custo inventado é pior que não ter CMV" protege
+  lojista de verdade; aqui não há lojista e o tenant nasce `isDemo`. Sem custo, a
+  página de precificação não teria o que demonstrar.
+- **Senha do dono nunca é embutida.** Vem de `FOOCCI_BAKERY_OWNER_PASSWORD` ou é
+  sorteada e impressa uma vez. Re-execução não troca a senha de dono existente.
+- **Imagem é passo separado e pago.** Um seed que gasta dinheiro sem avisar é
+  armadilha: nada acontece sem `--yes`. Falha de foto registra o item e segue —
+  item sem foto cai no estado vazio da loja (emoji), e URL quebrada é pior que
+  nenhuma foto.
+- **O script de imagem só roda em `isDemo = true`.** Foto de IA em cardápio de
+  cliente real é vender um prato que ele nunca fez.
+
+**Verificado de verdade (banco Postgres local, não produção):**
+- `npx tsc --noEmit` limpo · `npx vitest run` 381 arquivos / 4754 testes verdes.
+- Seed rodado 3×: contagem final estável em 7 categorias / 40 itens / 31 variantes
+  / 10 adicionais / 7 grupos / 29 opções. Não duplica.
+- `next dev` local: `/qr/foocci-bakery` **200**, `/pedido/foocci-bakery?modo=loja`
+  **200**, `/pedido/foocci-bakery` **200**. Os três com conteúdo do cardápio no
+  HTML, e a cor de marca `#8A4B1E` aplicada (white-label funcionando). O modo IA
+  renderiza a conversa (`placeholder="Peça uma sugestão…"`), o `?modo=loja`
+  renderiza o catálogo — são componentes diferentes, confirmado pelo HTML.
+
+**O que NÃO foi provado:** as fotos. Não há `OPENAI_API_KEY` neste ambiente, então
+nenhuma imagem foi gerada — os 40 itens estão com `imageUrl` nulo e a loja mostra o
+estado vazio. O script está escrito e o ensaio (`--dry-run` implícito, sem `--yes`)
+imprime o comando exato que iria ao modelo, mas **nenhuma foto desta padaria existe
+ainda**. Tratar como preparado, não como entregue.
+
+**Achado colateral para a `interface`:** `categoryEmoji()`
+(`src/app/pedido/[slug]/PedidoClient.tsx:484`) é chamada com o **nome do item** e
+não conhece nenhuma palavra de padaria — todo item sem foto cai no 🍽️ genérico.
+Enquanto não houver foto, a vitrine fica com 40 pratos iguais. Não mexi: tela é
+domínio da `interface`.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Vitrine é tenant de verdade, e
+por isso precisa de marca no DADO. O que existe para demonstrar (padaria, sandbox,
+treino) roda com o mesmo código do cliente pagante — é isso que faz a demonstração
+valer, e é isso que a torna indistinguível de um cliente numa consulta descuidada.
+A marca é a coluna `Restaurant.isDemo`, nunca o nome do slug, e ela só vale se
+estiver LIGADA nos pontos que doem: cobrança (`PlanSubscriptionService.create`
+recusa vitrine, com falha fechada para restaurante inexistente) e listagem
+comercial (`REAL_RESTAURANTS_ONLY`). Toda superfície nova que conta, cobra ou
+fatura restaurante começa perguntando: 'e a vitrine, entra nessa conta?'"*
+Origem: este bloco, worktree da Frente 3 a partir de `claude/foocci-brain-vaamrx`;
+arquivos `src/lib/demo-restaurant.ts` e `src/lib/demo-restaurant.test.ts`.

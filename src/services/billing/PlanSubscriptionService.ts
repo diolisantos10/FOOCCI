@@ -16,6 +16,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import type { BillingCycle, Plan, PlanSubscription } from "@prisma/client";
 import { TERMS_VERSION } from "@/lib/billing/terms";
+import { assertNotDemoRestaurant } from "@/lib/demo-restaurant";
 
 /** Preço mensal de tabela por plano, em centavos (tabela aprovada 03/08). */
 export const PLAN_MONTHLY_CENTS: Record<Plan, number> = {
@@ -59,6 +60,14 @@ export interface CreateSubscriptionInput {
 export const PlanSubscriptionService = {
   /** Cria o rascunho e o token do link de aceite. Status: AGUARDANDO_ACEITE. */
   async create(input: CreateSubscriptionInput): Promise<PlanSubscription> {
+    // Vitrine não vira cobrança. A Foocci Bakery é um tenant completo e funcional
+    // (é o que faz a degustação valer); sem esta trava ela é indistinguível de um
+    // cliente na hora de criar assinatura. Guardrail 4 — a marca é coluna e a
+    // recusa é código, não um combinado de nomenclatura.
+    if (input.restaurantId) {
+      await assertNotDemoRestaurant(input.restaurantId);
+    }
+
     const priceCents =
       input.priceCents && input.priceCents > 0
         ? Math.round(input.priceCents)
