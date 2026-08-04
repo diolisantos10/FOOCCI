@@ -1075,7 +1075,18 @@ export function __resetBakeryImageJob(): void {
  * botão não pode dizer "comecei" e falhar calado depois.
  */
 export async function startBakeryImageJob(
-  options: { confirmar: boolean; regerar?: boolean; limite?: number },
+  options: {
+    confirmar: boolean;
+    regerar?: boolean;
+    limite?: number;
+    /**
+     * Avisado UMA vez quando o trabalho para de rodar — terminando bem ou mal.
+     * Existe para quem dispara sem ninguém olhando a tela (o seed automático de
+     * deploy): sem isto, o número de fotos geradas só viveria no painel do admin.
+     * O que estiver aqui dentro nunca derruba a geração.
+     */
+    onSettled?: (job: BakeryImageJob) => void;
+  },
 ): Promise<BakeryImageJob> {
   reapIfExpired();
   if (currentImageJob?.status === "RODANDO") {
@@ -1152,6 +1163,15 @@ export async function startBakeryImageJob(
     if (currentImageJob && currentImageJob.id === jobId) currentImageJob = fn(currentImageJob);
   };
 
+  /** O aviso de encerramento é do CHAMADOR: se ele explodir, o problema é dele. */
+  const settled = (j: BakeryImageJob) => {
+    try {
+      options.onSettled?.(j);
+    } catch (e) {
+      console.error("[FoocciBakery] onSettled do chamador falhou", e);
+    }
+  };
+
   void generateBakeryImages({
     confirmar: true,
     regerar: options.regerar,
@@ -1180,6 +1200,7 @@ export async function startBakeryImageJob(
         falhas: r.falhas,
         custoEstimadoUsd: r.custoRealEstimadoUsd,
       }));
+      if (currentImageJob?.id === jobId) settled(currentImageJob);
     })
     .catch((err: unknown) => {
       const motivo =
@@ -1189,6 +1210,7 @@ export async function startBakeryImageJob(
             "salvas foi alterado.";
       console.error("[FoocciBakery] geração de fotos falhou", err);
       patch((j) => ({ ...j, status: "FALHOU", terminadoEm: Date.now(), itemAtual: null, erroFatal: motivo }));
+      if (currentImageJob?.id === jobId) settled(currentImageJob);
     });
 
   return currentImageJob;

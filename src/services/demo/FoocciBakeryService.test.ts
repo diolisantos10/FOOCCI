@@ -490,6 +490,37 @@ describe("startBakeryImageJob — o botão do admin", () => {
     expect(fim.processadas).toBe(fim.total); // a barra não fica presa em 90%
   });
 
+  it("avisa o chamador quando termina, com o total gerado — quem dispara no deploy não olha tela", async () => {
+    const avisos: Array<{ status: string; geradas: number; puladas: number }> = [];
+
+    await startBakeryImageJob({
+      confirmar: true,
+      limite: 2,
+      onSettled: (j) => avisos.push({ status: j.status, geradas: j.geradas, puladas: j.puladas }),
+    });
+    await aguardarFim();
+    // O aviso sai no `.then` do trabalho de fundo, um tique depois do estado mudar.
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatchObject({ status: "CONCLUIDO", geradas: 2 });
+  });
+
+  it("aviso do chamador que explode não derruba a geração", async () => {
+    await startBakeryImageJob({
+      confirmar: true,
+      limite: 1,
+      onSettled: () => {
+        throw new Error("quem escuta quebrou");
+      },
+    });
+    await aguardarFim();
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(getBakeryImageJob()!.status).toBe("CONCLUIDO");
+    expect(getBakeryImageJob()!.geradas).toBe(1);
+  });
+
   it("depois de terminar, um novo disparo é aceito — o trabalho não trava o botão para sempre", async () => {
     await startBakeryImageJob({ confirmar: true, limite: 1 });
     await aguardarFim();

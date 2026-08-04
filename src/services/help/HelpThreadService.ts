@@ -99,6 +99,13 @@ export class HelpThreadService {
       threadId: string;
       mode: HelpThread["mode"];
       messages: HelpMessageDTO[];
+      /**
+       * Veredito do turno, para a UI. `shouldEscalate` é o próprio agente
+       * dizendo que não resolve sozinho — a interface então OFERECE o chamado
+       * em vez de esconder a escalada num link de rodapé. Não é persistido:
+       * vale para o turno que acabou de acontecer.
+       */
+      assistant: { shouldEscalate: boolean; coherence: string } | null;
     }>
   > {
     try {
@@ -113,6 +120,7 @@ export class HelpThreadService {
       });
 
       const out: HelpMessageDTO[] = [msgDTO(userMsg)];
+      let assistant: { shouldEscalate: boolean; coherence: string } | null = null;
 
       // The AI only answers while the thread is in AI mode.
       if (thread.mode === "AI") {
@@ -152,9 +160,10 @@ export class HelpThreadService {
           data: { lastMessageAt: new Date() },
         });
         out.push(msgDTO(assistantMsg));
+        assistant = { shouldEscalate: ai.shouldEscalate, coherence: ai.coherence };
       }
 
-      return serviceOk({ threadId: thread.id, mode: thread.mode, messages: out });
+      return serviceOk({ threadId: thread.id, mode: thread.mode, messages: out, assistant });
     } catch (err) {
       console.error("[HelpThreadService.sendMessage]", err);
       return serviceFail("Falha ao enviar a mensagem", 500);

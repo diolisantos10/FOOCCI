@@ -653,3 +653,63 @@ tem). Toda trava que existia como 'o operador confere antes' vira código."*
 Origem: este bloco; arquivos `src/services/demo/FoocciBakeryService.ts`,
 `src/services/imageEnhancement/providers/openai.ts:41`,
 `src/services/brain/architecture.test.ts` (portão que cobrou).
+
+---
+
+## 2026-08-04 · A padaria de vitrine deixa de depender de clique
+
+**Pedido:** a Foocci Bakery existia como código e como botão, mas não existia no
+banco de produção — o botão nunca tinha sido clicado. Fazer nascer e se manter
+sozinha a cada deploy, sem poder derrubar o boot.
+
+**O que fiz:**
+- `src/services/demo/bakerySelfSeed.ts` — orquestração de deploy: seed idempotente
+  + disparo das fotos que faltam. **Não lança em nenhum caminho.** Chama o mesmo
+  `FoocciBakeryService` do botão; nenhuma segunda cópia.
+- `src/app/api/admin/demo-bakery/self-seed/route.ts` — a rota que o boot chama.
+  200 = em dia (script para de tentar), 503 = tente de novo (banco fora).
+- `scripts/start-production.sh:33-56` — Step 4, cópia estrutural do passo dos
+  guias: subshell em segundo plano, 3 tentativas (40/60/90s), `|| echo "000"`,
+  pula sem ADMIN_SECRET. `next start` virou Step 5 e não espera por nada disso.
+- `FoocciBakeryService.ts` ganhou `onSettled` em `startBakeryImageJob` — quem
+  dispara no deploy não tem tela para ler o total gerado.
+
+**Decisões que valem registro:**
+1. **Sem `prune` no caminho automático.** Podar cardápio num boot é destruição
+   silenciosa (guardrail 5). Podar continua sendo escolha de botão.
+2. **`regerar: false` por escrito, não por omissão.** É o caminho que roda sem
+   ninguém olhando; a omissão faria a mesma coisa hoje e outra coisa amanhã.
+3. **`NADA_A_FAZER` é o caminho FELIZ do segundo deploy**, não uma falha — o
+   serviço o expressa como recusa e o orquestrador o traduz de volta.
+4. **Sem seed OK, nenhuma foto é disparada.** Sem cardápio no banco não há o que
+   fotografar, e insistir produziria um erro por deploy.
+5. **`FOOCCI_BAKERY_SELF_SEED=off`** desliga sem precisar de deploy novo. Só o
+   valor explícito `off` desliga; ausência é ligado.
+
+**Trava contra gastar duas vezes com N réplicas:** o `Lease` é por processo. Quem
+sobrevive a dois processos subindo juntos é a re-leitura do `imageUrl`
+imediatamente antes de cada chamada paga (`FoocciBakeryService.ts:976-985`) —
+já existia e continua sendo a única trava que vale entre processos.
+
+**Provas:** `bakerySelfSeed.test.ts` (falha do seed não derruba o boot, em três
+formatos de erro; `regerar: false`; sem chave registra e segue; script chama a
+rota em segundo plano antes do `next start`), `self-seed/route.test.ts` (401,
+200, 503, e responde mesmo se o orquestrador explodir), +2 em
+`FoocciBakeryService.test.ts` (`onSettled` relata o total; `onSettled` que explode
+não derruba a geração). `npx tsc --noEmit` limpo · `npx vitest run` 4894/4894.
+
+**O que NÃO está provado:** nada rodou contra o banco de produção nem contra a
+OpenAI de verdade. A padaria continua sem existir em produção e as 40 fotos
+continuam sem sair. Só o deploy fecha isso — e ninguém deve dizer "está no ar"
+antes de o `/pedido/foocci-bakery` responder.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Vitrine que depende de alguém
+clicar é vitrine vazia. Todo estado de demonstração que o CEO precisa ver no ar
+nasce no boot, idempotente, e o boot nunca pode cair por causa dele: o passo roda
+em segundo plano DEPOIS do `next start`, com tentativas contadas, e toda falha
+vira registro com a evidência em vez de exceção. E o caminho automático é sempre
+o mais conservador dos dois — sem poda, sem regeração, sem gasto que o caminho
+manual faria com um humano olhando."* Origem: este bloco; arquivos
+`src/services/demo/bakerySelfSeed.ts`,
+`src/app/api/admin/demo-bakery/self-seed/route.ts`,
+`scripts/start-production.sh:33-56`.
