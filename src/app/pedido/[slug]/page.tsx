@@ -573,6 +573,8 @@ gtag('config', '${ga4Id}');
         knownCustomerPhone={knownCustomerPhone}
         knownCustomerName={knownCustomerName}
         knownCustomerId={knownCustomerId}
+        knownDefaultAddress={knownDefaultAddress}
+        pedidoToken={pedidoToken}
         restaurantIsOpen={restaurantIsOpen}
         closedMessage={closedMessage}
       />

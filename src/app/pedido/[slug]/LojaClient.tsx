@@ -4,27 +4,33 @@
  * LojaClient — a loja do plano de entrada: o MESMO cardápio da mesa (/qr/[slug],
  * QRMenuClient), com uma única diferença — o cliente pode comprar.
  *
- * Direção do CEO (04/08): lado a lado, as duas telas são o mesmo cardápio; uma
- * só olha, a outra compra. Por isso o visual inteiro vem do módulo compartilhado
- * src/components/menu/* (extraído do QRMenuClient): hero, banners, carrosséis,
- * nav de categorias fixa embaixo, ProductCard e ProductModal. A camada de compra
- * é o `commerce` do ProductModal (quantidade/observação/variantes/adicionais) +
- * a barra de carrinho encaixada ACIMA dos chips no mesmo contêiner fixo.
+ * Direção do CEO (04/08, manhã): o CORPO segue o módulo compartilhado
+ * src/components/menu/* (cards, categorias, ProductModal com `commerce`, nav
+ * fixa embaixo com a barra de carrinho no topSlot). O TOPO, por emenda do CEO à
+ * regra "igual por construção", é de aplicativo de marketplace (iFood/Rappi):
+ * - StoreHeader fixo: logomarca + nome + status à esquerda; Minha conta e
+ *   Sacola (badge de quantidade) à direita.
+ * - Faixa fina com as redes sociais + avaliação Google (MenuSocialLinks, o
+ *   mesmo markup do QR) e os banners/carrosséis compartilhados (MenuShowcase).
+ * - StoreAccountDrawer: identidade, Meus cupons e Meus endereços — rotas
+ *   read-only já existentes, gated por prova de posse do telefone (waToken).
  *
  * A máquina embaixo NÃO é nova: identify → finalize são as mesmas rotas
  * /api/pedido/* provadas com pedido real (#O2VKA1); o payload do carrinho
- * espelha o PedidoClient (baseItemId, selectedOptions, selectedExtras — ver
- * /api/pedido/[slug]/finalize, cartItemSchema). Preço no canal DELIVERY.
+ * espelha o PedidoClient (baseItemId, selectedOptions, selectedExtras). O cupom
+ * escolhido no drawer vai como customerCouponId — o SERVIDOR revalida e
+ * recalcula o desconto no finalize. Preço no canal DELIVERY.
  *
  * White-label: a cor vem do restaurante via --brand-primary, como no QR.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   CategoryDescriptionStrip,
   CategoryNav,
   CategorySections,
-  MenuHero,
+  MenuShowcase,
+  MenuSocialLinks,
   ProductModal,
   WelcomeModal,
   fmtPhone,
@@ -34,8 +40,23 @@ import {
   type MenuDisplayItem,
   type PromotionBannerData,
 } from "@/components/menu";
+import { buildInstagramUrl, buildTikTokUrl, buildWhatsAppUrl } from "@/lib/social";
+import { StoreHeader } from "./StoreHeader";
+import { StoreAccountDrawer } from "./StoreAccountDrawer";
+import {
+  LOCKED_WALLET,
+  fetchWallet,
+  type CustomerAddress,
+  type WalletCoupon,
+  type WalletState,
+} from "./lojaWallet";
 
 /* ── Props ────────────────────────────────────────────────────────────────── */
+
+interface KnownAddress {
+  street: string; number: string; neighborhood: string; complement: string;
+  cep?: string; city?: string; state?: string;
+}
 
 interface Props {
   slug: string;
@@ -57,12 +78,17 @@ interface Props {
   knownCustomerPhone?: string | null;
   knownCustomerName?: string | null;
   knownCustomerId?: string | null;
+  /** Endereço padrão do cliente PROVADO (waToken) — pré-preenche a entrega. */
+  knownDefaultAddress?: KnownAddress | null;
+  /** waToken validado no servidor — destrava cupons/endereços (read-only). */
+  pedidoToken?: string | null;
   restaurantIsOpen?: boolean;
   closedMessage?: string | null;
 }
 
 type Step =
   | "browse"
+  | "cart"
   | "identify"
   | "method"
   | "address"
@@ -79,6 +105,14 @@ const EMPTY_ADDRESS: Address = {
   cep: "", street: "", number: "", neighborhood: "",
   city: "", state: "", complement: "", referencePoint: "",
 };
+
+function savedToAddress(a: CustomerAddress): Address {
+  return {
+    cep: a.zipCode ?? "", street: a.street, number: a.number,
+    neighborhood: a.neighborhood, city: a.city ?? "", state: a.state ?? "",
+    complement: a.complement ?? "", referencePoint: "",
+  };
+}
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -101,6 +135,7 @@ export function LojaClient({
   instagramUrl = null, tiktokUrl = null, restaurantPhone = null, googleReviewUrl = null,
   deliveryEnabled, pickupEnabled, deliveryFee,
   knownCustomerPhone = null, knownCustomerName = null, knownCustomerId = null,
+  knownDefaultAddress = null, pedidoToken = null,
   restaurantIsOpen = true, closedMessage = null,
 }: Props) {
   const pc = brandPrimaryColor || "#f97316";
@@ -110,15 +145,14 @@ export function LojaClient({
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? "");
   const navRef = useRef<HTMLDivElement>(null);
 
-  /* ── Identidade (WelcomeModal por telefone, como no QR) ── */
+  /* ── Identidade (WelcomeModal por telefone, como no QR) ──
+   * O estado inicial usa SÓ o que o servidor conhece (props). A identidade do
+   * sessionStorage entra num efeito de mount — ler storage no useState fazia o
+   * HTML do servidor divergir do cliente (hydration mismatch no avatar do topo). */
   const [showWelcome, setShowWelcome] = useState(false);
-  const [identifiedName, setIdentifiedName] = useState<string | null>(() =>
-    knownCustomerName ?? readStoredIdentity(slug)?.name ?? null);
-  const [identifiedPhone, setIdentifiedPhone] = useState<string | null>(() => {
-    if (knownCustomerPhone) return fmtPhone(knownCustomerPhone);
-    const stored = readStoredIdentity(slug);
-    return stored?.displayPhone ?? (stored?.phone ? fmtPhone(stored.phone) : null);
-  });
+  const [identifiedName, setIdentifiedName] = useState<string | null>(knownCustomerName);
+  const [identifiedPhone, setIdentifiedPhone] = useState<string | null>(
+    knownCustomerPhone ? fmtPhone(knownCustomerPhone) : null);
 
   /* ── Carrinho ── */
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -127,20 +161,80 @@ export function LojaClient({
 
   /* ── Checkout (máquina preservada — mesmas rotas /api/pedido/*) ── */
   const [step, setStep] = useState<Step>("browse");
-  const [phone, setPhone] = useState(() =>
-    knownCustomerPhone ?? readStoredIdentity(slug)?.phone ?? "");
-  const [custName, setCustName] = useState(() =>
-    knownCustomerName ?? readStoredIdentity(slug)?.name ?? "");
-  const [custId, setCustId] = useState<string | null>(() =>
-    knownCustomerId ?? readStoredIdentity(slug)?.customerId ?? null);
+  const [phone, setPhone] = useState(knownCustomerPhone ?? "");
+  const [custName, setCustName] = useState(knownCustomerName ?? "");
+  const [custId, setCustId] = useState<string | null>(knownCustomerId);
+
+  /* Identidade guardada na sessão (compartilhada com o QR) — só no cliente. */
+  useEffect(() => {
+    const stored = readStoredIdentity(slug);
+    if (!stored) return;
+    setIdentifiedName((v) => v ?? stored.name ?? null);
+    setIdentifiedPhone((v) =>
+      v ?? stored.displayPhone ?? (stored.phone ? fmtPhone(stored.phone) : null));
+    setPhone((v) => v || (stored.phone ?? ""));
+    setCustName((v) => v || (stored.name ?? ""));
+    setCustId((v) => v ?? stored.customerId ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
   const [needName, setNeedName] = useState(false);
   const [method, setMethod] = useState<"delivery" | "pickup" | null>(null);
-  const [address, setAddress] = useState<Address>(EMPTY_ADDRESS);
+  const [address, setAddress] = useState<Address>(() =>
+    knownDefaultAddress
+      ? {
+          ...EMPTY_ADDRESS,
+          street: knownDefaultAddress.street, number: knownDefaultAddress.number,
+          neighborhood: knownDefaultAddress.neighborhood, complement: knownDefaultAddress.complement,
+          cep: knownDefaultAddress.cep ?? "", city: knownDefaultAddress.city ?? "",
+          state: knownDefaultAddress.state ?? "",
+        }
+      : EMPTY_ADDRESS);
   const [paySub, setPaySub] = useState<"cash" | "card_machine" | "pix_in_person" | null>(null);
   const [changeFor, setChangeFor] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<{ orderId: string } | null>(null);
+
+  /* ── Minha conta: carteira (cupons + endereços) — rotas gated por waToken ── */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(() => pedidoToken ?? null);
+  useEffect(() => {
+    // SSR não resolveu o token mas ele pode estar na URL (link do WhatsApp).
+    if (authToken || typeof window === "undefined") return;
+    const t = new URLSearchParams(window.location.search).get("waToken");
+    if (t) setAuthToken(t);
+  }, [authToken]);
+
+  const [wallet, setWallet] = useState<WalletState>(LOCKED_WALLET);
+  const [appliedCoupon, setAppliedCoupon] = useState<WalletCoupon | null>(null);
+  const [usedAddressId, setUsedAddressId] = useState<string | null>(null);
+
+  const loadWallet = useCallback(async () => {
+    if (!authToken) { setWallet(LOCKED_WALLET); return; }
+    setWallet((w) => ({ ...w, status: "loading" }));
+    try {
+      const { coupons, addresses } = await fetchWallet(slug, authToken);
+      setWallet({ status: "ready", coupons, addresses });
+    } catch {
+      setWallet({ status: "error", coupons: [], addresses: [] });
+    }
+  }, [slug, authToken]);
+
+  useEffect(() => { void loadWallet(); }, [loadWallet]);
+
+  /* Pré-preenche a entrega com o endereço padrão salvo (uma vez, ao carregar). */
+  const walletPrefillDone = useRef(false);
+  useEffect(() => {
+    if (wallet.status !== "ready" || walletPrefillDone.current) return;
+    walletPrefillDone.current = true;
+    const def = wallet.addresses.find((a) => a.isDefault) ?? wallet.addresses[0];
+    if (!def) return;
+    const empty = !address.street.trim();
+    const same  = address.street === def.street && address.number === def.number;
+    if (empty) setAddress(savedToAddress(def));
+    if (empty || same) setUsedAddressId(def.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet.status]);
 
   /* Welcome uma vez por sessão — pulado se já identificado (URL ou sessão). */
   useEffect(() => {
@@ -170,6 +264,12 @@ export function LojaClient({
     setPhone("");
     setCustName("");
     setCustId(null);
+    // Trocar de pessoa invalida a carteira anterior — cupom e endereço saem juntos.
+    setAuthToken(null);
+    setWallet(LOCKED_WALLET);
+    setAppliedCoupon(null);
+    setUsedAddressId(null);
+    setAccountOpen(false);
     setShowWelcome(true);
   }
 
@@ -236,6 +336,23 @@ export function LojaClient({
   function openCheckout() {
     setError(null);
     setStep(custId && custName.trim() ? "method" : "identify");
+  }
+
+  /* Ícone da sacola no topo — abre a revisão da sacola (padrão iFood: o ícone
+     mostra a sacola; a barra de baixo segue direto pro fechamento). */
+  function openCartSheet() {
+    setError(null);
+    if (order) { setOrder(null); setMethod(null); setPaySub(null); }
+    setStep("cart");
+  }
+
+  function applyCoupon(c: WalletCoupon) {
+    setAppliedCoupon(c);
+  }
+
+  function useAddress(a: CustomerAddress) {
+    setAddress(savedToAddress(a));
+    setUsedAddressId(a.id);
   }
 
   /* ── Ações do checkout (máquina intocada) ── */
@@ -313,18 +430,23 @@ export function LojaClient({
           address: method === "delivery" ? address : EMPTY_ADDRESS,
           paymentMode: method === "delivery" ? "pay_on_delivery" : "pay_on_pickup",
           paymentMethodSub: paySub,
-          ...(paySub === "cash" && Number(changeFor.replace(/\D/g, "")) > cartTotal
+          ...(paySub === "cash" && Number(changeFor.replace(/\D/g, "")) > grandTotal
             ? { changeFor: Number(changeFor.replace(/\D/g, "")) }
             : {}),
           ...(phone ? { customerPhone: phone } : {}),
           ...(custId ? { customerId: custId } : {}),
           ...(method === "delivery" && deliveryFee != null ? { clientDeliveryFee: deliveryFee } : {}),
+          // Cupom da carteira: o servidor revalida (findRedeemable) e recalcula
+          // o desconto — o valor exibido aqui nunca é a autoridade.
+          ...(appliedCoupon && custId ? { customerCouponId: appliedCoupon.id } : {}),
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.orderId) throw new Error(json?.error ?? "Não consegui confirmar o pedido. Tente de novo.");
       setOrder({ orderId: json.orderId });
       setCart([]);
+      setAppliedCoupon(null);
+      if (authToken) void loadWallet(); // cupom consumido sai da carteira
       setStep("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não consegui confirmar o pedido. Tente de novo.");
@@ -334,6 +456,23 @@ export function LojaClient({
   }
 
   const fee = method === "delivery" && deliveryFee != null ? deliveryFee : 0;
+
+  /* Desconto de exibição — espelha a regra do PedidoClient.applyWalletCoupon;
+     a autoridade é o recálculo do finalize no servidor. */
+  const discount = (() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.isReward || appliedCoupon.discountType === "CUSTOM") return 0;
+    if (appliedCoupon.discountType === "FREE_SHIPPING") {
+      return method === "delivery" ? Math.round(fee * 100) / 100 : 0;
+    }
+    if (appliedCoupon.discountType === "PERCENTAGE") {
+      return Math.round(Math.min((cartTotal * appliedCoupon.discountValue) / 100, cartTotal) * 100) / 100;
+    }
+    return Math.round(Math.min(appliedCoupon.discountValue, cartTotal + fee) * 100) / 100;
+  })();
+  const grandTotal = Math.max(0, cartTotal + fee - discount);
+
+  const couponCount = wallet.status === "ready" ? wallet.coupons.length : 0;
 
   /* ── Barra de carrinho — vive DENTRO do contêiner fixo da nav, acima dos chips ── */
   const showCartBar = cartCount > 0 && step === "browse" && !order;
@@ -358,6 +497,15 @@ export function LojaClient({
   /* Padding inferior: libera a nav fixa + barra de carrinho (como o pb-24 do QR). */
   const bottomPad = showNav && showCartBar ? "pb-40" : (showNav || showCartBar) ? "pb-24" : "";
 
+  /* Topo: faixa de sociais/avaliação + vitrine (banners e carrosséis do QR). */
+  const hasSocialStrip = Boolean(
+    buildInstagramUrl(instagramUrl) || buildTikTokUrl(tiktokUrl) ||
+    buildWhatsAppUrl(restaurantPhone) || googleReviewUrl
+  );
+  const hasShowcase =
+    promotionBanners.length > 0 || Boolean(promoBanner) ||
+    promotedItems.length > 0 || featured.length > 0;
+
   return (
     <div style={{ '--brand-primary': pc } as React.CSSProperties}>
       {showWelcome && (
@@ -372,25 +520,77 @@ export function LojaClient({
         />
       )}
 
-      <div className={`min-h-screen bg-[#fafaf9] ${bottomPad}`}>
-
-        {/* ── HERO (idêntico ao QR; subtítulo diz que aqui se pede) ── */}
-        <MenuHero
-          restaurant={{ name: restaurantName, logoUrl }}
-          subtitle="Cardápio digital — peça online"
-          instagramUrl={instagramUrl}
-          tiktokUrl={tiktokUrl}
-          restaurantPhone={restaurantPhone}
-          googleReviewUrl={googleReviewUrl}
+      {accountOpen && (
+        <StoreAccountDrawer
           identifiedName={identifiedName}
           identifiedPhone={identifiedPhone}
+          wallet={wallet}
+          appliedCouponId={appliedCoupon?.id ?? null}
+          usedAddressId={usedAddressId}
+          onClose={() => setAccountOpen(false)}
+          onIdentify={() => { setAccountOpen(false); setShowWelcome(true); }}
           onResetIdentity={handleResetIdentity}
-          promotionBanners={promotionBanners}
-          promoBanner={promoBanner}
-          promotedItems={promotedItems}
-          featured={featured}
-          onSelectItem={setSelectedItem}
+          onRetry={() => void loadWallet()}
+          onApplyCoupon={applyCoupon}
+          onRemoveCoupon={() => setAppliedCoupon(null)}
+          onUseAddress={useAddress}
         />
+      )}
+
+      <div className={`min-h-screen bg-[#fafaf9] ${bottomPad}`}>
+
+        {/* ── TOPO DE APP (barra fixa estilo marketplace) ── */}
+        <StoreHeader
+          restaurantName={restaurantName}
+          logoUrl={logoUrl}
+          isOpen={restaurantIsOpen}
+          deliveryEnabled={deliveryEnabled}
+          pickupEnabled={pickupEnabled}
+          cartCount={cartCount}
+          couponCount={couponCount}
+          identifiedName={identifiedName}
+          onOpenAccount={() => setAccountOpen(true)}
+          onOpenCart={openCartSheet}
+        />
+
+        {/* ── Faixa social + vitrine (banners/carrosséis compartilhados do QR) ── */}
+        {(hasSocialStrip || hasShowcase) && (
+          <div className="border-b border-gray-100 bg-white">
+            {hasSocialStrip && (
+              <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
+                <MenuSocialLinks
+                  instagramUrl={instagramUrl}
+                  tiktokUrl={tiktokUrl}
+                  restaurantPhone={restaurantPhone}
+                  className="flex items-center gap-2.5"
+                />
+                {googleReviewUrl && (
+                  <a
+                    href={googleReviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Avaliar restaurante no Google"
+                    className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-yellow-300 bg-yellow-50 px-3.5 py-2 text-xs font-semibold text-yellow-800 shadow-sm transition hover:bg-yellow-100 active:scale-95"
+                  >
+                    <span aria-hidden="true">⭐</span>
+                    Avaliar
+                  </a>
+                )}
+              </div>
+            )}
+            {hasShowcase && (
+              <div className={hasSocialStrip ? "" : "pt-4"}>
+                <MenuShowcase
+                  promotionBanners={promotionBanners}
+                  promoBanner={promoBanner}
+                  promotedItems={promotedItems}
+                  featured={featured}
+                  onSelectItem={setSelectedItem}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Fechado agora — a Loja aceita montar o pedido, o envio é barrado no finalize */}
         {!restaurantIsOpen && (
@@ -423,14 +623,57 @@ export function LojaClient({
         </footer>
       </div>
 
-      {/* ── Checkout em folhas (máquina preservada, visual do QR) ── */}
+      {/* ── Sacola + checkout em folhas (máquina preservada, visual do QR) ── */}
       {step !== "browse" && step !== "done" && (
         <Sheet onClose={busy ? undefined : () => { setStep("browse"); setError(null); }}>
-          {/* Resumo curto do carrinho no topo de todas as etapas */}
-          <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5 text-sm">
-            <span className="text-gray-600">{cartCount} {cartCount === 1 ? "item" : "itens"}</span>
-            <span className="font-bold text-gray-900">{fmt(cartTotal + fee)}</span>
-          </div>
+          {/* Resumo curto do carrinho no topo das etapas de checkout (a sacola já lista tudo) */}
+          {step !== "cart" && (
+            <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5 text-sm">
+              <span className="text-gray-600">{cartCount} {cartCount === 1 ? "item" : "itens"}</span>
+              <span className="font-bold text-gray-900">{fmt(grandTotal)}</span>
+            </div>
+          )}
+
+          {step === "cart" && (
+            cart.length === 0 ? (
+              <div className="py-6 text-center">
+                <span aria-hidden="true" className="text-4xl">🛍️</span>
+                <h3 className="mt-2 text-lg font-bold text-gray-900">Sua sacola está vazia</h3>
+                <p className="mt-1 text-sm text-gray-500">Toque em um produto do cardápio para adicionar.</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("browse")}
+                  className="mt-4 w-full rounded-2xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  Ver cardápio
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold text-gray-900">Sua sacola</h3>
+                <CartLineList cart={cart} onChangeQty={changeQty} />
+                <div className="mt-2 space-y-1 border-t border-gray-100 pt-3 text-sm">
+                  <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{fmt(cartTotal)}</span></div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between" style={{ color: "var(--brand-primary)" }}>
+                      <span>Cupom · {appliedCoupon.label}</span>
+                      <span>{appliedCoupon.isReward ? "no pedido" : "no fechamento"}</span>
+                    </div>
+                  )}
+                </div>
+                <PrimaryBtn disabled={busy} onClick={openCheckout}>
+                  Continuar · {fmt(cartTotal)}
+                </PrimaryBtn>
+                <button
+                  type="button"
+                  onClick={() => setStep("browse")}
+                  className="mt-2 w-full py-2 text-center text-xs font-semibold text-gray-400 transition-colors hover:text-gray-600"
+                >
+                  Escolher mais itens
+                </button>
+              </>
+            )
+          )}
 
           {step === "identify" && (
             <>
@@ -477,10 +720,13 @@ export function LojaClient({
           {step === "address" && (
             <>
               <h3 className="text-lg font-bold text-gray-900">Endereço de entrega</h3>
+              {usedAddressId && address.street.trim() && (
+                <p className="mt-1 text-xs text-gray-500">Usando seu endereço salvo — é só conferir.</p>
+              )}
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <input value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} placeholder="Rua" className={`col-span-2 ${inputSmCls}`} />
-                <input value={address.number} onChange={(e) => setAddress({ ...address, number: e.target.value })} placeholder="Número" className={inputSmCls} />
-                <input value={address.neighborhood} onChange={(e) => setAddress({ ...address, neighborhood: e.target.value })} placeholder="Bairro" className={inputSmCls} />
+                <input value={address.street} onChange={(e) => { setAddress({ ...address, street: e.target.value }); setUsedAddressId(null); }} placeholder="Rua" className={`col-span-2 ${inputSmCls}`} />
+                <input value={address.number} onChange={(e) => { setAddress({ ...address, number: e.target.value }); setUsedAddressId(null); }} placeholder="Número" className={inputSmCls} />
+                <input value={address.neighborhood} onChange={(e) => { setAddress({ ...address, neighborhood: e.target.value }); setUsedAddressId(null); }} placeholder="Bairro" className={inputSmCls} />
                 <input value={address.complement} onChange={(e) => setAddress({ ...address, complement: e.target.value })} placeholder="Complemento (opcional)" className={`col-span-2 ${inputSmCls}`} />
               </div>
               <PrimaryBtn disabled={busy} onClick={submitAddress}>Continuar</PrimaryBtn>
@@ -502,7 +748,7 @@ export function LojaClient({
                   inputMode="numeric"
                   value={changeFor}
                   onChange={(e) => setChangeFor(e.target.value)}
-                  placeholder={`Troco para quanto? (pedido: ${fmt(cartTotal + fee)})`}
+                  placeholder={`Troco para quanto? (pedido: ${fmt(grandTotal)})`}
                   className={`mt-2 ${inputSmCls}`}
                 />
               )}
@@ -513,41 +759,32 @@ export function LojaClient({
           {step === "review" && (
             <>
               <h3 className="text-lg font-bold text-gray-900">Confira seu pedido</h3>
-              <ul className="mt-3 divide-y divide-gray-100">
-                {cart.map((l, i) => (
-                  <li key={`${l.id}-${i}`} className="flex items-center justify-between py-2.5">
-                    <div className="min-w-0 flex-1 pr-3">
-                      <p className="text-sm font-semibold text-gray-900">{l.name}</p>
-                      {(l.selectedOptions?.length || l.selectedExtras?.length || l.notes) && (
-                        <p className="text-xs text-gray-500">
-                          {[
-                            l.selectedOptions?.map((o) => `${o.qty}× ${o.optionName}`).join(", "),
-                            l.selectedExtras?.map((e) => `${e.qty}× ${e.name}`).join(", "),
-                            l.notes,
-                          ].filter(Boolean).join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" aria-label={`tirar um ${l.name}`} onClick={() => changeQty(i, -1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">−</button>
-                      <span className="w-5 text-center text-sm font-semibold">{l.qty}</span>
-                      <button type="button" aria-label={`mais um ${l.name}`} onClick={() => changeQty(i, +1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">+</button>
-                      <span className="w-20 text-right text-sm font-semibold text-gray-900">{fmt(l.price * l.qty)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <CartLineList cart={cart} onChangeQty={changeQty} />
               <div className="mt-2 space-y-1 border-t border-gray-100 pt-3 text-sm">
                 {method === "delivery" && (
                   <div className="flex justify-between text-gray-600"><span>Entrega</span><span>{deliveryFee != null ? fmt(fee) : "a combinar"}</span></div>
                 )}
-                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total</span><span>{fmt(cartTotal + fee)}</span></div>
+                {appliedCoupon && (
+                  <div className="flex justify-between" style={{ color: "var(--brand-primary)" }}>
+                    <span>Cupom · {appliedCoupon.label}</span>
+                    <span>
+                      {discount > 0
+                        ? `−${fmt(discount)}`
+                        : appliedCoupon.isReward
+                        ? "no pedido"
+                        : appliedCoupon.discountType === "FREE_SHIPPING" && method === "pickup"
+                        ? "vale na entrega — fica guardado"
+                        : "—"}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total</span><span>{fmt(grandTotal)}</span></div>
               </div>
               {cart.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">Seu carrinho ficou vazio — volte ao cardápio para escolher.</p>
               ) : (
                 <PrimaryBtn disabled={busy} onClick={submitOrder}>
-                  {busy ? "Enviando…" : `Confirmar pedido · ${fmt(cartTotal + fee)}`}
+                  {busy ? "Enviando…" : `Confirmar pedido · ${fmt(grandTotal)}`}
                 </PrimaryBtn>
               )}
             </>
@@ -581,6 +818,36 @@ export function LojaClient({
 
 const inputCls   = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
 const inputSmCls = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
+
+/** Linhas do carrinho com controle de quantidade — usada na sacola e na revisão. */
+function CartLineList({ cart, onChangeQty }: { cart: CartLine[]; onChangeQty: (index: number, delta: number) => void }) {
+  return (
+    <ul className="mt-3 divide-y divide-gray-100">
+      {cart.map((l, i) => (
+        <li key={`${l.id}-${i}`} className="flex items-center justify-between py-2.5">
+          <div className="min-w-0 flex-1 pr-3">
+            <p className="text-sm font-semibold text-gray-900">{l.name}</p>
+            {(l.selectedOptions?.length || l.selectedExtras?.length || l.notes) && (
+              <p className="text-xs text-gray-500">
+                {[
+                  l.selectedOptions?.map((o) => `${o.qty}× ${o.optionName}`).join(", "),
+                  l.selectedExtras?.map((e) => `${e.qty}× ${e.name}`).join(", "),
+                  l.notes,
+                ].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" aria-label={`tirar um ${l.name}`} onClick={() => onChangeQty(i, -1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">−</button>
+            <span className="w-5 text-center text-sm font-semibold">{l.qty}</span>
+            <button type="button" aria-label={`mais um ${l.name}`} onClick={() => onChangeQty(i, +1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">+</button>
+            <span className="w-20 text-right text-sm font-semibold text-gray-900">{fmt(l.price * l.qty)}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function Sheet({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   return (

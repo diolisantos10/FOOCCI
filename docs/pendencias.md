@@ -2,6 +2,17 @@
 
 > Última atualização: 04/08/2026.
 
+## 📱 Cupons/endereços na Loja para quem DIGITA o telefone — depende de OTP (canais)
+
+Nota do topo marketplace (04/08): o drawer "Minha conta" da Loja mostra cupons
+e endereços reais via rotas gated por prova de posse do telefone (waToken) —
+quem chega pelo **link do WhatsApp** tem a experiência completa; quem só digita
+o telefone no WelcomeModal vê nota honesta ("aparecem quando você abre pelo
+link do WhatsApp"), porque telefone digitado não é prova (LGPD — seria expor
+cupons/endereços de terceiros). Destravar para todos = OTP por WhatsApp
+cunhando o mesmo token, domínio do `canais`. O drawer já está pronto para isso
+sem mudança.
+
 ## ✅ Cobrança — os dois achados de 04/08 FECHADOS no mesmo dia (aguardando merge)
 
 1. **Variante no WhatsApp:** `WhatsAppCheckoutAdapter.validateAndPriceItems`
