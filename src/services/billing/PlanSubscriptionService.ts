@@ -23,6 +23,7 @@ import {
   recurringChargeCents,
 } from "@/lib/billing/pricing";
 import { MercadoPagoPlatformBilling } from "./MercadoPagoPlatformBilling";
+import { assertNotDemoRestaurant } from "@/lib/demo-restaurant";
 
 // Preço não mora mais aqui: a fonte única é `@/lib/billing/pricing`, lida também
 // pela página pública. Reexportado para não quebrar quem já importava daqui.
@@ -68,6 +69,14 @@ export interface CreateSubscriptionInput {
 export const PlanSubscriptionService = {
   /** Cria o rascunho e o token do link de aceite. Status: AGUARDANDO_ACEITE. */
   async create(input: CreateSubscriptionInput): Promise<PlanSubscription> {
+    // Vitrine não vira cobrança. A Foocci Bakery é um tenant completo e funcional
+    // (é o que faz a degustação valer); sem esta trava ela é indistinguível de um
+    // cliente na hora de criar assinatura. Guardrail 4 — a marca é coluna e a
+    // recusa é código, não um combinado de nomenclatura.
+    if (input.restaurantId) {
+      await assertNotDemoRestaurant(input.restaurantId);
+    }
+
     // `priceCents` é o valor CHEIO do ciclo (o de toda renovação).
     const priceCents =
       input.priceCents && input.priceCents > 0

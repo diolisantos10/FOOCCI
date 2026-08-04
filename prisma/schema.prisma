@@ -31,6 +31,12 @@ model Restaurant {
   description     String?
   timezone        String   @default("America/Sao_Paulo")
   isActive        Boolean  @default(true)
+  // Restaurante de DEMONSTRAÇÃO — vitrine do site de vendas, sandbox de treino.
+  // NÃO é cliente: não entra em cobrança, relatório comercial nem métrica de base.
+  // É coluna e não convenção de slug de propósito (guardrail 4: código é a trava) —
+  // uma regra escrita só no nome do slug some na primeira renomeação.
+  // Filtro canônico e a trava de cobrança vivem em src/lib/demo-restaurant.ts.
+  isDemo          Boolean  @default(false)
   // Master switch do Agente de CRM. false = CRM roda 100% na mão (sem IA).
   crmAgentEnabled Boolean  @default(true)
   plan            Plan     @default(STARTER)
