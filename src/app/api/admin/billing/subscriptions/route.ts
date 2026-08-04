@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { PlanSubscriptionService } from "@/services/billing/PlanSubscriptionService";
-import { MercadoPagoPlatformBilling, isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
+import { isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
 import { getNfseConfig } from "@/services/billing/PlanNfseService";
 
 export async function GET(req: NextRequest) {

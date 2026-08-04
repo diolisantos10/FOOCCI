@@ -6,6 +6,10 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+// A QUARTA tabela de preço do repositório morava aqui, digitada à mão, e
+// sugeria ao CEO um valor de ciclo SEM o desconto do trimestral/anual (179×3 em
+// vez de 483). Agora vem da mesma fonte que cobra.
+import { PLAN_CYCLE_CENTS, PLAN_LABEL, CYCLE_MONTHS } from "@/lib/billing/pricing";
 
 interface Invoice {
   id: string;
@@ -30,12 +34,14 @@ interface Subscription {
   termsAcceptedAt: string | null;
   termsAcceptedBy: string | null;
   mpInitPoint: string | null;
+  /** Alertas operacionais que NÃO podem morrer só no log do servidor. */
+  provisionError: string | null;
+  priceSyncError: string | null;
+  provisionedAt: string | null;
+  restaurant: { name: string; slug: string } | null;
   invoices: Invoice[];
 }
 
-const PLAN_LABEL = { STARTER: "Essencial", GROWTH: "Crescimento", PRO: "Performance" } as const;
-const MONTHLY_DEFAULT = { STARTER: 179, GROWTH: 429, PRO: 899 } as const;
-const CYCLE_MONTHS = { MENSAL: 1, TRIMESTRAL: 3, ANUAL: 12 } as const;
 
 const STATUS_STYLE: Record<string, string> = {
   ATIVA: "bg-green-50 text-green-700 border-green-200",
@@ -67,7 +73,7 @@ export function AssinaturasClient() {
     customerEmail: "",
     plan: "STARTER" as Subscription["plan"],
     cycle: "MENSAL" as Subscription["cycle"],
-    priceReais: String(MONTHLY_DEFAULT.STARTER),
+    priceReais: String(PLAN_CYCLE_CENTS.STARTER.MENSAL / 100),
     notes: "",
   });
 
@@ -93,7 +99,7 @@ export function AssinaturasClient() {
   function updatePlanOrCycle(plan: Subscription["plan"], cycle: Subscription["cycle"]) {
     // Prefill honesto: tabela × meses, sem desconto automático — desconto é
     // decisão do CEO, digitada por cima.
-    setForm((f) => ({ ...f, plan, cycle, priceReais: String(MONTHLY_DEFAULT[plan] * CYCLE_MONTHS[cycle]) }));
+    setForm((f) => ({ ...f, plan, cycle, priceReais: String(PLAN_CYCLE_CENTS[plan][cycle] / 100) }));
   }
 
   async function createSubscription() {
@@ -265,6 +271,23 @@ export function AssinaturasClient() {
                 ) : (
                   <div className="mt-1 text-xs text-amber-700">⏳ Termo ainda não aceito</div>
                 )}
+                {s.restaurant ? (
+                  <div className="mt-1 text-xs text-green-700">
+                    🏪 Conta criada: {s.restaurant.name} (foocci.com.br/pedido/{s.restaurant.slug})
+                  </div>
+                ) : null}
+                {/* Guardrail 6: o alerta carrega a própria evidência, e aparece
+                    onde o operador olha — não só no log do servidor. */}
+                {s.provisionError ? (
+                  <div className="mt-2 rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs leading-relaxed text-red-700">
+                    <b>Pagou e a conta não foi criada.</b> {s.provisionError}
+                  </div>
+                ) : null}
+                {s.priceSyncError ? (
+                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800">
+                    <b>Valor da renovação não subiu no Mercado Pago.</b> {s.priceSyncError}
+                  </div>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <button

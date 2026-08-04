@@ -354,3 +354,130 @@ responder primeiro 'que canal a tela usou?'. E toda falha de validação do chec
 WhatsApp carrega replyText — falha sem resposta vira 'pedido anotado' falso."*
 Origem: este bloco, E2E real na pizzaria-demo, branch
 `claude/foocci-director-onboarding-lhindy`.
+
+---
+
+## 04/08 — Checkout self-service: do card de preço à conta rodando (Frente 1)
+
+**Branch:** `claude/foocci-brain-vaamrx` · **Verificação:** `npx tsc --noEmit` limpo ·
+`npx vitest run` 4818/4820 (as 2 falhas são `quality/noSideEffects` e
+`whatsapp/WhatsAppOrderingW8`, timeouts de 5s por falta de Postgres no sandbox —
+provado idêntico no commit `024400ae`, anterior a este trabalho; W8 passa isolado).
+
+### O que existia e o que faltava
+Já existia metade: `PlanSubscriptionService`, `createPreapproval`, webhook, aceite
+versionado, `RestaurantService.register`. Faltava a ponta pública e **a costura**:
+`PlanSubscription.restaurantId` não era escrito por ninguém, então pagamento
+confirmado não virava conta.
+
+### O buraco central, e por que a idempotência não podia ser um `if`
+`PlanProvisioningService.provision` cria restaurante + dono OWNER + vínculo com a
+assinatura numa transação só. A trava contra restaurante duplicado **não é código**:
+é o índice UNIQUE `restaurants.originSubscriptionId` (migration
+`20260804120000_checkout_self_service`). O webhook do MP é retryable por contrato;
+uma checagem em código perderia a corrida entre o SELECT e o INSERT. Com o UNIQUE,
+o segundo processamento estoura P2002 e a transação inteira volta atrás — sem
+restaurante órfão, sem usuário pela metade. O serviço trata P2002 como
+"já feito", não como erro (`PlanProvisioningService.ts:193-201`).
+
+**Sub-decisão:** slug ocupado entre o checkout e o pagamento NÃO custa a conta de
+quem pagou — sufixa (`-2`, `-3`) e registra. Perder a conta de um cliente pagante
+por causa de um endereço ocupado seria muito pior; a tela pós-pagamento mostra o
+endereço real, então o cliente vê a verdade.
+
+### G2 (dupla cobrança) — a corrida também precisava de resposta
+`ensurePreapproval` (`PlanSubscriptionService.ts:174-232`) resolve DOIS cenários,
+não um. O reenvio sequencial devolve o link guardado sem tocar o MP. Mas na corrida
+real os dois requests criam no MP; a gravação é `updateMany` com
+`mpPreapprovalId: null`, e **o perdedor cancela no MP o preapproval órfão que
+acabou de criar**. Sem esse cancelamento a corrida deixaria uma recorrência viva
+que nenhum registro nosso aponta — cobrança fantasma, invisível para sempre. Se o
+cancelamento do órfão falhar, sai `console.error` com o id a cancelar à mão.
+
+### G4 (ativar sem aceite) — dentro do UPDATE, e sem jogar dinheiro fora
+`termsAcceptedAt: { not: null }` entrou no `where` do mesmo `updateMany` atômico
+que já filtrava estados terminais. Guardrail 5 aplicado: recusar ativação **não**
+descarta a cobrança — o webhook registra a PlanInvoice e enfileira a NFS-e antes
+de decidir sobre ativar (dinheiro que entrou é fato fiscal; o que fica retido é só
+o acesso). O log carrega cliente, plano e o link de aceite para resolver.
+
+### Preço: quatro fontes viraram uma
+`src/lib/billing/pricing.ts` é a fonte única. `precos/page.tsx`, `lib/site/plans.ts`,
+o `PLAN_MONTHLY_CENTS` do serviço e o `MONTHLY_DEFAULT` do admin agora leem dela.
+Três achados:
+1. O admin sugeria **preço de ciclo sem desconto** (`179 × 3 = 537` em vez de 483,
+   `179 × 12 = 2148` em vez de 1790). Corrigido junto — era cobrança acima do
+   anunciado esperando acontecer.
+2. **"Preço fundador" saiu do site.** Decisão do CEO: não existe no motor. Anunciar
+   desconto que o motor não aplica é o mesmo furo ao contrário.
+3. **50% de R$ 179,00 é R$ 89,50, não R$ 89,00.** O site anunciava arredondado. A
+   página agora imprime o mesmo centavo que o cartão paga. Não arredondei para
+   fazer bater — o número mudou no anúncio, não na cobrança.
+
+### O degrau de preço no Mercado Pago — a parte que NÃO foi verificada de verdade
+O preapproval do MP tem UM valor recorrente; não existe campo de "primeira parcela
+diferente". Então: nasce com `firstChargeCents` e é elevado a `priceCents` por
+`PUT /preapproval/{id}` quando a primeira cobrança confirma (`syncFullAmount`).
+**Este PUT nunca rodou contra a API real do Mercado Pago** — só contra mock. Se o MP
+recusar o formato, o cliente paga metade para sempre. Por isso o carimbo
+`fullAmountSyncedAt` é DESFEITO na falha e `priceSyncError` fica gravado e visível no
+admin. Mas isso é conserto no papel: **precisa de uma contratação real de ponta a
+ponta para provar.** Registrado como pendência.
+
+### Arquivos
+`src/lib/billing/pricing.ts` · `src/lib/billing/checkout-slug.ts` ·
+`src/services/billing/PlanProvisioningService.ts` ·
+`src/services/billing/PlanSubscriptionService.ts:174-232,235-275,277-318` ·
+`src/services/billing/MercadoPagoPlatformBilling.ts:38-84,86-120` ·
+`src/app/api/billing/checkout/route.ts` · `src/app/api/billing/slug-check/route.ts` ·
+`src/app/api/billing/mp-webhook/route.ts:30-40,73,110-127` ·
+`src/app/contratar/novo/{page,CheckoutClient}.tsx` ·
+`src/app/contratar/obrigado/page.tsx` · `src/app/site/(gated)/precos/page.tsx` ·
+`src/lib/site/plans.ts` · `src/app/admin/(area)/assinaturas/AssinaturasClient.tsx` ·
+`prisma/migrations/20260804120000_checkout_self_service/migration.sql`
+
+**Testes:** `pricing.test.ts` (9) · `PlanProvisioningService.test.ts` (10) ·
+`checkout/route.test.ts` (11) · `mp-webhook/route.test.ts` (8) ·
+`PlanSubscriptionService.test.ts` (12) · `admin .../action/route.test.ts` (7).
+
+### Proposta de vitrine (promoção é do Diretor)
+
+> **Idempotência de dinheiro mora no índice do banco, não no `if` do serviço — e
+> quem perde a corrida limpa o que criou fora.**
+>
+> Todo caminho que cria cobrança ou conta a partir de evento externo (webhook de
+> gateway, POST público) é reexecutado: o Mercado Pago reenvia por contrato, e o
+> cliente reenvia por duplo clique. Três regras aprendidas construindo o checkout
+> self-service:
+>
+> 1. **A trava é o UNIQUE.** `restaurants.originSubscriptionId` (e
+>    `plan_subscriptions.signupIdempotencyKey`) fazem o segundo processamento
+>    estourar P2002 dentro da transação, que volta atrás inteira. Checagem só em
+>    código perde a janela entre o SELECT e o INSERT. **P2002 nesse índice é
+>    "já feito", não erro.**
+> 2. **Perder a corrida obriga a limpar fora.** Dois requests criaram preapproval
+>    no MP; só um grava. O perdedor **cancela o órfão no gateway** — senão fica
+>    uma recorrência viva que nenhum registro nosso aponta: cobrança fantasma,
+>    invisível para sempre. Recurso criado em sistema externo e não gravado no
+>    nosso banco é vazamento, igual a estado sem prazo.
+> 3. **Pré-condição de negócio vai no `where` do UPDATE, não num `if` antes dele.**
+>    "Não ativa sem aceite de contrato" virou `termsAcceptedAt: { not: null }` no
+>    mesmo `updateMany` que já filtrava estado terminal. E recusar ativação **não**
+>    descarta o dinheiro que entrou: a cobrança e a NFS-e são registradas antes da
+>    decisão; o que fica retido é o acesso (guardrail 5).
+>
+> — origem: oficina 04/08, Frente 1 (checkout self-service), branch
+> `claude/foocci-brain-vaamrx`
+
+> **Preço anunciado e preço cobrado precisam ser o MESMO objeto — e o arredondamento
+> é do anúncio, nunca da cobrança.**
+>
+> Havia quatro tabelas de preço no repositório. Enquanto a venda era 1:1 isso era
+> dívida; com checkout self-service vira cobrança diferente do anunciado no primeiro
+> cliente. Unificadas em `src/lib/billing/pricing.ts`, que a página pública, o
+> checkout, o motor e o admin leem. Dois achados que só apareceram na unificação:
+> o admin sugeria ciclo **sem** o desconto do trimestral/anual, e o site anunciava
+> "1º mês R$ 89" para uma cobrança de R$ 89,50. Ajustou-se o **anúncio** para o
+> centavo real — nunca o contrário.
+>
+> — origem: oficina 04/08, Frente 1, decisão de preço do CEO de 04/08

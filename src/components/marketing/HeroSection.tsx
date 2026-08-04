@@ -71,8 +71,13 @@ export function HeroSection() {
             />
           </div>
 
+          {/*
+            Nada de "usamos a tabela pública de fulano": o Foocci não afirma a taxa de
+            ninguém. A microcopy promete o que a calculadora realmente faz — a conta
+            com os números que o próprio dono informa (trava jurídica de 04/08).
+          */}
           <p className="mt-3 text-sm text-muted lg:mt-4">
-            Sem cadastro. A conta usa as tabelas públicas de comissão de 2026.
+            Sem cadastro: você informa quanto fatura e a taxa que paga hoje.
           </p>
         </div>
       </div>

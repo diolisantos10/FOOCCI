@@ -7,17 +7,25 @@
  * destaque ("você paga R$ 6.080 de comissão") e escondia a comparação lá embaixo,
  * em dois cards discretos. Ninguém acorda querendo calcular quanto paga: o dono
  * quer saber QUANTO SOBRA. Agora, assim que o número entra, a tela mostra na cara,
- * sem procurar:
+ * sem procurar: quanto sai hoje, quanto custa aqui, e — no maior número da tela —
+ * quanto sobra por mês e por ano.
  *
- *     No iFood você paga R$ X/mês. No Foocci, R$ 429 fixo.
- *     Você economiza R$ Y por mês (R$ Z por ano).
+ * ⚠️ TRAVA JURÍDICA (2026-08-04, decisão do CEO) — leia antes de mexer:
+ * publicidade comparativa é permitida no Brasil desde que seja **verdadeira,
+ * comprovável e não denigra** o concorrente. Por isso, aqui:
  *
- * A ECONOMIA é o maior número da tela — é o dado que vende. O custo continua
- * visível, mas como termo da comparação, não como manchete.
+ *   1. O Foocci **NÃO afirma** qual é a taxa do marketplace. **Quem informa a taxa é
+ *      o próprio dono**, num campo editável — o valor que vem preenchido é ponto de
+ *      partida, e o rótulo diz isso com todas as letras. A conta é feita com os
+ *      números DELE, o que blinda juridicamente e converte mais.
+ *   2. O nome do marketplace aparece só como **texto descritivo** (`MARKETPLACE_NAME`).
+ *      Nunca logo, símbolo ou as cores dele.
+ *   3. O tom é **factual**: taxa variável × mensalidade fixa. Nada de "abusivo",
+ *      "rouba" ou qualquer adjetivo que deprecie.
+ *   4. Todo número que aparece na tela ou é digitado pelo dono, ou vem de fonte
+ *      nossa (o preço do plano). Não existe terceira origem.
  *
- * Regras que este componente não quebra:
- *   - As porcentagens vêm de UM arquivo de constantes (`commissionRates.ts`), nunca
- *     escritas aqui; e a FONTE delas é renderizada, não escondida.
+ * As demais regras que este componente não quebra:
  *   - O preço fixo do Foocci vem de `plans.ts` — a MESMA fonte que a tabela de
  *     ancoragem e a página de planos leem. Sem valor fechado, o comparativo
  *     simplesmente não aparece, em vez de inventar cifra.
@@ -27,24 +35,15 @@
  *     volta como reclamação.
  *   - Faturamento baixo demais para o plano compensar NÃO vira economia negativa:
  *     a tela diz a partir de quanto a conta vira, que é honesto e ainda vende.
- *   - Antes de calcular a tela não fica vazia: já mostra o mecanismo (a comissão é
- *     um % que sobe; o Foocci é fixo) com o próximo passo.
+ *   - Antes de calcular a tela não fica vazia: já mostra o mecanismo (a taxa é um %
+ *     que sobe com a venda; o Foocci é fixo) com o próximo passo.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import {
-  COMMISSION_RATES,
-  COMMISSION_SOURCE,
-  MARKETPLACE_NAME,
-  MIGRATION_RANGE,
-  calculateCommission,
-  formatBRL,
-} from "@/lib/site/commissionRates";
+import { MARKETPLACE_NAME, MIGRATION_RANGE, formatBRL } from "@/lib/site/commissionRates";
 import { planByIdOrNull } from "@/lib/site/plans";
 import { DEMO_URL } from "./config";
-
-type Delivery = keyof typeof COMMISSION_RATES;
 
 /** Accepts "40.000", "40000", "R$ 40 mil" typing habits — digits are what matter. */
 function parseRevenue(raw: string): number {
@@ -57,23 +56,40 @@ function maskRevenue(raw: string): string {
   return n ? n.toLocaleString("pt-BR") : "";
 }
 
-function formatPct(rate: number): string {
-  return `${(rate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+/** "23", "23,5" e "23.5" são a mesma coisa para quem digita no celular. */
+function parseRate(raw: string): number {
+  const n = Number(raw.replace(",", ".").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatPct(percent: number): string {
+  return `${percent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
 const PRESETS = [20_000, 40_000, 80_000, 150_000];
 
+/**
+ * Ponto de partida do campo de taxa — NÃO é uma afirmação sobre a tabela de ninguém.
+ * O campo é editável e o rótulo pede o número do próprio dono; este valor existe só
+ * para a tela nascer com uma conta plausível em vez de zerada.
+ */
+const DEFAULT_RATE_PERCENT = "23";
+/** Acima disso o número quase certamente é erro de digitação, não taxa. */
+const MAX_PLAUSIBLE_RATE = 90;
+
 export function CommissionCalculator() {
   const [revenueText, setRevenueText] = useState("");
-  const [delivery, setDelivery] = useState<Delivery>("own");
+  const [rateText, setRateText] = useState(DEFAULT_RATE_PERCENT);
 
   const revenue = parseRevenue(revenueText);
-  const result = useMemo(() => calculateCommission(revenue, delivery), [revenue, delivery]);
+  const ratePercent = parseRate(rateText);
+  const rate = ratePercent / 100;
 
-  const hasValue = revenue > 0;
-  // Below this, percentages produce numbers too small to argue with — say so instead
-  // of showing a result that weakens the case.
-  const tooSmall = hasValue && revenue < 1_000;
+  const hasValue = revenue > 0 && ratePercent > 0 && ratePercent <= MAX_PLAUSIBLE_RATE;
+  // Abaixo disso as porcentagens produzem números pequenos demais para argumentar —
+  // melhor dizer isso do que mostrar um resultado que enfraquece a conta.
+  const tooSmall = revenue > 0 && revenue < 1_000;
+  const rateOutOfRange = ratePercent > MAX_PLAUSIBLE_RATE;
 
   const demoHref = DEMO_URL;
 
@@ -82,12 +98,17 @@ export function CommissionCalculator() {
   // o comparativo simplesmente não aparece, em vez de inventar uma cifra.
   const foocciFixed = planByIdOrNull("crescimento")?.monthly ?? null;
 
-  const rate = COMMISSION_RATES[delivery].rate;
-  const savings = foocciFixed === null ? 0 : result.monthlyCommission - foocciFixed;
+  // Toda a conta sai de dois números: o faturamento e a taxa, ambos informados por
+  // quem está lendo. A faixa de migração é nossa e vem rotulada como conservadora.
+  const monthlyCommission = revenue * rate;
+  const savingsLow = monthlyCommission * MIGRATION_RANGE.low;
+  const savingsHigh = monthlyCommission * MIGRATION_RANGE.high;
+
+  const savings = foocciFixed === null ? 0 : monthlyCommission - foocciFixed;
   /** Só existe economia para mostrar quando a comissão passa da mensalidade fixa. */
   const hasSavings = foocciFixed !== null && savings > 0;
-  /** Faturamento a partir do qual o plano fixo custa menos que a comissão. */
-  const breakEven = foocciFixed === null ? 0 : foocciFixed / rate;
+  /** Faturamento a partir do qual o plano fixo custa menos que a taxa informada. */
+  const breakEven = foocciFixed === null || rate <= 0 ? 0 : foocciFixed / rate;
 
   return (
     <section id="calculadora" className="scroll-mt-16 bg-canvas py-12 sm:py-20">
@@ -100,8 +121,8 @@ export function CommissionCalculator() {
             Quanto sobraria no seu bolso?
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-ink2 sm:mt-4">
-            Coloque o que você fatura no delivery hoje. A conta é feita na hora, com a
-            tabela pública de comissões de 2026.
+            Coloque o que você fatura no delivery e a taxa que você paga hoje. A conta é
+            feita na hora, com os seus números.
           </p>
         </header>
 
@@ -140,63 +161,85 @@ export function CommissionCalculator() {
               </div>
             </div>
 
+            {/*
+              A TAXA É INFORMADA PELO DONO — o Foocci não afirma a tabela de ninguém
+              (ver trava jurídica no topo do arquivo). O campo nasce preenchido só para
+              a tela não abrir zerada, e o rótulo diz, sem rodeio, que é para ajustar.
+            */}
             <div>
-              <span className="block text-sm font-semibold text-ink">Quem entrega?</span>
-              <div className="mt-2 grid gap-2">
-                {(Object.keys(COMMISSION_RATES) as Delivery[]).map((key) => {
-                  const opt = COMMISSION_RATES[key];
-                  const active = delivery === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setDelivery(key)}
-                      className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                        active
-                          ? "border-brand-500 bg-brand-50/60"
-                          : "border-line bg-paper hover:border-line2"
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold text-ink">{opt.label}</span>
-                      <span className="mt-0.5 block text-xs text-muted">
-                        {formatPct(opt.rate)} — {opt.breakdown}
-                      </span>
-                    </button>
-                  );
-                })}
+              <label htmlFor="taxa" className="block text-sm font-semibold text-ink">
+                Taxa que você paga hoje{" "}
+                <span className="font-normal text-ink2">(ajuste se for diferente)</span>
+              </label>
+              <div className="relative mt-2">
+                <input
+                  id="taxa"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={rateText}
+                  onChange={(e) => setRateText(e.target.value)}
+                  placeholder="23"
+                  aria-describedby="taxa-ajuda"
+                  className="w-full rounded-xl border border-line bg-paper py-3 pl-3 pr-9 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                  %
+                </span>
               </div>
+              <p id="taxa-ajuda" className="mt-2 text-xs leading-relaxed text-muted">
+                Some tudo que sai do seu faturamento no aplicativo: comissão, taxa de
+                pagamento e entrega. O valor exato está no seu extrato — este aqui é só
+                um ponto de partida.
+              </p>
             </div>
           </div>
 
           {/* ── Resultado: antes de calcular · inválido · calculado ── */}
           <div className="mt-8 border-t border-line pt-8" aria-live="polite">
-            {!hasValue ? (
-              /* Antes de calcular a tela não fica vazia: mostra o mecanismo. */
-              <div>
-                <ComparisonPair
-                  marketplaceValue={formatPct(rate)}
-                  marketplaceNote="Do que você fatura — e sobe toda vez que você vende mais."
-                  foocciFixed={foocciFixed}
-                  dimmed
-                />
-                <p className="mt-4 text-center text-sm text-ink2">
-                  Digite seu faturamento acima — ou toque num valor — para ver{" "}
-                  <strong className="font-semibold text-ink">quanto sobra no seu bolso</strong>.
-                </p>
-              </div>
-            ) : tooSmall ? (
+            {tooSmall ? (
               <p className="text-center text-sm text-ink2">
                 Esse valor parece baixo demais para uma conta mensal. Confira o número —
                 a calculadora usa o faturamento do mês inteiro.
               </p>
+            ) : rateOutOfRange ? (
+              <p className="text-center text-sm text-ink2">
+                Essa taxa parece alta demais. Confira o número — ele é a porcentagem que
+                sai do seu faturamento, não o valor em reais.
+              </p>
+            ) : !hasValue ? (
+              /* Antes de calcular a tela não fica vazia: mostra o mecanismo. */
+              <div>
+                <ComparisonPair
+                  marketplaceValue={ratePercent > 0 ? formatPct(ratePercent) : "—"}
+                  marketplaceNote="Da sua venda — e em reais sobe toda vez que você vende mais."
+                  foocciFixed={foocciFixed}
+                  dimmed
+                />
+                <p className="mt-4 text-center text-sm text-ink2">
+                  {ratePercent > 0 ? (
+                    <>
+                      Digite seu faturamento acima — ou toque num valor — para ver{" "}
+                      <strong className="font-semibold text-ink">
+                        quanto sobra no seu bolso
+                      </strong>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      Informe também a taxa que você paga hoje para a conta fechar com os
+                      seus números.
+                    </>
+                  )}
+                </p>
+              </div>
             ) : (
               <div>
                 {/* 1 · A comparação, na cara: quanto lá, quanto aqui. */}
                 <ComparisonPair
-                  marketplaceValue={formatBRL(result.monthlyCommission)}
+                  marketplaceLabel={`Com os ${formatPct(ratePercent)} que você informou`}
+                  marketplaceValue={formatBRL(monthlyCommission)}
                   marketplaceSuffix="/mês"
-                  marketplaceNote="Comissão que sobe toda vez que você vende mais."
+                  marketplaceNote="Em reais, sobe toda vez que você vende mais."
                   foocciFixed={foocciFixed}
                 />
 
@@ -234,7 +277,7 @@ export function CommissionCalculator() {
 
                 {/* 3 · A virada conceitual, em uma linha. */}
                 <p className="mx-auto mt-4 max-w-xl text-center text-sm leading-relaxed text-ink2">
-                  A comissão do {MARKETPLACE_NAME}{" "}
+                  Uma taxa por pedido{" "}
                   <strong className="text-ink">cresce junto com o seu faturamento</strong>. O
                   Foocci é <strong className="text-ink">fixo</strong> — venda mais e continue
                   pagando o mesmo.
@@ -254,7 +297,7 @@ export function CommissionCalculator() {
                     </strong>{" "}
                     desse movimento para o seu canal direto, já ficam{" "}
                     <strong className="text-ink tabular-nums">
-                      {formatBRL(result.savingsLow)} a {formatBRL(result.savingsHigh)}
+                      {formatBRL(savingsLow)} a {formatBRL(savingsHigh)}
                     </strong>{" "}
                     por mês no seu caixa.
                   </p>
@@ -275,10 +318,15 @@ export function CommissionCalculator() {
           </div>
         </div>
 
-        {/* A fonte fica visível: número sem origem é número inventado. */}
+        {/*
+          A origem de cada número fica visível: número sem origem é número inventado —
+          e, quando o número seria sobre o concorrente, inventar também é risco jurídico.
+        */}
         <p className="mt-4 text-center text-xs leading-relaxed text-muted">
-          Fonte: {COMMISSION_SOURCE.label}. A faixa de migração é conservadora e varia
-          conforme o restaurante — não é promessa de resultado.
+          A conta usa a taxa que <strong className="font-semibold">você informou</strong> e o
+          preço fixo do plano Crescimento do Foocci. Não afirmamos a tabela de nenhum
+          aplicativo — confira a sua no extrato. A faixa de migração é conservadora e varia
+          conforme o restaurante: não é promessa de resultado.
         </p>
       </div>
     </section>
@@ -288,12 +336,15 @@ export function CommissionCalculator() {
 /* ── Os dois lados da conta, sempre no mesmo formato ─────────────────────────── */
 
 function ComparisonPair({
+  marketplaceLabel,
   marketplaceValue,
   marketplaceSuffix,
   marketplaceNote,
   foocciFixed,
   dimmed = false,
 }: {
+  /** Diz DE ONDE veio o número do marketplace — por padrão, do próprio visitante. */
+  marketplaceLabel?: string;
   marketplaceValue: string;
   marketplaceSuffix?: string;
   marketplaceNote: string;
@@ -308,7 +359,7 @@ function ComparisonPair({
     <div className="grid grid-cols-2 gap-3">
       <div className="rounded-2xl border border-line bg-paper p-4 sm:p-5">
         <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-widest text-muted sm:text-[11px]">
-          No {MARKETPLACE_NAME} você paga
+          {marketplaceLabel ?? `No ${MARKETPLACE_NAME} você paga`}
         </p>
         <p
           className={`mt-1.5 text-xl font-semibold tabular-nums sm:text-[1.75rem] ${
