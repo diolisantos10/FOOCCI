@@ -154,7 +154,7 @@ async function listCustomDomains(target) {
   const result = await gql(
     `query Domains($projectId: String!, $environmentId: String!, $serviceId: String!) {
        domains(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId) {
-         customDomains { id domain status { dnsRecords { hostlabel recordType requiredValue currentValue status } } }
+         customDomains { id domain status { certificateStatus cdnProvider dnsRecords { hostlabel recordType requiredValue currentValue status } } }
          serviceDomains { id domain }
        }
      }`,
@@ -165,14 +165,25 @@ async function listCustomDomains(target) {
 }
 
 function describeDomain(entry) {
+  const linhas = [];
+
+  // O estado do certificado é a resposta para "o navegador já abre?". Sem ele,
+  // a única forma de saber era tentar de fora — e de dentro de uma rede com
+  // cache de DNS isso engana.
+  const cert = entry?.status?.certificateStatus;
+  if (cert) linhas.push(`   · certificado: ${String(cert).replace('CERTIFICATE_STATUS_', '')}`);
+
   const records = entry?.status?.dnsRecords || [];
-  if (!records.length) return '   (sem detalhe de DNS ainda — o Railway acabou de receber o domínio)';
-  return records
-    .map(
-      (r) =>
-        `   · ${r.recordType || 'CNAME'} ${r.hostlabel || '@'} → esperado "${r.requiredValue}" · atual "${r.currentValue ?? '—'}" · ${r.status ?? 'desconhecido'}`,
-    )
-    .join('\n');
+  if (!records.length) {
+    linhas.push('   (sem detalhe de DNS ainda — o Railway acabou de receber o domínio)');
+  } else {
+    for (const r of records) {
+      linhas.push(
+        `   · ${(r.recordType || 'CNAME').replace('DNS_RECORD_TYPE_', '')} ${r.hostlabel || '@'} → esperado "${r.requiredValue}" · atual "${r.currentValue ?? '—'}" · ${(r.status ?? 'desconhecido').replace('DNS_RECORD_STATUS_', '')}`,
+      );
+    }
+  }
+  return linhas.join('\n');
 }
 
 /**
@@ -266,7 +277,7 @@ async function main() {
     `mutation CustomDomainCreate($input: CustomDomainCreateInput!) {
        customDomainCreate(input: $input) {
          id domain
-         status { dnsRecords { hostlabel recordType requiredValue currentValue status } }
+         status { certificateStatus cdnProvider dnsRecords { hostlabel recordType requiredValue currentValue status } }
        }
      }`,
     { input },
