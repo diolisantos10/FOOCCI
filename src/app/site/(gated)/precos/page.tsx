@@ -547,8 +547,8 @@ export default function PrecosPage() {
                 </h2>
                 <p className="mt-4 text-base leading-relaxed text-ink2">
                   Você paga metade da mensalidade no primeiro mês — o de instalação e aprendizado — e
-                  recebe o produto completo, sem recorte. Vale no mensal e no trimestral; no anual você já
-                  ganha 2 meses. A implantação nunca entra no desconto.
+                  recebe o produto completo, sem recorte. Vale para <strong className="font-semibold text-ink">todo cliente novo, em qualquer plano</strong>.
+                  É só o primeiro mês; a partir do segundo, o valor cheio. A implantação nunca entra no desconto.
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
