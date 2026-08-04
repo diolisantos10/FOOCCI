@@ -18,8 +18,18 @@ Fluxo completo: cliente entra no site → decide pagar → **clica no valor do p
 > onboarding). Depende do onboarding (ver Frente 2, que faz a config).
 
 ## Frente 2 — Agente de suporte 🔴
-Substitui o balãozinho atual (insuficiente). Referência de INTERFACE: um produto
-que o CEO chamou de "Ross Gator" — **ele vai mandar os prints da interface dele**.
+Substitui o balãozinho atual (insuficiente). **Referência de INTERFACE: o HostGator
+("Gator 2.0")** — prints enviados pelo CEO em 04/08. O padrão a copiar:
+- **Barra de chat/busca no TOPO do painel** ("Como posso te ajudar?") — não um
+  balãozinho no canto. Fica sempre à mão, com ícone de microfone (voz) e enviar.
+- **Botões de ação rápida** ao lado/abaixo da barra (no HostGator: "Suporte",
+  "Criar site", "Criar e-mail"…). No Foocci seriam as ações do lojista.
+- **Sugestões clicáveis** listadas ao abrir ("Como aumentar a segurança do meu
+  site" etc.) — atalhos para as dúvidas mais comuns.
+- Ao entrar na conversa, **chat em tela cheia/expansível** (minimizar, expandir,
+  fechar), com **saudação usando o nome do cliente**, histórico, botão de copiar
+  resposta e o aviso honesto "está sempre aprendendo e pode cometer erros".
+- **Exigência do CEO: UX e UI de altíssimo nível.**
 O **backend não existe e é o que vamos construir**. É um agente de IA; o CEO quer
 **fundir com o agente `manual`** que já existe no sistema.
 O que ele faz, dentro da plataforma do lojista:
