@@ -16,7 +16,10 @@
  *       NEVER to variant lines (PedidoClient/ProductModal charge the plain
  *       variant price);
  *   (h) resolves the variant from the `${baseItemId}_${variantId}` line-id
- *       convention when variantId is missing (older cached clients).
+ *       convention when variantId is missing (older cached clients);
+ *   (i) pickup charges the DELIVERY-channel price/promotion the screen showed
+ *       ("cobra-se o que a tela mostrou" — decisão do CEO 04/08), delivery
+ *       unchanged.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -85,6 +88,7 @@ vi.mock("@/services/promotions/productPromotionResolver", async (importOriginal)
 });
 
 import { POST } from "./route";
+import { getActiveMenuPromotions } from "@/services/promotions/productPromotionResolver";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -275,6 +279,87 @@ describe("POST finalize — variant price guard", () => {
     const input = recordedItems();
     expect(input.items[0].price).toBeCloseTo(26.45, 2); // plain: 52.90 − 50%
     expect(input.items[1].price).toBe(64.9);            // variant: untouched by promo
+  });
+
+  it("(i) pickup charges the DELIVERY price the screen showed — base item (CEO 04/08)", async () => {
+    // priceDineIn ≠ priceDelivery: a tela do /pedido mostra o DELIVERY (55.00);
+    // a retirada tem de cobrar exatamente isso, nunca o DINE_IN (45.00).
+    db.menuItem.findMany.mockResolvedValue([{
+      id: "item_ch", price: 50, priceDelivery: 55, priceDineIn: 45, priceIfood: null,
+      categoryId: "cat_1", category: { name: "Pizzas" },
+    }]);
+
+    const res = await POST(postReq(baseBody([{
+      id: "item_ch", name: "Calabresa", price: 55, qty: 1,
+    }])), { params });
+
+    expect(res.status).toBe(200);
+    const input = recordedItems();
+    expect(input.items[0].price).toBe(55);   // o que a tela mostrou
+    expect(input.items[0].price).not.toBe(45); // nunca o DINE_IN escondido
+    expect(input.subtotal).toBeCloseTo(55, 2);
+  });
+
+  it("(i') pickup charges the DELIVERY price the screen showed — variant line (CEO 04/08)", async () => {
+    db.menuItem.findMany.mockResolvedValue([{
+      id: "item_ch", price: 50, priceDelivery: 55, priceDineIn: 45, priceIfood: null,
+      categoryId: "cat_1", category: { name: "Pizzas" },
+    }]);
+    db.menuItemVariant.findMany.mockResolvedValue([{
+      id: "var_ch", menuItemId: "item_ch", name: "Grande", isAvailable: true,
+      price: 60, priceDelivery: 70, priceDineIn: 62, priceIfood: null,
+    }]);
+
+    const res = await POST(postReq(baseBody([{
+      id: "item_ch_var_ch", baseItemId: "item_ch",
+      variantId: "var_ch", variantName: "Grande",
+      name: "Calabresa — Grande", price: 70, qty: 1,
+    }])), { params });
+
+    expect(res.status).toBe(200);
+    const input = recordedItems();
+    expect(input.items[0].price).toBe(70);   // variante no canal DELIVERY (tela)
+    expect(input.items[0].price).not.toBe(62); // nunca o DINE_IN da variante
+  });
+
+  it("(i'') pickup loads promotions from the DELIVERY channel and applies them on the DELIVERY price", async () => {
+    db.menuItem.findMany.mockResolvedValue([{
+      id: "item_ch", price: 50, priceDelivery: 55, priceDineIn: 45, priceIfood: null,
+      categoryId: "cat_1", category: { name: "Pizzas" },
+    }]);
+    promos.current = [{
+      id: "promo_d", target: "PRODUCT", type: "PERCENTAGE", discountValue: 50,
+      targetProductIds: ["item_ch"], targetCategoryIds: [], channel: "DELIVERY",
+    }];
+
+    const res = await POST(postReq(baseBody([{
+      id: "item_ch", name: "Calabresa", price: 27.5, qty: 1,
+    }])), { params });
+
+    expect(res.status).toBe(200);
+    // A rota busca as promoções no canal que a tela usa (DELIVERY), mesmo no pickup
+    expect(getActiveMenuPromotions).toHaveBeenCalledWith("rest_1", "DELIVERY");
+    const input = recordedItems();
+    expect(input.items[0].price).toBeCloseTo(27.5, 2); // 55.00 (DELIVERY) − 50%
+  });
+
+  it("(i''') delivery keeps charging the DELIVERY price (regression — unchanged)", async () => {
+    db.menuItem.findMany.mockResolvedValue([{
+      id: "item_ch", price: 50, priceDelivery: 55, priceDineIn: 45, priceIfood: null,
+      categoryId: "cat_1", category: { name: "Pizzas" },
+    }]);
+    db.deliveryConfig.findUnique.mockResolvedValue(null); // sem config → taxa 0, não bloqueia
+
+    const res = await POST(postReq({
+      ...baseBody([{ id: "item_ch", name: "Calabresa", price: 55, qty: 1 }]),
+      deliveryMethod: "delivery",
+      paymentMode:    "pay_on_delivery",
+      address: { street: "Rua A", number: "1", neighborhood: "Centro", city: "SP", state: "SP", cep: "01000-000" },
+    }), { params });
+
+    expect(res.status).toBe(200);
+    const input = recordedItems();
+    expect(input.items[0].price).toBe(55);
   });
 
   it("(h) resolves the variant from the line-id convention when variantId is missing", async () => {

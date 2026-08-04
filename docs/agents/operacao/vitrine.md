@@ -27,3 +27,19 @@ Todo caminho que recalcula preço precisa da mesma resolução — o
 — promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08, bloco P1 do
 preço de variante (E2E real na pizzaria-demo, branch
 `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## Canal de cobrança = canal de EXIBIÇÃO — e falha de checkout no WhatsApp sempre responde
+
+1. **Todo caminho de checkout precifica no canal que a TELA usou.** O `/pedido`
+   e a conversa de WhatsApp exibem tudo em DELIVERY; retirada cobra DELIVERY
+   (decisão do CEO 04/08: "cobra-se o que a tela mostrou"). Caminho novo de
+   checkout? Primeira pergunta: "que canal a superfície exibe?" — e cobre nele.
+2. **No checkout do WhatsApp, toda falha de validação carrega `replyText`.**
+   Falha sem `replyText` morria como "pedido anotado" falso — o cliente recebia
+   confirmação sem pedido criado. O `replyText` viaja pelo `blockedReply` e
+   escala para atendente com resposta honesta.
+
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08, bloco cobrança
+2/2 (branch `claude/foocci-director-onboarding-lhindy`)

@@ -2,24 +2,21 @@
 
 > Última atualização: 04/08/2026.
 
-## 💰 P1 · WhatsApp: mesmo furo de preço de variante no checkout do canal (04/08)
+## ✅ Cobrança — os dois achados de 04/08 FECHADOS no mesmo dia (aguardando merge)
 
-Achado do `operacao` ao corrigir o finalize (abaixo):
-`WhatsAppCheckoutAdapter.validateAndPriceItems`
-(`src/services/whatsapp/ordering/WhatsAppCheckoutAdapter.ts:85,100`) recalcula
-pelo `channelPrice` do item **base** e só carrega `variantName` — idêntico ao bug
-que o finalize tinha. Pedido por WhatsApp com variante mais cara cobra a menos.
-Não foi tocado no bloco do finalize (fora do escopo, por ordem); é o próximo
-conserto da fila. A mesma resolução de variante do finalize serve de modelo.
-
-## ⚖️ Canal de exibição × canal de cobrança no pickup — decisão pendente (04/08)
-
-Segundo achado do `operacao`: os clientes do `/pedido` exibem preço do canal
-DELIVERY (`mapPedidoItem`), mas o finalize precifica **pickup** como DINE_IN. Se
-um restaurante tiver `priceDineIn ≠ priceDelivery`, o cliente vê um preço e a
-retirada cobra outro — pré-existente, vale para item base e variante. Corrigir
-exige decidir a regra de produto (pickup cobra qual canal?) — não resolver em
-silêncio; levar ao CEO junto com a próxima conversa de preços.
+1. **Variante no WhatsApp:** `WhatsAppCheckoutAdapter.validateAndPriceItems`
+   tinha o mesmo furo do finalize (cobrava variante pelo item base). Corrigido
+   com a mesma resolução: variante do banco, validada (pertence ao item,
+   disponível), `resolveVariantPrice`, falha fechada COM resposta ao cliente
+   (`replyText` pelo `blockedReply` — antes, falha de validação virava "pedido
+   anotado" falso sem pedido criado; fechado também para item indisponível).
+   9+3 testes novos em `tests/WhatsAppCheckoutAdapterVariantPrice.test.ts`.
+2. **Canal de exibição × cobrança no pickup:** DECIDIDO pelo CEO em 04/08 —
+   **cobra-se o que a tela mostrou** (registro em `docs/decisoes.md`). Aplicado
+   no finalize e no WhatsApp: pickup precifica e promociona como DELIVERY, o
+   canal que as duas superfícies exibem. E2E real provou (priceDineIn plantado
+   diferente → pickup cobrou o DELIVERY da tela). Taxa de entrega segue só para
+   delivery; cupom já era consistente entre preview e cobrança.
 
 ## ✅ P1 · Finalize ignorava o preço da variante — CORRIGIDO em 04/08 (aguardando merge)
 
