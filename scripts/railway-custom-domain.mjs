@@ -175,6 +175,33 @@ function describeDomain(entry) {
     .join('\n');
 }
 
+/**
+ * O Railway emite o certificado para um endereço de borda EXCLUSIVO daquele
+ * domínio. Se o DNS aponta para outro endereço da Railway — o do serviço, por
+ * exemplo — o navegador chega numa borda que não tem o certificado e recusa a
+ * conexão, mesmo com tudo "verde" dos dois lados. Esse desencontro é silencioso
+ * e já custou horas aqui: o alerta abaixo existe para nunca mais ser silencioso.
+ *
+ * Retorna true quando há divergência (o domínio NÃO vai funcionar como está).
+ */
+function alertarDivergenciaDeDns(entry) {
+  const divergentes = (entry?.status?.dnsRecords || []).filter(
+    (r) => r.requiredValue && r.currentValue && r.requiredValue !== r.currentValue,
+  );
+  if (!divergentes.length) return false;
+
+  console.log('\n⚠️  O DNS NÃO bate com o que o Railway exige — o certificado não será emitido assim.');
+  for (const r of divergentes) {
+    console.log(`\n   No painel de DNS do domínio, corrija o registro:`);
+    console.log(`     tipo   : ${(r.recordType || 'CNAME').replace('DNS_RECORD_TYPE_', '')}`);
+    console.log(`     nome   : ${r.hostlabel || '@'}`);
+    console.log(`     hoje   : ${r.currentValue}   ← errado`);
+    console.log(`     deve   : ${r.requiredValue}   ← trocar para este`);
+  }
+  console.log('\n   Enquanto os dois valores forem diferentes, o domínio continua fora do ar.');
+  return true;
+}
+
 async function main() {
   console.log(`\n🎯 Domínio alvo: ${DOMAIN}\n`);
 
@@ -190,6 +217,7 @@ async function main() {
     if (existente) {
       console.log(`\n✅ "${DOMAIN}" JÁ está cadastrado neste serviço. Nada a criar.`);
       console.log(describeDomain(existente));
+      alertarDivergenciaDeDns(existente);
       return;
     }
   }
@@ -213,7 +241,10 @@ async function main() {
 
   console.log(`\n✅ "${entry.domain}" cadastrado no Railway (id ${entry.id}).`);
   console.log(describeDomain(entry));
-  console.log('\nO certificado TLS é emitido automaticamente em seguida — costuma levar de 1 a 5 minutos.');
+
+  if (!alertarDivergenciaDeDns(entry)) {
+    console.log('\nO certificado TLS é emitido automaticamente em seguida — costuma levar de 1 a 5 minutos.');
+  }
 }
 
 main().catch((error) => fail(sanitize(error?.stack || error?.message || error)));

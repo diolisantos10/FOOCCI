@@ -70,12 +70,17 @@ jobs:
         run: |
           echo "Aguardando a emissão do certificado TLS (até ~3 min)..."
           for tentativa in 1 2 3 4 5 6; do
-            CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$DOMAIN/" || echo "000")
-            echo "Tentativa $tentativa — HTTP $CODIGO"
-            if [ "$CODIGO" != "000" ]; then
-              echo "TLS de $DOMAIN funcionando (HTTP $CODIGO)."
-              exit 0
-            fi
+            # O curl já imprime "000" quando falha e ainda sai com código != 0.
+            # Um "|| echo 000" aqui concatenaria e produziria "000000", que passaria
+            # no teste abaixo e declararia sucesso sobre uma falha — portanto: || true.
+            CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$DOMAIN/" || true)
+            echo "Tentativa $tentativa — HTTP ${CODIGO:-vazio}"
+            case "$CODIGO" in
+              200|30[1278]|40*|50*)
+                echo "TLS de $DOMAIN funcionando (HTTP $CODIGO)."
+                exit 0
+                ;;
+            esac
             sleep 30
           done
           echo "::warning::Certificado ainda não emitido ao fim da espera. O cadastro foi feito; a emissão continua em background."
