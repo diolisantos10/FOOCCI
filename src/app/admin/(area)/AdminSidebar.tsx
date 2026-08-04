@@ -8,6 +8,9 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  // Mobile: o menu vira drawer. Sem isso o aside fixo de 208px deixava ~167px
+  // úteis num celular de 375px e TODA página do admin estourava na horizontal.
+  const [open, setOpen] = useState(false);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -31,7 +34,7 @@ export function AdminSidebar() {
         { href: "/admin/quality",          label: "Qualidade",       icon: "🛡️" },
         { href: "/admin/brain",            label: "Brain",           icon: "⚡" },
         { href: "/admin/brain/free-form",  label: "Escada do Brain", icon: "🪜" },
-        { href: "/admin/crm-agente",       label: "Agente de CRM",   icon: "🎚️" },
+        { href: "/admin/agentes/crm",      label: "Agente de CRM",   icon: "🎚️" },
       ],
     },
     {
@@ -74,13 +77,51 @@ export function AdminSidebar() {
   ];
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-r border-gray-800 bg-gray-900">
+    <>
+      {/* Top bar mobile — abre o drawer. Some no desktop (lg). */}
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-gray-800 bg-gray-900 px-3 lg:hidden">
+        <button
+          type="button"
+          aria-label="Abrir menu"
+          onClick={() => setOpen(true)}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-300 hover:bg-gray-800"
+        >
+          ☰
+        </button>
+        <span className="text-sm font-bold tracking-tight text-white">Foocci</span>
+        <span className="rounded-full bg-violet-900/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-300">
+          admin
+        </span>
+      </div>
+
+      {/* Backdrop do drawer (só mobile, só aberto) */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-52 shrink-0 flex-col border-r border-gray-800 bg-gray-900 transition-transform lg:static lg:z-auto lg:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
       {/* Brand */}
       <div className="flex h-14 items-center gap-2 border-b border-gray-800 px-4">
         <span className="text-base font-bold tracking-tight text-white">Foocci</span>
         <span className="rounded-full bg-violet-900/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-300">
           admin
         </span>
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setOpen(false)}
+          className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-800 lg:hidden"
+        >
+          ✕
+        </button>
       </div>
 
       {/* Nav */}
@@ -97,6 +138,7 @@ export function AdminSidebar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      onClick={() => setOpen(false)}
                       className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
                         active
                           ? "bg-violet-900/50 text-violet-200"
@@ -127,6 +169,7 @@ export function AdminSidebar() {
           {loggingOut ? "Saindo…" : "Sair"}
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

@@ -75,6 +75,10 @@ export default async function PedidoPage({
   const pedidoToken = waPayload ? rawWaToken : null;
   // Recovery link sets src=recovery — used below to restore the customer's draft cart
   const isRecovery = sp.src === "recovery";
+  // ?modo=loja força a Loja (catálogo + checkout, sem conversa) mesmo em plano com
+  // Garçom IA. Direção segura: o parâmetro só REMOVE a IA, nunca a liga — a trava
+  // por plano (STARTER → 403 nas rotas de chat) fica intocada.
+  const forceLoja = sp.modo === "loja";
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug },
@@ -493,7 +497,7 @@ gtag('config', '${ga4Id}');
         </>
       )}
 
-      {aiWaiterIncluded(restaurant) ? (
+      {aiWaiterIncluded(restaurant) && !forceLoja ? (
       <PedidoClient
         slug={slug}
         aiIncluded={true}
@@ -534,9 +538,10 @@ gtag('config', '${ga4Id}');
         repeatMenuItems={repeatMenuItems}
       />
       ) : (
-      /* Plano de entrada: a loja é a interface do QR com checkout — catálogo puro,
-         zero elemento de conversa (OS-loja-qr-com-checkout). A máquina embaixo são
-         as MESMAS rotas /api/pedido/* provadas sem IA (pedido #O2VKA1). */
+      /* Loja: catálogo puro + checkout, zero elemento de conversa
+         (OS-loja-qr-com-checkout). Renderiza no plano de entrada OU quando
+         ?modo=loja força a versão sem IA. A máquina embaixo são as MESMAS
+         rotas /api/pedido/* provadas sem IA (pedido #O2VKA1). */
       <LojaClient
         slug={slug}
         restaurantName={restaurant.name}

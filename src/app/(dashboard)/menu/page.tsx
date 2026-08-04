@@ -123,6 +123,7 @@ export default async function MenuPage() {
           restaurantSlug={restaurant?.slug ?? ""}
           restaurantId={session.user.restaurantId}
           qrUrl={`${appOrigin}/qr/${restaurant?.slug ?? ""}`}
+          lojaUrl={`${appOrigin}/pedido/${restaurant?.slug ?? ""}?modo=loja`}
           pedidoUrl={`${appOrigin}/pedido/${restaurant?.slug ?? ""}`}
         />
       </div>

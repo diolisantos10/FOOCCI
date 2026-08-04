@@ -7,6 +7,65 @@
 
 ---
 
+## Rota de plateia dupla precisa do middleware como cúmplice
+
+Uma rota que promete atender duas plateias (tenant E admin) morre em silêncio se
+o middleware barrar uma delas antes de a rota rodar: a tela antiga do agente de
+CRM consumia `/api/crm/*`, o cookie de admin tomava 401 do NextAuth **antes** do
+`resolverEscopoDoAgente`, e a tela ficou morta em produção sem erro visível.
+Tela de admin consome rota `/api/admin/*`; a lógica compartilhada vive no
+serviço, nunca na rota.
+
+— promovido em 2026-08-03 pelo Diretor · origem: bloco da casa do Agente de CRM
+(OS-crm-agente-ligar-e-dar-casa, oficina de 2026-08-03)
+
+---
+
+## O admin agora tem drawer mobile — e o mapa de camadas mudou
+
+O shell do admin era `aside w-52` fixo: a 375px sobravam 167px úteis e **toda**
+página do admin estourava. Agora é topbar + drawer (backdrop `z-40`, menu `z-50`,
+`lg:static` no desktop). Overlay novo no admin se confere **com o drawer aberto**
+— mesma lição do painel do lojista. E screenshot de admin: o `fullPage` do
+Playwright não enxerga scroll interno de shell fixo — soltar o shell e medir
+`main.scrollWidth`, não o documento.
+
+— promovido em 2026-08-03 pelo Diretor · origem: mesmo bloco (bug medido:
+`main.scrollWidth` 296 × `clientWidth` 167 a 375px)
+
+---
+
+## Breakpoint de viewport não serve para componente que vive em grid
+
+O `sm:` olha a **viewport**, mas quem manda na quebra é a **largura do cartão**:
+num grid de 2–3 colunas o cartão tem ~320–350px mesmo com a tela a 768px+, e um
+corpo em linha estoura — com `overflow-hidden`, o corte é **silencioso**. Foi
+assim que o `QRCard` cortou o input de link e o texto de dica em produção sem
+ninguém ver. Sem container queries (Tailwind 3.4 sem plugin), a largura é
+conhecimento do **uso**, não do componente: exponha uma prop de layout
+(`"row" | "stacked"`) e deixe quem monta o grid decidir.
+
+No mesmo bloco, a conta de cabeça errou duas vezes ("3 colunas não cabem a 1280";
+"2 colunas + 1 embaixo fica bom") e o screenshot corrigiu as duas. Os screenshots
+de 375/768/1280 são instrumento de **decisão** de layout, não só conferência final.
+
+— promovido em 2026-08-03 pelo Diretor · origem: bloco do terceiro cartão de QR na
+tela Cardápio (oficina de 2026-08-03, commit `eedee0c` + consolidação)
+
+---
+
+## Receita de ambiente local para screenshot do painel
+
+`service postgresql start` → `.env` a partir do `.env.example` com DATABASE_URL
+local → `npx prisma generate` → **`npx prisma db push`** (as migrations históricas
+quebram com `migrate deploy` em banco virgem: "relation orders does not exist") →
+seed de `prisma/seed.ts` (login `owner@pizzaria-demo.com` / `demo1234`, restaurante
+`pizzaria-demo`) → `next dev` + Playwright pré-instalado (`/opt/pw-browsers/chromium`).
+
+— promovido em 2026-08-03 pelo Diretor · origem: mesmo bloco, registrado na oficina
+
+---
+
 ## O site comercial, medido (02/08) — o problema é comprimento, não qualidade
 
 Auditoria com Playwright em 375 / 768 / 1280, com o gate de prévia aberto.
