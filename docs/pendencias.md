@@ -1,6 +1,20 @@
 # Pendências — o que está aberto
 
-> Última atualização: 03/08/2026.
+> Última atualização: 04/08/2026.
+
+## 💰 P1 · Finalize ignora o preço da variante — restaurante cobra a menos (04/08)
+
+Achado do `interface` no E2E do retrabalho da Loja, **confirmado pelo Diretor no
+código**: `/api/pedido/[slug]/finalize` recalcula o preço no servidor a partir do
+preço **base** do item (`channelPrice` + opções + extras) e só grava
+`variantName` — o preço da variante nunca entra na conta. Prova: Quatro Queijos
+Grande (R$ 64,90 na tela) → cliente viu R$ 190,70 na revisão, pedido gravado com
+R$ 166,70. **Pré-existente** — afeta o cardápio com IA (PedidoClient) desde
+antes, mesma rota, mesmo payload. Toda venda de variante mais cara que o base sai
+mais barata para o cliente e o restaurante não vê. Correção: resolver `variantId`
+→ `resolveVariantPrice` dentro do guard server-side do finalize (o guard
+anti-adulteração continua; ele só precisa conhecer variantes). Guardrail 6: a
+evidência acima é o caso concreto.
 
 ---
 
@@ -137,6 +151,17 @@ restaurante PRO). De carona: o QRCard cortava conteúdo em grid desde antes
 (breakpoint de viewport × largura de coluna) — corrigido; aprendizado promovido à
 vitrine do `interface`. Na branch `claude/foocci-director-onboarding-lhindy`,
 aguardando merge para a padrão.
+
+**Correção de rota do CEO, 04/08 — executada no mesmo dia:** a casca que saiu em
+03/08 ainda era um e-commerce genérico, não o que o CEO pediu. Palavras dele: *"é
+só você pegar o mesmo cardápio [da mesa], replicar, e colocar os itens à venda e o
+checkout"*. Refeito: o visual do `/qr` foi extraído para `src/components/menu/*` e
+as duas superfícies compõem os MESMOS componentes — igualdade por construção, não
+por disciplina. O `/qr` foi provado pixel-idêntico ao que era (baseline via stash
++ diff). Nome oficial do produto: **"Cardápio sem IA"** (cartão de QR renomeado;
+"Loja" não é nome de cliente). Decisão registrada em `docs/decisoes.md`. E2E real
+com variante + opções + extras confirmado no banco local — que revelou o P1 de
+preço de variante no topo desta fila.
 
 ## (original) 0º · CORREÇÃO DO CEO — a interface era OUTRA
 

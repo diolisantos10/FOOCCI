@@ -103,3 +103,65 @@ screenshots 375/768/1280 + estados vazios, `tsc` limpo, 4698 testes verdes.
    receita de screenshot do admin difere da do painel).
 
 — interface, OS-crm-agente-ligar-e-dar-casa §3 (branch `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## 2026-08-04 — Retrabalho da Loja sem IA: o cardápio do QR que compra
+
+**Ordem do CEO (04/08):** a Loja (`/pedido/[slug]` no plano de entrada ou
+`?modo=loja`) deve ser IGUAL ao cardápio da mesa (`/qr/[slug]`) — mesma cara,
+mesma experiência — com uma única diferença: ela compra. A casca genérica de
+e-commerce do LojaClient anterior estava errada e foi refeita.
+
+**O que foi feito:** o visual do QRMenuClient foi EXTRAÍDO verbatim para
+`src/components/menu/*` (types, format, WelcomeModal, ProductModal, cards,
+MenuHero, CategoryNav, CategorySections) e os dois clientes agora compõem o
+mesmo módulo — os cardápios não podem mais divergir por construção. O
+ProductModal ganhou um modo `commerce` opcional: sem ele, é o modal do QR
+pixel-idêntico; com ele, variantes viram selecionáveis (escolher define o
+preço), grupos de opções e adicionais pagos ganham seletores, e o rodapé vira
+observação + quantidade + "Adicionar · R$ X". Payload do carrinho espelha o
+PedidoClient (baseItemId, variantName, selectedOptions, selectedExtras).
+
+**Achado 1 — prova de pixel-idêntico com o próprio git.** Como verificar que a
+extração não mudou o QR: `git stash` → screenshot baseline → `git stash pop` →
+screenshot novo → `cmp` byte a byte (mesmo dev server, hot reload). 375/768 e
+o modal deram idênticos; o 1280 "divergiu" numa caixa de 160×160 — era um
+thumbnail `loading="lazy"` que não tinha pintado no baseline. Diff de pixel com
+bbox (via sharp) desmascarou o falso positivo em segundos. Screenshot fullPage
+com imagens lazy é não-determinístico; o sinal é o bbox do diff, não o `cmp`.
+
+**Achado 2 — dois elementos fixos no rodapé não se empilham por offset.** A
+barra de carrinho e a nav de categorias são ambas fixas embaixo. Offset
+(`bottom: <altura da nav>`) quebraria com safe-area e com o wrap dos chips. A
+solução foi um `topSlot` no CategoryNav: a barra entra DENTRO do mesmo
+contêiner fixo, acima dos chips — um único `fixed`, zero conta de altura, e no
+QR o slot vazio mantém o markup byte-idêntico.
+
+**Achado 3 — BUG PRÉ-EXISTENTE de preço de variante no finalize (não corrigido
+aqui, fora do escopo; REPORTAR).** O
+`/api/pedido/[slug]/finalize` recalcula o preço no servidor a partir do preço
+BASE do item (`channelPrice`) + opções + extras, e só grava `variantName` — o
+preço da variante NUNCA é usado. E2E real: Quatro Queijos Grande (R$ 64,90 na
+tela, base R$ 52,90) → cliente viu total R$ 190,70 na revisão; o pedido foi
+gravado com R$ 166,70. Afeta igualmente o PedidoClient (mesmo payload, mesma
+rota) desde antes deste retrabalho. Restaurante cobra a menos em toda venda de
+variante com preço acima do base. Precisa de correção server-side (resolver
+`variantId` → `resolveVariantPrice`), decisão do Diretor.
+
+**Provas colhidas:** QR pixel-idêntico (cmp + diff bbox nos 3 tamanhos),
+pedido real #1 CONFIRMED no banco local com variante + observação + opções +
+extras no `addonsJson` canônico, screenshots 375/768/1280 das duas superfícies
+e do fluxo de compra, `tsc` limpo, vitest 4697 verdes (1 falha pré-existente
+em `quality/noSideEffects` por ambiente sem serviços — falha igual sem o diff).
+
+**Propostas de vitrine** (promoção é do Diretor):
+1. "Prova de pixel-idêntico em refactor visual: stash → baseline → pop → diff
+   com bbox; imagem lazy gera falso positivo no cmp" (Achado 1).
+2. "Elemento fixo novo no rodapé da loja entra como slot do contêiner da nav,
+   não como segundo fixed com offset" (Achado 2).
+3. O Achado 3 é pendência de produto/engenharia, não de vitrine — sugere-se
+   registrar em docs/pendencias.md como P1 de cobrança incorreta.
+
+— interface, retrabalho aprovado pelo CEO em 04/08 (branch
+`claude/foocci-director-onboarding-lhindy`, sem commit — Diretor revisa)
