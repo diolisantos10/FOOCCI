@@ -34,7 +34,15 @@ export type AuditAction =
   | "conversation.reopen"
   | "conversation.delete"
   // Build OS (internal admin)
-  | "buildos.bootstrap";
+  | "buildos.bootstrap"
+  // Cofre de credenciais de infraestrutura (Admin → Credenciais).
+  // `read` é o que importa: um token do Railway é chave-mestra, e leitura de
+  // chave-mestra sem trilha é risco cego. `meta` carrega o motivo (`purpose`) e,
+  // no máximo, os 4 últimos caracteres — nunca o token.
+  | "infra_credential.save"
+  | "infra_credential.save_rejected"
+  | "infra_credential.delete"
+  | "infra_credential.read";
 
 export interface AuditEntry {
   action: AuditAction;
