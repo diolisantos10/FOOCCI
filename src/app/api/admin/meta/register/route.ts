@@ -27,10 +27,9 @@ export async function POST(req: NextRequest) {
     // real number so the assistant actually answers on it. No PIN needed.
     if (body.activate) {
       if (!body.restaurantId) return badRequest("restaurantId é obrigatório para ativar.");
-      await prisma.restaurant.update({
-        where: { id: body.restaurantId },
-        data:  { whatsappProvider: "META_CLOUD_API" },
-      });
+      // Antes marcava Restaurant.whatsappProvider = META_CLOUD_API para trocar
+      // de provedor. Não há mais provedor a escolher — a Meta é o canal único
+      // desde 04/08 —, então "ativar" agora é só ligar o CRM abaixo.
       if (body.enableCrm) {
         await prisma.metaWhatsAppConfig.updateMany({
           where: { restaurantId: body.restaurantId },

@@ -18,7 +18,7 @@
  */
 
 import { classifyExecution } from "./crmExecutionClassification";
-import { normalizePhoneForEvolution } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR } from "@/lib/crm/normalizePhone";
 
 export interface PlanExecutionRow {
   id: string;
@@ -81,7 +81,7 @@ export function computeRecoverablePlan(rows: PlanExecutionRow[], cap: number): R
   const deduped: PlanRecipient[] = [];
   for (const r of recoverable) {
     const customerId = r.customerId as string;
-    const phoneKey = normalizePhoneForEvolution(r.customerPhone ?? "");
+    const phoneKey = normalizePhoneBR(r.customerPhone ?? "");
     if (seenCustomer.has(customerId)) continue;
     if (phoneKey && seenPhone.has(phoneKey)) continue;
     seenCustomer.add(customerId);

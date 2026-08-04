@@ -5,7 +5,7 @@
  * Ordering regardless of whether the allowlist entry was typed as +5511…, 5511…,
  * or 11…, and regardless of the mobile 9th digit.
  *
- * Root cause this guards against: Evolution delivers the phone as an E.164 JID
+ * Root cause this guards against: o webhook entrega o telefone como JID E.164
  * ("+5511999990000"); if the allowlist was typed in a different format the naive
  * digit-strip comparison silently failed and the message fell back to the old
  * WhatsApp Agent.
@@ -47,14 +47,14 @@ afterEach(() => {
   for (const k of ENV_KEYS) delete process.env[k];
 });
 
-// The exact form Evolution delivers (jidToPhone → "+5511999990000").
-const EVOLUTION_PHONE = "+5511999990000";
+// A forma exata que o webhook entrega (jidToPhone → "+5511999990000").
+const WEBHOOK_PHONE = "+5511999990000";
 
 // ── D. Phone normalization across all formats ──────────────────────────────────
 
 describe("LiveRouting D — phone normalization is format-tolerant", () => {
   const formats = [
-    "+5511999990000", // E.164 (what Evolution sends)
+    "+5511999990000", // E.164 (o que o webhook entrega)
     "5511999990000",  // country code, no plus
     "11999990000",    // national with 9th digit
     "551199990000",   // country code, no 9th digit
@@ -63,14 +63,14 @@ describe("LiveRouting D — phone normalization is format-tolerant", () => {
   ];
 
   for (const stored of formats) {
-    it(`allowlist entry "${stored}" matches the Evolution JID ${EVOLUTION_PHONE}`, () => {
+    it(`allowlist entry "${stored}" matches the webhook JID ${WEBHOOK_PHONE}`, () => {
       withEnv(
         {
           WHATSAPP_TEXT_ORDERING_ENABLED: "true",
           WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES: stored,
         },
         () => {
-          expect(isPhoneAllowlisted(EVOLUTION_PHONE)).toBe(true);
+          expect(isPhoneAllowlisted(WEBHOOK_PHONE)).toBe(true);
         },
       );
     });
@@ -113,7 +113,7 @@ describe("LiveRouting A — enabled + restaurant + phone allowlisted routes live
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES: "11999990000",
       },
       () => {
-        const d = getRoutingDecision("rest-cazza", EVOLUTION_PHONE);
+        const d = getRoutingDecision("rest-cazza", WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(true);
         expect(d.declineReason).toBeNull();
         expect(isWaTextOrderingEnabled("rest-cazza")).toBe(true);
@@ -147,7 +147,7 @@ describe("LiveRouting B — non-allowlisted phone falls back to old agent", () =
 describe("LiveRouting C — disabled flag falls back to old agent", () => {
   it("shouldUseTextOrdering=false with master-switch decline reason", () => {
     withEnv({ WHATSAPP_TEXT_ORDERING_ENABLED: undefined }, () => {
-      const d = getRoutingDecision("rest-cazza", EVOLUTION_PHONE);
+      const d = getRoutingDecision("rest-cazza", WEBHOOK_PHONE);
       expect(d.shouldUseTextOrdering).toBe(false);
       expect(d.declineReason).toContain("master switch off");
     });
@@ -165,7 +165,7 @@ describe("LiveRouting F — restaurant not allowlisted decline reason", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES: "11999990000",
       },
       () => {
-        const d = getRoutingDecision("rest-cazza", EVOLUTION_PHONE);
+        const d = getRoutingDecision("rest-cazza", WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.declineReason).toContain("restaurant not allowlisted");
         expect(d.enabledForRestaurant).toBe(false);
@@ -178,7 +178,7 @@ describe("LiveRouting F — restaurant not allowlisted decline reason", () => {
 
 describe("LiveRouting — maskPhone never leaks the full number", () => {
   it("masks the middle digits", () => {
-    const masked = maskPhone(EVOLUTION_PHONE);
+    const masked = maskPhone(WEBHOOK_PHONE);
     expect(masked).not.toContain("99999");
     expect(masked).toMatch(/\*\*\*/);
     expect(masked.endsWith("00")).toBe(true);

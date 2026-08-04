@@ -5,7 +5,7 @@
  * Runs the canonical scenarios through the PURE state machine with a SYNTHETIC
  * catalog + the Brain adapter for intent. Proves: ORDER_BY_TEXT identified,
  * items extracted, ambiguity → numbered options, nothing invented, every active
- * reply ends with `0. menu`, and ZERO side effects (no real order, no Evolution,
+ * reply ends with `0. menu`, and ZERO side effects (no real order, no WhatsApp send,
  * no Pix, runtimeTouched=false). Never touches the DB.
  */
 
@@ -58,7 +58,7 @@ export interface TextOrderDiagnosticResult {
   p0: number;
   cases: CaseResult[];
   noSend: true;
-  noEvolution: true;
+  noWhatsAppSend: true;
   noOrder: true;
   noPix: true;
   runtimeMetadataInjected: boolean;
@@ -195,7 +195,7 @@ export async function runWhatsAppTextOrderDiagnostic(): Promise<TextOrderDiagnos
     p0: allPass ? 0 : 1,
     cases,
     noSend: true,
-    noEvolution: true,
+    noWhatsAppSend: true,
     noOrder: true,
     noPix: true,
     runtimeMetadataInjected,

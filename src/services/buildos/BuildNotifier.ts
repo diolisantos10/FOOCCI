@@ -1,9 +1,9 @@
 /**
  * BuildNotifier — envia a confirmação do Build OS por WhatsApp.
  *
- * Canal ÚNICO desde 04/08/2026: a Meta homologada. Antes daqui saía um envio pela
- * Evolution (`EvolutionClient.sendTextMessage`) usando a instância do restaurante
- * ou a instância Admin; a Evolution foi eliminada do Foocci por ordem do CEO.
+ * Canal ÚNICO desde 04/08/2026: a Meta homologada. Antes daqui saía um envio pelo
+ * provedor anterior, usando a instância do restaurante ou a instância Admin; esse
+ * provedor foi eliminado do Foocci por ordem do CEO.
  *
  * Dois caminhos, pela mesma razão de sempre:
  *   • `restaurantId` nulo → número Master do Build OS (credencial própria, não

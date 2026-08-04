@@ -78,17 +78,40 @@ const ACTIVE_STATUSES: ConversationStatus[] = [
 async function processMetaWebhook(payload: unknown): Promise<void> {
   const norm = normalizeMetaWebhook(payload);
 
-  // Coexistence events (history / app-state sync / message echoes) start arriving once a
-  // number is onboarded via Business App Onboarding. We don't ingest them yet — log their
-  // arrival so the real payload shape can be validated against a live event before we wire
-  // echoes (the agent's phone-sent replies) into the Central. Safe + additive.
+  // ── Coexistência: eco da mensagem que o ATENDENTE mandou do celular ─────────
+  //
+  // ⚠️ ÚNICO ITEM SEM PARIDADE APÓS A SAÍDA DA EVOLUTION (04/08/2026).
+  //
+  // O webhook da Evolution tratava `fromMe`: quando alguém da equipe respondia
+  // pelo WhatsApp Web/celular, a mensagem entrava na Central como HUMAN_EXTERNAL
+  // **e** carimbava `handoffAlarmAckAt` — foi assim que se resolveu o crônico
+  // "apita e não para", em que conversa já respondida pelo celular seguia tocando
+  // por horas.
+  //
+  // Na Meta o equivalente é `smb_message_echoes`, que só chega em número onboardado
+  // por Business App Onboarding. O formato real do payload **nunca foi validado
+  // contra um evento ao vivo** — e escrever no banco a partir de um formato
+  // adivinhado é pior que não escrever: cria mensagem fantasma na conversa do
+  // cliente e silencia alarme que deveria tocar (guardrail 5).
+  //
+  // Então: registramos o evento COM A EVIDÊNCIA necessária para implementar
+  // (guardrail 6), e NÃO ingerimos. O que isso custa, dito sem maquiagem:
+  //   • resposta dada pelo celular não aparece na Central de Conversas;
+  //   • o alarme de handoff não é silenciado automaticamente por ela.
+  // Não custa mensagem de cliente: entrada normal continua vindo em `messages`.
   try {
-    const body = payload as { entry?: Array<{ changes?: Array<{ field?: string }> }> };
+    const body = payload as { entry?: Array<{ changes?: Array<{ field?: string; value?: unknown }> }> };
     const coex = (body?.entry ?? [])
       .flatMap((e) => e.changes ?? [])
-      .map((c) => c.field)
-      .filter((f): f is string => f === "history" || f === "smb_app_state_sync" || f === "smb_message_echoes");
-    if (coex.length) console.info(`[webhook/meta/whatsapp] coexistence event(s): ${coex.join(",")}`);
+      .filter((c) => c.field === "history" || c.field === "smb_app_state_sync" || c.field === "smb_message_echoes");
+    for (const c of coex) {
+      // Só as CHAVES do payload — nunca conteúdo de mensagem, nunca telefone.
+      const shape = c.value && typeof c.value === "object" ? Object.keys(c.value as object) : [];
+      console.info(
+        `[webhook/meta/whatsapp] evento de coexistência NÃO ingerido: field=${c.field} chaves=[${shape.join(",")}] ` +
+        `— eco de resposta pelo celular ainda não entra na Central nem silencia o alarme de handoff`,
+      );
+    }
   } catch { /* best-effort — never block the webhook */ }
 
   // Delivery statuses → update the matching OUTBOUND message.

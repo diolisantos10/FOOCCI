@@ -65,16 +65,11 @@ export function getPublicSiteUrl(): string {
   return SITE_URL;
 }
 
-/**
- * The canonical Evolution webhook URL (base, no token) — the SINGLE source of
- * truth used by the diagnostics card, the live-status comparison, and the sync
- * endpoint. Always built from the canonical site URL (never the Railway proxy
- * host), so a `host`-derived `foocci.up.railway.app` can never be applied to
- * Evolution by mistake.
- */
-export function getExpectedEvolutionWebhookUrl(): string {
-  return `${SITE_URL}/api/webhooks/evolution`;
-}
+// `getExpectedEvolutionWebhookUrl()` vivia aqui: a URL canônica do webhook do
+// provedor antigo, usada pelo card de diagnóstico e pelo endpoint de sincronismo.
+// Saiu em 04/08/2026 com a Evolution. Na Meta a inscrição do webhook é do
+// APLICATIVO e é configurada uma vez lá dentro — não há URL para o Foocci
+// reaplicar por restaurante.
 
 /**
  * Sanitizes a URL stored in the database (e.g. WhatsAppAgentConfig.menuUrl)

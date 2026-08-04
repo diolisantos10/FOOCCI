@@ -18,7 +18,7 @@ import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/p
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { isWhatsAppChannelConnected, SendFailure, NO_WHATSAPP_CONFIG, NO_WHATSAPP_CONFIG_DETAIL } from "./crmWhatsAppChannel";
 import { sendMetaCrmMessage, resolveMetaCrmTemplate } from "./metaCrmSend";
-import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR, isValidPhoneBR } from "@/lib/crm/normalizePhone";
 import { Prisma, ConversationStatus } from "@prisma/client";
 import {
   resolveAudience,
@@ -1569,8 +1569,8 @@ export class ScheduledCampaignRunnerService {
         continue;
       }
 
-      const phone = normalizePhoneForEvolution(customer.phone);
-      if (!isValidEvolutionPhone(phone)) {
+      const phone = normalizePhoneBR(customer.phone);
+      if (!isValidPhoneBR(phone)) {
         // Recipient-data problem — SKIP antes de qualquer chamada ao canal. NOT a failure.
         const hasRawPhone = Boolean((customer.phone ?? "").trim());
         await prisma.campaignExecution.create({

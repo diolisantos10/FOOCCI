@@ -307,15 +307,19 @@ describe("I. Dry-run does not create Payment", () => {
 // ── J. Dry-run does not send WhatsApp ─────────────────────────────────────────
 
 describe("J. Dry-run does not send WhatsApp", () => {
-  it("WhatsAppTextOrderService never imports EvolutionClient (structural)", async () => {
+  // Trava estrutural: o motor de pedido por texto RACIOCINA, não envia. Quem envia
+  // é o runtime, depois de decidir se pode. Se um import de envio aparecer aqui, o
+  // dry-run deixa de ser dry-run — e é isso que este teste impede.
+  it("WhatsAppTextOrderService nunca importa um caminho de envio (estrutural)", async () => {
     const fs = await import("node:fs/promises");
     const src = await fs.readFile(
       new URL("../WhatsAppTextOrderService.ts", import.meta.url),
       "utf-8",
     );
-    expect(src).not.toContain("EvolutionClient");
+    expect(src).not.toContain("WhatsAppMessagingService");
+    expect(src).not.toContain("MetaWhatsAppCloudProvider");
+    expect(src).not.toContain("activeProvider");
     expect(src).not.toContain("sendMessage");
-    expect(src).not.toContain("evolution");
   });
 
   it("safetyNotes always includes 'nenhuma mensagem WhatsApp enviada'", () => {
@@ -364,11 +368,12 @@ describe("K. Feature flag disabled by default", () => {
     delete process.env.WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS;
   });
 
-  it("webhook routing does not import new service (structural)", async () => {
+  // (Antes de 04/08/2026 apontava para o webhook da Evolution, que foi apagado.)
+  it("a rota do webhook não conhece o pedido por texto (estrutural)", async () => {
     const fs = await import("node:fs/promises");
     const webhookSrc = await fs.readFile(
       new URL(
-        "../../../../app/api/webhooks/evolution/route.ts",
+        "../../../../app/api/webhooks/meta/whatsapp/route.ts",
         import.meta.url,
       ),
       "utf-8",

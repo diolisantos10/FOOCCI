@@ -267,21 +267,21 @@ async function checkModules(): Promise<CheckResult[]> {
     });
   }
 
-  // Evolution configs
+  // Conexões de WhatsApp (Meta Cloud API — canal único desde 04/08)
   try {
-    const evoCount = await prisma.evolutionConfig.count();
+    const metaCount = await prisma.metaWhatsAppConfig.count({ where: { connectionStatus: "CONNECTED" } });
     checks.push({
-      key: "module_evolution", label: "Configurações Evolution (WhatsApp)",
-      status: evoCount > 0 ? "PASS" : "WARNING",
-      message: evoCount > 0
-        ? `${evoCount} instância${evoCount !== 1 ? "s" : ""} configurada${evoCount !== 1 ? "s" : ""}`
-        : "Nenhum restaurante com WhatsApp configurado",
+      key: "module_whatsapp", label: "Conexões WhatsApp (Meta)",
+      status: metaCount > 0 ? "PASS" : "WARNING",
+      message: metaCount > 0
+        ? `${metaCount} restaurante${metaCount !== 1 ? "s" : ""} conectado${metaCount !== 1 ? "s" : ""}`
+        : "Nenhum restaurante com WhatsApp conectado",
       critical: false,
     });
   } catch {
     checks.push({
-      key: "module_evolution", label: "Configurações Evolution (WhatsApp)",
-      status: "WARNING", message: "Tabela EvolutionConfig inacessível", critical: false,
+      key: "module_whatsapp", label: "Conexões WhatsApp (Meta)",
+      status: "WARNING", message: "Tabela MetaWhatsAppConfig inacessível", critical: false,
     });
   }
 
@@ -324,7 +324,7 @@ async function buildRestaurantSnapshots(): Promise<RestaurantSnapshot[]> {
   for (const r of restaurants) {
     const [
       menuCategoryCount, menuItemCount, customerCount, orderCount,
-      deliveryConfig, paymentConfig, evolutionConfig, brandConfig,
+      deliveryConfig, paymentConfig, metaConfig, brandConfig,
     ] = await Promise.all([
       prisma.menuCategory.count({ where: { restaurantId: r.id, isActive: true } }),
       prisma.menuItem.count({ where: { category: { restaurantId: r.id }, isActive: true } }),
@@ -332,7 +332,7 @@ async function buildRestaurantSnapshots(): Promise<RestaurantSnapshot[]> {
       prisma.order.count({ where: { restaurantId: r.id } }),
       prisma.deliveryConfig.findUnique({ where: { restaurantId: r.id }, select: { id: true } }),
       prisma.paymentSettings.findUnique({ where: { restaurantId: r.id }, select: { id: true } }).catch(() => null),
-      prisma.evolutionConfig.findUnique({ where: { restaurantId: r.id }, select: { id: true, isActive: true } }),
+      prisma.metaWhatsAppConfig.findUnique({ where: { restaurantId: r.id }, select: { connectionStatus: true } }).catch(() => null),
       prisma.restaurantBrandConfig.findUnique({ where: { restaurantId: r.id }, select: { googleReviewUrl: true } }),
     ]);
 
@@ -344,7 +344,7 @@ async function buildRestaurantSnapshots(): Promise<RestaurantSnapshot[]> {
       hasMenu:          menuCategoryCount > 0 && menuItemCount > 0,
       hasDeliveryConfig: !!deliveryConfig,
       hasPaymentConfig: !!paymentConfig,
-      hasWhatsApp:      !!(evolutionConfig?.isActive),
+      hasWhatsApp:      metaConfig?.connectionStatus === "CONNECTED",
       hasGoogleReview:  !!(brandConfig?.googleReviewUrl),
       menuCategoryCount,
       menuItemCount,

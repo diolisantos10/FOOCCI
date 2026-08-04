@@ -1,6 +1,6 @@
 /**
  * WhatsAppFullAgentDiagnostic — tests for the consolidated agent battery's PURE
- * evaluation + recommendation logic (no DB, no Evolution, no order/Pix). The
+ * evaluation + recommendation logic (no DB, no WhatsApp send, no order/Pix). The
  * async runner is exercised in production via the workflow.
  */
 
@@ -10,8 +10,10 @@ import { vi, describe, it, expect } from "vitest";
 // → WhatsAppReceptionistService. We only call the pure functions here.
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/openai", () => ({ openai: {} }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: class {} }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: class {} }));
+// Canal único: nenhum envio real de WhatsApp neste teste.
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({
+  WhatsAppMessagingService: { sendText: vi.fn(), sendConversationReply: vi.fn() },
+}));
 vi.mock("@/services/buildos/BuildCommandRouter", () => ({ detectBuildCommand: () => false }));
 vi.mock("@/services/knowledge/RestaurantKnowledgeService", () => ({ RestaurantKnowledgeService: class {} }));
 vi.mock("@/lib/handoff", () => ({ markConversationNeedsHuman: vi.fn() }));
@@ -31,7 +33,7 @@ import {
   type FullAgentSafety,
 } from "../fullAgentDiagnostic";
 
-const SAFE: FullAgentSafety = { noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false };
+const SAFE: FullAgentSafety = { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, runtimeTouched: false };
 const spec = (over: Partial<ScenarioSpec>): ScenarioSpec => ({
   id: "x", name: "x", phoneProfile: "NON_ALLOWLISTED", message: "m", expect: {}, ...over,
 });
@@ -166,8 +168,8 @@ describe("computeSummary — recomendação operacional", () => {
     expect(s.status).toBe("FAIL");
   });
 
-  it("(8c) noEvolution=false → ROLLBACK_OR_PAUSE", () => {
-    const s = computeSummary([pass("OK")], { ...SAFE, noEvolution: false }, false);
+  it("(8c) noWhatsAppSend=false → ROLLBACK_OR_PAUSE", () => {
+    const s = computeSummary([pass("OK")], { ...SAFE, noWhatsAppSend: false }, false);
     expect(s.recommendation).toBe("ROLLBACK_OR_PAUSE");
   });
 

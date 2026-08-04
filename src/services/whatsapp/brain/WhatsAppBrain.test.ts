@@ -55,7 +55,7 @@ describe("WhatsAppBrainReasoningAdapter", () => {
     expect(r.handoffReason).toBe("COMPLAINT");
   });
 
-  it("(6/7/8) runtimeTouched=false; sem envio/Evolution/pedido na superfície do adapter", () => {
+  it("(6/7/8) runtimeTouched=false; sem envio nem pedido na superfície do adapter", () => {
     const r = reason("oi");
     expect(r.runtimeTouched).toBe(false);
     // adapter é puro — não há nada que envie/crie pedido (só decisão)
@@ -108,12 +108,12 @@ describe("WhatsAppAiReturnPolicy", () => {
 });
 
 describe("WhatsAppBrainDiagnostic", () => {
-  it("(13) diagnóstico sintético PASS, P0=0, no-send/no-evolution/no-order/no-pix", () => {
+  it("(13) diagnóstico sintético PASS, P0=0, no-send/no-order/no-pix", () => {
     const r = runWhatsAppBrainDiagnostic();
     expect(r.status).toBe("PASS");
     expect(r.passed).toBe(r.total);
     expect(r.p0).toBe(0);
-    expect(r.noSend && r.noEvolution && r.noOrder && r.noPix).toBe(true);
+    expect(r.noSend && r.noWhatsAppSend && r.noOrder && r.noPix).toBe(true);
     expect(r.runtimeTouched).toBe(false);
   });
 });

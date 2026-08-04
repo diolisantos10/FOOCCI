@@ -1,7 +1,8 @@
 /**
  * AES-256-GCM encryption utility for sensitive at-rest values.
  *
- * Usage: apiKey and webhookSecret in EvolutionConfig are stored encrypted.
+ * Uso: `MetaWhatsAppConfig.accessToken` e `webhookVerifyToken` são gravados
+ * cifrados aqui.
  * Plain values are NEVER returned from GET responses — only masked previews.
  *
  * Requires env: ENCRYPTION_KEY — 64 hex chars (32 bytes).

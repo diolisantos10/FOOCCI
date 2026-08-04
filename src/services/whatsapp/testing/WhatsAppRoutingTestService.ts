@@ -1,15 +1,15 @@
 /**
  * WhatsAppRoutingTestService — dry-run scenario runner for the Routing Test Lab.
  *
- * Runs simulated WhatsApp/Evolution events through the PURE
+ * Runs simulated WhatsApp events through the PURE
  * WhatsAppRoutingClassifier and asserts each against an expected outcome. There
- * are NO DB writes, NO Evolution sends, NO LLM calls, NO campaigns. The whole
+ * are NO DB writes, NO WhatsApp sends, NO LLM calls, NO campaigns. The whole
  * point is to replace manual WhatsApp testing: define a scenario, read the
  * verdict.
  *
  * Hard no-send invariant (PART 6): any scenario in which an internal command
- * would call Evolution send is a FAIL. The runner itself never imports or
- * touches EvolutionClient.
+ * would send to the customer is a FAIL. The runner itself never imports or
+ * envia WhatsApp.
  */
 
 import {
@@ -35,7 +35,7 @@ type ExpectedDecision = Partial<
     | "shouldRenderAsCustomerBubble"
     | "shouldCallWhatsAppAgent"
     | "shouldCallWaiter"
-    | "shouldCallEvolutionSend"
+    | "shouldCallProviderSend"
   >
 > & { blocked?: boolean };
 
@@ -56,7 +56,7 @@ export interface ScenarioResult {
   failedChecks: string[];
   redFlags: string[];
   explanation: string;
-  wouldCallEvolutionSend: boolean;
+  wouldCallProviderSend: boolean;
   wouldShowInAtendimento: boolean;
   wouldRenderAsCustomerBubble: boolean;
   wouldCallWhatsAppAgent: boolean;
@@ -88,7 +88,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
       direction: "INBOUND",
       shouldRenderAsCustomerBubble: true,
       shouldCallWhatsAppAgent: true,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
     },
   },
   {
@@ -101,7 +101,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
       actor: "INTERNAL_COMMAND",
       shouldCallWhatsAppAgent: false,
       shouldCallWaiter: false,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       shouldRenderAsCustomerBubble: false,
       shouldPersistConversationMessage: false,
     },
@@ -121,7 +121,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
       actor: "INTERNAL_COMMAND",
       direction: "OUTBOUND",
       visibility: "HIDDEN",
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       shouldRenderAsCustomerBubble: false,
       shouldShowInAtendimento: false,
     },
@@ -133,7 +133,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
     expected: {
       isInternalCommand: true,
       blocked: true,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       shouldPersistConversationMessage: false,
     },
   },
@@ -145,7 +145,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
     event: { source: "WEBHOOK", fromMe: false, messageText: "/build raio-x", fromPhone: "+5511988887777" },
     expected: {
       isInternalCommand: true,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       shouldRenderAsCustomerBubble: false,
       shouldPersistConversationMessage: false,
     },
@@ -163,7 +163,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
     },
     expected: {
       isInternalCommand: true,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       shouldRenderAsCustomerBubble: false,
       shouldPersistConversationMessage: false,
     },
@@ -188,7 +188,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
       actor: "CUSTOMER",
       source: "CARDAPIO",
       shouldRenderAsCustomerBubble: true,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
     },
   },
   {
@@ -199,7 +199,7 @@ export const ROUTING_SCENARIOS: RoutingScenario[] = [
       actor: "SYSTEM",
       direction: "INTERNAL",
       shouldRenderAsCustomerBubble: false,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
     },
   },
   {
@@ -245,7 +245,7 @@ function evaluate(scenario: RoutingScenario): ScenarioResult {
   check("shouldRenderAsCustomerBubble", exp.shouldRenderAsCustomerBubble);
   check("shouldCallWhatsAppAgent", exp.shouldCallWhatsAppAgent);
   check("shouldCallWaiter", exp.shouldCallWaiter);
-  check("shouldCallEvolutionSend", exp.shouldCallEvolutionSend);
+  check("shouldCallProviderSend", exp.shouldCallProviderSend);
 
   if (exp.blocked !== undefined) {
     const isBlocked = actual.blockReason !== null;
@@ -254,8 +254,8 @@ function evaluate(scenario: RoutingScenario): ScenarioResult {
 
   // ── Hard safety red flags (PART 6) — independent of the scenario's expected. ──
   const redFlags: string[] = [];
-  if (actual.isInternalCommand && actual.shouldCallEvolutionSend) {
-    redFlags.push("CRITICAL: internal command would call Evolution send.");
+  if (actual.isInternalCommand && actual.shouldCallProviderSend) {
+    redFlags.push("CRÍTICO: comando interno enviaria mensagem ao cliente.");
   }
   if (actual.isInternalCommand && actual.shouldRenderAsCustomerBubble) {
     redFlags.push("CRITICAL: internal command would render as a customer bubble.");
@@ -277,7 +277,7 @@ function evaluate(scenario: RoutingScenario): ScenarioResult {
     failedChecks,
     redFlags,
     explanation: actual.explanation,
-    wouldCallEvolutionSend: actual.shouldCallEvolutionSend,
+    wouldCallProviderSend: actual.shouldCallProviderSend,
     wouldShowInAtendimento: actual.shouldShowInAtendimento,
     wouldRenderAsCustomerBubble: actual.shouldRenderAsCustomerBubble,
     wouldCallWhatsAppAgent: actual.shouldCallWhatsAppAgent,
@@ -325,7 +325,7 @@ export function renderTextReport(summary: RoutingTestSummary): string {
     lines.push(`${icon} [${r.scenarioId}] ${r.name}`);
     lines.push(`    in : ${JSON.stringify(r.input)}`);
     lines.push(`    out: actor=${r.actual.actor} source=${r.actual.source} dir=${r.actual.direction} vis=${r.actual.visibility}`);
-    lines.push(`         evolutionSend=${r.wouldCallEvolutionSend} bubble=${r.wouldRenderAsCustomerBubble} agent=${r.wouldCallWhatsAppAgent} waiter=${r.wouldCallWaiter} persist=${r.wouldPersistMessage}`);
+    lines.push(`         providerSend=${r.wouldCallProviderSend} bubble=${r.wouldRenderAsCustomerBubble} agent=${r.wouldCallWhatsAppAgent} waiter=${r.wouldCallWaiter} persist=${r.wouldPersistMessage}`);
     if (r.failedChecks.length) lines.push(`    fail: ${r.failedChecks.join("; ")}`);
     if (r.redFlags.length) lines.push(`    RED : ${r.redFlags.join("; ")}`);
     lines.push(`    why: ${r.explanation}`);

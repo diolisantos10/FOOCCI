@@ -209,11 +209,11 @@ describe("Endereço salvo", () => {
 });
 
 describe("Diagnóstico (17–20)", () => {
-  it("PASS, sem pedido real, sem Evolution, sem Pix, runtimeTouched=false", async () => {
+  it("PASS, sem pedido real, sem envio de WhatsApp, sem Pix, runtimeTouched=false", async () => {
     const r = await runWhatsAppTextOrderDiagnostic();
     expect(r.status).toBe("PASS");
     expect(r.p0).toBe(0);
-    expect(r.noOrder && r.noEvolution && r.noPix && r.noSend).toBe(true);
+    expect(r.noOrder && r.noWhatsAppSend && r.noPix && r.noSend).toBe(true);
     expect(r.runtimeTouched).toBe(false);
   });
 });

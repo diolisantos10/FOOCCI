@@ -9,15 +9,17 @@
  *    LINK_CARDAPIO vs HANDOFF vs LOCATION);
  *  - decideHost() maps a routing decision (+ human block) to the right host.
  *
- * Hermetic: no Evolution, no order, no Pix, no DB writes — pure functions.
+ * Hermetic: no WhatsApp send, no order, no Pix, no DB writes — pure functions.
  */
 
 import { vi, describe, it, expect } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/openai", () => ({ openai: {} }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: class {} }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: class {} }));
+// Canal único: nenhum envio real de WhatsApp neste teste.
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({
+  WhatsAppMessagingService: { sendText: vi.fn(), sendConversationReply: vi.fn() },
+}));
 vi.mock("@/services/buildos/BuildCommandRouter", () => ({ detectBuildCommand: () => false }));
 vi.mock("@/services/knowledge/RestaurantKnowledgeService", () => ({ RestaurantKnowledgeService: class {} }));
 vi.mock("@/lib/handoff", () => ({ markConversationNeedsHuman: vi.fn() }));

@@ -15,7 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { isWhatsAppChannelConnected, SendFailure, NO_WHATSAPP_CONFIG_DETAIL } from "./crmWhatsAppChannel";
 import { sendMetaCrmMessage } from "./metaCrmSend";
-import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR, isValidPhoneBR } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
 import { RelationshipProgramService } from "./RelationshipProgramService";
 import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/public-url";
@@ -720,8 +720,8 @@ export class CrmCampaignService {
         continue;
       }
 
-      const phone = normalizePhoneForEvolution(exec.customerPhone);
-      if (!isValidEvolutionPhone(phone)) {
+      const phone = normalizePhoneBR(exec.customerPhone);
+      if (!isValidPhoneBR(phone)) {
         // Recipient-data problem — SKIP antes de qualquer chamada ao canal. Isto NÃO é
         // falha de provedor e nunca pode ser contado em "Falhas".
         const hasRawPhone = Boolean((exec.customerPhone ?? "").trim());

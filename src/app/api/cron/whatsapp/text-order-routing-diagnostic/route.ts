@@ -5,7 +5,7 @@
  * Text Order engine (and in which mode) or fall back to the receptionist, and
  * why — including allowlist membership, active session, and conversation-level
  * AI blocks (HUMAN/aiLocked). Phone is always masked in the response. Never
- * sends WhatsApp/Evolution, never creates an order/Pix, never changes config.
+ * sends WhatsApp, never creates an order/Pix, never changes config.
  *
  * Body: { restaurantSlug?|restaurantId?, phone? } — phone omitted = self-test of
  * the first allowlisted number (validates the real test phone without exposing it).

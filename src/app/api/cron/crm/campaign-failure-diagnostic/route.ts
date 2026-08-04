@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR, isValidPhoneBR } from "@/lib/crm/normalizePhone";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
@@ -131,8 +131,8 @@ export async function POST(req: NextRequest) {
 
     for (const e of execs) {
       const raw  = e.customerPhone ?? "";
-      const norm = normalizePhoneForEvolution(raw);
-      const valid = isValidEvolutionPhone(norm);
+      const norm = normalizePhoneBR(raw);
+      const valid = isValidPhoneBR(norm);
       if (!raw.trim()) phoneMissing++;
       else if (valid) phoneValid++;
       else phoneInvalid++;

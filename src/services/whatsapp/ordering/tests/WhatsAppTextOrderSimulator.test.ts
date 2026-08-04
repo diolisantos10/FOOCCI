@@ -2,7 +2,7 @@
  * Part 5 — automated proof of the Text Order simulator. The simulator drives the
  * REAL state machine over a synthetic catalog and lets the team validate the
  * whole journey WITHOUT a phone: transcript, comanda, WOULD_* actions, safety.
- * These tests assert it is hermetic (no Evolution / no real order / no real Pix /
+ * These tests assert it is hermetic (no WhatsApp send / no real order / no real Pix /
  * runtimeTouched=false), covers every canonical scenario, and stays P0-clean.
  */
 
@@ -19,11 +19,11 @@ beforeAll(async () => {
 });
 
 describe("simulador — saúde geral e segurança", () => {
-  it("(4/5/6) é hermético: sem Evolution, sem pedido real, sem Pix real, runtimeTouched=false", () => {
-    expect(report.safety).toEqual({ noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false });
+  it("(4/5/6) é hermético: sem envio de WhatsApp, sem pedido real, sem Pix real, runtimeTouched=false", () => {
+    expect(report.safety).toEqual({ noWhatsAppSend: true, noRealOrder: true, noRealPix: true, runtimeTouched: false });
     expect(report.runtimeTouched).toBe(false);
     for (const s of report.scenarios) {
-      expect(s.safety.noEvolution).toBe(true);
+      expect(s.safety.noWhatsAppSend).toBe(true);
       expect(s.safety.noRealOrder).toBe(true);
       expect(s.safety.noRealPix).toBe(true);
     }

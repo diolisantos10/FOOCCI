@@ -3,7 +3,7 @@
  * Adapter classifies the canonical cases correctly and stays 100% safe.
  *
  * Pure: runs synthetic messages through the (pure) adapter, asserts intent +
- * recommended action, and proves noSend / noEvolution / noOrder / noPix /
+ * recommended action, and proves noSend / noWhatsAppSend / noOrder / noPix /
  * runtimeTouched=false. Never reads/writes the DB, never sends anything.
  */
 
@@ -52,7 +52,7 @@ export interface BrainDiagnosticResult {
   p0: number;
   cases: BrainDiagnosticCase[];
   noSend: true;
-  noEvolution: true;
+  noWhatsAppSend: true;
   noOrder: true;
   noPix: true;
   runtimeTouched: false;
@@ -102,7 +102,7 @@ export function runWhatsAppBrainDiagnostic(): BrainDiagnosticResult {
     p0: allPass ? 0 : 1,
     cases,
     noSend: true,
-    noEvolution: true,
+    noWhatsAppSend: true,
     noOrder: true,
     noPix: true,
     runtimeTouched: false,

@@ -163,7 +163,7 @@ export async function resolveWaConfig(restaurantId: string): Promise<ResolvedWaC
 }
 
 /**
- * The authoritative live-routing decision used by the Evolution webhook and the
+ * The authoritative live-routing decision used by the live webhook and the
  * admin diagnostics. DB-aware. Applies global kill switch / pause overrides.
  */
 export async function getRoutingDecisionForRestaurant(
@@ -268,7 +268,7 @@ export function isReplyCapableMode(mode: WaOrderingMode | string): boolean {
  * SILENT (canReply=false) → the webhook's textOrderingHandled stays false → the
  * old WhatsApp Agent falls back and answers. This helper collapses routing +
  * reply-capability into the single customer-facing outcome, and is shared by the
- * Evolution webhook trace and the admin diagnostic so they never disagree.
+ * rastro do webhook e o diagnóstico admin, para nunca discordarem.
  */
 export function effectiveLiveHandler(
   wouldRouteToTextOrdering: boolean,
@@ -312,7 +312,7 @@ export interface MessageAwareRouteDecision {
 }
 
 /**
- * The single message-aware routing decision shared by the live Evolution webhook
+ * The single message-aware routing decision shared by the live webhook
  * gate and the admin diagnostic. Pure read: never sends WhatsApp, never creates
  * an order, never creates Pix. Looks up the active session only when the config
  * is eligible (otherwise the verdict is "old agent" regardless of session state).

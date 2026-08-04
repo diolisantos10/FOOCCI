@@ -62,15 +62,18 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    // ── 2. Check Evolution config per restaurant ──────────────────────────────
-    const evoConfigs = await prisma.evolutionConfig.findMany({
+    // ── 2. Config de WhatsApp por restaurante ─────────────────────────────────
+    // Canal único desde 04/08/2026: a Meta. Antes esta consulta lia
+    // `evolutionConfig` — que hoje só guarda linhas mortas e faria o diagnóstico
+    // dizer "tem WhatsApp" para quem não tem mais.
+    const waConfigs = await prisma.metaWhatsAppConfig.findMany({
       where:  { restaurantId: { in: restaurants.map((r) => r.id) } },
-      select: { restaurantId: true, instanceName: true, isActive: true },
+      select: { restaurantId: true, phoneNumberId: true, connectionStatus: true },
     });
     // ── 3. Fetch recent drafts per restaurant ──────────────────────────────────
     const draftsPerRestaurant = await Promise.all(
       restaurants.map(async (r) => {
-        const evo   = evoConfigs.find((e) => e.restaurantId === r.id);
+        const wa    = waConfigs.find((e) => e.restaurantId === r.id);
         const drafts = await prisma.orderDraft.findMany({
           where:   { restaurantId: r.id },
           orderBy: { updatedAt: "desc" },
@@ -98,9 +101,11 @@ export async function GET(req: NextRequest) {
           restaurantId:       r.id,
           slug:               r.slug,
           name:               r.name,
-          hasEvolutionConfig: !!evo,
-          evoActive:          evo?.isActive     ?? null,
-          instanceName:       evo?.instanceName ?? null,
+          hasWhatsAppConfig:  !!wa,
+          // "CONNECTED" é a ÚNICA prova de conexão — qualquer outro estado (ou
+          // ausência) NÃO pode ser lido como conectado (guardrail 1).
+          whatsappConnected:  wa ? wa.connectionStatus === "CONNECTED" : null,
+          phoneNumberId:      wa?.phoneNumberId ?? null,
           drafts: drafts.map((d) => ({
             draftId:          d.id,
             restaurantId:     d.restaurantId,
@@ -128,7 +133,7 @@ export async function GET(req: NextRequest) {
               if (!d.customer?.phone)            return "no_phone";
               if (isGuestIdentifier(d.customer.phone)) return "guest_phone";
               if (!isPhoneValid(d.customer?.phone))    return "invalid_phone";
-              if (!evo)                                 return "no_evolution_config";
+              if (!wa)                                  return "no_whatsapp_config";
               return null;
             })(),
           })),
@@ -137,21 +142,21 @@ export async function GET(req: NextRequest) {
     );
 
     // ── 4. Root-cause summary ────────────────────────────────────────────────────
-    const canonicalRestaurant   = draftsPerRestaurant.find((r) => r.hasEvolutionConfig);
-    const legacyRestaurants     = draftsPerRestaurant.filter((r) => !r.hasEvolutionConfig);
+    const canonicalRestaurant   = draftsPerRestaurant.find((r) => r.hasWhatsAppConfig);
+    const legacyRestaurants     = draftsPerRestaurant.filter((r) => !r.hasWhatsAppConfig);
     const slugOwner             = draftsPerRestaurant.find((r) => r.slug === slugFilter);
 
     const rootCause = (() => {
       if (!slugOwner) {
         return `No restaurant with slug "${slugFilter}" found.`;
       }
-      if (slugOwner.hasEvolutionConfig) {
+      if (slugOwner.hasWhatsAppConfig) {
         return `Slug "${slugFilter}" correctly points to the WhatsApp-configured restaurant. ` +
                `Check individual draft skipReason fields.`;
       }
       if (canonicalRestaurant) {
         return (
-          `Slug "${slugFilter}" points to legacy restaurant (${slugOwner.restaurantId}, no Evolution config). ` +
+          `Slug "${slugFilter}" points to legacy restaurant (${slugOwner.restaurantId}, sem config de WhatsApp). ` +
           `The canonical restaurant (${canonicalRestaurant.restaurantId}) has slug "${canonicalRestaurant.slug}". ` +
           `Customer records created via WhatsApp webhook exist on the canonical restaurant. ` +
           `When /pedido/${slugFilter} is loaded, customer lookup uses restaurantId="${slugOwner.restaurantId}" ` +
@@ -159,7 +164,7 @@ export async function GET(req: NextRequest) {
           `Fix: swap slugs so "${slugFilter}" points to ${canonicalRestaurant.restaurantId}.`
         );
       }
-      return "No restaurant with Evolution config found in the matched set.";
+      return "Nenhum restaurante com config de WhatsApp no conjunto encontrado.";
     })();
 
     // suppress unused variable warning

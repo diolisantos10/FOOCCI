@@ -340,8 +340,8 @@ export default function OnboardingClient() {
             <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasPhone ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
               {status.whatsapp.hasPhone ? "✓" : "⚠"} Telefone WhatsApp
             </span>
-            <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasEvolution ? "border-green-200 bg-green-50 text-green-700" : "border-line2 bg-[#FAFAF8] text-muted"}`}>
-              {status.whatsapp.hasEvolution ? "✓" : "○"} Evolution API
+            <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasWhatsApp ? "border-green-200 bg-green-50 text-green-700" : "border-line2 bg-[#FAFAF8] text-muted"}`}>
+              {status.whatsapp.hasWhatsApp ? "✓" : "○"} WhatsApp oficial (Meta)
             </span>
             <span className="rounded-full border border-line2 bg-[#FAFAF8] px-3 py-1 font-medium text-ink2">
               Modo: {status.whatsapp.agentMode === "RECEPTIONIST_ONLY" ? "Recepcionista" : status.whatsapp.agentMode === "HUMAN_ASSISTED" ? "Humano Assistido" : "IA Pedidos (exp.)"}

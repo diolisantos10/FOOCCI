@@ -1,7 +1,7 @@
 /**
  * WhatsApp Conversation Review — PURE classification of a real WhatsApp
  * conversation into a business-language outcome + a list of detected issues
- * (each a candidate "learning"). No DB, no Evolution, no order/Pix, no GPT.
+ * (each a candidate "learning"). No DB, no WhatsApp send, no order/Pix, no GPT.
  *
  * It reuses the SAME deterministic detectors the live receptionist uses
  * (detectIntent, classifyReplyText, looksLikeLooseAddress, isExplicitOrderMessage)

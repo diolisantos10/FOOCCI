@@ -368,16 +368,24 @@ describe("Pix safety", () => {
 // ── Webhook safety ────────────────────────────────────────────────────────────────
 
 describe("Webhook safety", () => {
-  it("F. evolution webhook does not import the ordering engine", async () => {
+  // A rota do webhook grava a mensagem e delega. Ela NÃO decide roteamento nem
+  // chama o motor de pedido: isso vive em `InboundAgentDispatch`, que é testável
+  // sem HTTP. Se o motor voltar a ser importado direto na rota, a decisão volta a
+  // ser invisível para os testes — que foi o estado que permitiu a assimetria
+  // entre os dois webhooks durar meses.
+  // (Antes de 04/08/2026 este teste apontava para o webhook da Evolution.)
+  it("F. o webhook da Meta não importa o motor de pedido direto", async () => {
     const fs = await import("node:fs/promises");
     const src = await fs.readFile(
-      new URL("../../../../app/api/webhooks/evolution/route.ts", import.meta.url),
+      new URL("../../../../app/api/webhooks/meta/whatsapp/route.ts", import.meta.url),
       "utf-8",
     );
     expect(src).not.toContain("WhatsAppTextOrderService");
     expect(src).not.toContain("WhatsAppTextOrderingRuntimeService");
     expect(src).not.toContain("handleInboundForOrdering");
     expect(src).not.toContain("processCustomerMessage");
+    // …e delega de fato, em vez de simplesmente não fazer nada.
+    expect(src).toContain("dispatchInboundAgent");
   });
 
   it("runtime service guards conversation lock (structural)", async () => {

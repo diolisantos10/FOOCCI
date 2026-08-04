@@ -1,6 +1,6 @@
 /**
  * ConversationReview — pure outcome classification + issue detection from real
- * WhatsApp conversations. No DB, no Evolution, no sends. PII must be masked.
+ * WhatsApp conversations. No DB, no sends. PII must be masked.
  */
 
 import { vi, describe, it, expect } from "vitest";
@@ -9,8 +9,10 @@ import { vi, describe, it, expect } from "vitest";
 // both pull a heavy module graph; mock it so we exercise only the pure logic.
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/openai", () => ({ openai: {} }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: class {} }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: class {} }));
+// Canal único: nenhum envio real de WhatsApp neste teste.
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({
+  WhatsAppMessagingService: { sendText: vi.fn(), sendConversationReply: vi.fn() },
+}));
 vi.mock("@/services/buildos/BuildCommandRouter", () => ({ detectBuildCommand: () => false }));
 vi.mock("@/services/knowledge/RestaurantKnowledgeService", () => ({ RestaurantKnowledgeService: class {} }));
 vi.mock("@/lib/handoff", () => ({ markConversationNeedsHuman: vi.fn() }));

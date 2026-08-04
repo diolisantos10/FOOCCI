@@ -33,14 +33,14 @@ import type { WhatsAppProviderId, SendResult, SendTextInput, SendTemplateInput, 
 import { MetaWhatsAppCloudProvider } from "./providers/MetaWhatsAppCloudProvider";
 import { decideMetaSend } from "./metaSendPolicy";
 import { toMetaRecipient } from "./providers/metaPayload";
-import { normalizePhoneForEvolution } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR } from "@/lib/crm/normalizePhone";
 
 /** O provedor. Singular, e sem irmão — ver o cabeçalho antes de acrescentar outro. */
 const meta = new MetaWhatsAppCloudProvider();
 
 /** Most recent INBOUND WhatsApp message time for this phone (for the 24h window). */
 async function getLastInboundAt(restaurantId: string, rawPhone: string): Promise<Date | null> {
-  const phone = normalizePhoneForEvolution(rawPhone);
+  const phone = normalizePhoneBR(rawPhone);
   if (!phone) return null;
   const tail = phone.slice(-8); // match on the last 8 digits to tolerate DDI/9th-digit variance
   const msg = await prisma.message.findFirst({

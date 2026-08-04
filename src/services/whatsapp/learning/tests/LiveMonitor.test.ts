@@ -54,7 +54,7 @@ describe("buildMonitorSnapshot", () => {
 
   it("(14) snapshot sempre reporta invariantes de segurança (não envia / não cobra)", () => {
     const s = buildMonitorSnapshot(inputs({}));
-    expect(s.safety).toEqual({ noEvolution: true, noRealOrder: true, noRealPix: true, noMessageSent: true });
+    expect(s.safety).toEqual({ noWhatsAppSend: true, noRealOrder: true, noRealPix: true, noMessageSent: true });
   });
 
   it("conversão é 0 quando não há conversas", () => {

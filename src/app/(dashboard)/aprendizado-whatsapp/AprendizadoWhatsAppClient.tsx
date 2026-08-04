@@ -107,7 +107,7 @@ interface MasterReport {
   total: number; passed: number; warned: number; failed: number;
   scenarios: MasterScenarioResult[];
   summary: MasterAreaSummary[];
-  safety: { noEvolution: boolean; noRealOrder: boolean; noRealPix: boolean; runtimeTouched: false };
+  safety: { noWhatsAppSend: boolean; noRealOrder: boolean; noRealPix: boolean; runtimeTouched: false };
   runtimeTouched: false;
   ranAt: string;
 }

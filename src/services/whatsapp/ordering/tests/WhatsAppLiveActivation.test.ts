@@ -50,8 +50,8 @@ afterEach(() => {
   for (const k of ENV_KEYS) delete process.env[k];
 });
 
-// Evolution always delivers E.164 with 9th digit.
-const EVOLUTION_PHONE = "+5511999990000";
+// O webhook sempre entrega E.164 com o 9º dígito.
+const WEBHOOK_PHONE = "+5511999990000";
 const TARGET_RESTAURANT = "rest-sushi-cazza";
 const OTHER_RESTAURANT  = "rest-other-pizza";
 
@@ -60,7 +60,7 @@ const OTHER_RESTAURANT  = "rest-other-pizza";
 describe("A — ENABLED=false → no text ordering for any restaurant/phone", () => {
   it("routing decision shouldUseTextOrdering=false, decline=master switch", () => {
     withEnv({ WHATSAPP_TEXT_ORDERING_ENABLED: undefined }, () => {
-      const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+      const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
       expect(d.shouldUseTextOrdering).toBe(false);
       expect(d.masterEnabled).toBe(false);
       expect(d.declineReason).toContain("master switch off");
@@ -80,7 +80,7 @@ describe("B — PHONE_ALLOWLIST scope routes only allowlisted phones", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES:      "11999990000",
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(true);
         expect(d.declineReason).toBeNull();
       },
@@ -152,7 +152,7 @@ describe("C — RESTAURANT_WIDE scope routes ALL phones for allowlisted restaura
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.scope).toBe("RESTAURANT_WIDE");
       },
     );
@@ -170,7 +170,7 @@ describe("D — non-target restaurant never routes to Text Ordering", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(OTHER_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(OTHER_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.declineReason).toContain("restaurant not allowlisted");
       },
@@ -185,7 +185,7 @@ describe("D — non-target restaurant never routes to Text Ordering", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES:      "11999990000",
       },
       () => {
-        const d = getRoutingDecision(OTHER_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(OTHER_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.enabledForRestaurant).toBe(false);
       },
@@ -203,7 +203,7 @@ describe("E — RESTAURANT_WIDE still requires master switch", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.declineReason).toContain("master switch off");
       },
@@ -223,7 +223,7 @@ describe("F — RESTAURANT_WIDE: non-listed restaurant is blocked; isRestaurantA
       },
       () => {
         expect(isRestaurantAllowlisted(TARGET_RESTAURANT)).toBe(false);
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.declineReason).toContain("restaurant not allowlisted");
       },
@@ -255,7 +255,7 @@ describe("G — PAUSED=true instantly disables live routing", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES:      "11999990000",
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.paused).toBe(true);
         expect(d.declineReason).toContain("paused");
@@ -272,7 +272,7 @@ describe("G — PAUSED=true instantly disables live routing", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.paused).toBe(true);
         expect(d.declineReason).toContain("paused");
@@ -290,7 +290,7 @@ describe("G — PAUSED=true instantly disables live routing", () => {
       },
       () => {
         expect(isWaTextOrderingPaused()).toBe(false);
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(true);
       },
     );
@@ -336,7 +336,7 @@ describe("I — routing decision always includes scope and paused fields", () =>
         WHATSAPP_TEXT_ORDERING_SCOPE:   "PHONE_ALLOWLIST",
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.scope).toBe("PHONE_ALLOWLIST");
         expect(d.paused).toBe(false);
       },
@@ -363,7 +363,7 @@ describe("J — Etapa 1: Diego-only (PHONE_ALLOWLIST + REPLY_ONLY)", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES:      "11999990000",
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(true);
         expect(d.mode).toBe("ALLOWLIST_REPLY_ONLY");
         expect(d.scope).toBe("PHONE_ALLOWLIST");
@@ -418,7 +418,7 @@ describe("K — Etapa 2: Sushi Cazza restaurant-wide (RESTAURANT_WIDE + REPLY_ON
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(OTHER_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(OTHER_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
       },
     );
@@ -437,7 +437,7 @@ describe("L — kill switch during RESTAURANT_WIDE rollout", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(false);
         expect(d.masterEnabled).toBe(true);    // flag preserved
         expect(d.enabledForRestaurant).toBe(true); // restaurant still configured
@@ -455,7 +455,7 @@ describe("L — kill switch during RESTAURANT_WIDE rollout", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+        const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
         expect(d.shouldUseTextOrdering).toBe(true);
         expect(d.paused).toBe(false);
       },
@@ -474,14 +474,14 @@ describe("M — declineReason is exact and actionable", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        expect(getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE).declineReason).toBeNull();
+        expect(getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE).declineReason).toBeNull();
       },
     );
   });
 
   it("'master switch off' when ENABLED not set", () => {
     withEnv({}, () => {
-      expect(getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE).declineReason)
+      expect(getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE).declineReason)
         .toContain("master switch off");
     });
   });
@@ -495,7 +495,7 @@ describe("M — declineReason is exact and actionable", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        expect(getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE).declineReason)
+        expect(getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE).declineReason)
           .toContain("paused");
       },
     );
@@ -508,7 +508,7 @@ describe("M — declineReason is exact and actionable", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: TARGET_RESTAURANT,
       },
       () => {
-        expect(getRoutingDecision(OTHER_RESTAURANT, EVOLUTION_PHONE).declineReason)
+        expect(getRoutingDecision(OTHER_RESTAURANT, WEBHOOK_PHONE).declineReason)
           .toContain("restaurant not allowlisted");
       },
     );
@@ -544,7 +544,7 @@ describe("N — phone normalization across formats works under both scopes", () 
 
   describe("PHONE_ALLOWLIST scope", () => {
     for (const stored of formats) {
-      it(`stored as "${stored}" matches Evolution JID ${EVOLUTION_PHONE}`, () => {
+      it(`stored as "${stored}" matches webhook JID ${WEBHOOK_PHONE}`, () => {
         withEnv(
           {
             WHATSAPP_TEXT_ORDERING_ENABLED:              "true",
@@ -553,7 +553,7 @@ describe("N — phone normalization across formats works under both scopes", () 
             WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES:      stored,
           },
           () => {
-            expect(isPhoneAllowlisted(EVOLUTION_PHONE)).toBe(true);
+            expect(isPhoneAllowlisted(WEBHOOK_PHONE)).toBe(true);
           },
         );
       });
@@ -572,8 +572,8 @@ describe("O — multiple restaurants can be allowlisted simultaneously", () => {
         WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: `${TARGET_RESTAURANT},${OTHER_RESTAURANT}`,
       },
       () => {
-        expect(getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE).shouldUseTextOrdering).toBe(true);
-        expect(getRoutingDecision(OTHER_RESTAURANT, EVOLUTION_PHONE).shouldUseTextOrdering).toBe(true);
+        expect(getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE).shouldUseTextOrdering).toBe(true);
+        expect(getRoutingDecision(OTHER_RESTAURANT, WEBHOOK_PHONE).shouldUseTextOrdering).toBe(true);
       },
     );
   });
@@ -606,7 +606,7 @@ describe("P — isWaTextOrderingEnabled without restaurantId", () => {
 describe("Q — WaRoutingDecision always includes all fields", () => {
   it("has all required fields regardless of outcome", () => {
     withEnv({}, () => {
-      const d = getRoutingDecision(TARGET_RESTAURANT, EVOLUTION_PHONE);
+      const d = getRoutingDecision(TARGET_RESTAURANT, WEBHOOK_PHONE);
       expect(d).toHaveProperty("masterEnabled");
       expect(d).toHaveProperty("paused");
       expect(d).toHaveProperty("mode");

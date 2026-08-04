@@ -1,5 +1,11 @@
 # WhatsApp — Raio-X de Roteamento (pedido real caindo no recepcionista/link)
 
+> ⚠️ **Desatualizado em 04/08/2026 — a Evolution foi eliminada do Foocci.**
+> Este documento descreve rotas, telas e o pareamento por QR que não existem
+> mais; o WhatsApp passa a ser exclusivamente a Meta Cloud API. Mantido como
+> registro histórico — **não siga os passos daqui**. A decisão e o que mudou
+> estão em `docs/decisoes.md`.
+
 > Rodada de **diagnóstico**, não de remendo. Objetivo: descobrir exatamente
 > onde a arquitetura real quebra antes de abrir o WhatsApp para clientes reais.
 >

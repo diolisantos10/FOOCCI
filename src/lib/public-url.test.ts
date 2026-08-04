@@ -1,35 +1,40 @@
 /**
- * Canonical Evolution webhook URL — single source of truth.
+ * URL pública canônica — fonte única de verdade.
  *
- * Guards against the bug where the diagnostics card said foocci.com.br but the
- * live-status/sync derived the URL from the Railway proxy host
- * (foocci.up.railway.app), risking a wrong webhook being configured.
+ * ⚠️ MUDOU EM 04/08/2026. Este arquivo testava `getExpectedEvolutionWebhookUrl()`,
+ * que saiu junto com a Evolution (na Meta a inscrição do webhook é do aplicativo,
+ * não de cada restaurante). O que continua valendo — e é o motivo real do teste —
+ * é a trava contra o host de proxy do Railway.
+ *
+ * Bug original: o card de diagnóstico dizia `foocci.com.br` enquanto o status ao
+ * vivo derivava a URL do `host` da requisição (`foocci.up.railway.app`), com risco
+ * de aplicar o endereço errado. A mesma armadilha vale para qualquer URL mostrada
+ * ao cliente — por isso a trava fica.
  */
 
 import { describe, it, expect } from "vitest";
-import { getExpectedEvolutionWebhookUrl, getPublicSiteUrl } from "./public-url";
+import { getPublicSiteUrl, getPublicMenuUrl } from "./public-url";
 
-describe("getExpectedEvolutionWebhookUrl", () => {
-  it("is the canonical site URL + /api/webhooks/evolution", () => {
-    expect(getExpectedEvolutionWebhookUrl()).toBe(
-      `${getPublicSiteUrl()}/api/webhooks/evolution`,
-    );
+describe("getPublicSiteUrl — nunca o host de proxy do Railway", () => {
+  it("não aponta para um host .railway.app", () => {
+    expect(getPublicSiteUrl()).not.toContain(".railway.app");
   });
 
-  it("never points at a Railway proxy host", () => {
-    expect(getExpectedEvolutionWebhookUrl()).not.toContain(".railway.app");
+  it("não tem barra no fim (a barra dupla já quebrou link de cliente)", () => {
+    expect(getPublicSiteUrl().endsWith("/")).toBe(false);
   });
 
-  it("has no trailing slash before the path and no token", () => {
-    const url = getExpectedEvolutionWebhookUrl();
-    expect(url.endsWith("/api/webhooks/evolution")).toBe(true);
-    expect(url).not.toContain("?token=");
+  it("cai no padrão https://foocci.com.br no ambiente de teste (sem env de site)", () => {
+    expect(getPublicSiteUrl()).toBe("https://foocci.com.br");
+  });
+});
+
+describe("getPublicMenuUrl — o link que vai para o cliente", () => {
+  it("é a URL canônica + /pedido/<slug>", () => {
+    expect(getPublicMenuUrl("sushi-cazza")).toBe(`${getPublicSiteUrl()}/pedido/sushi-cazza`);
   });
 
-  it("defaults to https://foocci.com.br in the test env (no site env set)", () => {
-    // No NEXT_PUBLIC_SITE_URL in unit env → hard fallback.
-    expect(getExpectedEvolutionWebhookUrl()).toBe(
-      "https://foocci.com.br/api/webhooks/evolution",
-    );
+  it("nunca vaza o host de proxy do Railway", () => {
+    expect(getPublicMenuUrl("sushi-cazza")).not.toContain(".railway.app");
   });
 });

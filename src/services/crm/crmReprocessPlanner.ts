@@ -16,7 +16,7 @@
  */
 
 import { classifyExecution } from "./crmExecutionClassification";
-import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR, isValidPhoneBR } from "@/lib/crm/normalizePhone";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
 
 export interface ReprocessExecInput {
@@ -69,7 +69,7 @@ export function buildReprocessPlan(execs: ReprocessExecInput[], opts: { batchLim
     if (!SUCCESS_STATUSES.has((e.status ?? "").toUpperCase())) continue;
     const t = toMs(e.sentAt ?? e.createdAt);
     if (e.customerId) lastSuccessByCustomer.set(e.customerId, Math.max(lastSuccessByCustomer.get(e.customerId) ?? 0, t));
-    const np = normalizePhoneForEvolution(e.customerPhone);
+    const np = normalizePhoneBR(e.customerPhone);
     if (np) lastSuccessByPhone.set(np, Math.max(lastSuccessByPhone.get(np) ?? 0, t));
   }
 
@@ -85,8 +85,8 @@ export function buildReprocessPlan(execs: ReprocessExecInput[], opts: { batchLim
     if (!(cls.kind === "FAILED" && cls.retryability === "RETRYABLE_LATER")) continue;
 
     // Must have a currently-valid phone (defensive — invalid would be SKIPPED anyway).
-    const norm = normalizePhoneForEvolution(e.customerPhone);
-    if (!isValidEvolutionPhone(norm)) continue;
+    const norm = normalizePhoneBR(e.customerPhone);
+    if (!isValidPhoneBR(norm)) continue;
 
     recoverableExecutions++;
 

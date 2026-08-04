@@ -4,7 +4,7 @@
  * Living regression net keyed to the production failures observed in the field
  * (the "raio-x" round). It drives the 10 real cases through the SAME
  * classification + receptionist decision surface the webhook uses, with NO
- * Evolution, NO real order, NO Pix, NO DB writes — pure functions only.
+ * envio de WhatsApp, NO real order, NO Pix, NO DB writes — pure functions only.
  *
  * Cases that depend on the live catalog or the order state machine (rodízio
  * conducting real temakis, CEP→frete, Pix timing, out-of-hours gate) are
@@ -24,8 +24,10 @@ import { vi, describe, it, expect } from "vitest";
 // ── Mock heavy deps so the receptionist module imports cleanly ────────────────
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/openai", () => ({ openai: {} }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: class {} }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: class {} }));
+// Canal único: nenhum envio real de WhatsApp neste teste.
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({
+  WhatsAppMessagingService: { sendText: vi.fn(), sendConversationReply: vi.fn() },
+}));
 vi.mock("@/services/buildos/BuildCommandRouter", () => ({ detectBuildCommand: () => false }));
 vi.mock("@/services/knowledge/RestaurantKnowledgeService", () => ({ RestaurantKnowledgeService: class {} }));
 vi.mock("@/lib/handoff", () => ({ markConversationNeedsHuman: vi.fn() }));

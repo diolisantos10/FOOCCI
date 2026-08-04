@@ -4,7 +4,7 @@
  * READ-ONLY consolidated battery across BOTH WhatsApp paths (Text Order +
  * Receptionist) and both phone profiles (allowlisted self-test + synthetic
  * non-allowlisted), with a single PASS/WARNING/FAIL verdict and an operational
- * recommendation. Never sends WhatsApp/Evolution, never creates an order/Pix,
+ * recommendation. Never sends WhatsApp, never creates an order/Pix,
  * never changes config. Phones are masked. Auth: Bearer {CRON_SECRET}. POST only.
  */
 

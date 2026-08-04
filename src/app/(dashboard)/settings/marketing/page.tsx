@@ -152,16 +152,16 @@ export default function MarketingSettingsPage() {
 
       {cfg.manualOverride && (<>
 
-      {/* ── Orçamento global de envio (modo seguro WhatsApp Web) ── */}
+      {/* ── Orçamento global de envio (proteções do número) ── */}
       <PageCard>
         <SectionHeading title="Orçamento de envio WhatsApp" />
         <p className="mt-1 text-sm text-gray-500">
-          Estes limites protegem o WhatsApp enquanto o envio ainda usa WhatsApp Web/Evolution.
-          Quando o WhatsApp oficial da Meta estiver conectado, estes limites poderão ser ajustados.
+          Estes limites protegem o seu número: horário de silêncio, teto diário e descanso por cliente.
+          Eles continuam valendo no WhatsApp oficial da Meta — o número aquecido é o seu ativo mais caro.
         </p>
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Um ciclo é cada execução do robô de campanhas. No modo WhatsApp Web, o limite por ciclo
-          é compartilhado entre todas as campanhas para evitar travamentos.
+          Um ciclo é cada execução do robô de campanhas. O limite por ciclo é compartilhado entre
+          todas as campanhas, para o número nunca disparar em rajada.
         </p>
 
         <div className="mt-4 space-y-4">
@@ -325,8 +325,8 @@ export default function MarketingSettingsPage() {
         <SectionHeading title="Limite de Contatos" />
         <p className="mt-1 text-sm text-muted">
           Máximo de <strong>contatos únicos</strong> que o CRM pode abordar. Cada pessoa conta 1 vez,
-          mesmo recebendo várias campanhas. Use 0 para sem limite. <span className="text-muted/80">(O
-          crédito em R$ do seu plano fica na Whats Evolution — aqui é só o limite de pessoas.)</span>
+          mesmo recebendo várias campanhas. Use 0 para sem limite. <span className="text-muted/80">(Aqui é
+          o limite de PESSOAS; o custo por conversa é cobrado pela Meta, fora desta tela.)</span>
         </p>
 
         {(() => {

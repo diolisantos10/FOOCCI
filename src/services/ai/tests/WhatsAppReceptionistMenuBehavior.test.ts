@@ -17,11 +17,9 @@ import { vi, describe, it, expect } from "vitest";
 // ── Mock all heavy dependencies BEFORE importing the service ──────────────────
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/openai", () => ({ openai: {} }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({
-  EvolutionConfigService: class { getConfig() { return null; } },
-}));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({
-  EvolutionClient: class {},
+// Canal único: nenhum envio real de WhatsApp neste teste.
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({
+  WhatsAppMessagingService: { sendText: vi.fn(), sendConversationReply: vi.fn() },
 }));
 vi.mock("@/services/buildos/BuildCommandRouter", () => ({
   detectBuildCommand: () => false,
