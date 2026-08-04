@@ -35,12 +35,11 @@ describe("isWhatsAppChannelConnected", () => {
   });
 
   it("consulta falhou ⇒ FALSE (ausência de informação não é permissão de envio)", async () => {
-    // Erro síncrono de propósito: exercita o mesmo `catch` sem deixar uma promessa
-    // rejeitada solta no runner (que o vitest contabilizaria como erro do arquivo).
-    channel.getConnectionStatus.mockImplementation(() => { throw new Error("graph fora do ar"); });
-    const v = await isWhatsAppChannelConnected("r1");
-    console.log("REACHED", v);
-    expect(v).toBe(false);
+    // Espião NOVO de propósito: reaproveitar o que já recebeu `mockResolvedValue`
+    // e depois passar a lançar faz o vitest 2.x contabilizar o erro como falha do
+    // arquivo, mesmo com o `catch` funcionando. Não "arrume" isto de volta.
+    channel.getConnectionStatus = vi.fn(() => { throw new Error("graph fora do ar"); });
+    expect(await isWhatsAppChannelConnected("r1")).toBe(false);
   });
 
   it("resposta malformada (sem o campo connected) ⇒ false", async () => {

@@ -9,7 +9,8 @@
  *   - excludes recipients who already received the campaign successfully AFTER the
  *     failed attempt (don't re-send a success)
  *   - dedupes by customerId (fallback: normalized phone) — never retry duplicates
- *   - caps the next batch to the Evolution Web safe limit (5)
+ *   - caps the next batch to `opts.batchLimit` (o chamador manda; o default 5 é
+ *     herança do provedor aposentado e só vale para quem não informa nada)
  *
  * This NEVER sends; it only describes what a future reprocess would do.
  */

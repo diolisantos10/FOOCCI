@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import {
   parseSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount, getConsumedContactCount,
-  getNumberAgeDays, warmupDailyLimit, applyEffectiveSafety,
+  applyEffectiveSafety,
 } from "@/lib/crm-safety";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const [profile, todaySent, weekSent, contactBudgetUsed, ageDays, couponSpentThisMonth, couponUsedThisMonth, metaCfg] = await Promise.all([
+    const [profile, todaySent, weekSent, contactBudgetUsed, couponSpentThisMonth, couponUsedThisMonth, metaCfg] = await Promise.all([
       prisma.restaurantCRMProfile.findUnique({
         where:  { restaurantId: ctx.restaurantId },
         select: { whatsAppSafetyConfig: true },
@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
       getTodayGlobalSendCount(ctx.restaurantId),
       getWeekGlobalSendCount(ctx.restaurantId),
       getConsumedContactCount(ctx.restaurantId),
-      getNumberAgeDays(ctx.restaurantId),
       CustomerCouponService.monthlySpend(ctx.restaurantId),
       CustomerCouponService.monthlyUsedStats(ctx.restaurantId),
       prisma.metaWhatsAppConfig.findUnique({
@@ -35,22 +34,20 @@ export async function GET(req: NextRequest) {
       }).catch(() => null),
     ]);
 
-    const metaOfficial = metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED";
     const raw       = parseSafetyConfig(profile?.whatsAppSafetyConfig);
-    const effective = applyEffectiveSafety(raw, ageDays, { metaOfficial });
-    // The UI binds the form to `raw`; when manualOverride is OFF it shows `effective`
-    // (locked). `warmup` explains the auto daily number — on Meta official the safe
-    // limit is the Meta-tier ceiling, not the Web-session warmup ramp.
+    const effective = applyEffectiveSafety(raw);
+    // A UI liga o formulário em `raw`; com manualOverride DESLIGADO ela mostra
+    // `effective` (travado). O bloco `limite` explica o número automático: desde
+    // 04/08 ele é o teto do tier da Meta, e não mais a rampa de aquecimento da
+    // sessão Web, que saiu junto com a Evolution.
     return ok({
       ...raw,
       todaySent, weekSent, contactBudgetUsed, couponSpentThisMonth,
       couponUsedCount: couponUsedThisMonth.count, couponUsedSpend: couponUsedThisMonth.spend,
       warmup:    {
-        ageDays,
-        safeDailyLimit: metaOfficial ? effective.dailyGlobalCap : warmupDailyLimit(ageDays),
-        metaOfficial,
-        qualityRating:  metaOfficial ? (metaCfg?.qualityRating ?? null) : null,
-        messagingLimit: metaOfficial ? (metaCfg?.messagingLimit ?? null) : null,
+        safeDailyLimit: effective.dailyGlobalCap,
+        qualityRating:  metaCfg?.qualityRating  ?? null,
+        messagingLimit: metaCfg?.messagingLimit ?? null,
       },
       effective,
     });
@@ -84,20 +81,22 @@ export async function PATCH(req: NextRequest) {
     // recompute `effective`/`warmup` (mirrors GET) so the UI keeps showing the
     // ENFORCED daily limit — e.g. 900 on Meta official — instead of falling back
     // to the raw saved number the instant after a save.
-    const [contactBudgetUsed, ageDays, metaCfg] = await Promise.all([
+    const [contactBudgetUsed, metaCfg] = await Promise.all([
       getConsumedContactCount(ctx.restaurantId),
-      getNumberAgeDays(ctx.restaurantId),
       prisma.metaWhatsAppConfig.findUnique({
         where:  { restaurantId: ctx.restaurantId },
-        select: { metaCrmEnabled: true, connectionStatus: true },
+        select: { qualityRating: true, messagingLimit: true },
       }).catch(() => null),
     ]);
-    const metaOfficial = metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED";
-    const effective = applyEffectiveSafety(config, ageDays, { metaOfficial });
+    const effective = applyEffectiveSafety(config);
     return ok({
       ...config,
       contactBudgetUsed,
-      warmup:    { ageDays, safeDailyLimit: metaOfficial ? effective.dailyGlobalCap : warmupDailyLimit(ageDays), metaOfficial },
+      warmup: {
+        safeDailyLimit: effective.dailyGlobalCap,
+        qualityRating:  metaCfg?.qualityRating  ?? null,
+        messagingLimit: metaCfg?.messagingLimit ?? null,
+      },
       effective,
     });
   } catch (err) {

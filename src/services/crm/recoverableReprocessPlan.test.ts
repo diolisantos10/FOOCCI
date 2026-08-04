@@ -98,8 +98,9 @@ describe("computeRecoverablePlan", () => {
       row({ customerId: "p5xx", errorMessage: "EVOLUTION_HTTP_500" }),
       row({ customerId: "ptimeout", errorMessage: "EVOLUTION_HTTP_504" }),
       row({ customerId: "punknown", status: "FAILED", errorMessage: null, failedReason: "algo estranho" }),
-      // Evolution/Baileys wraps a dropped session in a 400 — reclassified as a
-      // transient instance error (RETRYABLE_LATER), so it IS recoverable.
+      // Linha histórica: a Evolution embrulhava sessão caída num 400 e a
+      // classificação a reclassifica como erro transitório (RETRYABLE_LATER). O
+      // provedor saiu, as linhas antigas ficaram — e continuam recuperáveis.
       row({ customerId: "pdisc", status: "FAILED", errorMessage: "EVOLUTION_HTTP_400", failedReason: "Error: Connection Closed" }),
     ];
     const plan = computeRecoverablePlan(rows, 5);
@@ -120,7 +121,7 @@ describe("computeRecoverablePlan", () => {
 });
 
 describe("assertReprocessAllowed", () => {
-  const base = { confirm: true, campaignStatus: "ACTIVE", nextBatchCount: 3, instanceState: "open" };
+  const base = { confirm: true, campaignStatus: "ACTIVE", nextBatchCount: 3, channelConnected: true };
 
   it("allows a confirmed, connected, reprocessable campaign with a batch", () => {
     expect(assertReprocessAllowed(base)).toEqual({ ok: true });
@@ -142,8 +143,15 @@ describe("assertReprocessAllowed", () => {
     expect(assertReprocessAllowed({ ...base, nextBatchCount: 0 })).toMatchObject({ reason: "NO_RECOVERABLE" });
   });
 
-  it("blocks when the Evolution instance is not connected", () => {
-    expect(assertReprocessAllowed({ ...base, instanceState: "close" })).toMatchObject({ reason: "INSTANCE_NOT_CONNECTED" });
-    expect(assertReprocessAllowed({ ...base, instanceState: null })).toMatchObject({ reason: "INSTANCE_NOT_CONNECTED" });
+  it("blocks when the WhatsApp channel is not connected", () => {
+    expect(assertReprocessAllowed({ ...base, channelConnected: false })).toMatchObject({ reason: "INSTANCE_NOT_CONNECTED" });
+  });
+
+  it("blocks when the channel state could NOT be determined (null = fecha o portão)", () => {
+    const r = assertReprocessAllowed({ ...base, channelConnected: null });
+    expect(r).toMatchObject({ reason: "INSTANCE_NOT_CONNECTED" });
+    // A mensagem diferencia "está desconectado" de "não deu para saber" — o lojista
+    // precisa saber qual dos dois problemas ele tem.
+    expect(r.ok === false && r.message).toMatch(/não foi possível confirmar/i);
   });
 });

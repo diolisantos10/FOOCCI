@@ -1,14 +1,24 @@
 /**
- * Meta WhatsApp Cloud API webhook — official provider (parallel to Evolution).
+ * Meta WhatsApp Cloud API webhook — a ÚNICA porta de entrada de WhatsApp do Foocci.
  *
- * GET  — Meta verification handshake (hub.challenge) using the app verify token.
- * POST — signed events: validates X-Hub-Signature-256, normalizes, dedupes by
- *        wamid (Message.externalMessageId @unique), maps phone_number_id → restaurant,
- *        and writes inbound messages into Central de Conversas + applies delivery
- *        statuses to outbound messages.
+ * GET  — handshake de verificação da Meta (hub.challenge) com o verify token do app.
+ * POST — eventos assinados: valida X-Hub-Signature-256, normaliza, deduplica por
+ *        wamid (Message.externalMessageId @unique), mapeia phone_number_id →
+ *        restaurante, grava a entrada na Central de Conversas e aplica os status de
+ *        entrega nas mensagens de saída.
  *
- * Additive: does NOT touch the Evolution webhook (/api/webhooks/evolution). Always
- * returns 200 quickly so Meta does not disable the subscription.
+ * ── HISTÓRIA, para ninguém achar que sempre foi assim ────────────────────────
+ * Até 04/08/2026 existiam DOIS webhooks e eles **não eram simétricos**: o da
+ * Evolution carregava comando do Build OS, pedido por texto, opt-out, resgate de
+ * carrinho e atribuição de receita; este aqui gravava a mensagem e chamava o
+ * Cérebro. Com a Evolution eliminada por ordem do CEO, o caminho dela foi PORTADO
+ * para cá antes de ser apagado — apagar sem paridade seria derrubar recurso em
+ * produção. As duas metades ficaram em módulos próprios, testáveis:
+ *
+ *   • `InboundGuardsService`     — opt-out, atribuição, carrinho, política de IA
+ *   • `InboundAgentDispatch`     — Build OS, pedido por texto, agentMode, host
+ *
+ * Sempre devolve 200 rápido para a Meta não desativar a inscrição.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,6 +30,8 @@ import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "@/services/whatsapp/brain/WhatsAppBrainRuntimeService";
 import { isSupportPhoneNumberId, handleInboundSupport } from "@/services/support/SupportWhatsAppService";
 import { InboundGuardsService } from "@/services/whatsapp/inbound/InboundGuardsService";
+import { dispatchInboundAgent, interceptBuildOsCommand } from "@/services/whatsapp/inbound/InboundAgentDispatch";
+import { isBuildOsPhoneNumberId } from "@/services/buildos/BuildOsMetaChannel";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -109,8 +121,46 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
       continue;
     }
 
+    // Canal MASTER do Build OS: número dedicado da equipe, sem restaurante.
+    // Desvia ANTES do fluxo de cliente — aqui não se cria Customer, Conversation
+    // nem Message, e nada disso chega no garçom. Gated: com o canal desligado,
+    // `isBuildOsPhoneNumberId` é sempre false e o fluxo abaixo segue idêntico.
+    if (isBuildOsPhoneNumberId(m.phoneNumberId)) {
+      const isCmdText = m.type === "text" && Boolean((m.text ?? "").trim());
+      if (isCmdText) {
+        void interceptBuildOsCommand({
+          restaurantId: null,
+          phone:        m.fromPhone,
+          senderName:   m.profileName ?? undefined,
+          content:      m.text ?? "",
+          channelId:    m.phoneNumberId,
+        }).catch((err) => console.error("[webhook/meta/whatsapp] Build OS dispatch failed", err));
+      }
+      // Isolamento do Master: o que não era comando é simplesmente ignorado,
+      // NUNCA persistido como mensagem de cliente.
+      continue;
+    }
+
     const cfg = await MetaConfigService.getByPhoneNumberId(m.phoneNumberId);
     if (!cfg) { console.warn(`[webhook/meta/whatsapp] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched`); continue; }
+
+    // Supressão dura de comando interno num número de RESTAURANTE. Um `/build`
+    // aqui nunca é executado (o portão de canal do Build OS reprova), mas também
+    // nunca pode chegar ao cliente nem à IA — por isso é interceptado ANTES de
+    // virar Customer/Conversation/Message.
+    if (m.type === "text" && (m.text ?? "").trim()) {
+      const buildOs = await interceptBuildOsCommand({
+        restaurantId: cfg.restaurantId,
+        phone:        m.fromPhone,
+        senderName:   m.profileName ?? undefined,
+        content:      m.text ?? "",
+        channelId:    m.phoneNumberId,
+      });
+      if (buildOs.intercepted) {
+        console.info(`[webhook/meta/whatsapp] mensagem interceptada pelo Build OS (${buildOs.reason})`);
+        continue;
+      }
+    }
 
     // Dedupe by wamid — never write the same message twice.
     const existing = await prisma.message.findUnique({
@@ -186,13 +236,20 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
       continue;
     }
 
-    // Cérebro é a porta de entrada padrão para texto, e responde PELO provedor
-    // selecionado (Meta aqui). Fire-and-forget; ele também se protege sozinho.
-    if (isWhatsAppBrainEnabled() && isText) {
-      void WhatsAppBrainRuntimeService.respond(conv.id).catch((err) =>
-        console.error("[webhook/meta/whatsapp] brain dispatch failed", err),
-      );
-    }
+    // ── Quem responde ───────────────────────────────────────────────────────
+    // Portado do webhook da Evolution em 04/08: pedido por texto (piloto
+    // controlado), `agentMode` e o host. Antes daqui saía uma chamada seca ao
+    // Cérebro — o que fazia o pedido por texto NUNCA rotear pela Meta.
+    const dispatch = await dispatchInboundAgent({
+      restaurantId:   cfg.restaurantId,
+      conversationId: conv.id,
+      customerId:     conv.customerId,
+      phone:          m.fromPhone,
+      messageText:    m.text ?? null,
+      isTextMessage:  isText,
+      channelId:      m.phoneNumberId,
+    });
+    console.info(`[webhook/meta/whatsapp] agente=${dispatch.handler} (${dispatch.reason}) conv=${conv.id}`);
   }
 }
 
@@ -231,9 +288,27 @@ async function findOrCreateConversation(
     return existing;
   }
 
-  const customer = await prisma.customer.findFirst({
-    where:  { restaurantId, phone: { contains: tail } },
+  // Cliente de CRM. O caminho da Evolution fazia UPSERT aqui — este webhook só
+  // fazia `findFirst`, e por isso um número novo entrava SEM Customer. Não é
+  // detalhe: sem `customerId` o opt-out ("PARAR") é pulado, porque a guarda de
+  // saída precisa de um contato para marcar. Quem sofria era justamente quem
+  // ainda não tinha comprado.
+  //
+  // O `name` só é atualizado quando a Meta manda um `profileName` — nunca se
+  // sobrescreve um nome real com um número de telefone.
+  const customer = await prisma.customer.upsert({
+    where:  { phone_restaurantId: { phone: fromPhone, restaurantId } },
+    create: { restaurantId, phone: fromPhone, name: profileName ?? fromPhone },
+    update: profileName ? { name: profileName } : {},
     select: { id: true, name: true, phone: true },
+  }).catch(async (err) => {
+    // Número com formato divergente (ex.: 9º dígito) pode não bater no unique.
+    // Cai para a busca por sufixo em vez de perder a mensagem.
+    console.warn(`[webhook/meta/whatsapp] upsert de Customer falhou — buscando por sufixo`, err);
+    return prisma.customer.findFirst({
+      where:  { restaurantId, phone: { contains: tail } },
+      select: { id: true, name: true, phone: true },
+    });
   });
 
   return prisma.conversation.create({

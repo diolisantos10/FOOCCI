@@ -1,7 +1,7 @@
 /**
  * ReviewRequestSendService — human-confirmed send-path tests (A–L).
  *
- * Pure: no DB, no Evolution, no LLM. Exercises the decision layer
+ * Pure: no DB, no channel, no LLM. Exercises the decision layer
  * (resolveReviewSendPlan) and the audit-log builder (buildReviewActionLog),
  * which together gate every real send. No real WhatsApp message is ever sent.
  *
@@ -196,12 +196,12 @@ describe("I — failed send logs a non-dedup CRMActionLog with failed status", (
       platform: "GOOGLE",
       reviewLink: "https://g.page/r/x",
       messageText: "Oi! Avalie aqui: https://g.page/r/x",
-      error: "Evolution 500",
+      error: "META_500",
     });
     expect(row.actionType).toBe(REVIEW_ACTION_TYPE_FAILED);
     expect(row.actionType).not.toBe("REVIEW_REQUEST"); // excluded from dedup
     expect(row.metadata.status).toBe("failed");
-    expect(row.metadata.error).toBe("Evolution 500");
+    expect(row.metadata.error).toBe("META_500");
   });
 
   it("skipped uses its own actionType too", () => {

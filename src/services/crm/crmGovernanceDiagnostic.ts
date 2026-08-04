@@ -8,7 +8,7 @@
  *   - everything synthetic is cleaned up
  *
  * Never sends WhatsApp, never touches a real customer/campaign, never calls
- * Evolution. runtimeTouched stays false.
+ * o WhatsApp. runtimeTouched stays false.
  */
 
 import { prisma } from "@/lib/prisma";

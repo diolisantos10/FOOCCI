@@ -13,8 +13,15 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Config shape ─────────────────────────────────────────────────────────────
 
-/** Provider that actually delivers the WhatsApp message. */
-export type CRMProviderMode = "EVOLUTION_WEB" | "META_CLOUD";
+/**
+ * Provider that actually delivers the WhatsApp message.
+ *
+ * Um valor só desde 04/08/2026: a Evolution saiu do Foocci. O tipo continua
+ * existindo — em vez de sumir — porque as linhas históricas no banco ainda
+ * carregam "EVOLUTION_WEB" e precisam ser lidas sem quebrar. Escrever um
+ * segundo provedor agora é erro de compilação.
+ */
+export type CRMProviderMode = "META_CLOUD";
 
 /** How the daily/cycle budget is split across the active campaigns. */
 export type CRMBudgetDistributionMode = "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
@@ -22,20 +29,19 @@ export type CRMBudgetDistributionMode = "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIE
 /**
  * Restaurant-level WhatsApp sending budget + orchestration.
  *
- * This is the global safety budget that keeps the WhatsApp number from freezing
- * or being blocked while sends still ride the Evolution Web / WhatsApp Web bridge.
- * It governs how the daily ceiling is shared across all active campaigns and how
- * many messages the whole CRM may send per scheduler cycle (cron run).
+ * This is the global safety budget that shares the daily ceiling across all
+ * active campaigns and caps how many messages the whole CRM may send per
+ * scheduler cycle (cron run).
  *
- * A "cycle" is one CRM scheduler/cron execution. In Evolution Web mode the cycle
- * limit is the TOTAL across all campaigns in that run — not per campaign.
+ * A "cycle" is one CRM scheduler/cron execution; o limite de ciclo é o TOTAL de
+ * todas as campanhas daquela rodada, não por campanha.
  */
 export interface CRMWhatsAppBudgetConfig {
   /** Master switch for the global budget orchestration. When off, legacy per-campaign behavior applies. */
   enabled: boolean;
-  /** Active delivery provider. Evolution Web rides a real WhatsApp-Web session and needs tight limits. */
+  /** Active delivery provider — sempre a Meta Cloud API. */
   providerMode: CRMProviderMode;
-  /** Max CRM messages the whole restaurant may send in a 24h window. 0 = no daily cap. Default 50 for Evolution Web. */
+  /** Max CRM messages the whole restaurant may send in a 24h window. 0 = no daily cap. */
   globalDailyLimit: number;
   /** Max CRM messages the whole CRM may send in ONE scheduler cycle, shared across all campaigns. Default 5. */
   globalCycleLimit: number;
@@ -86,7 +92,7 @@ export interface CRMWhatsAppSafetyConfig {
   crmWhatsAppSafety: CRMWhatsAppBudgetConfig;
   /**
    * When FALSE (default) the anti-ban rules are LOCKED to safe values and the daily
-   * limit follows the warmup ramp — the owner cannot raise them. When TRUE the owner
+   * limit fica no teto seguro da Meta — o dono não pode elevá-los. When TRUE the owner
    * has explicitly taken manual control and the stored values are enforced as-is
    * (they accept the ban risk). Only the prepaid contact budget stays owner-set
    * either way — it is a cost limit, not an anti-ban rule.
@@ -103,11 +109,17 @@ export interface CRMWhatsAppSafetyConfig {
   couponAvgTicket: number;
 }
 
+// ─── Meta Cloud API (official) throughput ────────────────────────────────────
+/** Daily send ceiling in safe mode (under the 1k entry tier). */
+export const META_SAFE_DAILY_LIMIT = 900;
+/** Per-cron-cycle ceiling (36 cycles/day ⇒ ~1.4k capacity). */
+export const META_CYCLE_LIMIT = 40;
+
 export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
   enabled:                        true,
-  providerMode:                   "EVOLUTION_WEB",
-  globalDailyLimit:               50, // Evolution Web default — keep the number safe
-  globalCycleLimit:               5,  // total across ALL campaigns per cron run
+  providerMode:                   "META_CLOUD",
+  globalDailyLimit:               META_SAFE_DAILY_LIMIT,
+  globalCycleLimit:               META_CYCLE_LIMIT, // total across ALL campaigns per cron run
   minMinutesBetweenCycles:        10,
   // AUDIENCE by default: split the day's budget proportionally to each campaign's
   // eligible audience. This is the only mode that bypasses the per-campaign 200/day
@@ -146,8 +158,9 @@ export function parseBudgetConfig(raw: unknown): CRMWhatsAppBudgetConfig {
   if (!raw || typeof raw !== "object") return { ...d };
   const r = raw as Record<string, unknown>;
   const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : fallback);
-  const providerMode: CRMProviderMode =
-    r.providerMode === "META_CLOUD" || r.providerMode === "EVOLUTION_WEB" ? r.providerMode : d.providerMode;
+  // Linha histórica com "EVOLUTION_WEB" é lida e normalizada para META_CLOUD —
+  // o provedor antigo não existe mais para escrever nada.
+  const providerMode: CRMProviderMode = d.providerMode;
   const distributionMode: CRMBudgetDistributionMode =
     r.distributionMode === "EQUAL" || r.distributionMode === "PRIORITY" ||
     r.distributionMode === "MANUAL" || r.distributionMode === "AUDIENCE"
@@ -191,59 +204,25 @@ export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
   };
 }
 
-// ─── Safe locked rules + warmup ramp ────────────────────────────────────────
-// Safe-by-default: with manualOverride OFF the anti-ban rules below are FIXED and
-// the daily limit follows the number's warmup age. The owner can only change them
-// by turning manual override ON (taking responsibility for the ban risk).
-
-/** Warmup steps: safe max CRM messages/day by WhatsApp number age (days connected). */
-export const WARMUP_RAMP: ReadonlyArray<{ maxAgeDays: number; dailyLimit: number }> = [
-  { maxAgeDays: 3,        dailyLimit: 20  },
-  { maxAgeDays: 7,        dailyLimit: 40  },
-  { maxAgeDays: 14,       dailyLimit: 80  },
-  { maxAgeDays: 30,       dailyLimit: 150 },
-  { maxAgeDays: Infinity, dailyLimit: 250 },
-];
-
-export function warmupDailyLimit(ageDays: number): number {
-  for (const step of WARMUP_RAMP) if (ageDays <= step.maxAgeDays) return step.dailyLimit;
-  return 250;
-}
-
-// ─── Meta Cloud API (official) throughput ────────────────────────────────────
-// The warmup ramp + tiny cycles exist to protect an UNOFFICIAL WhatsApp Web
-// session from bans. On the official Meta Cloud API none of that applies — the
-// real ceiling is Meta's messaging tier (1k business-initiated/24h at entry,
-// scaling to 10k/100k). Safe mode on Meta therefore runs at full power:
-/** Daily send ceiling in safe mode on Meta official (under the 1k entry tier). */
-export const META_SAFE_DAILY_LIMIT = 900;
-/** Per-cron-cycle ceiling on Meta official (36 cycles/day ⇒ ~1.4k capacity). */
-export const META_CYCLE_LIMIT = 40;
-
-/** WhatsApp number age in days, from when its Evolution config was created. */
-export async function getNumberAgeDays(restaurantId: string): Promise<number> {
-  const cfg = await prisma.evolutionConfig.findUnique({
-    where:  { restaurantId },
-    select: { createdAt: true },
-  });
-  if (!cfg?.createdAt) return 0;
-  return Math.max(0, Math.floor((Date.now() - cfg.createdAt.getTime()) / 86_400_000));
-}
+// ─── Regras seguras travadas ─────────────────────────────────────────────────
+// Com override manual DESLIGADO as regras abaixo são FIXAS. O dono só as muda
+// ligando o override (assumindo o risco).
+//
+// O que saiu em 04/08/2026 junto com a Evolution: a "rampa de aquecimento"
+// (20 → 40 → 80 → 150 → 250 msgs/dia conforme a idade do número) e a leitura da
+// idade a partir de `evolutionConfig.createdAt`. Aquilo existia para proteger uma
+// sessão de WhatsApp Web NÃO OFICIAL de banimento. No aplicativo homologado da
+// Meta o teto real é o tier de mensagens da própria Meta, e aquecer artificialmente
+// só segurava venda sem reduzir risco nenhum.
 
 /**
  * Build the EFFECTIVE (enforced) safety config from the raw stored config + number age.
- * manualOverride ON → stored values as-is. OFF → safe locked rules + warmup daily limit.
+ * manualOverride ON → stored values as-is. OFF → regras travadas + teto seguro da Meta.
  * The prepaid contact budget + timezone are always kept from the owner's config.
  */
-export function applyEffectiveSafety(
-  raw: CRMWhatsAppSafetyConfig,
-  ageDays: number,
-  opts: { metaOfficial?: boolean } = {},
-): CRMWhatsAppSafetyConfig {
+export function applyEffectiveSafety(raw: CRMWhatsAppSafetyConfig): CRMWhatsAppSafetyConfig {
   if (raw.manualOverride) return raw;
-  // Meta official → full power (tier is the real limit); Evolution → warmup ramp.
-  const metaOfficial = opts.metaOfficial ?? false;
-  const safeDaily = metaOfficial ? META_SAFE_DAILY_LIMIT : warmupDailyLimit(ageDays);
+  const safeDaily = META_SAFE_DAILY_LIMIT;
   return {
     ...raw,
     manualOverride:        false,
@@ -256,15 +235,16 @@ export function applyEffectiveSafety(
     sendOnWeekends:        true,
     maxPerWeekPerCustomer: 5,
     randomDelayEnabled:    true,
-    // Humanization delays protect a Web session; the official API only needs a
-    // light pace (also keeps each cron request comfortably inside its timeout).
-    randomDelayMinSec:     metaOfficial ? 1 : 5,
-    randomDelayMaxSec:     metaOfficial ? 2 : 45,
+    // Os atrasos longos (5–45s) existiam para "humanizar" uma sessão Web e não
+    // ser detectada. A API oficial não precisa disso — só de um ritmo leve, que
+    // também mantém cada requisição do cron dentro do timeout.
+    randomDelayMinSec:     1,
+    randomDelayMaxSec:     2,
     crmWhatsAppSafety: {
       ...raw.crmWhatsAppSafety,
       enabled:                        true,
       globalDailyLimit:               safeDaily,
-      globalCycleLimit:               metaOfficial ? META_CYCLE_LIMIT : 5,
+      globalCycleLimit:               META_CYCLE_LIMIT,
       minMinutesBetweenCycles:        10,
       stopOnInstanceDisconnected:     true,
       pauseOnFailureRatePercent:      50,
@@ -277,28 +257,18 @@ export function applyEffectiveSafety(
 
 /**
  * EFFECTIVE safety config used by ALL enforcement (runner, planner, capacity, etc.).
- * Safe-by-default: locked rules + warmup daily limit unless the owner turned manual
+ * Safe-by-default: regras travadas + teto seguro da Meta, a menos que o dono ligue o manual
  * override ON. This is the single choke point that keeps the number protected.
  */
 export async function getSafetyConfig(restaurantId: string): Promise<CRMWhatsAppSafetyConfig> {
-  const [profile, ageDays, metaCfg] = await Promise.all([
+  const [profile] = await Promise.all([
     prisma.restaurantCRMProfile.findUnique({
       where:  { restaurantId },
       select: { whatsAppSafetyConfig: true },
     }),
-    getNumberAgeDays(restaurantId),
-    (async () => {
-      try {
-        return await prisma.metaWhatsAppConfig.findUnique({
-          where:  { restaurantId },
-          select: { metaCrmEnabled: true, connectionStatus: true },
-        });
-      } catch { return null; } // absent table/mock → Evolution rules (conservative)
-    })(),
   ]);
-  return applyEffectiveSafety(parseSafetyConfig(profile?.whatsAppSafetyConfig), ageDays, {
-    metaOfficial: metaCfg?.metaCrmEnabled === true && metaCfg.connectionStatus === "CONNECTED",
-  });
+  // Não há mais provedor a descobrir: o teto é o da Meta para todo mundo.
+  return applyEffectiveSafety(parseSafetyConfig(profile?.whatsAppSafetyConfig));
 }
 
 /**

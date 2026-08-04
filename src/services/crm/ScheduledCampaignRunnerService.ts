@@ -146,16 +146,6 @@ const REPROCESSING_CAMPAIGNS = new Set<string>();
 export const META_CLOUD_MAX_PER_RUN = 40;
 
 /**
- * @deprecated Resquício do provedor aposentado (WhatsApp Web via Evolution), onde
- * lotes precisavam ser minúsculos porque a sessão travava o celular. O CRM não usa
- * mais este valor para nada — ele sobrevive apenas porque três rotas de UI ainda o
- * importam para escrever "até N por ciclo" na tela. Quem migrar aquelas rotas deve
- * trocá-lo por `META_CLOUD_MAX_PER_RUN` e apagar esta constante.
- * Rotas: api/crm/campaigns/[id]/{route,recoverable,reprocess-plan}.
- */
-export const EVOLUTION_WEB_MAX_PER_RUN = 5;
-
-/**
  * Ready-made campaigns that belong to the relationship program. They may only send
  * while the program's master toggle (TierSettings.programEnabled) is ON.
  */
@@ -200,7 +190,7 @@ export interface StuckSendingRecoveryResult {
 /** Read-only budget snapshot for the campaign detail UI (Section 9). */
 export interface BudgetSnapshot {
   enabled:               boolean;
-  providerMode:          "EVOLUTION_WEB" | "META_CLOUD";
+  providerMode:          "META_CLOUD";
   distributionMode:      "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
   globalDailyUsed?:      number;
   globalDailyLimit?:     number;
@@ -725,7 +715,7 @@ export class ScheduledCampaignRunnerService {
 
       // Orchestrate whenever the budget is enabled — the daily/cycle limits, circuit
       // breaker and interval gate must apply on BOTH providers. (Previously this was
-      // keyed to providerMode==="EVOLUTION_WEB"; a persisted "META_CLOUD" would have
+      // keyed to the retired provider; a persisted "META_CLOUD" would have
       // silently fallen through to the legacy path with no budget at all.)
       if (budget?.enabled) {
         // Minimum interval between cycles: if the CRM produced execution activity
@@ -974,7 +964,7 @@ export class ScheduledCampaignRunnerService {
     if (!budget?.enabled) {
       return {
         enabled:          false,
-        providerMode:     budget?.providerMode ?? "EVOLUTION_WEB",
+        providerMode:     budget?.providerMode ?? "META_CLOUD",
         distributionMode: budget?.distributionMode ?? "AUDIENCE",
       };
     }
@@ -1015,6 +1005,9 @@ export class ScheduledCampaignRunnerService {
       };
     });
 
+    // `instanceConnected: true` é de propósito: isto é a FOTO do orçamento para a
+    // tela, não a decisão de enviar. Consultar a conexão aqui faria a tela mostrar
+    // "0 disponível" só porque o canal caiu, escondendo o número que o lojista veio ver.
     const plan = CRMWhatsAppBudgetPlanner.plan({
       config: budget, globalSentToday, instanceConnected: true, campaigns,
     });

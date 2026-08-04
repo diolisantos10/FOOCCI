@@ -24,11 +24,11 @@ describe("parseSafetyConfig — weekly cap + per-customer + 0 semantics", () => 
   });
 });
 
-describe("applyEffectiveSafety — Meta official full-power mode", () => {
+describe("applyEffectiveSafety — canal único (Meta)", () => {
   const base = parseSafetyConfig({});
 
-  it("safe mode on Meta uses the tier ceiling, fast pacing and big cycles", () => {
-    const eff = applyEffectiveSafety(base, 100, { metaOfficial: true });
+  it("modo seguro usa o teto do tier, ritmo rápido e ciclos grandes", () => {
+    const eff = applyEffectiveSafety(base);
     expect(eff.dailyGlobalCap).toBe(META_SAFE_DAILY_LIMIT);
     expect(eff.crmWhatsAppSafety?.globalDailyLimit).toBe(META_SAFE_DAILY_LIMIT);
     expect(eff.crmWhatsAppSafety?.globalCycleLimit).toBe(META_CYCLE_LIMIT);
@@ -36,16 +36,19 @@ describe("applyEffectiveSafety — Meta official full-power mode", () => {
     expect(eff.randomDelayMaxSec).toBe(2);
   });
 
-  it("safe mode WITHOUT Meta keeps the Evolution warmup ramp (max 250) and 5/cycle", () => {
-    const eff = applyEffectiveSafety(base, 100, { metaOfficial: false });
-    expect(eff.dailyGlobalCap).toBe(250);
-    expect(eff.crmWhatsAppSafety?.globalCycleLimit).toBe(5);
-    expect(eff.randomDelayMinSec).toBe(5);
+  // O caso que este teste substitui provava a rampa de aquecimento (20→250/dia
+  // conforme a idade do número) e o ciclo de 5. Aquilo existia para proteger uma
+  // sessão de WhatsApp Web NÃO OFICIAL de banimento, e saiu com a Evolution em
+  // 04/08. Agora não há um "modo sem Meta": não existe segundo canal, então o
+  // teto seguro é sempre o da Meta — e é isso que o caso abaixo trava.
+  it("não existe modo alternativo: sem argumentos extras, o teto é sempre o da Meta", () => {
+    expect(applyEffectiveSafety(base).dailyGlobalCap).toBe(META_SAFE_DAILY_LIMIT);
+    expect(applyEffectiveSafety(parseSafetyConfig({})).crmWhatsAppSafety?.globalCycleLimit)
+      .toBe(META_CYCLE_LIMIT);
   });
 
-  it("manual override wins over Meta mode (owner's numbers untouched)", () => {
+  it("override manual vence (os números do dono ficam intactos)", () => {
     const manual = parseSafetyConfig({ manualOverride: true, dailyGlobalCap: 123 });
-    const eff = applyEffectiveSafety(manual, 100, { metaOfficial: true });
-    expect(eff.dailyGlobalCap).toBe(123);
+    expect(applyEffectiveSafety(manual).dailyGlobalCap).toBe(123);
   });
 });

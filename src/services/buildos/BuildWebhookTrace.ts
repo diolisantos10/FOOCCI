@@ -13,6 +13,7 @@ export interface WebhookTraceInput {
   /** Full normalized E.164 phone — stored server-side only, never logged/exposed. */
   rawPhone?: string | null;
   /** Evolution instance the event arrived on (Master vs restaurant channel). */
+  /** Identidade do canal (hoje o `phone_number_id` da Meta). Coluna com nome legado. */
   instanceName?: string | null;
   prefixDetected?: string | null;
   configEnabled?: boolean | null;

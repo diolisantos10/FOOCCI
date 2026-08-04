@@ -245,7 +245,7 @@ type CampaignDetail = {
 
 type CampaignBudgetSnapshot = {
   enabled: boolean;
-  providerMode: "EVOLUTION_WEB" | "META_CLOUD";
+  providerMode: "META_CLOUD";
   distributionMode: "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
   globalDailyUsed?: number;
   globalDailyLimit?: number;
@@ -1812,6 +1812,10 @@ const FAILURE_REASON_LABELS: Record<string, string> = {
   CUSTOMER_NOT_CONTACTABLE:    "Não contactável",
   MISSING_PHONE:               "Sem telefone",
   INVALID_PHONE_FORMAT:        "Telefone inválido",
+  NO_WHATSAPP_CONFIG:          "WhatsApp desconectado",
+  // Código aposentado em 04/08 junto com a Evolution. Continua no mapa porque
+  // execuções antigas no banco ainda carregam esse motivo — sem a linha, a tela
+  // mostraria o código cru para o lojista.
   NO_EVOLUTION_CONFIG:         "WhatsApp desconectado",
   QUIET_HOURS:                 "Horário silencioso",
   WEEKEND_BLOCKED:             "Bloqueio fim de semana",

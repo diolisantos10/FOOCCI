@@ -84,7 +84,7 @@ interface CategoryMeta {
 
 const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   SENT:                            { kind: "SENT",    badge: "Enviado",                       retryable: false, retryability: "NEVER_RETRY" },
-  FAILED_PROVIDER:                 { kind: "FAILED",  badge: "Erro temporário da Evolution",  retryable: true,  retryability: "RETRYABLE_LATER" },
+  FAILED_PROVIDER:                 { kind: "FAILED",  badge: "Erro temporário do WhatsApp",   retryable: true,  retryability: "RETRYABLE_LATER" },
   FAILED_TIMEOUT:                  { kind: "FAILED",  badge: "Tempo esgotado / conexão",      retryable: true,  retryability: "RETRYABLE_LATER" },
   FAILED_UNKNOWN:                  { kind: "FAILED",  badge: "Erro desconhecido",             retryable: true,  retryability: "RETRYABLE_LATER" },
   EVOLUTION_BAD_REQUEST:           { kind: "FAILED",  badge: "Bad request (400)",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
@@ -93,7 +93,7 @@ const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Rate limit",                    retryable: true,  retryability: "RETRYABLE_LATER" },
   EMPTY_MESSAGE:                   { kind: "FAILED",  badge: "Mensagem vazia",                retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   // Invalid / missing phone / not-contactable are RECIPIENT DATA problems, not
-  // provider failures. Skipped BEFORE any Evolution call, so they never inflate
+  // provider failures. Skipped BEFORE any channel call, so they never inflate
   // the failure count. They are fixable in the customer's cadastro → "Precisa
   // corrigir" (RETRYABLE_AFTER_FIX), never auto-retried.
   BLOCKED_INVALID_PHONE:           { kind: "SKIPPED", badge: "Telefone inválido",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
