@@ -10,7 +10,7 @@
  */
 
 import { Eyebrow, PremiumCard } from "./premium";
-import { AGENDAR_LABEL, AGENDAR_URL } from "./config";
+import { DEMO_CTA_LABEL, DEMO_URL } from "./config";
 
 const PASSOS = [
   {
@@ -121,10 +121,10 @@ export function WaiterRealShowcase() {
 
         <div className="mt-12 text-center">
           <a
-            href={AGENDAR_URL}
+            href={DEMO_URL}
             className="inline-flex items-center justify-center rounded-full bg-brand-500 px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
           >
-            Quero ver com o meu cardápio — {AGENDAR_LABEL.toLowerCase()}
+            Quero ver com o meu cardápio — {DEMO_CTA_LABEL.toLowerCase()}
           </a>
           <p className="mx-auto mt-6 max-w-2xl text-xs leading-relaxed text-gray-400">
             Telas reais do produto em produção, capturadas em 08/2026. Nome do

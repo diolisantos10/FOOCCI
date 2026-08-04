@@ -28,18 +28,27 @@ export const COMO_FUNCIONA_URL = "/site/como-funciona";
 export const PROPOSTA_URL = "/site/sobre";
 export const DEMO_URL = "/site/demonstracao";
 /**
- * Agendamento real: o visitante escolhe um horário livre da agenda do fundador.
- * Decisão do CEO (03/08): a abordagem de conversão do site é AGENDAR uma
- * demonstração — os CTAs comerciais apontam para cá, não para o formulário.
+ * Caminho único de conversão (decisão do CEO, 04/08): TODO CTA comercial leva ao
+ * FORMULÁRIO de `/site/demonstracao`, onde o cliente deixa os dados e a gente entra
+ * em contato. Não há mais agenda de horários nem "falar com o fundador" — o rótulo
+ * é de PEDIDO, não de agendamento.
  */
-export const AGENDAR_URL = "/site/agendar";
-export const AGENDAR_LABEL = "Agendar demonstração";
+export const DEMO_CTA_LABEL = "Pedir uma demonstração";
+
+/**
+ * ALIAS TEMPORÁRIO (04/08). `/site/precos` está sendo refeita por outra frente
+ * (rebuild da tabela de preços), então NÃO a tocamos aqui para não gerar conflito
+ * de merge. O símbolo antigo `AGENDAR_URL` continua exportado — mas já apontando
+ * para o FORMULÁRIO, não para a agenda extinta: nenhum link quebra. A frente do
+ * rebuild remove este alias ao reescrever a página.
+ */
+export const AGENDAR_URL = DEMO_URL;
 
 /** CTA copy. */
 export const PRIMARY_CTA_LABEL = "Ver como o Foocci funciona";
 export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
-/** Hero secondary + header CTA — the commercial conversion path (→ AGENDAR_URL). */
-export const FOLLOW_LAUNCH_LABEL = "Agendar demonstração";
+/** Header CTA — the commercial conversion path (→ DEMO_URL). */
+export const FOLLOW_LAUNCH_LABEL = "Pedir uma demonstração";
 
 /** Launch messaging. */
 export const PRELAUNCH_BADGE = "Para restaurantes que querem ser donos dos próprios clientes";
@@ -65,5 +74,4 @@ export const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/site#crm", label: "CRM" },
   { href: "/site/precos", label: "Planos" },
   { href: "/site/demonstracao", label: "Demonstração" },
-  { href: "/site/agendar", label: "Agendar" },
 ];

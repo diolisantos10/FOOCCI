@@ -12,7 +12,7 @@
  */
 
 import { Eyebrow, PremiumCard } from "./premium";
-import { AGENDAR_LABEL, AGENDAR_URL } from "./config";
+import { DEMO_CTA_LABEL, DEMO_URL } from "./config";
 
 /* ── Dados dos prints (03/08/2026) — nomes anonimizados, valores reais ── */
 
@@ -282,10 +282,10 @@ export function CrmRealShowcase() {
         {/* CTA + nota de honestidade */}
         <div className="mt-16 text-center">
           <a
-            href={AGENDAR_URL}
+            href={DEMO_URL}
             className="inline-flex items-center justify-center rounded-full bg-brand-500 px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
           >
-            Quero isso no meu restaurante — {AGENDAR_LABEL.toLowerCase()}
+            Quero isso no meu restaurante — {DEMO_CTA_LABEL.toLowerCase()}
           </a>
           <p className="mx-auto mt-6 max-w-2xl text-xs leading-relaxed text-gray-400">
             Números reais de um restaurante operando no Foocci em julho/2026,
