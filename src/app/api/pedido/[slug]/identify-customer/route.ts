@@ -6,12 +6,17 @@
  *
  * Body: { phone: string; name?: string }
  *
- * Response (found):     { found: true,  name, customerId }
+ * Response (found):     { found: true,  name }
  * Response (not found): { found: false, normalizedPhone }
- * Response (created):   { found: false, name, customerId }
+ * Response (created):   { found: false, name, normalizedPhone }
  *
- * Security: scoped to restaurantId from slug — no cross-restaurant leakage.
- * Rate limit: 20 req / 60 s per IP.
+ * SECURITY (CR C1): this endpoint intentionally returns NEITHER the customerId NOR
+ * any history/spend. Given only a phone + slug it must not become a lookup that
+ * unlocks a stranger's identity. The customerId used to be a bearer credential for
+ * the PII endpoints (profile/address) — it no longer is; those now require a signed
+ * proof of phone possession (see lib/pedido-identity + the waToken handoff). The
+ * order flow does not need the customerId here: /finalize resolves the customer from
+ * the phone. Scoped to restaurantId from slug. Rate limit: 20 req / 60 s per IP.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -56,9 +61,6 @@ export async function POST(
       select: {
         id:          true,
         name:        true,
-        totalOrders: true,
-        totalSpend:  true,
-        lastOrderAt: true,
       },
     });
 
@@ -71,21 +73,20 @@ export async function POST(
           .catch(() => { /* best-effort */ });
         firstName = rawName.split(/\s+/)[0]!;
       }
+      // Greeting only. NO customerId / history / spend — see the security note above.
       return NextResponse.json({
-        found:         true,
-        name:          firstName ?? undefined,
-        customerId:    existing.id,
-        orderCount:    existing.totalOrders ?? 0,
-        totalSpent:    existing.totalSpend ? Number(existing.totalSpend) : 0,
-        lastOrderDate: existing.lastOrderAt?.toISOString() ?? null,
+        found: true,
+        name:  firstName ?? undefined,
       });
     }
 
     const normalizedPhone = toE164(rawPhone);
 
-    // New customer — create in CRM if name was provided
+    // New customer — create in CRM if name was provided. We still create the record
+    // (so the CRM captures the lead) but do NOT return its id: the client does not
+    // need it (the order resolves the customer by phone at /finalize).
     if (rawName.length >= 2) {
-      const created = await prisma.customer.create({
+      await prisma.customer.create({
         data: {
           restaurantId: restaurant.id,
           name:         rawName,
@@ -99,7 +100,6 @@ export async function POST(
       return NextResponse.json({
         found:          false,
         name:           firstName,
-        customerId:     created?.id ?? undefined,
         normalizedPhone,
       });
     }

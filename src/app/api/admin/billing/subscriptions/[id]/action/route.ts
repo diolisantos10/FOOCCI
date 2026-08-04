@@ -65,8 +65,40 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if (action === "cancel") {
+      // Cancelamento REAL (CR A1): não basta marcar CANCELADA no nosso banco —
+      // sem cancelar o preapproval no MP, o gateway cobra o próximo ciclo e o
+      // webhook tentaria reativar. Duas travas, complementares:
+      //  1. Marcar terminal SEMPRE arma a trava anti-reativação (código puro,
+      //     independe do token) — o webhook não ressuscita nem fatura.
+      //  2. Cancelar no MP é o que estanca o dinheiro no cartão — depende do
+      //     MP_PLATFORM_ACCESS_TOKEN.
+      let gateway: { ok: boolean; detail?: string; skipped?: boolean } = { ok: true, skipped: true };
+      if (sub.mpPreapprovalId) {
+        const r = await MercadoPagoPlatformBilling.cancelPreapproval(sub.mpPreapprovalId);
+        gateway = r.ok
+          ? { ok: true, detail: r.status }
+          : {
+              ok: false,
+              detail:
+                r.reason === "gateway_nao_configurado"
+                  ? "MP_PLATFORM_ACCESS_TOKEN ausente — o preapproval NÃO foi cancelado no Mercado Pago; a cobrança pode continuar. Cancele manualmente no painel do MP."
+                  : `Mercado Pago recusou o cancelamento (${r.detail ?? "sem detalhe"}). Cancele manualmente no painel do MP.`,
+            };
+      }
+
+      // A trava local é armada AINDA QUE o MP falhe — é ela que impede a
+      // cobrança-zumbi de reativar/faturar do nosso lado.
       await PlanSubscriptionService.cancel(sub.id);
-      return NextResponse.json({ ok: true });
+
+      if (!gateway.ok) {
+        // Guardrail: cancelamento externo falho NÃO vira sucesso silencioso.
+        // Cancelado localmente (trava armada), mas o operador PRECISA agir no MP.
+        return NextResponse.json(
+          { ok: false, canceledLocally: true, gatewayError: gateway.detail },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json({ ok: true, gateway });
     }
 
     if (action === "emit-invoices") {

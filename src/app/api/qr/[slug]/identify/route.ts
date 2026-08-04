@@ -8,9 +8,14 @@
  * Body: { phone: string; name?: string }
  *
  * Response:
- *   { found: true,  name: string, customerId: string }  — existing customer
- *   { found: false, name: string, customerId: string }  — new customer created
- *   { found: false }                                     — unknown (no name provided)
+ *   { found: true,  name: string }   — existing customer (greeting only)
+ *   { found: false, name: string }   — new customer created
+ *   { found: false }                 — unknown (no name provided)
+ *
+ * SECURITY (CR C1): like /pedido/[slug]/identify-customer, this must NOT return the
+ * customerId or any history from just a phone + slug. The customerId is no longer a
+ * bearer credential for PII (profile/address now require a signed proof of phone
+ * possession). The visit is still logged server-side using the resolved id.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -87,7 +92,8 @@ export async function POST(
         firstName = rawName.split(/\s+/)[0]!;
       }
       // Sem nome legível → found sem name; o front pede o nome e reenvia.
-      return NextResponse.json({ found: true, name: firstName ?? undefined, customerId: existing.id });
+      // Greeting only — NO customerId (see the security note above).
+      return NextResponse.json({ found: true, name: firstName ?? undefined });
     }
 
     // New customer — create in CRM if name was provided
@@ -108,7 +114,6 @@ export async function POST(
       return NextResponse.json({
         found: false,
         name: firstName,
-        customerId: created?.id ?? undefined,
       });
     }
 

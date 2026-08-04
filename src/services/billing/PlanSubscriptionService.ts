@@ -30,6 +30,19 @@ export const CYCLE_MONTHS: Record<BillingCycle, number> = {
   ANUAL: 12,
 };
 
+/**
+ * Estados TERMINAIS: uma assinatura aqui NÃO volta a cobrar por evento externo
+ * (webhook de pagamento, preapproval "authorized" reenviado). Só sai daqui por
+ * REASSINATURA EXPLÍCITA — que nesta casa é um registro novo (`create`), nunca a
+ * ressurreição do registro cancelado (CR A1). Esta lista é a fonte da trava e é
+ * código puro: não depende do `MP_PLATFORM_ACCESS_TOKEN`.
+ */
+export const TERMINAL_STATUSES = ["CANCELADA"] as const;
+
+export function isTerminalStatus(status: PlanSubscription["status"]): boolean {
+  return (TERMINAL_STATUSES as readonly string[]).includes(status);
+}
+
 export interface CreateSubscriptionInput {
   customerName: string;
   customerWhatsapp: string;
@@ -109,10 +122,25 @@ export const PlanSubscriptionService = {
    * manual existe porque a V1 não pode depender de o gateway estar configurado).
    */
   async activate(id: string): Promise<void> {
-    await prisma.planSubscription.update({
-      where: { id },
+    // Trava terminal (CR A1, guardrail 4 — código é a trava, não o comentário):
+    // uma assinatura CANCELADA é estado terminal. O `updateMany` com
+    // `status notIn TERMINAL_STATUSES` é ATÔMICO — não há janela entre "ler" e
+    // "gravar" para um webhook ressuscitar uma sub que acabou de ser cancelada.
+    // É código puro: funciona mesmo sem o token de plataforma (é ela que impede
+    // a cobrança-zumbi quando não deu para cancelar no MP).
+    const { count } = await prisma.planSubscription.updateMany({
+      where: { id, status: { notIn: [...TERMINAL_STATUSES] } },
       data: { status: "ATIVA", activatedAt: new Date(), canceledAt: null },
     });
+    if (count === 0) {
+      // Carrega a própria evidência (guardrail 6): ou a sub não existe, ou está
+      // terminal. Se chegou aqui por um pagamento, é cobrança-zumbi do MP —
+      // conferir reembolso no painel do Mercado Pago.
+      console.warn(
+        `[billing] activate NÃO reativou ${id}: inexistente ou em estado terminal (CANCELADA). ` +
+          `Se houve pagamento associado, é cobrança-zumbi — verificar reembolso no Mercado Pago.`,
+      );
+    }
   },
 
   async markDelinquent(id: string): Promise<void> {
