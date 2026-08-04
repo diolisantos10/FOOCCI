@@ -7,6 +7,11 @@
  * performs on their own numbers. Someone who types their revenue and sees R$ 6.080
  * leave their pocket every month has already made the argument to themselves.
  *
+ * Below the result sits the marketplace × Foocci comparison: the marketplace fee GROWS
+ * with revenue, the Foocci plan is FIXED. The fixed value is not inlined here — it is
+ * read from `plans.ts` (the SAME source the anchoring table uses), so the two blocks can
+ * never disagree.
+ *
  * Three rules this component follows, all of them from the OS:
  *   - Percentages come from ONE constant file, never inlined here.
  *   - The source of the percentage is RENDERED, not hidden. A number without an
@@ -24,7 +29,8 @@ import {
   calculateCommission,
   formatBRL,
 } from "@/lib/site/commissionRates";
-import { AGENDAR_URL } from "./config";
+import { planByIdOrNull } from "@/lib/site/plans";
+import { DEMO_URL } from "./config";
 
 type Delivery = keyof typeof COMMISSION_RATES;
 
@@ -53,7 +59,12 @@ export function CommissionCalculator() {
   // of showing a result that weakens the case.
   const tooSmall = hasValue && revenue < 1_000;
 
-  const demoHref = AGENDAR_URL;
+  const demoHref = DEMO_URL;
+
+  // Preço fixo do Foocci: a MESMA fonte que a tabela de ancoragem lê (plano
+  // Crescimento). Nunca um número solto aqui — se um dia o plano ficar sem valor,
+  // o comparativo simplesmente não aparece, em vez de inventar uma cifra.
+  const foocciFixed = planByIdOrNull("crescimento")?.monthly ?? null;
 
   return (
     <section id="calculadora" className="bg-canvas py-12 sm:py-20">
@@ -156,6 +167,44 @@ export function CommissionCalculator() {
                 <p className="mt-1 text-sm text-muted">
                   {formatBRL(result.monthlyCommission * 12)} por ano
                 </p>
+
+                {/* Comparativo marketplace × Foocci — a comissão cresce; o Foocci é fixo. */}
+                {foocciFixed !== null && (
+                  <>
+                    <div className="mx-auto mt-6 grid max-w-xl grid-cols-2 gap-3 text-left">
+                      <div className="rounded-2xl border border-line bg-paper p-4 sm:p-5">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                          No marketplace
+                        </p>
+                        <p className="mt-1.5 text-2xl font-semibold text-ink sm:text-3xl">
+                          {formatBRL(result.monthlyCommission)}
+                          <span className="text-sm font-normal text-ink2">/mês</span>
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted">
+                          Comissão que sobe quando você vende mais.
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-brand-200 bg-brand-50/60 p-4 ring-1 ring-brand-100 sm:p-5">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-brand-600">
+                          No Foocci
+                        </p>
+                        <p className="mt-1.5 text-2xl font-semibold text-brand-600 sm:text-3xl">
+                          {formatBRL(foocciFixed)}
+                          <span className="text-sm font-normal text-ink2">/mês</span>
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted">
+                          Valor fixo: não muda com o seu faturamento.
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink2">
+                      A comissão do marketplace{" "}
+                      <strong className="text-ink">cresce junto com o seu faturamento</strong>. O
+                      Foocci é <strong className="text-ink">fixo</strong> — venda mais e continue
+                      pagando o mesmo.
+                    </p>
+                  </>
+                )}
 
                 <div className="mx-auto mt-6 max-w-xl rounded-2xl bg-canvas p-5">
                   <p className="text-sm leading-relaxed text-ink2">

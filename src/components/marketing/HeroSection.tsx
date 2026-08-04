@@ -2,8 +2,8 @@
  * Hero (home) — implements the APPROVED MOCKUP (official art direction).
  * Server component. Pre-launch.
  *
- * Left: orange-rule eyebrow, essence headline, bold-segment subheadline, pill
- * CTAs with icons (play / calendar), pilot microcopy. Right: the approved scene
+ * Left: orange-rule eyebrow, essence headline, bold-segment subheadline, a single
+ * primary CTA to the commission calculator, pilot microcopy. Right: the approved scene
  * rendered as ONE composed photograph — a warm restaurant with the Foocci
  * mascot as host behind the curved counter, the "Olá! Sou o Foocci" speech
  * bubble and the black F tile, exactly as delivered (`SITE_ASSETS.heroComposed`).
@@ -12,9 +12,8 @@
  */
 
 import Image from "next/image";
-import { PrimaryCta, SecondaryCta } from "./Cta";
-import { FOLLOW_LAUNCH_LABEL, AGENDAR_URL } from "./config";
-import { PlayCircleIcon, CalendarIcon } from "./icons";
+import { PrimaryCta } from "./Cta";
+import { PlayCircleIcon } from "./icons";
 import { Eyebrow } from "./premium";
 import { hasAsset, SITE_ASSETS } from "./siteAssets";
 
@@ -38,10 +37,11 @@ export function HeroSection() {
           </h1>
 
           <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
-            Cardápio, pedido, atendimento por IA e CRM de fidelidade são{" "}
-            <strong className="font-semibold text-ink">quatro contratos</strong> que não
-            trocam uma informação entre si. Aqui é um só — e o cliente do delivery é o
-            mesmo que o CRM reconhece e a IA atende pelo nome.
+            Cardápio, pedido, atendimento por IA e fidelidade: no mercado são{" "}
+            <strong className="font-semibold text-ink">quatro serviços</strong> que você
+            contrata e paga separado — e que não trocam informação entre si. No Foocci é
+            um só. O cliente que pede no delivery é o mesmo que a IA atende pelo nome e o
+            CRM traz de volta.
           </p>
 
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row lg:mt-8 lg:justify-start">
@@ -51,12 +51,6 @@ export function HeroSection() {
               href="#calculadora"
               label="Calcule quanto você paga de comissão"
               icon={<PlayCircleIcon className="h-5 w-5" />}
-            />
-            <SecondaryCta
-              className="w-full gap-2.5 sm:w-auto"
-              label={FOLLOW_LAUNCH_LABEL}
-              href={AGENDAR_URL}
-              icon={<CalendarIcon className="h-5 w-5 text-muted" />}
             />
           </div>
 

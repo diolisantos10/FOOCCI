@@ -27,19 +27,32 @@ export const WHATSAPP_SALES_NUMBER: string | null = null;
 export const COMO_FUNCIONA_URL = "/site/como-funciona";
 export const PROPOSTA_URL = "/site/sobre";
 export const DEMO_URL = "/site/demonstracao";
+
 /**
- * Agendamento real: o visitante escolhe um horário livre da agenda do fundador.
- * Decisão do CEO (03/08): a abordagem de conversão do site é AGENDAR uma
- * demonstração — os CTAs comerciais apontam para cá, não para o formulário.
+ * MENU DE PRODUTO (decisão do CEO, 04/08): cada item vira PÁGINA própria — nada de
+ * âncora que pula pro meio da home. Os dois carros-chefe (o atendimento por IA e o
+ * CRM) têm página dedicada com os prints reais; "Soluções" reúne todo o resto
+ * (cardápio, loja, cozinha, pagamento, entrega, nota fiscal, gestão/PDV). As antigas
+ * âncoras `/site#solucoes` e `/site#crm` estavam órfãs desde a repaginação de 02/08 —
+ * apontavam para seções que a home não renderiza mais.
  */
-export const AGENDAR_URL = "/site/agendar";
-export const AGENDAR_LABEL = "Agendar demonstração";
+export const ATENDIMENTO_IA_URL = "/site/atendimento-com-ia";
+export const CRM_URL = "/site/crm";
+export const SOLUCOES_URL = "/site/solucoes";
+export const PRECOS_URL = "/site/precos";
+/**
+ * Caminho único de conversão (decisão do CEO, 04/08): TODO CTA comercial leva ao
+ * FORMULÁRIO de `/site/demonstracao`, onde o cliente deixa os dados e a gente entra
+ * em contato. Não há mais agenda de horários nem "falar com o fundador" — o rótulo
+ * é de PEDIDO, não de agendamento.
+ */
+export const DEMO_CTA_LABEL = "Pedir uma demonstração";
 
 /** CTA copy. */
 export const PRIMARY_CTA_LABEL = "Ver como o Foocci funciona";
 export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
-/** Hero secondary + header CTA — the commercial conversion path (→ AGENDAR_URL). */
-export const FOLLOW_LAUNCH_LABEL = "Agendar demonstração";
+/** Header CTA — the commercial conversion path (→ DEMO_URL). */
+export const FOLLOW_LAUNCH_LABEL = "Pedir uma demonstração";
 
 /** Launch messaging. */
 export const PRELAUNCH_BADGE = "Para restaurantes que querem ser donos dos próprios clientes";
@@ -59,11 +72,14 @@ export function ctaTarget(href: string): { href: string } & Record<string, strin
   return external ? { href, target: "_blank", rel: "noopener noreferrer" } : { href };
 }
 
+/**
+ * Menu do site. Cinco destinos, nesta ordem — os dois carros-chefe primeiro. O
+ * "Pedir uma demonstração" NÃO entra aqui: ele é o botão de ação laranja do header
+ * (mais limpo do que repetir o CTA como item de menu). Ver `MarketingHeader`.
+ */
 export const NAV_LINKS: { href: string; label: string }[] = [
-  { href: "/site/como-funciona", label: "Como funciona" },
-  { href: "/site#solucoes", label: "Soluções" },
-  { href: "/site#crm", label: "CRM" },
-  { href: "/site/precos", label: "Planos" },
-  { href: "/site/demonstracao", label: "Demonstração" },
-  { href: "/site/agendar", label: "Agendar" },
+  { href: ATENDIMENTO_IA_URL, label: "Atendimento com IA" },
+  { href: CRM_URL, label: "CRM" },
+  { href: SOLUCOES_URL, label: "Soluções" },
+  { href: PRECOS_URL, label: "Planos e preços" },
 ];

@@ -178,6 +178,57 @@ export function StarIcon({ className }: IconProps) {
   );
 }
 
+export function StorefrontIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <path d="M3.5 9 5 4.5A2 2 0 0 1 6.9 3h10.2A2 2 0 0 1 19 4.5L20.5 9" />
+      <path d="M3.5 9a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0" />
+      <path d="M5 11.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8.5M9.5 21v-5h5v5" />
+    </svg>
+  );
+}
+
+export function PrinterIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <path d="M7 8V3h10v5" />
+      <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+      <path d="M7 14h10v7H7z" />
+      <path d="M16.5 12h.01" />
+    </svg>
+  );
+}
+
+export function CreditCardIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <path d="M2.5 9.5h19M6.5 14.5h4" />
+    </svg>
+  );
+}
+
+export function TruckIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <path d="M3 7a1 1 0 0 1 1-1h9v9.5H3z" />
+      <path d="M13 9.5h4l3 3v3h-7z" />
+      <path d="M9 15.5h4" />
+      <circle cx="7" cy="17.5" r="1.6" />
+      <circle cx="17" cy="17.5" r="1.6" />
+    </svg>
+  );
+}
+
+export function ReceiptIcon({ className }: IconProps) {
+  return (
+    <svg {...stroke(className)}>
+      <path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z" />
+      <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+    </svg>
+  );
+}
+
 export function WhatsAppIcon({ className }: IconProps) {
   return (
     <svg width={24} height={24} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>

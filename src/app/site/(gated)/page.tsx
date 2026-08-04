@@ -37,7 +37,7 @@ import { FinalCTASection } from "@/components/marketing/FinalCTASection";
 
 const TITLE = "Foocci | Pare de pagar comissão e seja dono dos seus clientes";
 const DESCRIPTION =
-  "Cardápio, pedido, atendimento por IA e CRM de fidelidade em um contrato só — e conversando entre si. Calcule quanto você paga de comissão ao marketplace hoje.";
+  "Cardápio, pedido, atendimento por IA e CRM de fidelidade em um serviço só — e conversando entre si. Calcule quanto você paga de comissão ao marketplace hoje.";
 
 // Indexability (index, follow) is centralized in src/app/site/layout.tsx for the
 // whole /site subtree — do not set `robots` per page.
