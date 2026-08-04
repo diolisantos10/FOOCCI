@@ -196,3 +196,63 @@ testes, verde. Testes novos que provam a trava:
 end-to-end numa loja real (WhatsApp → link → área do cliente com endereços) **não foi
 exercido com humano presente** — como a impressão física, trate como conserto provado
 no código até haver confirmação de operação real.
+
+---
+
+## 2026-08-04 · P1 — o guard anti-adulteração do finalize IGNORAVA a variante (cobrava a menos)
+
+**Contexto:** bloco P1 aprovado pelo Diretor (04/08). Bug de dinheiro provado no E2E:
+Quatro Queijos **Grande** (R$ 64,90 na tela, base R$ 52,90) → pedido gravado errado.
+Afetava LojaClient E PedidoClient — mesma rota, mesmo payload.
+
+**A causa:** `finalize/route.ts`, bloco `verifiedCart`. O guard server-side recalculava
+TODA linha como `channelPrice(item base) [+promo] + opções + extras` e da variante só
+gravava o `variantName` — o preço da variante escolhida nunca entrava na conta. O guard
+que existia para impedir adulteração de preço era, ele próprio, a fonte do preço errado.
+
+**A correção (princípio: cobrar o que o cliente viu, vindo do BANCO):**
+- `cartItemSchema` ganhou `variantId` — **os dois clientes JÁ enviavam o campo; era o
+  zod que o descartava silenciosamente** (zod remove chave desconhecida sem erro).
+  Detalhe traiçoeiro: o dado certo estava no payload o tempo todo.
+- Linha com variante: resolve a variante no banco (fetch sem filtro de `isAvailable`,
+  para dar 400 claro de "indisponível" em vez de "não achei"), valida que pertence ao
+  item da linha, e precifica com `resolveVariantPrice(item, variant, canal)` — herança
+  de canal incluída (variante sem preço herda o preço de canal do produto).
+- Fallback para bundle antigo em cache: sem `variantId`, resolve pela convenção do id
+  de linha `${baseItemId}_${variantId}[sufixo]` (sufixos `_c<uid>` e `__upsell`).
+- Variante inexistente / de outro item → 400 "Opção inválida"; indisponível → 400
+  "Opção indisponível". Fail-closed: nunca cair para o preço do item base em silêncio.
+- `variantName` gravado agora vem do BANCO, não do payload — a comanda não pode mentir.
+
+**Regra promoção × variante adotada (espelho do cliente, não regra nova):** os dois
+clientes NUNCA aplicam promoção em linha de variante — PedidoClient só exibe/aplica
+promo quando `!item.hasVariants` (linhas 757/1235/1391; `handleVariantAdd` usa
+`variant.price` seco) e o ProductModal commerce usa `selectedVariant.price` direto
+(linha 109-112). O servidor espelha: variante NÃO passa pelo resolvedor de promoções.
+
+**Verificação:** `npx tsc --noEmit` limpo; `npx vitest run` → 4729 verdes, única falha
+a conhecida do ambiente (`noSideEffects.test.ts`, pré-existente). 9 testes novos em
+`finalize/route.test.ts` (variante do banco, adulteração sobrescrita, variante de outro
+item/inexistente/indisponível → 400, variante+opções+extras, regressão sem variante,
+promo só na linha sem variante, fallback pela convenção do id). **E2E REAL contra o
+Postgres local com seed:** handler real + banco real → pedido da Grande (35cm) gravado
+com item 64,90 / subtotal 64,90 / total 64,90; pedido de prova removido depois.
+
+**MESMO FURO em outro caminho — reportado, NÃO tocado (ordem do Diretor):**
+1. **WhatsApp:** `WhatsAppCheckoutAdapter.validateAndPriceItems`
+   (`src/services/whatsapp/ordering/WhatsAppCheckoutAdapter.ts:85,100`) — recalcula
+   `channelPrice(item base)` e só carrega `variantName`. Idêntico ao bug consertado.
+2. **Canal de exibição × canal de cobrança no pickup:** os clientes /pedido exibem
+   preço do canal DELIVERY (`mapPedidoItem`), mas o finalize precifica pickup como
+   DINE_IN. Se um restaurante tiver `priceDineIn ≠ priceDelivery`, o cliente vê um
+   preço e o pickup cobra outro — pré-existente, vale para item base e variante.
+
+**Proposta de vitrine (promoção é do Diretor):** *"O guard de preço do finalize é a
+única verdade de cobrança — e linha de variante se precifica pela VARIANTE do banco,
+nunca pelo item base."* Três aprendizados: (1) zod descarta campo desconhecido em
+silêncio — quando o servidor precisa de um dado que o cliente já envia, a ausência no
+schema é um bug invisível; (2) promoção não se aplica a linha de variante porque o
+CLIENTE não aplica — o servidor espelha o que foi mostrado, não inventa regra; (3) todo
+caminho que recalcula preço (finalize, WhatsAppCheckoutAdapter) precisa da mesma
+resolução de variante — o do WhatsApp ainda tem o furo. Origem: bloco P1 de 04/08,
+E2E real na pizzaria-demo, branch `claude/foocci-director-onboarding-lhindy`.

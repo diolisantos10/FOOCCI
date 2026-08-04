@@ -37,7 +37,7 @@ import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncSe
 import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
-import { channelPrice } from "@/services/menu/MenuPricingService";
+import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
 import { createOrderRecord } from "@/services/checkout/CheckoutFinalizationService";
@@ -70,6 +70,12 @@ const cartItemSchema = z.object({
   price:       z.number().positive(),
   qty:         z.number().int().positive(),
   notes:       z.string().max(500).optional(),
+  // Variant lines: both clients (PedidoClient.handleVariantAdd and the commerce
+  // ProductModal) send variantId + variantName and build id as
+  // `${baseItemId}_${variantId}` (plus optional `_c<uid>` / `__upsell` suffixes).
+  // The server resolves the variant in the DB and prices from it — never from
+  // the client-supplied `price`.
+  variantId:   z.string().optional(),
   variantName: z.string().optional(),
   // Analytics-only: marks items the customer added from a Foocci suggestion
   // card (AI/waiter grid), not from normal menu browsing. Never affects pricing.
@@ -226,7 +232,13 @@ export async function POST(
     cart.flatMap((i) => (i.selectedExtras ?? []).map((e) => e.extraId)),
   )];
 
-  const [dbItems, dbOptionItems, dbExtras] = await Promise.all([
+  // A line "has a variant" when the client sent variantId (current clients) or
+  // variantName (defensive: older cached bundles that embed the variant only in
+  // the line id). Fetched WITHOUT the isAvailable filter so an unavailable
+  // variant yields a clear 400 instead of a generic "not found".
+  const cartWantsVariant = cart.some((i) => i.variantId || i.variantName);
+
+  const [dbItems, dbOptionItems, dbExtras, dbVariants] = await Promise.all([
     prisma.menuItem.findMany({
       where: {
         id:          { in: itemIds },
@@ -256,6 +268,15 @@ export async function POST(
           select: { id: true, price: true },
         })
       : Promise.resolve([]),
+    cartWantsVariant
+      ? prisma.menuItemVariant.findMany({
+          where: { menuItemId: { in: itemIds } },
+          select: {
+            id: true, menuItemId: true, name: true, isAvailable: true,
+            price: true, priceDelivery: true, priceDineIn: true, priceIfood: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   // Resolve the menu price for the order's channel (delivery vs salão/QR) so
@@ -265,9 +286,11 @@ export async function POST(
     price:        channelPrice(i, pricingChannel),
     categoryId:   i.categoryId,
     categoryName: i.category?.name ?? null,
+    row:          i, // full channel-price row — needed by resolveVariantPrice inheritance
   }]));
   const dbOptionPriceMap = new Map(dbOptionItems.map((o) => [o.id, Number(o.price)]));
   const dbExtraPriceMap  = new Map(dbExtras.map((e) => [e.id, Number(e.price)]));
+  const dbVariantById    = new Map(dbVariants.map((v) => [v.id, v]));
 
   for (const item of cart) {
     if (!dbItemMap.has(resolveMenuItemId(item))) {
@@ -282,10 +305,46 @@ export async function POST(
   const promoChannel = parsed.data.deliveryMethod === "delivery" ? "DELIVERY" : "QR_MENU";
   const activeMenuPromos = await getActiveMenuPromotions(restaurantId, promoChannel);
 
-  // Use DB prices throughout — prevents price tampering on base items AND add-ons
-  const verifiedCart = cart.map((item) => {
+  // Use DB prices throughout — prevents price tampering on base items, variants
+  // AND add-ons
+  type VerifiedCartLine = (typeof cart)[number] & {
+    menuItemId:   string;
+    categoryId:   string;
+    categoryName: string | null;
+  };
+  const verifiedCart: VerifiedCartLine[] = [];
+
+  for (const item of cart) {
     const menuItemId = resolveMenuItemId(item);
     const dbEntry = dbItemMap.get(menuItemId)!;
+
+    // ── Variant resolution (server-side price guard for variant lines) ────────
+    // Primary signal: the explicit variantId. Fallback for older cached clients:
+    // the line-id convention `${baseItemId}_${variantId}[suffix]`. Either way the
+    // variant must exist, belong to THIS line's item, and be available — fail
+    // closed with a 400 rather than silently pricing from the base item.
+    const wantsVariant = !!(item.variantId || item.variantName);
+    let dbVariant: (typeof dbVariants)[number] | null = null;
+    if (wantsVariant) {
+      dbVariant = item.variantId
+        ? dbVariantById.get(item.variantId) ?? null
+        : dbVariants.find((v) =>
+            v.menuItemId === menuItemId &&
+            (item.id === `${menuItemId}_${v.id}` || item.id.startsWith(`${menuItemId}_${v.id}_`)),
+          ) ?? null;
+      if (!dbVariant || dbVariant.menuItemId !== menuItemId) {
+        return NextResponse.json(
+          { error: `Opção inválida para o item: ${item.name}` },
+          { status: 400 },
+        );
+      }
+      if (!dbVariant.isAvailable) {
+        return NextResponse.json(
+          { error: `Opção indisponível: ${item.name}` },
+          { status: 400 },
+        );
+      }
+    }
 
     const optionsExtra = (item.selectedOptions ?? []).reduce((s, o) => {
       const dbPrice = dbOptionPriceMap.get(o.optionId) ?? 0;
@@ -295,8 +354,16 @@ export async function POST(
       const dbPrice = dbExtraPriceMap.get(e.extraId) ?? 0;
       return s + dbPrice * e.qty;
     }, 0);
-    const resolved = resolveMenuItemPromotion(menuItemId, dbEntry.categoryId, dbEntry.price, activeMenuPromos);
-    const effectiveBasePrice = resolved?.promotionalPrice ?? dbEntry.price;
+
+    // Promoção × variante: os clientes NUNCA aplicam promoção em linha de
+    // variante — o preço mostrado é o da própria variante (PedidoClient só
+    // exibe/aplica promo quando !item.hasVariants; o ProductModal commerce usa
+    // selectedVariant.price direto). O servidor espelha: variante cobra
+    // resolveVariantPrice do banco, sem passar pelo resolvedor de promoções.
+    const effectiveBasePrice = dbVariant
+      ? resolveVariantPrice(dbEntry.row, dbVariant, pricingChannel)
+      : (resolveMenuItemPromotion(menuItemId, dbEntry.categoryId, dbEntry.price, activeMenuPromos)
+          ?.promotionalPrice ?? dbEntry.price);
     const computedPrice = effectiveBasePrice + optionsExtra + extrasExtra;
 
     // Rebuild selectedOptions/selectedExtras with DB-verified prices
@@ -309,16 +376,18 @@ export async function POST(
       unitPrice: dbExtraPriceMap.get(e.extraId) ?? 0,
     }));
 
-    return {
+    verifiedCart.push({
       ...item,
       menuItemId,
       price:           computedPrice,
+      // Comanda/ticket must show what the DB charged, not what the client typed
+      ...(dbVariant ? { variantName: dbVariant.name } : {}),
       categoryId:      dbEntry.categoryId,
       categoryName:    dbEntry.categoryName,
       selectedOptions: verifiedOptions,
       selectedExtras:  verifiedExtras,
-    };
-  });
+    });
+  }
 
   // ── Idempotency: return existing order on duplicate submit ─────
   const ikey = makeIdempotencyKey(restaurantId, customerName, verifiedCart);

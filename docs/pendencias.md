@@ -2,7 +2,26 @@
 
 > Última atualização: 04/08/2026.
 
-## 💰 P1 · Finalize ignora o preço da variante — restaurante cobra a menos (04/08)
+## 💰 P1 · WhatsApp: mesmo furo de preço de variante no checkout do canal (04/08)
+
+Achado do `operacao` ao corrigir o finalize (abaixo):
+`WhatsAppCheckoutAdapter.validateAndPriceItems`
+(`src/services/whatsapp/ordering/WhatsAppCheckoutAdapter.ts:85,100`) recalcula
+pelo `channelPrice` do item **base** e só carrega `variantName` — idêntico ao bug
+que o finalize tinha. Pedido por WhatsApp com variante mais cara cobra a menos.
+Não foi tocado no bloco do finalize (fora do escopo, por ordem); é o próximo
+conserto da fila. A mesma resolução de variante do finalize serve de modelo.
+
+## ⚖️ Canal de exibição × canal de cobrança no pickup — decisão pendente (04/08)
+
+Segundo achado do `operacao`: os clientes do `/pedido` exibem preço do canal
+DELIVERY (`mapPedidoItem`), mas o finalize precifica **pickup** como DINE_IN. Se
+um restaurante tiver `priceDineIn ≠ priceDelivery`, o cliente vê um preço e a
+retirada cobra outro — pré-existente, vale para item base e variante. Corrigir
+exige decidir a regra de produto (pickup cobra qual canal?) — não resolver em
+silêncio; levar ao CEO junto com a próxima conversa de preços.
+
+## ✅ P1 · Finalize ignorava o preço da variante — CORRIGIDO em 04/08 (aguardando merge)
 
 Achado do `interface` no E2E do retrabalho da Loja, **confirmado pelo Diretor no
 código**: `/api/pedido/[slug]/finalize` recalcula o preço no servidor a partir do
@@ -15,6 +34,17 @@ mais barata para o cliente e o restaurante não vê. Correção: resolver `varia
 → `resolveVariantPrice` dentro do guard server-side do finalize (o guard
 anti-adulteração continua; ele só precisa conhecer variantes). Guardrail 6: a
 evidência acima é o caso concreto.
+
+**Corrigido em 04/08 pelo `operacao`, revisado pelo Diretor:** o guard resolve a
+variante no banco (`variantId` explícito no schema — antes o zod o descartava em
+silêncio — com fallback pela convenção do id de linha), falha fechado com 400
+para variante inválida/indisponível/de outro item, cobra `resolveVariantPrice`
+no canal do pedido e grava na comanda o nome da variante do banco. Regra
+promoção×variante: espelha os clientes (promoção nunca se aplica a linha de
+variante). Travado por 12 testes novos em
+`src/app/api/pedido/[slug]/finalize/route.test.ts` + E2E real na pizzaria-demo
+(64,90 cobrado como 64,90). De carona revelou os DOIS achados no topo desta
+fila (WhatsApp com o mesmo furo; canal de exibição × cobrança no pickup).
 
 ---
 
