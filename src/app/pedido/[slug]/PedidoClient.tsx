@@ -397,6 +397,12 @@ interface Props {
   knownCustomerName?: string | null;
   knownCustomerId?: string | null;
   knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string; cep?: string; city?: string; state?: string } | null;
+  /**
+   * Proof-of-phone-possession token (a signed waToken) for the gated "área do cliente"
+   * endpoints (profile / addresses / coupons). Present when the customer arrived via a
+   * verified WhatsApp link; null otherwise. Without it those endpoints reveal nothing.
+   */
+  pedidoToken?: string | null;
   deliveryFee?: number | null;
   /** Free delivery threshold: if subtotal >= this value, delivery is free. */
   freeDeliveryAbove?: number | null;
@@ -1896,16 +1902,21 @@ function AddressFormModal({
 function CustomerIdentityStrip({
   slug,
   customerId,
+  authToken,
   name,
   displayPhone,
   onReset,
 }: {
   slug: string;
   customerId: string | null | undefined;
+  /** Proof-of-phone token required by the gated profile/address/coupon endpoints. */
+  authToken: string | null;
   name: string | null;
   displayPhone: string | null;
   onReset: () => void;
 }) {
+  // No token → the gated endpoints reveal nothing, so skip the fetches entirely.
+  const authHeaders: Record<string, string> = authToken ? { "x-pedido-token": authToken } : {};
   const [open, setOpen]       = useState(false);
   const [tab, setTab]         = useState<"info" | "coupons">("info");
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -1918,33 +1929,34 @@ function CustomerIdentityStrip({
 
   // Refetch just the profile after an address change (so the list updates).
   const reloadProfile = useCallback(async () => {
-    if (!customerId) return;
-    const p = await fetch(`/api/pedido/${slug}/customer-profile?customerId=${encodeURIComponent(customerId)}`)
+    if (!customerId || !authToken) return;
+    const p = await fetch(`/api/pedido/${slug}/customer-profile?customerId=${encodeURIComponent(customerId)}`, { headers: authHeaders })
       .then((r) => r.json()).catch(() => null);
     if (p?.profile) setProfile(p.profile as CustomerProfile);
-  }, [customerId, slug]);
+  }, [customerId, slug, authToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Eager load once identified: lets the collapsed bar show a live hint (cupons)
-  // and opens the panel instantly.
+  // Eager load once identified AND holding the proof token: lets the collapsed bar
+  // show a live hint (cupons) and opens the panel instantly. Without the token the
+  // gated endpoints return nothing, so there is nothing to load.
   useEffect(() => {
-    if (loadedRef.current || !customerId) return;
+    if (loadedRef.current || !customerId || !authToken) return;
     loadedRef.current = true;
     setLoading(true);
     Promise.all([
-      fetch(`/api/pedido/${slug}/customer-profile?customerId=${encodeURIComponent(customerId)}`).then((r) => r.json()).catch(() => null),
-      fetch(`/api/pedido/${slug}/coupons?customerId=${encodeURIComponent(customerId)}`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/pedido/${slug}/customer-profile?customerId=${encodeURIComponent(customerId)}`, { headers: authHeaders }).then((r) => r.json()).catch(() => null),
+      fetch(`/api/pedido/${slug}/coupons?customerId=${encodeURIComponent(customerId)}`, { headers: authHeaders }).then((r) => r.json()).catch(() => null),
     ]).then(([p, c]) => {
       if (p?.profile) setProfile(p.profile as CustomerProfile);
       if (Array.isArray(c?.coupons)) setCoupons(c.coupons as WalletCoupon[]);
     }).finally(() => setLoading(false));
-  }, [customerId, slug]);
+  }, [customerId, slug, authToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Address CRUD (público, escopado por customerId+slug) ───────────────────
+  // ── Address CRUD (gated: proof token + slug; customerId resolved server-side) ──
   const setAddrDefault = async (id: string) => {
     if (!customerId) return;
     setAddrBusy(true);
     await fetch(`/api/pedido/${slug}/customer-address/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ customerId, isDefault: true }),
     }).catch(() => {});
     await reloadProfile();
@@ -1954,7 +1966,7 @@ function CustomerIdentityStrip({
     if (!customerId || typeof window === "undefined" || !window.confirm("Excluir este endereço?")) return;
     setAddrBusy(true);
     await fetch(`/api/pedido/${slug}/customer-address/${id}`, {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
+      method: "DELETE", headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ customerId }),
     }).catch(() => {});
     await reloadProfile();
@@ -1974,7 +1986,7 @@ function CustomerIdentityStrip({
         : `/api/pedido/${slug}/customer-address`;
       const res = await fetch(url, {
         method: v.id ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -2415,6 +2427,7 @@ export function PedidoClient({
   slug, restaurantName, logoUrl, phone, categories,
   knownCustomerPhone = null, knownCustomerName = null,
   knownCustomerId = null, knownDefaultAddress = null,
+  pedidoToken = null,
   instagramUrl = null, tiktokUrl = null,
   banners = [],
   brandPrimaryColor = null, brandSecondaryColor = null,
@@ -2710,6 +2723,19 @@ export function PedidoClient({
   const effectiveCustomerPhone = knownCustomerPhone ?? trustedStored?.phone ?? null;
   // Effective customerId: from server prop or from session-stored identify response
   const effectiveCustomerId = knownCustomerId ?? trustedStored?.customerId ?? undefined;
+
+  // Proof-of-phone token for the gated "área do cliente" endpoints. From the SSR prop
+  // (validated waToken) or, when the SSR couldn't resolve it, the waToken still in the
+  // URL. Without it, profile/address/coupons reveal nothing — so the returning
+  // WhatsApp customer (who has it) keeps the full experience; a bare-web visitor who
+  // only typed a phone does not silently inherit a stranger's saved data.
+  const [authToken, setAuthToken] = useState<string | null>(pedidoToken ?? null);
+  useEffect(() => {
+    if (authToken || typeof window === "undefined") return;
+    const t = new URLSearchParams(window.location.search).get("waToken");
+    if (t) setAuthToken(t);
+  }, [authToken]);
+  const authTokenHeaders: Record<string, string> = authToken ? { "x-pedido-token": authToken } : {};
 
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
   const [customerName, setCustomerName] = useState(
@@ -4620,11 +4646,13 @@ export function PedidoClient({
   const loadWallet = useCallback(async () => {
     if (!resolvedCustomerId) { setWalletCoupons([]); return; }
     try {
-      const res = await fetch(`/api/pedido/${slug}/coupons?customerId=${encodeURIComponent(resolvedCustomerId)}`);
+      const res = await fetch(`/api/pedido/${slug}/coupons?customerId=${encodeURIComponent(resolvedCustomerId)}`, {
+        headers: authTokenHeaders, // proof of phone possession — no token, no wallet
+      });
       const j   = await res.json();
       setWalletCoupons(Array.isArray(j?.coupons) ? j.coupons : []);
     } catch { setWalletCoupons([]); }
-  }, [slug, resolvedCustomerId]);
+  }, [slug, resolvedCustomerId, authToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply a wallet coupon. discountAmount here is display-only — the server
   // recomputes it authoritatively at finalize from the coupon in the DB.
@@ -5825,6 +5853,7 @@ export function PedidoClient({
           <CustomerIdentityStrip
             slug={slug}
             customerId={resolvedCustomerId}
+            authToken={authToken}
             name={identifiedName}
             displayPhone={identifiedPhone}
             onReset={handleResetIdentity}

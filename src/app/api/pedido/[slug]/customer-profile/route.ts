@@ -5,13 +5,19 @@
  * identified customer sees — name, phone, email, saved addresses (default first)
  * and tier. Read-only. Coupons come from the separate /coupons endpoint.
  *
- * Security: scoped to the slug's restaurant AND the customer must belong to it —
- * no cross-restaurant/customer leakage. Rate limited.
+ * Security (CR C1): this returns PII (e-mail, full saved addresses), so it requires
+ * a PROOF of phone possession — a signed waToken, resolved by lib/pedido-identity.
+ * The `customerId` is NEVER trusted from the query; the customer is resolved from the
+ * proven phone within the slug's restaurant. Without a valid proof it reveals nothing
+ * (`profile: null`). This closes the old leak where a customerId (itself handed out
+ * from a bare phone by /identify-customer) unlocked a stranger's home address. Both
+ * cross-restaurant AND cross-customer access are blocked. Rate limited.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { resolvePedidoIdentity } from "@/lib/pedido-identity";
 
 export async function GET(
   req: NextRequest,
@@ -22,16 +28,17 @@ export async function GET(
   if (rl.limited) return rateLimitResponse(rl.retryAfter);
 
   try {
-    const { slug }   = await params;
-    const customerId = req.nextUrl.searchParams.get("customerId")?.trim() ?? "";
-    if (!customerId) return NextResponse.json({ profile: null });
+    const { slug } = await params;
 
     const restaurant = await prisma.restaurant.findUnique({ where: { slug }, select: { id: true } });
     if (!restaurant) return NextResponse.json({ error: "Restaurante não encontrado" }, { status: 404 });
 
-    // The customer must belong to this restaurant (no cross-tenant leakage).
+    // Gate: only a caller who proved possession of the phone can read this profile.
+    const identity = await resolvePedidoIdentity(req, restaurant.id);
+    if (!identity) return NextResponse.json({ profile: null });
+
     const customer = await prisma.customer.findFirst({
-      where:  { id: customerId, restaurantId: restaurant.id, isActive: true },
+      where:  { id: identity.customerId, restaurantId: restaurant.id, isActive: true },
       select: { id: true, name: true, phone: true, email: true, tier: true },
     });
     if (!customer) return NextResponse.json({ profile: null });
