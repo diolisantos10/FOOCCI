@@ -113,20 +113,32 @@ O script é idempotente: rodar de novo apenas reporta o estado do DNS, e agora
 **grita quando o valor do CNAME diverge do exigido** — que é exatamente o erro
 que ficou escondido aqui.
 
-### 2. Corrigir o valor do CNAME na Hostinger — ❌ **ÚNICO PASSO QUE FALTA**
+### 2. Corrigir o valor do CNAME na Hostinger — ✅ **FEITO** (por API, 04/08)
 
-O registro já existe; o que está errado é o **valor**. Não criar outro, **editar
-o que está lá**:
-
-- Hostinger → **Domínios → foocci.com.br → DNS / Nameservers**
-- Encontrar o registro `CNAME` de nome `www` e trocar o destino:
+O registro já existia; o que estava errado era o **valor**. Corrigido pela API da
+Hostinger (`PUT /api/dns/v1/zones/foocci.com.br`), trocando **apenas** o `CNAME`
+do `www` e deixando o `ALIAS @` e o `TXT _railway-verify` intocados:
 
 | Campo | Valor |
 |---|---|
 | Tipo | `CNAME` |
 | Nome | `www` |
 | Aponta para | ~~`o8p24ufo.up.railway.app`~~ → **`9gfe3aaa.up.railway.app`** |
-| TTL | 300 |
+| TTL | 14400 → **300** |
+
+Conferido nos dois servidores autoritativos, consultados um a um (sem passar por
+resolvedor com cache):
+
+```
+pixel.dns-parking.com (172.64.52.230) → 9gfe3aaa.up.railway.app
+byte.dns-parking.com  (172.64.53.67)  → 9gfe3aaa.up.railway.app
+```
+
+> **Cuidado ao medir depois de uma troca de DNS:** o TTL antigo era de 4 horas,
+> então Google e Cloudflare continuaram servindo o valor velho por um tempo — e o
+> proxy desta sessão também. Perguntar ao resolvedor público **não** prova que a
+> troca falhou. O que prova é o autoritativo, e o `certificateStatus` na API do
+> Railway.
 
 > Use **CNAME**, não A. Se o IP do Railway mudar, o CNAME acompanha sozinho; um
 > A record fixo quebra em silêncio no dia da troca.

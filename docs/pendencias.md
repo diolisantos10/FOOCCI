@@ -2,6 +2,38 @@
 
 > Última atualização: 04/08/2026.
 
+## ✅ Domínio `www` — FECHADO pelo Diretor em 04/08, ponta a ponta
+
+O `www.foocci.com.br` não abria: erro de certificado no navegador. Estava travado
+havia dias porque parecia depender do CEO abrir dois painéis. **Não depende mais
+— nenhuma das duas pontas.**
+
+| Ponta | Como ficou |
+|---|---|
+| **Registro no Railway** | Feito por API, via GitHub Actions, usando o `RAILWAY_TOKEN` que já existia nos segredos do repositório. `scripts/railway-custom-domain.mjs` + `.github/workflows/railway-custom-domain.yml`. |
+| **Correção do DNS** | Feita por API na Hostinger, com token do CEO. `CNAME www` → `9gfe3aaa.up.railway.app`, TTL 300. Confirmado nos dois servidores autoritativos (`pixel` e `byte.dns-parking.com`). |
+
+**A causa raiz, que ficou escondida por dias:** o `CNAME` do `www` apontava para
+`o8p24ufo.up.railway.app` — a borda do serviço/apex — enquanto o Railway emite o
+certificado do `www` numa borda exclusiva, `9gfe3aaa.up.railway.app`. Servidores
+diferentes (`69.46.46.119` × `69.46.46.53`). O DNS **resolvia**, então todo
+diagnóstico de fora dizia "está tudo certo, é só esperar". Não era espera: era
+valor trocado, e ficaria assim para sempre.
+
+> **Aprendizado que vale além deste domínio:** *DNS resolvendo* ≠ *DNS correto*.
+> Um portão que só checa NXDOMAIN aprova este erro. O que prova é comparar
+> `requiredValue` × `currentValue` na API do provedor — o script agora grita
+> quando divergem, e reporta o `certificateStatus`.
+
+**Detalhe operacional:** o TTL antigo era de 4 horas, então resolvedores públicos
+(Google, Cloudflare) ainda serviram o valor velho por um tempo depois da troca.
+Autoritativo correto = problema resolvido; o resto é expiração de cache.
+
+**Pendente de decisão do CEO:** o token da Hostinger passou pelo chat e **deve ser
+rotacionado**. Se ele quiser que DNS continue na mão do Diretor depois disso,
+guardar o token novo como segredo `HOSTINGER_API_TOKEN` no repositório — é o
+mesmo mecanismo que já resolveu o lado do Railway.
+
 ## 📱 Cupons/endereços na Loja para quem DIGITA o telefone — depende de OTP (canais)
 
 Nota do topo marketplace (04/08): o drawer "Minha conta" da Loja mostra cupons
