@@ -59,7 +59,7 @@ que faz upsert por `slug` como `isPublished=true` + `agentVisibility=true`.
 | guia-acompanhar-pedidos | Pedidos | `src/app/(dashboard)/orders/OrdersClient.tsx` |
 | guia-central-conversas | Central de Conversas | `src/app/(dashboard)/atendimento/AtendimentoClient.tsx` |
 | guia-cadastrar-produto | Cardápio | `src/app/(dashboard)/menu/MenuManager.tsx` |
-| guia-cardapio-digital-qr | Cardápio (QR) | `src/app/(dashboard)/menu/MenuManager.tsx`, `src/app/(dashboard)/web-menu/**` |
+| guia-cardapio-digital-qr | Cardápio (QR) | `src/app/(dashboard)/menu/MenuManager.tsx` (os 3 `QRCard`), `src/app/(dashboard)/menu/QRCard.tsx`, `src/app/(dashboard)/web-menu/**` |
 | guia-precificacao | CMV & Precificação | `src/app/(dashboard)/precificacao/PrecificacaoClient.tsx` |
 | guia-agentes-ia | Agentes IA | `src/app/(dashboard)/agente-ia/AgentePage.tsx` |
 | guia-ensinar-ia | Agentes IA (base de conhecimento) | `src/app/(dashboard)/agente-ia/AgentePage.tsx` |
