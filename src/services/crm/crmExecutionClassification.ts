@@ -120,6 +120,18 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "INVALID_PHONE_FORMAT": return "BLOCKED_INVALID_PHONE";
     case "CUSTOMER_NOT_CONTACTABLE": return "SKIPPED_NOT_CONTACTABLE";
     case "EMPTY_MESSAGE_AFTER_RENDER": return "EMPTY_MESSAGE";
+    // ── Canal oficial (Meta) ───────────────────────────────────────────────
+    // Os nomes de categoria continuam com o prefixo EVOLUTION_ por um motivo
+    // concreto: o painel do lojista (CRMClient) conta por essas chaves. Renomear
+    // aqui zeraria os contadores da tela sem ninguém perceber. O que mudou é o
+    // que ENTRA em cada uma.
+    case "META_TEMPLATE_REQUIRED": return "BLOCKED_SAFETY";       // política, não falha
+    case "META_NOT_CONNECTED":     return "EVOLUTION_INSTANCE_DISCONNECTED";
+    case "META_190":               return "EVOLUTION_AUTH_ERROR"; // token expirado/inválido
+    case "INVALID_PHONE":          return "BLOCKED_INVALID_PHONE";
+    case "WINDOW_LOOKUP_FAILED":                                   // banco fora → tentar depois
+    case "NETWORK":                return "FAILED_TIMEOUT";
+    case "HTTP_429":               return "EVOLUTION_RATE_LIMITED";
     case "EVOLUTION_HTTP_400": return "EVOLUTION_BAD_REQUEST";
     case "EVOLUTION_HTTP_401":
     case "EVOLUTION_HTTP_403": return "EVOLUTION_AUTH_ERROR";
@@ -128,6 +140,11 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "EVOLUTION_HTTP_504":
     case "EVOLUTION_HTTP_522":
     case "EVOLUTION_HTTP_524": return "FAILED_TIMEOUT";
+    case "NO_WHATSAPP_CONFIG":
+    // Linhas históricas: até 04/08/2026 o canal ausente era gravado como
+    // NO_EVOLUTION_CONFIG. O código saiu de circulação, mas os registros antigos
+    // continuam no banco e precisam continuar sendo lidos — apagar o case aqui
+    // transformaria bloqueio explicado em "erro desconhecido" retroativo.
     case "NO_EVOLUTION_CONFIG":
     case "QUIET_HOURS":
     case "WEEKEND_BLOCKED":
@@ -138,6 +155,12 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     default:
       // 5xx (and any other EVOLUTION_HTTP_*) → generic provider failure (retry later).
       if (reason.startsWith("EVOLUTION_HTTP_")) return "FAILED_PROVIDER";
+      // Códigos de erro da Meta que não estão mapeados um a um. Vão para falha de
+      // provedor (retentar depois) DE PROPÓSITO: mapear um código desconhecido para
+      // "número morto" mandaria cliente para a exclusão automática com base em
+      // palpite. Quando um código específico merecer tratamento próprio, ele entra
+      // acima, nomeado.
+      if (reason.startsWith("META_") || /^HTTP_5\d\d$/.test(reason)) return "FAILED_PROVIDER";
       return null;
   }
 }

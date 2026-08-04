@@ -38,8 +38,9 @@ export async function POST(req: NextRequest) {
       return badRequest("Por segurança, o teste só pode ser enviado para o telefone do restaurante ou para o número de teste interno (META_TEST_PHONE).");
     }
 
-    // Direct Meta provider — independent of the active provider selection.
-    const result = await WhatsAppMessagingService.providers.meta.sendText({
+    // A Meta é o único provedor desde 04/08 — não há mais "seleção" da qual se
+    // manter independente, então o teste usa o caminho normal de envio.
+    const result = await WhatsAppMessagingService.sendText({
       restaurantId: ctx.restaurantId,
       to:           toNorm,
       text:         body.text?.slice(0, 300) || "Teste de conexão Foocci · WhatsApp Meta ✅",

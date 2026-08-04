@@ -14,7 +14,7 @@
  *      re-checks at send time.
  *   2. Resolve the platform + real review link (no invention).
  *   3. Resolve the final message (operator edit allowed, must keep the link).
- *   4. Send via the existing safe Evolution path.
+ *   4. Envia pelo canal oficial (WhatsAppMessagingService).
  *   5. Log a Message into the customer's WhatsApp conversation (Atendimento).
  *   6. Log a CRMActionLog row (status in metadata) for audit + dedup.
  *
@@ -30,8 +30,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { ConversationStatus } from "@prisma/client";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
+import {
+  isWhatsAppChannelConnected,
+  NO_WHATSAPP_CONFIG,
+  NO_WHATSAPP_CONFIG_DETAIL,
+} from "./crmWhatsAppChannel";
 import {
   ReviewRequestService,
   type ReviewRequestDecision,
@@ -215,7 +219,7 @@ export interface SendReviewRequestResult {
   platform: ReviewPlatform | null;
   reviewLink: string | null;
   messageText: string | null;
-  /** Evolution message id when sent. */
+  /** Id da mensagem no provedor, quando enviada. */
   messageId?: string;
   blockReasons: string[];
   /** Block/skip reasons in human-readable form (mirrors eligibility reasons). */
@@ -314,14 +318,10 @@ export class ReviewRequestSendService {
       };
     }
 
-    // 5. Load Evolution config — only required when Evolution is the ACTIVE provider.
-    // A Meta-official restaurant sends via stored Cloud API credentials instead.
-    const activeProviderName = await prisma.restaurant
-      .findUnique({ where: { id: input.restaurantId }, select: { whatsappProvider: true } })
-      .then((r) => r?.whatsappProvider ?? "EVOLUTION")
-      .catch(() => "EVOLUTION");
-    const cfgResult = await EvolutionConfigService.getSnapshot(input.restaurantId);
-    if (!cfgResult.ok && activeProviderName !== "META_CLOUD_API") {
+    // 5. O canal está de pé? Antes a pergunta era "existe config da Evolution?" e o
+    // restaurante Meta passava por exceção. Com canal único a pergunta é uma só —
+    // e a resposta desconhecida vale por "não" (o helper falha fechado).
+    if (!(await isWhatsAppChannelConnected(input.restaurantId))) {
       const row = buildReviewActionLog({
         status: "skipped",
         restaurantId: input.restaurantId,
@@ -330,7 +330,7 @@ export class ReviewRequestSendService {
         platform: plan.platform,
         reviewLink: plan.link,
         messageText: plan.message,
-        error: "NO_EVOLUTION_CONFIG",
+        error: NO_WHATSAPP_CONFIG,
       });
       const created = await prisma.cRMActionLog.create({ data: row, select: { id: true } });
       return {
@@ -338,17 +338,21 @@ export class ReviewRequestSendService {
         platform: plan.platform,
         reviewLink: plan.link,
         messageText: plan.message,
-        blockReasons: ["NO_EVOLUTION_CONFIG"],
-        reasons: [...eligibility.reasons, "WhatsApp não configurado."],
+        blockReasons: [NO_WHATSAPP_CONFIG],
+        reasons: [...eligibility.reasons, `${NO_WHATSAPP_CONFIG_DETAIL}.`],
         eligibility,
         actionLogId: created.id,
       };
     }
 
-    // 6. Send + log. On Evolution failure, log a FAILED row (retry-safe).
+    // 6. Send + log. Falha de envio vira uma linha FAILED (retry-safe).
     try {
-      const sendRes = await sendWhatsAppText(input.restaurantId, phone, plan.message);
-      if (!sendRes.ok) throw new Error(sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
+      const sendRes = await WhatsAppMessagingService.sendText({
+        restaurantId: input.restaurantId, to: phone, text: plan.message,
+      });
+      // Bloqueio de política (fora da janela de 24h) também para aqui: o pedido de
+      // avaliação é texto livre por natureza, e é honesto dizer que não saiu.
+      if (!sendRes.ok) throw new Error(sendRes.blockReason ?? sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
 
       const convId = await findOrCreateReviewConversation(
         input.restaurantId,

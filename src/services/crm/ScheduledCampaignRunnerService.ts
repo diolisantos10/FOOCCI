@@ -9,16 +9,15 @@
  * - Respect weekday schedule, time window, timezone
  * - Enforce daily send limits (24-hour rolling window)
  * - Deduplicate: never send same campaign to same customer twice
- * - Send via Evolution API, log in Chat Inbox
+ * - Send via WhatsAppMessagingService (canal oficial Meta), log in Chat Inbox
  * - Mark COMPLETED when audience exhausted or end condition met
  */
 
 import { prisma } from "@/lib/prisma";
 import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/public-url";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
-import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
-import { sendMetaCrmMessage } from "./metaCrmSend";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
+import { isWhatsAppChannelConnected, SendFailure, NO_WHATSAPP_CONFIG, NO_WHATSAPP_CONFIG_DETAIL } from "./crmWhatsAppChannel";
+import { sendMetaCrmMessage, resolveMetaCrmTemplate } from "./metaCrmSend";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { Prisma, ConversationStatus } from "@prisma/client";
 import {
@@ -135,23 +134,26 @@ const BLOCK_RETRY_WINDOW_HOURS = 24;
 const REPROCESSING_CAMPAIGNS = new Set<string>();
 
 /**
- * Hard ceiling on messages sent per run for the Evolution Web / Baileys provider.
- * Evolution Web rides a real WhatsApp-Web session — bursts freeze the phone and
- * raise spam/block risk — so a recurring batch never sends more than this in one
- * run, regardless of the caller-supplied limit or the campaign's daily limit.
- * A lower configured limit is still respected (we take the min).
- * NOTE: this cap is provider-specific; an official Meta Cloud API provider (when
- * added) should gate on its own limits, not this constant.
- */
-export const EVOLUTION_WEB_MAX_PER_RUN = 5;
-
-/**
- * Per-run ceiling on the OFFICIAL Meta Cloud API — no session to protect, so the
- * cap only paces requests and keeps each cron HTTP call inside its timeout.
- * 40/run × ~36 cron cycles/day ≈ 1.4k capacity, comfortably above the safe
- * daily limit (META_SAFE_DAILY_LIMIT), so the day's budget is always reachable.
+ * Teto de mensagens por rodada no canal OFICIAL (Meta Cloud API) — não há sessão
+ * de celular a proteger, então o teto só dá ritmo às requisições e mantém cada
+ * chamada do cron dentro do tempo limite. 40/rodada × ~36 ciclos/dia ≈ 1.4k de
+ * capacidade, folgado acima do limite diário seguro (META_SAFE_DAILY_LIMIT), de
+ * modo que o orçamento do dia é sempre alcançável.
+ *
+ * Este é o único teto por rodada desde 04/08/2026: com um provedor só, não há
+ * mais escolha de teto por provedor.
  */
 export const META_CLOUD_MAX_PER_RUN = 40;
+
+/**
+ * @deprecated Resquício do provedor aposentado (WhatsApp Web via Evolution), onde
+ * lotes precisavam ser minúsculos porque a sessão travava o celular. O CRM não usa
+ * mais este valor para nada — ele sobrevive apenas porque três rotas de UI ainda o
+ * importam para escrever "até N por ciclo" na tela. Quem migrar aquelas rotas deve
+ * trocá-lo por `META_CLOUD_MAX_PER_RUN` e apagar esta constante.
+ * Rotas: api/crm/campaigns/[id]/{route,recoverable,reprocess-plan}.
+ */
+export const EVOLUTION_WEB_MAX_PER_RUN = 5;
 
 /**
  * Ready-made campaigns that belong to the relationship program. They may only send
@@ -161,17 +163,21 @@ export const RELATIONSHIP_PROGRAM_TEMPLATE_IDS = [
   "subiu-de-nivel", "quase-no-proximo-nivel", "mimo-mensal-nivel",
 ] as const;
 
-/** True when the restaurant sends CRM through the official Meta Cloud API. */
-async function isMetaCrmActive(restaurantId: string): Promise<boolean> {
-  try {
-    const cfg = await prisma.metaWhatsAppConfig.findUnique({
-      where:  { restaurantId },
-      select: { metaCrmEnabled: true, connectionStatus: true },
-    });
-    return cfg?.metaCrmEnabled === true && cfg.connectionStatus === "CONNECTED";
-  } catch {
-    return false; // absent table/mock → treat as Evolution (the conservative path)
-  }
+/**
+ * O canal do restaurante está de pé?
+ *
+ * Antes esta função respondia "é Meta ou é Evolution?" (`metaCrmEnabled === true &&
+ * connectionStatus === "CONNECTED"`), e o `false` caía para a Evolution. Não há mais
+ * para onde cair: a pergunta que sobrou é se o canal oficial está CONECTADO. A
+ * checagem de conexão continua exatamente porque, sem ela, restaurante com a Meta
+ * desconectada falharia em silêncio.
+ *
+ * `metaCrmEnabled` saiu da conta de propósito: ele existia para escolher provedor.
+ * Mantê-lo como trava de envio desligaria o CRM de todo restaurante que nunca
+ * precisou ligar aquele interruptor — quebra silenciosa, o oposto do pedido.
+ */
+async function isChannelReady(restaurantId: string): Promise<boolean> {
+  return isWhatsAppChannelConnected(restaurantId);
 }
 
 export interface ScheduledCampaignRunSummary {
@@ -234,7 +240,8 @@ export interface ReprocessRecoverableResult {
     cap:                   number;
     nextBatchCount:        number;
   };
-  instanceState: string | null;
+  /** Canal conectado no momento do portão; `null` quando nem chegou a ser consultado. */
+  channelConnected: boolean | null;
   /** Recipients actually attempted via the safe send path. */
   requested:     number;
   sent:          number;
@@ -473,10 +480,10 @@ export class ScheduledCampaignRunnerService {
     }
 
     const remainingToday = dailyLimit - todaySent;
-    // Per-run hard cap is provider-specific: the Evolution Web session needs tiny
-    // batches (ban risk); the official Meta Cloud API runs at full pace.
-    const perRunCap      = (await isMetaCrmActive(campaign.restaurantId)) ? META_CLOUD_MAX_PER_RUN : EVOLUTION_WEB_MAX_PER_RUN;
-    const batchCap       = Math.min(remainingToday, limit ?? remainingToday, perRunCap);
+    // Teto por rodada: um provedor só, um teto só (canal oficial, ritmo pleno).
+    // O teto por rodada é ritmo, NÃO é o limite do dia — quem manda no volume
+    // diário continua sendo `dailyLimit` + o orçamento global.
+    const batchCap       = Math.min(remainingToday, limit ?? remainingToday, META_CLOUD_MAX_PER_RUN);
 
     // Resolve full eligible audience at execution time
     const allEligible = await resolveAudience(
@@ -1038,31 +1045,20 @@ export class ScheduledCampaignRunnerService {
   /**
    * True when the restaurant has a live channel to send CRM through.
    *
-   * CRM-via-Meta: if the official Meta Cloud API is the CRM channel and it's
-   * connected, the Evolution (WhatsApp Web) instance being offline is IRRELEVANT —
-   * Meta is what actually sends. Checking only Evolution here wrongly blocked every
-   * campaign with "WhatsApp desconectado" for restaurants that migrated to Meta.
-   * Otherwise fall back to the Evolution instance reporting state=open.
+   * Uma pergunta só, ao canal único. O ciclo inteiro para quando ela é `false` —
+   * e para com motivo escrito (INSTANCE_DISCONNECTED) em cada campanha, que é o
+   * ponto: desconectado tem que APARECER, não virar rodada vazia sem explicação.
    */
   private static async _isInstanceConnected(restaurantId: string): Promise<boolean> {
-    const meta = await prisma.metaWhatsAppConfig.findUnique({
-      where:  { restaurantId },
-      select: { metaCrmEnabled: true, connectionStatus: true },
-    }).catch(() => null);
-    if (meta?.metaCrmEnabled === true && meta.connectionStatus === "CONNECTED") return true;
-
-    const snap = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!snap.ok) return false;
-    const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
-    return status?.state === "open";
+    return isChannelReady(restaurantId);
   }
 
   /**
    * Owner-initiated SAFE reprocess of a campaign's recoverable failures.
    *
    * Recomputes the recoverable plan from fresh DB rows (never trusts the client),
-   * checks the live Evolution instance state immediately before sending, sends only
-   * the next safe batch (cap EVOLUTION_WEB_MAX_PER_RUN) through the SAME battle-tested
+   * checks the live channel connection immediately before sending, sends only
+   * the next safe batch (cap META_CLOUD_MAX_PER_RUN) through the SAME battle-tested
    * `_sendBatch` path (opt-out / phone / cooldown / weekly-cap / cross-campaign dedup
    * gates, Central de Conversas logging, failure classification), creating NEW
    * execution rows only — old failed rows are never mutated. Aborts the remaining
@@ -1079,7 +1075,7 @@ export class ScheduledCampaignRunnerService {
     // smaller of the provider's hard ceiling, the configured cycle limit, and
     // whatever is left of today's global daily budget (Section 10).
     const budget = (await getSafetyConfig(ctx.restaurantId)).crmWhatsAppSafety;
-    const perRunCap = (await isMetaCrmActive(ctx.restaurantId)) ? META_CLOUD_MAX_PER_RUN : EVOLUTION_WEB_MAX_PER_RUN;
+    const perRunCap = META_CLOUD_MAX_PER_RUN;
     let cap = perRunCap;
     let budgetExhausted = false;
     if (budget?.enabled) {
@@ -1113,7 +1109,7 @@ export class ScheduledCampaignRunnerService {
     ): ReprocessRecoverableResult => ({
       ok: false, reason, message, httpStatus,
       campaignId, campaignName: campaign?.name ?? "",
-      plan: emptyPlan, instanceState: null,
+      plan: emptyPlan, channelConnected: null,
       requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [],
       ...extra,
     });
@@ -1144,7 +1140,7 @@ export class ScheduledCampaignRunnerService {
     if (ctx.confirm !== true) {
       return blocked("NOT_CONFIRMED", "Confirmação explícita obrigatória ({ confirm: true }).", 400, { plan: planOut });
     }
-    if (!assertReprocessAllowed({ confirm: true, campaignStatus: campaign.status, nextBatchCount: 1, instanceState: "open" }).ok) {
+    if (!assertReprocessAllowed({ confirm: true, campaignStatus: campaign.status, nextBatchCount: 1, channelConnected: true }).ok) {
       return blocked("CAMPAIGN_NOT_REPROCESSABLE", `Campanha em status ${campaign.status} não pode reprocessar.`, 409, { plan: planOut });
     }
     if (plan.nextBatchCount === 0) {
@@ -1153,7 +1149,7 @@ export class ScheduledCampaignRunnerService {
       const message = budgetExhausted
         ? "Sem orçamento global de envio disponível hoje — limite diário do WhatsApp atingido."
         : "Nenhum destinatário recuperável no momento.";
-      return { ok: true, httpStatus: 200, message, campaignId, campaignName: campaign.name, plan: planOut, instanceState: null, requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [] };
+      return { ok: true, httpStatus: 200, message, campaignId, campaignName: campaign.name, plan: planOut, channelConnected: null, requested: 0, sent: 0, ignored: 0, failed: 0, aborted: false, recipients: [] };
     }
 
     // No parallel live reprocess for the same campaign (anti-duplicate guard).
@@ -1163,16 +1159,11 @@ export class ScheduledCampaignRunnerService {
     REPROCESSING_CAMPAIGNS.add(campaignId);
     lockHeld = true;
     try {
-    // Live Evolution instance gate — IMMEDIATELY before sending.
-    let instanceState: string | null = null;
-    const snap = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
-    if (snap.ok) {
-      const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
-      instanceState = status?.state ?? null;
-    }
-    const gate = assertReprocessAllowed({ confirm: true, campaignStatus: campaign.status, nextBatchCount: plan.nextBatchCount, instanceState });
+    // Portão de canal ao vivo — IMEDIATAMENTE antes de enviar.
+    const channelConnected = await isChannelReady(campaign.restaurantId);
+    const gate = assertReprocessAllowed({ confirm: true, campaignStatus: campaign.status, nextBatchCount: plan.nextBatchCount, channelConnected });
     if (!gate.ok) {
-      return blocked(gate.reason, gate.message, gate.reason === "INSTANCE_NOT_CONNECTED" ? 409 : 400, { plan: planOut, instanceState });
+      return blocked(gate.reason, gate.message, gate.reason === "INSTANCE_NOT_CONNECTED" ? 409 : 400, { plan: planOut, channelConnected });
     }
 
     // Revalidate each recipient against the CURRENT cadastro: contactable, not
@@ -1215,7 +1206,7 @@ export class ScheduledCampaignRunnerService {
     }
 
     if (customers.length === 0) {
-      return { ok: true, httpStatus: 200, message: "Todos os recuperáveis foram ignorados na revalidação.", campaignId, campaignName: campaign.name, plan: planOut, instanceState, requested: 0, sent: 0, ignored: revalidationExcluded.length, failed: 0, aborted: false, recipients: revalidationExcluded };
+      return { ok: true, httpStatus: 200, message: "Todos os recuperáveis foram ignorados na revalidação.", campaignId, campaignName: campaign.name, plan: planOut, channelConnected, requested: 0, sent: 0, ignored: revalidationExcluded.length, failed: 0, aborted: false, recipients: revalidationExcluded };
     }
 
     // Send via the SAME safe path used by the cron, with mid-batch abort enabled.
@@ -1250,7 +1241,7 @@ export class ScheduledCampaignRunnerService {
       ok: true, httpStatus: 200,
       message: send.aborted ? "Instância desconectou durante o envio — lote interrompido com resultado parcial." : undefined,
       campaignId, campaignName: campaign.name,
-      plan: planOut, instanceState,
+      plan: planOut, channelConnected,
       requested: customers.length,
       sent: send.sent,
       ignored: send.blocked + send.skipped + revalidationExcluded.length,
@@ -1283,20 +1274,32 @@ export class ScheduledCampaignRunnerService {
       couponValidityDays?: number | null;
     } = {},
   ): Promise<{ sent: number; failed: number; blocked: number; skipped: number; aborted: boolean }> {
-    // Check if Meta CRM is enabled
-    const metaCfgRow = await prisma.metaWhatsAppConfig.findUnique({
-      where:  { restaurantId: campaign.restaurantId },
-      select: { metaCrmEnabled: true, connectionStatus: true },
-    });
-    const useMetaCrm = metaCfgRow?.metaCrmEnabled === true && metaCfgRow.connectionStatus === "CONNECTED";
-    const metaProvider = useMetaCrm ? new MetaWhatsAppCloudProvider() : null;
-
-    const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
-    if (!cfgResult.ok && !useMetaCrm) {
-      console.error(`[ScheduledCampaignRunner] WhatsApp not configured for restaurant ${campaign.restaurantId}`);
-      return { sent: 0, failed: customers.length, blocked: 0, skipped: 0, aborted: false };
+    // ── Portão de canal, uma vez por lote ─────────────────────────────────────
+    // Não há mais escolha de provedor: ou o canal oficial está conectado, ou o
+    // lote inteiro para. E parar precisa APARECER — antes, canal ausente devolvia
+    // "N falhas" sem uma única linha gravada, e o lojista via zero envio sem
+    // motivo. Agora cada destinatário do lote fica com uma linha BLOCKED e o
+    // motivo escrito; a janela de 24h de reattempt impede que isso vire enxurrada
+    // a cada tick do cron.
+    if (!(await isChannelReady(campaign.restaurantId))) {
+      console.error("[ScheduledCampaignRunner] canal WhatsApp desconectado — lote não enviado", {
+        restaurantId: campaign.restaurantId, campaignId: campaign.id, destinatarios: customers.length,
+      });
+      await prisma.campaignExecution.createMany({
+        data: customers.map((c) => ({
+          campaignId:    campaign.id,
+          restaurantId:  campaign.restaurantId,
+          customerId:    c.id,
+          customerName:  c.name,
+          customerPhone: c.phone,
+          messageText:   "",
+          status:        "BLOCKED" as never,
+          failedReason:  NO_WHATSAPP_CONFIG_DETAIL,
+          errorMessage:  NO_WHATSAPP_CONFIG,
+        })),
+      }).catch((e) => console.error("[ScheduledCampaignRunner] não foi possível registrar o bloqueio de canal", e));
+      return { sent: 0, failed: 0, blocked: customers.length, skipped: 0, aborted: true };
     }
-    const evoConfig = cfgResult.ok ? cfgResult.data : null;
 
     // Load message personalization context
     const [restaurant, brandConfig, agentCfg] = await Promise.all([
@@ -1351,13 +1354,13 @@ export class ScheduledCampaignRunnerService {
     const fallbackPhrase: PoolPhrase = {
       key: phraseKey(campaign.message), text: withCouponLine(campaign.message, hasCoupon), source: "fallback",
     };
-    // On the Meta path, marketing to cold audiences REQUIRES an approved template —
-    // rotation is limited to phrases whose per-phrase template is APPROVED **for the
-    // current text** (a coupon toggle changes the text; a stale template would send
-    // the old wording). With none eligible, the legacy single-template path is used.
+    // Marketing para audiência fria EXIGE modelo aprovado (é fora da janela de 24h) —
+    // o rodízio fica limitado às frases cujo modelo está APROVADO **para o texto
+    // atual** (ligar o cupom muda o texto; um modelo velho mandaria a redação
+    // antiga). Sem nenhuma elegível, cai no modelo único da campanha.
     const phraseTemplates = readPhraseMetaTemplates(campaign.audienceConfig);
     let metaPhrases: PoolPhrase[] = [];
-    if (metaProvider && activePhrases.length > 0) {
+    if (activePhrases.length > 0) {
       const checks = await Promise.all(activePhrases.map(async (p) => {
         const tpl = phraseTemplates[p.key];
         if (!tpl?.name || tpl.submittedMessage !== p.text) return null;
@@ -1368,6 +1371,22 @@ export class ScheduledCampaignRunnerService {
       }));
       metaPhrases = checks.filter((p): p is PoolPhrase => p !== null);
     }
+
+    // ── Esta campanha vai sair por MODELO ou por texto livre? ──────────────────
+    // A pergunta não é mais "qual provedor?", é "existe modelo aprovado?". Ela
+    // decide três coisas que antes eram decididas pelo provedor: sobre quais frases
+    // o rodízio gira, se o bandit pondera, e se o agente do CRM pode compor.
+    //
+    // Por que o agente só entra no texto livre: se um modelo resolve, é o TEXTO DO
+    // MODELO que chega ao cliente. Deixar o agente compor ali gravaria
+    // `variantKey="agent:crm"` numa mensagem que ninguém leu — número de conversão
+    // inventado, que é justamente o que não se faz aqui.
+    const campaignTemplate = await resolveMetaCrmTemplate(
+      campaign.restaurantId,
+      { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+      "Cliente",
+    ).catch(() => null);
+    const templateMode = metaPhrases.length > 0 || campaignTemplate !== null;
 
     // "Cupom vencendo" speaks about the customer's OWN wallet coupon — resolve each
     // recipient's soonest-expiring ACTIVE coupon so {cupom}/{validade} render THEIR
@@ -1442,25 +1461,28 @@ export class ScheduledCampaignRunnerService {
     // the gate adds the per-customer rules the runner historically lacked:
     // customer cooldown, weekly cap, and CROSS-CAMPAIGN 24h dedup.
     const isBirthday    = isBirthdayCampaign(campaign);
+    // O canal já foi verificado no topo deste lote — passar `true` aqui é repetir
+    // o que acabou de ser confirmado, não presumir.
     const safetyContext = await ContactSafetyService.buildGlobalContext(campaign.restaurantId, {
-      evolutionAvailable: true,
+      whatsappAvailable: true,
     });
 
     // ── Piloto do Agente de CRM (escada + A/B) ────────────────────────────────
     // Em ALLOWLIST/WIDE, uma fatia dos destinatários ELEGÍVEIS recebe a mensagem
-    // COMPOSTA pelo agente em vez do sorteio; o resto é o grupo de controle. Só no
-    // path Evolution (Meta cold exige template aprovado). SHADOW_ONLY/paused (o
-    // default) desliga tudo — o envio segue byte-a-byte igual a hoje.
+    // COMPOSTA pelo agente em vez do sorteio; o resto é o grupo de controle. Só
+    // quando a campanha sai por TEXTO LIVRE — com modelo aprovado, quem chega ao
+    // cliente é o texto do modelo, e creditar o agente por ele seria medir fumaça.
+    // SHADOW_ONLY/paused (o default) desliga tudo.
     const crmPilot = await getCrmPilotConfig(campaign.restaurantId).catch(() => null);
-    const crmPilotActive = !!crmPilot && crmPilot.mode !== "SHADOW_ONLY" && !crmPilot.paused && !metaProvider;
+    const crmPilotActive = !!crmPilot && crmPilot.mode !== "SHADOW_ONLY" && !crmPilot.paused && !templateMode;
 
     // ── Escolha inteligente da frase (bandit paciente) ────────────────────────
     // Substitui o sorteio uniforme por uma escolha ponderada pela conversão JÁ
-    // MEDIDA por frase (CrmPhraseSelector). Meta-safe: pondera SÓ o pool ativo
-    // (que, no path Meta, já é só template aprovado). Paciente: enquanto a campanha
-    // não junta baseline (100 envios) o seletor devolve pesos uniformes = sorteio.
-    // Qualquer erro na leitura de stats → uniforme. Nunca cria/edita texto.
-    const selectorPool = metaProvider ? metaPhrases : activePhrases;
+    // MEDIDA por frase (CrmPhraseSelector). Meta-safe: pondera SÓ o pool que pode
+    // de fato ser enviado (com modelo, apenas os aprovados). Paciente: enquanto a
+    // campanha não junta baseline (100 envios) o seletor devolve pesos uniformes =
+    // sorteio. Qualquer erro na leitura de stats → uniforme. Nunca cria/edita texto.
+    const selectorPool = templateMode ? metaPhrases : activePhrases;
     const phraseByKey = new Map<string, PoolPhrase>();
     let phraseWeights: PhraseWeight[] | null = null;
     if (selectorPool.length > 1) {
@@ -1485,15 +1507,15 @@ export class ScheduledCampaignRunnerService {
     }
 
     let sent        = 0;
-    let failed      = 0; // REAL send failures (provider/Evolution) only
+    let failed      = 0; // REAL send failures (canal/provedor) only
     let blocked     = 0; // safety blocks — never counted as failures
     let skipped     = 0; // recipient-data skips (no/invalid phone) — never failures
     let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
     let aborted     = false; // set when a hard instance collapse stops the batch early
-    // Circuit breaker: if the WhatsApp session is unhealthy, Evolution rejects EVERY
-    // send (HTTP 500, or a 400 wrapping "Connection Closed"). Without this we hammer
-    // the whole audience and rack up hundreds of failures. After N consecutive
-    // instance/provider failures we stop the batch — a reconnect is needed, not more tries.
+    // Circuit breaker: com o canal doente (token recusado, conta bloqueada, 5xx em
+    // série) TODO envio falha igual. Sem isto martelamos a audiência inteira e
+    // acumulamos centenas de falhas idênticas. Após N falhas consecutivas de canal o
+    // lote para — o que resolve é reconectar, não tentar mais.
     let consecutiveInstanceFailures = 0;
     const INSTANCE_COLLAPSE_THRESHOLD = 5;
     const unreachableIds: string[] = []; // numbers that can't receive WhatsApp (retire/delete)
@@ -1556,7 +1578,7 @@ export class ScheduledCampaignRunnerService {
 
       const phone = normalizePhoneForEvolution(customer.phone);
       if (!isValidEvolutionPhone(phone)) {
-        // Recipient-data problem — SKIP before any Evolution call. NOT a failure.
+        // Recipient-data problem — SKIP antes de qualquer chamada ao canal. NOT a failure.
         const hasRawPhone = Boolean((customer.phone ?? "").trim());
         await prisma.campaignExecution.create({
           data: {
@@ -1627,10 +1649,10 @@ export class ScheduledCampaignRunnerService {
         continue;
       }
 
-      // Draw this recipient's phrase. Meta path rotates only over phrases whose
-      // template is approved; anything else keeps the legacy single-phrase flow.
+      // Draw this recipient's phrase. Com modelo, o rodízio gira só sobre as frases
+      // cujo modelo está aprovado; sem modelo (texto livre), gira sobre o pool todo.
       // Escolha ponderada pela conversão (bandit) quando há pesos; senão sorteio.
-      const drawUniform = (): PoolPhrase => (metaProvider
+      const drawUniform = (): PoolPhrase => (templateMode
         ? (pickPhrase(metaPhrases) ?? fallbackPhrase)
         : (pickPhrase(activePhrases) ?? fallbackPhrase));
       let phrase: PoolPhrase;
@@ -1707,50 +1729,54 @@ export class ScheduledCampaignRunnerService {
       sendIndex++;
 
       try {
-        // Send via Meta Cloud API (when CRM toggle is on) with Evolution fallback.
-        let externalMessageId: string | null = null;
-        let crmProvider = "EVOLUTION";
+        // Envio pelo canal único. Audiência fria está FORA da janela de 24h → tem
+        // que ser modelo APROVADO; o `sendMetaCrmMessage` resolve o modelo da
+        // campanha e só cai em texto livre quando não há modelo nenhum.
+        const firstName = (customer.name ?? "").split(" ")[0] || "Cliente";
+        // When the drawn phrase has its own approved template, send THAT one;
+        // the fallback phrase keeps the campaign's legacy template resolution.
+        const phraseTpl = phraseTemplates[phrase.key];
+        const metaAudienceCfg = phrase.source !== "fallback" && phraseTpl
+          ? { metaTemplate: phraseTpl }
+          : campaign.audienceConfig;
+        const { result: sendResult } = await sendMetaCrmMessage(WhatsAppMessagingService, {
+          restaurantId: campaign.restaurantId, phone, freeformText: messageText, firstName,
+          campaign: { objective: campaign.objective, audienceConfig: metaAudienceCfg },
+          // Fill approved-template body params from the SAME canonical context that
+          // rendered the freeform text, so a multi-variable template ({{2}}=cupom,
+          // {{3}}=link, …) delivers exactly what the freeform message would. Use the
+          // firstName fallback ("Cliente") for {nome} so a blank-name customer keeps the
+          // exact single-variable behavior instead of bailing to freeform on an empty param.
+          renderToken: (token) => personalizeMessage(token, { ...customer, name: customer.name || firstName }, recipientCtx),
+        });
 
-        if (metaProvider) {
-          // Cold/marketing audience is outside the 24h window → must use an APPROVED
-          // template. Resolve the campaign's template + fill {{1}}=nome; falls back to
-          // freeform only when no template is configured.
-          const firstName = (customer.name ?? "").split(" ")[0] || "Cliente";
-          // When the drawn phrase has its own approved template, send THAT one;
-          // the fallback phrase keeps the campaign's legacy template resolution.
-          const phraseTpl = phraseTemplates[phrase.key];
-          const metaAudienceCfg = phrase.source !== "fallback" && phraseTpl
-            ? { metaTemplate: phraseTpl }
-            : campaign.audienceConfig;
-          const { result: metaResult } = await sendMetaCrmMessage(metaProvider, {
-            restaurantId: campaign.restaurantId, phone, freeformText: messageText, firstName,
-            campaign: { objective: campaign.objective, audienceConfig: metaAudienceCfg },
-            // Fill approved-template body params from the SAME canonical context that
-            // rendered the freeform text, so a multi-variable template ({{2}}=cupom,
-            // {{3}}=link, …) delivers exactly what the freeform message would. Use the
-            // firstName fallback ("Cliente") for {nome} so a blank-name customer keeps the
-            // exact single-variable behavior instead of bailing to freeform on an empty param.
-            renderToken: (token) => personalizeMessage(token, { ...customer, name: customer.name || firstName }, recipientCtx),
+        // Recusa DELIBERADA (ex.: fora da janela de 24h sem modelo aprovado) não é
+        // falha de entrega: é política. Vira BLOCKED com o motivo escrito, não
+        // alimenta o disjuntor e não manda ninguém para a limpeza de números.
+        if (!sendResult.ok && sendResult.status === "BLOCKED") {
+          await prisma.campaignExecution.create({
+            data: {
+              campaignId:    campaign.id,
+              restaurantId:  campaign.restaurantId,
+              customerId:    customer.id,
+              customerName:  customer.name,
+              customerPhone: customer.phone,
+              messageText:   "",
+              variantKey,
+              status:        "BLOCKED" as never,
+              failedReason:  sendResult.error ?? "Envio bloqueado pela política do canal",
+              errorMessage:  sendResult.blockReason ?? "CHANNEL_POLICY_BLOCKED",
+            },
           });
-          if (metaResult.ok) {
-            externalMessageId = metaResult.providerMessageId;
-            crmProvider = "META_CLOUD_API";
-          } else {
-            console.warn(`[ScheduledCampaignRunner] Meta send failed (${metaResult.errorCode}) — falling back to Evolution for ${phone}`);
-            if (evoConfig) {
-              const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
-              externalMessageId = evoResult.key.id;
-              crmProvider = "EVOLUTION_FALLBACK";
-            } else {
-              throw new Error(`Meta CRM send failed: ${metaResult.error} (no Evolution fallback configured)`);
-            }
-          }
-        } else {
-          if (!evoConfig) throw new Error("No WhatsApp provider configured");
-          const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
-          externalMessageId = evoResult.key.id;
-          crmProvider = "EVOLUTION";
+          blocked++;
+          continue;
         }
+        if (!sendResult.ok) {
+          throw new SendFailure(sendResult.error ?? "Falha no envio", sendResult.errorCode ?? "SEND_FAILED");
+        }
+
+        const externalMessageId = sendResult.providerMessageId;
+        const crmProvider       = sendResult.provider;
 
         const now       = new Date();
 
@@ -1825,12 +1851,12 @@ export class ScheduledCampaignRunnerService {
           }).catch((e) => console.error(`[ReadyMade] coupon grant failed for ${customer.id}:`, e));
         }
       } catch (err) {
-        // A real provider/Evolution failure (e.g. HTTP 400 invalid number).
-        const isEvoErr = err instanceof EvolutionApiError;
-        const errMsg = isEvoErr
-          ? `HTTP ${(err as EvolutionApiError).status}: ${typeof (err as EvolutionApiError).body === "string" ? (err as EvolutionApiError).body : JSON.stringify((err as EvolutionApiError).body ?? {}).slice(0, 500)}`
-          : (err instanceof Error ? err.message : "Erro desconhecido");
-        const errorCode = isEvoErr ? `EVOLUTION_HTTP_${(err as EvolutionApiError).status}` : errMsg;
+        // Falha REAL de envio (ex.: número recusado pela Meta, token inválido, rede).
+        // O código de erro do provedor é preservado inteiro — é ele que a
+        // classificação lê para decidir se vale retentar e se o número morreu.
+        const isSendFailure = err instanceof SendFailure;
+        const errMsg    = isSendFailure ? err.message : (err instanceof Error ? err.message : "Erro desconhecido");
+        const errorCode = isSendFailure ? err.errorCode : errMsg;
         await prisma.campaignExecution.create({
           data: {
             campaignId:    campaign.id,
@@ -1847,9 +1873,9 @@ export class ScheduledCampaignRunnerService {
         });
         failed++;
 
-        // Is this an INSTANCE/session failure (vs a genuine per-number bad request)?
-        // A session-wrapped 400, a 500, a timeout or a disconnect all mean the
-        // WhatsApp session is unhealthy — retrying the next recipient will fail too.
+        // Is this a CHANNEL failure (vs a genuine per-number bad request)?
+        // Canal desconectado, credencial recusada, 5xx ou tempo esgotado significam
+        // que o próximo destinatário vai falhar igual — não adianta martelar a base.
         const cls = classifyExecution({ status: "FAILED", failedReason: errMsg, errorMessage: errorCode });
         const isInstanceFailure =
           cls.category === "EVOLUTION_INSTANCE_DISCONNECTED" ||
@@ -1866,11 +1892,11 @@ export class ScheduledCampaignRunnerService {
           unreachableIds.push(customer.id);
         }
 
-        // Circuit breaker (all paths, incl. cron): once the session is clearly
+        // Circuit breaker (all paths, incl. cron): once the channel is clearly
         // collapsed, stop the batch instead of hammering the whole audience and
         // racking up hundreds of identical failures. A reconnect is what's needed.
         if (consecutiveInstanceFailures >= INSTANCE_COLLAPSE_THRESHOLD) {
-          console.warn(`[CampaignRunner] instance collapse — aborting batch after ${consecutiveInstanceFailures} consecutive failures`, {
+          console.warn(`[CampaignRunner] channel collapse — aborting batch after ${consecutiveInstanceFailures} consecutive failures`, {
             campaignId: campaign.id, lastError: errorCode,
           });
           aborted = true;
@@ -1879,8 +1905,7 @@ export class ScheduledCampaignRunnerService {
 
         // Manual reprocess: also verify liveness explicitly and stop early.
         if (runOpts.abortOnInstanceCollapse) {
-          const liveStatus = evoConfig ? await EvolutionClient.getInstanceStatus(evoConfig).catch(() => null) : null;
-          if (!liveStatus || liveStatus.state !== "open") { aborted = true; break; }
+          if (!(await isChannelReady(campaign.restaurantId))) { aborted = true; break; }
         }
       }
     }

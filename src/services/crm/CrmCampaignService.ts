@@ -5,16 +5,15 @@
  *   1. Audience resolution — query real customer data by segment/template.
  *   2. Message personalization — variable substitution per customer.
  *   3. Campaign creation — Campaign + CampaignExecution records.
- *   4. Sending — Evolution API + Chat Inbox logging + status tracking.
+ *   4. Sending — canal oficial (WhatsAppMessagingService) + Chat Inbox logging + status tracking.
  *
  * Sending requires explicit human approval via the review UI before calling `send()`.
  * This service NEVER sends autonomously.
  */
 
 import { prisma } from "@/lib/prisma";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
-import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
+import { isWhatsAppChannelConnected, SendFailure, NO_WHATSAPP_CONFIG_DETAIL } from "./crmWhatsAppChannel";
 import { sendMetaCrmMessage } from "./metaCrmSend";
 import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
 import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
@@ -586,20 +585,12 @@ export class CrmCampaignService {
       throw new Error("Campaign is already sent or sending");
     }
 
-    // Check if Meta CRM is enabled for this restaurant
-    const metaCfgRow = await prisma.metaWhatsAppConfig.findUnique({
-      where:  { restaurantId },
-      select: { metaCrmEnabled: true, connectionStatus: true },
-    });
-    const useMetaCrm = metaCfgRow?.metaCrmEnabled === true && metaCfgRow.connectionStatus === "CONNECTED";
-
-    // Check Evolution config (always fetched — used as fallback even when Meta is primary)
-    const cfgResult = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!cfgResult.ok && !useMetaCrm) {
-      throw new Error(`WhatsApp not configured: ${cfgResult.error}`);
+    // Canal único: ou o WhatsApp oficial está conectado, ou este envio não começa.
+    // A campanha continua PENDING e o operador vê o erro na hora — falhar antes de
+    // marcar SENDING é melhor que uma campanha travada em "enviando" sem canal.
+    if (!(await isWhatsAppChannelConnected(restaurantId))) {
+      throw new Error(`WhatsApp not configured: ${NO_WHATSAPP_CONFIG_DETAIL}`);
     }
-    const evoConfig = cfgResult.ok ? cfgResult.data : null;
-    const metaProvider = useMetaCrm ? new MetaWhatsAppCloudProvider() : null;
 
     // Mark campaign as SENDING
     await prisma.campaign.update({
@@ -629,10 +620,10 @@ export class CrmCampaignService {
         : []
     );
 
-    // Customer first names — needed to fill Meta template body params (e.g. {{1}}=nome)
-    // when CRM routes through Meta. Cheap single batch; only used on the Meta path.
+    // Customer first names — needed to fill Meta template body params (e.g. {{1}}=nome).
+    // Cheap single batch.
     const customerNames = new Map<string, string>(
-      useMetaCrm && customerIds.length > 0
+      customerIds.length > 0
         ? (await prisma.customer.findMany({
             where:  { id: { in: customerIds } },
             select: { id: true, name: true },
@@ -667,8 +658,9 @@ export class CrmCampaignService {
     // overridden (a human explicitly clicked "Enviar"), but every per-customer
     // safety rule (opt-out, contactability, phone, cooldown, weekly cap,
     // cross-campaign 24h dedup) is still enforced.
+    // Canal já confirmado no início do send() — repetir o que foi verificado, não presumir.
     const safetyContext = await ContactSafetyService.buildGlobalContext(restaurantId, {
-      evolutionAvailable: true,
+      whatsappAvailable: true,
     });
 
     let totalSent        = 0;
@@ -704,8 +696,8 @@ export class CrmCampaignService {
         continue;
       }
 
-      // 24 h duplicate guard: do not send via Evolution if this customer already received
-      // a successful CRM WhatsApp message from another campaign today.
+      // 24 h duplicate guard: não envia se este cliente já recebeu uma mensagem
+      // de CRM bem-sucedida de outra campanha hoje.
       if (exec.customerId && recentlySentIds.has(exec.customerId)) {
         await prisma.campaignExecution.update({
           where: { id: exec.id },
@@ -730,8 +722,8 @@ export class CrmCampaignService {
 
       const phone = normalizePhoneForEvolution(exec.customerPhone);
       if (!isValidEvolutionPhone(phone)) {
-        // Recipient-data problem — SKIP before any Evolution call. This is NOT a
-        // provider failure and must never be counted under "Falhas".
+        // Recipient-data problem — SKIP antes de qualquer chamada ao canal. Isto NÃO é
+        // falha de provedor e nunca pode ser contado em "Falhas".
         const hasRawPhone = Boolean((exec.customerPhone ?? "").trim());
         await prisma.campaignExecution.update({
           where: { id: exec.id },
@@ -756,40 +748,37 @@ export class CrmCampaignService {
       }
 
       try {
-        // Send via Meta Cloud API (when CRM toggle is on) with Evolution fallback.
-        // On Meta failure we fall back to Evolution so no customer is silently skipped.
-        let externalMessageId: string | null = null;
-        let providerUsed = "EVOLUTION";
+        // Envio pelo canal único. Marketing para audiência fria está fora da janela
+        // de 24h → tem que ser modelo APROVADO; `sendMetaCrmMessage` resolve o modelo
+        // da campanha e preenche os parâmetros, caindo em texto livre só quando não
+        // há modelo nenhum configurado.
+        const firstName = (customerNames.get(exec.customerId ?? "") ?? "").split(" ")[0] || "Cliente";
+        const { result: sendResult } = await sendMetaCrmMessage(WhatsAppMessagingService, {
+          restaurantId, phone, freeformText: messageText, firstName,
+          campaign: { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+        });
 
-        if (metaProvider) {
-          // Marketing to cold audiences is outside the 24h window → must use an APPROVED
-          // template. sendMetaCrmMessage resolves the campaign's template + fills params;
-          // it only falls back to freeform when no template is configured.
-          const firstName = (customerNames.get(exec.customerId ?? "") ?? "").split(" ")[0] || "Cliente";
-          const { result: metaResult } = await sendMetaCrmMessage(metaProvider, {
-            restaurantId, phone, freeformText: messageText, firstName,
-            campaign: { objective: campaign.objective, audienceConfig: campaign.audienceConfig },
+        // Recusa deliberada da política do canal (ex.: fora da janela de 24h sem
+        // modelo aprovado) é BLOQUEIO, não falha de entrega — e não some da tela.
+        if (!sendResult.ok && sendResult.status === "BLOCKED") {
+          await prisma.campaignExecution.update({
+            where: { id: exec.id },
+            data:  {
+              status:       "BLOCKED" as never,
+              failedReason: sendResult.error ?? "Envio bloqueado pela política do canal",
+              errorMessage: sendResult.blockReason ?? "CHANNEL_POLICY_BLOCKED",
+            },
           });
-          if (metaResult.ok) {
-            externalMessageId = metaResult.providerMessageId;
-            providerUsed = "META_CLOUD_API";
-          } else {
-            console.warn(`[CrmCampaignService] Meta send failed (${metaResult.errorCode}) — falling back to Evolution for ${phone}`);
-            // Fallback to Evolution
-            if (evoConfig) {
-              const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
-              externalMessageId = evoResult.key.id;
-              providerUsed = "EVOLUTION_FALLBACK";
-            } else {
-              throw new Error(`Meta CRM send failed: ${metaResult.error} (no Evolution fallback configured)`);
-            }
-          }
-        } else {
-          if (!evoConfig) throw new Error("No WhatsApp provider configured");
-          const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
-          externalMessageId = evoResult.key.id;
-          providerUsed = "EVOLUTION";
+          totalBlocked++;
+          results.push({ id: exec.id, status: "BLOCKED", error: sendResult.blockReason ?? "CHANNEL_POLICY_BLOCKED" });
+          continue;
         }
+        if (!sendResult.ok) {
+          throw new SendFailure(sendResult.error ?? "Falha no envio", sendResult.errorCode ?? "SEND_FAILED");
+        }
+
+        const externalMessageId = sendResult.providerMessageId;
+        const providerUsed      = sendResult.provider;
 
         const now = new Date();
 
@@ -834,11 +823,10 @@ export class CrmCampaignService {
         totalSent++;
         results.push({ id: exec.id, status: "SENT" });
       } catch (err) {
-        const isEvoErr = err instanceof EvolutionApiError;
-        const errMsg = isEvoErr
-          ? `HTTP ${(err as EvolutionApiError).status}: ${typeof (err as EvolutionApiError).body === "string" ? (err as EvolutionApiError).body : JSON.stringify((err as EvolutionApiError).body ?? {}).slice(0, 500)}`
-          : (err instanceof Error ? err.message : "Erro desconhecido");
-        const errorCode = isEvoErr ? `EVOLUTION_HTTP_${(err as EvolutionApiError).status}` : errMsg;
+        // Falha real de envio — o código do provedor é preservado para a classificação.
+        const isSendFailure = err instanceof SendFailure;
+        const errMsg    = isSendFailure ? err.message : (err instanceof Error ? err.message : "Erro desconhecido");
+        const errorCode = isSendFailure ? err.errorCode : errMsg;
         await prisma.campaignExecution.update({
           where: { id: exec.id },
           data:  { status: "FAILED", failedReason: errMsg, errorMessage: errorCode },

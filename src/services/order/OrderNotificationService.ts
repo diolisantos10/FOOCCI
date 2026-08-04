@@ -8,7 +8,9 @@
  *  - Guest customers (isGuest=true) are never notified
  *  - Opted-out customers (hasOptedOut=true) are never notified
  *  - Missing/invalid phone → skip silently
- *  - Missing Evolution config → skip silently
+ *  - Missing Meta WhatsApp config → the provider returns META_NOT_CONNECTED and
+ *    it is LOGGED (never swallowed): "não configurado" e "enviado" não podem
+ *    parecer a mesma coisa no log.
  *  - Any send error → log and move on
  *
  * Deduplication: The order state machine only allows each status transition
@@ -86,7 +88,7 @@ export class OrderNotificationService {
       const { customer } = order;
       if (!customer.phone || customer.isGuest || customer.hasOptedOut) return;
 
-      // Normalize to E.164 digits only (Evolution expects no leading +)
+      // Normalize to E.164 digits only (no leading +)
       const phone = customer.phone.replace(/^\+/, "").replace(/\D/g, "");
       if (!phone.match(/^\d{10,15}$/)) return;
 
@@ -95,10 +97,19 @@ export class OrderNotificationService {
       const finalMsg   = buildMessage(newStatus as NotifyStatus, firstName, orderNum, options);
       if (!finalMsg) return;
 
-      // Route through the restaurant's ACTIVE provider (Meta official or Evolution).
+      // Sai pela Meta — é o único provedor. `sendWhatsAppText` já é Meta-only.
       const sent = await sendWhatsAppText(restaurantId, phone, finalMsg);
       if (!sent.ok) {
-        console.warn("[OrderNotificationService] send failed:", sent.errorCode, sent.error);
+        // BLOCKED (política da Meta) e FAILED (erro real) são coisas diferentes e
+        // precisam ser distinguíveis no log — senão "não avisou o cliente" vira
+        // uma linha genérica que ninguém investiga.
+        console.warn("[OrderNotificationService] send failed:", {
+          restaurantId, orderId, newStatus,
+          status:      sent.status,
+          errorCode:   sent.errorCode ?? null,
+          blockReason: sent.blockReason ?? null,
+          error:       sent.error ?? null,
+        });
       }
     } catch (err) {
       console.error("[OrderNotificationService] WhatsApp notification failed:", {

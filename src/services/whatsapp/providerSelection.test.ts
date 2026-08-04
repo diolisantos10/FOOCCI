@@ -14,9 +14,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SendResult } from "./providers/types";
 
-const sendText     = vi.fn(async (): Promise<SendResult> => ({ ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.1" }));
-const sendTemplate = vi.fn(async (): Promise<SendResult> => ({ ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.2" }));
-const getConnectionStatus = vi.fn(async () => ({ provider: "META_CLOUD_API" as const, connected: true, detail: "+55 11 90000-0000" }));
+const { sendText, sendTemplate, getConnectionStatus, findFirst } = vi.hoisted(() => ({
+  sendText:     vi.fn(async (): Promise<SendResult> => ({ ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.1" })),
+  sendTemplate: vi.fn(async (): Promise<SendResult> => ({ ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.2" })),
+  getConnectionStatus: vi.fn(async () => ({ provider: "META_CLOUD_API" as const, connected: true, detail: "+55 11 90000-0000" })),
+  findFirst:    vi.fn(),
+}));
 
 vi.mock("./providers/MetaWhatsAppCloudProvider", () => ({
   MetaWhatsAppCloudProvider: class {
@@ -27,11 +30,8 @@ vi.mock("./providers/MetaWhatsAppCloudProvider", () => ({
   },
 }));
 
-const findFirst = vi.fn();
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    message: { findFirst: (...a: unknown[]) => findFirst(...a) },
-  },
+  prisma: { message: { findFirst } },
 }));
 
 import * as MessagingModule from "./WhatsAppMessagingService";

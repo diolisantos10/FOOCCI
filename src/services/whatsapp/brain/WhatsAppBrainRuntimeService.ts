@@ -19,15 +19,13 @@
 
 import { ConversationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
 import type { SanitizedTurn } from "@/services/brain/core/BrainTypes";
 import { sanitizeText } from "@/services/simulation/simulationSanitizer";
 import { isWhatsAppBrainShadowMode } from "./WhatsAppBrainReasoningAdapter";
 import { resolveFreeFormAccess } from "@/services/brain/runtime/BrainFreeFormConfigService";
-import { resolveProviderId, WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { encaminharParaOCardapio, prometeuPedido } from "./promessaDePedido";
 
 /** The Brain front door is ON for everyone by default; set WHATSAPP_BRAIN_ENABLED=false to disable. */
@@ -341,21 +339,14 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     brainEngine: `${outcome.engine.provider}:${outcome.engine.model}`,
   };
 
-  // Provider-aware send. The EVOLUTION path below is unchanged; Meta restaurants
-  // (flag on + explicitly selected) reply through the Meta Cloud API. For every
-  // Evolution restaurant resolveProviderId() short-circuits to EVOLUTION, so this
-  // branch is inert in production.
-  const providerId = await resolveProviderId(restaurantId);
-  if (providerId === "META_CLOUD_API") {
-    const sent = await WhatsAppMessagingService.sendConversationReply({
-      restaurantId, conversationId, toPhone: resolvedPhone, text: anchoredReply, senderType: "AI", metadata,
-    });
-    if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
-  } else {
-    const cfg = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!cfg.ok) return { status: "SKIPPED", reason: "evolution config missing" };
-    await sendReply(cfg.data, resolvedPhone, anchoredReply, conversationId, metadata);
-  }
+  // Canal único (04/08): a resposta sai pela Meta. Antes havia um ramo Evolution
+  // aqui, escolhido por provedor do restaurante — ele saiu junto com a Evolution.
+  // Falha da Meta vira SKIPPED com o motivo real: sem rede alternativa, calar sem
+  // registrar seria o cliente esperando resposta que nunca vem.
+  const sent = await WhatsAppMessagingService.sendConversationReply({
+    restaurantId, conversationId, toPhone: resolvedPhone, text: anchoredReply, senderType: "AI", metadata,
+  });
+  if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
 
   // Escalate AFTER the reply is sent, so the customer still gets the Brain's
   // message and the next turn goes to a human.
@@ -368,31 +359,4 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
 
   console.warn("[BrainDecision]", JSON.stringify({ gate: "replied", text: inboundText.slice(0, 60), intent: outcome.result.primaryIntent, confidence: Number(outcome.result.confidence.toFixed(2)) }));
   return { status: "REPLIED", reason: outcome.result.primaryIntent };
-}
-
-async function sendReply(
-  config: { instanceName: string; baseUrl: string; apiKey: string },
-  toPhone: string,
-  text: string,
-  conversationId: string,
-  metadata?: Record<string, unknown>,
-): Promise<void> {
-  const result = await EvolutionClient.sendTextMessage(config, toPhone, text);
-  const now = new Date();
-  await prisma.$transaction([
-    prisma.message.create({
-      data: {
-        conversationId,
-        direction: "OUTBOUND",
-        senderType: "AI",
-        content: text,
-        type: "TEXT",
-        sentAt: now,
-        externalMessageId: result.key.id,
-        externalStatus: "sent",
-        ...(metadata ? { metadata: metadata as object } : {}),
-      },
-    }),
-    prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } }),
-  ]);
 }
