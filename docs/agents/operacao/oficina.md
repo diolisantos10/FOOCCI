@@ -580,3 +580,76 @@ comercial (`REAL_RESTAURANTS_ONLY`). Toda superfície nova que conta, cobra ou
 fatura restaurante começa perguntando: 'e a vitrine, entra nessa conta?'"*
 Origem: este bloco, worktree da Frente 3 a partir de `claude/foocci-brain-vaamrx`;
 arquivos `src/lib/demo-restaurant.ts` e `src/lib/demo-restaurant.test.ts`.
+
+---
+
+## 2026-08-04 · Os dois botões da padaria de vitrine no admin (branch `claude/foocci-brain-vaamrx`)
+
+**Pedido:** o CEO não roda terminal, e só a produção tem banco e `OPENAI_API_KEY`.
+Criar em `/admin/padaria-vitrine` dois botões — criar/atualizar a padaria e gerar
+as 40 fotos — sem duplicar a lógica dos scripts.
+
+**O que fiz.** Extraí tudo para `src/services/demo/FoocciBakeryService.ts` e
+transformei os dois scripts em bocas de linha de comando (`scripts/seed-foocci-bakery.ts`
+caiu de 598 para 92 linhas; `scripts/foocci-bakery-images.ts`, de 181 para 110). O
+arquivo de dados saiu de `scripts/` para `src/services/demo/foocci-bakery.data.ts`
+porque `tsconfig.json` exclui `scripts/` — código de app não pode importar de lá.
+Rotas: `/api/admin/demo-bakery/seed` e `/api/admin/demo-bakery/imagens`, ambas com
+`checkAdminRequest`.
+
+**Três coisas que o trabalho ensinou:**
+
+1. **Mover lógica de `scripts/` para `src/` a submete a portões que o script
+   nunca sentiu.** O `scripts/foocci-bakery-images.ts` importava `@/lib/openai`
+   direto e ninguém reclamava: `scripts/` está fora do `tsconfig` e fora do
+   varredor da Regra de Ouro do Brain. No instante em que a mesma linha entrou em
+   `src/`, `src/services/brain/architecture.test.ts` quebrou o build. **Não
+   adicionei o arquivo à lista congelada** (a lista só diminui — guardrail 3):
+   movi a chamada para `src/services/imageEnhancement/providers/openai.ts:41`, que
+   já é o lugar autorizado a falar com a API de imagem. Efeito colateral bom: hoje
+   existe UM ponto em `src/` que gera foto por IA.
+   → *Regra que sobra:* script não é rascunho de serviço. Se ele vai virar botão,
+   ele vai passar nos portões — e é melhor descobrir isso extraindo do que na CI.
+
+2. **"Não gastar duas vezes" precisa de duas travas, e elas protegem coisas
+   diferentes.** O empréstimo com prazo (`Lease`, `FoocciBakeryService.ts:96`)
+   segura o duplo clique dentro do mesmo processo. Ele NÃO segura o admin e o
+   terminal rodando juntos. O que segura isso é a re-leitura do `imageUrl`
+   imediatamente antes de cada chamada paga (`:970`): se a foto apareceu no
+   caminho, pula sem gastar. Escrevi teste para os dois cenários separadamente —
+   o segundo é o que um mock de contagem de chamadas jamais provaria.
+
+3. **Duas definições de "tem chave?" são um botão que mente.** Meu `hasOpenAiKey`
+   aceitava qualquer string não vazia; o provedor exige `length > 10`. Uma chave
+   curta passaria pelo botão e viraria 40 falhas por item em vez de uma frase. Uni
+   as duas em `isOpenAiImageConfigured()` (`providers/openai.ts:41`), importada,
+   não recopiada. Quem pergunta "posso oferecer?" e quem gasta têm que usar a
+   mesma régua.
+
+**Sobre o estado que prende trabalho (a lei do domínio).** A geração roda em
+segundo plano no servidor e o progresso vive no processo, não no banco. Nasceu com
+prazo (`IMAGE_LEASE_MS = 180s`, renovado a cada foto) e com quem o resgata: quem
+LÊ o estado depois do prazo declara `ABANDONADO` (`reapIfExpired`), com a frase que
+explica ao CEO que as fotos prontas ficaram salvas. Sem isso, um restart do Railway
+deixaria a tela girando para sempre.
+
+**O que NÃO está provado:** nada disto rodou contra o banco de produção nem contra
+a OpenAI de verdade. As 40 fotos continuam sem existir. As provas são de banco de
+mentira em memória e de rota com serviço substituído — provam a lógica e o
+contrato, não a fatura. Só o clique do CEO em produção fecha isso.
+
+**Achado que não é meu:** `src/services/quality/noSideEffects.test.ts` falha por
+tempo esgotado (5s) **no HEAD desta branch, sem nenhuma alteração minha** —
+confirmei em worktree limpo. Não toquei: é domínio da `qualidade`.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Script de operação que vira
+botão muda de jurisdição. Enquanto mora em `scripts/`, ele está fora do tsconfig e
+fora dos portões estruturais do repositório; ao ser extraído para `src/`, passa a
+responder pela Regra de Ouro do Brain e pelo gate de rota admin. A extração é a
+hora de obedecer aos portões, nunca de ampliar a lista de exceções deles — a lista
+congelada só diminui. E o serviço extraído passa a ter DOIS chamadores com
+permissões diferentes: o terminal (que tem operador olhando) e o botão (que não
+tem). Toda trava que existia como 'o operador confere antes' vira código."*
+Origem: este bloco; arquivos `src/services/demo/FoocciBakeryService.ts`,
+`src/services/imageEnhancement/providers/openai.ts:41`,
+`src/services/brain/architecture.test.ts` (portão que cobrou).
