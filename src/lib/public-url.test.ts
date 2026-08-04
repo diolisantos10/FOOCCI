@@ -7,7 +7,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { getExpectedEvolutionWebhookUrl, getPublicSiteUrl } from "./public-url";
+import {
+  getExpectedEvolutionWebhookUrl,
+  getPublicMenuUrl,
+  getPublicQrUrl,
+  getPublicSiteUrl,
+} from "./public-url";
 
 describe("getExpectedEvolutionWebhookUrl", () => {
   it("is the canonical site URL + /api/webhooks/evolution", () => {
@@ -31,5 +36,34 @@ describe("getExpectedEvolutionWebhookUrl", () => {
     expect(getExpectedEvolutionWebhookUrl()).toBe(
       "https://foocci.com.br/api/webhooks/evolution",
     );
+  });
+});
+
+/**
+ * Os endereços que viram QR CODE em `/site/experimente`.
+ *
+ * O botão da página usa caminho relativo (`/pedido/foocci-bakery`) e o QR usa o
+ * absoluto vindo daqui — quem escaneia está em OUTRO aparelho. Se os dois
+ * divergirem, o clique e a câmera passam a abrir telas diferentes, e ninguém
+ * percebe: o erro só aparece no celular do visitante, longe da página. Estes
+ * testes prendem o caminho que a página assume.
+ */
+describe("endereços públicos da vitrine (QR da degustação)", () => {
+  it("o cardápio de mesa é <site>/qr/<slug>", () => {
+    expect(getPublicQrUrl("foocci-bakery")).toBe(`${getPublicSiteUrl()}/qr/foocci-bakery`);
+  });
+
+  it("a loja é <site>/pedido/<slug> — a mesma base que o modo ?modo=loja usa", () => {
+    expect(getPublicMenuUrl("foocci-bakery")).toBe(
+      `${getPublicSiteUrl()}/pedido/foocci-bakery`,
+    );
+  });
+
+  it("são absolutos e no domínio público — QR não abre caminho relativo", () => {
+    for (const url of [getPublicQrUrl("foocci-bakery"), getPublicMenuUrl("foocci-bakery")]) {
+      expect(url.startsWith("https://")).toBe(true);
+      expect(url).not.toContain("localhost");
+      expect(url).not.toContain(".railway.app");
+    }
   });
 });
