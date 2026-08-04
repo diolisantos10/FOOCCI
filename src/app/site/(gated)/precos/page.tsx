@@ -7,16 +7,24 @@
  * camada interna (justificativas de precificação, tarja de decisão, teto acima de
  * 4.000 pedidos etc.). Palavra "contrato" é proibida — usar "serviço/serviços".
  *
- * Toda conversão desta página aponta para o FORMULÁRIO de demonstração
- * (DEMO_URL = /site/demonstracao), com o rótulo "Peça uma demonstração" — nunca
- * "agendar". Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 +
+ * CONVERSÃO (04/08, self-service): cada plano tem DOIS caminhos — "Contratar
+ * agora", que leva ao checkout `/contratar/novo` já com plano e ciclo escolhidos,
+ * e "Pedir uma demonstração" (DEMO_URL), que continua existindo para quem quer
+ * ver antes. Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 +
  * escala brand-*), ação primária brand-500/600, card rounded-2xl, pesos 400/600.
+ *
+ * PREÇO: nenhum número desta página é digitado aqui. Tudo vem de
+ * `@/lib/billing/pricing`, a MESMA fonte que o checkout usa para cobrar. Antes
+ * havia uma tabela local nesta página e outras três espalhadas pelo repositório —
+ * com checkout self-service, tabela duplicada vira cobrança diferente do
+ * anunciado. O "preço fundador" saiu: por decisão do CEO (04/08) ele não existe
+ * no motor, e anunciar desconto que o motor não aplica é o mesmo furo ao contrário.
  */
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
-import { PrimaryCta } from "@/components/marketing/Cta";
+import { PrimaryCta, SecondaryCta } from "@/components/marketing/Cta";
 import { Eyebrow, DotGrid, Halo } from "@/components/marketing/premium";
 import {
   CheckIcon,
@@ -24,7 +32,25 @@ import {
   TrendingUpIcon,
   RepeatIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, COMO_FUNCIONA_URL } from "@/components/marketing/config";
+import { DEMO_URL, COMO_FUNCIONA_URL, DEMO_CTA_LABEL } from "@/components/marketing/config";
+import {
+  SITE_PLAN_IDS,
+  SITE_PLAN_TO_CODE,
+  CYCLE_CODES,
+  CYCLE_LABEL,
+  PLAN_LABEL,
+  PLAN_CYCLE_CENTS,
+  monthlyEquivalentCents,
+  firstChargeCents,
+  formatBRL,
+  type SitePlanId,
+  type CycleCode,
+} from "@/lib/billing/pricing";
+
+/** O link do botão de comprar: plano e ciclo já escolhidos no checkout. */
+function checkoutUrl(planId: SitePlanId, cycle: CycleCode = "MENSAL"): string {
+  return `/contratar/novo?plano=${planId}&ciclo=${cycle}`;
+}
 
 const TITLE = "Planos Foocci | Três planos, e o motivo de cada um valer o preço";
 const DESCRIPTION =
@@ -41,10 +67,10 @@ export const metadata: Metadata = {
 type FeatureGroupData = { label: string; items: string[] };
 
 type Plan = {
+  /** Id comercial — é ele que viaja para o checkout e vira o enum do banco. */
+  id: SitePlanId;
   name: string;
   tagline: string;
-  price: string;
-  discounts: { label: string; value: string }[];
   limit: string;
   limitSub: string;
   onlyHere: string[];
@@ -57,14 +83,9 @@ type Plan = {
 
 const PLANS: Plan[] = [
   {
+    id: "essencial",
     name: "Essencial",
     tagline: "Pare de pagar comissão.",
-    price: "179",
-    discounts: [
-      { label: "Anual", value: "R$ 149/mês" },
-      { label: "1º mês", value: "R$ 89" },
-      { label: "Fundador", value: "R$ 129" },
-    ],
     limit: "Até 300 pedidos/mês",
     limitSub: "≈ 10 por dia",
     onlyHere: [
@@ -115,15 +136,10 @@ const PLANS: Plan[] = [
     ],
   },
   {
+    id: "crescimento",
     name: "Crescimento",
     tagline: "Faça o cliente voltar.",
-    price: "429",
     highlighted: true,
-    discounts: [
-      { label: "Anual", value: "R$ 358/mês" },
-      { label: "1º mês", value: "R$ 214" },
-      { label: "Fundador", value: "R$ 299" },
-    ],
     limit: "Até 1.200 pedidos/mês",
     limitSub: "≈ 40 por dia · 3.000 mensagens",
     onlyHere: [
@@ -181,14 +197,9 @@ const PLANS: Plan[] = [
     ],
   },
   {
+    id: "performance",
     name: "Performance",
     tagline: "Gerencie como gente grande.",
-    price: "899",
-    discounts: [
-      { label: "Anual", value: "R$ 749/mês" },
-      { label: "1º mês", value: "R$ 449" },
-      { label: "Fundador", value: "R$ 649" },
-    ],
     limit: "Até 4.000 pedidos/mês",
     limitSub: "≈ 130 por dia · 10.000 mensagens",
     onlyHere: [
@@ -243,44 +254,44 @@ const PLANS: Plan[] = [
 
 /* ── Ciclos de pagamento ──────────────────────────────────────────────────── */
 
-const CYCLES = [
-  {
-    name: "Mensal",
-    badge: "Sem fidelidade",
-    prices: [
-      { plan: "Essencial", value: "R$ 179", sub: "" },
-      { plan: "Crescimento", value: "R$ 429", sub: "" },
-      { plan: "Performance", value: "R$ 899", sub: "" },
-    ],
-    gain: "Cancela avisando 30 dias antes. Implantação cheia.",
-  },
-  {
-    name: "Trimestral",
-    badge: "−10%",
-    prices: [
-      { plan: "Essencial", value: "R$ 161", sub: "R$ 483 / 3 meses" },
-      { plan: "Crescimento", value: "R$ 386", sub: "R$ 1.158 / 3 meses" },
-      { plan: "Performance", value: "R$ 809", sub: "R$ 2.427 / 3 meses" },
-    ],
-    gain: "10% de desconto. Implantação pela metade.",
-  },
-  {
-    name: "Anual",
-    badge: "2 meses grátis",
-    prices: [
-      { plan: "Essencial", value: "R$ 149", sub: "R$ 1.790 / ano" },
-      { plan: "Crescimento", value: "R$ 358", sub: "R$ 4.290 / ano" },
-      { plan: "Performance", value: "R$ 749", sub: "R$ 8.990 / ano" },
-    ],
-    gain: "Paga 10, usa 12. Implantação grátis à vista.",
-  },
-];
+const CYCLE_COPY: Record<CycleCode, { badge: string; gain: string }> = {
+  MENSAL: { badge: "Sem fidelidade", gain: "Cancela avisando 30 dias antes. Implantação cheia." },
+  TRIMESTRAL: { badge: "−10%", gain: "10% de desconto. Implantação pela metade." },
+  ANUAL: { badge: "2 meses grátis", gain: "Paga 10, usa 12. Implantação grátis à vista." },
+};
 
-const DEGUSTACAO = [
-  { plan: "Essencial", value: "R$ 89" },
-  { plan: "Crescimento", value: "R$ 214" },
-  { plan: "Performance", value: "R$ 449" },
-];
+/**
+ * A tabela de ciclos, montada a partir dos centavos que o checkout cobra. O
+ * "/mês" é a mensalidade EQUIVALENTE — ninguém é cobrado nesse valor no
+ * trimestral e no anual, por isso o total do ciclo vem logo abaixo.
+ */
+const CYCLES = CYCLE_CODES.map((cycle) => ({
+  cycle,
+  name: CYCLE_LABEL[cycle],
+  badge: CYCLE_COPY[cycle].badge,
+  gain: CYCLE_COPY[cycle].gain,
+  prices: SITE_PLAN_IDS.map((id) => {
+    const code = SITE_PLAN_TO_CODE[id];
+    const months = cycle === "MENSAL" ? 1 : cycle === "TRIMESTRAL" ? 3 : 12;
+    return {
+      planId: id,
+      plan: PLAN_LABEL[code],
+      value: formatBRL(monthlyEquivalentCents(code, cycle)),
+      sub: months === 1 ? "" : `${formatBRL(PLAN_CYCLE_CENTS[code][cycle])} / ${months === 3 ? "3 meses" : "ano"}`,
+    };
+  }),
+}));
+
+/**
+ * Primeiro mês pela metade, no ciclo mensal. É exatamente 50% de R$ 179,00 —
+ * portanto R$ 89,50, e não R$ 89,00. Este número é lido da mesma função que
+ * calcula o que sai do cartão: anunciar arredondado e cobrar outra coisa é o
+ * furo que a fonte única fecha.
+ */
+const DEGUSTACAO = SITE_PLAN_IDS.map((id) => {
+  const code = SITE_PLAN_TO_CODE[id];
+  return { planId: id, plan: PLAN_LABEL[code], value: formatBRL(firstChargeCents(code, "MENSAL")) };
+});
 
 const ADDONS = [
   { name: "Nota fiscal (NFC-e)", price: "R$ 89/mês", desc: "Custo por documento + certificado digital do lojista." },
@@ -317,6 +328,13 @@ function FeatureGroup({ label, items }: FeatureGroupData) {
 
 function PlanCard({ plan }: { plan: Plan }) {
   const featured = Boolean(plan.highlighted);
+  const code = SITE_PLAN_TO_CODE[plan.id];
+  // Todo número abaixo sai da fonte única — a mesma que o checkout cobra.
+  const monthly = PLAN_CYCLE_CENTS[code].MENSAL;
+  const highlights = [
+    { label: "Anual", value: `${formatBRL(monthlyEquivalentCents(code, "ANUAL"))}/mês` },
+    { label: "1º mês", value: formatBRL(firstChargeCents(code, "MENSAL")) },
+  ];
   return (
     <div
       className={`relative flex flex-col rounded-2xl bg-paper p-6 sm:p-7 ${
@@ -343,15 +361,14 @@ function PlanCard({ plan }: { plan: Plan }) {
 
       {/* Preço âncora */}
       <div className="mt-5 flex items-baseline gap-1.5">
-        <span className="text-[15px] font-normal text-muted">R$</span>
-        <span className="text-4xl font-semibold tabular-nums tracking-tight text-ink">{plan.price}</span>
+        <span className="text-4xl font-semibold tabular-nums tracking-tight text-ink">{formatBRL(monthly)}</span>
         <span className="text-sm text-muted">/mês</span>
       </div>
       <p className="mt-0.5 text-xs text-muted">no plano mensal</p>
 
-      {/* Descontos */}
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        {plan.discounts.map((d) => (
+      {/* Os dois preços que mudam: ciclo anual e primeiro mês */}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {highlights.map((d) => (
           <div key={d.label} className="rounded-xl border border-line bg-canvas px-2 py-2 text-center">
             <p className="text-[10.5px] uppercase tracking-wide text-muted">{d.label}</p>
             <p className="mt-0.5 text-[12.5px] font-semibold tabular-nums text-ink">{d.value}</p>
@@ -365,9 +382,19 @@ function PlanCard({ plan }: { plan: Plan }) {
         <span className="text-xs text-muted">{plan.limitSub}</span>
       </div>
 
-      {/* CTA */}
-      <div className="mt-5">
-        <PrimaryCta label="Peça uma demonstração" href={DEMO_URL} block withArrow={false} className="!py-3 !text-[15px]" />
+      {/* CTA — comprar é o caminho principal; a demonstração continua existindo */}
+      <div className="mt-5 space-y-2.5">
+        <PrimaryCta
+          label="Contratar agora"
+          href={checkoutUrl(plan.id)}
+          block
+          withArrow={false}
+          className="!py-3 !text-[15px]"
+        />
+        <SecondaryCta label={DEMO_CTA_LABEL} href={DEMO_URL} block className="!py-3 !text-[14px]" />
+        <p className="text-center text-[11.5px] text-muted">
+          Primeiro mês por {formatBRL(firstChargeCents(code, "MENSAL"))}. Sem fidelidade.
+        </p>
       </div>
 
       {/* Só aqui você tem */}
@@ -427,10 +454,10 @@ export default function PrecosPage() {
         badge="Planos"
         title="Três planos, e o motivo de cada um valer o preço."
         subtitle="Cada plano abre pelo que só ele tem. Sem comissão sobre as suas vendas — você paga um valor fixo, e pronto."
-        primaryLabel="Peça uma demonstração"
-        primaryHref={DEMO_URL}
-        secondaryLabel="Ver como funciona"
-        secondaryHref={COMO_FUNCIONA_URL}
+        primaryLabel="Contratar agora"
+        primaryHref={checkoutUrl("crescimento")}
+        secondaryLabel="Pedir uma demonstração"
+        secondaryHref={DEMO_URL}
       />
 
       {/* 1. Os três planos */}
@@ -497,6 +524,14 @@ export default function PrecosPage() {
                           <span className="text-xs font-normal text-muted">/mês</span>
                         </p>
                         {p.sub && <p className="mt-0.5 text-[11.5px] tabular-nums text-muted">{p.sub}</p>}
+                        {/* Cada célula é um botão de compra: o cliente clica no
+                            valor que escolheu e cai no checkout já configurado. */}
+                        <a
+                          href={checkoutUrl(p.planId, c.cycle)}
+                          className="mt-2 inline-block text-[12px] font-semibold text-brand-600 underline decoration-brand-100 underline-offset-4 hover:text-brand-700"
+                        >
+                          Contratar
+                        </a>
                       </td>
                     ))}
                     <td className="px-5 py-5 text-[13px] leading-relaxed text-ink2">{c.gain}</td>
@@ -518,13 +553,18 @@ export default function PrecosPage() {
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   {c.prices.map((p, i) => (
-                    <div key={p.plan} className="rounded-xl border border-line bg-canvas px-2 py-2.5 text-center">
+                    <a
+                      key={p.plan}
+                      href={checkoutUrl(p.planId, c.cycle)}
+                      className="block rounded-xl border border-line bg-canvas px-2 py-2.5 text-center transition hover:border-brand-500"
+                    >
                       <p className="text-[10.5px] uppercase tracking-wide text-muted">{p.plan}</p>
                       <p className={`mt-1 text-[15px] font-semibold tabular-nums ${i === 1 ? "text-brand-600" : "text-ink"}`}>
                         {p.value}
                       </p>
                       {p.sub && <p className="mt-0.5 text-[10px] tabular-nums text-muted">{p.sub}</p>}
-                    </div>
+                      <p className="mt-1 text-[10.5px] font-semibold text-brand-600">Contratar</p>
+                    </a>
                   ))}
                 </div>
                 <p className="mt-3 text-[13px] leading-relaxed text-ink2">{c.gain}</p>
@@ -553,13 +593,14 @@ export default function PrecosPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
                 {DEGUSTACAO.map((d) => (
-                  <div
+                  <a
                     key={d.plan}
-                    className="flex items-center justify-between rounded-xl border border-line bg-canvas px-4 py-3"
+                    href={checkoutUrl(d.planId)}
+                    className="flex items-center justify-between rounded-xl border border-line bg-canvas px-4 py-3 transition hover:border-brand-500"
                   >
                     <span className="text-sm text-ink2">{d.plan}</span>
                     <span className="text-lg font-semibold tabular-nums text-ink">{d.value}</span>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>

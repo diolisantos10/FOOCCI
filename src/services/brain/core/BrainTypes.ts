@@ -40,6 +40,17 @@ export interface BrainReasoningRequest {
   customerMemory?: string;
   currentResponse?: string;
   contextHints?: string[];
+  /**
+   * Verdade CURADA que só o chamador conhece e o adapter do negócio não tem como
+   * carregar — ex.: os trechos do manual recuperados para esta pergunta, ou os
+   * sinais read-only do sistema no momento do relato.
+   *
+   * REGRA (Lei 2): isto é VERDADE, não entrada. Só entra aqui conteúdo curado e
+   * governado (manual publicado, mapa de falhas, probe do sistema). NUNCA texto
+   * digitado pelo usuário — senão o usuário passaria a escrever a própria verdade
+   * e o verificador de fato ficaria cego.
+   */
+  extraTruthSources?: Record<string, unknown>;
 }
 
 export interface BrainCoherenceCheck {

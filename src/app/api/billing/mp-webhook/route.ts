@@ -14,6 +14,30 @@ import { prisma } from "@/lib/prisma";
 import { PlanSubscriptionService, isTerminalStatus } from "@/services/billing/PlanSubscriptionService";
 import { MercadoPagoPlatformBilling, isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
 import { PlanNfseService } from "@/services/billing/PlanNfseService";
+import { PlanProvisioningService } from "@/services/billing/PlanProvisioningService";
+
+/**
+ * A COSTURA, chamada sempre que a assinatura passa a valer.
+ *
+ * Idempotente por construção (UNIQUE em `restaurants.originSubscriptionId`) — e
+ * precisa ser: o Mercado Pago reenvia o mesmo evento, e cada reenvio passa por
+ * aqui. Rodar dez vezes cria um restaurante só.
+ *
+ * NUNCA derruba o webhook: se a conta não nascer, o pagamento já entrou e o
+ * evento não pode ser perdido. A falha fica gravada na assinatura e no log com o
+ * dado do cliente, que é o caso "pagou e a conta não criou".
+ */
+async function provisionAccount(subscriptionId: string): Promise<void> {
+  try {
+    await PlanProvisioningService.provision(subscriptionId);
+  } catch (err) {
+    console.error(
+      `[billing/mp-webhook] CLIENTE PAGOU E A CRIAÇÃO DA CONTA EXPLODIU (assinatura ${subscriptionId}). ` +
+        `Ação humana necessária — criar a conta pelo admin e vincular à assinatura:`,
+      err,
+    );
+  }
+}
 
 async function resolveSubscription(externalReference: string | null, preapprovalId: string | null) {
   if (externalReference) {
@@ -42,8 +66,13 @@ export async function POST(req: Request) {
       const sub = await resolveSubscription(pre.externalReference, id);
       if (!sub) return NextResponse.json({ ok: true, ignored: true });
 
-      if (pre.status === "authorized") await PlanSubscriptionService.activate(sub.id);
-      else if (pre.status === "cancelled") await PlanSubscriptionService.cancel(sub.id);
+      if (pre.status === "authorized") {
+        const act = await PlanSubscriptionService.activate(sub.id);
+        // Só cria conta para quem está de fato ativo. Sem aceite (G4) ou em
+        // estado terminal, `activate` já registrou o motivo com a evidência.
+        if (act.ok) await provisionAccount(sub.id);
+        else return NextResponse.json({ ok: true, activated: false, reason: act.reason });
+      } else if (pre.status === "cancelled") await PlanSubscriptionService.cancel(sub.id);
       else if (pre.status === "paused") await PlanSubscriptionService.markDelinquent(sub.id);
       return NextResponse.json({ ok: true });
     }
@@ -74,11 +103,29 @@ export async function POST(req: Request) {
         mpPaymentId: id,
         referenceMonth,
       });
-      if (sub.status !== "ATIVA") await PlanSubscriptionService.activate(sub.id);
+      // A cobrança é registrada ANTES de qualquer decisão sobre ativar. Dinheiro
+      // que entrou é fato fiscal: mesmo que o acesso fique retido por falta de
+      // aceite, a NFS-e é devida (guardrail 5 — a proteção não pode ser mais
+      // destrutiva que o problema; reter acesso é uma coisa, sumir com a nota é
+      // outra).
+      const act = sub.status === "ATIVA" ? { ok: true } : await PlanSubscriptionService.activate(sub.id);
 
       // Emissão best-effort: sem condição fiscal a cobrança fica na fila com o
       // motivo — o webhook nunca falha por causa da nota.
       if (created) await PlanNfseService.emit(invoiceId).catch(() => {});
+
+      if (!act.ok) {
+        return NextResponse.json({ ok: true, invoiced: true, activated: false, reason: "reason" in act ? act.reason : undefined });
+      }
+
+      // A conta do cliente nasce aqui. Idempotente: reenvio do MP não duplica.
+      await provisionAccount(sub.id);
+
+      // Primeira cobrança confirmada → o preapproval sobe do valor com os 50%
+      // para o valor cheio do ciclo. Só na primeira (`created`), e o próprio
+      // serviço é idempotente pelo carimbo `fullAmountSyncedAt`.
+      if (created) await PlanSubscriptionService.syncFullAmount(sub.id);
+
       return NextResponse.json({ ok: true });
     }
 

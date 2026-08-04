@@ -1,53 +1,60 @@
 /**
- * Plan pricing for the public site.
+ * Planos para o site público — a camada de COPY.
  *
- * STATE (2026-08-02): only Crescimento has a closed value — it is the one the OS
- * quotes for the anchoring argument (`os-repaginacao-comercial.md` §2.1). The other
- * two were never committed to the repository, so they are `null` here.
+ * MUDANÇA (04/08/2026): os valores não moram mais aqui. Esta era uma das quatro
+ * tabelas de preço do repositório, e com o checkout self-service no ar tabela
+ * duplicada deixou de ser dívida e virou risco de cobrar diferente do anunciado.
+ * O número agora vem de `@/lib/billing/pricing` — a mesma função que decide o
+ * que sai do cartão. Aqui ficam só nome, posicionamento e para quem serve.
  *
- * `null` is not a placeholder to fill with a plausible number. Decision D3 of the
- * commercial briefing and guardrail 7 both forbid inventing a price on a public page:
- * an invented figure is a commercial liability the moment a lead quotes it back. Every
- * component reads `monthly === null` and renders "sob demonstração" instead.
- *
- * To publish the full table, set the two values here. Nothing else changes.
+ * O `monthly: number | null` foi mantido na interface porque componentes leem
+ * `monthly === null` para renderizar "sob demonstração". Hoje os três planos têm
+ * valor fechado, então nunca é null — mas o caminho continua existindo para um
+ * plano futuro sem preço público, que é exatamente o que a decisão D3 protege.
  */
 
+import { PLAN_CYCLE_CENTS, SITE_PLAN_TO_CODE, type SitePlanId } from "@/lib/billing/pricing";
+
 export interface Plan {
-  id: "essencial" | "crescimento" | "performance";
+  id: SitePlanId;
   name: string;
-  /** Monthly price in BRL, or null while the CEO has not closed it. */
+  /** Mensalidade em reais, derivada da fonte única de preço. */
   monthly: number | null;
-  /** The differentiator that opens the card — not a feature list. */
+  /** O diferencial que abre o card — não uma lista de recursos. */
   onlyHere: string;
   forWho: string;
+}
+
+/** Reais por mês no ciclo mensal, lido da fonte única (nunca digitado aqui). */
+function monthlyReais(id: SitePlanId): number {
+  return PLAN_CYCLE_CENTS[SITE_PLAN_TO_CODE[id]].MENSAL / 100;
 }
 
 export const PLANS: Plan[] = [
   {
     id: "essencial",
     name: "Essencial",
-    monthly: 179,
+    monthly: monthlyReais("essencial"),
     onlyHere: "Seu cardápio e seus pedidos fora do marketplace, com o cliente virando seu.",
     forWho: "Para quem está começando a vender direto.",
   },
   {
     id: "crescimento",
     name: "Crescimento",
-    monthly: 429,
+    monthly: monthlyReais("crescimento"),
     onlyHere: "O CRM que traz o cliente de volta antes de ele sumir — não depois.",
     forWho: "Para quem já vende e quer recorrência.",
   },
   {
     id: "performance",
     name: "Performance",
-    monthly: 899,
+    monthly: monthlyReais("performance"),
     onlyHere: "CMV com ficha técnica e reprecificação automática por canal.",
     forWho: "Para quem opera com margem apertada e muitos canais.",
   },
 ];
 
-/** True while any plan is still missing its value — used to soften the pricing copy. */
+/** True enquanto algum plano estiver sem valor — usado para suavizar a copy. */
 export const PRICING_INCOMPLETE = PLANS.some((p) => p.monthly === null);
 
 export function planByIdOrNull(id: Plan["id"]): Plan | null {

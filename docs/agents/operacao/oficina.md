@@ -354,3 +354,229 @@ responder primeiro 'que canal a tela usou?'. E toda falha de validação do chec
 WhatsApp carrega replyText — falha sem resposta vira 'pedido anotado' falso."*
 Origem: este bloco, E2E real na pizzaria-demo, branch
 `claude/foocci-director-onboarding-lhindy`.
+
+---
+
+## 04/08 — Checkout self-service: do card de preço à conta rodando (Frente 1)
+
+**Branch:** `claude/foocci-brain-vaamrx` · **Verificação:** `npx tsc --noEmit` limpo ·
+`npx vitest run` 4818/4820 (as 2 falhas são `quality/noSideEffects` e
+`whatsapp/WhatsAppOrderingW8`, timeouts de 5s por falta de Postgres no sandbox —
+provado idêntico no commit `024400ae`, anterior a este trabalho; W8 passa isolado).
+
+### O que existia e o que faltava
+Já existia metade: `PlanSubscriptionService`, `createPreapproval`, webhook, aceite
+versionado, `RestaurantService.register`. Faltava a ponta pública e **a costura**:
+`PlanSubscription.restaurantId` não era escrito por ninguém, então pagamento
+confirmado não virava conta.
+
+### O buraco central, e por que a idempotência não podia ser um `if`
+`PlanProvisioningService.provision` cria restaurante + dono OWNER + vínculo com a
+assinatura numa transação só. A trava contra restaurante duplicado **não é código**:
+é o índice UNIQUE `restaurants.originSubscriptionId` (migration
+`20260804120000_checkout_self_service`). O webhook do MP é retryable por contrato;
+uma checagem em código perderia a corrida entre o SELECT e o INSERT. Com o UNIQUE,
+o segundo processamento estoura P2002 e a transação inteira volta atrás — sem
+restaurante órfão, sem usuário pela metade. O serviço trata P2002 como
+"já feito", não como erro (`PlanProvisioningService.ts:193-201`).
+
+**Sub-decisão:** slug ocupado entre o checkout e o pagamento NÃO custa a conta de
+quem pagou — sufixa (`-2`, `-3`) e registra. Perder a conta de um cliente pagante
+por causa de um endereço ocupado seria muito pior; a tela pós-pagamento mostra o
+endereço real, então o cliente vê a verdade.
+
+### G2 (dupla cobrança) — a corrida também precisava de resposta
+`ensurePreapproval` (`PlanSubscriptionService.ts:174-232`) resolve DOIS cenários,
+não um. O reenvio sequencial devolve o link guardado sem tocar o MP. Mas na corrida
+real os dois requests criam no MP; a gravação é `updateMany` com
+`mpPreapprovalId: null`, e **o perdedor cancela no MP o preapproval órfão que
+acabou de criar**. Sem esse cancelamento a corrida deixaria uma recorrência viva
+que nenhum registro nosso aponta — cobrança fantasma, invisível para sempre. Se o
+cancelamento do órfão falhar, sai `console.error` com o id a cancelar à mão.
+
+### G4 (ativar sem aceite) — dentro do UPDATE, e sem jogar dinheiro fora
+`termsAcceptedAt: { not: null }` entrou no `where` do mesmo `updateMany` atômico
+que já filtrava estados terminais. Guardrail 5 aplicado: recusar ativação **não**
+descarta a cobrança — o webhook registra a PlanInvoice e enfileira a NFS-e antes
+de decidir sobre ativar (dinheiro que entrou é fato fiscal; o que fica retido é só
+o acesso). O log carrega cliente, plano e o link de aceite para resolver.
+
+### Preço: quatro fontes viraram uma
+`src/lib/billing/pricing.ts` é a fonte única. `precos/page.tsx`, `lib/site/plans.ts`,
+o `PLAN_MONTHLY_CENTS` do serviço e o `MONTHLY_DEFAULT` do admin agora leem dela.
+Três achados:
+1. O admin sugeria **preço de ciclo sem desconto** (`179 × 3 = 537` em vez de 483,
+   `179 × 12 = 2148` em vez de 1790). Corrigido junto — era cobrança acima do
+   anunciado esperando acontecer.
+2. **"Preço fundador" saiu do site.** Decisão do CEO: não existe no motor. Anunciar
+   desconto que o motor não aplica é o mesmo furo ao contrário.
+3. **50% de R$ 179,00 é R$ 89,50, não R$ 89,00.** O site anunciava arredondado. A
+   página agora imprime o mesmo centavo que o cartão paga. Não arredondei para
+   fazer bater — o número mudou no anúncio, não na cobrança.
+
+### O degrau de preço no Mercado Pago — a parte que NÃO foi verificada de verdade
+O preapproval do MP tem UM valor recorrente; não existe campo de "primeira parcela
+diferente". Então: nasce com `firstChargeCents` e é elevado a `priceCents` por
+`PUT /preapproval/{id}` quando a primeira cobrança confirma (`syncFullAmount`).
+**Este PUT nunca rodou contra a API real do Mercado Pago** — só contra mock. Se o MP
+recusar o formato, o cliente paga metade para sempre. Por isso o carimbo
+`fullAmountSyncedAt` é DESFEITO na falha e `priceSyncError` fica gravado e visível no
+admin. Mas isso é conserto no papel: **precisa de uma contratação real de ponta a
+ponta para provar.** Registrado como pendência.
+
+### Arquivos
+`src/lib/billing/pricing.ts` · `src/lib/billing/checkout-slug.ts` ·
+`src/services/billing/PlanProvisioningService.ts` ·
+`src/services/billing/PlanSubscriptionService.ts:174-232,235-275,277-318` ·
+`src/services/billing/MercadoPagoPlatformBilling.ts:38-84,86-120` ·
+`src/app/api/billing/checkout/route.ts` · `src/app/api/billing/slug-check/route.ts` ·
+`src/app/api/billing/mp-webhook/route.ts:30-40,73,110-127` ·
+`src/app/contratar/novo/{page,CheckoutClient}.tsx` ·
+`src/app/contratar/obrigado/page.tsx` · `src/app/site/(gated)/precos/page.tsx` ·
+`src/lib/site/plans.ts` · `src/app/admin/(area)/assinaturas/AssinaturasClient.tsx` ·
+`prisma/migrations/20260804120000_checkout_self_service/migration.sql`
+
+**Testes:** `pricing.test.ts` (9) · `PlanProvisioningService.test.ts` (10) ·
+`checkout/route.test.ts` (11) · `mp-webhook/route.test.ts` (8) ·
+`PlanSubscriptionService.test.ts` (12) · `admin .../action/route.test.ts` (7).
+
+### Proposta de vitrine (promoção é do Diretor)
+
+> **Idempotência de dinheiro mora no índice do banco, não no `if` do serviço — e
+> quem perde a corrida limpa o que criou fora.**
+>
+> Todo caminho que cria cobrança ou conta a partir de evento externo (webhook de
+> gateway, POST público) é reexecutado: o Mercado Pago reenvia por contrato, e o
+> cliente reenvia por duplo clique. Três regras aprendidas construindo o checkout
+> self-service:
+>
+> 1. **A trava é o UNIQUE.** `restaurants.originSubscriptionId` (e
+>    `plan_subscriptions.signupIdempotencyKey`) fazem o segundo processamento
+>    estourar P2002 dentro da transação, que volta atrás inteira. Checagem só em
+>    código perde a janela entre o SELECT e o INSERT. **P2002 nesse índice é
+>    "já feito", não erro.**
+> 2. **Perder a corrida obriga a limpar fora.** Dois requests criaram preapproval
+>    no MP; só um grava. O perdedor **cancela o órfão no gateway** — senão fica
+>    uma recorrência viva que nenhum registro nosso aponta: cobrança fantasma,
+>    invisível para sempre. Recurso criado em sistema externo e não gravado no
+>    nosso banco é vazamento, igual a estado sem prazo.
+> 3. **Pré-condição de negócio vai no `where` do UPDATE, não num `if` antes dele.**
+>    "Não ativa sem aceite de contrato" virou `termsAcceptedAt: { not: null }` no
+>    mesmo `updateMany` que já filtrava estado terminal. E recusar ativação **não**
+>    descarta o dinheiro que entrou: a cobrança e a NFS-e são registradas antes da
+>    decisão; o que fica retido é o acesso (guardrail 5).
+>
+> — origem: oficina 04/08, Frente 1 (checkout self-service), branch
+> `claude/foocci-brain-vaamrx`
+
+> **Preço anunciado e preço cobrado precisam ser o MESMO objeto — e o arredondamento
+> é do anúncio, nunca da cobrança.**
+>
+> Havia quatro tabelas de preço no repositório. Enquanto a venda era 1:1 isso era
+> dívida; com checkout self-service vira cobrança diferente do anunciado no primeiro
+> cliente. Unificadas em `src/lib/billing/pricing.ts`, que a página pública, o
+> checkout, o motor e o admin leem. Dois achados que só apareceram na unificação:
+> o admin sugeria ciclo **sem** o desconto do trimestral/anual, e o site anunciava
+> "1º mês R$ 89" para uma cobrança de R$ 89,50. Ajustou-se o **anúncio** para o
+> centavo real — nunca o contrário.
+>
+> — origem: oficina 04/08, Frente 1, decisão de preço do CEO de 04/08
+
+---
+
+## 2026-08-04 · Foocci Bakery — a padaria de degustação (Frente 3 do lançamento)
+
+**Contexto:** o CEO quer que o visitante do site experimente as três superfícies de
+atendimento antes de comprar. Parte 1 (esta): criar a padaria e o cardápio. Parte 2
+(aba de degustação no site) é da `interface`. Worktree a partir de
+`claude/foocci-brain-vaamrx`.
+
+**Terreno levantado antes de escrever qualquer linha:**
+- `RestaurantService.register()` (`src/services/restaurant/RestaurantService.ts:33`)
+  cria restaurante + dono numa transação e dispara os defaults **fire-and-forget**.
+  Não serve para seed: se `createRestaurantDefaults` falhar, ninguém fica sabendo e
+  o restaurante nasce meio configurado. O seed chama
+  `RestaurantDefaultsService.createRestaurantDefaults()` direto, **aguardando** — o
+  serviço já é idempotente por construção (`RestaurantDefaultsService.ts:22`).
+- `scripts/import-sushi-cazza.ts` é o padrão de import idempotente que existia:
+  `findFirst` + create/update, porque `MenuCategory` **não tem unique em
+  (restaurantId, name)**. Reaproveitado em vez de inventar caminho.
+- `prisma/seed.ts` (pizzaria-demo) só cria restaurante+dono, sem cardápio.
+- `prisma migrate deploy` **não sobe num banco vazio** neste repo (a cadeia de
+  migrações quebra em `relation "orders" does not exist`). Para banco novo, é
+  `prisma db push`. Registrado porque isso já vai custar tempo de alguém.
+
+**O que ficou pronto:**
+1. `prisma/schema.prisma:34` — `Restaurant.isDemo Boolean @default(false)` +
+   migração `prisma/migrations/20260804090000_restaurant_is_demo/migration.sql`.
+2. `src/lib/demo-restaurant.ts` — filtros canônicos (`REAL_RESTAURANTS_ONLY`),
+   `assertNotDemoRestaurant()` com **falha fechada** (restaurante inexistente
+   também não passa: ausência não é prova, guardrail 1).
+3. `src/services/billing/PlanSubscriptionService.ts:62` — a trava ligada no ponto
+   que cobra: `create()` recusa vincular restaurante de vitrine, ANTES da escrita.
+4. `src/app/api/admin/restaurants/route.ts:41,83` — `isDemo` na resposta da lista.
+5. `scripts/foocci-bakery.data.ts` — 7 categorias, 40 itens, 31 variantes, 10
+   adicionais, 7 grupos de opção (29 opções). Com `ingredients`, `tagFunil`,
+   `perfilPaladar`, `alergenosDetalhados`, `storytellingIA` e `harmonizacaoSugerida`
+   preenchidos — é o que o Garçom lê para responder alérgeno e sugerir par.
+6. `scripts/seed-foocci-bakery.ts` (`npm run bakery:seed`) — idempotente, com
+   `--dry-run` e `--prune`.
+7. `scripts/foocci-bakery-images.ts` (`npm run bakery:imagens`) — geração de foto
+   pelo `gpt-image-1`, mesmo modelo e mesmo armazenamento
+   (`src/services/imageEnhancement/storage.ts`) já usados pelo realce. Nenhuma
+   dependência nova, nenhuma foto baixada de terceiro.
+
+**Decisões que valem registro:**
+- **A marca de demonstração é COLUNA, não convenção de slug.** Slug é nome; nome
+  se renomeia e não serve de filtro de banco. Guardrail 4 aplicado a dado.
+- **Preço: um só por item, sem preço por canal.** Padaria cobra o mesmo no salão e
+  no delivery, e canal com preço diferente é exatamente onde esta casa já errou
+  cobrança. Preço base = variante mais barata (vira o "a partir de").
+- **Campo fiscal e CNPJ ficam VAZIOS.** Nota fiscal não admite chute, e NCM errado
+  numa vitrine é NCM errado copiado por um lojista que confia na vitrine.
+- **Custo (`cost`) é FICTÍCIO e está declarado como tal** no cabeçalho do arquivo de
+  dados. A lei "markup em cima de custo inventado é pior que não ter CMV" protege
+  lojista de verdade; aqui não há lojista e o tenant nasce `isDemo`. Sem custo, a
+  página de precificação não teria o que demonstrar.
+- **Senha do dono nunca é embutida.** Vem de `FOOCCI_BAKERY_OWNER_PASSWORD` ou é
+  sorteada e impressa uma vez. Re-execução não troca a senha de dono existente.
+- **Imagem é passo separado e pago.** Um seed que gasta dinheiro sem avisar é
+  armadilha: nada acontece sem `--yes`. Falha de foto registra o item e segue —
+  item sem foto cai no estado vazio da loja (emoji), e URL quebrada é pior que
+  nenhuma foto.
+- **O script de imagem só roda em `isDemo = true`.** Foto de IA em cardápio de
+  cliente real é vender um prato que ele nunca fez.
+
+**Verificado de verdade (banco Postgres local, não produção):**
+- `npx tsc --noEmit` limpo · `npx vitest run` 381 arquivos / 4754 testes verdes.
+- Seed rodado 3×: contagem final estável em 7 categorias / 40 itens / 31 variantes
+  / 10 adicionais / 7 grupos / 29 opções. Não duplica.
+- `next dev` local: `/qr/foocci-bakery` **200**, `/pedido/foocci-bakery?modo=loja`
+  **200**, `/pedido/foocci-bakery` **200**. Os três com conteúdo do cardápio no
+  HTML, e a cor de marca `#8A4B1E` aplicada (white-label funcionando). O modo IA
+  renderiza a conversa (`placeholder="Peça uma sugestão…"`), o `?modo=loja`
+  renderiza o catálogo — são componentes diferentes, confirmado pelo HTML.
+
+**O que NÃO foi provado:** as fotos. Não há `OPENAI_API_KEY` neste ambiente, então
+nenhuma imagem foi gerada — os 40 itens estão com `imageUrl` nulo e a loja mostra o
+estado vazio. O script está escrito e o ensaio (`--dry-run` implícito, sem `--yes`)
+imprime o comando exato que iria ao modelo, mas **nenhuma foto desta padaria existe
+ainda**. Tratar como preparado, não como entregue.
+
+**Achado colateral para a `interface`:** `categoryEmoji()`
+(`src/app/pedido/[slug]/PedidoClient.tsx:484`) é chamada com o **nome do item** e
+não conhece nenhuma palavra de padaria — todo item sem foto cai no 🍽️ genérico.
+Enquanto não houver foto, a vitrine fica com 40 pratos iguais. Não mexi: tela é
+domínio da `interface`.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Vitrine é tenant de verdade, e
+por isso precisa de marca no DADO. O que existe para demonstrar (padaria, sandbox,
+treino) roda com o mesmo código do cliente pagante — é isso que faz a demonstração
+valer, e é isso que a torna indistinguível de um cliente numa consulta descuidada.
+A marca é a coluna `Restaurant.isDemo`, nunca o nome do slug, e ela só vale se
+estiver LIGADA nos pontos que doem: cobrança (`PlanSubscriptionService.create`
+recusa vitrine, com falha fechada para restaurante inexistente) e listagem
+comercial (`REAL_RESTAURANTS_ONLY`). Toda superfície nova que conta, cobra ou
+fatura restaurante começa perguntando: 'e a vitrine, entra nessa conta?'"*
+Origem: este bloco, worktree da Frente 3 a partir de `claude/foocci-brain-vaamrx`;
+arquivos `src/lib/demo-restaurant.ts` e `src/lib/demo-restaurant.test.ts`.

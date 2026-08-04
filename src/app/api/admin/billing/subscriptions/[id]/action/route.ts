@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { PlanSubscriptionService } from "@/services/billing/PlanSubscriptionService";
 import { MercadoPagoPlatformBilling } from "@/services/billing/MercadoPagoPlatformBilling";
 import { PlanNfseService } from "@/services/billing/PlanNfseService";
+import { PlanProvisioningService } from "@/services/billing/PlanProvisioningService";
 
 const actionSchema = z.object({
   action: z.enum([
@@ -43,14 +44,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     if (action === "mp-link") {
-      const pre = await MercadoPagoPlatformBilling.createPreapproval(sub);
-      if (!pre) return NextResponse.json({ ok: false, error: "Gateway não configurado (MP_PLATFORM_ACCESS_TOKEN)." }, { status: 400 });
-      await PlanSubscriptionService.attachMercadoPago(sub.id, pre.id, pre.initPoint);
-      return NextResponse.json({ ok: true, initPoint: pre.initPoint });
+      // G2 — dupla cobrança: antes, este botão chamava `createPreapproval` sem
+      // olhar se a assinatura JÁ tinha um preapproval. Clicar duas vezes criava
+      // duas recorrências no cartão do cliente, e a segunda cobrava para sempre
+      // porque nenhum registro nosso apontava para ela. `ensurePreapproval`
+      // devolve o link existente e, na corrida, cancela o órfão no MP.
+      const pre = await PlanSubscriptionService.ensurePreapproval(sub.id);
+      if (!pre.ok) {
+        const msg =
+          pre.reason === "gateway_nao_configurado"
+            ? "Gateway não configurado (MP_PLATFORM_ACCESS_TOKEN)."
+            : pre.reason === "sem_email"
+              ? "MP exige e-mail do cliente para criar a assinatura — preencha o e-mail."
+              : pre.reason === "terminal"
+                ? "Assinatura cancelada: não se gera link de cobrança para estado terminal."
+                : "Assinatura não encontrada.";
+        return NextResponse.json({ ok: false, error: msg }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, initPoint: pre.initPoint, reused: pre.reused });
     }
 
     if (action === "activate") {
-      await PlanSubscriptionService.activate(sub.id);
+      // G4: ativar sem aceite é recusado no serviço. O admin PRECISA ver o motivo
+      // — "cliquei e não ativou, sem explicação" já é um incidente por si só.
+      const act = await PlanSubscriptionService.activate(sub.id);
+      if (!act.ok) {
+        const msg =
+          act.reason === "sem_aceite"
+            ? `Sem aceite do Termo. Mande o link https://foocci.com.br/contratar/${sub.acceptToken} e ative depois do aceite.`
+            : act.reason === "terminal"
+              ? "Assinatura cancelada (estado terminal) — não reativa. Crie uma nova assinatura."
+              : "Assinatura não encontrada.";
+        return NextResponse.json({ ok: false, error: msg }, { status: 409 });
+      }
+      // A costura vale também para a venda 1:1: se a assinatura tem cadastro
+      // pendente, a conta nasce aqui; se não tem, é no-op.
+      await PlanProvisioningService.provision(sub.id).catch((e) =>
+        console.error(`[admin/billing] provisionamento falhou para ${sub.id}:`, e),
+      );
       return NextResponse.json({ ok: true });
     }
 

@@ -38,9 +38,10 @@ const FROZEN_EXCEPTIONS = new Set<string>([
   "services/ai/WhatsAppReceptionistService.ts",
   // Exceção consciente (não é dívida de raciocínio): embeddings não passam pelo chat dispatcher
   "services/brain/knowledge/KnowledgeEmbeddingService.ts",
-  // helpAssistant usa histórico multi-turn (mais de 2 mensagens) — o dispatcher
-  // callStructuredJson só suporta system+user; migrar exige evoluir o contrato.
-  "services/help/helpAssistant.ts",
+  // REMOVIDO em 04/08/2026: services/help/helpAssistant.ts. A aba "Ajuda" chamava
+  // a OpenAI direto; agora passa por reasonAsAgent({agentId:"suporte-tecnico"}).
+  // O histórico multi-turn — a justificativa antiga da exceção — vai pelo campo
+  // sanitizedHistory do BrainReasoningRequest, que já existia.
   "services/imageEnhancement/providers/openai.ts",
 ]);
 

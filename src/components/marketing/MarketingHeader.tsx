@@ -27,12 +27,23 @@ export function MarketingHeader() {
 
   return (
     <header
-      className={`sticky top-0 z-50 bg-white/85 backdrop-blur-md transition-colors ${
-        scrolled ? "border-b border-gray-200" : "border-b border-transparent"
+      className={`sticky top-0 z-50 bg-paper/85 backdrop-blur-md transition-colors ${
+        scrolled ? "border-b border-line" : "border-b border-transparent"
       }`}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
-        <Link href="/site" className={`flex items-center gap-2.5 rounded-md ${FOCUS}`} aria-label="Foocci — início">
+        {/*
+          No celular a logo fica CENTRALIZADA (pedido do CEO, 2026-08-04). O espaçador
+          tem a mesma largura do botão de menu à direita — é ele que faz o centro ser o
+          centro de verdade, sem posicionamento absoluto. No desktop some.
+        */}
+        <span aria-hidden className="w-10 shrink-0 lg:hidden" />
+
+        <Link
+          href="/site"
+          className={`flex flex-1 items-center justify-center gap-2.5 rounded-md lg:flex-none lg:justify-start ${FOCUS}`}
+          aria-label="Foocci — início"
+        >
           <Image
             src="/brand/foocci/foocci-wordmark.png"
             alt="Foocci"
@@ -48,7 +59,7 @@ export function MarketingHeader() {
             <Link
               key={l.href}
               href={l.href}
-              className={`rounded-md text-sm font-medium text-gray-600 transition-colors hover:text-[#0B0B0B] ${FOCUS}`}
+              className={`rounded-md text-sm font-semibold text-ink2 transition-colors hover:text-ink ${FOCUS}`}
             >
               {l.label}
             </Link>
@@ -58,7 +69,7 @@ export function MarketingHeader() {
         <div className="hidden items-center gap-3 lg:flex">
           <Link
             href={LOGIN_URL}
-            className={`inline-flex items-center rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-gray-300 hover:bg-gray-50 ${FOCUS}`}
+            className={`inline-flex items-center rounded-xl border border-line2 bg-paper px-5 py-2 text-sm font-semibold text-ink shadow-[0_1px_2px_rgba(11,11,11,.03)] transition-colors hover:bg-[#FAFAF8] ${FOCUS}`}
           >
             Entrar
           </Link>
@@ -75,30 +86,30 @@ export function MarketingHeader() {
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Fechar menu" : "Abrir menu"}
           aria-expanded={open}
-          className={`flex h-10 w-10 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 lg:hidden ${FOCUS}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink2 hover:bg-[#F4F4F2] lg:hidden ${FOCUS}`}
         >
           {open ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
         </button>
       </div>
 
       {open && (
-        <div className="border-t border-gray-200 bg-white lg:hidden">
+        <div className="border-t border-line bg-paper lg:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col px-5 py-3" aria-label="Navegação principal">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className={`rounded-lg px-2 py-3 text-base font-medium text-gray-700 hover:bg-gray-50 ${FOCUS}`}
+                className={`rounded-lg px-2 py-3 text-base text-ink2 hover:bg-[#FAFAF8] ${FOCUS}`}
               >
                 {l.label}
               </Link>
             ))}
-            <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-3">
+            <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
               <Link
                 href={LOGIN_URL}
                 onClick={() => setOpen(false)}
-                className={`rounded-lg px-2 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50 ${FOCUS}`}
+                className={`rounded-lg px-2 py-3 text-base font-semibold text-ink hover:bg-[#FAFAF8] ${FOCUS}`}
               >
                 Entrar
               </Link>

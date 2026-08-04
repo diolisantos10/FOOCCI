@@ -42,6 +42,8 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/payments\/mercadopago\/webhook$/, // Mercado Pago webhook (public — MP servers have no JWT)
   /^\/contratar(\/.*)?$/,                // Public plan-contract acceptance page (token-gated by construction)
   /^\/api\/billing\/accept$/,           // Terms acceptance (rate-limited; requires unguessable token)
+  /^\/api\/billing\/checkout$/,         // Self-service checkout (rate-limited per IP + idempotency key)
+  /^\/api\/billing\/slug-check$/,       // Store-address availability while typing (rate-limited; answers only free/taken)
   /^\/api\/billing\/mp-webhook$/,       // MP PLATFORM billing webhook (verified by refetch with our token)
   /^\/api\/payments\/sumup\/webhook$/, // SumUp webhook (public — re-verified via SumUp API before confirming)
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)

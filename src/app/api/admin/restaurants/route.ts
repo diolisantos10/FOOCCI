@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
       email: true,
       phone: true,
       isActive: true,
+      isDemo: true,
       plan: true,
       createdAt: true,
       users: {
@@ -79,6 +80,9 @@ export async function GET(req: NextRequest) {
       email: r.email,
       phone: r.phone,
       isActive: r.isActive,
+      // Vitrine de demonstração (ex.: Foocci Bakery). Vai na resposta para que a
+      // lista do admin nunca apresente um restaurante fictício como cliente.
+      isDemo: r.isDemo,
       plan: r.plan,
       createdAt: r.createdAt,
       owner: r.users[0] ?? null,

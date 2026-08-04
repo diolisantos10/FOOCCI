@@ -13,7 +13,7 @@
  */
 
 import type { PlanSubscription } from "@prisma/client";
-import { CYCLE_MONTHS } from "./PlanSubscriptionService";
+import { CYCLE_MONTHS } from "@/lib/billing/pricing";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -34,6 +34,16 @@ export const MercadoPagoPlatformBilling = {
   /**
    * Cria a assinatura recorrente no MP e devolve o link de pagamento hospedado.
    * Exige e-mail do cliente (obrigatório na API do MP para preapproval).
+   *
+   * VALOR: nasce com `firstChargeCents` quando ele existe (a regra dos 50% do
+   * primeiro mês) e só depois é elevado a `priceCents` por
+   * `updatePreapprovalAmount`, chamado quando a primeira cobrança é confirmada.
+   * O preapproval do MP tem UM valor recorrente — não há campo de "primeira
+   * parcela diferente" —, então o degrau em duas etapas é o caminho suportado.
+   *
+   * NÃO chame direto para gerar o link do cliente: use
+   * `PlanSubscriptionService.ensurePreapproval`, que é quem impede a segunda
+   * recorrência num duplo clique.
    */
   async createPreapproval(sub: PlanSubscription): Promise<PreapprovalResult | null> {
     const token = platformToken();
@@ -43,6 +53,7 @@ export const MercadoPagoPlatformBilling = {
     }
 
     const months = CYCLE_MONTHS[sub.cycle];
+    const amountCents = sub.firstChargeCents ?? sub.priceCents;
     const res = await fetch(`${MP_API}/preapproval`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -50,11 +61,11 @@ export const MercadoPagoPlatformBilling = {
         reason: `Foocci — plano ${sub.plan} (${sub.cycle.toLowerCase()})`,
         external_reference: sub.id,
         payer_email: sub.customerEmail,
-        back_url: "https://foocci.com.br/contratar/obrigado",
+        back_url: `https://foocci.com.br/contratar/obrigado?s=${encodeURIComponent(sub.acceptToken)}`,
         auto_recurring: {
           frequency: months,
           frequency_type: "months",
-          transaction_amount: sub.priceCents / 100,
+          transaction_amount: amountCents / 100,
           currency_id: "BRL",
         },
       }),
@@ -65,6 +76,42 @@ export const MercadoPagoPlatformBilling = {
       throw new Error(`MP recusou a criação da assinatura (${res.status}): ${body?.message ?? "sem detalhe"}`);
     }
     return { id: body.id, initPoint: body.init_point };
+  },
+
+  /**
+   * Eleva o valor recorrente do preapproval para o valor CHEIO do ciclo, depois
+   * que a primeira cobrança (com os 50%) já foi confirmada.
+   *
+   * Se isto falhar, o cliente continua pagando metade para sempre — perda de
+   * receita silenciosa. Por isso a falha volta com motivo e o chamador PERSISTE
+   * o alerta; nunca há catch mudo aqui.
+   */
+  async updatePreapprovalAmount(
+    preapprovalId: string,
+    amountCents: number,
+    cycle: PlanSubscription["cycle"],
+  ): Promise<{ ok: true } | { ok: false; reason: "gateway_nao_configurado" | "mp_recusou"; detail?: string }> {
+    const token = platformToken();
+    if (!token) return { ok: false, reason: "gateway_nao_configurado" };
+    if (!preapprovalId) return { ok: false, reason: "mp_recusou", detail: "preapprovalId vazio" };
+
+    const res = await fetch(`${MP_API}/preapproval/${encodeURIComponent(preapprovalId)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        auto_recurring: {
+          frequency: CYCLE_MONTHS[cycle],
+          frequency_type: "months",
+          transaction_amount: amountCents / 100,
+          currency_id: "BRL",
+        },
+      }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { message?: string } | null;
+      return { ok: false, reason: "mp_recusou", detail: `${res.status}: ${body?.message ?? "sem detalhe"}` };
+    }
+    return { ok: true };
   },
 
   /**

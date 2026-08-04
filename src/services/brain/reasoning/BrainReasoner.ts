@@ -82,6 +82,8 @@ const TRUTH_LABELS: Record<string, string> = {
   materials: "Materiais",
   conversations: "Conversas (agregado)",
   evidence: "Evidências",
+  manual: "Manual/documentação curada (trechos relevantes)",
+  systemSignals: "Sinais read-only do sistema agora",
 };
 
 function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
@@ -100,10 +102,32 @@ function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
 // knowledge RELEVANT to this exact question (retrieval), not just the top-N.
 async function loadKnowledge(req: BrainReasoningRequest): Promise<BusinessKnowledgeSnapshot> {
   const adapter = resolveKnowledgeAdapter(req.businessType);
-  if (!adapter) return emptySnapshot(req);
-  return adapter
-    .getSnapshot(req.businessId, { agentId: req.agentId, queryHint: req.sanitizedInput })
-    .catch(() => emptySnapshot(req));
+  const base = adapter
+    ? await adapter
+        .getSnapshot(req.businessId, { agentId: req.agentId, queryHint: req.sanitizedInput })
+        .catch(() => emptySnapshot(req))
+    : emptySnapshot(req);
+  return withExtraTruth(base, req.extraTruthSources);
+}
+
+/**
+ * Costura a verdade curada do chamador ao snapshot do adapter. O adapter continua
+ * dono da verdade DO NEGÓCIO; o chamador acrescenta a verdade DO DOMÍNIO que só
+ * ele recuperou (manual, sinais do sistema). Chaves vazias não entram — verdade
+ * vazia não é verdade, e um bloco vazio no prompt só gasta contexto.
+ */
+function withExtraTruth(
+  snap: BusinessKnowledgeSnapshot,
+  extra?: Record<string, unknown>,
+): BusinessKnowledgeSnapshot {
+  if (!extra) return snap;
+  const merged = { ...snap.truthSources };
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    merged[key] = value;
+  }
+  return { ...snap, truthSources: merged };
 }
 
 // ── Approved learnings → the human-approved pool finally feeds reasoning ───────

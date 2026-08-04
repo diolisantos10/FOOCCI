@@ -27,13 +27,29 @@ export const MAX_EMBEDDING_BACKFILLS_PER_CALL = 20;
 /** Guarda-chuva de custo: nunca mandamos textos gigantes para a API. */
 const MAX_EMBED_INPUT_CHARS = 2000;
 
-/** Shape mínimo que o ranking precisa — compatível com as rows do adapter. */
-export interface EmbeddableKnowledgeItem {
+/**
+ * Shape GENÉRICO de qualquer documento embedável (item de conhecimento do
+ * restaurante, capítulo do manual, …). O ranking não sabe o que o documento é:
+ * quem chama informa como extrair o texto e como persistir o vetor.
+ */
+export interface EmbeddableDocument {
   id?: string;
-  title: string;
-  questionPatterns: unknown; // string[] no banco (Json)
   embedding?: unknown; // number[] persistido (Json) ou null
   embeddingModel?: string | null;
+}
+
+/** Shape mínimo que o ranking precisa — compatível com as rows do adapter. */
+export interface EmbeddableKnowledgeItem extends EmbeddableDocument {
+  title: string;
+  questionPatterns: unknown; // string[] no banco (Json)
+}
+
+/** Como o ranking genérico lê o texto e grava o vetor de um tipo de documento. */
+export interface EmbeddingDocumentCodec<T> {
+  /** Texto canônico que representa o documento. */
+  textOf: (item: T) => string;
+  /** Persistência best-effort do vetor. Ausente = só memória (nunca falha). */
+  persist?: (id: string, vector: number[]) => Promise<void>;
 }
 
 /** Texto canônico embedado por item: título + padrões de pergunta. */
@@ -78,23 +94,21 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * Garante o embedding de UM item: usa o persistido quando o modelo bate;
+ * Garante o embedding de UM documento: usa o persistido quando o modelo bate;
  * senão calcula e persiste (best-effort — falha de persistência não derruba
  * o vetor recém-calculado). Erros de API → null.
  */
-export async function ensureItemEmbedding(item: EmbeddableKnowledgeItem): Promise<number[] | null> {
+export async function ensureDocumentEmbedding<T extends EmbeddableDocument>(
+  item: T,
+  codec: EmbeddingDocumentCodec<T>,
+): Promise<number[] | null> {
   const existing = asVector(item.embedding);
   if (existing && item.embeddingModel === KNOWLEDGE_EMBEDDING_MODEL) return existing;
 
   try {
-    const vector = await embedText(embeddingTextOf(item));
-    if (item.id) {
-      await prisma.restaurantKnowledgeItem
-        .update({
-          where: { id: item.id },
-          data: { embedding: vector, embeddingModel: KNOWLEDGE_EMBEDDING_MODEL },
-        })
-        .catch(() => undefined); // best-effort: ranking segue mesmo sem persistir
+    const vector = await embedText(codec.textOf(item));
+    if (item.id && codec.persist) {
+      await codec.persist(item.id, vector).catch(() => undefined); // best-effort
     }
     return vector;
   } catch {
@@ -103,15 +117,19 @@ export async function ensureItemEmbedding(item: EmbeddableKnowledgeItem): Promis
 }
 
 /**
- * Ranqueia items por similaridade de embedding com a query (1 call para a query;
- * no máx MAX_EMBEDDING_BACKFILLS_PER_CALL backfills de itens sem embedding).
+ * Ranqueia documentos por similaridade de embedding com a query (1 call para a
+ * query; no máx MAX_EMBEDDING_BACKFILLS_PER_CALL backfills de itens sem vetor).
  * Itens sem vetor vão para o fim, na ordem original (que já é a de uso).
  * Qualquer erro estrutural (query não embedou / nenhum item com vetor) → null,
  * o sinal para o chamador cair no ranking keyword.
+ *
+ * Genérico de propósito: item de conhecimento, capítulo de manual ou qualquer
+ * documento futuro usa o MESMO ranking — só troca o codec.
  */
-export async function rankByEmbedding<T extends EmbeddableKnowledgeItem>(
+export async function rankDocumentsByEmbedding<T extends EmbeddableDocument>(
   queryText: string,
   items: T[],
+  codec: EmbeddingDocumentCodec<T>,
 ): Promise<T[] | null> {
   if (!items.length) return null;
 
@@ -130,7 +148,7 @@ export async function rankByEmbedding<T extends EmbeddableKnowledgeItem>(
       vector = null;
       if (backfills < MAX_EMBEDDING_BACKFILLS_PER_CALL) {
         backfills++;
-        vector = await ensureItemEmbedding(item);
+        vector = await ensureDocumentEmbedding(item, codec);
       }
     }
     scored.push({ item, order, score: vector ? cosineSimilarity(queryVector, vector) : null });
@@ -145,4 +163,31 @@ export async function rankByEmbedding<T extends EmbeddableKnowledgeItem>(
     return b.score - a.score || a.order - b.order;
   });
   return scored.map((s) => s.item);
+}
+
+/** Codec do conhecimento curado do restaurante (RestaurantKnowledgeItem). */
+const KNOWLEDGE_ITEM_CODEC: EmbeddingDocumentCodec<EmbeddableKnowledgeItem> = {
+  textOf: embeddingTextOf,
+  persist: async (id, vector) => {
+    await prisma.restaurantKnowledgeItem.update({
+      where: { id },
+      data: { embedding: vector, embeddingModel: KNOWLEDGE_EMBEDDING_MODEL },
+    });
+  },
+};
+
+/** Compat: o ranking do conhecimento curado do restaurante. */
+export async function ensureItemEmbedding(item: EmbeddableKnowledgeItem): Promise<number[] | null> {
+  return ensureDocumentEmbedding(item, KNOWLEDGE_ITEM_CODEC);
+}
+
+/** Compat: ranking por embedding dos itens de conhecimento do restaurante. */
+export async function rankByEmbedding<T extends EmbeddableKnowledgeItem>(
+  queryText: string,
+  items: T[],
+): Promise<T[] | null> {
+  return rankDocumentsByEmbedding(queryText, items, {
+    textOf: (i) => embeddingTextOf(i),
+    persist: KNOWLEDGE_ITEM_CODEC.persist,
+  });
 }

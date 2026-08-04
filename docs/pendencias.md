@@ -1259,3 +1259,11 @@ Isso bloqueia a definição das faixas de preço e o bloqueio por plano.
   *🤖 Automações WhatsApp* dentro de Promoções. Está em produção, o manual já
   descreve o caminho novo (`howToGuidesContent.ts:599`), e o motor antigo está
   aposentado **por teste** (`AutomationRetired.test.ts`), não por combinado.
+
+## CEO — Railway: `SUPPORT_NOTIFY_EMAIL` (agente de suporte, 04/08)
+O agente de suporte passou a abrir **chamado numerado** (CHM-0042) e mandar
+**e-mail com a evidência** do caso quando não resolve sozinho. Falta setar no
+Railway a variável **`SUPPORT_NOTIFY_EMAIL`** = e-mail do time de suporte.
+Não é bloqueador: sem ela o aviso cai em `LEADS_NOTIFY_EMAIL` (que já existe e já
+chega no time), e o e-mail declara no rodapé que saiu pelo fallback. `RESEND_API_KEY`
+já existe. `SUPPORT_FROM_EMAIL` é opcional.

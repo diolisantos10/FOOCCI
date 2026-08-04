@@ -20,7 +20,6 @@
         "src/services/ai/WhatsAppReceptionistService.ts",
         // embeddings não passam pelo chat dispatcher
         "src/services/brain/knowledge/KnowledgeEmbeddingService.ts",
-        "src/services/help/helpAssistant.ts",
         "src/services/imageEnhancement/providers/openai.ts"
       ],
       "rules": {
