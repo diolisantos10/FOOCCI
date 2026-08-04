@@ -491,3 +491,24 @@ dias (03/08: "não é a tela do /pedido sem IA"; 04/08: "é a réplica exata da
 mesa"). O padrão a aprender: quando o CEO descreve uma superfície POR REFERÊNCIA
 a outra ("igual à da mesa"), a entrega é a referência replicada — não uma
 interpretação nova do mesmo requisito funcional.
+
+## Cobra-se o que a tela mostrou — retirada precifica pelo canal de exibição
+
+**Data:** 2026-08-04 · **Decidido por:** CEO (opção recomendada pelo Diretor) ·
+**Registrado por:** Diretor do Foocci
+
+Contexto: produtos podem ter dois preços (entrega × salão). As superfícies de
+pedido exibem tudo no canal DELIVERY, mas a cobrança de **retirada** usava a
+tabela DINE_IN — cliente podia ver um valor e pagar outro.
+
+**A regra:** quando o cliente pede por uma superfície online, vale **o preço que
+a tela mostrou**. Nunca surpresa de valor — a regra dos marketplaces.
+
+Aplicação (04/08, mesmo dia):
+- `/api/pedido/[slug]/finalize`: pickup precifica e promociona como DELIVERY
+  (canal que o `/pedido` exibe). Taxa de entrega continua só para delivery.
+- `WhatsAppCheckoutAdapter`: idem — a conversa exibe tudo em DELIVERY
+  (extensão da mesma decisão pelo Diretor, com a evidência no código).
+- Corolário para todo caminho novo de checkout: **canal de cobrança = canal de
+  exibição.** A pergunta a responder antes de precificar é "que canal a tela
+  usou?". Promovido à vitrine do `operacao`.

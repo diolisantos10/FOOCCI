@@ -10,6 +10,6 @@ export * from "./format";
 export { WelcomeModal } from "./WelcomeModal";
 export { ProductModal } from "./ProductModal";
 export { PromoBanner, FeaturedCard, ProductCard } from "./cards";
-export { MenuHero } from "./MenuHero";
+export { MenuHero, MenuSocialLinks, MenuShowcase } from "./MenuHero";
 export { CategoryNav, CategoryDescriptionStrip } from "./CategoryNav";
 export { CategorySections } from "./CategorySections";

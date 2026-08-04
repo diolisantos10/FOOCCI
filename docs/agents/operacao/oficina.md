@@ -256,3 +256,101 @@ CLIENTE não aplica — o servidor espelha o que foi mostrado, não inventa regr
 caminho que recalcula preço (finalize, WhatsAppCheckoutAdapter) precisa da mesma
 resolução de variante — o do WhatsApp ainda tem o furo. Origem: bloco P1 de 04/08,
 E2E real na pizzaria-demo, branch `claude/foocci-director-onboarding-lhindy`.
+_(Promovida à vitrine pelo Diretor em 04/08.)_
+
+---
+
+## 2026-08-04 · Bloco cobrança 2/2 — pickup cobra o que a tela mostrou + variante no WhatsApp
+
+**Contexto:** bloco aprovado pelo Diretor (04/08), duas tarefas. Fecha os dois achados
+reportados no bloco P1 da manhã. Branch `claude/foocci-director-onboarding-lhindy`,
+sem commit (Diretor revisa e commita).
+
+**TAREFA 1 — decisão do CEO: retirada cobra o preço que a tela mostrou (canal DELIVERY).**
+- Confirmado por grep que `/api/pedido/[slug]/finalize` só é chamado por
+  `PedidoClient.tsx:4488` e `LojaClient.tsx:304` — o QRMenuClient (mesa) NÃO usa esta
+  rota. E a página `/pedido` exibe TODO preço em `channelPrice(..., "DELIVERY")` e
+  carrega promoções com `getActiveMenuPromotions(id, "DELIVERY")` (`page.tsx:373,388`),
+  independente de o cliente depois escolher entrega ou retirada.
+- `finalize/route.ts`: `pricingChannel` e `promoChannel` viraram `"DELIVERY"` fixos,
+  com comentário citando a regra ("cobra-se o que a tela mostrou — decisão do CEO
+  04/08"). Antes, pickup precificava DINE_IN e promocionava QR_MENU — preço e promo
+  que a tela nunca mostrou.
+- Conferido que a taxa de entrega NÃO depende desse canal: `resolveDeliveryFee` só
+  roda no bloco `deliveryMethod === "delivery"` (route.ts:457) — retirada segue sem taxa.
+- Cupom digitado (`validate-coupon` + bloco de cupom do finalize) usa o MESMO
+  mapeamento nos dois lados (DELIVERY↔delivery, QR_MENU↔pickup) — preview e cobrança
+  consistentes entre si; não foi tocado (é canal de CUPOM, decisão separada se um dia
+  incomodar).
+- Testes (i)–(i''') em `finalize/route.test.ts`: pickup com `priceDineIn ≠
+  priceDelivery` cobra o DELIVERY no item base E na variante; promoção buscada e
+  aplicada no canal DELIVERY mesmo no pickup; delivery inalterado (regressão).
+
+**TAREFA 2 — mesmo furo de variante do finalize, agora no WhatsApp.**
+- **Formato real da variante no carrinho do WhatsApp:** `WaOrderItem` carrega
+  `variantId?` + `variantName?` (`types.ts:94-95`), preenchidos num ÚNICO ponto —
+  `WhatsAppOrderStateMachine.ts:602-603` (resposta à pergunta "Tamanho/Variante").
+  O matcher inicial nunca preenche variante; item com variantes vira pergunta.
+- `WhatsAppCheckoutAdapter.validateAndPriceItems`: linha com variante agora resolve a
+  variante no banco (fetch sem filtro de `isAvailable`, igual ao finalize), valida que
+  pertence ao item, e precifica com `resolveVariantPrice(item, variante, canal)` no
+  canal que o adapter já usava. Fallback defensivo: `variantName` sem `variantId`
+  resolve por nome exato dentro das variantes DO item. `variantName` gravado vem do
+  banco. Falha fechada: variante inválida/indisponível → `{ok:false, reason,
+  replyText}` e o pedido NÃO é criado.
+- **replyText nas falhas de variante é deliberado:** o mecanismo `reason`-sem-replyText
+  do "item indisponível" morre em silêncio (ver achado 2 abaixo). O `blockedReply` já
+  existente (`WhatsAppOrderCreationService:83` → `WhatsAppTextOrderService:440-444`)
+  leva a mensagem ao cliente e escala para atendente — usei o canal que já existia.
+- **Promoção no WhatsApp: NÃO existe.** Grep em `src/services/whatsapp` — zero uso de
+  `getActiveMenuPromotions`/resolvedor de promoções no fluxo de pedido (só "promotion"
+  de governança de runtime). Nada de promoção foi inventado no adapter.
+- Testes novos: `tests/WhatsAppCheckoutAdapterVariantPrice.test.ts` (9) — preço da
+  variante do banco (sessão adulterada sobrescrita), variante de outro
+  item/inexistente/indisponível → falha fechada com replyText, regressão sem variante
+  (tabela de variantes nem consultada), fallback por nome, variante+opções+extras,
+  herança de canal. W9 e todos os testes de ordering intactos.
+
+**Verificação:** `npx tsc --noEmit` limpo (inclusive com o trabalho em andamento do
+outro agente na árvore); `npx vitest run` COMPLETO → 380 arquivos, 4743 testes, TODOS
+verdes (nem a falha conhecida de `noSideEffects` apareceu nesta rodada). **E2E REAL
+contra o Postgres local com seed (pizzaria-demo):** plantei `priceDineIn` 1,11/2,22 no
+Quatro Queijos e na Média (30cm), pedido pickup via handler real → cobrado 52,90/52,90
+(DELIVERY da tela), subtotal 105,80, nunca o DINE_IN. Pedido de prova apagado, preços
+restaurados, banco conferido limpo.
+
+**Episódio operacional:** no meio do bloco um `git stash`/`pop` externo (do agente que
+mexe na Loja) passou pela árvore — verifiquei arquivo a arquivo depois do pop que as
+minhas três edições voltaram intactas antes de seguir. Em repositório compartilhado ao
+vivo, conferir o conteúdo depois de qualquer evento de árvore que não foi seu.
+
+**Dois furos ENCONTRADOS durante o bloco — inicialmente só reportados, depois
+FECHADOS na mesma sessão por ordem do Diretor na revisão:**
+1. **WhatsApp tinha o MESMO descasamento exibição×cobrança do pickup.** A conversa
+   mostra preço SEMPRE no canal DELIVERY — o menu é carregado só com
+   `price`/`priceDelivery` e filtrado por `showInDelivery`
+   (`WhatsAppTextOrderService.ts:47-96`), e o state machine chama
+   `channelPrice(..., "DELIVERY")` em todos os pontos de exibição (linhas 388, 485,
+   604, 779, 1013...). Mas o adapter cobrava `deliveryType === "DELIVERY" ?
+   "DELIVERY" : "DINE_IN"`. **Fechado:** o Diretor estendeu a decisão do CEO ao
+   WhatsApp — `pricingChannel = "DELIVERY"` fixo no `WhatsAppCheckoutAdapter`, com
+   comentário citando a decisão. Testes (h): sessão PICKUP com `priceDineIn ≠
+   priceDelivery` cobra o DELIVERY no item base (55, nunca 45) E na variante
+   (override 70, nunca 62).
+2. **Falha de validação do adapter sem replyText morria como "pedido anotado".**
+   Quando `validateAndPriceItems` falhava só com `reason` (caso "item indisponível"),
+   `WhatsAppTextOrderService.ts:485-487` respondia `buildOrderAnnotatedReply` — o
+   cliente entendia que o pedido foi anotado, mas NENHUM pedido existia. **Fechado:**
+   o caso "item indisponível" agora devolve `replyText` pelo mesmo canal
+   `blockedReply` usado nas falhas de variante — resposta clara + escalada para
+   atendente, nunca "anotado" sem pedido. Teste (i) cobre o caso.
+
+**Proposta de vitrine (promoção é do Diretor):** complementar a entrada existente do
+guard de preço com: *"Canal de cobrança = canal de EXIBIÇÃO, nunca o canal 'lógico' do
+método de entrega. As duas superfícies de pedido (clientes /pedido E conversa do
+WhatsApp) mostram tudo em DELIVERY, então pickup cobra DELIVERY nas duas (decisão do
+CEO 04/08, estendida ao WhatsApp pelo Diretor). Todo caminho novo de checkout deve
+responder primeiro 'que canal a tela usou?'. E toda falha de validação do checkout do
+WhatsApp carrega replyText — falha sem resposta vira 'pedido anotado' falso."*
+Origem: este bloco, E2E real na pizzaria-demo, branch
+`claude/foocci-director-onboarding-lhindy`.

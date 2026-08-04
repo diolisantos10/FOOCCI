@@ -165,3 +165,67 @@ em `quality/noSideEffects` por ambiente sem serviços — falha igual sem o diff
 
 — interface, retrabalho aprovado pelo CEO em 04/08 (branch
 `claude/foocci-director-onboarding-lhindy`, sem commit — Diretor revisa)
+
+---
+
+## 2026-08-04 (tarde) — Topo de app do Cardápio sem IA: StoreHeader + Minha conta
+
+**Ordem do CEO:** topo estilo marketplace — logomarca no superior esquerdo,
+redes sociais, ícone do carrinho (faltava) e a identificação do cliente com o
+"menuzinho" de cupons e endereços. Emenda explícita à regra "igual por
+construção" de 04/08: o CORPO segue compartilhado com o QR; o TOPO da Loja é
+composição própria.
+
+**O que foi feito:** `StoreHeader` (barra sticky: logo+nome+status
+aberto/fechado+modalidades à esquerda; avatar da conta com badge de cupons e
+sacola com badge de quantidade à direita), `StoreAccountDrawer` (identidade +
+Meus cupons + Meus endereços), `lojaWallet` (tipos + fetch das rotas read-only
+já existentes), faixa fina de sociais + "Avaliar" no lugar do hero centralizado,
+e o passo "Sua sacola" no fluxo (ícone abre a sacola; a barra inferior segue
+direto pro fechamento — a combinação do iFood, que tem os dois). Do MenuHero
+foram EXTRAÍDOS `MenuSocialLinks` e `MenuShowcase` (exportados e recompostos no
+mesmo lugar — DOM do QR idêntico, provado por pixel-diff nos 3 tamanhos).
+
+**Achado 1 — a carteira do cliente já existia inteira no backend; o trabalho
+era honestidade, não tela.** `/api/pedido/[slug]/coupons` e `/customer-profile`
+são read-only e gated por prova de posse do telefone (waToken — CR C1/LGPD), e
+o `finalize` JÁ aceita `customerCouponId` com revalidação e recálculo no
+servidor. Resultado: o cupom escolhido no drawer É aplicado de verdade (E2E
+local: pedido #4 CONFIRMED, subtotal 52,90 → desconto 5,29 → total 47,61,
+cupom vira USED). Sem token (telefone digitado no WelcomeModal), o drawer NÃO
+finge: mostra a nota honesta "cupons e endereços aparecem entrando pelo link do
+WhatsApp". Quando nascer o OTP (domínio canais), ele cunha o MESMO token e o
+drawer destrava sem mudança.
+
+**Achado 2 — ler sessionStorage no inicializador do useState quebra a
+hidratação.** O LojaClient inicializava a identidade com
+`readStoredIdentity(slug)` dentro do `useState` — o servidor renderiza sem
+identidade, o cliente com, e o React descarta a árvore inteira ("Text content
+does not match"). Com o avatar de iniciais no topo o mismatch ficou VISÍVEL
+(overlay "1 error" no dev). Correção: estado inicial só com props do servidor;
+o storage entra num `useEffect` de mount. Vale para qualquer componente novo
+que renderize identidade de sessão.
+
+**Achado 3 — o lookup de cliente por telefone tem pegadinha de formato no seed
+local.** O banco tinha `+5511988887777` (com "+") e o seed da carteira criou
+`5511988887777` — `resolvePedidoIdentity` usa `phoneCandidates` +
+`CUSTOMER_LOOKUP_ORDER` e resolveu o cadastro RICO antigo, deixando a carteira
+recém-semeada invisível. Em teste local, semear dados de cliente exige conferir
+QUAL cadastro o lookup resolve, não assumir que o upsert criou o que será lido.
+
+**Provas colhidas:** QR pixel-idêntico (diff bbox 375/768/1280, "IDENTICAL"),
+E2E de cupom no banco, screenshots 375/768/1280 do topo + drawer (com dados /
+vazio / travado) + sacola (vazia / com item) + revisão com desconto, `tsc`
+limpo, vitest 4746 verdes (380 arquivos, incluindo a suíte nova do finalize).
+
+**Propostas de vitrine** (promoção é do Diretor):
+1. "Identidade de sessão renderizada no SSR: sessionStorage nunca entra no
+   useState inicial — entra em efeito de mount" (Achado 2, custou um hydration
+   mismatch visível no topo).
+2. "Antes de desenhar tela de dados do cliente, procurar a rota gated que já
+   existe: a carteira (cupons/endereços/aplicação no finalize) já estava
+   pronta no backend — e o estado 'sem prova' é uma nota honesta, não um vazio"
+   (Achado 1).
+
+— interface, topo de app da Loja (branch `claude/foocci-director-onboarding-lhindy`,
+sem commit — Diretor revisa)

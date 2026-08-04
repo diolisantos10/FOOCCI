@@ -4,9 +4,11 @@
  *
  * Responsibilities:
  *   - Re-validate item availability against the live menu (anti-staleness).
- *   - Re-calculate server-side prices from DB using the same channelPrice()
- *     logic the /pedido finalize route uses — WhatsApp session prices are
- *     never trusted directly.
+ *   - Re-calculate server-side prices from DB using the same channelPrice()/
+ *     resolveVariantPrice() logic the /pedido finalize route uses — WhatsApp
+ *     session prices are never trusted directly. Variant lines are resolved in
+ *     the DB (belongs to the item? available?) and priced from the VARIANT,
+ *     never from the base item — fail closed when the variant doesn't hold up.
  *   - Check business hours and ordering-pause state before order creation.
  *   - Map WaOrderItem → CreateOrderItem (options/extras shape alignment).
  *   - Build the CreateOrderInput for CheckoutFinalizationService.createOrderRecord().
@@ -28,12 +30,17 @@ export interface AdaptResult {
 /** Converts the session into validated checkout items with DB-fresh prices. */
 export async function validateAndPriceItems(
   session: WaPersistedSession,
-): Promise<{ ok: boolean; reason?: string; items?: CreateOrderItem[] }> {
-  const { prisma }       = await import("@/lib/prisma");
-  const { channelPrice } = await import("@/services/menu/MenuPricingService");
+): Promise<{ ok: boolean; reason?: string; replyText?: string; items?: CreateOrderItem[] }> {
+  const { prisma } = await import("@/lib/prisma");
+  const { channelPrice, resolveVariantPrice } = await import("@/services/menu/MenuPricingService");
 
   const menuItemIds = [...new Set(session.selectedItems.map(i => i.menuItemId))];
-  const pricingChannel = session.deliveryType === "DELIVERY" ? "DELIVERY" : "DINE_IN";
+  // Cobra-se o que a tela mostrou — decisão do CEO 04/08, estendida ao WhatsApp
+  // pelo Diretor: a conversa exibe TODO preço no canal DELIVERY (o menu é
+  // carregado só com price/priceDelivery em loadMenuForRestaurant e o state
+  // machine precifica com channelPrice(..., "DELIVERY") em todos os pontos de
+  // exibição). Retirada cobra DELIVERY também — nunca surpresa de valor.
+  const pricingChannel = "DELIVERY" as const;
 
   // Load base items with channel pricing columns
   const dbItems = await prisma.menuItem.findMany({
@@ -74,15 +81,74 @@ export async function validateAndPriceItems(
   const dbOptionPriceMap = new Map(dbOptions.map(o => [o.id, Number(o.price)]));
   const dbExtraPriceMap  = new Map(dbExtras.map(e => [e.id, Number(e.price)]));
 
+  // Variant lines: the state machine stores variantId + variantName on the
+  // WaOrderItem when the customer answers the "Tamanho/Variante" question.
+  // Fetched WITHOUT the isAvailable filter so an unavailable variant fails with
+  // a clear "indisponível" instead of a generic "não achei".
+  const cartWantsVariant = session.selectedItems.some(i => i.variantId || i.variantName);
+  const dbVariants = cartWantsVariant
+    ? await prisma.menuItemVariant.findMany({
+        where: { menuItemId: { in: menuItemIds } },
+        select: {
+          id: true, menuItemId: true, name: true, isAvailable: true,
+          price: true, priceDelivery: true, priceDineIn: true, priceIfood: true,
+        },
+      })
+    : [];
+  const dbVariantById = new Map(dbVariants.map(v => [v.id, v]));
+
   const items: CreateOrderItem[] = [];
   for (const waItem of session.selectedItems) {
     const dbEntry = dbItemMap.get(waItem.menuItemId);
     if (!dbEntry) {
-      return { ok: false, reason: `item indisponível: ${waItem.menuItemName}` };
+      // Falha fechada COM resposta: sem replyText o fluxo respondia "pedido
+      // anotado" sem criar pedido nenhum (WhatsAppTextOrderService, ramo
+      // buildOrderAnnotatedReply). O replyText viaja pelo blockedReply e
+      // escala para atendente.
+      return {
+        ok:        false,
+        reason:    `item indisponível: ${waItem.menuItemName}`,
+        replyText: `${waItem.menuItemName} ficou indisponível agora. Vou chamar um atendente para te ajudar a ajustar o pedido. 🤝`,
+      };
     }
 
-    // Recalculate price using DB values (same as finalize's verifiedCart logic)
-    const basePrice = channelPrice(dbEntry, pricingChannel);
+    // ── Variant resolution (same guard as /pedido finalize) ──────────────────
+    // The variant must exist, belong to THIS line's item, and be available —
+    // fail closed (blocks order creation) rather than silently pricing from
+    // the base item. replyText rides the existing blockedReply channel so the
+    // customer gets a real answer instead of a false "pedido anotado".
+    let dbVariant: (typeof dbVariants)[number] | null = null;
+    if (waItem.variantId || waItem.variantName) {
+      dbVariant = waItem.variantId
+        ? dbVariantById.get(waItem.variantId) ?? null
+        // Defensive fallback (older persisted session without variantId):
+        // unambiguous name match within THIS item's variants only.
+        : dbVariants.find(v =>
+            v.menuItemId === waItem.menuItemId &&
+            v.name.trim().toLowerCase() === (waItem.variantName ?? "").trim().toLowerCase(),
+          ) ?? null;
+      if (!dbVariant || dbVariant.menuItemId !== waItem.menuItemId) {
+        return {
+          ok:        false,
+          reason:    `opção inválida: ${waItem.variantName ?? waItem.variantId} (${waItem.menuItemName})`,
+          replyText: `Não consegui confirmar a opção "${waItem.variantName ?? ""}" de ${waItem.menuItemName}. Vou chamar um atendente para finalizar seu pedido. 🤝`,
+        };
+      }
+      if (!dbVariant.isAvailable) {
+        return {
+          ok:        false,
+          reason:    `opção indisponível: ${dbVariant.name} (${waItem.menuItemName})`,
+          replyText: `${waItem.menuItemName} ${dbVariant.name} ficou indisponível agora. Vou chamar um atendente para te ajudar a ajustar o pedido. 🤝`,
+        };
+      }
+    }
+
+    // Recalculate price using DB values (same as finalize's verifiedCart logic).
+    // Variant line → resolveVariantPrice (variant channel → variant base →
+    // inherit product channel/base); plain line → channelPrice of the item.
+    const basePrice = dbVariant
+      ? resolveVariantPrice(dbEntry, dbVariant, pricingChannel)
+      : channelPrice(dbEntry, pricingChannel);
     const optionsExtra = waItem.options.reduce((sum, o) => {
       return sum + (dbOptionPriceMap.get(o.optionId) ?? 0);  // each option qty=1
     }, 0);
@@ -97,7 +163,8 @@ export async function validateAndPriceItems(
       price:         computedPrice,
       qty:           waItem.quantity,
       notes:         waItem.notes ?? null,
-      variantName:   waItem.variantName ?? null,
+      // Comanda/ticket shows what the DB charged, not what the session carried
+      variantName:   dbVariant?.name ?? null,
       categoryId:    dbEntry.categoryId ?? null,
       categoryName:  dbEntry.category?.name ?? null,
       isUpsell:      false,
@@ -166,10 +233,12 @@ export async function adaptSessionToOrderInput(
   /** Only true in ALLOWLIST_FULL_TEST — guards and DB writes are skipped otherwise. */
   runGuards:    boolean,
 ): Promise<AdaptResult> {
-  // Validate + re-price items from DB
+  // Validate + re-price items from DB. replyText (when present) rides the
+  // blockedReply channel so a failed validation reaches the customer instead
+  // of dying silently.
   const itemsResult = await validateAndPriceItems(session);
   if (!itemsResult.ok) {
-    return { ok: false, reason: itemsResult.reason };
+    return { ok: false, reason: itemsResult.reason, replyText: itemsResult.replyText };
   }
 
   // Business guards (only when we'll actually create the order)

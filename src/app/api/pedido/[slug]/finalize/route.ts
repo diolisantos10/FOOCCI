@@ -279,9 +279,12 @@ export async function POST(
       : Promise.resolve([]),
   ]);
 
-  // Resolve the menu price for the order's channel (delivery vs salão/QR) so
-  // the server-side price guard matches what the customer saw on the menu.
-  const pricingChannel = parsed.data.deliveryMethod === "delivery" ? "DELIVERY" : "DINE_IN";
+  // Cobra-se o que a tela mostrou — decisão do CEO 04/08: esta rota só atende os
+  // clientes /pedido (PedidoClient/LojaClient), e a página exibe TODO preço no
+  // canal DELIVERY (page.tsx / mapPedidoItem), inclusive quando o cliente escolhe
+  // retirada. Pickup precifica como DELIVERY também — nunca surpresa de valor.
+  // A taxa de entrega segue exclusiva do delivery (bloco resolveDeliveryFee).
+  const pricingChannel = "DELIVERY" as const;
   const dbItemMap = new Map(dbItems.map((i) => [i.id, {
     price:        channelPrice(i, pricingChannel),
     categoryId:   i.categoryId,
@@ -301,8 +304,11 @@ export async function POST(
     }
   }
 
-  // Load active product + category promotions for server-side price guard
-  const promoChannel = parsed.data.deliveryMethod === "delivery" ? "DELIVERY" : "QR_MENU";
+  // Load active product + category promotions for server-side price guard.
+  // Mesmo espelho da tela: a página /pedido carrega promoções no canal DELIVERY
+  // para todo mundo (page.tsx:373), então pickup promociona como DELIVERY também
+  // (cobra-se o que a tela mostrou — decisão do CEO 04/08).
+  const promoChannel = "DELIVERY" as const;
   const activeMenuPromos = await getActiveMenuPromotions(restaurantId, promoChannel);
 
   // Use DB prices throughout — prevents price tampering on base items, variants

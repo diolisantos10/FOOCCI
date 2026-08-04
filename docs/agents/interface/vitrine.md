@@ -227,3 +227,37 @@ mantém o markup idêntico.
 
 — promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08 (retrabalho da
 Loja sem IA, branch `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## sessionStorage nunca entra no useState inicial de componente com SSR
+
+Inicializar `useState` lendo `sessionStorage` num componente renderizado no
+servidor gera **hydration mismatch**: o servidor renderiza o estado "vazio", o
+cliente hidrata com o valor guardado, e o React descarta/reconstrói a árvore —
+às vezes silencioso, às vezes visível (foi um avatar piscando que denunciou). O
+padrão: iniciar vazio e carregar do `sessionStorage` em `useEffect` de mount.
+Vale para qualquer storage do browser (local/session) em página App Router.
+
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08 (topo
+marketplace da Loja, branch `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## Tela de dados do cliente: primeiro procurar a rota gated que já existe
+
+Antes de desenhar qualquer tela que mostre dados do cliente (cupons, endereços,
+histórico), procurar a rota/serviço que já existe — a carteira do cliente já
+tinha `GET coupons` e `GET customer-profile` prontas, gated por prova de posse
+do telefone (waToken). Duas regras:
+
+1. **Não criar rota nova sem antes esgotar as existentes** — o backend desta
+   casa costuma estar à frente da UI.
+2. **O estado "sem prova de posse" é nota honesta, não vazio.** Quem digitou o
+   telefone sem provar posse vê "seus cupons aparecem quando você abre pelo
+   link do WhatsApp" — nunca uma lista vazia mentirosa (ausência de informação
+   não é informação), e nunca os dados de outra pessoa por confiar em telefone
+   digitado.
+
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08 (topo
+marketplace da Loja, branch `claude/foocci-director-onboarding-lhindy`)
