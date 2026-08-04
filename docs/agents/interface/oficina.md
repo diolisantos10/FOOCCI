@@ -103,3 +103,56 @@ screenshots 375/768/1280 + estados vazios, `tsc` limpo, 4698 testes verdes.
    receita de screenshot do admin difere da do painel).
 
 — interface, OS-crm-agente-ligar-e-dar-casa §3 (branch `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## 2026-08-04 — Rebuild da página pública de planos (/site/precos)
+
+**O que foi feito:** `/site/(gated)/precos/page.tsx` reconstruída do zero para o
+lançamento comercial. Saiu a página "planos em definição" e entrou a proposta
+fechada: cabeçalho + 3 cards de plano (Crescimento em destaque "Mais vendido"),
+tabela de ciclos (mensal/trimestral/anual), bloco "primeiro mês pela metade",
+tabela "cobrado à parte" (add-ons), regra do limite e CTA final. Dados vindos do
+spec do CEO ("Planos Foocci v3"); a camada interna de precificação NÃO foi
+publicada. Palavra "contrato" evitada (usei "serviço/serviços").
+
+**Aprendizado 1 — o `/site` tem DUAS linguagens de token convivendo, e é de
+propósito não unificar na marra.** Os primitivos de marketing compartilhados
+(`PageHero`, `CtaBand`, `PrimaryCta`, `VisualStepCard`, `premium.tsx`) usam
+`gray-*` e `#0B0B0B` literal internamente. O DESIGN.md manda usar
+`ink/ink2/muted/paper/canvas/line/line2`. Resolvi assim: **meu markup novo é
+100% token; os componentes reaproveitados ficam como estão.** `canvas` (#F6F6F4)
+e `gray-50` (#F9FAFB) são visualmente quase idênticos, então a alternância de
+seções (paper ↔ canvas) casa com o `gray-50` que os componentes trazem sem
+costura visível. Trocar o `gray-*` dos componentes compartilhados no dia do
+lançamento seria sweep de risco em página que roda o site inteiro — fica como
+drift conhecido pra migração gradual, não pra véspera de release.
+
+**Aprendizado 2 — card de pricing denso pede zonas, não paredão.** O card tem
+~10 blocos (nome, tagline, preço, descontos, limite, CTA, "Só aqui você tem",
+ROI, "Substitui", grupos de recursos). O que salvou a legibilidade: (a) preço +
+CTA no topo, antes da rolagem do card; (b) diferenciais num box brand-tint
+("Só aqui você tem") separado do ROI num box neutro ("Faz a conta"); (c) recursos
+em grupos com label `uppercase tracking text-muted` + itens `text-[13px]` com
+check. `items-start` no grid deixa o rodapé dos 3 cards irregular (conteúdo
+diferente) — aceitável; o card destacado é o mais alto e central, vira o ápice.
+
+**Aprendizado 3 — CTA da página x CTA global do site divergem hoje.** O
+`config.ts` documenta decisão do CEO (03/08): a conversão comercial do site é
+AGENDAR (`/site/agendar`, "Agendar demonstração") — e o header/sticky global
+seguem isso. A ordem deste bloco foi explícita: nesta página, CTA é "Peça uma
+demonstração" → `/site/demonstracao`, nunca "agendar". Cumpri na página; a chrome
+global (header, sticky, footer) continua "Agendar". **Fica a divergência pro
+Diretor decidir** se a página deve destoar do resto do site ou se o site inteiro
+migra — não resolvi em silêncio.
+
+**Verificação:** `npx tsc --noEmit` limpo. `npx vitest run`: 4687 testes verdes;
+1 suíte (`AnalyticsAgentService.test.ts`) falha no import por
+"PrismaClient is not a constructor" — problema de ambiente/prisma-client, sem
+relação com a página (precos não importa nada de analytics). Screenshots 375/768/
+1280 com Playwright, `scrollWidth` = clientWidth nos três (zero rolagem
+horizontal). Auto-avaliação: hierarquia 9, tipografia 9, espaçamento 8,5,
+consistência 9.
+
+— interface, rebuild /site/precos (worktree `worktree-agent-a3c588a3f037f1b3a`,
+commit `a81bd46b`)
