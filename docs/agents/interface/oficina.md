@@ -429,3 +429,101 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, bloco da degustação + trava jurídica de /precos + enxugada de
 /como-funciona (branch `claude/foocci-brain-vaamrx`)
+
+---
+
+## 04/08 — O assistente sai do balãozinho e vira barra no topo do painel
+
+Pedido direto do CEO, referência de interface aprovada: HostGator "Gator 2.0".
+O cérebro já estava pronto e no ar (Brain + manual + snapshot + runbook +
+chamado numerado); faltava a cara. `HelpWidget.tsx` (795 linhas, balão de canto)
+foi **apagado** e substituído por seis peças pequenas em `src/components/help/`:
+`AssistantBar` (a barra + orquestração), `AssistantPanel` (sugestões),
+`AssistantChat` (a conversa), `AssistantNotifications` (avisos),
+`assistantCatalog.ts` (dados), `useHelpThread` / `useVoiceInput` (estado) e
+`icons.tsx`.
+
+### 1. A barra no topo é elemento de SHELL — e shell mexe com quem mede em `vh`
+
+A barra entra em `(dashboard)/layout.tsx` **acima do `<main>`**, não dentro de
+página nenhuma: é o único lugar em que ela existe uma vez e vale para as 20 telas.
+Só que cinco telas do painel têm altura fixa calculada na mão —
+`calc(100vh - 56px)` (Pedidos, Central de Conversas, Chat, chat-sim, test-ai),
+onde 56 é a `TopBar` que cada página desenha. Somar 52px de barra sem tocar nelas
+empurraria cinco telas para fora da janela.
+
+**A regra que ficou:** altura de shell não é número repetido, é token.
+`--assistant-bar: 3.25rem` nasceu em `globals.css` e as cinco telas passaram a
+descontar `calc(100vh - 56px - var(--assistant-bar, 0px))`. O `, 0px` importa: se
+a barra sumir amanhã, as telas voltam sozinhas ao que eram. Medido depois:
+`document.scrollHeight == innerHeight` nas duas telas críticas, a 375 e a 1280.
+
+### 2. No celular, a barra do topo não pode ser onde se digita
+
+O primeiro desenho abria um painel suspenso e deixava o foco no campo da barra.
+No celular isso põe o teclado por cima da lista de sugestões e o dedo a 700px do
+que ele quer tocar. O que ficou: `onPointerDown` **detecta o telefone dentro do
+handler** (`matchMedia`, nunca no render — hidratação), dá `preventDefault()` para
+o teclado não subir, e abre uma **folha de tela cheia com composer no rodapé**.
+Mesma árvore de componentes, comportamento diferente por interação, zero
+`useState` de breakpoint e zero mismatch de hidratação.
+
+### 3. As três abas viraram três modos — e ganharam duas portas cada
+
+Ajuda / Ajuda técnica / Avisos não podiam sumir. Viraram um seletor segmentado
+dentro da conversa (Assistente · Diagnóstico · Avisos), e cada um ganhou um
+segundo caminho: o **sino** da barra abre direto em Avisos; a ação rápida
+"🛠️ Algo não funciona" e um link no estado vazio abrem direto o Diagnóstico. O
+`HELP_OPEN_EVENT` antigo continua funcionando (mapeia `tecnica`→diagnóstico).
+
+### 4. Microfone: o botão só existe quando ele grava — e o header proibia gravar
+
+`next.config.js` mandava `Permissions-Policy: microphone=()`. Isso desliga
+`getUserMedia` no app inteiro: o microfone que a Ajuda técnica JÁ tinha estava
+morto em produção havia meses, falhando com "não consegui acessar o microfone".
+Virou `microphone=(self)` (câmera e geolocalização continuam desligadas). Além
+disso, `supported` é resolvido **depois do mount** e o botão só é desenhado quando
+o navegador tem `MediaRecorder` + `mediaDevices`. Rota nova mínima
+(`/api/help/transcribe`) reusando o `TranscriptionAdapter` que já existia; sem
+chave, ela devolve 422 com recado em português em vez de engolir o áudio.
+
+### 5. GET velho não pode passar por cima de POST novo
+
+`useHelpThread` carrega o histórico e envia mensagem. Se o lojista perguntasse
+enquanto o GET inicial ainda estava no ar, a resposta atrasada do GET repunha a
+lista **sem** o que ele acabou de mandar. Um contador de mutações (`mutationsRef`)
+incrementado por enviar/escalar/recomeçar e comparado ao voltar do `fetch`
+resolve: resposta que começou antes de uma escrita é descartada.
+
+### 6. Detalhes que os screenshots decidiram (e a conta de cabeça errou)
+
+- "Como posso te ajudar, **Proprietário**?" no placeholder era cortado a 375px.
+  O nome foi para a **saudação da conversa** — que é onde o CEO pediu.
+- Grade de ações rápidas em 3 colunas quebrava rótulo em duas linhas a 576px de
+  painel. Virou 2 colunas com rótulos curtos.
+- A janela encaixada começava em `inset-y-4` e cobria o terceiro atalho da própria
+  barra. Passou a começar em `calc(var(--assistant-bar) + 0.75rem)`.
+- Trilha de primeiros passos **fechada** por padrão: aberta, o painel terminava
+  cortado no meio de uma linha a 70vh.
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` **396 arquivos / 4955 testes verdes**
+(inclui `assistantCatalog.test.ts`, novo: trava a ordem "primeiro prefixo que casa
+vence" — mover `/menu` acima de `/menu-enhancement` passaria a oferecer as dúvidas
+erradas em silêncio). Screenshots 375/768/1280 de: barra fechada, sugestões,
+conversa encaixada, conversa expandida, estado vazio com saudação, diagnóstico,
+avisos e **erro de carregamento** (rota abortada de propósito). `scrollWidth ==
+viewport` exato nos três tamanhos. Verificado também com o menu mobile aberto: o
+menu fica por cima (correto) e abrir o assistente fecha o menu.
+
+**Nota de bancada:** o working tree tinha outras duas frentes rodando ao mesmo
+tempo. Dois `next dev` no mesmo `.next` corrompem o roteamento (tudo vira 404) —
+a saída foi `NEXT_DIST_DIR` (suporte novo e opcional em `next.config.js`) + porta
+própria + `NEXTAUTH_URL` por variável de ambiente do processo, sem tocar no `.env`
+compartilhado.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, bloco do Agente de Suporte (Frente 2, cara do assistente),
+branch `claude/foocci-brain-vaamrx`

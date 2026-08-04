@@ -26,7 +26,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   {
     id: "cardapio",
     icon: "🍽️",
-    label: "Subir meu cardápio",
+    label: "Subir cardápio",
     kind: "ask",
     question: "Como subo o meu cardápio inteiro no Foocci?",
   },
@@ -47,22 +47,23 @@ export const QUICK_ACTIONS: QuickAction[] = [
   {
     id: "pedidos",
     icon: "📋",
-    label: "Acompanhar pedidos",
+    label: "Ver pedidos",
     kind: "ask",
     question: "Como acompanhar e gerenciar pedidos?",
   },
   {
     id: "campanha",
     icon: "📣",
-    label: "Criar uma campanha",
+    label: "Criar campanha",
     kind: "ask",
     question: "Como criar uma campanha no CRM?",
   },
   {
-    id: "primeiros-passos",
-    icon: "🚀",
-    label: "Primeiros passos",
-    kind: "trail",
+    id: "divulgar",
+    icon: "🔗",
+    label: "Divulgar cardápio",
+    kind: "ask",
+    question: "Como compartilhar o cardápio digital (QR Code e link)?",
   },
 ];
 
