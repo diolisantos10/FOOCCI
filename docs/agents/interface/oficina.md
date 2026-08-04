@@ -229,3 +229,40 @@ limpo, vitest 4746 verdes (380 arquivos, incluindo a suíte nova do finalize).
 
 — interface, topo de app da Loja (branch `claude/foocci-director-onboarding-lhindy`,
 sem commit — Diretor revisa)
+
+---
+
+## 2026-08-04 (fim de tarde) — Faixa social da Loja: saudação "Olá, {nome}" no espaço vazio
+
+**Ajuste pedido pelo CEO** (print da Sushi Cazza em produção): o espaço à direita
+dos ícones sociais, vazio quando o restaurante não tem `googleReviewUrl`, agora
+mostra a identidade — cliente identificado vê o chip "Olá, {primeiro nome}" na
+tinta da marca (mesma linguagem da faixa de identidade do cardápio da mesa);
+tocar abre o drawer Minha conta. **Escolha para o não identificado:** convite
+discreto "Identificar-se" (cinza, linguagem dos ícones) que abre o WelcomeModal —
+padrão marketplace (o iFood mantém "Entrar" no topo quando deslogado), e dá
+segunda chance a quem pulou o modal de entrada sem reexibi-lo à força.
+
+**Escopo:** só `LojaClient.tsx` — a faixa é composição própria da Loja; nenhum
+arquivo de `src/components/menu/` foi tocado, então o `/qr` não muda por
+construção (zero diff fora do LojaClient).
+
+**Aprendizado — chip com rótulo FIXO não pode depender de truncate; a conta se
+fecha medindo o DOM, não de cabeça.** A 375px com o pill "Avaliar" presente,
+"Identificar-se" truncava ("Identificar…"). Medição via Playwright
+(`span.scrollWidth` 78 × `clientWidth` 73): faltavam 5px. Primeira correção
+(px-3.5→px-3) ganhou só **4px** — 0.5 de padding Tailwind são 2px POR LADO, não
+4 — e ficou 1px curto; `gap-3`→`gap-2.5` no grupo fechou a conta (+4px). Rótulo
+fixo cabe inteiro; só o NOME trunca com ellipsis (combinado da direção).
+Reforça a entrada da vitrine "screenshot como instrumento de decisão": aqui o
+instrumento foi `scrollWidth` do span, em pixels, antes de escolher o ajuste.
+
+**Provas:** screenshots 375/768/1280 × 3 estados (identificado sem Avaliar — o
+caso do print; identificado com Avaliar; não identificado), zero overflow
+horizontal (`scrollWidth == clientWidth` nos 9), toque no chip abre o drawer e
+o convite abre o WelcomeModal (screenshots), `tsc` limpo, vitest dirigido do
+domínio pedido 104 arquivos / 1878 verdes. Autoavaliação: hierarquia 9,
+tipografia 9, espaçamento 8, consistência 9.
+
+— interface, ajuste da faixa social da Loja (branch
+`claude/foocci-director-onboarding-lhindy`, sem commit — Diretor revisa)
