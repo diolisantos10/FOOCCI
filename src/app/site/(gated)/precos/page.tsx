@@ -1,21 +1,34 @@
 /**
- * /site/precos — PRE-LAUNCH. Inherits /site/layout.tsx.
- * No prices and no sales language: plans are being defined for the launch. The
- * page now carries more design — plan directions, a maturity ladder and a
- * "value before price" band. Masculine voice ("o Foocci").
+ * /site/precos — Planos e preços (público). Inherits /site/layout.tsx.
+ *
+ * Página estática (server component, sem fetch — não precisa dos estados
+ * loading/vazio/erro). Preços e recursos vêm da proposta comercial fechada pelo
+ * CEO ("Planos Foocci v3"); ver spec do bloco de lançamento. NÃO publicar nada da
+ * camada interna (justificativas de precificação, tarja de decisão, teto acima de
+ * 4.000 pedidos etc.). Palavra "contrato" é proibida — usar "serviço/serviços".
+ *
+ * Toda conversão desta página aponta para o FORMULÁRIO de demonstração
+ * (DEMO_URL = /site/demonstracao), com o rótulo "Peça uma demonstração" — nunca
+ * "agendar". Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 +
+ * escala brand-*), ação primária brand-500/600, card rounded-2xl, pesos 400/600.
  */
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
-import { VisualStepCard } from "@/components/marketing/VisualStepCard";
-import { DotGrid, Eyebrow } from "@/components/marketing/premium";
-import { TrendingUpIcon, UsersIcon, RepeatIcon } from "@/components/marketing/icons";
-import { COMO_FUNCIONA_URL, AGENDAR_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { PrimaryCta } from "@/components/marketing/Cta";
+import { Eyebrow, DotGrid, Halo } from "@/components/marketing/premium";
+import {
+  CheckIcon,
+  SparklesIcon,
+  TrendingUpIcon,
+  RepeatIcon,
+} from "@/components/marketing/icons";
+import { DEMO_URL, COMO_FUNCIONA_URL } from "@/components/marketing/config";
 
-const TITLE = "Planos Foocci | Um plano para cada momento do restaurante";
+const TITLE = "Planos Foocci | Três planos, e o motivo de cada um valer o preço";
 const DESCRIPTION =
-  "O Foocci tem planos para diferentes momentos e tamanhos de operação. Peça uma demonstração e monte a proposta certa para o seu restaurante.";
+  "Três planos com valor fixo, sem comissão sobre as suas vendas. Cada plano abre pelo que só ele tem. Veja preços, ciclos e o que vem em cada um — e peça uma demonstração.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -23,130 +36,597 @@ export const metadata: Metadata = {
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
-const PLANS = [
+/* ── Dados dos planos ──────────────────────────────────────────────────────── */
+
+type FeatureGroupData = { label: string; items: string[] };
+
+type Plan = {
+  name: string;
+  tagline: string;
+  price: string;
+  discounts: { label: string; value: string }[];
+  limit: string;
+  limitSub: string;
+  onlyHere: string[];
+  roi: string;
+  substitui: string;
+  inheritLabel?: string;
+  groups: FeatureGroupData[];
+  highlighted?: boolean;
+};
+
+const PLANS: Plan[] = [
   {
     name: "Essencial",
-    forWho: "Restaurantes que querem começar a vender melhor no pedido direto.",
-    copy: "Base para cardápio, pedido e organização comercial inicial.",
-    highlighted: false,
+    tagline: "Pare de pagar comissão.",
+    price: "179",
+    discounts: [
+      { label: "Anual", value: "R$ 149/mês" },
+      { label: "1º mês", value: "R$ 89" },
+      { label: "Fundador", value: "R$ 129" },
+    ],
+    limit: "Até 300 pedidos/mês",
+    limitSub: "≈ 10 por dia",
+    onlyHere: [
+      "Preço diferente por canal, no mesmo prato — delivery, salão e iFood com três preços.",
+      "A comanda não some: não imprimiu, volta pra fila 5×, o alarme repete até alguém aceitar, e só um aparelho toca.",
+    ],
+    roi: "Um restaurante que fatura R$ 20 mil/mês no iFood paga R$ 3.040 de comissão. Migrando 20% pro canal direto, economiza R$ 608/mês — o plano se paga 3,4×.",
+    substitui: "O cardápio digital que você contrataria por R$ 110–224/mês. E faz mais.",
+    groups: [
+      {
+        label: "Seu canal de venda",
+        items: [
+          "Loja com a sua marca (o cliente não vê Foocci)",
+          "Preço por canal: delivery, salão e iFood",
+          "Cardápio de mesa por QR, com preço próprio",
+          "Item aparece no delivery e some do salão",
+          "Links rastreáveis por origem",
+          "Pedido numerado (“Pedido #47”)",
+        ],
+      },
+      {
+        label: "A cozinha confia",
+        items: [
+          "Alarme de pedido novo que repete até aceitar",
+          "Comanda que não some (5 tentativas)",
+          "Impressão por estação",
+          "Volume até 400% e 3 sons",
+          "Só um aparelho toca",
+          "Letra grande na comanda",
+          "Pausa de emergência com motivo e prazo",
+          "Almoço e jantar com horários separados",
+        ],
+      },
+      {
+        label: "Cardápio e dinheiro",
+        items: [
+          "Variantes e adicionais com mín/máx",
+          "Importar cardápio por planilha",
+          "Esgotado num clique",
+          "Pix, dinheiro, cartão e link, com troco",
+          "Taxa por bairro, pedido mínimo e frete grátis acima de X",
+          "Base de clientes com histórico",
+          "Relatórios",
+          "Equipe com papéis",
+          "Ajuda por IA no painel",
+        ],
+      },
+    ],
   },
   {
     name: "Crescimento",
-    forWho: "Restaurantes que querem unir pedido, WhatsApp e relacionamento.",
-    copy: "Mais foco em CRM, campanhas e recorrência.",
+    tagline: "Faça o cliente voltar.",
+    price: "429",
     highlighted: true,
+    discounts: [
+      { label: "Anual", value: "R$ 358/mês" },
+      { label: "1º mês", value: "R$ 214" },
+      { label: "Fundador", value: "R$ 299" },
+    ],
+    limit: "Até 1.200 pedidos/mês",
+    limitSub: "≈ 40 por dia · 3.000 mensagens",
+    onlyHere: [
+      "Seu WhatsApp não queima: silêncio das 21h às 8h, teto diário, descanso por cliente, atraso aleatório e ninguém recebe a mesma campanha duas vezes.",
+      "A IA é impedida de mentir: um verificador barra o que não bate com o cardápio, e toda madrugada um simulador testa o agente.",
+      "Resgate antes de perder o cliente: quente esfriando → morno → frio.",
+    ],
+    roi: "Um restaurante que fatura R$ 40 mil/mês no iFood paga R$ 6.080 de comissão. Migrando 20%, economiza R$ 1.216/mês — o plano se paga 2,8× (com a entrega do iFood, 4,9×).",
+    substitui: "Cardápio digital (R$ 110–224) + atendimento por IA (R$ 50–500) + CRM de fidelidade. Uns R$ 500/mês em três serviços que não trocam dado.",
+    inheritLabel: "Tudo do Essencial, mais:",
+    groups: [
+      {
+        label: "A IA que vende",
+        items: [
+          "Garçom de IA no cardápio (sugere, monta combo, respeita alergia)",
+          "WhatsApp com atendente de IA",
+          "Personalidade sua",
+          "Central de Conversas (WhatsApp, site e QR num lugar)",
+          "Humano assume quando quiser",
+          "Mesmo cliente reconhecido nos 3 canais",
+        ],
+      },
+      {
+        label: "Trazer o cliente de volta",
+        items: [
+          "16 campanhas prontas",
+          "Resgate antes de perder o cliente",
+          "Clientes classificados sozinho (quente/morno/frio/perdido)",
+          "Recuperação de carrinho",
+          "Aniversário, avaliação no Google, boas-vindas e VIP",
+          "Cupons e promoções (6 tipos) + carteira de cupons",
+          "Importar base antiga",
+          "Limpeza automática de telefone inválido",
+        ],
+      },
+      {
+        label: "Seu número não queima",
+        items: [
+          "Nada entre 21h e 8h",
+          "Teto diário + descanso de 24h por cliente",
+          "Atraso aleatório entre os envios",
+          "Sem repetir a mesma campanha",
+          "Para sozinho se a falha subir",
+        ],
+      },
+      {
+        label: "Entender o movimento",
+        items: [
+          "Quem volta e quem some",
+          "Quanto a IA rendeu",
+          "Quantos pedidos levam bebida ou sobremesa",
+          "Entrega por distância e por zona",
+        ],
+      },
+    ],
   },
   {
     name: "Performance",
-    forWho: "Operações que precisam de mais inteligência comercial e acompanhamento.",
-    copy: "Mais profundidade em dados, campanhas e oportunidades.",
-    highlighted: false,
+    tagline: "Gerencie como gente grande.",
+    price: "899",
+    discounts: [
+      { label: "Anual", value: "R$ 749/mês" },
+      { label: "1º mês", value: "R$ 449" },
+      { label: "Fundador", value: "R$ 649" },
+    ],
+    limit: "Até 4.000 pedidos/mês",
+    limitSub: "≈ 130 por dia · 10.000 mensagens",
+    onlyHere: [
+      "Saber se o prato dá lucro e reprecificar sozinho: ficha técnica real e markup sobre a despesa real.",
+      "A IA escreve a campanha sozinha com o contexto de cada cliente — e explica, em português, por que as vendas caíram.",
+      "Fidelidade que expira: de Bronze a Diamante com janela móvel, brinde com estoque real.",
+    ],
+    roi: "Um restaurante que fatura R$ 150 mil/mês no iFood paga R$ 22.800 de comissão. Migrando 20%, economiza R$ 4.560/mês — o plano se paga 5,1×.",
+    substitui: "Tudo acima, mais o PDV (a partir de R$ 240) e o módulo de CMV. Uns R$ 700/mês em quatro serviços.",
+    inheritLabel: "Tudo do Crescimento, mais:",
+    groups: [
+      {
+        label: "Saber se o prato dá lucro",
+        items: [
+          "Ficha técnica real (subiu o insumo, subiu o custo do prato)",
+          "O preço que fecha a conta",
+          "Reprecificação automática até um teto",
+          "CMV do mês",
+          "Histórico de mudança de preço",
+          "Arredondamento comercial",
+        ],
+      },
+      {
+        label: "Fidelizar de verdade",
+        items: [
+          "Níveis Bronze, Prata, Ouro e Diamante (quem para, desce)",
+          "Brinde físico com estoque real",
+          "Indicação (os dois ganham)",
+          "Campanhas por nível",
+        ],
+      },
+      {
+        label: "A IA sozinha",
+        items: [
+          "Agente de CRM que escreve a campanha",
+          "Diagnóstico automático de queda",
+          "Melhoria de fotos por IA, com sua aprovação",
+        ],
+      },
+      {
+        label: "Integrar e medir",
+        items: [
+          "Integração com PDV (Saipos)",
+          "API própria",
+          "Eficiência (tempo do pedido até a entrega)",
+          "Suporte humano prioritário",
+        ],
+      },
+    ],
   },
 ];
 
-const MATURITY = [
-  { icon: TrendingUpIcon, title: "Começar a vender direto", copy: "Tirar o pedido do papel e vender melhor pelos canais diretos do restaurante." },
-  { icon: UsersIcon, title: "Organizar relacionamento", copy: "Reunir clientes, histórico e contexto em um só lugar." },
-  { icon: RepeatIcon, title: "Criar recorrência", copy: "Ativar campanhas e reativação para o cliente voltar com mais frequência." },
+/* ── Ciclos de pagamento ──────────────────────────────────────────────────── */
+
+const CYCLES = [
+  {
+    name: "Mensal",
+    badge: "Sem fidelidade",
+    prices: [
+      { plan: "Essencial", value: "R$ 179", sub: "" },
+      { plan: "Crescimento", value: "R$ 429", sub: "" },
+      { plan: "Performance", value: "R$ 899", sub: "" },
+    ],
+    gain: "Cancela avisando 30 dias antes. Implantação cheia.",
+  },
+  {
+    name: "Trimestral",
+    badge: "−10%",
+    prices: [
+      { plan: "Essencial", value: "R$ 161", sub: "R$ 483 / 3 meses" },
+      { plan: "Crescimento", value: "R$ 386", sub: "R$ 1.158 / 3 meses" },
+      { plan: "Performance", value: "R$ 809", sub: "R$ 2.427 / 3 meses" },
+    ],
+    gain: "10% de desconto. Implantação pela metade.",
+  },
+  {
+    name: "Anual",
+    badge: "2 meses grátis",
+    prices: [
+      { plan: "Essencial", value: "R$ 149", sub: "R$ 1.790 / ano" },
+      { plan: "Crescimento", value: "R$ 358", sub: "R$ 4.290 / ano" },
+      { plan: "Performance", value: "R$ 749", sub: "R$ 8.990 / ano" },
+    ],
+    gain: "Paga 10, usa 12. Implantação grátis à vista.",
+  },
 ];
+
+const DEGUSTACAO = [
+  { plan: "Essencial", value: "R$ 89" },
+  { plan: "Crescimento", value: "R$ 214" },
+  { plan: "Performance", value: "R$ 449" },
+];
+
+const ADDONS = [
+  { name: "Nota fiscal (NFC-e)", price: "R$ 89/mês", desc: "Custo por documento + certificado digital do lojista." },
+  { name: "WhatsApp oficial da Meta", price: "R$ 149/mês", desc: "A Meta cobra por conversa; o repasse é transparente." },
+  { name: "Pacote de 1.000 mensagens", price: "R$ 79", desc: "Pra quem estoura a cota sem precisar subir de plano." },
+  { name: "Unidade adicional", price: "60% do plano", desc: "Segunda loja da mesma marca, com cardápio e base próprios." },
+  { name: "Gestão pela agência", price: "Sob consulta", desc: "É serviço com hora humana." },
+  { name: "Implantação", price: "R$ 299 / 599 / 1.490", desc: "Única, por faixa. Metade no trimestral, grátis no anual à vista." },
+];
+
+/* ── Peças ────────────────────────────────────────────────────────────────── */
+
+function CheckItem({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      <CheckIcon className="mt-[3px] h-3.5 w-3.5 shrink-0 text-brand-500" />
+      <span className="text-[13px] leading-relaxed text-ink2">{children}</span>
+    </li>
+  );
+}
+
+function FeatureGroup({ label, items }: FeatureGroupData) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
+      <ul className="mt-2.5 space-y-2">
+        {items.map((it) => (
+          <CheckItem key={it}>{it}</CheckItem>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PlanCard({ plan }: { plan: Plan }) {
+  const featured = Boolean(plan.highlighted);
+  return (
+    <div
+      className={`relative flex flex-col rounded-2xl bg-paper p-6 sm:p-7 ${
+        featured
+          ? "border-2 border-brand-500 shadow-[0_1px_2px_rgba(11,11,11,0.04),0_28px_56px_-28px_rgba(249,115,22,0.40)]"
+          : "border border-line shadow-[0_1px_2px_rgba(11,11,11,0.04),0_18px_38px_-26px_rgba(11,11,11,0.22)]"
+      }`}
+    >
+      {featured && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.55)]">
+          Mais vendido
+        </span>
+      )}
+
+      {/* Nome + tagline */}
+      <span
+        className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${
+          featured ? "bg-brand-50 text-brand-600" : "bg-canvas text-ink2"
+        }`}
+      >
+        {plan.name}
+      </span>
+      <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">{plan.tagline}</h2>
+
+      {/* Preço âncora */}
+      <div className="mt-5 flex items-baseline gap-1.5">
+        <span className="text-[15px] font-normal text-muted">R$</span>
+        <span className="text-4xl font-semibold tabular-nums tracking-tight text-ink">{plan.price}</span>
+        <span className="text-sm text-muted">/mês</span>
+      </div>
+      <p className="mt-0.5 text-xs text-muted">no plano mensal</p>
+
+      {/* Descontos */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {plan.discounts.map((d) => (
+          <div key={d.label} className="rounded-xl border border-line bg-canvas px-2 py-2 text-center">
+            <p className="text-[10.5px] uppercase tracking-wide text-muted">{d.label}</p>
+            <p className="mt-0.5 text-[12.5px] font-semibold tabular-nums text-ink">{d.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Limite */}
+      <div className="mt-4 flex items-baseline justify-between gap-2 border-t border-line pt-4">
+        <span className="text-sm font-semibold text-ink">{plan.limit}</span>
+        <span className="text-xs text-muted">{plan.limitSub}</span>
+      </div>
+
+      {/* CTA */}
+      <div className="mt-5">
+        <PrimaryCta label="Peça uma demonstração" href={DEMO_URL} block withArrow={false} className="!py-3 !text-[15px]" />
+      </div>
+
+      {/* Só aqui você tem */}
+      <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+        <div className="flex items-center gap-2">
+          <SparklesIcon className="h-4 w-4 text-brand-600" />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-700">Só aqui você tem</p>
+        </div>
+        <ul className="mt-3 space-y-2.5">
+          {plan.onlyHere.map((o) => (
+            <li key={o} className="flex items-start gap-2">
+              <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
+              <span className="text-[13px] leading-relaxed text-ink2">{o}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* ROI */}
+      <div className="mt-4 rounded-2xl border border-line bg-canvas p-4">
+        <div className="flex items-center gap-2">
+          <TrendingUpIcon className="h-4 w-4 text-ink2" />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink2">Faz a conta</p>
+        </div>
+        <p className="mt-2 text-[13px] leading-relaxed text-ink2">{plan.roi}</p>
+      </div>
+
+      {/* Substitui */}
+      <p className="mt-4 text-[13px] leading-relaxed text-muted">
+        <span className="font-semibold text-ink2">Substitui:</span> {plan.substitui}
+      </p>
+
+      {/* Recursos agrupados */}
+      <div className="mt-6 border-t border-line pt-6">
+        {plan.inheritLabel && (
+          <p className="mb-5 inline-flex items-center gap-2 rounded-lg bg-canvas px-3 py-1.5 text-[12.5px] font-semibold text-ink">
+            <RepeatIcon className="h-3.5 w-3.5 text-brand-500" />
+            {plan.inheritLabel}
+          </p>
+        )}
+        <div className="space-y-5">
+          {plan.groups.map((g) => (
+            <FeatureGroup key={g.label} label={g.label} items={g.items} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Página ───────────────────────────────────────────────────────────────── */
 
 export default function PrecosPage() {
   return (
     <>
       <PageHero
         badge="Planos"
-        title="Um plano para cada momento do seu restaurante."
-        subtitle="O valor depende do tamanho da operação e do que você vai usar. Peça uma demonstração e a gente apresenta a proposta certa — sem compromisso."
-        primaryLabel="Agendar demonstração"
-        primaryHref={AGENDAR_URL}
-        note={PRELAUNCH_NOTE}
+        title="Três planos, e o motivo de cada um valer o preço."
+        subtitle="Cada plano abre pelo que só ele tem. Sem comissão sobre as suas vendas — você paga um valor fixo, e pronto."
+        primaryLabel="Peça uma demonstração"
+        primaryHref={DEMO_URL}
+        secondaryLabel="Ver como funciona"
+        secondaryHref={COMO_FUNCIONA_URL}
       />
 
-      {/* Plan directions (no prices) */}
-      <section aria-label="Direções de planos" className="relative overflow-hidden bg-gray-50 py-20 lg:py-24">
-        <DotGrid className="[mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
+      {/* 1. Os três planos */}
+      <section aria-labelledby="planos-title" className="relative overflow-hidden bg-canvas py-16 lg:py-20">
+        <DotGrid className="[mask-image:radial-gradient(ellipse_at_top,black,transparent_65%)]" />
         <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
-          <div className="grid gap-6 lg:grid-cols-3">
+          <h2 id="planos-title" className="sr-only">
+            Os três planos
+          </h2>
+          <div className="grid items-start gap-6 lg:grid-cols-3 lg:gap-5">
             {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative flex flex-col rounded-2xl border bg-white p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_14px_34px_-20px_rgba(15,23,42,0.22)] ${
-                  plan.highlighted
-                    ? "border-brand-200 ring-1 ring-brand-100"
-                    : "border-gray-200/80 ring-1 ring-gray-900/[0.02]"
-                }`}
-              >
-                {plan.highlighted && (
-                  <span className="absolute right-6 top-7 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-600 ring-1 ring-brand-100">
-                    Destaque
+              <PlanCard key={plan.name} plan={plan} />
+            ))}
+          </div>
+
+          <p className="mt-8 text-center text-sm text-muted">
+            Passa de 4.000 pedidos por mês?{" "}
+            <a href={DEMO_URL} className="font-semibold text-ink underline decoration-line2 underline-offset-2 hover:text-brand-600">
+              Fale com a gente
+            </a>{" "}
+            — montamos o plano certo pra sua operação.
+          </p>
+        </div>
+      </section>
+
+      {/* 2. Como o cliente paga — ciclos */}
+      <section aria-labelledby="ciclos-title" className="bg-paper py-16 lg:py-20">
+        <div className="mx-auto max-w-6xl px-5 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <Eyebrow>Como o cliente paga</Eyebrow>
+            <h2 id="ciclos-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+              Escolha o ciclo. Quanto mais longo, menor a mensalidade.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-ink2">
+              O mesmo produto inteiro nos três ciclos — o que muda é a mensalidade e a implantação.
+            </p>
+          </div>
+
+          {/* Desktop: tabela */}
+          <div className="mt-12 hidden overflow-hidden rounded-2xl border border-line md:block">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="bg-canvas">
+                  <th className="px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Ciclo</th>
+                  <th className="px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Essencial</th>
+                  <th className="px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-600">Crescimento</th>
+                  <th className="px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Performance</th>
+                  <th className="px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">O que ganha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CYCLES.map((c) => (
+                  <tr key={c.name} className="border-t border-line align-top">
+                    <td className="px-5 py-5">
+                      <p className="text-sm font-semibold text-ink">{c.name}</p>
+                      <span className="mt-1 inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-600">
+                        {c.badge}
+                      </span>
+                    </td>
+                    {c.prices.map((p, i) => (
+                      <td key={p.plan} className="px-5 py-5">
+                        <p className={`text-lg font-semibold tabular-nums ${i === 1 ? "text-brand-600" : "text-ink"}`}>
+                          {p.value}
+                          <span className="text-xs font-normal text-muted">/mês</span>
+                        </p>
+                        {p.sub && <p className="mt-0.5 text-[11.5px] tabular-nums text-muted">{p.sub}</p>}
+                      </td>
+                    ))}
+                    <td className="px-5 py-5 text-[13px] leading-relaxed text-ink2">{c.gain}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: cards por ciclo */}
+          <div className="mt-10 space-y-4 md:hidden">
+            {CYCLES.map((c) => (
+              <div key={c.name} className="rounded-2xl border border-line bg-paper p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-base font-semibold text-ink">{c.name}</p>
+                  <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-semibold text-brand-600">
+                    {c.badge}
                   </span>
-                )}
-                <h2 className="text-xl font-semibold text-[#0B0B0B]">{plan.name}</h2>
-                <p className="mt-3 text-sm text-gray-500">
-                  <span className="font-semibold text-gray-700">Para:</span> {plan.forWho}
-                </p>
-                <p className="mt-3 text-base text-gray-600">{plan.copy}</p>
-                <p className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600">
-                  Em definição para o lançamento
-                </p>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {c.prices.map((p, i) => (
+                    <div key={p.plan} className="rounded-xl border border-line bg-canvas px-2 py-2.5 text-center">
+                      <p className="text-[10.5px] uppercase tracking-wide text-muted">{p.plan}</p>
+                      <p className={`mt-1 text-[15px] font-semibold tabular-nums ${i === 1 ? "text-brand-600" : "text-ink"}`}>
+                        {p.value}
+                      </p>
+                      {p.sub && <p className="mt-0.5 text-[10px] tabular-nums text-muted">{p.sub}</p>}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[13px] leading-relaxed text-ink2">{c.gain}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Maturity ladder + value-before-price band */}
-      <section aria-labelledby="maturidade-title" className="bg-white py-20 lg:py-24">
-        <div className="mx-auto max-w-6xl px-5 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <Eyebrow>Antes de preço, proposta de valor</Eyebrow>
-            <h2 id="maturidade-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-              Planos que acompanham o momento do seu restaurante.
-            </h2>
-            <p className="mt-4 text-lg leading-relaxed text-gray-600">
-              Você fala com a gente, a gente entende sua operação e monta a proposta.
-              A ideia é acompanhar o momento do restaurante — do pedido direto à
-              recorrência inteligente.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {MATURITY.map((m, i) => (
-              <VisualStepCard key={m.title} index={i + 1} icon={m.icon} title={m.title} copy={m.copy} />
-            ))}
-          </div>
-
-          <div className="mt-12 overflow-hidden rounded-3xl bg-[#0B0B0B] px-6 py-8 text-center sm:px-10">
-            <p className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              Antes de preço, <span className="text-brand-400">proposta de valor.</span>
-            </p>
-            <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-gray-400">
-              Estamos no piloto justamente para definir planos que façam sentido de
-              verdade — sem promessas antes da hora.
-            </p>
+      {/* 3. Primeiro mês pela metade — degustação */}
+      <section aria-labelledby="degustacao-title" className="bg-canvas py-16 lg:py-20">
+        <div className="mx-auto max-w-5xl px-5 lg:px-8">
+          <div className="relative overflow-hidden rounded-2xl border border-line bg-paper p-7 sm:p-10">
+            <Halo className="right-0 top-0 h-56 w-72" color="rgba(249,115,22,0.08)" />
+            <div className="relative grid gap-8 lg:grid-cols-2 lg:items-center">
+              <div>
+                <Eyebrow>Primeiro mês pela metade</Eyebrow>
+                <h2 id="degustacao-title" className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+                  Não é teste grátis. É o produto inteiro, por metade do preço.
+                </h2>
+                <p className="mt-4 text-base leading-relaxed text-ink2">
+                  Você paga metade da mensalidade no primeiro mês — o de instalação e aprendizado — e
+                  recebe o produto completo, sem recorte. Vale no mensal e no trimestral; no anual você já
+                  ganha 2 meses. A implantação nunca entra no desconto.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                {DEGUSTACAO.map((d) => (
+                  <div
+                    key={d.plan}
+                    className="flex items-center justify-between rounded-xl border border-line bg-canvas px-4 py-3"
+                  >
+                    <span className="text-sm text-ink2">{d.plan}</span>
+                    <span className="text-lg font-semibold tabular-nums text-ink">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Why plans are defined at launch */}
-      <section aria-labelledby="planos-porque-title" className="bg-gray-50 py-20">
-        <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 id="planos-porque-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Por que os planos serão definidos no lançamento?
-          </h2>
-          <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            Porque o Foocci se adapta ao tipo de restaurante, ao momento da operação,
-            aos canais que você já usa e ao seu objetivo comercial. Estamos no piloto
-            justamente para definir planos que façam sentido de verdade — sem promessas
-            antes da hora.
-          </p>
+      {/* 4. Cobrado à parte — add-ons */}
+      <section aria-labelledby="addons-title" className="bg-paper py-16 lg:py-20">
+        <div className="mx-auto max-w-5xl px-5 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <Eyebrow>Cobrado à parte</Eyebrow>
+            <h2 id="addons-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+              O que vem só se você usar.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-ink2">
+              Nada disso está embutido no preço — você só paga o que precisar, quando precisar.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2">
+            {ADDONS.map((a) => (
+              <div key={a.name} className="flex items-start justify-between gap-4 rounded-2xl border border-line bg-paper p-5">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{a.name}</p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-ink2">{a.desc}</p>
+                </div>
+                <span className="shrink-0 whitespace-nowrap rounded-lg bg-canvas px-2.5 py-1 text-[13px] font-semibold tabular-nums text-ink">
+                  {a.price}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. A regra do limite */}
+      <section aria-labelledby="limite-title" className="bg-canvas py-16 lg:py-20">
+        <div className="mx-auto max-w-3xl px-5 lg:px-8">
+          <div className="rounded-2xl border border-line bg-paper p-7 sm:p-9">
+            <Eyebrow>Passou do limite?</Eyebrow>
+            <h2 id="limite-title" className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+              Nada é bloqueado. Sua loja continua vendendo.
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-ink2">
+              Se passar do limite do seu plano, nenhum pedido é recusado — você só recebe um aviso no
+              painel. Se passar dois meses seguidos, a gente conversa sobre subir de plano. Não existe
+              cobrança por pedido extra, nem por “crédito” ou “token”.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-green-100 bg-green-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-green-700">Conta pro limite</p>
+                <p className="mt-1.5 text-sm text-ink2">Pedidos de entrega e retirada.</p>
+              </div>
+              <div className="rounded-xl border border-line bg-canvas p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Não conta</p>
+                <p className="mt-1.5 text-sm text-ink2">Pedido feito na mesa pelo QR.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       <CtaBand
-        title="Quer saber quanto fica para o seu restaurante?"
-        label="Agendar demonstração"
-        href={AGENDAR_URL}
+        title="Veja o Foocci rodando com o cardápio do seu restaurante."
+        label="Peça uma demonstração"
+        href={DEMO_URL}
       />
     </>
   );
