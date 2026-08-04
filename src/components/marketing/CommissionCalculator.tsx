@@ -84,6 +84,8 @@ export function CommissionCalculator() {
 
   const rate = COMMISSION_RATES[delivery].rate;
   const savings = foocciFixed === null ? 0 : result.monthlyCommission - foocciFixed;
+  /** Só existe economia para mostrar quando a comissão passa da mensalidade fixa. */
+  const hasSavings = foocciFixed !== null && savings > 0;
   /** Faturamento a partir do qual o plano fixo custa menos que a comissão. */
   const breakEven = foocciFixed === null ? 0 : foocciFixed / rate;
 
@@ -173,8 +175,8 @@ export function CommissionCalculator() {
               /* Antes de calcular a tela não fica vazia: mostra o mecanismo. */
               <div>
                 <ComparisonPair
-                  marketplaceValue={`${formatPct(rate)} do que você fatura`}
-                  marketplaceNote="A comissão sobe toda vez que você vende mais."
+                  marketplaceValue={formatPct(rate)}
+                  marketplaceNote="Do que você fatura — e sobe toda vez que você vende mais."
                   foocciFixed={foocciFixed}
                   dimmed
                 />
@@ -192,13 +194,14 @@ export function CommissionCalculator() {
               <div>
                 {/* 1 · A comparação, na cara: quanto lá, quanto aqui. */}
                 <ComparisonPair
-                  marketplaceValue={`${formatBRL(result.monthlyCommission)}/mês`}
+                  marketplaceValue={formatBRL(result.monthlyCommission)}
+                  marketplaceSuffix="/mês"
                   marketplaceNote="Comissão que sobe toda vez que você vende mais."
                   foocciFixed={foocciFixed}
                 />
 
                 {/* 2 · A economia — o maior número da tela. É o dado que vende. */}
-                {foocciFixed !== null && savings > 0 && (
+                {hasSavings && (
                   <div className="mt-4 rounded-2xl border border-brand-200 bg-brand-50 p-5 text-center sm:p-7">
                     <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">
                       Você economiza
@@ -218,7 +221,7 @@ export function CommissionCalculator() {
                 )}
 
                 {/* Faturamento em que o plano ainda não compensa: dizer, não esconder. */}
-                {foocciFixed !== null && savings <= 0 && (
+                {foocciFixed !== null && !hasSavings && (
                   <div className="mt-4 rounded-2xl border border-line bg-canvas p-5 text-center">
                     <p className="text-sm leading-relaxed text-ink2">
                       Nesse faturamento, a comissão ainda é menor que a mensalidade fixa. A
@@ -237,26 +240,34 @@ export function CommissionCalculator() {
                   pagando o mesmo.
                 </p>
 
-                {/* 4 · O piso conservador: mesmo migrando pouco, já sobra. */}
-                <p className="mx-auto mt-4 max-w-xl rounded-2xl bg-canvas p-4 text-center text-sm leading-relaxed text-ink2">
-                  Começando devagar: levando de{" "}
-                  <strong className="text-ink">
-                    {Math.round(MIGRATION_RANGE.low * 100)}% a{" "}
-                    {Math.round(MIGRATION_RANGE.high * 100)}%
-                  </strong>{" "}
-                  desse movimento para o seu canal direto, já ficam{" "}
-                  <strong className="text-ink tabular-nums">
-                    {formatBRL(result.savingsLow)} a {formatBRL(result.savingsHigh)}
-                  </strong>{" "}
-                  por mês no seu caixa.
-                </p>
+                {/*
+                  4 · O piso conservador: mesmo migrando pouco, já sobra. Só aparece
+                  quando existe economia — abaixo do ponto de equilíbrio ele argumentaria
+                  com trocados e enfraqueceria a conta em vez de sustentá-la.
+                */}
+                {hasSavings && (
+                  <p className="mx-auto mt-4 max-w-xl rounded-2xl bg-canvas p-4 text-center text-sm leading-relaxed text-ink2">
+                    Começando devagar: levando de{" "}
+                    <strong className="text-ink">
+                      {Math.round(MIGRATION_RANGE.low * 100)}% a{" "}
+                      {Math.round(MIGRATION_RANGE.high * 100)}%
+                    </strong>{" "}
+                    desse movimento para o seu canal direto, já ficam{" "}
+                    <strong className="text-ink tabular-nums">
+                      {formatBRL(result.savingsLow)} a {formatBRL(result.savingsHigh)}
+                    </strong>{" "}
+                    por mês no seu caixa.
+                  </p>
+                )}
 
                 <div className="text-center">
                   <Link
                     href={demoHref}
                     className="mt-6 inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
                   >
-                    Quero essa economia no meu restaurante
+                    {hasSavings
+                      ? "Quero essa economia no meu restaurante"
+                      : "Quero ver funcionando no meu restaurante"}
                   </Link>
                 </div>
               </div>
@@ -278,47 +289,56 @@ export function CommissionCalculator() {
 
 function ComparisonPair({
   marketplaceValue,
+  marketplaceSuffix,
   marketplaceNote,
   foocciFixed,
   dimmed = false,
 }: {
   marketplaceValue: string;
+  marketplaceSuffix?: string;
   marketplaceNote: string;
   foocciFixed: number | null;
   dimmed?: boolean;
 }) {
+  // DUAS COLUNAS TAMBÉM NO CELULAR, de propósito: empilhado, o lado do marketplace
+  // ocupava meia tela e empurrava a economia para fora do campo de visão — que é
+  // exatamente o "tem que procurar" que este bloco veio resolver. Lado a lado, a
+  // comparação é uma faixa compacta e o número grande vem logo em seguida.
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-2 gap-3">
       <div className="rounded-2xl border border-line bg-paper p-4 sm:p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+        <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-widest text-muted sm:text-[11px]">
           No {MARKETPLACE_NAME} você paga
         </p>
         <p
-          className={`mt-1.5 text-2xl font-semibold tabular-nums sm:text-[1.75rem] ${
+          className={`mt-1.5 text-xl font-semibold tabular-nums sm:text-[1.75rem] ${
             dimmed ? "text-ink2" : "text-ink"
           }`}
         >
           {marketplaceValue}
+          {marketplaceSuffix && (
+            <span className="text-xs font-normal text-ink2 sm:text-sm">{marketplaceSuffix}</span>
+          )}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-muted">{marketplaceNote}</p>
       </div>
 
       <div className="rounded-2xl border border-brand-200 bg-brand-50/60 p-4 sm:p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-brand-600">
-          No Foocci
+        <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-widest text-brand-600 sm:text-[11px]">
+          No Foocci você paga
         </p>
-        <p className="mt-1.5 text-2xl font-semibold text-brand-600 tabular-nums sm:text-[1.75rem]">
+        <p className="mt-1.5 text-xl font-semibold text-brand-600 tabular-nums sm:text-[1.75rem]">
           {foocciFixed === null ? (
-            "sob demonstração"
+            <span className="text-base">sob demonstração</span>
           ) : (
             <>
               {formatBRL(foocciFixed)}
-              <span className="text-sm font-normal text-ink2"> fixo/mês</span>
+              <span className="text-xs font-normal text-ink2 sm:text-sm">/mês</span>
             </>
           )}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          Valor fixo: não muda com o seu faturamento.
+          Fixo: não muda quando você vende mais.
         </p>
       </div>
     </div>

@@ -58,7 +58,12 @@ export function HeroSection() {
             Descubra em 30 segundos — e veja quanto sobraria no seu bolso com o Foocci.
           </p>
 
-          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row lg:mt-8 lg:justify-start">
+          {/*
+            `sm:justify-center lg:justify-start`: sem isso o botão ficava colado na
+            esquerda no tablet enquanto todo o resto estava centrado — a linha vira
+            `flex-row` no `sm`, e `flex-row` sem justify começa na esquerda.
+          */}
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:mt-8 lg:justify-start">
             <PrimaryCta
               className="w-full sm:w-auto"
               href="#calculadora"
@@ -81,7 +86,7 @@ function HostScene({ className = "" }: { className?: string }) {
   const composed = hasAsset(SITE_ASSETS.heroComposed);
 
   return (
-    <div className={`relative mx-auto w-full max-w-2xl lg:mr-0 lg:max-w-none ${className}`}>
+    <div className={`relative mx-auto w-full max-w-xl lg:mr-0 lg:max-w-none ${className}`}>
       {/* brilho quente atrás da cena (atmosfera, não conteúdo) */}
       <div
         aria-hidden
