@@ -9,10 +9,14 @@ import { reasonSupportIncident } from "./SupportIncidentReasoner";
 
 const NOW = new Date("2026-07-24T23:00:00Z");
 
-function llmOutcome(text: string) {
+function llmOutcome(text: string, over: Record<string, unknown> = {}) {
   return {
     reasoningMode: "LLM",
-    result: { idealResponse: text, coherenceCheck: { verdict: "PASS" }, confidence: 0.8 },
+    result: {
+      idealResponse: text,
+      coherenceCheck: { verdict: "PASS", doesNotClaimUnexecutedAction: true, ...over },
+      confidence: 0.8,
+    },
     snapshot: { truthSources: {} },
   };
 }
@@ -95,5 +99,53 @@ describe("SupportIncidentReasoner — diagnostica, explica, escala (shadow-safe)
     reasonAsAgent.mockResolvedValue(llmOutcome("ok"));
     await reasonSupportIncident({ restaurantId: "r1", report: "o whatsapp caiu", now: NOW });
     expect(reasonAsAgent).toHaveBeenCalledWith(expect.objectContaining({ agentId: "suporte-tecnico" }));
+  });
+});
+
+/** O portão de capacidade também na aba técnica — as duas metades. */
+describe("portão de capacidade — a IA não se atribui o que não fez", () => {
+  it("BARRA: 'já reprocessei a fila' não vira explicação — cai no determinístico", async () => {
+    reasonAsAgent.mockResolvedValue(
+      llmOutcome("Pronto, já reprocessei a fila e os pedidos voltaram.", {
+        doesNotClaimUnexecutedAction: false,
+      }),
+    );
+
+    const d = await reasonSupportIncident({
+      restaurantId: "r1",
+      report: "os pedidos pararam de chegar no whatsapp",
+      now: NOW,
+    });
+
+    expect(d.explanation).not.toContain("já reprocessei");
+    expect(d.note).toMatch(/afirmava ter executado/i);
+    expect(d.executed).toBe(false);
+  });
+
+  it("BARRA POR OMISSÃO: sem veredito de capacidade, a fala da IA não é usada", async () => {
+    reasonAsAgent.mockResolvedValue({
+      reasoningMode: "LLM",
+      result: { idealResponse: "Já reconectei sua instância.", coherenceCheck: { verdict: "PASS" }, confidence: 0.8 },
+      snapshot: { truthSources: {} },
+    });
+
+    const d = await reasonSupportIncident({ restaurantId: "r1", report: "o whatsapp caiu", now: NOW });
+
+    expect(d.explanation).not.toContain("Já reconectei");
+  });
+
+  it("DEIXA PASSAR: proposta no futuro ('vou propor reprocessar') sai inteira", async () => {
+    reasonAsAgent.mockResolvedValue(
+      llmOutcome("Os webhooks de entrada pararam há uns 20 minutos. Vou propor reprocessar a fila."),
+    );
+
+    const d = await reasonSupportIncident({
+      restaurantId: "r1",
+      report: "os pedidos pararam de chegar no whatsapp",
+      now: NOW,
+    });
+
+    expect(d.explanation).toContain("webhooks");
+    expect(d.note).toBeUndefined();
   });
 });

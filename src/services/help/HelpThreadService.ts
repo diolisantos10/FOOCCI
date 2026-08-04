@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import type { HelpMessage, HelpThread } from "@prisma/client";
 import { SupportTicketService } from "@/services/support/SupportTicketService";
+import type { SupportActionProposal } from "@/services/support/actions/SupportActionExecutor";
 import { answerHelpQuestion } from "./helpAssistant";
 
 export interface HelpMessageDTO {
@@ -106,6 +107,12 @@ export class HelpThreadService {
        * vale para o turno que acabou de acontecer.
        */
       assistant: { shouldEscalate: boolean; coherence: string } | null;
+      /**
+       * Ação que o agente PROPÔS neste turno (ex.: subir o cardápio). É uma
+       * OFERTA com botão — nunca algo já feito: `executed` é false enquanto a
+       * escada estiver em sombra, e quem confirma é sempre o lojista.
+       */
+      proposedAction: SupportActionProposal | null;
     }>
   > {
     try {
@@ -121,6 +128,7 @@ export class HelpThreadService {
 
       const out: HelpMessageDTO[] = [msgDTO(userMsg)];
       let assistant: { shouldEscalate: boolean; coherence: string } | null = null;
+      let proposedAction: SupportActionProposal | null = null;
 
       // The AI only answers while the thread is in AI mode.
       if (thread.mode === "AI") {
@@ -150,6 +158,7 @@ export class HelpThreadService {
           restaurantId,
           history: priorHistory,
           restaurantName: restaurant?.name ?? undefined,
+          conversationId: thread.id,
         });
 
         const assistantMsg = await prisma.helpMessage.create({
@@ -161,9 +170,10 @@ export class HelpThreadService {
         });
         out.push(msgDTO(assistantMsg));
         assistant = { shouldEscalate: ai.shouldEscalate, coherence: ai.coherence };
+        proposedAction = ai.proposedAction;
       }
 
-      return serviceOk({ threadId: thread.id, mode: thread.mode, messages: out, assistant });
+      return serviceOk({ threadId: thread.id, mode: thread.mode, messages: out, assistant, proposedAction });
     } catch (err) {
       console.error("[HelpThreadService.sendMessage]", err);
       return serviceFail("Falha ao enviar a mensagem", 500);

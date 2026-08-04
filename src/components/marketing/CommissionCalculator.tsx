@@ -41,7 +41,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { MARKETPLACE_NAME, MIGRATION_RANGE, formatBRL } from "@/lib/site/commissionRates";
+import {
+  MARKETPLACE_NAME,
+  MIGRATION_RANGE,
+  ASSUMED_RATE_PERCENT,
+  formatBRL,
+} from "@/lib/site/commissionRates";
 import { planByIdOrNull } from "@/lib/site/plans";
 import { DEMO_URL } from "./config";
 
@@ -72,8 +77,12 @@ const PRESETS = [20_000, 40_000, 80_000, 150_000];
  * Ponto de partida do campo de taxa — NÃO é uma afirmação sobre a tabela de ninguém.
  * O campo é editável e o rótulo pede o número do próprio dono; este valor existe só
  * para a tela nascer com uma conta plausível em vez de zerada.
+ *
+ * Vem de `commissionRates` porque a página de planos usa a MESMA premissa: dois
+ * números diferentes para a mesma suposição, em duas páginas do mesmo site, é o
+ * furo que o visitante nota e o advogado do concorrente também.
  */
-const DEFAULT_RATE_PERCENT = "23";
+const DEFAULT_RATE_PERCENT = String(ASSUMED_RATE_PERCENT);
 /** Acima disso o número quase certamente é erro de digitação, não taxa. */
 const MAX_PLAUSIBLE_RATE = 90;
 

@@ -14,6 +14,10 @@
  *  • A IA compõe a EXPLICAÇÃO humana (idealResponse) ancorada nos sinais.
  *  • A EXECUÇÃO nunca acontece aqui — `executed: false` é invariante. Na Fase 0 a
  *    escada está em SOMBRA e todo caso escala com o diagnóstico pronto.
+ *  • PORTÃO DE CAPACIDADE (04/08/2026): se a fala da IA afirmar ter executado
+ *    algo ("já reprocessei a fila"), ela NÃO é usada — cai na explicação
+ *    determinística, que é honesta. Aqui a escada está em sombra e nada roda,
+ *    então qualquer pretérito de execução é, por construção, mentira.
  */
 
 import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
@@ -128,6 +132,7 @@ export async function reasonSupportIncident(input: SupportReasonInput): Promise<
   let reasoningMode: string | undefined;
   let coherence: string | undefined;
   let confidence: number | undefined;
+  let capabilityNote: string | undefined;
   let explanation = deterministicExplanation(top, snap.summary);
 
   try {
@@ -145,8 +150,17 @@ export async function reasonSupportIncident(input: SupportReasonInput): Promise<
     coherence = outcome.result.coherenceCheck?.verdict;
     confidence = Number((outcome.result.confidence ?? 0).toFixed(2));
     const aiText = (outcome.result.idealResponse ?? "").trim();
-    // Só usa a fala da IA quando ela raciocinou de verdade (não fallback).
-    if (outcome.reasoningMode === "LLM" && aiText.length > 0) explanation = aiText;
+    // Portão que não registrou resultado REPROVA: exigimos o true explícito.
+    const honestAboutItself =
+      outcome.result.coherenceCheck?.doesNotClaimUnexecutedAction === true;
+    // Só usa a fala da IA quando ela raciocinou de verdade (não fallback) E não
+    // se atribuiu uma execução que não houve.
+    if (outcome.reasoningMode === "LLM" && aiText.length > 0 && honestAboutItself) {
+      explanation = aiText;
+    } else if (!honestAboutItself) {
+      capabilityNote =
+        "A fala da IA afirmava ter executado algo que não foi executado — usei o diagnóstico determinístico.";
+    }
   } catch (err) {
     return {
       ok: true,
@@ -181,5 +195,6 @@ export async function reasonSupportIncident(input: SupportReasonInput): Promise<
     coherence,
     confidence,
     executed: false,
+    note: capabilityNote,
   };
 }

@@ -52,8 +52,16 @@ describe("nome da marca no site público", () => {
     for (const file of FILES) {
       const src = readFileSync(file, "utf8");
       src.split("\n").forEach((line, i) => {
+        /*
+          "Foocci" sozinho é a MARCA e é masculino. Mas "Foocci Bakery" é o nome de
+          uma PADARIA — substantivo feminino —, e "a Foocci Bakery é de mentira" é
+          português correto, não deslize de gênero. Sem esta exceção, quem escrever
+          sobre a loja de demonstração é forçado a torcer a frase para driblar uma
+          regex; a regra continua valendo, com o caso nomeado.
+        */
+        const semPadaria = line.replace(/Foocci Bakery/g, "«padaria»");
         // \b(a|A)\s+Foocci\b — pega "a Foocci", "A Foocci", "da Foocci", "pela Foocci".
-        if (/\b(?:[aA]|[dD]a|[pP]ela|[nN]a|à)\s+Foocci\b/.test(line)) {
+        if (/\b(?:[aA]|[dD]a|[pP]ela|[nN]a|à)\s+Foocci\b/.test(semPadaria)) {
           offenders.push(`${file}:${i + 1} → ${line.trim().slice(0, 90)}`);
         }
       });

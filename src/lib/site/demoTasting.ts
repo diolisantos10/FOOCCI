@@ -146,12 +146,14 @@ export async function getTastingState(now: Date = new Date()): Promise<TastingSt
     if (!restaurant || !restaurant.isDemo) return { status: "empty" };
 
     const [itemCount, photoCount, hoursRows] = await Promise.all([
+      // MenuItem não guarda restaurantId — ele pende da categoria. Contar pelo
+      // caminho da categoria é o que garante que a conta é DESTA vitrine.
       prisma.menuItem.count({
-        where: { restaurantId: restaurant.id, isActive: true, isAvailable: true },
+        where: { category: { restaurantId: restaurant.id }, isActive: true, isAvailable: true },
       }),
       prisma.menuItem.count({
         where: {
-          restaurantId: restaurant.id,
+          category: { restaurantId: restaurant.id },
           isActive: true,
           isAvailable: true,
           imageUrl: { not: null },

@@ -30,6 +30,20 @@ export interface HelpThreadInfo {
   mode: "AI" | "HUMAN";
 }
 
+/**
+ * Ação que o agente PROPÔS no turno (espelha SupportActionProposal do serviço —
+ * declarada aqui para o componente de cliente não importar módulo de servidor).
+ * É oferta com botão: `executed` é sempre false; quem confirma é o lojista.
+ */
+export interface HelpProposedAction {
+  key: string;
+  label: string;
+  offer: string;
+  cta: { label: string; href: string };
+  humanConfirms: string;
+  executed: boolean;
+}
+
 export interface HelpTicket {
   code: string;
   notified: boolean;
@@ -47,6 +61,8 @@ export interface UseHelpThread {
   escalating: boolean;
   resetting: boolean;
   ticket: HelpTicket | null;
+  /** Oferta de ação do último turno (some quando o lojista segue perguntando). */
+  proposedAction: HelpProposedAction | null;
   sendError: string | null;
   load: () => Promise<void>;
   /** `false` quando não conseguiu enviar (o chamador devolve o texto ao campo). */
@@ -65,13 +81,21 @@ export function useHelpThread(): UseHelpThread {
   const [escalating, setEscalating] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [ticket, setTicket] = useState<HelpTicket | null>(null);
+  const [proposedAction, setProposedAction] = useState<HelpProposedAction | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
   const loadingRef = useRef(false);
+  /**
+   * Toda escrita (enviar/escalar/recomeçar) incrementa este contador. Um GET que
+   * começou ANTES de uma escrita não pode aplicar sua resposta velha por cima —
+   * era assim que a bolha otimista sumia quando o lojista perguntava rápido.
+   */
+  const mutationsRef = useRef(0);
 
   const load = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
+    const startedAt = mutationsRef.current;
     setStatus((s) => (s === "ready" ? s : "loading"));
     try {
       const res = await fetch("/api/help/thread");
@@ -80,6 +104,7 @@ export function useHelpThread(): UseHelpThread {
         data?: { thread: HelpThreadInfo; messages: HelpChatMessage[] };
       };
       if (!json.data) throw new Error("empty");
+      if (mutationsRef.current !== startedAt) return; // chegou tarde demais
       setThread(json.data.thread);
       setMessages(json.data.messages ?? []);
       setStatus("ready");
@@ -102,6 +127,7 @@ export function useHelpThread(): UseHelpThread {
       const content = text.trim();
       if (!content || sending) return false;
 
+      mutationsRef.current += 1;
       setSendError(null);
       setSending(true);
 
@@ -130,6 +156,7 @@ export function useHelpThread(): UseHelpThread {
             mode: HelpThreadInfo["mode"];
             messages: HelpChatMessage[];
             assistant?: { shouldEscalate: boolean } | null;
+            proposedAction?: HelpProposedAction | null;
           };
         };
         if (!json.data) throw new Error("empty");
@@ -142,6 +169,7 @@ export function useHelpThread(): UseHelpThread {
           t ? { ...t, mode: data.mode } : { id: data.threadId, status: "OPEN", mode: data.mode },
         );
         setShouldEscalate(Boolean(data.assistant?.shouldEscalate));
+        setProposedAction(data.proposedAction ?? null);
         setStatus("ready");
         return true;
       } catch {
@@ -157,6 +185,7 @@ export function useHelpThread(): UseHelpThread {
 
   const escalate = useCallback(async () => {
     if (escalating) return;
+    mutationsRef.current += 1;
     setEscalating(true);
     try {
       const res = await fetch("/api/help/escalate", { method: "POST" });
@@ -173,6 +202,7 @@ export function useHelpThread(): UseHelpThread {
       setMessages((prev) => [...prev, json.data!.message]);
       setTicket(json.data.ticket);
       setShouldEscalate(false);
+      setProposedAction(null);
     } catch {
       setSendError("Não consegui abrir o chamado agora. Tente de novo em instantes.");
     } finally {
@@ -182,6 +212,7 @@ export function useHelpThread(): UseHelpThread {
 
   const reset = useCallback(async () => {
     if (resetting) return;
+    mutationsRef.current += 1;
     setResetting(true);
     try {
       const res = await fetch("/api/help/reset", { method: "POST" });
@@ -194,6 +225,7 @@ export function useHelpThread(): UseHelpThread {
       setMessages(json.data.messages ?? []);
       setTicket(null);
       setShouldEscalate(false);
+      setProposedAction(null);
       setSendError(null);
       setStatus("ready");
     } catch {
@@ -214,6 +246,7 @@ export function useHelpThread(): UseHelpThread {
     escalating,
     resetting,
     ticket,
+    proposedAction,
     sendError,
     load,
     send,

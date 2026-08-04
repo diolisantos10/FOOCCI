@@ -37,18 +37,20 @@ export const TYPE_LABEL: Record<NotifType, string> = {
   sistema: "Sistema",
 };
 
+// Tokens do DESIGN.md — laranja é da marca, o resto é status semântico.
+// (Antes: purple/teal/gray crus. Corrigido ao reconstruir a superfície de Avisos.)
 export const TYPE_LABEL_COLOR: Record<NotifType, string> = {
   atendimento: "text-blue-600",
-  pedido: "text-orange-600",
-  pagamento: "text-purple-600",
-  integracao: "text-teal-600",
-  sistema: "text-gray-500",
+  pedido: "text-brand-600",
+  pagamento: "text-green-700",
+  integracao: "text-amber-700",
+  sistema: "text-muted",
 };
 
 export const PRIORITY_BORDER: Record<NotifPriority, string> = {
   critical: "border-l-red-500",
-  important: "border-l-orange-400",
-  normal: "border-l-gray-200",
+  important: "border-l-brand-400",
+  normal: "border-l-line2",
 };
 
 // ── Read-state (localStorage, shared with the legacy TopBar) ──────────────────

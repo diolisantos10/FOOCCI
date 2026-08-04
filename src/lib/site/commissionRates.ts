@@ -43,6 +43,31 @@ export interface CommissionRate {
 export const MARKETPLACE_NAME = "iFood";
 
 /**
+ * A TAXA-PREMISSA — o único percentual que o site usa quando não há um informado
+ * pelo próprio dono. Ler antes de mexer:
+ *
+ * Publicidade comparativa é lícita no Brasil desde que o dado seja **verdadeiro,
+ * comprovável e não deprecie** o concorrente. Nós não temos como comprovar a tabela
+ * de ninguém — cada contrato é diferente. Por isso o site NUNCA afirma "o
+ * marketplace X cobra N%". Ele DECLARA uma premissa e faz a conta em cima dela:
+ *
+ *   ✅ "Considerando uma comissão de 23% — ajuste para a sua —, quem fatura
+ *       R$ 20 mil paga R$ 4.600."
+ *   ❌ "Restaurante de R$ 20 mil/mês no iFood paga R$ 3.040 de comissão."
+ *
+ * A calculadora da home deixa o visitante EDITAR esse número (o melhor caso: a conta
+ * fica com os números dele). Onde a página é estática — `/site/precos` — o número
+ * entra rotulado como premissa, com o convite para conferir na calculadora.
+ *
+ * Um lugar só, de propósito: premissa copiada em três arquivos vira três premissas
+ * diferentes, e aí uma delas é mentira.
+ */
+export const ASSUMED_RATE_PERCENT = 23;
+
+/** A premissa como fração, para as contas. */
+export const ASSUMED_RATE = ASSUMED_RATE_PERCENT / 100;
+
+/**
  * Where the percentages came from — rendered on the page, never hidden.
  *
  * The rates are the real, published ones. If anyone asks in a sales meeting, the

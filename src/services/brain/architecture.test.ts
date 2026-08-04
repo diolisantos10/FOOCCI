@@ -76,6 +76,48 @@ describe("Regra de Ouro — portão único de raciocínio", () => {
     ).toEqual([]);
   });
 
+  it("o Brain PROPÕE, nunca EXECUTA: nenhum tool-calling dentro de src/services/brain", () => {
+    // A Lei 2 em forma de teste. O raciocínio devolve, no máximo, uma CHAVE de
+    // allowlist — quem age é um executor separado, fora do Brain. Se alguém
+    // plugar function-calling aqui, o build cai.
+    const TOOL_CALLING_RE =
+      /\b(?:tool_choice|tool_calls|function_call|parallel_tool_calls)\b|\btools\s*:\s*\[/;
+    const offenders: string[] = [];
+    for (const file of listSourceFiles(join(SRC_ROOT, "services", "brain"))) {
+      const content = readFileSync(file, "utf8");
+      if (TOOL_CALLING_RE.test(content)) {
+        offenders.push(relative(SRC_ROOT, file).split(sep).join("/"));
+      }
+    }
+    expect(
+      offenders,
+      `Tool-calling dentro do Brain — o raciocínio voltaria a executar:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("o Brain não importa executor: a seta aponta só de fora para dentro", () => {
+    // O executor (services/support/actions) pode importar o Brain; o Brain NÃO
+    // pode importar o executor. É o que impede o raciocínio de ganhar braços.
+    const EXECUTOR_IMPORT_RE = /["']@?[./\w/]*(?:services\/)?support\/actions\/[\w]+["']/;
+    const offenders: string[] = [];
+    for (const file of listSourceFiles(join(SRC_ROOT, "services", "brain"))) {
+      const content = readFileSync(file, "utf8");
+      if (EXECUTOR_IMPORT_RE.test(content)) {
+        offenders.push(relative(SRC_ROOT, file).split(sep).join("/"));
+      }
+    }
+    expect(
+      offenders,
+      `O Brain importou o executor de ações — inversão de dependência proibida:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("runtimeTouched é literal false no contrato — não é boolean configurável", () => {
+    const types = readFileSync(join(SRC_ROOT, "services/brain/core/BrainTypes.ts"), "utf8");
+    expect(types).toMatch(/runtimeTouched:\s*false;/);
+    expect(types).not.toMatch(/runtimeTouched\s*:\s*boolean/);
+  });
+
   it("a lista congelada só diminui — exceções que já migraram devem ser removidas", () => {
     // Informativo/estrutural: garante que a lista congelada não referencia
     // arquivos que deixaram de existir (renomear ≠ escapar da lei).

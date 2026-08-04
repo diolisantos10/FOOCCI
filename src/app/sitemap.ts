@@ -17,6 +17,7 @@ const PAGES: { path: string; priority: number; changeFrequency: "weekly" | "mont
   { path: "/site/atendimento-com-ia",       priority: 0.9, changeFrequency: "monthly" },
   { path: "/site/crm",                      priority: 0.9, changeFrequency: "monthly" },
   { path: "/site/solucoes",                 priority: 0.9, changeFrequency: "monthly" },
+  { path: "/site/experimente",              priority: 0.9, changeFrequency: "monthly" },
   { path: "/site/como-funciona",            priority: 0.7, changeFrequency: "monthly" },
   { path: "/site/precos",                   priority: 0.9, changeFrequency: "monthly" },
   { path: "/site/demonstracao",             priority: 0.9, changeFrequency: "monthly" },

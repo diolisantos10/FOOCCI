@@ -34,6 +34,7 @@ function outcome(over: Record<string, unknown> = {}) {
   const {
     idealResponse = "Vá em Vendas → Cardápio e clique em + Novo Produto.",
     doesNotInventFacts = true,
+    doesNotClaimUnexecutedAction = true,
     verdict = "PASS",
     shouldEscalate = false,
     reasoningMode = "LLM",
@@ -48,7 +49,9 @@ function outcome(over: Record<string, unknown> = {}) {
       idealResponse,
       shouldEscalate,
       escalationReason: undefined,
-      coherenceCheck: { verdict, doesNotInventFacts, reason: "motivo" },
+      proposedActionKey: null,
+      confidence: 0.9,
+      coherenceCheck: { verdict, doesNotInventFacts, doesNotClaimUnexecutedAction, reason: "motivo" },
       runtimeTouched: false,
       ...rest,
     },
@@ -195,5 +198,76 @@ describe("portão de saída — o veredito nunca fica sem registro", () => {
     expect(r.answer).toContain("Falar com a FOOD");
     expect(r.shouldEscalate).toBe(true);
     expect(r.coherence).toBe("NEEDS_REVIEW");
+  });
+});
+
+/**
+ * O SEGUNDO portão: o agente mentindo sobre SI MESMO. O de cima pega preço
+ * inventado (mentira sobre o mundo) e é cego para "já subi seu cardápio".
+ */
+describe("portão de capacidade — o agente não promete o que não fez", () => {
+  it("BARRA: 'já subi seu cardápio' não chega ao lojista", async () => {
+    reasonMock.mockResolvedValue(
+      outcome({
+        idealResponse: "Pronto! Já subi seu cardápio, pode conferir na loja. 🎉",
+        doesNotClaimUnexecutedAction: false,
+        verdict: "NEEDS_REVIEW",
+      }),
+    );
+
+    const r = await answerHelpQuestion({ question: "sobe meu cardápio pra mim", restaurantId: "r1" });
+
+    expect(r.answer).not.toContain("Já subi");
+    expect(r.answer).toContain("não altero nada sozinho");
+    expect(r.shouldEscalate).toBe(true);
+    expect(r.proposedAction).toBeNull();
+  });
+
+  it("BARRA POR OMISSÃO: portão que não registrou veredito de capacidade reprova", async () => {
+    // Guardrail 2 — esquecer o gate nunca pode significar "aprovado". Aqui o
+    // campo não vem NADA (portão que não rodou), não vem false.
+    const semVeredito = outcome({ idealResponse: "Já importei sua planilha." });
+    delete (semVeredito.result.coherenceCheck as Record<string, unknown>)
+      .doesNotClaimUnexecutedAction;
+    reasonMock.mockResolvedValue(semVeredito);
+
+    const r = await answerHelpQuestion({ question: "importa pra mim", restaurantId: "r1" });
+
+    expect(r.answer).not.toContain("Já importei");
+    expect(r.shouldEscalate).toBe(true);
+  });
+
+  it("DEIXA PASSAR: a oferta honesta sai inteira E vira uma proposta com botão", async () => {
+    reasonMock.mockResolvedValue(
+      outcome({
+        idealResponse:
+          "Posso subir seu cardápio — me manda a planilha que eu preparo a prévia, aí você confere e confirma.",
+        proposedActionKey: "menu_import_preview",
+      }),
+    );
+
+    const r = await answerHelpQuestion({ question: "como eu subo meu cardápio?", restaurantId: "r1" });
+
+    expect(r.answer).toContain("Posso subir seu cardápio");
+    expect(r.proposedAction?.key).toBe("menu_import_preview");
+    expect(r.proposedAction?.cta.href).toBe("/menu/upload");
+    // Em sombra, nada rodou — e a proposta diz isso na cara.
+    expect(r.proposedAction?.executed).toBe(false);
+    expect(r.proposedAction?.mode).toBe("SHADOW_ONLY");
+  });
+
+  it("a allowlist vai para o Brain, e o turno declara que NADA foi executado", async () => {
+    await answerHelpQuestion({ question: "como eu subo meu cardápio?", restaurantId: "r1" });
+
+    const req = reasonMock.mock.calls[0]![0];
+    expect(req.proposableActions.map((a: { key: string }) => a.key)).toContain("menu_import_preview");
+    expect(req.executedThisTurn).toEqual([]);
+    // O Brain nunca recebe endpoint — ele escolhe uma chave, não um destino.
+    expect(JSON.stringify(req.proposableActions)).not.toContain("/api/");
+  });
+
+  it("chave nula (o caso comum) não inventa proposta", async () => {
+    const r = await answerHelpQuestion({ question: "como cadastro um produto", restaurantId: "r1" });
+    expect(r.proposedAction).toBeNull();
   });
 });

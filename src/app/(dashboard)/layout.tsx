@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SidebarProvider } from "@/components/layout/SidebarContext";
-import { HelpWidget } from "@/components/help/HelpWidget";
+import { AssistantBar } from "@/components/help/AssistantBar";
 import { GlobalAlertEngine } from "@/components/layout/GlobalAlertEngine";
 
 export default async function DashboardLayout({
@@ -57,9 +57,11 @@ export default async function DashboardLayout({
       <div className="flex h-screen overflow-hidden bg-canvas">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* O Assistente vive no TOPO do painel — sempre à mão, em toda tela.
+              Altura publicada em `--assistant-bar` (globals.css). */}
+          <AssistantBar />
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
-        <HelpWidget />
         <GlobalAlertEngine />
       </div>
     </SidebarProvider>
