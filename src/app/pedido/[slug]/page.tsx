@@ -65,8 +65,14 @@ export default async function PedidoPage({
   // Decode signed WhatsApp identity token (appended by WhatsAppReceptionistService)
   const rawWaToken = typeof sp.waToken === "string" ? sp.waToken.trim() : null;
   const waPayload  = rawWaToken ? verifyWaToken(rawWaToken) : null;
-  // Phone from token is used when no ?phone= param is present
-  const resolvedPhone = rawPhone ?? waPayload?.phone ?? null;
+  // SECURITY (CR C1): PII (customerId, saved address, e-mail) is loaded ONLY from a
+  // PROVEN phone — the signed waToken. A bare `?phone=` param is NOT proof of
+  // possession (anyone could put a victim's number in the URL), so it must never
+  // server-render a stranger's home address. It is kept solely to prefill the phone
+  // input below. `pedidoToken` (the validated waToken) is handed to the client so it
+  // can call the now-gated profile/address/coupon endpoints.
+  const provenPhone = waPayload?.phone ?? null;
+  const pedidoToken = waPayload ? rawWaToken : null;
   // Recovery link sets src=recovery — used below to restore the customer's draft cart
   const isRecovery = sp.src === "recovery";
 
@@ -138,8 +144,8 @@ export default async function PedidoPage({
   let knownCustomerId: string | null = null;
   let knownDefaultAddress: { street: string; number: string; neighborhood: string; complement: string; cep?: string; city?: string; state?: string } | null = null;
 
-  if (resolvedPhone) {
-    const candidates = phoneCandidates(resolvedPhone);
+  if (provenPhone) {
+    const candidates = phoneCandidates(provenPhone);
     if (candidates.length > 0) {
       const customer = await prisma.customer.findFirst({
         where: { restaurantId: restaurant.id, phone: { in: candidates } },
@@ -188,13 +194,13 @@ export default async function PedidoPage({
         // Phone known (WhatsApp link) but no customer record yet — upsert now.
         // Ensures knownCustomerId is always set when a waToken is used, eliminating
         // the race between async auto-identify and the first cart / chat action.
-        knownCustomerPhone = resolvedPhone;
+        knownCustomerPhone = provenPhone;
         const tokenName = waPayload?.name?.trim() ?? null;
         if (tokenName) knownCustomerName = tokenName.split(/\s+/)[0] ?? null;
         try {
           const upserted = await prisma.customer.upsert({
-            where:  { phone_restaurantId: { phone: resolvedPhone, restaurantId: restaurant.id } },
-            create: { restaurantId: restaurant.id, phone: resolvedPhone, name: tokenName ?? resolvedPhone },
+            where:  { phone_restaurantId: { phone: provenPhone, restaurantId: restaurant.id } },
+            create: { restaurantId: restaurant.id, phone: provenPhone, name: tokenName ?? provenPhone },
             update: {},
             select: { id: true, name: true },
           });
@@ -206,6 +212,10 @@ export default async function PedidoPage({
         }
       }
     }
+  } else if (rawPhone) {
+    // Not proven — prefill the phone input only. No customer lookup, no PII: a bare
+    // `?phone=` must never surface a stranger's identity or saved address.
+    knownCustomerPhone = rawPhone;
   }
 
   // ── Recovery: restore previous draft cart ───────────────────────────────────
@@ -501,6 +511,7 @@ gtag('config', '${ga4Id}');
         knownCustomerName={knownCustomerName}
         knownCustomerId={knownCustomerId}
         knownDefaultAddress={knownDefaultAddress}
+        pedidoToken={pedidoToken}
         instagramUrl={brandConfig?.instagramUrl ?? null}
         tiktokUrl={brandConfig?.tiktokUrl ?? null}
         brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
