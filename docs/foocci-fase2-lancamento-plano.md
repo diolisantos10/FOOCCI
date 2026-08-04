@@ -101,3 +101,18 @@ chama a OpenAI direto, fora do Brain).
 **Decisão do Diretor:** primeira ação real = **subir cardápio** via `/api/menu/import`,
 que já é 2 etapas (preview → o lojista confirma) — o agente propõe, o humano
 confirma, a Regra de Ouro fica intacta. Sem bypass.
+
+---
+
+## DECISÃO DO CEO (04/08) — regra de preço do checkout
+**Os valores da tabela SÃO os valores cobrados.** O preço de cada ciclo (mensal,
+trimestral, anual) já é o preço final — o anual já embute os 2 meses grátis, não
+há desconto adicional a calcular. Não existe "preço fundador" separado no motor.
+
+**A única regra de desconto: 50% no PRIMEIRO MÊS, para todo cliente novo, em
+qualquer plano e qualquer ciclo.** A partir do segundo mês, valor cheio da tabela.
+
+> Nota de implementação do Diretor: no mensal e trimestral o desconto é direto na
+> primeira cobrança. No anual (pago à vista), aplica-se abatimento equivalente a
+> meio mês sobre o total — é a leitura fiel de "50% só no primeiro mês" para um
+> ciclo pago de uma vez. A implantação nunca entra no desconto.
