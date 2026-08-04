@@ -7,7 +7,13 @@
  * gravam o MESMO sessionStorage `foocci-customer-<slug>` — assim a identidade
  * atravessa as duas superfícies na mesma sessão.
  *
- * Passo 1 = só o WhatsApp; passo 2 = nome (apenas cliente novo). Pode pular.
+ * Passo 1 = só o WhatsApp; passo 2 = nome (apenas cliente novo).
+ *
+ * `required` define se dá para entrar sem se identificar (decisão do CEO em
+ * 04/08): na **Loja** e no **chat com IA** a identificação é obrigatória — é ali
+ * que nasce pedido, cupom e histórico, e cliente anônimo quebra a atribuição de
+ * receita do CRM. Só o **QR da mesa** segue pulável: quem já está sentado no
+ * salão não deve ser barrado para ver o cardápio.
  */
 
 import { useState, FormEvent } from "react";
@@ -17,9 +23,13 @@ import type { CustomerIdentity } from "./types";
 export function WelcomeModal({
   slug,
   onClose,
+  required = false,
 }: {
   slug: string;
+  /** Recebe `null` só quando o cliente pula — impossível com `required`. */
   onClose: (identity: CustomerIdentity | null) => void;
+  /** Sem saída: esconde o "Pular identificação". Padrão: pulável (mesa). */
+  required?: boolean;
 }) {
   const [step,           setStep]           = useState<"phone" | "name">("phone");
   const [phoneInput,     setPhoneInput]     = useState("");
@@ -87,9 +97,13 @@ export function WelcomeModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm">
       <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-center pt-3 sm:hidden">
-          <div className="h-1 w-10 rounded-full bg-gray-200" />
-        </div>
+        {/* A alcinha do topo é o gesto universal de "arraste para fechar". Numa
+            tela que não fecha, ela promete uma saída que não existe. */}
+        {!required && (
+          <div className="flex justify-center pt-3 sm:hidden">
+            <div className="h-1 w-10 rounded-full bg-gray-200" />
+          </div>
+        )}
 
         <div className="mx-6 mt-5 rounded-2xl px-5 py-4 text-white shadow-sm" style={{ backgroundColor: "var(--brand-primary)" }}>
           <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
@@ -97,7 +111,11 @@ export function WelcomeModal({
           </p>
           <p className="mt-0.5 text-base font-bold leading-snug">
             {step === "phone"
-              ? "Pra personalizar seu atendimento, informe seu WhatsApp. 📱"
+              ? required
+                // Sem saída: o texto diz o porquê. "Informe seu WhatsApp" sem
+                // motivo, numa tela que não fecha, lê como cobrança de dado.
+                ? "Pra fazer seu pedido, informe seu WhatsApp. 📱"
+                : "Pra personalizar seu atendimento, informe seu WhatsApp. 📱"
               : "Como podemos te chamar? 😊"}
           </p>
         </div>
@@ -132,10 +150,16 @@ export function WelcomeModal({
               </button>
             </form>
           )}
-          <button type="button" onClick={() => onClose(null)}
-            className="mt-3 w-full py-2 text-xs text-gray-400 transition-colors hover:text-gray-600">
-            Pular identificação
-          </button>
+          {required ? (
+            <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-400">
+              Usamos seu WhatsApp só para identificar o pedido e seus cupons.
+            </p>
+          ) : (
+            <button type="button" onClick={() => onClose(null)}
+              className="mt-3 w-full py-2 text-xs text-gray-400 transition-colors hover:text-gray-600">
+              Pular identificação
+            </button>
+          )}
         </div>
       </div>
     </div>

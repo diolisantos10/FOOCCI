@@ -11,6 +11,36 @@
 
 ---
 
+## Identificação por telefone: obrigatória onde nasce pedido, pulável só na mesa
+
+**Decidido em** 2026-08-04 · **por** CEO · **origem:** conferência da Loja do
+sushi-cazza em produção (a Loja oferecia "Identificar-se" como convite opcional)
+
+O cliente **precisa** informar o WhatsApp para usar a **Loja** e o **chat com
+IA**. No **QR da mesa**, continua podendo pular.
+
+**Por que a linha passa aí:** a mesa é consumo presencial — o cliente já está
+sentado, o pedido é do garçom, e barrar quem quer só ver o cardápio é atrito puro.
+Loja e chat são o oposto: ali nasce pedido, cupom, endereço e histórico. Cliente
+anônimo nesses dois quebra a atribuição de receita do CRM, impede recuperação de
+carrinho e deixa o pedido sem dono verificável.
+
+**O que muda para todos:**
+
+1. A pergunta que decide se uma superfície nova exige identificação é **"aqui
+   nasce pedido?"** — não "aqui tem checkout?" nem "aqui tem IA?".
+2. **A marca de "já perguntei" não pode ser compartilhada entre superfícies de
+   regras diferentes.** O `sessionStorage` `qr-welcome-seen-<slug>` é gravado
+   pelo QR da mesa, onde pular vale; se a Loja consultar essa marca para decidir
+   se pede identificação, quem pulou no salão entra na Loja anônimo. Portão que
+   uma tela anterior desliga não é portão. Travado em
+   `src/components/menu/identificacaoObrigatoria.test.ts`.
+3. Tela sem saída **diz o porquê** e some com o que promete saída (o rótulo
+   "pular", a alcinha de arrastar). Obrigatoriedade sem explicação lê como
+   cobrança de dado.
+
+---
+
 ## Toda proteção decide pelo estado, não por reflexo
 
 **Decidido em** 2026-07-31 · **por** CEO + Diretor · **origem:** incidente da Nicole

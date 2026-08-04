@@ -237,22 +237,33 @@ export function LojaClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.status]);
 
-  /* Welcome uma vez por sessão — pulado se já identificado (URL ou sessão). */
+  /* Identificação OBRIGATÓRIA na Loja (decisão do CEO, 04/08) — igual ao chat
+   * com IA; só o QR da mesa continua pulável.
+   *
+   * O gate olha APENAS para identidade real (waToken do link do WhatsApp ou
+   * sessionStorage `foocci-customer-<slug>`). Ele NÃO olha a marca
+   * `qr-welcome-seen-<slug>`, que é COMPARTILHADA com o QR da mesa: quem pulou
+   * a identificação sentado no salão carregaria essa marca para cá e entraria
+   * na Loja sem se identificar — obrigatoriedade que uma tela anterior desliga
+   * não é obrigatoriedade. */
   useEffect(() => {
-    const seen = sessionStorage.getItem(`qr-welcome-seen-${slug}`);
     const identified = !!sessionStorage.getItem(`foocci-customer-${slug}`);
-    if (!seen && !identified && !knownCustomerPhone) setShowWelcome(true);
+    if (!identified && !knownCustomerPhone) setShowWelcome(true);
   }, [slug, knownCustomerPhone]);
 
   function handleWelcomeClose(identity: CustomerIdentity | null) {
-    if (identity?.name) {
-      setIdentifiedName(identity.name);
-      setIdentifiedPhone(identity.displayPhone);
-      // Pré-preenche o checkout: com nome+telefone+cliente, a etapa identify é pulada.
-      if (identity.phone) setPhone(identity.phone);
-      setCustName(identity.name);
-      if (identity.customerId) setCustId(identity.customerId);
-    }
+    // Sem identidade não há saída: o modal da Loja não oferece "pular", e se
+    // algum caminho futuro chamar com null, a tela continua barrada em vez de
+    // liberar em silêncio.
+    if (!identity?.name) return;
+
+    setIdentifiedName(identity.name);
+    setIdentifiedPhone(identity.displayPhone);
+    // Pré-preenche o checkout: com nome+telefone+cliente, a etapa identify é pulada.
+    if (identity.phone) setPhone(identity.phone);
+    setCustName(identity.name);
+    if (identity.customerId) setCustId(identity.customerId);
+
     setShowWelcome(false);
     sessionStorage.setItem(`qr-welcome-seen-${slug}`, "1");
   }
@@ -510,7 +521,7 @@ export function LojaClient({
   return (
     <div style={{ '--brand-primary': pc } as React.CSSProperties}>
       {showWelcome && (
-        <WelcomeModal slug={slug} onClose={handleWelcomeClose} />
+        <WelcomeModal slug={slug} onClose={handleWelcomeClose} required />
       )}
 
       {selectedItem && (

@@ -34,6 +34,18 @@ rotacionado**. Se ele quiser que DNS continue na mão do Diretor depois disso,
 guardar o token novo como segredo `HOSTINGER_API_TOKEN` no repositório — é o
 mesmo mecanismo que já resolveu o lado do Railway.
 
+## ⚠️ Portão de qualidade estourando o tempo — 3 arquivos de teste
+
+`src/services/quality/noSideEffects.test.ts`, `QualityControlService.test.ts` e
+`dashboardModel.test.ts` falham por **timeout de 5s**, não por asserção. Verificado
+em 04/08 que falham **igual na base**, sem relação com a mudança da identificação
+— o varredor de auditores simplesmente não cabe mais em 5 segundos.
+
+**Por que não é detalhe:** é o guardrail 2 ao contrário. Um portão que não termina
+não reprova nem aprova — ele fica vermelho por motivo errado e, com o tempo, todo
+mundo aprende a ignorar aquele vermelho. Ou o tempo sobe para um valor honesto, ou
+o varredor é fatiado. Não deixar como está.
+
 ## 📱 Cupons/endereços na Loja para quem DIGITA o telefone — depende de OTP (canais)
 
 Nota do topo marketplace (04/08): o drawer "Minha conta" da Loja mostra cupons
