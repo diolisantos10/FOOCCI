@@ -19,7 +19,7 @@ vi.mock("@/services/brain/reasoning/BrainReasoner", () => ({ reasonAsAgent: reas
 vi.mock("./manualRetrieval", () => ({ retrieveRelevantChapters: retrieveMock }));
 vi.mock("@/services/support/SupportSystemProbe", () => ({ probeSystem: probeMock }));
 
-import { answerHelpQuestion } from "./helpAssistant";
+import { answerHelpQuestion, describesNavigation } from "./helpAssistant";
 
 const chapter = {
   id: "1",
@@ -118,6 +118,15 @@ describe("(b) o agente responde com base no manual", () => {
     expect(r.answer).toContain("Vendas → Cardápio");
   });
 
+  /**
+   * ESTE TESTE ERA UM CARIMBO ATÉ 04/08/2026. Ele mockava o retrieval
+   * devolvendo [] para "provar" o caminho honesto — uma condição que NUNCA
+   * acontecia em produção, porque o retrieval ordenava sem cortar e sempre
+   * voltava com guia. Provava o tratamento de um caso que o sistema não
+   * produzia. A prova de que o vazio EXISTE de verdade mudou de endereço:
+   * manualRetrievalCorpus.test.ts, com os 36 guias reais. Aqui ficou só o que é
+   * responsabilidade deste módulo — o que ele FAZ quando o vazio chega.
+   */
   it("sem trecho de manual: não finge — devolve sem fonte e sem grounding", async () => {
     retrieveMock.mockResolvedValue([]);
     reasonMock.mockResolvedValue(outcome({ idealResponse: "Não achei isso por aqui.", shouldEscalate: true }));
@@ -129,6 +138,18 @@ describe("(b) o agente responde com base no manual", () => {
     expect(r.grounded).toBe(false);
     expect(r.sources).toEqual([]);
     expect(r.shouldEscalate).toBe(true);
+  });
+
+  it("sem manual, o aviso ao Brain diz que FALTA FONTE — não que o recurso não existe", async () => {
+    retrieveMock.mockResolvedValue([]);
+
+    await answerHelpQuestion({ question: "pergunta obscura", restaurantId: "r1" });
+
+    const hints: string[] = reasonMock.mock.calls[0]![0].contextHints;
+    const semManual = hints.find((h) => h.startsWith("NENHUM trecho"));
+    // Ausência de informação não é informação: o agente não pode concluir do
+    // silêncio da base que o Foocci não tem o recurso.
+    expect(semManual).toContain("NÃO quer dizer que o Foocci não tem o recurso");
   });
 
   it("relato de impressora traz o runbook curado E os sinais do sistema", async () => {
@@ -269,5 +290,115 @@ describe("portão de capacidade — o agente não promete o que não fez", () =>
   it("chave nula (o caso comum) não inventa proposta", async () => {
     const r = await answerHelpQuestion({ question: "como cadastro um produto", restaurantId: "r1" });
     expect(r.proposedAction).toBeNull();
+  });
+});
+
+/**
+ * O TERCEIRO portão: ensinar caminho de tela SEM NENHUMA verdade recuperada.
+ * Os outros dois são cegos para ele — não tem número (o verificador de fato
+ * passa) e não tem verbo no pretérito (o de capacidade passa). É a mentira que
+ * o assistente do lojista mais produzia enquanto o retrieval nunca voltava
+ * vazio: guia irrelevante rotulado como verdade → tela inventada com confiança.
+ */
+describe("portão de ensino sem lastro — não mandar o lojista para uma tela que não existe", () => {
+  beforeEach(() => {
+    retrieveMock.mockResolvedValue([]); // nada casou: sem guia e sem runbook
+  });
+
+  it("BARRA: caminho de tela inventado, sem guia nenhum, não chega ao lojista", async () => {
+    reasonMock.mockResolvedValue(
+      outcome({
+        idealResponse:
+          "Claro! Vá em Configurações → Fiscal, clique em Emitir NFC-e e pronto, a nota sai junto com a comanda.",
+      }),
+    );
+
+    const r = await answerHelpQuestion({ question: "como emito nota fiscal do pedido", restaurantId: "r1" });
+
+    expect(r.answer).not.toContain("NFC-e");
+    expect(r.answer).not.toContain("Configurações");
+    expect(r.answer).toContain("Falar com a FOOD");
+    expect(r.shouldEscalate).toBe(true);
+    expect(r.escalationReason).toContain("sem nenhum guia recuperado");
+    expect(r.grounded).toBe(false);
+  });
+
+  it("DEIXA PASSAR: a recusa honesta sem guia sai inteira (senão o portão vira mordaça)", async () => {
+    reasonMock.mockResolvedValue(
+      outcome({
+        idealResponse:
+          "Sobre nota fiscal eu não tenho material aqui pra te orientar com segurança. Quer que eu abra um chamado pra equipe?",
+        shouldEscalate: true,
+      }),
+    );
+
+    const r = await answerHelpQuestion({ question: "como emito nota fiscal do pedido", restaurantId: "r1" });
+
+    expect(r.answer).toContain("não tenho material aqui");
+  });
+
+  it("DEIXA PASSAR: pergunta ao lojista para entender melhor não é ensinar caminho", async () => {
+    reasonMock.mockResolvedValue(
+      outcome({ idealResponse: "Me conta uma coisa: aparece alguma mensagem de erro na tela quando isso acontece?" }),
+    );
+
+    const r = await answerHelpQuestion({ question: "tá estranho aqui", restaurantId: "r1" });
+
+    expect(r.answer).toContain("Me conta uma coisa");
+  });
+
+  it("DEIXA PASSAR: COM guia recuperado, o passo a passo com nome de tela sai inteiro", async () => {
+    retrieveMock.mockResolvedValue([chapter]); // agora há lastro
+    reasonMock.mockResolvedValue(
+      outcome({ idealResponse: "Vá em Vendas → Cardápio e clique em + Novo Produto." }),
+    );
+
+    const r = await answerHelpQuestion({ question: "como cadastro um produto", restaurantId: "r1" });
+
+    expect(r.answer).toBe("Vá em Vendas → Cardápio e clique em + Novo Produto.");
+    expect(r.shouldEscalate).toBe(false);
+  });
+
+  it("DEIXA PASSAR: runbook de modo de falha também é lastro (não é só o manual)", async () => {
+    reasonMock.mockResolvedValue(
+      outcome({ idealResponse: "Vá em Configurações → Impressoras e veja se aparece 'Carteiro conectado'." }),
+    );
+
+    // Sem guia de manual, mas o mapa curado casou → grounded = true.
+    const r = await answerHelpQuestion({
+      question: "a impressora não está imprimindo os pedidos",
+      restaurantId: "r1",
+    });
+
+    expect(r.suspectedSubsystem).toBe("printing");
+    expect(r.answer).toContain("Carteiro conectado");
+  });
+});
+
+describe("describesNavigation — as duas metades do detector", () => {
+  it("reconhece caminho de tela", () => {
+    for (const t of [
+      "Vá em Configurações → Fiscal.",
+      "Acesse o menu lateral e procure Pedidos.",
+      "Clique em Salvar para confirmar.",
+      "Toque no botão “Ativar base”.",
+      "É só seguir o passo a passo abaixo.",
+      "Em Configurações → Pagamentos você liga o Pix.",
+    ]) {
+      expect(describesNavigation(t), t).toBe(true);
+    }
+  });
+
+  it("NÃO reconhece conversa honesta como caminho de tela", () => {
+    for (const t of [
+      "Isso eu não sei te dizer com segurança.",
+      "Toque em “Falar com a FOOD” que eu abro um chamado.",
+      "Me conta o que aparece na tela quando você tenta?",
+      "Esse assunto é com a equipe, posso abrir um chamado pra você.",
+      "Bom dia! Tudo certo por aí?",
+      "Não achei nada sobre nota fiscal nos guias.",
+    ]) {
+      expect(describesNavigation(t), t).toBe(false);
+    }
   });
 });

@@ -171,3 +171,114 @@ ali** e isso é dívida real, não minha de escopo hoje: fica registrado.
   sozinha em todo deploy") — `BrainTypes.ts` e o `CapabilityCoherenceVerifier`
   entraram numa mensagem de commit que não fala deles. Worktree compartilhado com
   `git add -A`. O conteúdo está íntegro; a trilha é que ficou mentirosa.
+
+---
+
+## 2026-08-04 — P0 de confiança: o agente que nunca dizia "não sei"
+
+**Pedido:** consertar cinco defeitos medidos pela auditoria do `qualidade` no
+agente de suporte do lojista. O grave: retrieval sem limiar, portanto sempre
+"fundamentado"; o teste que provava o caminho honesto era carimbo; o casador de
+sintomas transformava dúvida em incidente.
+
+### O que tentei e o que descobri
+
+**1. O bug não era o retrieval errar — era ele não ter como não achar.**
+`rankDocumentsByEmbedding` ORDENA e nunca CORTA; `rankChapters` cortava em
+`score > 0`, que sempre passa. Como o chamador pegava os 4 primeiros,
+`grounded = chapters.length > 0` era tautologia e o ramo honesto era código
+morto. Reproduzi o baseline rodando o `rankChapters` do `HEAD` contra os 36 guias
+reais: **30 de 31 perguntas voltavam com guia** — e em produção, com
+`OPENAI_API_KEY`, o degrau de embedding levava isso a 31/31, porque ele devolve
+os 4 melhores de 36 mesmo quando os 36 são irrelevantes. *Sistema que não tem
+como devolver vazio não tem como dizer "não sei" — e nenhum portão de saída
+conserta isso, porque o portão olha a fala, não a fonte.*
+
+**2. Score absoluto NÃO separa relevante de irrelevante — cobertura por IDF separa.**
+Primeira tentativa: piso só no score. Furou na hora — "como emito nota fiscal do
+pedido" pontuava **10** (casando só "pedido", termo que aparece em 21 dos 36
+guias) enquanto "como adiciono um funcionário na equipe" pontuava **9** com o
+guia certo. Passei a medir a **fatia da INFORMAÇÃO da pergunta** que o guia
+cobre, com os termos pesados por IDF sobre o próprio corpus. Aí "nota fiscal"
+cai para 0,11 e a pergunta legítima fica em 0,60. Os dois pisos são
+**conjunção**, e cada um pega um caso que o outro deixa passar: a cobertura barra
+"estorno do pix" (0,36) e o score barra "esqueci a senha do painel", que tem
+cobertura ALTA (0,63) por casar 2 de 3 termos numa menção de passagem única.
+
+**3. Calibrei por varredura, e a primeira margem que anunciei estava errada.**
+Cheguei a escrever no código "maior cobertura entre os errados = 0,36". Estava
+errado: meu script de calibração cortava os 3 primeiros **por score** antes de
+aplicar o portão, e escondia o `guia-configurar-pagamentos` (score 6, cobertura
+**0,44**) em "cliente quer estorno do pix". O teste de corpus caiu e me mostrou.
+*A lição é chata e velha: instrumento de medida com filtro embutido mede o
+filtro.* Refiz com varredura completa de 64 combinações (T1 0,35–0,70 × T2 4–12).
+Ótimo em `T1=0,40 / T2=8`: 0 vazamentos, 0 guias errados, 1 pergunta legítima
+perdida. Faixas que separam as duas classes: score em (6 · 9], cobertura em
+(0,36 · 0,42].
+
+**4. Stemming: medido, e recusado.** Prefixo de 6 caracteres recuperava as duas
+perguntas que o piso derrubou ("acompanho"×"acompanhar", "ensino"×"ensinar") —
+mas fazia "ensino a IA" passar a devolver o guia de **campanha de CRM**, e
+prefixo de 5 quebrava dois dos nove bloqueios ("entregadores"→"entre" colide com
+"entrega"). Troca recall por precisão na direção errada: um "não sei" é honesto,
+um guia errado rotulado como verdade é a mentira que estamos consertando.
+Ficou registrado no teste de corpus, com o custo medido explícito.
+
+**5. Embeddings: o número que EU não podia calibrar, e disse isso.**
+O piso de cosseno precisa da API real para ser medido, e o ambiente não tem
+chave. Recusei chutar um valor e vendê-lo como calibrado. Inverti a arquitetura:
+**a admissão é lexical (calibrada, offline, testável) e os embeddings só
+reordenam o que já entrou**, com um piso de cosseno deliberadamente baixo e
+marcado no código como NÃO calibrado. Custa os casamentos puramente semânticos
+(zero sobreposição de palavras) — assumido por escrito, com o caminho para
+destravar. *Ausência de informação não é informação vale para o código que eu
+escrevo, não só para o agente em produção.*
+
+**6. A terceira mentira, que nenhum dos dois portões existentes via.**
+Separando as duas perguntas do método: mentir sobre o mundo (preço) tem
+verificador; mentir sobre si (execução) tem verificador desde ontem. Mas o dano
+medido aqui é uma **terceira**: ensinar `Configurações → Fiscal → Emitir NFC-e`
+para uma tela que não existe. Não tem número (o verificador de fato passa liso) e
+não tem verbo no pretérito (o de capacidade passa liso). Abri o portão 3: sem
+NENHUMA verdade recuperada, resposta que descreve navegação não chega ao lojista.
+O `contextHint` já pedia isso — e pedir não é travar.
+
+**7. O casador de sintomas classificava por sobreposição de palavras.**
+`MIN_MATCH_SCORE = 2` com duas palavras quaisquer do texto do sintoma. Rodei o
+código do `HEAD` e reproduzi os cinco falsos positivos exatamente como a
+auditoria descreveu — "papel de parede" → impressora HIGH, "erro ao abrir a tela"
+→ banco CRITICAL. Regra nova: **gatilho curado é obrigatório e a sobreposição só
+desempata**. Junto veio a regra de curadoria que faltava: *gatilho é expressão de
+FALHA, não palavra de assunto* — "comanda" é assunto, "comanda não sai" é falha.
+Mais escopo (o canal precisa estar no relato) e exclusões para a fronteira
+Instagram × WhatsApp.
+
+### O que quebrou
+
+- Os testes de `rankChapters` com capítulos de brinquedo caíram: corpo de uma
+  frase não alcança um piso calibrado em guias de verdade. **Resisti a afrouxar o
+  piso para o teste passar** — seria calibrar pelo fixture. Separei
+  `scoreChapters` (mecânica, sem corte) de `rankChapters` (portão), e os testes
+  de ordenação foram para o primeiro.
+- O teste do caminho honesto no `helpAssistant` continua existindo, mas com o
+  aviso de que ele NÃO prova que o vazio existe — a prova mudou de endereço para
+  `manualRetrievalCorpus.test.ts`, com os 36 guias reais e sem mock de retrieval.
+- `tsc` reclamou de `suspected?.subsystem` dentro do portão 3: o compilador já
+  sabia que `!grounded` implica `suspected === null`. O tipo estava mais atento
+  que eu.
+
+### Achados fora do meu escopo (para o Diretor)
+
+- **O mesmo defeito de "ordena e não corta" está vivo no caminho do garçom.**
+  `RestaurantKnowledgeAdapter.ts:84-85` chama `rankByEmbedding` e pega
+  `slice(0, MAX_KNOWLEDGE_ITEMS)` sem piso nenhum: o conhecimento curado do
+  restaurante entra no snapshot do garçom mesmo quando nada casa. O
+  `minScore` que abri em `rankDocumentsByEmbedding` já serve; falta calibrar
+  para aquele corpus (que é por restaurante, não fixo) e ligar. **Não mexi** — é
+  o cliente final, e mudar retrieval do garçom sem corpus de calibração seria
+  repetir o erro que vim consertar.
+- `src/services/ai/BrandConfigService.ts:123` acusa erro de `tsc` **no commit
+  base** (`waiterUpsellCategories` faltando). Pré-existente, não é deste bloco.
+- A dívida do `SupportIncidentReasoner` continua: ele usa `customerMemory` para
+  os sinais em vez de `extraTruthSources`, e o portão de FATO segue não aplicado
+  ali. Registrado pela terceira entrada seguida.
