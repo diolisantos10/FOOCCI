@@ -1,69 +1,42 @@
 /**
- * WhatsAppMessagingService — provider-agnostic WhatsApp send entry point.
+ * WhatsAppMessagingService — a porta ÚNICA de saída de WhatsApp do Foocci.
  *
- * Resolves the provider per restaurant (default EVOLUTION). Meta is used ONLY when
- * META_WHATSAPP_ENABLED=true AND restaurant.whatsappProvider="META_CLOUD_API", so
- * existing restaurants are unaffected. For Meta, business-initiated sends outside
- * the 24h customer-service window are blocked with META_TEMPLATE_REQUIRED instead
- * of failing silently.
+ * HISTÓRIA, para ninguém reintroduzir o que saiu: até 04/08/2026 este serviço
+ * escolhia entre dois provedores (`selectProvider` / `resolveProviderId` /
+ * `getProviderSettings`), tinha um FALLBACK opcional para o outro provedor em
+ * caso de falha e expunha `providers: { evolution, meta }`. A Evolution era uma
+ * muleta do começo, usada enquanto a homologação da Meta não saía. A homologação
+ * saiu, o CEO confirmou que NENHUM restaurante depende mais dela, e ela foi
+ * eliminada do sistema.
  *
- * Optional fallback (OFF by default): when the active provider FAILS (not BLOCKED)
- * and the restaurant enabled allowWhatsAppProviderFallback, the send is retried ONCE
- * via the configured fallbackProvider. A BLOCKED result (e.g. template required) is a
- * deliberate policy decision and never triggers fallback. Exactly one provider sends
- * per attempt — there is no double-send.
+ * A regra agora é absoluta: **toda mensagem sai pelo aplicativo homologado.**
+ * Não existe caminho alternativo — nem em erro de envio, nem em falha de banco.
+ * Um segundo caminho, não homologado, é exatamente o risco de banimento que a
+ * homologação eliminou. Se a Meta não puder enviar, o certo é FALHAR e AVISAR,
+ * nunca sair por outro lugar.
  *
- * This is additive: live Evolution send paths keep working whether or not they are
- * migrated to call this service.
+ * A única recusa deliberada que continua é a **janela de 24h da Meta**: fora
+ * dela, mensagem livre é bloqueada com `META_TEMPLATE_REQUIRED` (status
+ * `BLOCKED`) — e o caminho oficial passa a ser `sendTemplate`, com modelo
+ * aprovado. Bloqueio é decisão de política, não falha de entrega; por isso ele
+ * é reportado, não contornado.
+ *
+ * ⚠️ A flag `META_WHATSAPP_ENABLED` NÃO é consultada aqui de propósito. Com um
+ * provedor só, deixá-la governar o envio significaria "flag desligada = sistema
+ * mudo, sem log e sem erro" — perigo maior que o que ela evitava. Ela segue
+ * valendo como portão de ONBOARDING/UI nas rotas de `integracoes/whatsapp/meta/*`
+ * (conectar, templates, teste), onde desligar só impede configurar algo novo.
  */
 
 import { prisma } from "@/lib/prisma";
 import type { WhatsAppProviderId, SendResult, SendTextInput, SendTemplateInput, ConnectionStatus } from "./providers/types";
-import { EvolutionWhatsAppProvider } from "./providers/EvolutionWhatsAppProvider";
 import { MetaWhatsAppCloudProvider } from "./providers/MetaWhatsAppCloudProvider";
-import { isMetaWhatsAppEnabled } from "./metaFlag";
 import { decideMetaSend } from "./metaSendPolicy";
 import { toMetaRecipient } from "./providers/metaPayload";
 import { normalizePhoneForEvolution } from "@/lib/crm/normalizePhone";
 
-const evolution = new EvolutionWhatsAppProvider();
-const meta      = new MetaWhatsAppCloudProvider();
-
-/**
- * Pure provider selection. Meta is chosen ONLY when the feature flag is on AND the
- * restaurant explicitly selected it — otherwise EVOLUTION. Exactly one provider is
- * ever returned, so a single send never goes through both (no double-send).
- */
-export function selectProvider(flagEnabled: boolean, restaurantProvider: string | null | undefined): WhatsAppProviderId {
-  return flagEnabled && restaurantProvider === "META_CLOUD_API" ? "META_CLOUD_API" : "EVOLUTION";
-}
-
-/** Provider for a restaurant — EVOLUTION unless Meta is enabled AND selected. */
-export async function resolveProviderId(restaurantId: string): Promise<WhatsAppProviderId> {
-  if (!isMetaWhatsAppEnabled()) return "EVOLUTION";
-  const r = await prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { whatsappProvider: true } });
-  return selectProvider(true, r?.whatsappProvider);
-}
-
-interface ProviderSettings {
-  provider:         WhatsAppProviderId;
-  allowFallback:    boolean;
-  fallbackProvider: WhatsAppProviderId;
-}
-
-/** Active provider + (optional) fallback config for a restaurant. */
-async function getProviderSettings(restaurantId: string): Promise<ProviderSettings> {
-  if (!isMetaWhatsAppEnabled()) return { provider: "EVOLUTION", allowFallback: false, fallbackProvider: "EVOLUTION" };
-  const r = await prisma.restaurant.findUnique({
-    where:  { id: restaurantId },
-    select: { whatsappProvider: true, allowWhatsAppProviderFallback: true, fallbackProvider: true },
-  });
-  return {
-    provider:         selectProvider(true, r?.whatsappProvider),
-    allowFallback:    !!r?.allowWhatsAppProviderFallback,
-    fallbackProvider: r?.fallbackProvider === "META_CLOUD_API" ? "META_CLOUD_API" : "EVOLUTION",
-  };
-}
+/** O provedor. Singular, e sem irmão — ver o cabeçalho antes de acrescentar outro. */
+const meta = new MetaWhatsAppCloudProvider();
 
 /** Most recent INBOUND WhatsApp message time for this phone (for the 24h window). */
 async function getLastInboundAt(restaurantId: string, rawPhone: string): Promise<Date | null> {
@@ -88,33 +61,6 @@ async function getLastInboundAt(restaurantId: string, rawPhone: string): Promise
   return msg?.sentAt ?? null;
 }
 
-/**
- * Pure fallback decision. Retry on the fallback provider ONLY when the primary send
- * genuinely failed (never on a deliberate BLOCKED policy result), fallback is enabled,
- * and the fallback target differs from the primary — so there is never a double-send.
- */
-export function shouldAttemptFallback(
-  primary:  Pick<SendResult, "ok" | "status">,
-  settings: { allowFallback: boolean; provider: WhatsAppProviderId; fallbackProvider: WhatsAppProviderId },
-): boolean {
-  if (primary.ok || primary.status === "BLOCKED") return false;
-  return settings.allowFallback && settings.fallbackProvider !== settings.provider;
-}
-
-/** Sends a freeform text through ONE provider, applying Meta's 24h-window gate. */
-async function sendVia(providerId: WhatsAppProviderId, input: SendTextInput): Promise<SendResult> {
-  if (providerId !== "META_CLOUD_API") return evolution.sendText(input);
-  const lastInboundAt = await getLastInboundAt(input.restaurantId, input.to);
-  const decision = decideMetaSend({ phoneValid: toMetaRecipient(input.to) !== null, lastInboundAt, hasTemplate: false });
-  if (!decision.allowed) {
-    return {
-      ok: false, provider: "META_CLOUD_API", status: "BLOCKED", providerMessageId: null,
-      blockReason: decision.reason, error: decision.message,
-    };
-  }
-  return meta.sendText(input);
-}
-
 export interface ConversationReplyInput {
   restaurantId:   string;
   conversationId: string;
@@ -125,30 +71,53 @@ export interface ConversationReplyInput {
 }
 
 export const WhatsAppMessagingService = {
-  resolveProviderId,
-
+  /**
+   * Texto livre. Aplica a janela de 24h da Meta e entrega ao provedor único.
+   * Em bloqueio ou falha, devolve o resultado — **nunca** tenta outro caminho.
+   */
   async sendText(input: SendTextInput): Promise<SendResult> {
-    const s = await getProviderSettings(input.restaurantId);
-    const primary = await sendVia(s.provider, input);
-    if (shouldAttemptFallback(primary, s)) return sendVia(s.fallbackProvider, input);
-    return primary;
-  },
-
-  async sendTemplate(input: SendTemplateInput): Promise<SendResult> {
-    const providerId = await resolveProviderId(input.restaurantId);
-    if (providerId === "META_CLOUD_API") return meta.sendTemplate(input);
-    // Evolution has no template concept — fall back to a freeform render of the params.
-    const text = input.bodyParams && input.bodyParams.length > 0
-      ? input.bodyParams.join(" ")
-      : input.templateName;
-    return evolution.sendText({ restaurantId: input.restaurantId, to: input.to, text });
+    // Banco fora do ar = NÃO sabemos se estamos dentro da janela de 24h. Guardrail 1:
+    // ausência de informação não é informação — não se deduz "pode mandar" do silêncio
+    // do banco. Falha declarada e retryable, com o caso concreto no log (guardrail 6).
+    let lastInboundAt: Date | null;
+    try {
+      lastInboundAt = await getLastInboundAt(input.restaurantId, input.to);
+    } catch (err) {
+      console.error("[WhatsAppMessagingService.sendText] janela de 24h não pôde ser verificada", { restaurantId: input.restaurantId, err });
+      return {
+        ok: false, provider: "META_CLOUD_API", status: "FAILED", providerMessageId: null,
+        error: "Não foi possível verificar a janela de 24h da Meta; envio não realizado.",
+        errorCode: "WINDOW_LOOKUP_FAILED", retryable: true,
+      };
+    }
+    const decision = decideMetaSend({
+      phoneValid:  toMetaRecipient(input.to) !== null,
+      lastInboundAt,
+      hasTemplate: false,
+    });
+    if (!decision.allowed) {
+      return {
+        ok: false, provider: "META_CLOUD_API", status: "BLOCKED", providerMessageId: null,
+        blockReason: decision.reason, error: decision.message,
+      };
+    }
+    return meta.sendText(input);
   },
 
   /**
-   * Provider-aware conversation reply: sends the text via the active provider and
-   * persists the OUTBOUND message (+ bumps lastMessageAt). Used by the Meta reply
-   * path so an inbound Meta message gets answered through Meta. The legacy Evolution
-   * reply paths keep their own inline send/persist unchanged.
+   * Envio por modelo aprovado — o caminho OFICIAL para falar fora da janela de
+   * 24h. Não há janela a checar aqui: é justamente para isso que o template
+   * existe. Se o modelo não estiver aprovado, a própria Meta recusa e o erro
+   * volta no `SendResult`.
+   */
+  async sendTemplate(input: SendTemplateInput): Promise<SendResult> {
+    return meta.sendTemplate(input);
+  },
+
+  /**
+   * Resposta de conversa: envia o texto e persiste a mensagem OUTBOUND
+   * (+ atualiza `lastMessageAt`). A persistência é best-effort e roda DEPOIS do
+   * envio — falha de banco aqui não muda por onde a mensagem saiu (guardrail 5).
    */
   async sendConversationReply(input: ConversationReplyInput): Promise<SendResult> {
     const result = await this.sendText({ restaurantId: input.restaurantId, to: input.toPhone, text: input.text });
@@ -181,11 +150,11 @@ export const WhatsAppMessagingService = {
     return result;
   },
 
-  async getConnectionStatus(restaurantId: string, providerId?: WhatsAppProviderId): Promise<ConnectionStatus> {
-    const id = providerId ?? await resolveProviderId(restaurantId);
-    return (id === "META_CLOUD_API" ? meta : evolution).getConnectionStatus(restaurantId);
+  /**
+   * Estado da conexão do restaurante. O segundo parâmetro sobrevive só para não
+   * quebrar chamadas existentes: com um provedor só, ele não escolhe nada.
+   */
+  async getConnectionStatus(restaurantId: string, _providerId?: WhatsAppProviderId): Promise<ConnectionStatus> {
+    return meta.getConnectionStatus(restaurantId);
   },
-
-  /** Direct provider handles (for the safe test/diagnostics endpoints). */
-  providers: { evolution, meta },
 };

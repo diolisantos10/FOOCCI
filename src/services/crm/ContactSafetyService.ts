@@ -9,7 +9,7 @@
  *
  *   • opt-out (LGPD)               • daily global cap
  *   • contactability / phone       • per-customer cooldown
- *   • Evolution availability       • per-customer weekly cap
+ *   • canal WhatsApp conectado     • per-customer weekly cap
  *   • quiet hours / weekend        • cross-campaign 24h dedup
  *   • sending window               • duplicate-in-campaign dedup
  *   • restaurant operational status (opt-in)
@@ -37,6 +37,7 @@ import {
   checkWeekendBlock,
 } from "@/lib/crm-safety";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 
 // ─── Decision types ───────────────────────────────────────────────────────────
 
