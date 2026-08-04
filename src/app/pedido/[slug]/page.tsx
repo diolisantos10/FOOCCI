@@ -129,7 +129,7 @@ export default async function PedidoPage({
   const brandConfig = await prisma.restaurantBrandConfig.findUnique({
     where: { restaurantId: restaurant.id },
     select: {
-      instagramUrl: true, tiktokUrl: true,
+      instagramUrl: true, tiktokUrl: true, googleReviewUrl: true,
       brandPrimaryColor: true, brandSecondaryColor: true,
       ga4MeasurementId: true, gtmId: true,
       brandPersona: true,
@@ -421,6 +421,10 @@ export default async function PedidoPage({
 
   const allCategories = [...virtualCategories, ...categories];
 
+  // Loja (sem IA): o hero replica o do QR — o promoBanner é o primeiro item em
+  // promoção com foto (mesma regra de src/app/qr/[slug]/page.tsx).
+  const lojaPromoBanner = promotedItems.find((i) => i.imageUrl) ?? promotedItems[0] ?? null;
+
   // ── "Comprar novamente" pool (W3) ────────────────────────────────────────────
   // Full menu-item objects for the identified customer's repeatable items, resolved
   // INDEPENDENTLY of category visibility (getRepeatableOrder validates the ITEM's
@@ -527,10 +531,11 @@ gtag('config', '${ga4Id}');
         repeatMenuItems={repeatMenuItems}
       />
       ) : (
-      /* Loja: catálogo puro + checkout, zero elemento de conversa
-         (OS-loja-qr-com-checkout). Renderiza no plano de entrada OU quando
-         ?modo=loja força a versão sem IA. A máquina embaixo são as MESMAS
-         rotas /api/pedido/* provadas sem IA (pedido #O2VKA1). */
+      /* Loja: o MESMO cardápio do QR da mesa, que compra (retrabalho aprovado
+         pelo CEO em 04/08). Renderiza no plano de entrada OU quando ?modo=loja
+         força a versão sem IA. Visual compartilhado em src/components/menu/*;
+         a máquina embaixo são as MESMAS rotas /api/pedido/* provadas sem IA
+         (pedido #O2VKA1). Preço segue no canal DELIVERY. */
       <LojaClient
         slug={slug}
         restaurantName={restaurant.name}
@@ -542,7 +547,15 @@ gtag('config', '${ga4Id}');
           null
         }
         brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
-        categories={allCategories}
+        categories={categories}
+        featured={bestSellers}
+        promotedItems={promotedItems}
+        promoBanner={lojaPromoBanner}
+        promotionBanners={activeBanners}
+        instagramUrl={brandConfig?.instagramUrl ?? null}
+        tiktokUrl={brandConfig?.tiktokUrl ?? null}
+        restaurantPhone={restaurant.storeProfile?.whatsappPhone ?? restaurant.phone ?? null}
+        googleReviewUrl={brandConfig?.googleReviewUrl ?? null}
         deliveryEnabled={deliveryConfig?.enabled ?? false}
         pickupEnabled={deliveryConfig?.pickupEnabled ?? true}
         deliveryFee={checkoutDeliveryFee}

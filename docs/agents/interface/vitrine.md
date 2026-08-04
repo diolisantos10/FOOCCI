@@ -193,3 +193,37 @@ Uma sessão quase entregou briefing de site com "laranja protagonista"; teria
 produzido um site que não parece o app.
 
 — promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-site-comercial.md` (commit `79943f5`)
+
+---
+
+## Refactor visual se prova com pixel-diff: stash → baseline → pop → diff com bbox
+
+Ao extrair/reorganizar componentes de uma tela que NÃO pode mudar, a prova é
+mecânica: `git stash` → screenshot baseline → `git stash pop` → screenshot novo
+→ comparação. Duas regras aprendidas no retrabalho da Loja:
+
+1. `cmp` byte a byte é o ideal, mas **imagem `loading="lazy"` torna screenshot
+   fullPage não-determinístico** — um thumbnail que não pintou no baseline gera
+   "diferença" de layout que não existe. O sinal confiável é o **bbox do diff de
+   pixel** (via sharp): bbox do tamanho exato de uma imagem = falso positivo de
+   timing; bbox espalhado = mudança real.
+2. Mesmo dev server, mesma seed, mesma viewport nas duas capturas — senão o diff
+   mede o ambiente, não o código.
+
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08 (retrabalho da
+Loja sem IA, branch `claude/foocci-director-onboarding-lhindy`)
+
+---
+
+## Elemento fixo novo no rodapé entra como slot do contêiner fixo existente
+
+Quando uma superfície já tem um contêiner `fixed` no rodapé (ex.: a nav de
+categorias do cardápio) e nasce outro elemento fixo (ex.: barra de carrinho),
+**não** empilhe um segundo `fixed` com `bottom: <altura do outro>`: a conta
+quebra com `safe-area-inset-bottom` e com qualquer wrap interno. O padrão é dar
+um **slot** ao contêiner existente (`topSlot`) e renderizar o novo elemento
+DENTRO dele — um único `fixed`, zero aritmética de altura, e quem não usa o slot
+mantém o markup idêntico.
+
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08 (retrabalho da
+Loja sem IA, branch `claude/foocci-director-onboarding-lhindy`)
