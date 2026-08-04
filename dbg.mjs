@@ -1,0 +1,14 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
+p.on("response", r => { if (r.url().includes("/api/auth/")) console.log("RESP", r.status(), r.url()); });
+await p.goto("http://localhost:3100/login", { waitUntil: "domcontentloaded" });
+await p.waitForTimeout(1500);
+await p.fill('input[type="email"]', "owner@pizzaria-demo.com");
+await p.fill('input[type="password"]', "demo1234");
+await p.click('button[type="submit"]');
+await p.waitForTimeout(8000);
+console.log("URL:", p.url());
+const alert = await p.locator('[role="alert"]').count();
+if (alert) console.log("ALERT:", await p.locator('[role="alert"]').first().innerText());
+await b.close();

@@ -218,7 +218,7 @@ function CtaEmPreparo({ block = false, className = "" }: { block?: boolean; clas
 /* ── Página ───────────────────────────────────────────────────────────────── */
 
 export default async function ExperimentePage() {
-  const state = { status: "empty" } as Awaited<ReturnType<typeof getTastingState>>;
+  const state = await getTastingState();
 
   const ok = state.status === "ok";
   /*

@@ -50,3 +50,4 @@ test-results/
 # User-uploaded files (runtime)
 public/uploads/*
 !public/uploads/.gitkeep
+.next-ui/

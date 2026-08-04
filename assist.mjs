@@ -9,7 +9,7 @@ const SIZES = [
   { name: "768", width: 768, height: 1024 },
   { name: "1280", width: 1280, height: 800 },
 ];
-const BASE = "http://localhost:3000";
+const BASE = "http://localhost:3100";
 const PAGE = process.env.SHOT_PAGE ?? "/menu";
 
 const browser = await chromium.launch();
@@ -20,6 +20,7 @@ for (const size of SIZES) {
   page.on("pageerror", (e) => console.log("PAGEERROR", size.name, e.message));
 
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500);
   await page.fill('input[type="email"]', "owner@pizzaria-demo.com");
   await page.fill('input[type="password"]', "demo1234");
   await page.click('button[type="submit"]');
@@ -42,7 +43,7 @@ for (const size of SIZES) {
   await page.screenshot({ path: `${OUT}/c-conversa-${size.name}.png` });
 
   const expand = page.locator('button[aria-label="Expandir"]');
-  if (await expand.count()) {
+  if (await expand.count() && await expand.first().isVisible()) {
     await expand.first().click();
     await page.waitForTimeout(900);
     await page.screenshot({ path: `${OUT}/d-expandida-${size.name}.png` });
