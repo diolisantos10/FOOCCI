@@ -1,6 +1,58 @@
 # Pendências — o que está aberto
 
-> Última atualização: 03/08/2026.
+> Última atualização: 04/08/2026.
+
+## 📱 Cupons/endereços na Loja para quem DIGITA o telefone — depende de OTP (canais)
+
+Nota do topo marketplace (04/08): o drawer "Minha conta" da Loja mostra cupons
+e endereços reais via rotas gated por prova de posse do telefone (waToken) —
+quem chega pelo **link do WhatsApp** tem a experiência completa; quem só digita
+o telefone no WelcomeModal vê nota honesta ("aparecem quando você abre pelo
+link do WhatsApp"), porque telefone digitado não é prova (LGPD — seria expor
+cupons/endereços de terceiros). Destravar para todos = OTP por WhatsApp
+cunhando o mesmo token, domínio do `canais`. O drawer já está pronto para isso
+sem mudança.
+
+## ✅ Cobrança — os dois achados de 04/08 FECHADOS no mesmo dia (aguardando merge)
+
+1. **Variante no WhatsApp:** `WhatsAppCheckoutAdapter.validateAndPriceItems`
+   tinha o mesmo furo do finalize (cobrava variante pelo item base). Corrigido
+   com a mesma resolução: variante do banco, validada (pertence ao item,
+   disponível), `resolveVariantPrice`, falha fechada COM resposta ao cliente
+   (`replyText` pelo `blockedReply` — antes, falha de validação virava "pedido
+   anotado" falso sem pedido criado; fechado também para item indisponível).
+   9+3 testes novos em `tests/WhatsAppCheckoutAdapterVariantPrice.test.ts`.
+2. **Canal de exibição × cobrança no pickup:** DECIDIDO pelo CEO em 04/08 —
+   **cobra-se o que a tela mostrou** (registro em `docs/decisoes.md`). Aplicado
+   no finalize e no WhatsApp: pickup precifica e promociona como DELIVERY, o
+   canal que as duas superfícies exibem. E2E real provou (priceDineIn plantado
+   diferente → pickup cobrou o DELIVERY da tela). Taxa de entrega segue só para
+   delivery; cupom já era consistente entre preview e cobrança.
+
+## ✅ P1 · Finalize ignorava o preço da variante — CORRIGIDO em 04/08 (aguardando merge)
+
+Achado do `interface` no E2E do retrabalho da Loja, **confirmado pelo Diretor no
+código**: `/api/pedido/[slug]/finalize` recalcula o preço no servidor a partir do
+preço **base** do item (`channelPrice` + opções + extras) e só grava
+`variantName` — o preço da variante nunca entra na conta. Prova: Quatro Queijos
+Grande (R$ 64,90 na tela) → cliente viu R$ 190,70 na revisão, pedido gravado com
+R$ 166,70. **Pré-existente** — afeta o cardápio com IA (PedidoClient) desde
+antes, mesma rota, mesmo payload. Toda venda de variante mais cara que o base sai
+mais barata para o cliente e o restaurante não vê. Correção: resolver `variantId`
+→ `resolveVariantPrice` dentro do guard server-side do finalize (o guard
+anti-adulteração continua; ele só precisa conhecer variantes). Guardrail 6: a
+evidência acima é o caso concreto.
+
+**Corrigido em 04/08 pelo `operacao`, revisado pelo Diretor:** o guard resolve a
+variante no banco (`variantId` explícito no schema — antes o zod o descartava em
+silêncio — com fallback pela convenção do id de linha), falha fechado com 400
+para variante inválida/indisponível/de outro item, cobra `resolveVariantPrice`
+no canal do pedido e grava na comanda o nome da variante do banco. Regra
+promoção×variante: espelha os clientes (promoção nunca se aplica a linha de
+variante). Travado por 12 testes novos em
+`src/app/api/pedido/[slug]/finalize/route.test.ts` + E2E real na pizzaria-demo
+(64,90 cobrado como 64,90). De carona revelou os DOIS achados no topo desta
+fila (WhatsApp com o mesmo furo; canal de exibição × cobrança no pickup).
 
 ---
 
@@ -137,6 +189,17 @@ restaurante PRO). De carona: o QRCard cortava conteúdo em grid desde antes
 (breakpoint de viewport × largura de coluna) — corrigido; aprendizado promovido à
 vitrine do `interface`. Na branch `claude/foocci-director-onboarding-lhindy`,
 aguardando merge para a padrão.
+
+**Correção de rota do CEO, 04/08 — executada no mesmo dia:** a casca que saiu em
+03/08 ainda era um e-commerce genérico, não o que o CEO pediu. Palavras dele: *"é
+só você pegar o mesmo cardápio [da mesa], replicar, e colocar os itens à venda e o
+checkout"*. Refeito: o visual do `/qr` foi extraído para `src/components/menu/*` e
+as duas superfícies compõem os MESMOS componentes — igualdade por construção, não
+por disciplina. O `/qr` foi provado pixel-idêntico ao que era (baseline via stash
++ diff). Nome oficial do produto: **"Cardápio sem IA"** (cartão de QR renomeado;
+"Loja" não é nome de cliente). Decisão registrada em `docs/decisoes.md`. E2E real
+com variante + opções + extras confirmado no banco local — que revelou o P1 de
+preço de variante no topo desta fila.
 
 ## (original) 0º · CORREÇÃO DO CEO — a interface era OUTRA
 

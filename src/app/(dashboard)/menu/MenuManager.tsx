@@ -4024,10 +4024,10 @@ export function MenuManager({
             url={lojaUrl}
             slug={restaurantSlug}
             layout="stacked"
-            label="QR Code Loja"
-            subtitle="Pedido online — sem conversa"
-            downloadName={`loja-qr-${restaurantSlug}.png`}
-            tip="O cliente vê o catálogo, monta o carrinho e paga online, sem chat. Ideal para quem prefere pedir direto."
+            label="QR Code Cardápio sem IA"
+            subtitle="Pedido online — sem IA"
+            downloadName={`cardapio-sem-ia-qr-${restaurantSlug}.png`}
+            tip="O cliente vê o catálogo, monta o carrinho e paga online, sem IA. Ideal para quem prefere pedir direto."
           />
           <QRCard
             url={pedidoUrl}

@@ -1,130 +1,45 @@
-# Vitrine — operação
+# Vitrine — operacao
 
-> Curada pelo Diretor. Qualquer agente lê; **só o Diretor escreve**.
-
----
-
-## O importador de planilha: custo e preço são colunas SEPARADAS, e a ordem de detecção importa
-
-Até 02/08, `PRECO_PREFIXES` continha `"custo"` e `"cost"`. Uma planilha com coluna
-"custo" **sobrescrevia o preço de venda do cardápio inteiro** — perda irreversível,
-provocada pelo próprio lojista, sem erro nenhum aparecendo.
-
-**Como ficou:**
-
-- `CUSTO_PREFIXES` é testado **antes** de `PRECO_PREFIXES`. É deliberado:
-  `"valor de custo"` começa com `"valor"` e seria engolido pelo preço.
-- **O empate vai para o custo, sempre.** Custo lido como preço **destrói dado**;
-  preço lido como custo só deixa o CMV errado. Os dois erros não são simétricos —
-  escolha a direção recuperável.
-- Custo ilegível **não invalida a linha**. O cardápio precisa do preço para
-  funcionar.
-- Planilha só com custo acusa *"falta a coluna Preço"* em vez de destruir.
-
-**Gravar `cost` direto no importador é permitido** porque este caminho **só cria**
-item (nome repetido é pulado como duplicata): não há custo anterior para auditar
-nem reprice a disparar. Mudar custo de item **existente** continua obrigado a
-passar por `updateCostsWithReprice`.
-
-Travado por `src/app/api/menu/import/route.test.ts` — 5 testes com `.xlsx` reais.
-
-— promovido em 2026-08-02 pelo Diretor · origem: conserto do P0 registrado em
-`HANDOFF-cmv-precificacao.md`, verificado com a suíte inteira verde
+> Curta e curada. Só o Diretor escreve aqui. O agente propõe na oficina.
 
 ---
 
-## `MenuItem` não tem `restaurantId` — o escopo é pela categoria
+## O guard de preço do finalize é a única verdade de cobrança — e variante se precifica pela VARIANTE do banco
 
-O multi-tenant do item se faz por `category: { restaurantId }`.
+O `/api/pedido/[slug]/finalize` recalcula TODO preço no servidor a partir do
+banco (anti-adulteração) — o `price` do payload do cliente nunca é confiado.
+Três regras aprendidas quando o guard cobrava variante pelo preço do item base:
 
-**Toda query nova de item que esquecer isso vaza dado entre restaurantes — e passa
-no `tsc` sem reclamar uma linha.** É o tipo de erro que só aparece quando um
-lojista vê o prato de outro.
+1. **Linha de variante cobra `resolveVariantPrice(item, variante, canal)`**, com
+   a variante resolvida no banco (pertence ao item? disponível?) e falha fechada
+   em 400. Nunca o preço do item base, nunca o preço do payload.
+2. **Zod descarta campo desconhecido em silêncio.** O cliente já enviava
+   `variantId`; o schema não o declarava, então o servidor "não via" — um bug
+   invisível sem erro em lugar nenhum. Quando o servidor precisa de um dado que
+   o cliente envia, a ausência no schema É o bug.
+3. **Promoção não se aplica a linha de variante porque o CLIENTE não aplica.**
+   O servidor espelha o que foi mostrado na tela — não inventa regra de preço.
+   (Se um dia o produto quiser promoção em variante, muda-se nos dois lados.)
 
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.3 (commit `36a36597`)
+Todo caminho que recalcula preço precisa da mesma resolução — o
+`WhatsAppCheckoutAdapter` tinha o mesmo furo (registrado em pendências).
 
----
-
-## Ficha técnica completa TRAVA o custo manual — e isso é intencional
-
-Quando **todas** as linhas da ficha têm quantidade e **todos** os insumos têm
-custo, o `RecipeCostService` recalcula e **sobrescreve `MenuItem.cost`** (auditado
-como `RECIPE`), e a aba Preços desabilita o campo ("🧾 pela ficha").
-
-Voltar a editar na mão exige **quebrar a ficha** — remover uma quantidade ou uma
-linha. É comportamento desenhado, não bug.
-
-**Os três estados possíveis do custo de um produto:**
-
-| Estado | Como | Gera sugestão? |
-|---|---|---|
-| **Manual** | digitado na aba Preços · log `COST_EDIT` | sim |
-| **Pela ficha** | calculado · log `RECIPE` · trava o manual | sim |
-| **Nulo** | "Sem custo" | **nunca** |
-
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.6 e §6.4 (commit `36a36597`)
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08, bloco P1 do
+preço de variante (E2E real na pizzaria-demo, branch
+`claude/foocci-director-onboarding-lhindy`)
 
 ---
 
-## A trava segura o PREÇO, nunca o CUSTO
+## Canal de cobrança = canal de EXIBIÇÃO — e falha de checkout no WhatsApp sempre responde
 
-Num salto de +81% no insumo, **o custo do produto atualiza na hora** — o CMV real
-fica visível imediatamente. **Só o preço espera aprovação.**
+1. **Todo caminho de checkout precifica no canal que a TELA usou.** O `/pedido`
+   e a conversa de WhatsApp exibem tudo em DELIVERY; retirada cobra DELIVERY
+   (decisão do CEO 04/08: "cobra-se o que a tela mostrou"). Caminho novo de
+   checkout? Primeira pergunta: "que canal a superfície exibe?" — e cobre nele.
+2. **No checkout do WhatsApp, toda falha de validação carrega `replyText`.**
+   Falha sem `replyText` morria como "pedido anotado" falso — o cliente recebia
+   confirmação sem pedido criado. O `replyText` viaja pelo `blockedReply` e
+   escala para atendente com resposta honesta.
 
-Detalhes que é fácil errar:
-- `ON_TARGET` tem **tolerância de 2%** (`classifyPrice`) para não pipocar sugestão
-  por centavos
-- **"Aplicar sugeridos" em massa inclui só itens ABAIXO do ideal.** Item acima tem
-  botão individual — baixar preço em massa foi considerado perigoso demais
-
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §6.3 (commit `36a36597`)
-
----
-
-## A ordem do dispositivo importa — e passar por fora perde auditoria
-
-**custo muda → ficha recalcula → SÓ ENTÃO o reprice roda.** Uma chamada
-(`updateCostsWithReprice`) encadeia tudo.
-
-**Nunca escreva `menuItem.update({ cost })` direto** — perde auditoria e
-automação. Se criar um terceiro caminho de custo (por exemplo, o importador de
-planilha corrigido), passe por aquela função com o `costSource` certo.
-
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.9 e §6.6 (commit `36a36597`)
-
----
-
-## Dinheiro é `Decimal` do Prisma — a conversão é do chamador
-
-Todo o schema usa `Decimal`. A fronteira RSC/route converte para `number`
-**explicitamente, campo a campo**. O `PricingEngine` só aceita `number`.
-
-Conversão é responsabilidade de quem chama, não do motor.
-
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.8 (commit `36a36597`)
-
----
-
-## O parser de ingredientes divide por " e " e " com " — pode picar demais
-
-`IngredientParser` separa por vírgula, ponto-e-vírgula, quebra de linha, barra
-**e pelas conjunções "e" / "com"**.
-
-Consequência: *"Hot roll com geleia"* vira **dois insumos**. Para o piloto isso
-acertou; para nome composto com "com" no meio, pica demais.
-
-**Se um restaurante reclamar de insumo picado, o ajuste é na `CONJUNCTION_REGEX`.**
-
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §6.5 (commit `36a36597`)
-
----
-
-## Dois documentos na raiz mentem — são de abril
-
-`FICHA_TECNICA.md` e `HANDOFF_PARA_IA.md` citam **outro nome de repositório** e
-regras superadas. Use como contexto histórico, **nunca como verdade**.
-
-O mapa atualizado desta frente é o `HANDOFF-cmv-precificacao.md` mais
-`docs/cmv-precificacao-backlog.md`.
-
-— promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-cmv-precificacao.md` §5.2 (commit `36a36597`)
+— promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08, bloco cobrança
+2/2 (branch `claude/foocci-director-onboarding-lhindy`)

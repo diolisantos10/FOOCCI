@@ -69,6 +69,18 @@ function isPublicPath(pathname: string): boolean {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Canônica: www.foocci.com.br → foocci.com.br (308, preservando caminho e
+  // query). A apex é a URL registrada nos callbacks de Google/Meta/SumUp e em
+  // todo link gerado — o www é só porta de entrada. Inerte enquanto o DNS do
+  // www não existir; passa a valer no momento em que Railway + Hostinger
+  // registrarem o subdomínio (docs/dominio-www-diagnostico.md).
+  const host = req.headers.get("host") ?? "";
+  if (host.startsWith("www.")) {
+    const dest = req.nextUrl.clone();
+    dest.host = host.slice(4);
+    return NextResponse.redirect(dest, 308);
+  }
+
   // Always allow Next.js internals and static assets
   if (
     pathname.startsWith("/_next/") ||

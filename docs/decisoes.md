@@ -459,3 +459,56 @@ funil `handleCheckoutStarted`, teto `capForCardScope`). **Travado por teste:**
 `src/services/ai/tests/WaiterBrainV2.card-policy.test.ts` ("Regra CEO ①/②").
 O teto técnico de segurança da categoria subiu de 50 para 200 cards — é proteção
 contra catálogo patológico, não limite de produto.
+
+## O Cardápio sem IA é o cardápio da mesa que compra — e esse é o nome
+
+**Data:** 2026-08-04 · **Decidido por:** CEO ·
+**Registrado por:** Diretor do Foocci
+
+Correção de direção do CEO sobre o produto do plano básico, nas palavras dele:
+o cardápio sem IA *"era pra ser igual ao cardápio da mesa (…) A única diferença
+é que esse o cliente pode comprar, escolher produtos, e ter o checkout. É só
+pegar o mesmo cardápio, replicar, e colocar os itens à venda e o processo de
+checkout."*
+
+Três consequências, todas executadas em 04/08:
+
+1. **Igualdade por construção.** O visual do `/qr/[slug]` vive em
+   `src/components/menu/*` e as duas superfícies (mesa e Cardápio sem IA)
+   compõem os mesmos componentes. Divergir passou a ser impossível sem mexer no
+   módulo comum — não é mais uma questão de disciplina de quem edita.
+2. **A única diferença é a compra.** ProductModal em modo `commerce` (variantes
+   selecionáveis, opções, adicionais, observação, quantidade), barra de carrinho
+   integrada à nav de categorias, e o checkout provado de `/api/pedido/*`
+   intocado por baixo. Preço no canal DELIVERY; a mesa segue DINE_IN, vitrine.
+3. **O nome do produto é "Cardápio sem IA"** — não "Loja", não "Cardápio Loja".
+   É assim que o cartão de QR do painel o chama e é assim que ele será vendido
+   no plano básico. (`LojaClient`/`?modo=loja` sobrevivem como nomes internos de
+   código e parâmetro; o que o lojista lê usa o nome oficial.)
+
+**Contexto de corredor:** é a segunda correção de rota no mesmo produto em dois
+dias (03/08: "não é a tela do /pedido sem IA"; 04/08: "é a réplica exata da
+mesa"). O padrão a aprender: quando o CEO descreve uma superfície POR REFERÊNCIA
+a outra ("igual à da mesa"), a entrega é a referência replicada — não uma
+interpretação nova do mesmo requisito funcional.
+
+## Cobra-se o que a tela mostrou — retirada precifica pelo canal de exibição
+
+**Data:** 2026-08-04 · **Decidido por:** CEO (opção recomendada pelo Diretor) ·
+**Registrado por:** Diretor do Foocci
+
+Contexto: produtos podem ter dois preços (entrega × salão). As superfícies de
+pedido exibem tudo no canal DELIVERY, mas a cobrança de **retirada** usava a
+tabela DINE_IN — cliente podia ver um valor e pagar outro.
+
+**A regra:** quando o cliente pede por uma superfície online, vale **o preço que
+a tela mostrou**. Nunca surpresa de valor — a regra dos marketplaces.
+
+Aplicação (04/08, mesmo dia):
+- `/api/pedido/[slug]/finalize`: pickup precifica e promociona como DELIVERY
+  (canal que o `/pedido` exibe). Taxa de entrega continua só para delivery.
+- `WhatsAppCheckoutAdapter`: idem — a conversa exibe tudo em DELIVERY
+  (extensão da mesma decisão pelo Diretor, com a evidência no código).
+- Corolário para todo caminho novo de checkout: **canal de cobrança = canal de
+  exibição.** A pergunta a responder antes de precificar é "que canal a tela
+  usou?". Promovido à vitrine do `operacao`.

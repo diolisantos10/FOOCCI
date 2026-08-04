@@ -1,45 +1,62 @@
 "use client";
 
 /**
- * LojaClient — the entry-plan store: the QR menu's visual language, plus commerce.
+ * LojaClient — a loja do plano de entrada: o MESMO cardápio da mesa (/qr/[slug],
+ * QRMenuClient), com uma única diferença — o cliente pode comprar.
  *
- * Born from the CEO's correction of 03/08 (docs/OS-loja-qr-com-checkout.md): the
- * entry plan's store is the CLEAN CATALOG people know from the table QR — no chat
- * bubbles, no avatar, no composer, nothing conversational — gaining a cart bar and
- * the delivery/pickup checkout.
+ * Direção do CEO (04/08, manhã): o CORPO segue o módulo compartilhado
+ * src/components/menu/* (cards, categorias, ProductModal com `commerce`, nav
+ * fixa embaixo com a barra de carrinho no topSlot). O TOPO, por emenda do CEO à
+ * regra "igual por construção", é de aplicativo de marketplace (iFood/Rappi):
+ * - StoreHeader fixo: logomarca + nome + status à esquerda; Minha conta e
+ *   Sacola (badge de quantidade) à direita.
+ * - Faixa fina com as redes sociais (MenuSocialLinks, o mesmo markup do QR), a
+ *   saudação do cliente identificado ("Olá, {nome}" — abre Minha conta) + a
+ *   avaliação Google, e os banners/carrosséis compartilhados (MenuShowcase).
+ * - StoreAccountDrawer: identidade, Meus cupons e Meus endereços — rotas
+ *   read-only já existentes, gated por prova de posse do telefone (waToken).
  *
- * The machine underneath is NOT new: identify → cart → finalize are the exact
- * `/api/pedido/*` routes the no-AI funnel proved with a real confirmed order
- * (#O2VKA1). This component is a different shell over a proven engine — which is
- * why it holds no pricing or order logic of its own: the server routes decide.
+ * A máquina embaixo NÃO é nova: identify → finalize são as mesmas rotas
+ * /api/pedido/* provadas com pedido real (#O2VKA1); o payload do carrinho
+ * espelha o PedidoClient (baseItemId, selectedOptions, selectedExtras). O cupom
+ * escolhido no drawer vai como customerCouponId — o SERVIDOR revalida e
+ * recalcula o desconto no finalize. Preço no canal DELIVERY.
  *
- * White-label: the restaurant's brand color drives the accents, like the QR menu.
+ * White-label: a cor vem do restaurante via --brand-primary, como no QR.
  */
 
-import { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  CategoryDescriptionStrip,
+  CategoryNav,
+  CategorySections,
+  MenuShowcase,
+  MenuSocialLinks,
+  ProductModal,
+  WelcomeModal,
+  fmtPhone,
+  type CartLine,
+  type CustomerIdentity,
+  type MenuDisplayCategory,
+  type MenuDisplayItem,
+  type PromotionBannerData,
+} from "@/components/menu";
+import { buildInstagramUrl, buildTikTokUrl, buildWhatsAppUrl } from "@/lib/social";
+import { StoreHeader } from "./StoreHeader";
+import { StoreAccountDrawer } from "./StoreAccountDrawer";
+import {
+  LOCKED_WALLET,
+  fetchWallet,
+  type CustomerAddress,
+  type WalletCoupon,
+  type WalletState,
+} from "./lojaWallet";
 
-/* ── Types (subset of the pedido page's data, no chat fields) ─────────────── */
+/* ── Props ────────────────────────────────────────────────────────────────── */
 
-export interface LojaMenuItem {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  imageUrl: string | null;
-}
-
-export interface LojaCategory {
-  id: string;
-  name: string;
-  items: LojaMenuItem[];
-}
-
-interface CartLine {
-  id: string;        // menu item id — finalize's cartItemSchema `id`
-  name: string;
-  price: number;
-  qty: number;
-  notes?: string;
+interface KnownAddress {
+  street: string; number: string; neighborhood: string; complement: string;
+  cep?: string; city?: string; state?: string;
 }
 
 interface Props {
@@ -47,19 +64,32 @@ interface Props {
   restaurantName: string;
   logoUrl: string | null;
   brandPrimaryColor: string | null;
-  categories: LojaCategory[];
+  categories: MenuDisplayCategory[];
+  featured?: MenuDisplayItem[];
+  promotedItems?: MenuDisplayItem[];
+  promoBanner?: MenuDisplayItem | null;
+  promotionBanners?: PromotionBannerData[];
+  instagramUrl?: string | null;
+  tiktokUrl?: string | null;
+  restaurantPhone?: string | null;
+  googleReviewUrl?: string | null;
   deliveryEnabled: boolean;
   pickupEnabled: boolean;
   deliveryFee: number | null;
   knownCustomerPhone?: string | null;
   knownCustomerName?: string | null;
   knownCustomerId?: string | null;
+  /** Endereço padrão do cliente PROVADO (waToken) — pré-preenche a entrega. */
+  knownDefaultAddress?: KnownAddress | null;
+  /** waToken validado no servidor — destrava cupons/endereços (read-only). */
+  pedidoToken?: string | null;
   restaurantIsOpen?: boolean;
   closedMessage?: string | null;
 }
 
 type Step =
   | "browse"
+  | "cart"
   | "identify"
   | "method"
   | "address"
@@ -77,65 +107,219 @@ const EMPTY_ADDRESS: Address = {
   city: "", state: "", complement: "", referencePoint: "",
 };
 
+function savedToAddress(a: CustomerAddress): Address {
+  return {
+    cep: a.zipCode ?? "", street: a.street, number: a.number,
+    neighborhood: a.neighborhood, city: a.city ?? "", state: a.state ?? "",
+    complement: a.complement ?? "", referencePoint: "",
+  };
+}
+
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+/* sessionStorage compartilhado com o QR — a identidade atravessa as superfícies. */
+type StoredIdentity = { phone?: string; name?: string; customerId?: string; displayPhone?: string };
+
+function readStoredIdentity(slug: string): StoredIdentity | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(`foocci-customer-${slug}`);
+    if (raw) return JSON.parse(raw) as StoredIdentity;
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function LojaClient({
   slug, restaurantName, logoUrl, brandPrimaryColor, categories,
+  featured = [], promotedItems = [], promoBanner = null, promotionBanners = [],
+  instagramUrl = null, tiktokUrl = null, restaurantPhone = null, googleReviewUrl = null,
   deliveryEnabled, pickupEnabled, deliveryFee,
   knownCustomerPhone = null, knownCustomerName = null, knownCustomerId = null,
+  knownDefaultAddress = null, pedidoToken = null,
   restaurantIsOpen = true, closedMessage = null,
 }: Props) {
   const pc = brandPrimaryColor || "#f97316";
 
-  /* ── Catalog ── */
-  const nonEmpty = useMemo(() => categories.filter((c) => c.items.length > 0), [categories]);
-  const [activeCat, setActiveCat] = useState<string | null>(nonEmpty[0]?.id ?? null);
+  /* ── Catálogo / navegação (mesma mecânica do QRMenuClient) ── */
+  const [selectedItem, setSelectedItem] = useState<MenuDisplayItem | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? "");
+  const navRef = useRef<HTMLDivElement>(null);
 
-  /* ── Cart ── */
+  /* ── Identidade (WelcomeModal por telefone, como no QR) ──
+   * O estado inicial usa SÓ o que o servidor conhece (props). A identidade do
+   * sessionStorage entra num efeito de mount — ler storage no useState fazia o
+   * HTML do servidor divergir do cliente (hydration mismatch no avatar do topo). */
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [identifiedName, setIdentifiedName] = useState<string | null>(knownCustomerName);
+  const [identifiedPhone, setIdentifiedPhone] = useState<string | null>(
+    knownCustomerPhone ? fmtPhone(knownCustomerPhone) : null);
+
+  /* ── Carrinho ── */
   const [cart, setCart] = useState<CartLine[]>([]);
   const cartCount = cart.reduce((s, l) => s + l.qty, 0);
   const cartTotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
 
-  /* ── Product modal ── */
-  const [modalItem, setModalItem] = useState<LojaMenuItem | null>(null);
-  const [modalQty, setModalQty] = useState(1);
-  const [modalNotes, setModalNotes] = useState("");
-
-  /* ── Checkout state ── */
+  /* ── Checkout (máquina preservada — mesmas rotas /api/pedido/*) ── */
   const [step, setStep] = useState<Step>("browse");
   const [phone, setPhone] = useState(knownCustomerPhone ?? "");
   const [custName, setCustName] = useState(knownCustomerName ?? "");
   const [custId, setCustId] = useState<string | null>(knownCustomerId);
+
+  /* Identidade guardada na sessão (compartilhada com o QR) — só no cliente. */
+  useEffect(() => {
+    const stored = readStoredIdentity(slug);
+    if (!stored) return;
+    setIdentifiedName((v) => v ?? stored.name ?? null);
+    setIdentifiedPhone((v) =>
+      v ?? stored.displayPhone ?? (stored.phone ? fmtPhone(stored.phone) : null));
+    setPhone((v) => v || (stored.phone ?? ""));
+    setCustName((v) => v || (stored.name ?? ""));
+    setCustId((v) => v ?? stored.customerId ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
   const [needName, setNeedName] = useState(false);
   const [method, setMethod] = useState<"delivery" | "pickup" | null>(null);
-  const [address, setAddress] = useState<Address>(EMPTY_ADDRESS);
+  const [address, setAddress] = useState<Address>(() =>
+    knownDefaultAddress
+      ? {
+          ...EMPTY_ADDRESS,
+          street: knownDefaultAddress.street, number: knownDefaultAddress.number,
+          neighborhood: knownDefaultAddress.neighborhood, complement: knownDefaultAddress.complement,
+          cep: knownDefaultAddress.cep ?? "", city: knownDefaultAddress.city ?? "",
+          state: knownDefaultAddress.state ?? "",
+        }
+      : EMPTY_ADDRESS);
   const [paySub, setPaySub] = useState<"cash" | "card_machine" | "pix_in_person" | null>(null);
   const [changeFor, setChangeFor] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<{ orderId: string } | null>(null);
 
-  function openItem(item: LojaMenuItem) {
-    setModalItem(item);
-    setModalQty(1);
-    setModalNotes("");
+  /* ── Minha conta: carteira (cupons + endereços) — rotas gated por waToken ── */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(() => pedidoToken ?? null);
+  useEffect(() => {
+    // SSR não resolveu o token mas ele pode estar na URL (link do WhatsApp).
+    if (authToken || typeof window === "undefined") return;
+    const t = new URLSearchParams(window.location.search).get("waToken");
+    if (t) setAuthToken(t);
+  }, [authToken]);
+
+  const [wallet, setWallet] = useState<WalletState>(LOCKED_WALLET);
+  const [appliedCoupon, setAppliedCoupon] = useState<WalletCoupon | null>(null);
+  const [usedAddressId, setUsedAddressId] = useState<string | null>(null);
+
+  const loadWallet = useCallback(async () => {
+    if (!authToken) { setWallet(LOCKED_WALLET); return; }
+    setWallet((w) => ({ ...w, status: "loading" }));
+    try {
+      const { coupons, addresses } = await fetchWallet(slug, authToken);
+      setWallet({ status: "ready", coupons, addresses });
+    } catch {
+      setWallet({ status: "error", coupons: [], addresses: [] });
+    }
+  }, [slug, authToken]);
+
+  useEffect(() => { void loadWallet(); }, [loadWallet]);
+
+  /* Pré-preenche a entrega com o endereço padrão salvo (uma vez, ao carregar). */
+  const walletPrefillDone = useRef(false);
+  useEffect(() => {
+    if (wallet.status !== "ready" || walletPrefillDone.current) return;
+    walletPrefillDone.current = true;
+    const def = wallet.addresses.find((a) => a.isDefault) ?? wallet.addresses[0];
+    if (!def) return;
+    const empty = !address.street.trim();
+    const same  = address.street === def.street && address.number === def.number;
+    if (empty) setAddress(savedToAddress(def));
+    if (empty || same) setUsedAddressId(def.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet.status]);
+
+  /* Welcome uma vez por sessão — pulado se já identificado (URL ou sessão). */
+  useEffect(() => {
+    const seen = sessionStorage.getItem(`qr-welcome-seen-${slug}`);
+    const identified = !!sessionStorage.getItem(`foocci-customer-${slug}`);
+    if (!seen && !identified && !knownCustomerPhone) setShowWelcome(true);
+  }, [slug, knownCustomerPhone]);
+
+  function handleWelcomeClose(identity: CustomerIdentity | null) {
+    if (identity?.name) {
+      setIdentifiedName(identity.name);
+      setIdentifiedPhone(identity.displayPhone);
+      // Pré-preenche o checkout: com nome+telefone+cliente, a etapa identify é pulada.
+      if (identity.phone) setPhone(identity.phone);
+      setCustName(identity.name);
+      if (identity.customerId) setCustId(identity.customerId);
+    }
+    setShowWelcome(false);
+    sessionStorage.setItem(`qr-welcome-seen-${slug}`, "1");
   }
 
-  function addToCart() {
-    if (!modalItem) return;
-    const notes = modalNotes.trim() || undefined;
+  function handleResetIdentity() {
+    try { sessionStorage.removeItem(`foocci-customer-${slug}`); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(`qr-welcome-seen-${slug}`);  } catch { /* ignore */ }
+    setIdentifiedName(null);
+    setIdentifiedPhone(null);
+    setPhone("");
+    setCustName("");
+    setCustId(null);
+    // Trocar de pessoa invalida a carteira anterior — cupom e endereço saem juntos.
+    setAuthToken(null);
+    setWallet(LOCKED_WALLET);
+    setAppliedCoupon(null);
+    setUsedAddressId(null);
+    setAccountOpen(false);
+    setShowWelcome(true);
+  }
+
+  /* IntersectionObserver: categoria ativa acompanha o scroll (igual ao QR). */
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const observers: IntersectionObserver[] = [];
+    categories.forEach((cat) => {
+      const el = document.getElementById(`cat-${cat.id}`);
+      if (!el) return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) setActiveCategory(cat.id);
+        },
+        { rootMargin: "-20% 0px -70% 0px", threshold: 0 }
+      );
+      obs.observe(el);
+      observers.push(obs);
+    });
+    return () => observers.forEach((o) => o.disconnect());
+  }, [categories]);
+
+  useEffect(() => {
+    if (!navRef.current || !activeCategory) return;
+    const chip = navRef.current.querySelector(
+      `[data-cat="${activeCategory}"]`
+    ) as HTMLElement | null;
+    chip?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [activeCategory]);
+
+  function scrollToCategory(catId: string) {
+    const el = document.getElementById(`cat-${catId}`);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 8;
+    window.scrollTo({ top, behavior: "smooth" });
+  }
+
+  /* ── Carrinho: merge por id de linha (convenção do PedidoClient) ── */
+  function addLine(line: CartLine) {
     setCart((prev) => {
-      // Same item + same notes merges into one line; different notes stay separate.
-      const ix = prev.findIndex((l) => l.id === modalItem.id && l.notes === notes);
+      const ix = prev.findIndex((l) => l.id === line.id);
       if (ix >= 0) {
         const next = [...prev];
-        next[ix] = { ...next[ix]!, qty: next[ix]!.qty + modalQty };
+        next[ix] = { ...next[ix]!, qty: next[ix]!.qty + line.qty };
         return next;
       }
-      return [...prev, { id: modalItem.id, name: modalItem.name, price: modalItem.price, qty: modalQty, notes }];
+      return [...prev, line];
     });
-    setModalItem(null);
+    setSelectedItem(null);
   }
 
   function changeQty(index: number, delta: number) {
@@ -150,7 +334,29 @@ export function LojaClient({
     });
   }
 
-  /* ── Checkout actions ── */
+  function openCheckout() {
+    setError(null);
+    setStep(custId && custName.trim() ? "method" : "identify");
+  }
+
+  /* Ícone da sacola no topo — abre a revisão da sacola (padrão iFood: o ícone
+     mostra a sacola; a barra de baixo segue direto pro fechamento). */
+  function openCartSheet() {
+    setError(null);
+    if (order) { setOrder(null); setMethod(null); setPaySub(null); }
+    setStep("cart");
+  }
+
+  function applyCoupon(c: WalletCoupon) {
+    setAppliedCoupon(c);
+  }
+
+  function useAddress(a: CustomerAddress) {
+    setAddress(savedToAddress(a));
+    setUsedAddressId(a.id);
+  }
+
+  /* ── Ações do checkout (máquina intocada) ── */
 
   async function submitIdentify() {
     setBusy(true);
@@ -168,6 +374,8 @@ export function LojaClient({
         const resolvedName = json.name ?? custName.trim();
         if (resolvedName) {
           setCustName(resolvedName);
+          setIdentifiedName(resolvedName);
+          setIdentifiedPhone(fmtPhone(phone));
           setStep("method");
         } else {
           // Cadastro existe mas sem nome legível — pede o nome; o reenvio corrige o cadastro.
@@ -177,6 +385,8 @@ export function LojaClient({
       } else if (json.customerId) {
         // New customer created with the provided name.
         setCustId(json.customerId);
+        setIdentifiedName(custName.trim() || null);
+        setIdentifiedPhone(fmtPhone(phone));
         setStep("method");
       } else {
         // Phone ok but we still need a name for the order.
@@ -213,24 +423,31 @@ export function LojaClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cart: cart.map((l) => ({ id: l.id, name: l.name, price: l.price, qty: l.qty, ...(l.notes ? { notes: l.notes } : {}) })),
+          // Linhas no formato do PedidoClient: id, baseItemId, name, price, qty,
+          // notes, variantName, selectedOptions, selectedExtras (cartItemSchema).
+          cart,
           customerName: custName.trim() || "Cliente",
           deliveryMethod: method,
           address: method === "delivery" ? address : EMPTY_ADDRESS,
           paymentMode: method === "delivery" ? "pay_on_delivery" : "pay_on_pickup",
           paymentMethodSub: paySub,
-          ...(paySub === "cash" && Number(changeFor.replace(/\D/g, "")) > cartTotal
+          ...(paySub === "cash" && Number(changeFor.replace(/\D/g, "")) > grandTotal
             ? { changeFor: Number(changeFor.replace(/\D/g, "")) }
             : {}),
           ...(phone ? { customerPhone: phone } : {}),
           ...(custId ? { customerId: custId } : {}),
           ...(method === "delivery" && deliveryFee != null ? { clientDeliveryFee: deliveryFee } : {}),
+          // Cupom da carteira: o servidor revalida (findRedeemable) e recalcula
+          // o desconto — o valor exibido aqui nunca é a autoridade.
+          ...(appliedCoupon && custId ? { customerCouponId: appliedCoupon.id } : {}),
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.orderId) throw new Error(json?.error ?? "Não consegui confirmar o pedido. Tente de novo.");
       setOrder({ orderId: json.orderId });
       setCart([]);
+      setAppliedCoupon(null);
+      if (authToken) void loadWallet(); // cupom consumido sai da carteira
       setStep("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não consegui confirmar o pedido. Tente de novo.");
@@ -241,158 +458,251 @@ export function LojaClient({
 
   const fee = method === "delivery" && deliveryFee != null ? deliveryFee : 0;
 
-  /* ── Empty state: menu without items ── */
-  if (nonEmpty.length === 0) {
-    return (
-      <Shell name={restaurantName} logoUrl={logoUrl} pc={pc}>
-        <div className="mx-auto max-w-md px-5 py-16 text-center">
-          <p className="text-lg font-semibold text-gray-800">Cardápio em preparação</p>
-          <p className="mt-2 text-sm text-gray-500">
-            O {restaurantName} ainda está montando o cardápio. Volte em breve!
-          </p>
-        </div>
-      </Shell>
-    );
-  }
+  /* Desconto de exibição — espelha a regra do PedidoClient.applyWalletCoupon;
+     a autoridade é o recálculo do finalize no servidor. */
+  const discount = (() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.isReward || appliedCoupon.discountType === "CUSTOM") return 0;
+    if (appliedCoupon.discountType === "FREE_SHIPPING") {
+      return method === "delivery" ? Math.round(fee * 100) / 100 : 0;
+    }
+    if (appliedCoupon.discountType === "PERCENTAGE") {
+      return Math.round(Math.min((cartTotal * appliedCoupon.discountValue) / 100, cartTotal) * 100) / 100;
+    }
+    return Math.round(Math.min(appliedCoupon.discountValue, cartTotal + fee) * 100) / 100;
+  })();
+  const grandTotal = Math.max(0, cartTotal + fee - discount);
+
+  const couponCount = wallet.status === "ready" ? wallet.coupons.length : 0;
+
+  /* ── Barra de carrinho — vive DENTRO do contêiner fixo da nav, acima dos chips ── */
+  const showCartBar = cartCount > 0 && step === "browse" && !order;
+  const showNav = categories.length > 1;
+  const cartBar = showCartBar ? (
+    <div className={`mx-auto max-w-2xl px-4 pt-3${showNav ? "" : " pb-3"}`}>
+      <button
+        type="button"
+        onClick={openCheckout}
+        className="flex w-full items-center justify-between rounded-2xl px-5 py-3.5 text-white shadow-lg hover:opacity-90 active:scale-[0.99] transition-all"
+        style={{ backgroundColor: "var(--brand-primary)" }}
+      >
+        <span className="flex items-center gap-2 text-sm font-bold">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/25 text-xs font-bold">{cartCount}</span>
+          Finalizar pedido
+        </span>
+        <span className="text-sm font-bold">{fmt(cartTotal)}</span>
+      </button>
+    </div>
+  ) : null;
+
+  /* Padding inferior: libera a nav fixa + barra de carrinho (como o pb-24 do QR). */
+  const bottomPad = showNav && showCartBar ? "pb-40" : (showNav || showCartBar) ? "pb-24" : "";
+
+  /* Topo: faixa de sociais/avaliação + vitrine (banners e carrosséis do QR). */
+  const hasSocialStrip = Boolean(
+    buildInstagramUrl(instagramUrl) || buildTikTokUrl(tiktokUrl) ||
+    buildWhatsAppUrl(restaurantPhone) || googleReviewUrl
+  );
+  const hasShowcase =
+    promotionBanners.length > 0 || Boolean(promoBanner) ||
+    promotedItems.length > 0 || featured.length > 0;
 
   return (
-    <Shell name={restaurantName} logoUrl={logoUrl} pc={pc}>
-      {/* Fechado agora */}
-      {!restaurantIsOpen && (
-        <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {closedMessage ?? "Estamos fechados no momento — mas você já pode montar o pedido."}
-        </div>
+    <div style={{ '--brand-primary': pc } as React.CSSProperties}>
+      {showWelcome && (
+        <WelcomeModal slug={slug} onClose={handleWelcomeClose} />
       )}
 
-      {/* Category chips */}
-      <nav className="sticky top-0 z-20 bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {nonEmpty.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => {
-                setActiveCat(c.id);
-                document.getElementById(`cat-${c.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className="shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors"
-              style={activeCat === c.id
-                ? { backgroundColor: pc, color: "#fff" }
-                : { backgroundColor: "#f3f4f6", color: "#374151" }}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      </nav>
+      {selectedItem && (
+        <ProductModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          commerce={{ onAdd: addLine }}
+        />
+      )}
 
-      {/* Catálogo */}
-      <main className="mx-auto max-w-2xl px-4 pb-36 pt-2">
-        {nonEmpty.map((c) => (
-          <section key={c.id} id={`cat-${c.id}`} className="scroll-mt-16 pt-4">
-            <h2 className="text-lg font-bold text-gray-900">{c.name}</h2>
-            <div className="mt-2 space-y-3">
-              {c.items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => openItem(item)}
-                  className="flex w-full items-stretch gap-3 rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-sm transition-shadow hover:shadow"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900">{item.name}</p>
-                    {item.description ? (
-                      <p className="mt-0.5 line-clamp-2 text-sm text-gray-500">{item.description}</p>
-                    ) : null}
-                    <p className="mt-1.5 text-sm font-bold" style={{ color: pc }}>{fmt(item.price)}</p>
-                  </div>
-                  {item.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.imageUrl} alt={item.name} className="h-20 w-20 shrink-0 rounded-xl object-cover" />
-                  ) : (
-                    <span
-                      aria-hidden
-                      className="flex h-20 w-20 shrink-0 items-center justify-center self-center rounded-xl text-2xl"
-                      style={{ backgroundColor: `${pc}14` }}
-                    >
-                      🍽️
+      {accountOpen && (
+        <StoreAccountDrawer
+          identifiedName={identifiedName}
+          identifiedPhone={identifiedPhone}
+          wallet={wallet}
+          appliedCouponId={appliedCoupon?.id ?? null}
+          usedAddressId={usedAddressId}
+          onClose={() => setAccountOpen(false)}
+          onIdentify={() => { setAccountOpen(false); setShowWelcome(true); }}
+          onResetIdentity={handleResetIdentity}
+          onRetry={() => void loadWallet()}
+          onApplyCoupon={applyCoupon}
+          onRemoveCoupon={() => setAppliedCoupon(null)}
+          onUseAddress={useAddress}
+        />
+      )}
+
+      <div className={`min-h-screen bg-[#fafaf9] ${bottomPad}`}>
+
+        {/* ── TOPO DE APP (barra fixa estilo marketplace) ── */}
+        <StoreHeader
+          restaurantName={restaurantName}
+          logoUrl={logoUrl}
+          isOpen={restaurantIsOpen}
+          deliveryEnabled={deliveryEnabled}
+          pickupEnabled={pickupEnabled}
+          cartCount={cartCount}
+          couponCount={couponCount}
+          identifiedName={identifiedName}
+          onOpenAccount={() => setAccountOpen(true)}
+          onOpenCart={openCartSheet}
+        />
+
+        {/* ── Faixa social + vitrine (banners/carrosséis compartilhados do QR) ── */}
+        {(hasSocialStrip || hasShowcase) && (
+          <div className="border-b border-gray-100 bg-white">
+            {hasSocialStrip && (
+              <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3">
+                <MenuSocialLinks
+                  instagramUrl={instagramUrl}
+                  tiktokUrl={tiktokUrl}
+                  restaurantPhone={restaurantPhone}
+                  className="flex shrink-0 items-center gap-2.5"
+                />
+                {/* O espaço à direita dos ícones é da identidade (pedido do CEO,
+                    04/08): identificado → "Olá, {nome}", como a faixa do cardápio
+                    da mesa; o toque abre Minha conta. Sem identificação → convite
+                    discreto que abre o WelcomeModal (padrão marketplace: o iFood
+                    mantém o "Entrar" no topo quando deslogado). O chip trunca com
+                    ellipsis para conviver com o "Avaliar" a 375px. */}
+                {identifiedName ? (
+                  <button
+                    type="button"
+                    onClick={() => setAccountOpen(true)}
+                    aria-label={`Minha conta — ${identifiedName}`}
+                    className="ml-auto min-w-0 rounded-full border px-3 py-2 text-xs font-semibold transition active:scale-95"
+                    style={{ backgroundColor: `${pc}14`, borderColor: `${pc}26`, color: pc }}
+                  >
+                    <span className="block truncate">
+                      Olá, {identifiedName.trim().split(/\s+/)[0]}
                     </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
-      </main>
-
-      {/* Barra de carrinho fixa */}
-      {cartCount > 0 && step === "browse" && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <button
-            type="button"
-            onClick={() => setStep(custId || knownCustomerPhone ? "method" : "identify")}
-            className="mx-auto flex w-full max-w-2xl items-center justify-between rounded-2xl px-5 py-3.5 text-white shadow-lg"
-            style={{ backgroundColor: pc }}
-          >
-            <span className="flex items-center gap-2 font-semibold">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/25 text-sm">{cartCount}</span>
-              Finalizar pedido
-            </span>
-            <span className="font-bold">{fmt(cartTotal)}</span>
-          </button>
-        </div>
-      )}
-
-      {/* ── Modal do produto ── */}
-      {modalItem && (
-        <Sheet onClose={() => setModalItem(null)}>
-          {modalItem.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={modalItem.imageUrl} alt={modalItem.name} className="h-44 w-full rounded-2xl object-cover" />
-          ) : null}
-          <h3 className="mt-3 text-xl font-bold text-gray-900">{modalItem.name}</h3>
-          {modalItem.description ? <p className="mt-1 text-sm text-gray-500">{modalItem.description}</p> : null}
-          <p className="mt-2 text-lg font-bold" style={{ color: pc }}>{fmt(modalItem.price)}</p>
-
-          <label className="mt-4 block text-sm font-semibold text-gray-700" htmlFor="obs">
-            Alguma observação?
-          </label>
-          <textarea
-            id="obs"
-            value={modalNotes}
-            onChange={(e) => setModalNotes(e.target.value)}
-            placeholder="Ex.: sem cebola, ponto da carne…"
-            maxLength={300}
-            rows={2}
-            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
-          />
-
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex items-center rounded-xl border border-gray-200">
-              <button type="button" aria-label="menos um" onClick={() => setModalQty((q) => Math.max(1, q - 1))} className="px-4 py-2.5 text-lg font-bold text-gray-600">−</button>
-              <span className="w-8 text-center font-semibold">{modalQty}</span>
-              <button type="button" aria-label="mais um" onClick={() => setModalQty((q) => q + 1)} className="px-4 py-2.5 text-lg font-bold text-gray-600">+</button>
-            </div>
-            <button
-              type="button"
-              onClick={addToCart}
-              className="flex-1 rounded-xl px-4 py-3 font-semibold text-white"
-              style={{ backgroundColor: pc }}
-            >
-              Adicionar · {fmt(modalItem.price * modalQty)}
-            </button>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowWelcome(true)}
+                    aria-label="Identificar meu WhatsApp"
+                    className="ml-auto min-w-0 rounded-full bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-200 active:scale-95"
+                  >
+                    <span className="block truncate">Identificar-se</span>
+                  </button>
+                )}
+                {googleReviewUrl && (
+                  <a
+                    href={googleReviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Avaliar restaurante no Google"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-yellow-300 bg-yellow-50 px-3.5 py-2 text-xs font-semibold text-yellow-800 shadow-sm transition hover:bg-yellow-100 active:scale-95"
+                  >
+                    <span aria-hidden="true">⭐</span>
+                    Avaliar
+                  </a>
+                )}
+              </div>
+            )}
+            {hasShowcase && (
+              <div className={hasSocialStrip ? "" : "pt-4"}>
+                <MenuShowcase
+                  promotionBanners={promotionBanners}
+                  promoBanner={promoBanner}
+                  promotedItems={promotedItems}
+                  featured={featured}
+                  onSelectItem={setSelectedItem}
+                />
+              </div>
+            )}
           </div>
-        </Sheet>
-      )}
+        )}
 
-      {/* ── Checkout em folhas ── */}
+        {/* Fechado agora — a Loja aceita montar o pedido, o envio é barrado no finalize */}
+        {!restaurantIsOpen && (
+          <div className="mx-auto max-w-2xl px-4 pt-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {closedMessage ?? "Estamos fechados no momento — mas você já pode montar o pedido."}
+            </div>
+          </div>
+        )}
+
+        {/* ── NAV DE CATEGORIAS FIXA EMBAIXO + barra de carrinho ── */}
+        {(showNav || showCartBar) && (
+          <CategoryNav
+            navRef={navRef}
+            categories={showNav ? categories : []}
+            activeCategory={activeCategory}
+            onSelect={scrollToCategory}
+            topSlot={cartBar}
+          />
+        )}
+
+        {/* ── FAIXA DE DESCRIÇÃO DA CATEGORIA ── */}
+        <CategoryDescriptionStrip categories={categories} activeCategory={activeCategory} />
+
+        {/* ── SEÇÕES DE PRODUTOS ── */}
+        <CategorySections categories={categories} onSelectItem={setSelectedItem} />
+
+        <footer className="py-8 text-center text-xs text-gray-400">
+          Cardápio gerado por Foocci
+        </footer>
+      </div>
+
+      {/* ── Sacola + checkout em folhas (máquina preservada, visual do QR) ── */}
       {step !== "browse" && step !== "done" && (
         <Sheet onClose={busy ? undefined : () => { setStep("browse"); setError(null); }}>
-          {/* Resumo curto do carrinho no topo de todas as etapas */}
-          <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5 text-sm">
-            <span className="text-gray-600">{cartCount} {cartCount === 1 ? "item" : "itens"}</span>
-            <span className="font-bold text-gray-900">{fmt(cartTotal + fee)}</span>
-          </div>
+          {/* Resumo curto do carrinho no topo das etapas de checkout (a sacola já lista tudo) */}
+          {step !== "cart" && (
+            <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5 text-sm">
+              <span className="text-gray-600">{cartCount} {cartCount === 1 ? "item" : "itens"}</span>
+              <span className="font-bold text-gray-900">{fmt(grandTotal)}</span>
+            </div>
+          )}
+
+          {step === "cart" && (
+            cart.length === 0 ? (
+              <div className="py-6 text-center">
+                <span aria-hidden="true" className="text-4xl">🛍️</span>
+                <h3 className="mt-2 text-lg font-bold text-gray-900">Sua sacola está vazia</h3>
+                <p className="mt-1 text-sm text-gray-500">Toque em um produto do cardápio para adicionar.</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("browse")}
+                  className="mt-4 w-full rounded-2xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  Ver cardápio
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold text-gray-900">Sua sacola</h3>
+                <CartLineList cart={cart} onChangeQty={changeQty} />
+                <div className="mt-2 space-y-1 border-t border-gray-100 pt-3 text-sm">
+                  <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{fmt(cartTotal)}</span></div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between" style={{ color: "var(--brand-primary)" }}>
+                      <span>Cupom · {appliedCoupon.label}</span>
+                      <span>{appliedCoupon.isReward ? "no pedido" : "no fechamento"}</span>
+                    </div>
+                  )}
+                </div>
+                <PrimaryBtn disabled={busy} onClick={openCheckout}>
+                  Continuar · {fmt(cartTotal)}
+                </PrimaryBtn>
+                <button
+                  type="button"
+                  onClick={() => setStep("browse")}
+                  className="mt-2 w-full py-2 text-center text-xs font-semibold text-gray-400 transition-colors hover:text-gray-600"
+                >
+                  Escolher mais itens
+                </button>
+              </>
+            )
+          )}
 
           {step === "identify" && (
             <>
@@ -404,17 +714,19 @@ export function LojaClient({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="(11) 99999-9999"
-                className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:border-gray-400"
+                style={{ fontSize: "16px" }}
+                className={`mt-3 ${inputCls}`}
               />
               {needName && (
                 <input
                   value={custName}
                   onChange={(e) => setCustName(e.target.value)}
                   placeholder="Seu nome"
-                  className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:border-gray-400"
+                  style={{ fontSize: "16px" }}
+                  className={`mt-3 ${inputCls}`}
                 />
               )}
-              <PrimaryBtn pc={pc} disabled={busy || phone.replace(/\D/g, "").length < 10 || (needName && custName.trim().length < 2)} onClick={submitIdentify}>
+              <PrimaryBtn disabled={busy || phone.replace(/\D/g, "").length < 10 || (needName && custName.trim().length < 2)} onClick={submitIdentify}>
                 {busy ? "Verificando…" : "Continuar"}
               </PrimaryBtn>
             </>
@@ -437,13 +749,16 @@ export function LojaClient({
           {step === "address" && (
             <>
               <h3 className="text-lg font-bold text-gray-900">Endereço de entrega</h3>
+              {usedAddressId && address.street.trim() && (
+                <p className="mt-1 text-xs text-gray-500">Usando seu endereço salvo — é só conferir.</p>
+              )}
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <input value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} placeholder="Rua" className="col-span-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-                <input value={address.number} onChange={(e) => setAddress({ ...address, number: e.target.value })} placeholder="Número" className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-                <input value={address.neighborhood} onChange={(e) => setAddress({ ...address, neighborhood: e.target.value })} placeholder="Bairro" className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-                <input value={address.complement} onChange={(e) => setAddress({ ...address, complement: e.target.value })} placeholder="Complemento (opcional)" className="col-span-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+                <input value={address.street} onChange={(e) => { setAddress({ ...address, street: e.target.value }); setUsedAddressId(null); }} placeholder="Rua" className={`col-span-2 ${inputSmCls}`} />
+                <input value={address.number} onChange={(e) => { setAddress({ ...address, number: e.target.value }); setUsedAddressId(null); }} placeholder="Número" className={inputSmCls} />
+                <input value={address.neighborhood} onChange={(e) => { setAddress({ ...address, neighborhood: e.target.value }); setUsedAddressId(null); }} placeholder="Bairro" className={inputSmCls} />
+                <input value={address.complement} onChange={(e) => setAddress({ ...address, complement: e.target.value })} placeholder="Complemento (opcional)" className={`col-span-2 ${inputSmCls}`} />
               </div>
-              <PrimaryBtn pc={pc} disabled={busy} onClick={submitAddress}>Continuar</PrimaryBtn>
+              <PrimaryBtn disabled={busy} onClick={submitAddress}>Continuar</PrimaryBtn>
             </>
           )}
 
@@ -462,44 +777,43 @@ export function LojaClient({
                   inputMode="numeric"
                   value={changeFor}
                   onChange={(e) => setChangeFor(e.target.value)}
-                  placeholder={`Troco para quanto? (pedido: ${fmt(cartTotal + fee)})`}
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400"
+                  placeholder={`Troco para quanto? (pedido: ${fmt(grandTotal)})`}
+                  className={`mt-2 ${inputSmCls}`}
                 />
               )}
-              <PrimaryBtn pc={pc} disabled={!paySub || busy} onClick={() => setStep("review")}>Revisar pedido</PrimaryBtn>
+              <PrimaryBtn disabled={!paySub || busy} onClick={() => setStep("review")}>Revisar pedido</PrimaryBtn>
             </>
           )}
 
           {step === "review" && (
             <>
               <h3 className="text-lg font-bold text-gray-900">Confira seu pedido</h3>
-              <ul className="mt-3 divide-y divide-gray-100">
-                {cart.map((l, i) => (
-                  <li key={`${l.id}-${i}`} className="flex items-center justify-between py-2.5">
-                    <div className="min-w-0 flex-1 pr-3">
-                      <p className="text-sm font-semibold text-gray-900">{l.name}</p>
-                      {l.notes ? <p className="text-xs text-gray-500">{l.notes}</p> : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" aria-label={`tirar um ${l.name}`} onClick={() => changeQty(i, -1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">−</button>
-                      <span className="w-5 text-center text-sm font-semibold">{l.qty}</span>
-                      <button type="button" aria-label={`mais um ${l.name}`} onClick={() => changeQty(i, +1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">+</button>
-                      <span className="w-20 text-right text-sm font-semibold text-gray-900">{fmt(l.price * l.qty)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <CartLineList cart={cart} onChangeQty={changeQty} />
               <div className="mt-2 space-y-1 border-t border-gray-100 pt-3 text-sm">
                 {method === "delivery" && (
                   <div className="flex justify-between text-gray-600"><span>Entrega</span><span>{deliveryFee != null ? fmt(fee) : "a combinar"}</span></div>
                 )}
-                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total</span><span>{fmt(cartTotal + fee)}</span></div>
+                {appliedCoupon && (
+                  <div className="flex justify-between" style={{ color: "var(--brand-primary)" }}>
+                    <span>Cupom · {appliedCoupon.label}</span>
+                    <span>
+                      {discount > 0
+                        ? `−${fmt(discount)}`
+                        : appliedCoupon.isReward
+                        ? "no pedido"
+                        : appliedCoupon.discountType === "FREE_SHIPPING" && method === "pickup"
+                        ? "vale na entrega — fica guardado"
+                        : "—"}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold text-gray-900"><span>Total</span><span>{fmt(grandTotal)}</span></div>
               </div>
               {cart.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">Seu carrinho ficou vazio — volte ao cardápio para escolher.</p>
               ) : (
-                <PrimaryBtn pc={pc} disabled={busy} onClick={submitOrder}>
-                  {busy ? "Enviando…" : `Confirmar pedido · ${fmt(cartTotal + fee)}`}
+                <PrimaryBtn disabled={busy} onClick={submitOrder}>
+                  {busy ? "Enviando…" : `Confirmar pedido · ${fmt(grandTotal)}`}
                 </PrimaryBtn>
               )}
             </>
@@ -519,48 +833,54 @@ export function LojaClient({
               {custName ? `${custName}, o` : "O"} {restaurantName} já recebeu seu pedido
               {method === "delivery" ? " e vai preparar para a entrega." : " — retire no balcão quando avisarem."}
             </p>
-            <button
-              type="button"
-              onClick={() => { setOrder(null); setStep("browse"); setMethod(null); setPaySub(null); }}
-              className="mt-5 w-full rounded-xl px-4 py-3 font-semibold text-white"
-              style={{ backgroundColor: pc }}
-            >
+            <PrimaryBtn onClick={() => { setOrder(null); setStep("browse"); setMethod(null); setPaySub(null); }}>
               Fazer novo pedido
-            </button>
+            </PrimaryBtn>
           </div>
         </Sheet>
       )}
-    </Shell>
+    </div>
   );
 }
 
-/* ── Shell: header white-label, sem nada de chat ─────────────────────────── */
+/* ── Primitivos do checkout — visual alinhado ao QR (WelcomeModal) ─────────── */
 
-function Shell({ name, logoUrl, pc, children }: { name: string; logoUrl: string | null; pc: string; children: React.ReactNode }) {
+const inputCls   = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
+const inputSmCls = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
+
+/** Linhas do carrinho com controle de quantidade — usada na sacola e na revisão. */
+function CartLineList({ cart, onChangeQty }: { cart: CartLine[]; onChangeQty: (index: number, delta: number) => void }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="flex items-center gap-3 px-4 py-3" style={{ backgroundColor: pc }}>
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={name} className="h-10 w-10 rounded-full object-cover" />
-        ) : (
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-lg font-bold text-white">
-            {name.charAt(0).toUpperCase()}
-          </span>
-        )}
-        <div>
-          <p className="font-bold leading-tight text-white">{name}</p>
-          <p className="text-xs text-white/80">Peça pelo cardápio</p>
-        </div>
-      </header>
-      {children}
-    </div>
+    <ul className="mt-3 divide-y divide-gray-100">
+      {cart.map((l, i) => (
+        <li key={`${l.id}-${i}`} className="flex items-center justify-between py-2.5">
+          <div className="min-w-0 flex-1 pr-3">
+            <p className="text-sm font-semibold text-gray-900">{l.name}</p>
+            {(l.selectedOptions?.length || l.selectedExtras?.length || l.notes) && (
+              <p className="text-xs text-gray-500">
+                {[
+                  l.selectedOptions?.map((o) => `${o.qty}× ${o.optionName}`).join(", "),
+                  l.selectedExtras?.map((e) => `${e.qty}× ${e.name}`).join(", "),
+                  l.notes,
+                ].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" aria-label={`tirar um ${l.name}`} onClick={() => onChangeQty(i, -1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">−</button>
+            <span className="w-5 text-center text-sm font-semibold">{l.qty}</span>
+            <button type="button" aria-label={`mais um ${l.name}`} onClick={() => onChangeQty(i, +1)} className="h-7 w-7 rounded-full bg-gray-100 font-bold text-gray-600">+</button>
+            <span className="w-20 text-right text-sm font-semibold text-gray-900">{fmt(l.price * l.qty)}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 function Sheet({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center" onClick={onClose}>
       <div
         className="max-h-[88vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
@@ -574,14 +894,14 @@ function Sheet({ children, onClose }: { children: React.ReactNode; onClose?: () 
   );
 }
 
-function PrimaryBtn({ pc, disabled, onClick, children }: { pc: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+function PrimaryBtn({ disabled, onClick, children }: { disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="mt-4 w-full rounded-xl px-4 py-3 font-semibold text-white transition-opacity disabled:opacity-40"
-      style={{ backgroundColor: pc }}
+      className="mt-4 w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+      style={{ backgroundColor: "var(--brand-primary)" }}
     >
       {children}
     </button>
@@ -593,7 +913,7 @@ function ChoiceBtn({ title, subtitle, onClick, active, pc }: { title: string; su
     <button
       type="button"
       onClick={onClick}
-      className="rounded-xl border px-4 py-3 text-left transition-colors"
+      className="rounded-2xl border px-4 py-3 text-left transition-colors"
       style={active && pc ? { borderColor: pc, backgroundColor: `${pc}0d` } : { borderColor: "#e5e7eb" }}
     >
       <span className="block font-semibold text-gray-900">{title}</span>
