@@ -35,15 +35,6 @@ export const DEMO_URL = "/site/demonstracao";
  */
 export const DEMO_CTA_LABEL = "Pedir uma demonstração";
 
-/**
- * ALIAS TEMPORÁRIO (04/08). `/site/precos` está sendo refeita por outra frente
- * (rebuild da tabela de preços), então NÃO a tocamos aqui para não gerar conflito
- * de merge. O símbolo antigo `AGENDAR_URL` continua exportado — mas já apontando
- * para o FORMULÁRIO, não para a agenda extinta: nenhum link quebra. A frente do
- * rebuild remove este alias ao reescrever a página.
- */
-export const AGENDAR_URL = DEMO_URL;
-
 /** CTA copy. */
 export const PRIMARY_CTA_LABEL = "Ver como o Foocci funciona";
 export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
