@@ -52,7 +52,7 @@ jobs:
           echo "← status                : $STATUS"
           echo "← passed/warn/fail/total: $(jq -r '.passed' /tmp/sim.json)/$(jq -r '.warned' /tmp/sim.json)/$(jq -r '.failed' /tmp/sim.json)/$(jq -r '.total' /tmp/sim.json)"
           echo "← p0                    : $(jq -r '.p0' /tmp/sim.json)"
-          echo "← safety                : noEvolution=$(jq -r '.safety.noEvolution' /tmp/sim.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/sim.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/sim.json)"
+          echo "← safety                : noWhatsAppSend=$(jq -r '.safety.noWhatsAppSend' /tmp/sim.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/sim.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/sim.json)"
           echo "── cenários ──"
           jq -r '.scenarios[]? | "\(if .status=="PASS" then "✓" elif .status=="WARNING" then "⚠" else "✗" end) \(.scenarioId) — ações: \(.actions | join(",") // "—")"' /tmp/sim.json 2>/dev/null || true
           echo "← runtimeTouched        : $RUNTIME_TOUCHED"

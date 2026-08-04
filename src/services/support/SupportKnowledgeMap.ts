@@ -56,9 +56,9 @@ export const SUBSYSTEMS: readonly SubsystemInfo[] = [
   },
   {
     key: "whatsapp_evolution",
-    name: "WhatsApp não-oficial (Evolution)",
-    impact: "Se cai, a instância desconecta e as campanhas/atendimento por Evolution param.",
-    signals: ["/api/evolution/status → open|close|connecting"],
+    name: "WhatsApp não-oficial (WhatsApp (Meta))",
+    impact: "Se cai, a instância desconecta e as campanhas/atendimento por WhatsApp (Meta) param.",
+    signals: ["/api/integracoes/whatsapp/meta/status → open|close|connecting"],
   },
   {
     key: "payments",
@@ -142,14 +142,14 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     subsystem: "whatsapp_evolution",
     symptom: "O WhatsApp (não-oficial) caiu / apareceu como desconectado.",
     triggers: ["desconectou", "desconectado", "caiu o whatsapp", "qr code", "qrcode", "reconectar", "instância", "evolution", "pedindo qr", "aparelho desconectou"],
-    likelyCause: "Instância Evolution em estado 'close' — sessão caiu.",
-    confirmingSignals: ["/api/evolution/status = close"],
+    likelyCause: "Instância WhatsApp (Meta) em estado 'close' — sessão caiu.",
+    confirmingSignals: ["/api/integracoes/whatsapp/meta/status = close"],
     runbook: [
-      "Conferir /api/evolution/status.",
+      "Conferir /api/integracoes/whatsapp/meta/status.",
       "Se 'close': disparar reconexão da instância (ação de integração).",
       "Se pedir QR novamente: escalar — precisa do humano reparear o aparelho.",
     ],
-    remediationAction: "reconnect_evolution",
+    remediationAction: "reconnect_whatsapp_meta",
     severity: "HIGH",
   },
   {

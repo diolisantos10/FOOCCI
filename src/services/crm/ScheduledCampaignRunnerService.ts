@@ -1874,7 +1874,7 @@ export class ScheduledCampaignRunnerService {
           cls.category === "EVOLUTION_INSTANCE_DISCONNECTED" ||
           cls.category === "FAILED_PROVIDER" ||
           cls.category === "FAILED_TIMEOUT" ||
-          cls.category === "EVOLUTION_AUTH_ERROR";
+          cls.category === "WHATSAPP_AUTH_ERROR";
         consecutiveInstanceFailures = isInstanceFailure ? consecutiveInstanceFailures + 1 : 0;
 
         // Auto-cleanup: a genuine per-number failure (bad request / invalid phone —

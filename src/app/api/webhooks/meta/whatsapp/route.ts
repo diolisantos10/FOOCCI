@@ -276,6 +276,35 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
   }
 }
 
+/**
+ * Garante um Customer para o número que acabou de escrever.
+ *
+ * Existe como função própria porque é usado em DOIS pontos: ao criar a conversa
+ * e ao curar conversa antiga que ficou sem cliente vinculado. Estava só no
+ * primeiro, e por isso o opt-out não pegava quem já tinha conversa aberta.
+ */
+async function upsertCustomerForInbound(
+  restaurantId: string,
+  fromPhone: string,
+  tail: string,
+  profileName?: string | null,
+): Promise<{ id: string; name: string | null; phone: string | null } | null> {
+  return prisma.customer.upsert({
+    where:  { phone_restaurantId: { phone: fromPhone, restaurantId } },
+    create: { restaurantId, phone: fromPhone, name: profileName ?? fromPhone },
+    update: profileName ? { name: profileName } : {},
+    select: { id: true, name: true, phone: true },
+  }).catch(async (err) => {
+    // Número com formato divergente (ex.: 9º dígito) pode não bater no unique.
+    // Cai para a busca por sufixo em vez de perder a mensagem.
+    console.warn(`[webhook/meta/whatsapp] upsert de Customer falhou — buscando por sufixo`, err);
+    return prisma.customer.findFirst({
+      where:  { restaurantId, phone: { contains: tail } },
+      select: { id: true, name: true, phone: true },
+    });
+  });
+}
+
 async function findOrCreateConversation(
   restaurantId: string,
   fromPhone:    string,
@@ -308,6 +337,26 @@ async function findOrCreateConversation(
         data:  { customerPhone: fromPhone },
       }).catch(() => { /* best-effort — reply still uses stored phone if this fails */ });
     }
+
+    // Conversa antiga SEM cliente vinculado é um furo de LGPD, não um detalhe:
+    // a guarda de opt-out precisa de um `customerId` para marcar quem pediu
+    // silêncio. Enquanto ele for null, "PARAR" não grava nada, não loga nada, e
+    // a IA responde normalmente — para sempre, porque a conversa é reusada.
+    // Conversas criadas antes de o upsert existir aqui carregam esse null, então
+    // cura-se no primeiro contato seguinte em vez de esperar uma migração.
+    if (!existing.customerId) {
+      const curado = await upsertCustomerForInbound(restaurantId, fromPhone, tail, profileName);
+      if (curado?.id) {
+        await prisma.conversation.update({
+          where: { id: existing.id },
+          data:  { customerId: curado.id },
+        }).catch((err) => console.error("[webhook/meta/whatsapp] não consegui vincular cliente à conversa", err));
+        return { ...existing, customerId: curado.id };
+      }
+      // Não deu para criar/achar o cliente: registra alto, porque este turno
+      // passa sem poder aplicar opt-out.
+      console.error("[webhook/meta/whatsapp] conversa sem customerId e upsert falhou — opt-out NÃO aplicável neste turno", { conversationId: existing.id, restaurantId });
+    }
     return existing;
   }
 
@@ -319,20 +368,7 @@ async function findOrCreateConversation(
   //
   // O `name` só é atualizado quando a Meta manda um `profileName` — nunca se
   // sobrescreve um nome real com um número de telefone.
-  const customer = await prisma.customer.upsert({
-    where:  { phone_restaurantId: { phone: fromPhone, restaurantId } },
-    create: { restaurantId, phone: fromPhone, name: profileName ?? fromPhone },
-    update: profileName ? { name: profileName } : {},
-    select: { id: true, name: true, phone: true },
-  }).catch(async (err) => {
-    // Número com formato divergente (ex.: 9º dígito) pode não bater no unique.
-    // Cai para a busca por sufixo em vez de perder a mensagem.
-    console.warn(`[webhook/meta/whatsapp] upsert de Customer falhou — buscando por sufixo`, err);
-    return prisma.customer.findFirst({
-      where:  { restaurantId, phone: { contains: tail } },
-      select: { id: true, name: true, phone: true },
-    });
-  });
+  const customer = await upsertCustomerForInbound(restaurantId, fromPhone, tail, profileName);
 
   return prisma.conversation.create({
     data: {

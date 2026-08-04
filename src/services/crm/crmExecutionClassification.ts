@@ -19,7 +19,7 @@ export type ExecutionCategory =
   | "FAILED_UNKNOWN"         // unrecognized failure — retry later with caution
   | "EVOLUTION_BAD_REQUEST"  // HTTP 400 — fix payload/phone first
   | "EVOLUTION_INSTANCE_DISCONNECTED"
-  | "EVOLUTION_AUTH_ERROR"   // HTTP 401/403
+  | "WHATSAPP_AUTH_ERROR"   // HTTP 401/403
   | "EVOLUTION_RATE_LIMITED" // HTTP 429
   | "EMPTY_MESSAGE"
   | "BLOCKED_SAFETY"
@@ -89,7 +89,7 @@ const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   FAILED_UNKNOWN:                  { kind: "FAILED",  badge: "Erro desconhecido",             retryable: true,  retryability: "RETRYABLE_LATER" },
   EVOLUTION_BAD_REQUEST:           { kind: "FAILED",  badge: "Bad request (400)",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED",  badge: "Instância desconectada",        retryable: true,  retryability: "RETRYABLE_LATER" },
-  EVOLUTION_AUTH_ERROR:            { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
+  WHATSAPP_AUTH_ERROR:            { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Rate limit",                    retryable: true,  retryability: "RETRYABLE_LATER" },
   EMPTY_MESSAGE:                   { kind: "FAILED",  badge: "Mensagem vazia",                retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   // Invalid / missing phone / not-contactable are RECIPIENT DATA problems, not
@@ -127,14 +127,14 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     // que ENTRA em cada uma.
     case "META_TEMPLATE_REQUIRED": return "BLOCKED_SAFETY";       // política, não falha
     case "META_NOT_CONNECTED":     return "EVOLUTION_INSTANCE_DISCONNECTED";
-    case "META_190":               return "EVOLUTION_AUTH_ERROR"; // token expirado/inválido
+    case "META_190":               return "WHATSAPP_AUTH_ERROR"; // token expirado/inválido
     case "INVALID_PHONE":          return "BLOCKED_INVALID_PHONE";
     case "WINDOW_LOOKUP_FAILED":                                   // banco fora → tentar depois
     case "NETWORK":                return "FAILED_TIMEOUT";
     case "HTTP_429":               return "EVOLUTION_RATE_LIMITED";
     case "EVOLUTION_HTTP_400": return "EVOLUTION_BAD_REQUEST";
     case "EVOLUTION_HTTP_401":
-    case "EVOLUTION_HTTP_403": return "EVOLUTION_AUTH_ERROR";
+    case "EVOLUTION_HTTP_403": return "WHATSAPP_AUTH_ERROR";
     case "EVOLUTION_HTTP_429": return "EVOLUTION_RATE_LIMITED";
     case "EVOLUTION_HTTP_408":
     case "EVOLUTION_HTTP_504":
@@ -207,7 +207,7 @@ function fromText(text: string): ExecutionCategory {
   // Instance/connectivity failures.
   if (t.includes("disconnected") || t.includes("desconectado") || t.includes("instance not found") || t.includes("instância não encontrada")) return "EVOLUTION_INSTANCE_DISCONNECTED";
   // Auth failures.
-  if (t.includes("401") || t.includes("403") || t.includes("unauthorized") || t.includes("forbidden") || t.includes("não autorizado")) return "EVOLUTION_AUTH_ERROR";
+  if (t.includes("401") || t.includes("403") || t.includes("unauthorized") || t.includes("forbidden") || t.includes("não autorizado")) return "WHATSAPP_AUTH_ERROR";
   // Rate limit.
   if (t.includes("rate limit") || t.includes("too many") || t.includes("429")) return "EVOLUTION_RATE_LIMITED";
   // Recipient-data skips (no phone / not contactable) recorded as FAILED in legacy data.
@@ -357,7 +357,7 @@ const EMPTY_BY_CATEGORY = (): Record<ExecutionCategory, number> => ({
   FAILED_UNKNOWN: 0,
   EVOLUTION_BAD_REQUEST: 0,
   EVOLUTION_INSTANCE_DISCONNECTED: 0,
-  EVOLUTION_AUTH_ERROR: 0,
+  WHATSAPP_AUTH_ERROR: 0,
   EVOLUTION_RATE_LIMITED: 0,
   EMPTY_MESSAGE: 0,
   BLOCKED_SAFETY: 0,
@@ -480,7 +480,7 @@ export function buildEligibilityMetrics(summary: ExecutionSummary, audienceTotal
       timeout:     c.FAILED_TIMEOUT,
       rateLimit:   c.EVOLUTION_RATE_LIMITED,
       disconnected:c.EVOLUTION_INSTANCE_DISCONNECTED,
-      auth:        c.EVOLUTION_AUTH_ERROR,
+      auth:        c.WHATSAPP_AUTH_ERROR,
       emptyMessage:c.EMPTY_MESSAGE,
       unknown:     c.FAILED_UNKNOWN,
     },

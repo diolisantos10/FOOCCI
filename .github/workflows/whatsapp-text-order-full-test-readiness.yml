@@ -4,7 +4,7 @@
 # Proves FULL_TEST behaviour WITHOUT a phone and WITHOUT any real side effect:
 # order/Pix only after final confirmation, REPLY_ONLY never creates, FULL_TEST
 # stays allowlist-bound, 0. menu + handoff intact, rollback documented.
-# Asserts PASS, p0=0, noRealOrder/noRealPix/noEvolution and runtimeTouched=false.
+# Asserts PASS, p0=0, noRealOrder/noRealPix/noWhatsAppSend and runtimeTouched=false.
 # Manual only. Uses CRON_SECRET — NOT ADMIN_SECRET.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ jobs:
           echo "← status        : $STATUS"
           echo "← passed/total  : $(jq -r '.passed' /tmp/r.json)/$(jq -r '.total' /tmp/r.json)"
           echo "← p0            : $P0"
-          echo "← noRealOrder/noRealPix/noEvolution: $(jq -r '.noRealOrder' /tmp/r.json)/$(jq -r '.noRealPix' /tmp/r.json)/$(jq -r '.noEvolution' /tmp/r.json)"
+          echo "← noRealOrder/noRealPix/noWhatsAppSend: $(jq -r '.noRealOrder' /tmp/r.json)/$(jq -r '.noRealPix' /tmp/r.json)/$(jq -r '.noWhatsAppSend' /tmp/r.json)"
           echo "← runtimeTouched: $RT"
           echo "── checks ──"
           jq -r '.checks[]? | "\(if .pass then "✓" else "✗" end) \(.name)\(if .pass then "" else " — " + .note end)"' /tmp/r.json 2>/dev/null || true

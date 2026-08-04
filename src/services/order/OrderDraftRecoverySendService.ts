@@ -566,7 +566,8 @@ export class OrderDraftRecoverySendService {
         // O texto livre continua existindo, mas só serve para quem está DENTRO da
         // janela; fora dela ele volta BLOCKED e isso é contado, não engolido.
         const metaCfg = metaCfgByRestaurant.get(draft.restaurantId);
-        if (metaCfg?.metaCrmEnabled && metaCfg.connectionStatus === "CONNECTED" && cartRow) {
+        // Idem ao cron: o gate é a CONEXÃO, não o interruptor antigo de provedor.
+        if (metaCfg?.connectionStatus === "CONNECTED" && cartRow) {
           const renderCtx = {
             restaurantName: draft.restaurant.name ?? "nossa loja",
             pedidoUrl:      shortRecoveryUrl,

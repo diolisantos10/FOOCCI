@@ -566,7 +566,7 @@ Quando o cliente responde, a conversa entra como resposta CRM.
 Decisões técnicas:
 - usar Evolution API v2.3.7+;
 - webhookByEvents deve ser false;
-- endpoint único: \`/api/webhooks/evolution\`;
+- endpoint único: \`/api/webhooks/meta/whatsapp\`;
 - autenticação por query-token;
 - token validado server-side;
 - não expor token ao restaurante;
@@ -924,7 +924,7 @@ Devem ser simples para o dono e técnicas apenas para suporte/admin.
 
 Estado e decisões:
 - Evolution API v2.3.7+;
-- endpoint único \`/api/webhooks/evolution\`;
+- endpoint único \`/api/webhooks/meta/whatsapp\`;
 - webhookByEvents=false;
 - autenticação por query-token;
 - token validado server-side;

@@ -60,15 +60,15 @@ describe("classifyExecution — FAILED statuses with machine reason", () => {
     expect(r.kind).toBe("FAILED");
   });
 
-  it("EVOLUTION_HTTP_401 → EVOLUTION_AUTH_ERROR", () => {
+  it("EVOLUTION_HTTP_401 → WHATSAPP_AUTH_ERROR", () => {
     const r = classifyExecution({ status: "FAILED", errorMessage: "EVOLUTION_HTTP_401" });
-    expect(r.category).toBe("EVOLUTION_AUTH_ERROR");
+    expect(r.category).toBe("WHATSAPP_AUTH_ERROR");
     expect(r.kind).toBe("FAILED");
   });
 
-  it("EVOLUTION_HTTP_403 → EVOLUTION_AUTH_ERROR", () => {
+  it("EVOLUTION_HTTP_403 → WHATSAPP_AUTH_ERROR", () => {
     const r = classifyExecution({ status: "FAILED", errorMessage: "EVOLUTION_HTTP_403" });
-    expect(r.category).toBe("EVOLUTION_AUTH_ERROR");
+    expect(r.category).toBe("WHATSAPP_AUTH_ERROR");
     expect(r.kind).toBe("FAILED");
   });
 
