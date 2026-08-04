@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PlanSubscriptionService } from "@/services/billing/PlanSubscriptionService";
+import { PlanSubscriptionService, isTerminalStatus } from "@/services/billing/PlanSubscriptionService";
 import { MercadoPagoPlatformBilling, isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
 import { PlanNfseService } from "@/services/billing/PlanNfseService";
 
@@ -54,6 +54,19 @@ export async function POST(req: Request) {
 
       const sub = await resolveSubscription(payment.externalReference, payment.preapprovalId);
       if (!sub) return NextResponse.json({ ok: true, ignored: true });
+
+      // Trava terminal (CR A1): pagamento avulso NUNCA ressuscita uma assinatura
+      // cancelada. Não reativa E não fatura — emitir NFS-e para uma cobrança que
+      // consideramos indevida só agravaria. Código puro, sem dependência de token:
+      // se o cancelamento no MP falhou e o cartão foi cobrado mesmo assim, a
+      // cobrança-zumbi para AQUI (o certo é reembolso no MP, não uma nota).
+      if (isTerminalStatus(sub.status)) {
+        console.warn(
+          `[billing/mp-webhook] pagamento ${id} recebido para assinatura ${sub.id} em estado ${sub.status} (terminal). ` +
+            `NÃO reativa nem fatura — provável cobrança-zumbi do Mercado Pago; verificar reembolso.`,
+        );
+        return NextResponse.json({ ok: true, ignored: true, reason: "subscription_terminal" });
+      }
 
       const referenceMonth = (payment.approvedAt ?? new Date().toISOString()).slice(0, 7);
       const { invoiceId, created } = await PlanSubscriptionService.recordPaidCharge(sub.id, {

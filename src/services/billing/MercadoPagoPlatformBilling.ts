@@ -68,6 +68,39 @@ export const MercadoPagoPlatformBilling = {
   },
 
   /**
+   * Cancela o preapproval (a assinatura recorrente) no Mercado Pago. É ISTO que
+   * faz o dinheiro PARAR de sair do cartão do cliente — marcar CANCELADA só no
+   * nosso banco não impede o MP de cobrar o próximo ciclo (CR A1).
+   *
+   * Idempotente no MP: cancelar um preapproval já cancelado devolve 200/"cancelled".
+   *
+   * Sem o token de plataforma NÃO cancela e devolve `gateway_nao_configurado` —
+   * o chamador PRECISA saber que o MP não foi tocado (a cobrança pode continuar),
+   * porque a trava anti-reativação do nosso lado não estanca o dinheiro no MP.
+   */
+  async cancelPreapproval(
+    preapprovalId: string,
+  ): Promise<
+    | { ok: true; status: string }
+    | { ok: false; reason: "gateway_nao_configurado" | "mp_recusou"; detail?: string }
+  > {
+    const token = platformToken();
+    if (!token) return { ok: false, reason: "gateway_nao_configurado" };
+    if (!preapprovalId) return { ok: false, reason: "mp_recusou", detail: "preapprovalId vazio" };
+
+    const res = await fetch(`${MP_API}/preapproval/${encodeURIComponent(preapprovalId)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+    const body = (await res.json().catch(() => null)) as { status?: string; message?: string } | null;
+    if (!res.ok) {
+      return { ok: false, reason: "mp_recusou", detail: `${res.status}: ${body?.message ?? "sem detalhe"}` };
+    }
+    return { ok: true, status: body?.status ?? "cancelled" };
+  },
+
+  /**
    * Busca o estado real de um preapproval direto na API — o webhook do MP só
    * carrega o ID, e confiar no corpo do webhook seria confiar em quem POSTou.
    * O refetch com o NOSSO token é a verificação (mesmo padrão do webhook de

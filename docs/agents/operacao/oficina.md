@@ -4,6 +4,82 @@
 
 ---
 
+## 2026-08-04 · A1 do CR — cancelar não cancelava no MP; webhook ressuscitava a sub
+
+**Contexto:** CR `docs/CR-seguranca-cibernetica-2026-08-03.md`, item A1 (🟠). Base:
+branch `claude/foocci-brain-vaamrx` (produção incorporada; último commit da série C1).
+
+**Cadeia do bug confirmada no código (antes):**
+- `PlanSubscriptionService.cancel` (`PlanSubscriptionService.ts:122-127`) só fazia
+  `update` local → `CANCELADA` + `canceledAt`. **Nunca tocava o preapproval no MP.**
+- Rota admin `.../subscriptions/[id]/action/route.ts:67-69` chamava esse `cancel`
+  puro-local. O CEO cancela no admin, o MP nunca soube.
+- MP cobra o próximo ciclo → webhook chega com pagamento `approved` →
+  `mp-webhook/route.ts:64`: `if (sub.status !== "ATIVA") await activate(sub.id)` →
+  `activate` (`:111-116`) fazia `update` **limpando `canceledAt`** e pondo `ATIVA`.
+  Ressuscitava a sub cancelada, faturava e disparava NFS-e. Loop eterno de cobrança.
+
+**Duas travas, complementares (uma pura, uma depende de token):**
+
+1. **Trava anti-reativação — código puro, sem token (passo 3/4 da ordem).**
+   `activate` virou `updateMany({ where:{ id, status:{ notIn:[...TERMINAL_STATUSES] }}})`
+   — ATÔMICO, sem janela ler→gravar. `count===0` registra (guardrail 6), não dá
+   sucesso silencioso. `TERMINAL_STATUSES=["CANCELADA"]` + `isTerminalStatus()`
+   exportados (`PlanSubscriptionService.ts`). Webhook payment branch
+   (`mp-webhook/route.ts`) ganhou guarda `isTerminalStatus(sub.status)` ANTES de
+   `recordPaidCharge`/`activate`: sub terminal → **não fatura e não reativa**
+   (`{ignored:true, reason:"subscription_terminal"}`). Não emitir NFS-e para
+   cobrança-zumbi é deliberado — o certo é reembolso no MP, não uma nota. Defesa em
+   profundidade: o webhook barra E o `activate` barra.
+
+2. **Cancelamento REAL no MP — depende do `MP_PLATFORM_ACCESS_TOKEN`.**
+   Novo `MercadoPagoPlatformBilling.cancelPreapproval(id)`: `PUT /preapproval/{id}`
+   `{status:"cancelled"}`. Sem token → `{ok:false, reason:"gateway_nao_configurado"}`
+   (não mente que cancelou). Rota admin `cancel` reescrita: se há `mpPreapprovalId`,
+   cancela no MP; **sempre** marca terminal local (arma a trava 1 mesmo se o MP
+   falhar); se o MP falhou → **502 `{canceledLocally:true, gatewayError}`** — não
+   vira sucesso silencioso (guardrail: proteção que não registra bloqueia).
+
+**Por que a ordem "sempre marca local, mesmo se MP falhar":** a trava 1 é o que
+impede a cobrança-zumbi de reativar/faturar do nosso lado sem depender de credencial
+externa. Abortar o local no erro do MP deixaria a sub `ATIVA` e a trava desarmada —
+pior. A trava 2 é o que estanca o dinheiro no cartão; sua falha é reportada, não
+engolida.
+
+**Onde pus o MP-cancel (e por que NÃO no service):** `PlanSubscriptionService` não
+importa `MercadoPagoPlatformBilling` (evita import circular — o MP importa
+`CYCLE_MONTHS` do service). A orquestração ficou na rota admin, que já importava os
+dois — mesmo padrão de `mp-link` (`createPreapproval` + `attachMercadoPago`). O
+`cancel` do service segue puro-local de propósito: o webhook branch `preapproval
+cancelled` (`:46`) usa esse mesmo `cancel` para SINCRONIZAR quando o MP avisa que já
+cancelou — ali não se deve re-chamar o MP.
+
+**Verificação:** `npx tsc --noEmit` limpo; `npx vitest run` → 378 arquivos, 4721
+testes, verde (+3 arquivos novos, +9 testes). Provas:
+- `PlanSubscriptionService.test.ts` — `isTerminalStatus`; `activate` filtra terminal
+  no próprio UPDATE (count 0 registra); sub viva reativa.
+- `mp-webhook/route.test.ts` — (b) pagamento p/ sub CANCELADA: sem `planInvoice.create`,
+  sem `updateMany`, sem `emit`; (c) sub `AGUARDANDO_PAGAMENTO`: fatura e ativa.
+- `.../action/route.test.ts` — (a) cancel chama `cancelPreapproval` + grava CANCELADA;
+  (a') MP recusa → 502 mas grava terminal; (a'') sem token → 502 avisando o operador +
+  grava terminal; (a''') sub sem preapproval → cancela local sem tocar o MP.
+
+**NÃO** foi feito deploy nem merge, conforme ordem.
+
+**Aviso honesto:** o cancelamento no MP (`cancelPreapproval`) foi provado com mock,
+não contra a API real do MP nem numa assinatura viva. Trate a chamada externa como
+conserto provado no código até haver uma execução real — como a impressão física.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Assinatura tem estado TERMINAL, e
+a trava vive no UPDATE, não na leitura."* CANCELADA é terminal; `activate` é
+`updateMany` com `notIn TERMINAL_STATUSES` (atômico) — nunca ler-depois-gravar num
+estado que troca dinheiro. Cancelar de verdade = cancelar no gateway externo E marcar
+terminal local; a marca local é a trava que não depende de credencial e por isso é
+armada mesmo quando a chamada externa falha. Falha de gateway se reporta (502), nunca
+vira sucesso silencioso. Origem: A1 do CR, este commit.
+
+---
+
 ## 2026-08-04 · A2 do CR de segurança + 2 gates estruturais (guardrail 4)
 
 **Contexto:** CR `docs/CR-seguranca-cibernetica-2026-08-03.md`, item A2 e "Travas
