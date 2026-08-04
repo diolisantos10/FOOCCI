@@ -1267,3 +1267,36 @@ Railway a variável **`SUPPORT_NOTIFY_EMAIL`** = e-mail do time de suporte.
 Não é bloqueador: sem ela o aviso cai em `LEADS_NOTIFY_EMAIL` (que já existe e já
 chega no time), e o e-mail declara no rodapé que saiu pelo fallback. `RESEND_API_KEY`
 já existe. `SUPPORT_FROM_EMAIL` é opcional.
+
+---
+
+# Fechamento 04/08 — o que subiu e o que ficou com o CEO
+
+**No ar em produção** (commits `901c06c1`, `72a7160c`, `83ccbc48`):
+- Segurança: vazamento de PII na loja pública (LGPD), cobrança de assinatura
+  cancelada, rota-fantasma com bypass, e a conferência de assinatura do webhook
+  do Mercado Pago. Mais travas de CI contra reentrada da classe.
+- Site: agenda de demonstração eliminada (tudo vai ao formulário), home com novo
+  gancho, calculadora com a economia em destaque, menu virou 4 páginas reais
+  (Atendimento com IA, CRM, Soluções, Planos e preços), nova página de preços.
+- **Checkout self-service**: o lojista contrata, aceita o contrato, paga e a
+  conta nasce sozinha.
+- **Agente de suporte**: dois cérebros fundidos no portão do Brain + chamado
+  numerado com e-mail ao time.
+- **Foocci Bakery** + botão no admin (`/admin/padaria-vitrine`) para criar a
+  padaria e gerar as 40 fotos.
+
+**PENDENTE COM O CEO:**
+1. 🔴 **Acompanhar a PRIMEIRA contratação real.** O Mercado Pago só aceita um
+   valor na recorrência; o sistema cria com o promocional e sobe para o cheio via
+   `PUT /preapproval`. Isso NUNCA rodou contra a API real — se o MP recusar, o
+   cliente pagaria metade para sempre. Há aviso no admin, mas a prova só vem com
+   uma venda de verdade.
+2. `SUPPORT_NOTIFY_EMAIL` no Railway (há fallback funcionando — não bloqueia).
+3. Clicar nos dois botões da padaria de vitrine (criar + gerar fotos, ~US$1.60).
+4. Decidir se o "preço fundador" volta (saiu por não existir no motor de cobrança).
+5. Redesenho do site continua — só anda ao vivo com o CEO.
+
+**Dívidas técnicas nomeadas:** webhook de billing ainda sem verificação HMAC
+(agora que ele cria contas, a assinatura de origem vale mais); `noSideEffects.test.ts`
+estoura tempo por falta de Postgres no sandbox (ambiental, domínio da `qualidade`).
