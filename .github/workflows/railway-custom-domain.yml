@@ -1,0 +1,82 @@
+name: Railway — domínio customizado
+
+# Por que este workflow existe:
+# adicionar um domínio no Railway exige a credencial do Railway, que vive apenas
+# nos segredos deste repositório (mesma usada pelo deploy). O Actions é o único
+# lugar onde uma sessão do Diretor alcança essa credencial — então é aqui que o
+# cadastro de domínio acontece, sem depender de alguém abrir o painel.
+
+on:
+  # Disparo manual, com o domínio como parâmetro.
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Domínio a cadastrar (ex.: www.foocci.com.br)'
+        required: true
+        default: 'www.foocci.com.br'
+      service_name:
+        description: 'Serviço no Railway'
+        required: false
+        default: 'FOOCCI'
+      environment_name:
+        description: 'Ambiente no Railway'
+        required: false
+        default: 'production'
+  # Disparo automático quando o próprio script muda — é o que permite rodar a
+  # partir de uma branch de trabalho, antes de existir na branch padrão.
+  push:
+    paths:
+      - 'scripts/railway-custom-domain.mjs'
+      - '.github/workflows/railway-custom-domain.yml'
+
+jobs:
+  registrar-dominio:
+    name: Cadastrar domínio no Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Conferir segredos
+        run: |
+          if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
+            echo "::error::Segredo RAILWAY_TOKEN ausente neste repositório."
+            exit 1
+          fi
+          echo "RAILWAY_TOKEN presente."
+          if [ -z "${{ secrets.RAILWAY_PROJECT_ID }}" ]; then
+            echo "::warning::RAILWAY_PROJECT_ID ausente — o script tentará deduzir pelo token de projeto."
+          else
+            echo "RAILWAY_PROJECT_ID presente."
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Registrar (ou conferir) o domínio
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          DOMAIN: ${{ github.event.inputs.domain || 'www.foocci.com.br' }}
+          SERVICE_NAME: ${{ github.event.inputs.service_name || 'FOOCCI' }}
+          ENVIRONMENT_NAME: ${{ github.event.inputs.environment_name || 'production' }}
+        run: node scripts/railway-custom-domain.mjs
+
+      - name: Conferir se o domínio já responde
+        env:
+          DOMAIN: ${{ github.event.inputs.domain || 'www.foocci.com.br' }}
+        run: |
+          echo "Aguardando a emissão do certificado TLS (até ~3 min)..."
+          for tentativa in 1 2 3 4 5 6; do
+            CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$DOMAIN/" || echo "000")
+            echo "Tentativa $tentativa — HTTP $CODIGO"
+            if [ "$CODIGO" != "000" ]; then
+              echo "TLS de $DOMAIN funcionando (HTTP $CODIGO)."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::warning::Certificado ainda não emitido ao fim da espera. O cadastro foi feito; a emissão continua em background."
+          exit 0
