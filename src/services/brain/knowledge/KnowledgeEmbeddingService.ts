@@ -116,12 +116,30 @@ export async function ensureDocumentEmbedding<T extends EmbeddableDocument>(
   }
 }
 
+export interface EmbeddingRankOptions {
+  /**
+   * Piso de similaridade de cosseno: documento abaixo dele NÃO entra no
+   * resultado — e documento SEM vetor também não, porque "não medi" não é
+   * "passou" (ausência de informação não é informação).
+   *
+   * Ausente = comportamento histórico: só ORDENA, nunca corta. Ordenar sem
+   * cortar significa que o pior documento do corpus volta no topo quando não há
+   * nenhum bom — foi assim que o assistente do lojista nunca dizia "não sei"
+   * (P0 de 04/08/2026, ver manualRetrieval.ts).
+   */
+  minScore?: number;
+}
+
 /**
  * Ranqueia documentos por similaridade de embedding com a query (1 call para a
  * query; no máx MAX_EMBEDDING_BACKFILLS_PER_CALL backfills de itens sem vetor).
- * Itens sem vetor vão para o fim, na ordem original (que já é a de uso).
+ * Sem `minScore`: itens sem vetor vão para o fim, na ordem original.
+ * Com `minScore`: quem não alcança o piso (ou não tem vetor) é descartado, e o
+ * resultado PODE ser [] — que é diferente de null.
+ *
  * Qualquer erro estrutural (query não embedou / nenhum item com vetor) → null,
- * o sinal para o chamador cair no ranking keyword.
+ * o sinal para o chamador cair no ranking keyword. `null` = o portão não rodou;
+ * `[]` = o portão rodou e ninguém passou. O chamador não pode confundir os dois.
  *
  * Genérico de propósito: item de conhecimento, capítulo de manual ou qualquer
  * documento futuro usa o MESMO ranking — só troca o codec.
@@ -130,6 +148,7 @@ export async function rankDocumentsByEmbedding<T extends EmbeddableDocument>(
   queryText: string,
   items: T[],
   codec: EmbeddingDocumentCodec<T>,
+  opts?: EmbeddingRankOptions,
 ): Promise<T[] | null> {
   if (!items.length) return null;
 
@@ -155,6 +174,16 @@ export async function rankDocumentsByEmbedding<T extends EmbeddableDocument>(
   }
 
   if (!scored.some((s) => s.score !== null)) return null;
+
+  // Com piso: corta antes de ordenar. Item sem vetor (score null) cai fora —
+  // não medimos a relevância dele, e não medir não é aprovar.
+  if (opts?.minScore !== undefined) {
+    const floor = opts.minScore;
+    return scored
+      .filter((s): s is { item: T; order: number; score: number } => s.score !== null && s.score >= floor)
+      .sort((a, b) => b.score - a.score || a.order - b.order)
+      .map((s) => s.item);
+  }
 
   scored.sort((a, b) => {
     if (a.score === null && b.score === null) return a.order - b.order;
