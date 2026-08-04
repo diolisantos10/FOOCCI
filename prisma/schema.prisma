@@ -34,6 +34,15 @@ model Restaurant {
   // Master switch do Agente de CRM. false = CRM roda 100% na mão (sem IA).
   crmAgentEnabled Boolean  @default(true)
   plan            Plan     @default(STARTER)
+
+  /// A CHAVE DE IDEMPOTÊNCIA do checkout self-service. Preenchida quando este
+  /// restaurante nasceu do pagamento de uma PlanSubscription. É UNIQUE de
+  /// propósito: o webhook do Mercado Pago reenvia o mesmo evento, e é este índice
+  /// — no banco, não no código — que garante que dois webhooks concorrentes não
+  /// criem dois restaurantes para a mesma assinatura. O segundo INSERT viola a
+  /// restrição e a transação inteira volta atrás, sem deixar nada pela metade.
+  /// Não é FK: a direção da posse é PlanSubscription.restaurantId.
+  originSubscriptionId String? @unique
   // Whether the AI Waiter is available on this restaurant's public store.
   // NULL = derive from plan (STARTER → no, GROWTH/PRO → yes). The migration
   // grandfathers every restaurant existing at rollout to TRUE: Sushi Cazza — the
@@ -2772,6 +2781,11 @@ model OperationalManualChapter {
   createdBy       String?
   updatedBy       String?
   approvedBy      String?
+  /// Vetor de embedding do capítulo (number[]), calculado sob demanda pelo
+  /// retrieval do assistente. Fica null até o primeiro backfill.
+  embedding       Json?
+  /// Modelo que gerou o vetor — trocar de modelo invalida o vetor antigo.
+  embeddingModel  String?
 
   revisions      OperationalManualRevision[]
   changeRequests OperationalManualChangeRequest[]
@@ -2906,6 +2920,41 @@ enum HelpMessageRole {
   ASSISTANT
   SUPPORT
   SYSTEM
+}
+
+/// Chamado de suporte — o "último caso" do agente de suporte.
+/// Nasce quando o agente não resolve e o lojista pede humano. É o COFRE: existe
+/// mesmo que o e-mail de aviso falhe (notifyError guarda o porquê). Carrega a
+/// evidência do caso (pergunta, o que o agente tentou, por que escalou) para o
+/// time humano não precisar reconstituir nada.
+model SupportTicket {
+  id           String              @id @default(cuid())
+  /// Número sequencial legível — vira "CHM-0042" para o lojista.
+  number       Int                 @unique @default(autoincrement())
+  restaurantId String
+  userId       String?
+  threadId     String?
+  subject      String
+  /// Por que escalou (motivo do agente ou pedido explícito do lojista).
+  reason       String              @db.Text
+  /// Evidência: transcrição/resumo do que foi perguntado e tentado.
+  evidence     String              @db.Text
+  status       SupportTicketStatus @default(OPEN)
+  notifiedAt   DateTime?
+  notifyError  String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("support_tickets")
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
 }
 
 // ═══════════════════════════════════════════
@@ -4874,6 +4923,36 @@ model PlanSubscription {
   /// Vínculo com o Mercado Pago Assinaturas (preapproval).
   mpPreapprovalId String?
   mpInitPoint     String?
+
+  /// ── Regra dos 50% do primeiro mês ─────────────────────────────────────────
+  /// `priceCents` é o valor CHEIO do ciclo (o que sai do cartão a cada renovação).
+  /// `firstChargeCents` é o que sai na PRIMEIRA cobrança. O preapproval do Mercado
+  /// Pago nasce com o valor da primeira cobrança e é elevado ao valor cheio depois
+  /// que a primeira cobrança é confirmada — `fullAmountSyncedAt` é o carimbo desse
+  /// degrau. Sem esse carimbo, um webhook reenviado tentaria elevar duas vezes.
+  firstChargeCents   Int?
+  fullAmountSyncedAt DateTime?
+  /// Falha ao elevar o valor no MP. Nunca fica em silêncio: o cliente seguiria
+  /// pagando metade para sempre e ninguém saberia (guardrail 6).
+  priceSyncError     String?
+
+  /// ── Dados do checkout self-service (a conta que será criada ao pagar) ─────
+  /// Ficam AQUI, e não em um Restaurant criado antes da hora, para que ninguém
+  /// que não pagou ocupe um slug. A senha viaja como hash bcrypt — o texto puro
+  /// nunca é persistido.
+  signupRestaurantName    String?
+  signupSlug              String?
+  signupOwnerPasswordHash String?
+  /// Idempotência do POST público: o mesmo formulário reenviado (duplo clique,
+  /// F5, retry de rede) reaproveita a assinatura em vez de criar outra — e, com
+  /// ela, outra cobrança recorrente no Mercado Pago.
+  signupIdempotencyKey    String?   @unique
+  /// Carimbo da costura pagamento → conta criada.
+  provisionedAt           DateTime?
+  /// Motivo da falha de criação da conta APÓS pagamento confirmado. É o caso
+  /// "o cliente pagou e a conta não nasceu" — o pior deste domínio. Persistido
+  /// com a evidência para o operador agir; nunca engolido.
+  provisionError          String?
 
   activatedAt DateTime?
   canceledAt  DateTime?

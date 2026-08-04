@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import type { HelpMessage, HelpThread } from "@prisma/client";
+import { SupportTicketService } from "@/services/support/SupportTicketService";
 import { answerHelpQuestion } from "./helpAssistant";
 
 export interface HelpMessageDTO {
@@ -138,6 +139,7 @@ export class HelpThreadService {
 
         const ai = await answerHelpQuestion({
           question: content,
+          restaurantId,
           history: priorHistory,
           restaurantName: restaurant?.name ?? undefined,
         });
