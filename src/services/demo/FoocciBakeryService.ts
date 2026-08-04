@@ -41,6 +41,7 @@ import {
   BAKERY_MENU,
   BAKERY_PRINT_STATIONS,
   BAKERY_STORE,
+  BAKERY_UPSELL_CATEGORIES,
   type BakeryItem,
 } from "./foocci-bakery.data";
 
@@ -421,6 +422,9 @@ async function configureStore(restaurantId: string, dryRun: boolean): Promise<vo
       "o doce que combina — uma sugestão só, sem insistir. Se o cliente perguntar de alérgeno, responda " +
       "pelo que está escrito na ficha do item; se não estiver escrito, diga que precisa confirmar com a " +
       "cozinha e não invente.",
+    // O fechamento oferece Bebidas e, logo depois, Confeitaria — as categorias
+    // reais desta casa. Ver BAKERY_UPSELL_CATEGORIES.
+    waiterUpsellCategories: [...BAKERY_UPSELL_CATEGORIES],
   };
   await prisma.restaurantBrandConfig.upsert({
     where: { restaurantId },

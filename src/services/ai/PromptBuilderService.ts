@@ -21,6 +21,7 @@ import type OpenAI from "openai";
 import { buildSalesProfile } from "./SalesProfile";
 import type { SalesProfile } from "./SalesProfile";
 import { buildBehaviorBlock } from "./BehaviorEngine";
+import { upsellCategoryLabels } from "./waiter/upsellCategories";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -347,6 +348,17 @@ function buildSystemPrompt(params: {
 
   const personaBlock = buildPersonaBlock(brandConfig.brandPersona);
 
+  // Categorias de fechamento DESTE restaurante — configuração do lojista, ou o
+  // padrão legado derivado do cardápio quando ele não configurou nada.
+  // Antes isso era literal no prompt ("bebida", "sobremesa"): numa padaria que
+  // chama a categoria de "Confeitaria", o modelo era instruído a oferecer algo
+  // que não existia no cardápio dele — e não oferecia nada.
+  const closingSteps        = buildClosingSequence(menuCategories, brandConfig);
+  const closingSequenceLine = closingSteps.length > 0 ? closingSteps.join(" → ") : "(nenhuma configurada)";
+  const closingSequenceBlock = closingSteps.length > 0
+    ? closingSteps.map((label, i) => `    ${i + 1}. ${label}`).join("\n")
+    : "    (nenhuma — vá direto para o checkout, não invente categoria)";
+
   return `Você é o assistente virtual de pedidos do restaurante "${restaurant.name}" no WhatsApp.
 Sua função é ajudar clientes a fazerem pedidos de forma rápida e agradável — e maximizar o valor de cada pedido.
 
@@ -397,8 +409,8 @@ VOCÊ NÃO É UM CHATBOT. VOCÊ É UM EXECUTOR DE FLUXO DE VENDAS.
   ❌ NÃO contradizer resultado de tool — success:false = FALHOU, ponto final
   ❌ NÃO corrigir falha de tool silenciosamente — informe ou tente 1× com ID válido
   ❌ NÃO chamar a mesma tool 3× seguidas — 2 falhas = PARE e responda ao cliente
-  ❌ NÃO redirecionar cliente que perguntou sobre bebida/sobremesa/item — responda IMEDIATAMENTE
-  ❌ NÃO dizer "antes de falar de bebida...", "vamos completar o pedido primeiro" ou qualquer frase que bloqueie ou adie a resposta ao intent do cliente
+  ❌ NÃO redirecionar cliente que perguntou sobre uma categoria ou item — responda IMEDIATAMENTE
+  ❌ NÃO dizer "antes de falar disso...", "vamos completar o pedido primeiro" ou qualquer frase que bloqueie ou adie a resposta ao intent do cliente
   SE NÃO TIVER CERTEZA → NÃO CHAME TOOL
   TOOL > TUDO. Sempre. Sem exceção.
 
@@ -437,17 +449,16 @@ VOCÊ NÃO É UM CHATBOT. VOCÊ É UM EXECUTOR DE FLUXO DE VENDAS.
     Qualquer combinação de itens válida pode ser confirmada.
 
 ━━━ REGRA 3 — FUNIL DE VENDAS (GUIA, NÃO BLOQUEIO) ━━━
-  SEQUÊNCIA PADRÃO (quando o cliente não pede bebida/sobremesa):
-    1 → MAIN ITEM         (prato principal)
-    2 → FOOD EXPANSION    (mais comida — NÃO bebida, NÃO sobremesa)
-    3 → DRINK             (após sinal de fechamento ou iniciativa do cliente)
-    4 → DESSERT           (após bebida coberta ou iniciativa do cliente)
-    5 → CHECKOUT
+  SEQUÊNCIA PADRÃO (quando o cliente não pede uma categoria específica):
+    1 → PRATO PRINCIPAL
+    2 → MAIS COMIDA       (expansão — NÃO as categorias de fechamento)
+    3 → CATEGORIAS DE FECHAMENTO, NESTA ORDEM: ${closingSequenceLine}
+    4 → CHECKOUT
   ⚠️ O funil é um GUIA — a intenção do cliente SEMPRE prevalece:
-  SE o cliente perguntar sobre bebida, sobremesa ou item específico em QUALQUER momento:
+  SE o cliente perguntar sobre QUALQUER categoria ou item específico em QUALQUER momento:
     → Responda e sugira da categoria solicitada IMEDIATAMENTE
     → NÃO redirecione para comida primeiro
-    → NÃO diga "antes de falar de bebida..." ou "vamos completar o pedido primeiro"
+    → NÃO diga "antes de falar disso..." ou "vamos completar o pedido primeiro"
     → NÃO atrase nem bloqueie a resposta por causa do funil
 
 ━━━ REGRA 4 — MAIN ITEM / DESCOBERTA ━━━
@@ -469,26 +480,26 @@ VOCÊ NÃO É UM CHATBOT. VOCÊ É UM EXECUTOR DE FLUXO DE VENDAS.
     → OBRIGATÓRIO: sugira 1 item complementar de comida (combo, porção, hot) antes de qualquer complemento.
     → NÃO pule esta etapa mesmo que o cliente sinalize fechamento — ofereça 1 item de comida primeiro.
     → Localize ID de prato complementar no CARDÁPIO. Execute suggest_upsell.
-    → NÃO ofereça bebida ou sobremesa nesta fase.
+    → NÃO ofereça as categorias de fechamento nesta fase (ver REGRA 6).
   SE o cliente recusar a expansão de comida → aceite e avance para complementos (REGRA 6).
   SE o cliente já tiver 2+ itens de comida → pule a expansão, avance para complementos.
 
-━━━ REGRA 6 — COMPLEMENTOS (DRINK + DESSERT) ━━━
+━━━ REGRA 6 — CATEGORIAS DE FECHAMENTO ━━━
   ATIVADO quando o cliente sinaliza fechamento ("é isso", "fecha", "confirma", etc.)
-  Sequência (para o que ainda NÃO foi coberto):
-    1. Bebida não tentada E não está no carrinho? → Ofereça 1× → execute suggest_upsell → aguarde resposta
-    2. Bebida coberta, sobremesa não tentada? → Ofereça sobremesa 1× → execute suggest_upsell
-    3. Ambos cobertos (tentados ou no carrinho) → execute confirm_order imediatamente
-  NOTA: Se o cliente já pediu bebida/sobremesa antes do sinal de fechamento, esse item já está coberto — pule a etapa correspondente.
-  PROIBIDO proativamente (sem sinal de fechamento e sem iniciativa do cliente): oferecer bebida ou sobremesa.
+  ESTAS SÃO AS ÚNICAS CATEGORIAS DE FECHAMENTO DESTE RESTAURANTE, NESTA ORDEM:
+${closingSequenceBlock}
+  Para cada uma, de cima para baixo:
+    → Ainda não oferecida E não está no PEDIDO ATUAL? → Ofereça 1× → suggest_upsell → aguarde resposta
+    → Já oferecida, recusada ou já no pedido? → pule para a próxima
+  Todas cobertas → execute confirm_order imediatamente.
+  NUNCA ofereça uma categoria que não esteja nesta lista como etapa de fechamento.
+  NUNCA invente uma categoria: use o nome EXATO como está escrito acima e no CARDÁPIO.
+  PROIBIDO proativamente (sem sinal de fechamento e sem iniciativa do cliente): oferecer qualquer uma delas.
 
 ━━━ REGRA 7 — CONTROLE DE RECUSA ━━━
-  LIMITES ABSOLUTOS:
-    BEBIDA: máx 2 tentativas. SOBREMESA: máx 1 tentativa.
-    Após qualquer recusa → aceite IMEDIATAMENTE. NUNCA insista na mesma categoria.
-  recusa de bebida (1ª) → tente 1 alternativa diferente
-  recusa de bebida (2ª) → pare bebida, avance para sobremesa
-  recusa de sobremesa → pare sobremesa, vá direto para checkout
+  LIMITE ABSOLUTO: 1 oferta por categoria de fechamento. Ofereça uma vez, não insista.
+  Após qualquer recusa → aceite IMEDIATAMENTE. NUNCA insista na mesma categoria.
+  recusa numa categoria → pare essa categoria, avance para a próxima da lista
   2 recusas em categorias diferentes → confirm_order imediato, sem mais sugestões
 
 ━━━ REGRA 8 — SEM REPETIÇÃO ━━━
@@ -684,6 +695,23 @@ function buildVoiceBlock(cfg: RestaurantBrandConfig): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * A sequência de categorias que o Garçom oferece no fechamento, como rótulos.
+ *
+ * Só entram categorias que TÊM item no cardápio: categoria configurada e depois
+ * esvaziada/apagada não vira instrução para o modelo — instrução sobre categoria
+ * inexistente é convite à alucinação.
+ */
+function buildClosingSequence(
+  categories: CategoryWithItems[],
+  brandConfig: RestaurantBrandConfig,
+): string[] {
+  const catalog = categories
+    .filter((c) => c.items.length > 0)
+    .map((c) => ({ categoryName: c.name }));
+  return upsellCategoryLabels(catalog, brandConfig.waiterUpsellCategories);
 }
 
 function buildMenuBlock(categories: CategoryWithItems[]): string {

@@ -13,6 +13,11 @@
  */
 
 import { isDessertCategory } from "./ConversationGuardrails";
+import {
+  isDrinkCategory,
+  resolveUpsellSequence,
+  type UpsellStep,
+} from "./waiter/upsellCategories";
 
 // ─── public types ─────────────────────────────────────────────
 
@@ -90,6 +95,16 @@ export interface WaiterMemory {
   acknowledgedItemIds:     string[];      // item IDs already praised after add (no repeat)
   lastAckMessages:         string[];      // recent ack phrases (avoid literal repetition)
   checkoutUpsellStage:     CheckoutUpsellStage; // sequential upsell state machine
+  /**
+   * Chaves dos passos de upsell de fechamento JÁ OFERECIDOS nesta sessão.
+   *
+   * O `checkoutUpsellStage` só conseguia contar uma história de dois passos
+   * ("bebida" e "sobremesa"). Com a sequência configurável pelo lojista, o
+   * anti-loop passa a ser este conjunto: uma categoria já oferecida nunca
+   * reaparece, quantas categorias existam. Append-only — é o que garante a
+   * regra "oferecer uma vez, sem insistir" com N categorias.
+   */
+  checkoutUpsellOffered:   string[];
 }
 
 /** Returns a blank WaiterMemory for a new ordering session. */
@@ -108,6 +123,7 @@ export function createWaiterMemory(): WaiterMemory {
     acknowledgedItemIds:     [],
     lastAckMessages:         [],
     checkoutUpsellStage:     "none",
+    checkoutUpsellOffered:   [],
   };
 }
 
@@ -190,6 +206,15 @@ export interface V2Input {
   message?:     string;      // raw user message (for intent detection)
   memory?:      WaiterMemory;    // current session memory — client passes this in
   config?:      WaiterSalesConfig; // optional per-restaurant config override
+  /**
+   * Categorias que o LOJISTA escolheu oferecer no fechamento, na ordem dele.
+   * Nomes reais de categorias daquele cardápio.
+   *
+   * Ausente / vazia → sequência legada (bebida → sobremesa), idêntica ao
+   * comportamento anterior à configuração existir. Ausência de configuração
+   * NÃO é "não ofereça nada" — é "use o padrão".
+   */
+  upsellCategories?: readonly string[] | null;
   /** Store contact / social channels — used by HUMAN_CONTACT and SOCIAL_CHANNELS handlers. */
   storeChannels?: {
     whatsapp?:  string | null;
@@ -428,9 +453,8 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
 // ─── category classifiers ─────────────────────────────────────
 
-function isDrinkCategory(name: string): boolean {
-  return /bebida|suco|drink|refri|água|cerveja|vinho|refrigerante|soda|shake/i.test(name);
-}
+// isDrinkCategory vive em ./waiter/upsellCategories — mesma regex, uma fonte só.
+// Duplicá-la aqui já significaria duas verdades sobre o que é bebida.
 
 function isComplementCategory(name: string): boolean {
   return !isDrinkCategory(name) && !isDessertCategory(name);
@@ -2118,6 +2142,75 @@ function findPinnedId(catalog: V2CatalogItem[], pairing: string, cards: string[]
   });
 }
 
+// ─── checkout upsell: sequência configurável pelo lojista ─────
+//
+// A ordem NÃO é mais constante no código. `resolveUpsellSequence` devolve os
+// passos daquele restaurante (config do lojista, ou o padrão legado
+// bebida → sobremesa quando não há config). O anti-loop é o conjunto
+// `checkoutUpsellOffered`: passo oferecido não volta, quantas categorias existam.
+
+/** Chave do passo final de extras (não é categoria configurável). */
+const EXTRAS_STEP_KEY = "extras";
+
+/** Itens de um passo que ainda não estão no carrinho, na ordem do cardápio. */
+function selectStepItems(
+  catalog:     V2CatalogItem[],
+  cartItemIds: string[],
+  step:        UpsellStep,
+): string[] {
+  return catalog
+    .filter((i) => step.matches(i.categoryName) && !cartItemIds.includes(i.id))
+    .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+    .map((i) => i.id);
+}
+
+/** true quando o carrinho JÁ tem item da categoria deste passo — não se oferece o que já foi pedido. */
+function cartCoversStep(catalog: V2CatalogItem[], cartItemIds: string[], step: UpsellStep): boolean {
+  return cartItemIds.some((id) => {
+    const item = catalog.find((i) => i.id === id);
+    return !!item && step.matches(item.categoryName);
+  });
+}
+
+const STAGE_ORDINAL: Record<CheckoutUpsellStage, number> = {
+  none: 0, drink_shown: 1, dessert_shown: 2, extras_shown: 3, completed: 4,
+};
+
+/**
+ * Ponte para a memória gravada ANTES desta mudança existir.
+ *
+ * Sessão que começou com o código antigo tem `checkoutUpsellStage` avançado e
+ * `checkoutUpsellOffered` vazio. Traduzir o estágio em "os N primeiros passos já
+ * saíram" evita que um deploy no meio do pedido reofereça o que o cliente acabou
+ * de ver. Só é consultado enquanto `checkoutUpsellOffered` estiver vazio.
+ */
+function seedOfferedFromStage(stage: CheckoutUpsellStage, sequence: UpsellStep[]): string[] {
+  const n = STAGE_ORDINAL[stage] ?? 0;
+  if (n === 0) return [];
+  const keys = sequence.slice(0, Math.min(n, sequence.length)).map((s) => s.key);
+  if (n >= STAGE_ORDINAL.extras_shown) keys.push(EXTRAS_STEP_KEY);
+  return keys;
+}
+
+/**
+ * Fala de abertura do passo.
+ *
+ * Os dois passos legados mantêm a frase EXATA de antes — nenhum restaurante sem
+ * configuração ouve o Garçom falar diferente por causa desta mudança.
+ * Passo configurado usa o nome da categoria como o lojista escreveu, em moldura
+ * neutra de gênero: "Confeitaria", "Café & Bebidas" e "Vinhos" cabem na mesma frase.
+ */
+function stepOpeningLine(step: UpsellStep, isFirst: boolean): string {
+  if (step.source === "legacy") {
+    return step.key === "drink"
+      ? "Antes de fechar, deixe-me apresentar nossas bebidas."
+      : "Temos também deliciosas sobremesas para completar seu pedido.";
+  }
+  return isFirst
+    ? `Antes de fechar, dá uma olhada em ${step.label} 👇`
+    : `Temos também ${step.label} para completar seu pedido 👇`;
+}
+
 function handleCheckoutStarted(input: V2Input): V2Output {
   const cfg      = input.config ?? DEFAULT_WAITER_CONFIG;
   const mem      = input.memory ?? createWaiterMemory();
@@ -2135,59 +2228,47 @@ function handleCheckoutStarted(input: V2Input): V2Output {
     return done();
   }
 
-  // Stage "none": offer drinks first (if cart lacks one and drinks weren't refused)
-  if (stage === "none") {
-    if (!ca.hasDrink && !declined.includes("drink_upsell")) {
-      const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
-      if (drinkCards.length > 0) {
-        const pairing      = getCartPairing(input.catalog, input.cartItemIds);
-        const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, drinkCards) : undefined;
-        const sortedCards  = pinnedCardId
-          ? [pinnedCardId, ...drinkCards.filter((id) => id !== pinnedCardId)]
-          : drinkCards;
-        return {
-          message:     "Antes de fechar, deixe-me apresentar nossas bebidas.",
-          cards:       sortedCards,
-          mode:        "INTERVENTION",
-          options:     [],
-          requiresAI:  false,
-          aiDirective: "",
-          pinnedCardId,
-          cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
-          memoryPatch: { checkoutUpsellStage: "drink_shown" },
-        };
-      }
-    }
-    // No drink needed / no drink cards → fall through to dessert stage
+  const sequence = resolveUpsellSequence(input.catalog, input.upsellCategories);
+
+  const recorded = mem.checkoutUpsellOffered ?? [];
+  const offered  = new Set(recorded.length > 0 ? recorded : seedOfferedFromStage(stage, sequence));
+  const isFirst  = offered.size === 0;
+
+  for (const step of sequence) {
+    if (offered.has(step.key)) continue;
+    // Recusa explícita do cliente cala a categoria — inclusive pelo apelido
+    // legado ("não quero bebida" cala "Café & Bebidas").
+    if (step.declineKeys.some((k) => declined.includes(k))) continue;
+    // Já está no carrinho → nada a oferecer.
+    if (cartCoversStep(input.catalog, input.cartItemIds, step)) continue;
+
+    const cards = selectStepItems(input.catalog, input.cartItemIds, step);
+    if (cards.length === 0) continue;
+
+    const pairing      = getCartPairing(input.catalog, input.cartItemIds);
+    const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, cards) : undefined;
+    const sortedCards  = pinnedCardId
+      ? [pinnedCardId, ...cards.filter((id) => id !== pinnedCardId)]
+      : cards;
+
+    return {
+      message:     stepOpeningLine(step, isFirst),
+      cards:       sortedCards,
+      mode:        "INTERVENTION",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+      pinnedCardId,
+      cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
+      memoryPatch: {
+        checkoutUpsellStage:   step.legacyStage,
+        checkoutUpsellOffered: [...offered, step.key],
+      },
+    };
   }
 
-  // Stage "none" (no drinks) or "drink_shown": offer desserts (unless refused)
-  if (stage === "none" || stage === "drink_shown") {
-    if (!ca.hasDessert && !declined.includes("dessert_upsell")) {
-      const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
-      if (dessertCards.length > 0) {
-        const pairing      = getCartPairing(input.catalog, input.cartItemIds);
-        const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, dessertCards) : undefined;
-        const sortedCards  = pinnedCardId
-          ? [pinnedCardId, ...dessertCards.filter((id) => id !== pinnedCardId)]
-          : dessertCards;
-        return {
-          message:     "Temos também deliciosas sobremesas para completar seu pedido.",
-          cards:       sortedCards,
-          mode:        "INTERVENTION",
-          options:     [],
-          requiresAI:  false,
-          aiDirective: "",
-          pinnedCardId,
-          cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
-          memoryPatch: { checkoutUpsellStage: "dessert_shown" },
-        };
-      }
-    }
-  }
-
-  // Stage "none", "drink_shown", or "dessert_shown": offer extras
-  if (stage === "none" || stage === "drink_shown" || stage === "dessert_shown") {
+  // Passo final fixo: extras / adicionais (não é categoria de venda, é complemento).
+  if (!offered.has(EXTRAS_STEP_KEY)) {
     const extrasCards = selectExtrasItems(input.catalog, input.cartItemIds);
     if (extrasCards.length > 0) {
       return {
@@ -2198,13 +2279,88 @@ function handleCheckoutStarted(input: V2Input): V2Output {
         requiresAI:  false,
         aiDirective: "",
         cardScope:   "category", // regra do CEO (2026-08-03): fim de funil mostra 100% da categoria
-        memoryPatch: { checkoutUpsellStage: "extras_shown" },
+        memoryPatch: {
+          checkoutUpsellStage:   "extras_shown",
+          checkoutUpsellOffered: [...offered, EXTRAS_STEP_KEY],
+        },
       };
     }
   }
 
-  // "extras_shown" or all upsells skipped (no catalog matches) → proceed.
+  // Tudo já oferecido (ou sem card para mostrar) → seguir para o checkout.
   return done();
+}
+
+/**
+ * O cliente pulou o passo que estava na tela ("skip_drink_upsell" /
+ * "skip_dessert_upsell", botões antigos que o cliente web ainda pode devolver).
+ *
+ * Antes cada botão sabia de cor qual era o próximo passo — "pulou bebida, mostre
+ * sobremesa". Com a sequência do lojista isso deixa de existir: o próximo passo é
+ * simplesmente o próximo da sequência que ainda não foi oferecido. O passo pulado
+ * já está em `checkoutUpsellOffered` (ou é deduzido do estágio legado), então
+ * pular nunca reoferece o que acabou de ser recusado.
+ */
+function advanceCheckoutUpsellAfterSkip(input: V2Input): V2Output {
+  const mem      = input.memory ?? createWaiterMemory();
+  const stage    = mem.checkoutUpsellStage ?? "none";
+  const declined = mem.declinedSuggestionTypes ?? [];
+  const sequence = resolveUpsellSequence(input.catalog, input.upsellCategories);
+
+  const recorded = mem.checkoutUpsellOffered ?? [];
+  const offered  = new Set(recorded.length > 0 ? recorded : seedOfferedFromStage(stage, sequence));
+
+  for (const step of sequence) {
+    if (offered.has(step.key)) continue;
+    if (step.declineKeys.some((k) => declined.includes(k))) continue;
+    if (cartCoversStep(input.catalog, input.cartItemIds, step)) continue;
+
+    const cards = selectStepItems(input.catalog, input.cartItemIds, step);
+    if (cards.length === 0) continue;
+
+    return {
+      message:     step.source === "legacy" && step.key === "dessert"
+        ? "Feche com chave de ouro — o favorito dos clientes 🍰"
+        : stepOpeningLine(step, false),
+      cards,
+      mode:        "INTERVENTION",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+      memoryPatch: {
+        checkoutUpsellStage:   step.legacyStage,
+        checkoutUpsellOffered: [...offered, step.key],
+      },
+    };
+  }
+
+  if (!offered.has(EXTRAS_STEP_KEY)) {
+    const extrasCards = selectExtrasItems(input.catalog, input.cartItemIds);
+    if (extrasCards.length > 0) {
+      return {
+        message:     "Para finalizar, quer adicionar algum item extra? 🛍️",
+        cards:       extrasCards,
+        mode:        "INTERVENTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+        memoryPatch: {
+          checkoutUpsellStage:   "extras_shown",
+          checkoutUpsellOffered: [...offered, EXTRAS_STEP_KEY],
+        },
+      };
+    }
+  }
+
+  return {
+    message:     "Perfeito 😊 pode finalizar por aqui.",
+    cards:       [],
+    mode:        "CHECKOUT_SUPPORT",
+    options:     [],
+    requiresAI:  false,
+    aiDirective: "",
+    memoryPatch: { checkoutUpsellStage: "completed" },
+  };
 }
 
 function buildInterventionDirective(): string {
@@ -2757,66 +2913,12 @@ function handleUserMessage(input: V2Input): V2Output {
     return noCardsFound();
   }
 
-  // ── Special path: user skipped drink upsell → offer desserts (no skip button) ─
-  if (msgLow === "skip_drink_upsell") {
-    const dessertCards = selectDessertItems(catalog, cartItemIds);
-    if (dessertCards.length > 0) {
-      return {
-        message:     "Feche com chave de ouro — o favorito dos clientes 🍰",
-        cards:       dessertCards,
-        mode:        "INTERVENTION",
-        options:     [],
-        requiresAI:  false,
-        aiDirective: "",
-        memoryPatch: { checkoutUpsellStage: "dessert_shown" },
-      };
-    }
-    const extrasAfterDrink = selectExtrasItems(catalog, cartItemIds);
-    if (extrasAfterDrink.length > 0) {
-      return {
-        message:     "Para finalizar, quer adicionar algum item extra? 🛍️",
-        cards:       extrasAfterDrink,
-        mode:        "INTERVENTION",
-        options:     [],
-        requiresAI:  false,
-        aiDirective: "",
-        memoryPatch: { checkoutUpsellStage: "extras_shown" },
-      };
-    }
-    return {
-      message:     "Perfeito 😊 pode finalizar por aqui.",
-      cards:       [],
-      mode:        "CHECKOUT_SUPPORT",
-      options:     [],
-      requiresAI:  false,
-      aiDirective: "",
-      memoryPatch: { checkoutUpsellStage: "completed" },
-    };
-  }
-
-  // ── Special path: user skipped dessert upsell → offer extras ─────────────────
-  if (msgLow === "skip_dessert_upsell") {
-    const extrasCards = selectExtrasItems(catalog, cartItemIds);
-    if (extrasCards.length > 0) {
-      return {
-        message:     "Para finalizar, quer adicionar algum item extra? 🛍️",
-        cards:       extrasCards,
-        mode:        "INTERVENTION",
-        options:     [],
-        requiresAI:  false,
-        aiDirective: "",
-        memoryPatch: { checkoutUpsellStage: "extras_shown" },
-      };
-    }
-    return {
-      message:     "Perfeito 😊 pode finalizar por aqui.",
-      cards:       [],
-      mode:        "CHECKOUT_SUPPORT",
-      options:     [],
-      requiresAI:  false,
-      aiDirective: "",
-      memoryPatch: { checkoutUpsellStage: "completed" },
-    };
+  // ── Special path: cliente pulou o passo de upsell na tela ───────────────────
+  // Os dois valores de botão são legado (o cliente web antigo ainda pode
+  // devolvê-los). Ambos significam a mesma coisa hoje: avance na sequência
+  // configurada do restaurante.
+  if (msgLow === "skip_drink_upsell" || msgLow === "skip_dessert_upsell") {
+    return advanceCheckoutUpsellAfterSkip(input);
   }
 
   // ── Handle open_whatsapp / open_url values if echoed back by the frontend ────
@@ -3547,6 +3649,12 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   }
   if (output.memoryPatch?.checkoutUpsellStage !== undefined) {
     patch.checkoutUpsellStage = output.memoryPatch.checkoutUpsellStage;
+  }
+  // Anti-loop do fechamento com N categorias. Sem este repasse a lista de passos
+  // já oferecidos nunca chegaria de volta ao cliente e o Garçom reofereceria a
+  // mesma categoria a cada clique em "Finalizar".
+  if (output.memoryPatch?.checkoutUpsellOffered !== undefined) {
+    patch.checkoutUpsellOffered = output.memoryPatch.checkoutUpsellOffered;
   }
   // Refusal handler (W4) records declined upsell categories so they are not re-pushed.
   if (output.memoryPatch?.declinedSuggestionTypes) {

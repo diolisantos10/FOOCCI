@@ -125,7 +125,12 @@ export async function POST(
 
     const restaurant = await prisma.restaurant.findUnique({
       where:  { slug },
-      select: { id: true, plan: true, aiWaiterEnabled: true },
+      select: {
+        id: true, plan: true, aiWaiterEnabled: true,
+        // Categorias que o lojista escolheu oferecer no fechamento, na ordem dele.
+        // Vem junto desta busca (mesma query) para não custar round-trip por turno.
+        brandConfig: { select: { waiterUpsellCategories: true } },
+      },
     });
     if (!restaurant) return badRequest("Restaurante não encontrado.");
 
@@ -327,6 +332,8 @@ export async function POST(
       lastAddedId,
       suggestedProductIds: Array.isArray(suggestedProductIds) ? suggestedProductIds : [],
       waiterMemory:        waiterMemory ?? undefined,
+      // Sem registro de marca → null = "use o padrão legado" (bebida → sobremesa).
+      upsellCategories:    restaurant.brandConfig?.waiterUpsellCategories ?? null,
     });
 
     console.info("[waiter]", JSON.stringify({
