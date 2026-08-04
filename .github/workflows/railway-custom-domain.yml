@@ -65,7 +65,7 @@ jobs:
           # Lista só os NOMES das variáveis do serviço (nunca os valores), para
           # saber se já existe credencial de DNS guardada — e assim resolver
           # domínio ponta a ponta sem depender de ninguém abrir painel.
-          LISTAR_VARIAVEIS: '1'
+          LISTAR_VARIAVEIS: '0'
         run: node scripts/railway-custom-domain.mjs
 
       - name: Conferir se o domínio já responde
