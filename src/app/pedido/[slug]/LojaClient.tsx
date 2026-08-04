@@ -10,8 +10,9 @@
  * regra "igual por construção", é de aplicativo de marketplace (iFood/Rappi):
  * - StoreHeader fixo: logomarca + nome + status à esquerda; Minha conta e
  *   Sacola (badge de quantidade) à direita.
- * - Faixa fina com as redes sociais + avaliação Google (MenuSocialLinks, o
- *   mesmo markup do QR) e os banners/carrosséis compartilhados (MenuShowcase).
+ * - Faixa fina com as redes sociais (MenuSocialLinks, o mesmo markup do QR), a
+ *   saudação do cliente identificado ("Olá, {nome}" — abre Minha conta) + a
+ *   avaliação Google, e os banners/carrosséis compartilhados (MenuShowcase).
  * - StoreAccountDrawer: identidade, Meus cupons e Meus endereços — rotas
  *   read-only já existentes, gated por prova de posse do telefone (waToken).
  *
@@ -557,20 +558,48 @@ export function LojaClient({
         {(hasSocialStrip || hasShowcase) && (
           <div className="border-b border-gray-100 bg-white">
             {hasSocialStrip && (
-              <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
+              <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3">
                 <MenuSocialLinks
                   instagramUrl={instagramUrl}
                   tiktokUrl={tiktokUrl}
                   restaurantPhone={restaurantPhone}
-                  className="flex items-center gap-2.5"
+                  className="flex shrink-0 items-center gap-2.5"
                 />
+                {/* O espaço à direita dos ícones é da identidade (pedido do CEO,
+                    04/08): identificado → "Olá, {nome}", como a faixa do cardápio
+                    da mesa; o toque abre Minha conta. Sem identificação → convite
+                    discreto que abre o WelcomeModal (padrão marketplace: o iFood
+                    mantém o "Entrar" no topo quando deslogado). O chip trunca com
+                    ellipsis para conviver com o "Avaliar" a 375px. */}
+                {identifiedName ? (
+                  <button
+                    type="button"
+                    onClick={() => setAccountOpen(true)}
+                    aria-label={`Minha conta — ${identifiedName}`}
+                    className="ml-auto min-w-0 rounded-full border px-3 py-2 text-xs font-semibold transition active:scale-95"
+                    style={{ backgroundColor: `${pc}14`, borderColor: `${pc}26`, color: pc }}
+                  >
+                    <span className="block truncate">
+                      Olá, {identifiedName.trim().split(/\s+/)[0]}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowWelcome(true)}
+                    aria-label="Identificar meu WhatsApp"
+                    className="ml-auto min-w-0 rounded-full bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-200 active:scale-95"
+                  >
+                    <span className="block truncate">Identificar-se</span>
+                  </button>
+                )}
                 {googleReviewUrl && (
                   <a
                     href={googleReviewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Avaliar restaurante no Google"
-                    className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-yellow-300 bg-yellow-50 px-3.5 py-2 text-xs font-semibold text-yellow-800 shadow-sm transition hover:bg-yellow-100 active:scale-95"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-yellow-300 bg-yellow-50 px-3.5 py-2 text-xs font-semibold text-yellow-800 shadow-sm transition hover:bg-yellow-100 active:scale-95"
                   >
                     <span aria-hidden="true">⭐</span>
                     Avaliar
