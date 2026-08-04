@@ -48,19 +48,19 @@ export default function AssistantPanel({
   ].slice(0, 4);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4">
+    <div className="flex min-h-full flex-col gap-4 px-4 py-4">
       {/* ── Ações rápidas ─────────────────────────────────────────────── */}
       <section>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.06em] text-muted">
           Ações rápidas
         </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2">
           {QUICK_ACTIONS.map((a) => (
             <button
               key={a.id}
               type="button"
               onClick={() => onQuickAction(a)}
-              className="flex items-center gap-2 rounded-xl border border-line bg-paper px-3 py-2.5 text-left text-[12.5px] font-semibold text-ink2 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+              className="flex items-center gap-1.5 rounded-xl border border-line bg-paper px-2.5 py-2.5 text-left text-[12.5px] font-semibold text-ink2 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
             >
               <span className="shrink-0 text-[15px] leading-none" aria-hidden>
                 {a.icon}
@@ -108,7 +108,7 @@ export default function AssistantPanel({
       />
 
       {/* ── Rodapé ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-line pt-3">
         <button
           type="button"
           onClick={onOpenAvisos}

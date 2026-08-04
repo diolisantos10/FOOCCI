@@ -9,7 +9,8 @@
  * diagnostica. Segue o DESIGN.md (laranja + tokens ink/muted/line, rounded-2xl).
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { MicIcon, SendIcon } from "./icons";
 
 interface Diagnosis {
   classification: "INCIDENT" | "NO_INCIDENT_DETECTED" | "NEEDS_MORE_INFO";
@@ -25,7 +26,7 @@ interface Diagnosis {
 const SEVERITY_STYLE: Record<string, string> = {
   LOW: "bg-[#F4F4F2] text-ink2",
   MEDIUM: "bg-amber-50 text-amber-700",
-  HIGH: "bg-orange-100 text-orange-700",
+  HIGH: "bg-amber-100 text-amber-800",
   CRITICAL: "bg-red-100 text-red-700",
 };
 
@@ -41,6 +42,16 @@ export default function SupportTechChat() {
   const [diag, setDiag] = useState<Diagnosis | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  // Microfone só aparece quando o navegador realmente grava — botão falso é
+  // pior que ausência. Resolvido depois do mount (o servidor não sabe disso).
+  const [micSupported, setMicSupported] = useState(false);
+  useEffect(() => {
+    setMicSupported(
+      typeof window !== "undefined" &&
+        typeof window.MediaRecorder !== "undefined" &&
+        Boolean(navigator.mediaDevices?.getUserMedia),
+    );
+  }, []);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -113,7 +124,7 @@ export default function SupportTechChat() {
                 key={ex}
                 type="button"
                 onClick={() => setReport(ex)}
-                className="rounded-xl border border-line bg-paper px-3 py-2 text-left text-[12.5px] text-ink2 transition-colors hover:border-brand-300 hover:bg-brand-50"
+                className="rounded-xl border border-line bg-paper px-3 py-2 text-left text-[12.5px] text-ink2 transition-colors hover:border-brand-200 hover:bg-brand-50"
               >
                 {ex}
               </button>
@@ -176,36 +187,51 @@ export default function SupportTechChat() {
         </div>
       </div>
 
-      {/* Input */}
-      <div className="shrink-0 border-t border-line bg-paper px-4 py-3 sm:px-5">
-        <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
-          <textarea
-            value={report}
-            onChange={(e) => setReport(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitText(); } }}
-            rows={1}
-            placeholder="Descreva o problema…"
-            className="max-h-24 flex-1 resize-none rounded-xl border border-line bg-canvas px-3 py-2 text-[13px] text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-          />
-          <button
-            type="button"
-            onClick={() => void toggleRecording()}
-            disabled={loading}
-            aria-label={recording ? "Parar gravação" : "Gravar relato"}
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition-colors disabled:opacity-50 ${
-              recording ? "border-red-300 bg-red-50 text-red-600" : "border-line bg-canvas text-ink2 hover:bg-brand-50"
-            }`}
-          >
-            {recording ? "⏺" : "🎤"}
-          </button>
-          <button
-            type="button"
-            onClick={submitText}
-            disabled={loading || !report.trim()}
-            className="h-9 shrink-0 rounded-xl bg-brand-600 px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
-          >
-            Enviar
-          </button>
+      {/* Campo de escrita — mesma peça do modo Assistente (consistência do DESIGN.md) */}
+      <div className="shrink-0 border-t border-line bg-paper px-4 pb-3 pt-3 sm:px-5">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="flex items-end gap-2 rounded-2xl border border-line2 bg-canvas px-2 py-1.5 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+            <textarea
+              value={report}
+              onChange={(e) => setReport(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitText(); } }}
+              rows={1}
+              placeholder="Descreva o problema…"
+              className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:ring-0"
+            />
+            {micSupported && (
+              <button
+                type="button"
+                onClick={() => void toggleRecording()}
+                disabled={loading}
+                aria-label={recording ? "Parar gravação" : "Relatar por voz"}
+                title={recording ? "Parar gravação" : "Relatar por voz"}
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition-colors disabled:opacity-50 ${
+                  recording
+                    ? "border-red-200 bg-red-50 text-red-600"
+                    : "border-transparent text-muted hover:bg-[#F4F4F2] hover:text-ink2"
+                }`}
+              >
+                {recording ? (
+                  <span className="h-2.5 w-2.5 animate-pulse rounded-sm bg-red-500" />
+                ) : (
+                  <MicIcon className="h-4 w-4" />
+                )}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={submitText}
+              disabled={loading || !report.trim()}
+              aria-label="Enviar relato"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-500 text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600 disabled:opacity-40 disabled:shadow-none"
+            >
+              <SendIcon className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-2 text-center text-[11px] leading-snug text-muted">
+            O diagnóstico é uma leitura dos sinais do sistema — nada é executado sem você.
+          </p>
         </div>
       </div>
     </div>

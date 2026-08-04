@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ContextGuide, QuickAction } from "./assistantCatalog";
 import { SUGGESTIONS } from "./assistantCatalog";
 import type { HelpChatMessage, HelpProposedAction, UseHelpThread } from "./useHelpThread";
+import { Button, Card, Pill } from "@/components/ui";
 import { useVoiceInput } from "./useVoiceInput";
 import { MicIcon, SendIcon, SparkIcon } from "./icons";
 
@@ -108,20 +109,20 @@ export default function AssistantChat({
               <p className="mt-1 text-[12.5px] leading-snug text-red-600">
                 Pode ser a conexão. Seu histórico está guardado — nada foi perdido.
               </p>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={() => void load()}
-                className="mt-3 inline-flex items-center justify-center rounded-xl border border-red-200 bg-paper px-3.5 py-2 text-[12.5px] font-semibold text-red-700 transition-colors hover:bg-red-100"
+                className="mt-3 border-red-200 text-red-700 hover:bg-red-100"
               >
                 Tentar de novo
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Vazio — saudação com o nome + o próximo passo */}
           {status !== "loading" && status !== "error" && !hasUserMessages && (
             <div className="flex flex-col gap-3">
-              <div className="rounded-2xl border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
+              <Card className="p-4">
                 <div className="flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                     <SparkIcon className="h-4 w-4" />
@@ -136,7 +137,7 @@ export default function AssistantChat({
                   WhatsApp, impressora, campanhas. Pergunte com suas palavras que eu te mostro o
                   caminho. Se eu não resolver, abro um chamado com a equipe.
                 </p>
-              </div>
+              </Card>
 
               <div className="flex flex-col gap-1.5">
                 <p className="px-1 text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
@@ -168,7 +169,7 @@ export default function AssistantChat({
                       mode: "diagnostico",
                     })
                   }
-                  className="mt-1 self-start text-[12.5px] font-semibold text-muted underline-offset-2 transition-colors hover:text-brand-600 hover:underline"
+                  className="mt-1 self-start text-left text-[12.5px] font-semibold text-muted underline-offset-2 transition-colors hover:text-brand-600 hover:underline"
                 >
                   🛠️ Alguma coisa parou de funcionar? Ir para o diagnóstico →
                 </button>
@@ -200,14 +201,14 @@ export default function AssistantChat({
                 Posso abrir um chamado com a equipe Foocci levando esta conversa inteira como
                 evidência — você recebe o número na hora.
               </p>
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={() => void escalate()}
                 disabled={escalating}
-                className="mt-3 inline-flex items-center justify-center rounded-xl border border-brand-500 bg-brand-500 px-4 py-2.5 text-[13.5px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600 disabled:opacity-50"
+                className="mt-3"
               >
                 {escalating ? "Abrindo chamado…" : "Abrir chamado com a equipe"}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -392,7 +393,7 @@ function MessageBubble({ message }: { message: HelpChatMessage }) {
         <button
           type="button"
           onClick={() => void copy()}
-          className="mt-1 px-1 text-[11px] text-muted opacity-100 transition-colors hover:text-ink2 sm:opacity-0 sm:group-hover:opacity-100"
+          className="mt-1 px-1 text-[11px] text-muted transition-colors hover:text-ink2"
         >
           {copied ? "✓ copiado" : "Copiar resposta"}
         </button>
@@ -430,40 +431,30 @@ function ProposalCard({
   onGo: (href: string) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
+    <Card className="p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[.06em] text-muted">
         Posso te levar lá
       </p>
       <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-ink">{action.offer}</p>
-      <button
-        type="button"
-        onClick={() => onGo(action.cta.href)}
-        className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-brand-500 bg-brand-500 px-4 py-2.5 text-[13.5px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600"
-      >
+      <Button variant="primary" onClick={() => onGo(action.cta.href)} className="mt-3">
         {action.cta.label}
-      </button>
+      </Button>
       <p className="mt-2 text-[11.5px] leading-snug text-muted">
         Nada é feito sem você: {action.humanConfirms}
       </p>
-    </div>
+    </Card>
   );
 }
 
 function TicketCard({ code, notified }: { code: string; notified: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="rounded-2xl border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
+    <Card className="p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-1 text-[11.5px] font-semibold text-brand-600">
-          Chamado {code}
-        </span>
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${
-            notified ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-          }`}
-        >
+        <Pill tone="brand">Chamado {code}</Pill>
+        <Pill tone={notified ? "green" : "amber"}>
           {notified ? "Equipe avisada" : "Registrado — aviso pendente"}
-        </span>
+        </Pill>
       </div>
       <p className="mt-2 text-[12.5px] leading-snug text-ink2">
         {notified
@@ -481,6 +472,6 @@ function TicketCard({ code, notified }: { code: string; notified: boolean }) {
       >
         {copied ? "✓ número copiado" : "Copiar número do chamado"}
       </button>
-    </div>
+    </Card>
   );
 }

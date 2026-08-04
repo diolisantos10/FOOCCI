@@ -61,9 +61,9 @@ const MODES: Array<{ id: AssistantMode; icon: string; label: string }> = [
 ];
 
 const MODE_SUBTITLE: Record<AssistantMode, string> = {
-  assistente: "Tira dúvidas, ensina e abre chamado quando não resolve",
-  diagnostico: "Verifica os sinais do sistema e explica o que houve",
-  avisos: "O que está acontecendo na sua operação agora",
+  assistente: "Dúvidas, onboarding e chamados",
+  diagnostico: "Sinais do sistema e o que fazer",
+  avisos: "O que está acontecendo agora",
 };
 
 function isPhone(): boolean {
@@ -85,6 +85,8 @@ export function AssistantBar() {
   const [expanded, setExpanded] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [draft, setDraft] = useState("");
+  // A trilha começa fechada (o painel termina limpo); o cartão com a barra de
+  // progresso "0 de 8" é o convite, e as ações rápidas abrem ela direto.
   const [trailOpen, setTrailOpen] = useState(false);
   const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set());
 
@@ -95,7 +97,6 @@ export function AssistantBar() {
   const voice = useVoiceInput((text) => setDraft((d) => (d ? `${d} ${text}` : text)));
 
   const userName = session?.user?.name ?? null;
-  const firstName = (userName ?? "").trim().split(" ")[0] || null;
 
   // ── Trilha de primeiros passos (por navegador) ──────────────────────────────
   useEffect(() => {
@@ -230,15 +231,17 @@ export function AssistantBar() {
   ).filter((a): a is QuickAction => Boolean(a));
 
   const hasConversation = helper.messages.some((m) => m.role === "USER");
-  const placeholder = firstName ? `Como posso te ajudar, ${firstName}?` : "Como posso te ajudar?";
+  // O nome do lojista aparece na SAUDAÇÃO da conversa, não no placeholder:
+  // a 375px "Como posso te ajudar, Proprietário?" era cortado no meio.
+  const placeholder = "Como posso te ajudar?";
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
       <div className="relative z-40 shrink-0 border-b border-line bg-paper print:hidden">
-        <div className="flex h-[var(--assistant-bar)] items-center gap-2 px-3 sm:px-4">
+        <div className="flex h-[var(--assistant-bar)] items-center gap-2 px-4 sm:px-6">
           {/* Barra + painel de sugestões (ancorados juntos) */}
-          <div ref={anchorRef} className="relative min-w-0 flex-1 sm:max-w-xl">
+          <div ref={anchorRef} className="relative min-w-0 flex-1 sm:max-w-2xl lg:max-w-xl">
             <form
               onSubmit={submitBar}
               className="flex h-9 items-center gap-1.5 rounded-xl border border-line2 bg-canvas pl-2.5 pr-1 transition-colors focus-within:border-brand-400 focus-within:bg-paper focus-within:ring-2 focus-within:ring-brand-100"
@@ -376,7 +379,7 @@ export function AssistantBar() {
             className={`fixed inset-0 z-50 flex flex-col overflow-hidden bg-paper print:hidden sm:rounded-2xl sm:border sm:border-line sm:shadow-2xl ${
               expanded
                 ? "sm:inset-4 sm:mx-auto sm:max-w-5xl"
-                : "sm:inset-y-4 sm:left-auto sm:right-4 sm:w-[420px]"
+                : "sm:bottom-4 sm:left-auto sm:right-4 sm:top-[calc(var(--assistant-bar)+0.75rem)] sm:w-[420px]"
             }`}
           >
             {/* Cabeçalho */}
@@ -424,7 +427,7 @@ export function AssistantBar() {
                 </div>
 
                 {/* Modos — as três abas antigas, agora aqui dentro */}
-                <div className="mt-2.5 flex items-center gap-1 rounded-xl bg-[#F4F4F2] p-1">
+                <div className="mt-2.5 flex w-full max-w-sm items-center gap-1 rounded-xl bg-[#F4F4F2] p-1">
                   {MODES.map((m) => {
                     const active = mode === m.id;
                     return (
