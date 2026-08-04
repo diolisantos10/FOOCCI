@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, type FormEvent } from "react";
 import Link from "next/link";
+import { UpsellCategoriesPicker } from "./UpsellCategoriesPicker";
 import {
   DEFAULT_BRAND_CONFIG,
   PERSONALITY_VOICE_MAP,
@@ -1692,6 +1693,16 @@ export function AgentePage() {
                 </label>
               ))}
             </div>
+          </Section>
+
+          <Section
+            title="Ofertas no fechamento do pedido"
+            subtitle="Quais categorias do SEU cardápio o Garçom oferece quando o cliente vai finalizar — e em que ordem. Cada uma é oferecida uma vez só, sem insistir."
+          >
+            <UpsellCategoriesPicker
+              value={form.waiterUpsellCategories ?? []}
+              onChange={(next) => patch("waiterUpsellCategories", next)}
+            />
           </Section>
 
           <Section
