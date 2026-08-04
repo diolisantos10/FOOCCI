@@ -37,6 +37,62 @@ WHAT TO IMPROVE:
 
 STYLE GOAL: "Same photo, professionally edited by a food photographer" — NOT a new AI-generated image.`;
 
+/**
+ * A chave da OpenAI está de fato utilizável? UMA definição para todo mundo — se
+ * quem pergunta ("posso oferecer o botão?") e quem gasta usarem regras
+ * diferentes, o botão promete o que a chamada recusa, 40 vezes seguidas.
+ */
+export function isOpenAiImageConfigured(): boolean {
+  const key = process.env.OPENAI_API_KEY;
+  return !!key && key !== "not-configured" && key.length > 10;
+}
+
+/** Uma foto nascida de um texto. Sem imagem de origem — é `images.generate`. */
+export type GeneratedPhoto =
+  | { success: true; buffer: Buffer; mimeType: string; model: string }
+  | { success: false; error: string };
+
+/**
+ * Gera uma foto de prato A PARTIR DE TEXTO (não realça uma existente).
+ *
+ * Mora aqui, e não em quem chama, porque este arquivo é o único lugar do `src/`
+ * autorizado a falar com a API de imagem da OpenAI — a Regra de Ouro do Brain
+ * (src/services/brain/architecture.test.ts) barra "cérebro paralelo", e a porta
+ * de imagem já é esta. Quem precisa de foto pede aqui; ninguém importa o cliente
+ * da OpenAI por conta própria.
+ *
+ * Não escreve no banco e não guarda arquivo: devolve os bytes. Quem chamou decide
+ * onde salva (hoje, `storeEnhancedImage`).
+ */
+export async function generateFoodPhotoFromPrompt(prompt: string): Promise<GeneratedPhoto> {
+  if (!isOpenAiImageConfigured()) {
+    return { success: false, error: "OPENAI_API_KEY não configurada" };
+  }
+
+  try {
+    const { openai } = await import("@/lib/openai");
+    const raw = (await (openai.images.generate as (p: unknown) => Promise<unknown>)({
+      model: MODEL,
+      prompt,
+      size: "1024x1024",
+      n: 1,
+    })) as { data?: Array<{ b64_json?: string; url?: string }> };
+
+    const first = raw.data?.[0];
+    if (first?.b64_json) {
+      return { success: true, buffer: Buffer.from(first.b64_json, "base64"), mimeType: "image/png", model: MODEL };
+    }
+    if (first?.url) {
+      const dl = await fetchImageBuffer(first.url);
+      if ("error" in dl) return { success: false, error: `falha ao baixar a imagem gerada: ${dl.error}` };
+      return { success: true, buffer: dl.buffer, mimeType: dl.mimeType, model: MODEL };
+    }
+    return { success: false, error: "a OpenAI respondeu sem imagem (nem b64_json nem url)" };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export class OpenAIEnhancementProvider implements ImageEnhancementProvider {
   readonly name = "openai";
 

@@ -2,7 +2,8 @@
  * Foocci Bakery — a padaria de demonstração (Frente 3 do lançamento).
  *
  * Este arquivo é o CARDÁPIO e a FICHA DA LOJA. Ele é só dado: quem escreve no
- * banco é `scripts/seed-foocci-bakery.ts`.
+ * banco é `FoocciBakeryService` (chamado pelo botão do admin E pela linha de
+ * comando `npm run bakery:seed` — um serviço só, dois chamadores).
  *
  * ─── O que é fictício aqui, declarado ─────────────────────────────────────────
  *  • O restaurante inteiro. Não existe padaria nenhuma; é vitrine do site de vendas.
