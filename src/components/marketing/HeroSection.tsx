@@ -1,19 +1,30 @@
 /**
  * Hero (home) — o GANCHO, não a explicação.
  *
- * O CONCORRENTE NÃO APARECE AQUI (2026-08-05, ordem do CEO). O hero anterior
- * perguntava "quanto o {marketplace} leva do seu faturamento". Funcionava como
- * conta, mas queimava o primeiro impacto falando de outra empresa: a primeira
- * imagem que o dono forma do Foocci não pode ser a de alguém apontando para o
- * vizinho. Aquela pergunta NÃO foi descartada — ela foi para o topo da
- * `CommissionCalculator`, que é onde a comparação tem lastro (os números são os
- * dele, e a taxa é editável).
+ * AS DUAS DORES, JUNTAS, NA PRIMEIRA TELA (2026-08-05, terceira versão do dia —
+ * escolhida pelo CEO entre três, e a evolução vale mais que o texto final).
  *
- * O que ficou no lugar é a dor mais funda, não o sintoma: a comissão dói todo mês,
- * mas o que machuca de verdade é que **o cliente não é seu**. Quem recebe o pedido
- * fica com o nome, o telefone e o histórico — e cobra de novo para devolver a
- * mesma pessoa amanhã. Comissão é consequência; posse do cliente é a causa. É
- * também a única dor que o Foocci resolve inteira, e por isso ela abre o site.
+ * O CONCORRENTE CONTINUA SEM NOME AQUI, e essa parte não mudou: a primeira imagem
+ * que o dono forma do Foocci não pode ser a de alguém apontando para o vizinho. A
+ * comparação com nome próprio mora no topo da `CommissionCalculator`, que é onde
+ * ela tem lastro — os números são os DELE e a taxa é editável.
+ *
+ * O QUE MUDOU: a versão anterior escolhia UMA dor. Dizia "você vende mais todo mês
+ * e ganha a mesma coisa" — a comissão pelo efeito dela, sem nomear a causa — e
+ * deixava a posse do cliente para depois da rolagem. Era boa de ler e lenta de
+ * agir: descrevia um sintoma que o dono precisa reconhecer antes de entender o que
+ * a gente vende.
+ *
+ * O CEO, olhando o funil: *"as maiores dores são pagar comissão e atender cliente
+ * que não é seu — isso tem que ficar muito claro logo quando eles entram"*. As duas
+ * doem juntas e são a MESMA transação: o marketplace cobra a fatia E fica com a
+ * pessoa. Separar as duas em telas diferentes desfaz o argumento, porque a resposta
+ * do Foocci também é uma só.
+ *
+ * Por isso a manchete tem as duas metades numa frase — "pagar comissão PARA
+ * ENTREGAR o seu cliente" — e a linha de apoio dá o contraste completo: taxa fixa
+ * de um lado, cadastro do outro. Nome, telefone e histórico são ditos com todas as
+ * letras porque "ser dono do cliente" é abstrato e "o telefone dele é seu" não é.
  *
  * REESCRITA COMERCIAL ANTERIOR (2026-08-04): o hero de antes falava do NOSSO ponto
  * de vista ("todo mundo vende um pedaço; o Foocci faz os quatro conversarem") e
@@ -58,9 +69,8 @@ export function HeroSection() {
             Para quem chega de anúncio isso pode ser um curso, uma consultoria ou uma
             maquininha. Ele tem três minutos e nenhuma paciência para adivinhar.
 
-            A manchete NÃO muda: ela é escolha do CEO e o gancho está certo. Quem
-            carrega a categoria é a sobrancelha, que existe exatamente para isso e
-            estava gasta com um público que a manchete já deixa óbvio.
+            Quem carrega a categoria é a sobrancelha, que existe exatamente para isso
+            e estava gasta com um público que a manchete já deixa óbvio.
           */}
           <span className="inline-flex items-center gap-3">
             <span aria-hidden className="hidden h-0.5 w-6 rounded-full bg-brand-500 lg:block" />
@@ -68,32 +78,44 @@ export function HeroSection() {
           </span>
 
           {/*
-            É uma OBSERVAÇÃO, não uma promessa — e é por isso que funciona. O dono lê
-            e pensa "é exatamente isso": ele já viveu o mês em que vendeu mais e
-            fechou igual. Frase que descreve a vida de quem lê não precisa ser
-            acreditada; ela já é reconhecida.
+            "Chega de" e não "pare de": os dois mandam parar, mas o primeiro é o que o
+            dono já disse sozinho, na cozinha, no fim de um mês ruim. Comando soa como
+            anúncio; desabafo soa como ele.
 
-            O laranja marca a VIRADA, não o benefício: "ganha a mesma coisa" é onde
-            dói. Uma expressão só — a marca é 90% neutro + 10% laranja, e destaque em
-            tudo é destaque em nada. `text-balance` evita palavra órfã na última linha.
+            A frase junta as duas dores numa transação só — a comissão é o preço que
+            ele paga PARA perder o cliente. É por isso que "para entregar" carrega o
+            peso: não são duas queixas, é uma troca ruim.
+
+            O laranja marca a virada e para em "o seu cliente" — não em "o seu cliente
+            para outro". A primeira versão pintava as duas últimas de quatro linhas no
+            celular: metade da manchete em laranja é a marca gritando, não enfatizando
+            (90% neutro + 10% laranja, e destaque em tudo é destaque em nada). Medido
+            na captura de 375px, não no olho. `text-balance` evita palavra órfã.
           */}
           <h1
             id="hero-title"
             className="mt-3 text-balance text-[2.1rem] font-semibold leading-[1.08] tracking-tight text-ink sm:text-[2.7rem] lg:mt-4 lg:text-[3.05rem]"
           >
-            Você vende mais todo mês e{" "}
-            <span className="text-brand-500">ganha a mesma coisa</span>.
+            Chega de pagar comissão para entregar{" "}
+            <span className="text-brand-500">o seu cliente</span> para outro.
           </h1>
 
           {/*
-            A linha de apoio fecha o raciocínio que a manchete abre: por que acontece,
-            e o que muda aqui. "Comissão" aparece sem dono — é um fato do negócio do
-            leitor, não uma afirmação sobre a tabela de ninguém (trava jurídica 04/08).
+            A linha de apoio dá o contraste inteiro em duas metades: o que acontece lá
+            (fatia + o cliente fica) e o que muda aqui (taxa fixa + o cadastro é seu).
+
+            "Nome, telefone e histórico" está escrito com todas as letras de propósito.
+            "Ser dono do seu cliente" é abstrato e não se compra; "o telefone dele fica
+            no seu cadastro" é concreto e se entende na primeira leitura.
+
+            "Marketplace" sem nome próprio: é um fato do negócio de quem lê, não uma
+            afirmação sobre a tabela de ninguém (trava jurídica de 04/08, e decisão do
+            CEO de 05/08 de manter o concorrente fora do primeiro impacto).
           */}
           <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
-            Porque o que cresce junto com a venda é a comissão. No Foocci — cardápio,
-            pedido, PDV e CRM no mesmo sistema — o custo é fixo: o que você vender a
-            mais fica com você.
+            Cada pedido no marketplace leva uma fatia do seu faturamento — e o cliente
+            continua sendo deles. No Foocci a taxa é fixa e o cliente é seu: nome,
+            telefone e histórico no seu cadastro.
           </p>
 
           {/*
@@ -105,7 +127,13 @@ export function HeroSection() {
             <PrimaryCta
               className="w-full sm:w-auto"
               href="#calculadora"
-              label="Calcular minha economia"
+              /*
+                "quanto eu economizo" e não "minha economia": o primeiro é a pergunta
+                que ele tem na cabeça depois de ler a manchete; o segundo já pressupõe
+                que existe economia. Prometer menos e entregar o número dele é o que
+                faz a calculadora ser lida como ferramenta, não como propaganda.
+              */
+              label="Calcular quanto eu economizo"
             />
           </div>
 

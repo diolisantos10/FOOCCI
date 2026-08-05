@@ -16,27 +16,26 @@
  * pronto o que está em piloto — e esta seção fazia o inverso, anunciava como futuro
  * o que já está à venda. Mentira nas duas direções custa a mesma confiança.
  *
- * ── SOBRE O BOTÃO, porque ele contraria uma regra que eu mesmo escrevi hoje ──
+ * ── SOBRE O BOTÃO ──
  *
- * `config.ts` diz "no máximo UM CTA comercial por página", e a home já gasta o dela
- * na calculadora — logo depois de a pessoa ver a economia DELA na tela, que é o pico
- * emocional. Mantive os dois, e a razão é o percurso e não a teoria: quem chega até
- * aqui rolou o site inteiro e está a uma tela do rodapé. Fechar sem pedir nada é
- * deixar sair de mãos vazias justamente o visitante que leu tudo.
+ * De manhã este fecho ganhou DOIS botões, e eu abri uma exceção na regra de "um CTA
+ * comercial por página" para justificar o de cima. À noite o CEO desfez a exceção,
+ * e o argumento dele é melhor que o meu: o "agende uma demonstração" vive no header
+ * e na barra fixa do celular, então já está na tela aqui embaixo. Repetir o convite
+ * a dois centímetros de onde ele já está não insiste — ensina a ignorar o laranja.
  *
- * A regra continua valendo para as outras páginas. A exceção mora aqui, no ponto de
- * uso, como o próprio `config.ts` manda — e está registrada em `docs/decisoes.md`.
+ * O que sobrou é a OUTRA porta, a que o topo não oferece: ver o produto funcionando
+ * sem falar com ninguém. Para quem rolou a home inteira e ainda não clicou em marcar
+ * conversa, o que falta não é mais um convite — é prova.
  *
- * O segundo botão NÃO é comercial: leva à degustação, que é prova, não convite.
- * Ele existe para o desconfiado — o que não pede demonstração antes de ver a coisa
- * funcionando. Os dois botões antigos ("Ver como funciona" / "Conhecer a proposta")
- * mandavam o visitante para MAIS duas páginas institucionais: fim de leitura que
- * vira começo de leitura.
+ * Os dois botões originais ("Ver como funciona" / "Conhecer a proposta") mandavam o
+ * visitante para MAIS duas páginas institucionais: fim de leitura que vira começo de
+ * leitura. Esse defeito continua morto.
  */
 
 import Image from "next/image";
-import { PrimaryCta, SecondaryCta } from "./Cta";
-import { DEMO_CTA_LABEL, DEMO_URL, EXPERIMENTE_URL } from "./config";
+import { PrimaryCta } from "./Cta";
+import { EXPERIMENTE_CTA_LABEL, EXPERIMENTE_URL } from "./config";
 
 export function FinalCTASection() {
   return (
@@ -64,43 +63,51 @@ export function FinalCTASection() {
         </h2>
         <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-ink2 lg:mt-4 lg:text-lg">
           Cardápio, pedido, PDV e CRM no mesmo sistema, com o seu cliente no seu
-          cadastro. Deixe seus dados e uma pessoa do Foocci mostra como fica na sua
-          operação.
+          cadastro. Antes de falar com a gente, entre numa loja Foocci de verdade e
+          peça como um cliente seu pediria.
         </p>
 
-        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row lg:mt-8">
+        {/*
+          UM BOTÃO SÓ, e ele NÃO é o comercial (decisão do CEO, 05/08 à noite):
+          *"tira esse botão daí porque no topo já tem 'agende uma demonstração' —
+          que é onde a gente vai transferir ele pro SDR"*.
+
+          Ele tem razão e o argumento é de funil, não de estética: o "agende uma
+          demonstração" vive no header (fixo) e na barra do celular, então ele está
+          na tela o tempo todo, inclusive aqui embaixo. Repetir o mesmo convite a
+          dois centímetros de onde ele já está não insiste — ensina o visitante a
+          ignorar a cor laranja, e aí o que importa perde força.
+
+          O que o fecho ganha em troca é a OUTRA porta, a que o topo não oferece:
+          ver o produto funcionando sem falar com ninguém. Para quem rolou a home
+          inteira e ainda não clicou em marcar conversa, o que falta não é mais um
+          convite — é prova.
+
+          (Isto também desfaz a exceção que eu tinha aberto de manhã para a home ter
+          dois CTAs comerciais. Volta a valer a regra de um por página, e o da home
+          é o da calculadora — logo depois de a pessoa ver a economia dela.)
+        */}
+        <div className="mt-6 flex justify-center lg:mt-8">
           {/*
-            `demoCta` marca este como O botão comercial da página: a barra fixa do
-            celular lê a marca e se apaga quando ele está na tela, para não empilhar
-            dois botões laranja idênticos na mesma dobra.
+            Aba nova de propósito: a degustação leva para DENTRO da loja de
+            demonstração, e perder a página de vendas no caminho é perder o botão
+            de agendar.
           */}
           <PrimaryCta
             className="w-full sm:w-auto"
-            href={DEMO_URL}
-            label={DEMO_CTA_LABEL}
-            demoCta
-          />
-          {/*
-            Aba nova de propósito: a degustação leva para dentro da loja de
-            demonstração, e perder a página de vendas no caminho é perder o botão
-            de contratar.
-          */}
-          <SecondaryCta
-            className="w-full sm:w-auto"
             href={EXPERIMENTE_URL}
-            label="Experimentar antes"
+            label={EXPERIMENTE_CTA_LABEL}
             newTab
           />
         </div>
 
         {/*
-          Microcopy honesta sobre o que acontece depois do clique. A versão anterior
-          dizia "Fale com a gente" — em texto morto, sem link, e sem que existisse
-          telefone, WhatsApp ou e-mail em lugar nenhum do site. Convite sem porta é
-          a forma mais barata de perder o visitante que JÁ decidiu falar com você.
+          A microcopy diz o que tem do outro lado do clique. A versão anterior falava
+          dos dois campos do formulário — que agora não é mais o destino deste botão.
+          Microcopy que descreve outro botão é pior que microcopy nenhuma.
         */}
         <p className="mt-4 text-sm text-muted">
-          São dois campos: seu nome e seu WhatsApp. Sem cadastro e sem compromisso.
+          É uma padaria de demonstração, já montada: você pede como um cliente pediria.
         </p>
       </div>
     </section>

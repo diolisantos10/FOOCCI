@@ -344,12 +344,28 @@ export function CommissionCalculator() {
               </div>
             ) : (
               <div>
-                {/* 1 · A comparação, na cara: quanto lá, quanto aqui. */}
+                {/*
+                  1 · A comparação, na cara: quanto lá, quanto aqui.
+
+                  O RÓTULO É O CONFRONTO (05/08, CEO circulando os dois blocos no
+                  print: *"deveria até ter escrito assim — olha quanto você paga de
+                  comissão"*).
+
+                  Antes dizia "Com os 23% que você informou". Estava correto e era
+                  mudo: descrevia o MÉTODO da conta em vez do resultado dela. O dono
+                  não veio aqui conferir a matemática, ele veio levar um susto — e o
+                  susto é a palavra "comissão" colada num número de quatro dígitos que
+                  sai do bolso dele todo mês.
+
+                  A taxa não sumiu, desceu para a nota de rodapé do cartão: quem quiser
+                  conferir de onde saiu continua conferindo, e quem só vai ler o topo
+                  lê a frase que importa. Método é letra miúda; consequência é manchete.
+                */}
                 <ComparisonPair
-                  marketplaceLabel={`Com os ${formatPct(ratePercent)} que você informou`}
+                  marketplaceLabel="Olha quanto você paga de comissão"
                   marketplaceValue={formatBRL(monthlyCommission)}
                   marketplaceSuffix="/mês"
-                  marketplaceNote="Em reais, sobe toda vez que você vende mais."
+                  marketplaceNote={`Com a taxa de ${formatPct(ratePercent)} que você informou. Em reais, sobe toda vez que você vende mais.`}
                   foocciFixed={foocciFixed}
                 />
 
@@ -367,8 +383,19 @@ export function CommissionCalculator() {
                 */}
                 {hasSavings && conta.outcome !== "negativo" && (
                   <div className="mt-4 rounded-2xl border border-brand-200 bg-brand-50 p-5 text-center sm:p-7">
+                    {/*
+                      Mesma correção do cartão de cima, e ela vale a explicação: "Você
+                      economiza" é um rótulo de planilha. "Olha quanto você economiza
+                      com o Foocci" é alguém apontando para a tela.
+
+                      A marca entra no rótulo de propósito — este é o único número da
+                      página que é MÉRITO do Foocci. O de cima é a dor que ele já tem;
+                      este é o que muda quando ele troca. Sem o nome, o maior número da
+                      tela fica órfão: o visitante lê "economiza" e não sabe economizar
+                      com quem.
+                    */}
                     <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">
-                      Você economiza
+                      Olha quanto você economiza com o Foocci
                     </p>
                     <p className="mt-1 text-[3rem] font-semibold leading-none tracking-tight text-brand-600 tabular-nums sm:text-[4.25rem]">
                       {formatBRL(savings)}
@@ -553,7 +580,14 @@ function ComparisonPair({
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="rounded-2xl border border-line bg-paper p-4 sm:p-5">
-        <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-widest text-muted sm:text-[11px]">
+        {/*
+          `tracking-wide` no celular e `widest` só a partir do `sm`: o rótulo novo
+          ("Olha quanto você paga de comissão") é uma frase, não um carimbo de duas
+          palavras, e num cartão de meia tela a 375px o espaçamento largo o quebrava
+          em TRÊS linhas — empurrando o número para baixo e desalinhando os dois
+          cartões. Espaçamento de letra é decoração; o número é o conteúdo.
+        */}
+        <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-muted sm:text-[11px] sm:tracking-widest">
           {marketplaceLabel ?? `No ${MARKETPLACE_NAME} você paga`}
         </p>
         <p

@@ -9,7 +9,7 @@
  *
  * CONVERSÃO (04/08, self-service; enxugada em 05/08): o cartão do plano tem UMA
  * ação — "Contratar agora", que leva ao checkout `/contratar/novo` já com plano e
- * ciclo escolhidos. Quem quer ver antes tem "Experimentar antes" no topo (a
+ * ciclo escolhidos. Quem quer ver antes tem a degustação no topo (a
  * degustação) e a faixa de fechamento, que é o único CTA comercial da página.
  * Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 + escala
  * brand-*), ação primária brand-500/600, card rounded-2xl, pesos 400/600.
@@ -53,7 +53,12 @@ import {
   TrendingUpIcon,
   RepeatIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, CALCULADORA_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
+import {
+  DEMO_URL,
+  CALCULADORA_URL,
+  EXPERIMENTE_URL,
+  EXPERIMENTE_CTA_LABEL,
+} from "@/components/marketing/config";
 import {
   ASSUMED_RATE_PERCENT,
   MIGRATION_RANGE,
@@ -503,8 +508,8 @@ function PlanCard({ plan }: { plan: Plan }) {
         UMA AÇÃO POR CARTÃO (05/08): contratar. O segundo botão levava ao formulário
         de demonstração — e, com três cartões na tela, virava o MESMO convite três
         vezes, competindo com o "Contratar agora" logo acima dele. Quem ainda não
-        quer contratar tem duas saídas melhores nesta página: "Experimentar antes"
-        no topo (a degustação, sem formulário) e a faixa de fechamento, no fim.
+        quer contratar tem duas saídas melhores nesta página: a degustação no topo
+        (sem formulário) e a faixa de fechamento, no fim.
       */}
       <div className="mt-5 space-y-2.5">
         <PrimaryCta
@@ -575,7 +580,7 @@ export default function PrecosPage() {
         /* Quem chega no preço sem ter visto o produto trava aqui. O segundo botão
            é a saída sem atrito: a degustação, que não pede dado nenhum. O convite
            para a demonstração vive na faixa de fechamento — uma vez, no fim. */
-        secondaryLabel="Experimentar antes"
+        secondaryLabel={EXPERIMENTE_CTA_LABEL}
         secondaryHref={EXPERIMENTE_URL}
         /* Página de preço abre pelo que o dinheiro compra. Primeiro a tela de
            resultado — a que ele abre de manhã; sem ela, a cena que o resultado
