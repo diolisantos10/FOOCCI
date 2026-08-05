@@ -65,10 +65,21 @@ respondendo por ele. Na maioria dos casos não precisa.
 | `canais` | WhatsApp, Instagram, Google, integrações externas — a mensagem que entra e sai |
 | `crm` | campanhas, níveis, cupons, atribuição de receita |
 | `operacao` | cardápio → pedido → pagamento → comanda → nota fiscal |
-| `interface` | toda tela das duas superfícies; dono do `DESIGN.md` |
+| `interface` | **como a tela fica** — toda tela das duas superfícies; dono do `DESIGN.md` |
+| `experiencia` | **se a tela funciona para quem usa** — percurso, controle que mente, número em que não se pode confiar, passo que sobra |
 | `manual` | guias, assistente de ajuda, robô noturno de sync, onboarding do lojista |
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
+
+> **`interface` × `experiencia` — a fronteira, porque eles olham a MESMA tela:**
+> o `interface` responde *"está bonita e funciona em 375/768/1280?"*; o
+> `experiencia` responde *"essa tela deveria existir, e a pessoa consegue fazer o
+> que veio fazer?"*. Regra de bolso: **correção que é trocar uma classe é do
+> `interface`; correção que é tirar a tela, mudar a ordem dos passos ou consertar
+> o que o botão faz é do `experiencia`.** O segundo nasceu em 05/08 porque a nota
+> de 0 a 10 do primeiro — hierarquia, tipografia, espaçamento, consistência —
+> **não pega** o filtro que não filtrava, o "Total hoje" que mentia nem o botão de
+> pausar a loja escondido embaixo de outra barra. Nenhum desses é feio.
 
 > **`meta` × `canais` — a fronteira, porque eles fazem divisa:** o `meta` cuida da
 > **chave**; o `canais` usa a **porta**. Existe **um único aplicativo** dentro da
