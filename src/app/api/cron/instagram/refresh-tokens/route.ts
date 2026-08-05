@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { refreshExpiringInstagramTokens, refreshInstagramTokenForRestaurant } from "@/services/instagram/instagramTokenRefresh";
+import { alertInstagramAttention } from "@/services/instagram/instagramAttentionAlert";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: one.refreshed, result: one }, { status: 200 });
     }
     const result = await refreshExpiringInstagramTokens(typeof body.withinDays === "number" ? body.withinDays : 10);
-    return NextResponse.json({ ok: true, ...result }, { status: 200 });
+    // O alarme já existia e já falhava — dentro do Actions, onde ninguém entra. Aqui ele
+    // sai para o WhatsApp do responsável. O resultado do aviso volta na resposta para o
+    // Actions poder gritar "nem consegui avisar", que é pior ainda.
+    const alert = await alertInstagramAttention(result.attention);
+    return NextResponse.json({ ok: true, ...result, alertSent: alert.sent, alertReason: alert.reason }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";
     return NextResponse.json({ ok: false, error: message }, { status: 200 });

@@ -263,3 +263,135 @@ a verificação de negócio.
 
 **Método:** só leitura de código. Nada foi executado contra a Meta, nada foi
 commitado. Os itens marcados "não provado daqui" exigem `debug_token` ao vivo.
+
+---
+
+## 2026-08-05 · O Instagram mudo desde 23/07: o diagnóstico anterior estava errado em dois pontos
+
+**Pedido:** o CEO cobrou treze dias de canal parado com campanha paga no ar. A ordem
+foi confirmar o diagnóstico, não repeti-lo — e separar o que é meu do que é dele
+**com prova, tentando, não achando**.
+
+### O que eu derrubei do diagnóstico anterior
+
+A leitura herdada era *"token expirado + Página do Facebook não vinculada; DM de
+Instagram trafega pela Página, sem ela a Meta nem entrega"*. **Os dois pedaços da
+segunda metade estão errados**, e mandariam o CEO a uma tarefa inútil:
+
+1. **`facebookPageId: AUSENTE` é o estado CORRETO, escrito pelo próprio código.**
+   `instagramLoginOAuth.ts:297` grava `facebookPageId: null` de propósito: a conexão
+   usa Instagram Business Login, que existe justamente para quem não tem Facebook.
+   O roteamento do webhook casa por `instagramBusinessAccountId` **OU** `facebookPageId`
+   (`InstagramConfigService.ts:141`) — e o primeiro está presente (`27899980922965770`).
+2. **`verifyTokenConfigured: false` não é problema.** É o hash por restaurante; o
+   handshake aceita o token de ambiente (`InstagramConfigService.ts:238`), e
+   `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` **existe** em produção. Além disso o verify token
+   só vale no GET de verificação, não na entrega das mensagens.
+
+### A peça que ninguém tinha consultado, e que decide tudo
+
+**A assinatura de webhook do APLICATIVO** — `GET /{app-id}/subscriptions` com
+`{appId}|{appSecret}`. Ela se lê com a chave do app e **não depende do token morto do
+cliente**, que é o motivo de todo diagnóstico anterior ter parado na parede. Ao vivo:
+
+```
+object=instagram · active=true · callback=https://foocci.com.br/api/webhooks/instagram
+    fields: comments, message_reactions, messages, messaging_postbacks, messaging_handover
+object=whatsapp_business_account · active=true · callback=.../webhooks/meta/whatsapp
+```
+
+**A Meta está entregando.** Não há nada a corrigir na configuração do aplicativo, e a
+confirmação lateral é boa: o WhatsApp está assinado e intacto — o Instagram caído
+**não** o afeta, como a sala já dizia. Continua verdade.
+
+### A causa real, com prova aritmética
+
+`connectedAt: 2026-08-04T00:06:02Z` e `tokenExpiresAt: 2026-08-04T01:06:02Z`.
+**Exatamente uma hora.** O código só grava 3600 num único lugar: o fallback de
+`instagramLoginOAuth.ts:165`, quando toda tentativa de `ig_exchange_token` falhou.
+Logo, **alguém já reconectou em 04/08 e a conexão nasceu morta** — e a queda de julho
+nunca foi "token de 60 dias que venceu": é a troca short→long falhando em produção,
+pela segunda vez (25/07 e 04/08). Mandar reconectar de novo sem mexer nisso repete o
+resultado.
+
+**Por que a troca falha: NÃO PROVADO.** Tentei e registro o método para quem vier:
+- `INSTAGRAM_APP_SECRET` ≠ `META_APP_SECRET` (comparados sem imprimir) — o fallback
+  silencioso da linha 45 **não** está em vigor. Essa hipótese cai.
+- Chamar os dois endpoints da troca com code/token inválido de propósito **não
+  discrimina**: a Meta valida o token antes do `client_secret`, e as duas credenciais
+  devolvem a mesma mensagem. Teste inconclusivo, não negativo (guardrail 1).
+- Os logs `[ig-oauth]` daquela noite **já não existem**: o deploy é de 05/08 14:23 e a
+  retenção do Railway é por deploy. O motivo morreu com o deploy — que é exatamente o
+  buraco que consertei abaixo.
+- `INSTAGRAM_APP_ID|INSTAGRAM_APP_SECRET` é recusado como app token do Graph do
+  Facebook ("Cannot get application info"). **Não concluí nada disso**: o Instagram App
+  ID não é um app do Graph, então a recusa é esperada e não prova credencial ruim.
+
+### O buraco maior, que ninguém tinha visto: a conta nunca era inscrita
+
+A assinatura no nível do APP é necessária e **não suficiente** — a Meta só entrega
+quando a **conta** também está inscrita em `messages`. O fluxo de conexão nunca fez
+isso: dependia de alguém lembrar de chamar `graph-check?subscribe=true` à mão. Isso
+explica como um canal pode ficar mudo **com o token vivo**, que é o intervalo de 23/07
+a 25/07 que o diagnóstico do token nunca explicou.
+
+### O que consertei (arquivo:linha)
+
+| Onde | O quê |
+|---|---|
+| `instagramLoginOAuth.ts:~140` | `subscribe()` no cliente Graph; a inscrição da conta vira parte da conexão |
+| `instagramLoginOAuth.ts` callback | chama o subscribe, e a falha vira `lastError` com o motivo da Meta |
+| `instagramLoginOAuth.ts:30-33` | troca short→long passa de 3 tentativas em ~2s para **5 em ~30s** |
+| `instagramLoginOAuth.ts` `InstagramProfile.longLivedError` | **o motivo sobrevive ao deploy** — antes só existia num `console.warn` |
+| `login/callback/route.ts:33` | distingue `connected` × `connected_shortlived` × `connected_nosubscribe` |
+| `InstagramIntegrationClient.tsx:88` | **`connected_shortlived` NÃO EXISTIA no mapa `IG_FLASH`** — o callback já mandava essa chave desde 03/08 e a tela não mostrava aviso NENHUM. Foi assim que a reconexão de 04/08 morreu em silêncio |
+| `InstagramIntegrationClient.tsx:~296` | faixa vermelha com o `lastError` **dentro do card verde**, e botão "Reconectar agora" |
+| `instagramTokenRefresh.ts` | alarme de **canal mudo** (`silent[]`, `SILENCE_ALERT_DAYS=3`), com evidência |
+| `instagramAttentionAlert.ts` (novo) | o aviso sai do Actions e vai para o WhatsApp pelo canal **Master** |
+| `scripts/instagram-sos*.mjs` + `.github/workflows/instagram-sos.yml` | o diagnóstico que faltava, reaproveitando o padrão Railway→ADMIN_SECRET |
+
+**Verificação:** `npx tsc --noEmit` limpo · `npx vitest run` = 5375 verdes, 1 vermelho
+(`quality/noSideEffects.test.ts`, timeout de 5s por contenção da máquina — **passa
+isolado em 4,3s**, não é meu e não toquei em `quality/`).
+
+### A armadilha de UI que quase impede a correção
+
+Com o token morto, `isConnected` (`InstagramIntegrationClient.tsx:75`) devolve **true**
+— basta `tokenConfigured` — então a tela some com o botão "Entrar com Instagram" e o
+único caminho para reconectar era o botão **vermelho "Desconectar"**, com uma confirmação
+que assusta. Um lojista não escolhe esse caminho quando a tela diz que está tudo verde.
+Daí o botão "Reconectar Instagram" ficar sempre visível no card conectado.
+
+### O que NÃO fiz de propósito
+
+- **Não toquei em `/{app-id}/subscriptions`.** É a camada comum com o WhatsApp, o
+  produto que está no ar. A leitura provou que está correta; reescrever por reescrever
+  é arriscar o canal que funciona para consertar o que não está quebrado. Cheguei a
+  escrever essa capacidade no script e **removi**.
+- **Não rotacionei nada.** Nenhuma credencial foi alterada.
+
+### Duas coisas que descobri e que são pendência de humano
+
+1. **O cron de renovação falha, sozinho, desde 03/08** — verificado no histórico real:
+   `2026-08-03/04/05 | schedule | claude/remove-legacy-runner-q8iXa | failure`. O alarme
+   corrigido em 02/08 **funciona**. O problema é que ele toca dentro do GitHub Actions,
+   onde ninguém entra. Alarme em sala vazia é alarme que não existe — daí o aviso por
+   WhatsApp.
+2. **Não existe canal de aviso configurado em produção.** Varri os nomes das variáveis:
+   nenhuma com telefone (`BUILDOS_META_*`, `SUPPORT_META_*` e `META_TEST_PHONE`
+   **ausentes**). O aviso está pronto e **desligado**: precisa de `INSTAGRAM_ALERT_PHONE`
+   e do canal Master configurado. Não liguei sozinho porque escolher para onde vai o
+   alerta e ativar um número na WABA é decisão do CEO.
+
+### Para a vitrine (proposta — quem promove é o Diretor)
+
+- **"Página do Facebook ausente" não é defeito no fluxo Instagram Login** — é o que o
+  código grava de propósito. Proveniência: `instagramLoginOAuth.ts:297` +
+  `/{app-id}/subscriptions` ao vivo em 05/08.
+- **Quando o token do cliente morre, a chave do APP ainda responde.** `GET
+  /{app-id}/subscriptions` com `{appId}|{appSecret}` diz se a Meta está entregando, sem
+  depender do cliente. É por onde todo diagnóstico de canal mudo deve começar.
+- **Assinatura do APP é necessária e não suficiente**: a CONTA também precisa estar
+  inscrita em `messages`, e isso agora acontece na conexão.
+- **`tokenExpiresAt − connectedAt == 1h` é assinatura digital do fallback** da troca
+  short→long. Aritmética simples que dispensa log.

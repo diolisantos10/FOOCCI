@@ -57,6 +57,13 @@ export interface RefreshSweepResult {
   /** Configs that exist but were skipped — enabled=false, or no stored token. */
   ineligible: Array<{ restaurantId: string; reason: string }>;
   /**
+   * Canais LIGADOS que não recebem evento nenhum há dias. O sweep só olhava o token —
+   * e o token não é o único jeito de um canal morrer. Entre 23/07 e 04/08 este canal
+   * ficou treze dias mudo e quem percebeu foi o CEO, não a máquina. Silêncio prolongado
+   * num canal ligado é, no mínimo, uma pergunta que alguém tem de responder.
+   */
+  silent: Array<{ restaurantId: string; lastWebhookAt: string | null; days: number | null }>;
+  /**
    * True when this run deserves a human. The daily job used to answer
    * `{checked:0, refreshed:0}` with HTTP 200 and the workflow printed "✅ executado" —
    * an alarm that never fires. A restaurant whose token died drops out of the query
@@ -69,10 +76,13 @@ export interface RefreshSweepResult {
   attention: string[];
 }
 
+/** A partir de quantos dias sem NENHUM evento um canal ligado vira pergunta para humano. */
+export const SILENCE_ALERT_DAYS = 3;
+
 export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<RefreshSweepResult> {
   const all = await prisma.instagramChannelConfig.findMany({
-    select: { restaurantId: true, metadata: true, enabled: true, pageAccessTokenEncrypted: true, lastError: true },
-  }).catch(() => [] as Array<{ restaurantId: string; metadata: unknown; enabled: boolean; pageAccessTokenEncrypted: string | null; lastError: string | null }>);
+    select: { restaurantId: true, metadata: true, enabled: true, pageAccessTokenEncrypted: true, lastError: true, lastWebhookAt: true },
+  }).catch(() => [] as Array<{ restaurantId: string; metadata: unknown; enabled: boolean; pageAccessTokenEncrypted: string | null; lastError: string | null; lastWebhookAt: Date | null }>);
 
   const rows       = all.filter((r) => r.enabled && r.pageAccessTokenEncrypted);
   const ineligible = all
@@ -98,6 +108,26 @@ export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<R
     results.push(await refreshInstagramTokenForRestaurant(row.restaurantId));
   }
 
+  // Canal ligado e mudo. Não olha o token: olha se ALGUMA coisa chegou.
+  const agora = Date.now();
+  const silent = all
+    .filter((r) => r.enabled)
+    .map((r) => {
+      const meta = (r.metadata && typeof r.metadata === "object") ? (r.metadata as Record<string, unknown>) : {};
+      // Nunca recebeu nada? Então a régua é desde QUANDO foi conectado. Sem essa
+      // referência não dá para dizer se o silêncio é longo — e ausência de informação
+      // não é informação (guardrail 1): fica quieto em vez de alarmar no escuro.
+      const conectado = typeof meta.connectedAt === "string" ? Date.parse(meta.connectedAt) : NaN;
+      const referencia = r.lastWebhookAt ? r.lastWebhookAt.getTime() : (Number.isFinite(conectado) ? conectado : null);
+      return {
+        restaurantId: r.restaurantId,
+        lastWebhookAt: r.lastWebhookAt ? r.lastWebhookAt.toISOString() : null,
+        days: referencia === null ? null : Math.floor((agora - referencia) / (24 * 60 * 60 * 1000)),
+        lastError: r.lastError,
+      };
+    })
+    .filter((r) => r.days !== null && r.days >= SILENCE_ALERT_DAYS);
+
   const attention: string[] = [];
   for (const bad of ineligible) {
     attention.push(`Instagram do restaurante ${bad.restaurantId} não está sendo renovado: ${bad.reason}.`);
@@ -107,6 +137,18 @@ export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<R
       attention.push(`Renovação falhou para ${r.restaurantId}: ${r.reason ?? "motivo não informado"}.`);
     }
   }
+  // Guardrail 6: o alerta carrega a evidência — desde quando, quantos dias, e o último erro.
+  for (const s of silent) {
+    const desde = s.lastWebhookAt
+      ? `desde ${s.lastWebhookAt} (${s.days} dias)`
+      : `há ${s.days} dias — nunca recebeu nada desde que foi conectado`;
+    const erro = s.lastError ? ` Último erro registrado: ${s.lastError.slice(0, 160)}` : "";
+    attention.push(
+      `Instagram do restaurante ${s.restaurantId} está LIGADO e MUDO ${desde}.`
+      + ` Pode ser ausência real de mensagens, mas depois de ${SILENCE_ALERT_DAYS} dias alguém precisa olhar:`
+      + ` confira o card Diagnóstico e o graph-check.${erro}`,
+    );
+  }
 
   return {
     checked:   rows.length,
@@ -114,6 +156,7 @@ export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<R
     results,
     totalConfigs: all.length,
     ineligible,
+    silent: silent.map(({ restaurantId, lastWebhookAt, days }) => ({ restaurantId, lastWebhookAt, days })),
     needsAttention: attention.length > 0,
     attention,
   };

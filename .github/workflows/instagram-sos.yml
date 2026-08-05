@@ -1,0 +1,57 @@
+name: SOS Instagram — por que a DM não chega
+
+# Somente leitura por padrão. Consulta produção com o ADMIN_SECRET lido do Railway
+# dentro do runner, e consulta as ASSINATURAS DE WEBHOOK DO APLICATIVO com a chave
+# do app — a peça que não depende do token morto do cliente.
+#
+# O log deste repositório é PÚBLICO: o script mascara todo segredo e projeta só
+# campos escolhidos a dedo.
+#
+# ⚠️ aplicar=1 escreve, e escreve SÓ no escopo Instagram. A assinatura de
+# whatsapp_business_account nunca é tocada — o WhatsApp é o produto no ar.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Slug do restaurante'
+        required: false
+        default: 'sushi-cazza'
+      aplicar:
+        description: 'Escrever as correções do escopo Instagram (1 = sim)'
+        required: false
+        default: '0'
+  push:
+    paths:
+      - 'scripts/instagram-sos.mjs'
+      - '.github/workflows/instagram-sos.yml'
+
+jobs:
+  sos:
+    name: Perguntar à Meta e à produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Diagnosticar
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          SLUG: ${{ github.event.inputs.slug || 'sushi-cazza' }}
+          APLICAR: ${{ github.event.inputs.aplicar || '0' }}
+        run: node scripts/instagram-sos.mjs
+      - name: Perícia da credencial
+        if: ${{ github.event_name == 'push' || github.event.inputs.pericia == '1' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/instagram-sos-credencial.mjs
+      - name: Prova da troca do token de 60 dias
+        if: ${{ github.event_name == 'push' || github.event.inputs.pericia == '1' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/instagram-sos-troca.mjs
