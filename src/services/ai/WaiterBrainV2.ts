@@ -14,6 +14,12 @@
 
 import { isDessertCategory } from "./ConversationGuardrails";
 import {
+  cannotConfirmSentence,
+  catalogProvesOffering,
+  detectOfferingQuestion,
+  sanitizeUnprovenDenial,
+} from "./waiter/offeringClaims";
+import {
   isDrinkCategory,
   resolveUpsellSequence,
   type UpsellStep,
@@ -3214,6 +3220,49 @@ function handleUserMessage(input: V2Input): V2Output {
     }
   }
 
+  // ── Oferta do restaurante ≠ item do cardápio ─────────────────────────────────
+  // Roda ANTES da negação por existência. "Vocês tem rodízios" não é pergunta
+  // sobre um prato: rodízio, reserva, estacionamento, entrega num bairro e forma
+  // de pagamento nunca são itens de delivery, então a busca no cardápio não tem
+  // como confirmá-las NEM negá-las. Sem fato explícito, o Garçom confirma e
+  // escala — nunca nega sozinho (guardrail 1).
+  //
+  // Caso real: 05/08/2026, Sushi Cazza, cliente Júlia — o agente respondeu
+  // "Não encontrei rodízios no nosso cardápio" para uma casa que vende
+  // RODIZIO PRESENCIAL a R$ 99, invisível aqui só porque showInDelivery=false.
+  {
+    const offering = detectOfferingQuestion(msgRaw);
+    // Só assume a conversa quando a busca no cardápio também voltou vazia. Se o
+    // cliente citou uma oferta E um prato que existe ("vocês fazem entrega de
+    // temaki?"), os temakis continuam aparecendo — a trava não pode roubar a
+    // resposta boa (guardrail 5). A negação, essa, segue proibida pela regra 10
+    // do validador de saída, aconteça o que acontecer daqui pra frente.
+    const semResultado = offering
+      ? (() => {
+          const r = searchMenuByQuery(msgRaw, catalog, cartItemIds, [], maxBudget, excludedIngredients);
+          return r.confidence === "low" || r.ids.length === 0;
+        })()
+      : false;
+    if (offering && semResultado && !catalogProvesOffering(offering, catalog)) {
+      const wa = input.storeChannels?.whatsapp?.replace(/\D/g, "");
+      return {
+        message:     wa
+          ? `${cannotConfirmSentence(offering)} Quer falar com a equipe?`
+          : `${cannotConfirmSentence(offering)} Posso ajudar com o cardápio 😊`,
+        cards:       [],
+        mode:        "BROWSE",
+        options:     wa
+          ? [
+              { label: "💬 Falar com o restaurante", value: `open_whatsapp:${wa}` },
+              { label: "Ver cardápio",               value: "browse_menu" },
+            ]
+          : [{ label: "Ver cardápio", value: "browse_menu" }],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+  }
+
   // ── Menu Retrieval Contract: existence denial guard ───────────────────────────
   // When the customer asks "Tem X?" and X is genuinely absent from the menu,
   // return a safe denial with real alternatives — prevents AI hallucination.
@@ -3229,7 +3278,10 @@ function handleUserMessage(input: V2Input): V2Output {
       );
       if (altIds.length > 0) {
         return {
-          message:     `Não temos ${termLabel} no cardápio. Que tal essas opções? 👇`,
+          // "Não encontrei", não "não temos": o catálogo prova o que está nele,
+          // nunca o que o restaurante deixa de oferecer. Item específico o
+          // Garçom pode dizer que não achou — é o outro lado da trava acima.
+          message:     `Não encontrei ${termLabel} no cardápio. Que tal essas opções? 👇`,
           cards:       altIds,
           mode:        "SUGGESTION",
           options:     [],
@@ -3596,6 +3648,30 @@ export function validateWaiterResponse(
 
     // 9. No confirmation buttons alongside product cards — always strip options when cards present.
     if (cards.length > 0) options = [];
+
+    // 10. TRAVA: negação sobre oferta do restaurante que o catálogo não prova.
+    //     Nenhum handler — nem os que ainda vão nascer — consegue devolver
+    //     "não temos rodízio / não entregamos no seu bairro / não aceitamos
+    //     vale" a partir de busca vazia, porque a saída inteira passa por aqui.
+    //     É o guardrail 4 aplicado: aviso no perfil do agente já falhou em
+    //     produção; isto é mecanismo.
+    if (!requiresAI && message.length > 0) {
+      const denial = sanitizeUnprovenDenial({ reply: message, catalog });
+      if (denial.blocked) {
+        message = denial.reply;
+        // console.warn, não waiterLog: waiterLog só fala com WAITER_DEBUG=true, e
+        // uma trava que dispara em silêncio em produção é uma trava que ninguém
+        // audita. O alerta carrega a frase barrada (guardrail 6).
+        // eslint-disable-next-line no-console
+        console.warn("[waiter-unproven-denial]", JSON.stringify({
+          source:   "rule_based",
+          event,
+          offering: denial.term?.id ?? null,
+          evidence: denial.evidence,
+          replaced: message,
+        }));
+      }
+    }
 
     if (snap) {
       const fixes: string[] = [];

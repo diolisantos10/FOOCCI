@@ -35,6 +35,11 @@ import * as WaiterBrainV2 from "./WaiterBrainV2";
 import { cartLineBaseIds } from "./cartNormalization";
 import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
 import { upsellCategoryLabels } from "./waiter/upsellCategories";
+import {
+  catalogProvesOffering,
+  detectOfferingQuestion,
+  sanitizeUnprovenDenial,
+} from "./waiter/offeringClaims";
 import { getExperienceBrief } from "@/services/brain/experience/ExperienceBriefService";
 import { getWaiterRuntimeKnowledge } from "@/services/waiterRuntime/WaiterLibraryRuntimeBridge";
 import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
@@ -379,7 +384,19 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
         .slice(0, 4)
         .map((i) => `  • [ID: ${i.id}] ${i.name} — R$ ${i.price.toFixed(2)}`)
         .join("\n");
-      sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nResultado: NENHUM PRODUTO ENCONTRADO para esta consulta.\n→ OBRIGATÓRIO: Informe ao cliente que não encontrou esse item/categoria no cardápio.\n→ PROIBIDO: Afirmar que o produto existe ou chamar suggest_upsell para este item.`;
+      // Pergunta sobre OFERTA (rodízio, reserva, entrega no bairro, forma de
+      // pagamento…) não é pergunta sobre prato: o cardápio de delivery não tem
+      // como confirmá-la nem negá-la. Mandar "informe que não encontrou" aqui
+      // seria mandar o modelo negar o que ninguém verificou — foi assim que a
+      // cliente Júlia ouviu "não encontrei rodízios" de uma casa que tem
+      // rodízio. A trava de verdade é a de saída (sanitizeUnprovenDenial);
+      // esta é só a instrução coerente com ela.
+      const offering = detectOfferingQuestion(message);
+      if (offering && !catalogProvesOffering(offering, catalogItems)) {
+        sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nO cliente perguntou sobre ${offering.label} — isso é SERVIÇO/MODALIDADE do restaurante, não item de cardápio.\nResultado da busca: nada no cardápio deste canal, o que NÃO prova ausência.\n→ PROIBIDO: dizer "não temos", "não encontrei", "não fazemos" ou qualquer negação sobre ${offering.label}.\n→ OBRIGATÓRIO: dizer que vai confirmar com o restaurante e oferecer falar com a equipe.`;
+      } else {
+        sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nResultado: NENHUM PRODUTO ENCONTRADO para esta consulta.\n→ OBRIGATÓRIO: Informe ao cliente que não encontrou esse item/categoria no cardápio.\n→ PROIBIDO: Afirmar que o produto existe ou chamar suggest_upsell para este item.`;
+      }
       if (altLines) {
         sysAddendum += `\n→ Alternativas reais disponíveis (use APENAS estes IDs):\n${altLines}`;
       } else {
@@ -495,6 +512,26 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     finalCards = [];
     blockedHallucination = true;
     console.warn("[waiter-ai] hallucination blocked — AI suggested cards for a non-existent query term");
+  }
+
+  // 3. TRAVA: negação sobre oferta do restaurante que o catálogo não prova.
+  //    O prompt acima é aviso; isto é o mecanismo (guardrail 4). Vale para
+  //    qualquer resposta do modelo, com ou sem instrução, e roda antes dos três
+  //    caminhos de retorno abaixo. Só a frase ofensora é trocada.
+  {
+    const denial = sanitizeUnprovenDenial({ reply: finalResponse, catalog: catalogItems });
+    if (denial.blocked) {
+      console.warn("[waiter-unproven-denial]", JSON.stringify({
+        source:       "openai",
+        restaurantId,
+        event,
+        offering:     denial.term?.id ?? null,
+        userMessage:  message.slice(0, 120),
+        evidence:     denial.evidence,
+        replaced:     denial.reply.slice(0, 200),
+      }));
+      finalResponse = denial.reply;
+    }
   }
 
   console.info("[waiter-ai]", JSON.stringify({
