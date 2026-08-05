@@ -77,18 +77,48 @@ export const EXPERIMENTE_URL = "/site/experimente";
  */
 export const CALCULADORA_URL = "/site#calculadora";
 /**
+ * ⚑ O RÓTULO ÚNICO DE TODO CTA COMERCIAL. Escreva-o AQUI e em lugar nenhum mais.
+ *
  * Caminho único de conversão (decisão do CEO, 04/08): TODO CTA comercial leva ao
- * FORMULÁRIO de `/site/demonstracao`, onde o cliente deixa os dados e a gente entra
- * em contato. Não há mais agenda de horários nem "falar com o fundador" — o rótulo
- * é de PEDIDO, não de agendamento.
+ * FORMULÁRIO de `/site/demonstracao`, onde o cliente deixa os dados e uma pessoa do
+ * Foocci entra em contato.
+ *
+ * TEXTO ÚNICO (decisão do Diretor, 05/08). O site tinha ONZE chamadas para este
+ * mesmo destino com NOVE textos diferentes — "Pedir uma demonstração", "Ver
+ * funcionando no meu restaurante", "Quero isso no meu restaurante — pedir uma
+ * demonstração", "Peça uma demonstração"… Nove nomes para uma porta só é o
+ * visitante tendo que descobrir, botão a botão, que todos levam ao mesmo lugar.
+ *
+ * "Ver no meu restaurante" e não "Pedir uma demonstração" porque o primeiro
+ * descreve o que a pessoa GANHA e o segundo o que ela PEDE — e ele responde de
+ * uma vez as duas perguntas do CEO: demonstração do quê (o Foocci) e para quem
+ * (o restaurante dela). Curto o bastante para caber no header a 375px sem
+ * quebrar linha.
+ *
+ * REGRA DE MANUTENÇÃO: nenhum componente escreve o rótulo à mão. Rótulo literal
+ * em componente é exatamente como nasceram os nove textos.
  */
-export const DEMO_CTA_LABEL = "Pedir uma demonstração";
+export const DEMO_CTA_LABEL = "Ver no meu restaurante";
+
+/**
+ * ⚑ QUANTOS CTAs COMERCIAIS CADA PÁGINA PODE TER (decisão do Diretor, 05/08).
+ *
+ * **No máximo UM por página**, além do botão do header e da barra fixa do celular.
+ * Onde havia dois, ficou o que vem DEPOIS do argumento — a pessoa precisa ter lido
+ * o motivo antes de ser convidada. Botão repetido não aumenta conversão: ensina o
+ * visitante a ignorar a cor laranja, e aí o que importa perde força.
+ *
+ * NÃO conta como CTA comercial o botão que leva a uma FERRAMENTA ou a uma PROVA em
+ * vez do formulário — a calculadora na home ("Calcular minha economia"), a
+ * degustação, a âncora para as telas reais. Eles são o argumento, não o convite.
+ *
+ * As exceções vivem comentadas no ponto de uso, nunca aqui. Regra sem exceção
+ * documentada vira lei burra.
+ */
 
 /** CTA copy. */
 export const PRIMARY_CTA_LABEL = "Ver como o Foocci funciona";
 export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
-/** Header CTA — the commercial conversion path (→ DEMO_URL). */
-export const FOLLOW_LAUNCH_LABEL = "Pedir uma demonstração";
 
 /** Launch messaging. */
 export const PRELAUNCH_BADGE = "Para restaurantes que querem ser donos dos próprios clientes";
@@ -176,8 +206,8 @@ export function ctaTarget(href: string): { href: string } & Record<string, strin
 /**
  * Menu do site. Cinco destinos, nesta ordem — os dois carros-chefe primeiro, depois
  * o resto, depois EXPERIMENTAR e só então o preço: é o funil (o que faz → veja tudo →
- * teste → compre). O "Pedir uma demonstração" NÃO entra aqui: ele é o botão de ação
- * laranja do header (mais limpo do que repetir o CTA como item de menu). Ver
+ * teste → compre). O CTA comercial (`DEMO_CTA_LABEL`) NÃO entra aqui: ele é o botão
+ * de ação laranja do header (mais limpo do que repetir o CTA como item de menu). Ver
  * `MarketingHeader`.
  */
 export const NAV_LINKS: { href: string; label: string }[] = [

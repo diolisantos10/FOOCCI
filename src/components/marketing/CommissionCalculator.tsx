@@ -48,7 +48,7 @@ import {
   formatBRL,
 } from "@/lib/site/commissionRates";
 import { planByIdOrNull } from "@/lib/site/plans";
-import { DEMO_URL } from "./config";
+import { DEMO_URL, DEMO_CTA_LABEL } from "./config";
 
 /** Accepts "40.000", "40000", "R$ 40 mil" typing habits — digits are what matter. */
 function parseRevenue(raw: string): number {
@@ -320,14 +320,22 @@ export function CommissionCalculator() {
                   </p>
                 )}
 
+                {/*
+                  O ÚNICO CTA comercial da home, e ele mora aqui de propósito: só
+                  existe depois que o visitante viu a conta com os NÚMEROS DELE na
+                  tela. Ele é a conclusão do argumento, não uma faixa repetida — por
+                  isso sobreviveu à limpeza de 05/08 e o da `FourContractsSection`,
+                  uma tela abaixo, não. O rótulo é o mesmo do site inteiro: dois
+                  textos diferentes conforme o resultado da conta faziam a mesma
+                  porta ter dois nomes na mesma página.
+                */}
                 <div className="text-center">
                   <Link
                     href={demoHref}
+                    data-demo-cta
                     className="mt-6 inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
                   >
-                    {hasSavings
-                      ? "Quero essa economia no meu restaurante"
-                      : "Quero ver funcionando no meu restaurante"}
+                    {DEMO_CTA_LABEL}
                   </Link>
                 </div>
               </div>

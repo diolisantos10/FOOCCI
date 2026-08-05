@@ -31,7 +31,19 @@ type BtnProps = {
    * que é onde estão os botões de contratar.
    */
   newTab?: boolean;
+  /**
+   * Marca este botão como O CTA comercial da página (`data-demo-cta`). Quem lê a
+   * marca é a barra fixa do celular: com o mesmo rótulo e o mesmo destino nos dois,
+   * dois botões laranja idênticos na mesma dobra são ruído, não insistência. Mesmo
+   * mecanismo do `data-demo-form`. Ver `StickyMobileCta`.
+   */
+  demoCta?: boolean;
 };
+
+/** `data-demo-cta` só quando pedido — atributo vazio no HTML é atributo presente. */
+function demoCtaProps(on: boolean) {
+  return on ? { "data-demo-cta": "" } : {};
+}
 
 /** `target="_blank"` sempre acompanhado de `rel` — janela nova sem `opener` aberto. */
 function tabProps(newTab: boolean) {
@@ -46,11 +58,13 @@ export function PrimaryCta({
   block = false,
   icon,
   newTab = false,
+  demoCta = false,
 }: BtnProps) {
   return (
     <a
       {...ctaTarget(href)}
       {...tabProps(newTab)}
+      {...demoCtaProps(demoCta)}
       className={`inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 px-6 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
         block ? "w-full" : ""
       } ${className}`}
@@ -70,12 +84,15 @@ export function SecondaryCta({
   block = false,
   icon,
   newTab = false,
+  demoCta = false,
 }: BtnProps) {
   return (
     <a
       {...ctaTarget(href)}
       {...tabProps(newTab)}
-      className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
+      {...demoCtaProps(demoCta)}
+      /* Drift do DESIGN.md corrigido de passagem: gray-* → tokens (line2/ink/canvas). */
+      className={`inline-flex items-center justify-center gap-2 rounded-full border border-line2 bg-paper px-6 py-3.5 text-base font-semibold text-ink transition-colors hover:border-muted hover:bg-canvas focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
         block ? "w-full" : ""
       } ${className}`}
     >

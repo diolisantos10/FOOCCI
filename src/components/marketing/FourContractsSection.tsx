@@ -9,10 +9,8 @@
  * a figure rather than inventing one.
  */
 
-import Link from "next/link";
 import { SEPARATE_STACK_MONTHLY, formatBRL } from "@/lib/site/commissionRates";
 import { planByIdOrNull } from "@/lib/site/plans";
-import { DEMO_URL } from "./config";
 
 const SEPARATE = [
   { name: "Cardápio digital", note: "seu pedido, fora do marketplace" },
@@ -117,14 +115,14 @@ export function FourContractsSection() {
           o mesmo cliente que o CRM reconhece e que a IA atende pelo nome.
         </p>
 
-        <div className="mt-7 text-center">
-          <Link
-            href={DEMO_URL}
-            className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
-          >
-            Ver funcionando no meu restaurante
-          </Link>
-        </div>
+        {/*
+          SEM BOTÃO AQUI (05/08). Esta seção tinha um CTA para o formulário uma tela
+          abaixo do CTA da calculadora — dois convites laranja idênticos em sequência,
+          e o de cima aparece no momento em que o dono acabou de ver a economia DELE
+          na tela. Numa disputa entre "logo depois do número dele" e "logo depois de
+          uma tabela", quem fica é o primeiro. A home cumpre a regra de um CTA
+          comercial por página com o da calculadora. Ver `DEMO_CTA_LABEL` no config.
+        */}
       </div>
     </section>
   );

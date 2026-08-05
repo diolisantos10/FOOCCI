@@ -22,6 +22,7 @@ import {
   type CycleCode,
 } from "@/lib/billing/pricing";
 import { CheckoutClient } from "./CheckoutClient";
+import { DEMO_URL, DEMO_CTA_LABEL } from "@/components/marketing/config";
 
 export const dynamic = "force-dynamic";
 
@@ -63,8 +64,10 @@ export default function NovoCheckoutPage({
 
         <p className="mt-8 text-center text-xs text-muted">
           Foocci · CNPJ 59.120.811/0001-79 · foocci.com.br ·{" "}
-          <a href="/site/demonstracao" className="underline decoration-line2 underline-offset-2 hover:text-ink2">
-            Prefere ver antes? Peça uma demonstração
+          {/* Rótulo único do site (`DEMO_CTA_LABEL`) também aqui: esta página fica
+              fora de `/site`, mas a porta é a mesma — e era o décimo nome dela. */}
+          <a href={DEMO_URL} className="underline decoration-line2 underline-offset-2 hover:text-ink2">
+            Prefere ver antes? {DEMO_CTA_LABEL}
           </a>
         </p>
       </div>

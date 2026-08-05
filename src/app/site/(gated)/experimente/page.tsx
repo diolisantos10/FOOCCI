@@ -72,7 +72,7 @@ import {
   SparklesIcon,
   CheckIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, PRECOS_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
+import { DEMO_URL, DEMO_CTA_LABEL, PRECOS_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
 import { getTastingState, type ScheduleLine } from "@/lib/site/demoTasting";
 import { DEMO_BAKERY_SLUG } from "@/lib/demo-restaurant";
 import { getPublicQrUrl, getPublicMenuUrl } from "@/lib/public-url";
@@ -454,8 +454,14 @@ export default async function ExperimentePage() {
                       Ela volta ao ar em instantes. Enquanto isso, a gente mostra o sistema
                       rodando com o cardápio do seu restaurante, ao vivo.
                     </p>
+                    {/* EXCEÇÃO à regra de um CTA por página, e ela é do estado VAZIO:
+                        este botão só existe quando a padaria de demonstração está
+                        fora do ar. Sem ele, a página que a campanha paga aponta fica
+                        sem saída nenhuma. Ele nunca convive com o CTA do fechamento
+                        na mesma visita útil — quando um aparece, a página inteira
+                        está falando de outra coisa. */}
                     <SecondaryCta
-                      label="Pedir uma demonstração"
+                      label={DEMO_CTA_LABEL}
                       href={DEMO_URL}
                       block
                       className="mt-4 !py-2.5 !text-sm"
@@ -641,11 +647,13 @@ export default async function ExperimentePage() {
               A padaria acima é o Foocci configurado em um restaurante. O seu fica igual — com
               o seu nome, as suas cores e os seus preços.
             </p>
+            {/* O único CTA comercial da página (rótulo único: `DEMO_CTA_LABEL`). */}
             <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <PrimaryCta label="Contratar agora" href={PRECOS_URL} className="w-full sm:w-auto" />
               <SecondaryCta
-                label="Pedir uma demonstração"
+                label={DEMO_CTA_LABEL}
                 href={DEMO_URL}
+                demoCta
                 className="w-full sm:w-auto"
               />
             </div>
