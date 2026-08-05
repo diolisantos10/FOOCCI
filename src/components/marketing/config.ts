@@ -89,16 +89,33 @@ export const CALCULADORA_URL = "/site#calculadora";
  * demonstração", "Peça uma demonstração"… Nove nomes para uma porta só é o
  * visitante tendo que descobrir, botão a botão, que todos levam ao mesmo lugar.
  *
- * "Ver no meu restaurante" e não "Pedir uma demonstração" porque o primeiro
- * descreve o que a pessoa GANHA e o segundo o que ela PEDE — e ele responde de
- * uma vez as duas perguntas do CEO: demonstração do quê (o Foocci) e para quem
- * (o restaurante dela). Curto o bastante para caber no header a 375px sem
- * quebrar linha.
+ * DECISÃO DO CEO (05/08, à noite): **"Agende uma demonstração"**, e é ele quem
+ * está certo sobre o próprio funil. Eu tinha escolhido "Ver no meu restaurante"
+ * por descrever o que a pessoa GANHA em vez do que ela PEDE — bom princípio de
+ * copy, e errado aqui: este botão é a porta do SDR. Quem clica está marcando
+ * conversa com uma pessoa, e o rótulo tem que dizer isso, porque a promessa do
+ * botão vira a expectativa da ligação. "Ver no meu restaurante" prometia uma
+ * tela; do outro lado atende um humano.
+ *
+ * Quem mostra o produto sem intermediário é a DEGUSTAÇÃO (`EXPERIMENTE_URL`), com
+ * outro botão e outra promessa. Duas portas, duas frases honestas.
  *
  * REGRA DE MANUTENÇÃO: nenhum componente escreve o rótulo à mão. Rótulo literal
  * em componente é exatamente como nasceram os nove textos.
  */
-export const DEMO_CTA_LABEL = "Ver no meu restaurante";
+export const DEMO_CTA_LABEL = "Agende uma demonstração";
+
+/**
+ * ⚑ O RÓTULO DA DEGUSTAÇÃO — a outra porta, e ela NÃO é comercial.
+ *
+ * Era "Experimentar antes", e o CEO matou a expressão pelo motivo certo: *"dá a
+ * entender que eu vou testar o sistema antes de pagar — isso pode gerar
+ * confusão"*. O Foocci não oferece teste grátis do sistema; oferece uma padaria
+ * de demonstração já montada, com QR Code, para a pessoa **ver funcionando**.
+ * "Antes" sugeria um período de avaliação que não existe, e prometer degrau que
+ * não existe é o guardrail 7 na direção do exagero.
+ */
+export const EXPERIMENTE_CTA_LABEL = "Veja como funciona";
 
 /**
  * ⚑ QUANTOS CTAs COMERCIAIS CADA PÁGINA PODE TER (decisão do Diretor, 05/08).
@@ -246,6 +263,17 @@ export const NAV_LINKS: { href: string; label: string }[] = [
   { href: ATENDIMENTO_IA_URL, label: "Atendimento com IA" },
   { href: CRM_URL, label: "CRM" },
   { href: SOLUCOES_URL, label: "Soluções" },
-  { href: EXPERIMENTE_URL, label: "Experimente" },
+  /*
+    "Ver funcionando" e não "Experimente": mesma correção do CEO aplicada ao menu,
+    porque o problema é a PALAVRA e ela estava em três lugares (botão do fecho,
+    título da página e aqui). Deixar o menu dizendo "Experimente" enquanto a página
+    de destino diz "Veja como funciona" é o visitante clicando numa promessa e
+    chegando noutra.
+
+    "Ver funcionando" e não "Veja como funciona" só por caber: item de menu divide
+    a barra com outros quatro, e a 1280px a frase inteira empurrava o botão laranja
+    para fora. Mesmo verbo, mesma promessa, metade do comprimento.
+  */
+  { href: EXPERIMENTE_URL, label: "Ver funcionando" },
   { href: PRECOS_URL, label: "Planos e preços" },
 ];
