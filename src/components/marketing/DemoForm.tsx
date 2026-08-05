@@ -31,6 +31,21 @@
  * Estados (DESIGN.md §6.1): idle · enviando (botão travado, dois toques não viram
  * dois leads) · enviado (painel de WhatsApp OU painel de confirmação) · erro em
  * linha que PRESERVA tudo que foi digitado.
+ *
+ * ── CORREÇÃO DE 05/08/2026: o botão mudo ────────────────────────────────────
+ *
+ * "Enviar meus dados" nascia DESABILITADO com o formulário vazio e não dizia que
+ * faltavam nome e WhatsApp. É o mesmo defeito do checkout (`/contratar/novo`),
+ * numa escala menor, e a solução é a MESMA de propósito — dois formulários do
+ * mesmo site não podem responder de formas diferentes ao mesmo toque:
+ *
+ *   o botão fica habilitado, o toque valida, e a tela responde em três lugares —
+ *   resumo colado no botão, mensagem no campo e foco no primeiro pendente.
+ *
+ * `noValidate` no formulário porque a validação passou a ser nossa: sem ele o
+ * navegador engole o `submit` com um balão próprio, em inglês em alguns
+ * aparelhos, e o resumo nunca chega a aparecer. O `required` continua no campo —
+ * ele é semântica para leitor de tela, não o mecanismo.
  */
 
 import { useState } from "react";
@@ -84,11 +99,34 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
   const numeroLegivel = formatSalesNumber();
   const temWhatsApp = numeroLegivel !== null;
 
-  const canSubmit = status !== "sending" && nome.trim() !== "" && whatsapp.trim() !== "";
+  /** O que falta, na ordem dos campos. Mesma estrutura do checkout. */
+  const problemas: { campo: string; rotulo: string; mensagem: string }[] = [];
+  if (nome.trim() === "")
+    problemas.push({ campo: "nome", rotulo: "Nome", mensagem: "Diga como podemos te chamar." });
+  if (whatsapp.trim() === "")
+    problemas.push({ campo: "whatsapp", rotulo: "WhatsApp", mensagem: "Informe o WhatsApp com DDD — é por onde a gente responde." });
+
+  const [tentouEnviar, setTentouEnviar] = useState(false);
+  const mostrarPendencias = tentouEnviar && problemas.length > 0;
+  const erroDe = (campo: string) =>
+    tentouEnviar ? (problemas.find((p) => p.campo === campo)?.mensagem ?? null) : null;
+
+  function irParaCampo(campo: string) {
+    const el = document.getElementById(campo);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    window.setTimeout(() => el.focus({ preventScroll: true }), 250);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (status === "sending") return;
+
+    setTentouEnviar(true);
+    if (problemas.length > 0) {
+      irParaCampo(problemas[0]!.campo);
+      return;
+    }
 
     /* O MESMO analisador do servidor, rodando aqui só para a pessoa ver o erro
        sem esperar a ida e volta. Não é a trava — a trava é o `refine` do
@@ -196,10 +234,10 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
       formulário e a da barra — competem, e a barra leva a pessoa embora de onde
       ela já estava convertendo. Ver `StickyMobileCta`.
     */
-    <form onSubmit={handleSubmit} data-demo-form className="space-y-4">
+    <form onSubmit={handleSubmit} data-demo-form noValidate className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="nome" label="Nome" value={nome} onChange={setNome} placeholder="Seu nome" required />
-        <Field id="whatsapp" label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(00) 00000-0000" required />
+        <Field id="nome" label="Nome" value={nome} onChange={setNome} placeholder="Seu nome" required erro={erroDe("nome")} />
+        <Field id="whatsapp" label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(00) 00000-0000" required erro={erroDe("whatsapp")} />
         <Field id="restaurante" label="Nome do restaurante" value={restaurante} onChange={setRestaurante} placeholder="Seu restaurante" />
         <Field id="cidade" label="Cidade" value={cidade} onChange={setCidade} placeholder="Sua cidade" />
       </div>
@@ -217,10 +255,38 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
         </p>
       )}
 
+      {/* O resumo do que falta, colado no botão — mesma peça e mesmo tom do
+          checkout: amber para pendência do próprio formulário, vermelho (acima)
+          só para falha de servidor. */}
+      {mostrarPendencias && (
+        <div id="pendencias-demo" role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-700">
+            {problemas.length === 1 ? "Falta 1 campo" : `Faltam ${problemas.length} campos`}
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {problemas.map((p) => (
+              <li key={p.campo}>
+                <button
+                  type="button"
+                  onClick={() => irParaCampo(p.campo)}
+                  className="text-left text-sm leading-relaxed text-amber-700 hover:text-amber-800"
+                >
+                  <span className="font-semibold underline decoration-amber-300 underline-offset-4">
+                    {p.rotulo}
+                  </span>
+                  : {p.mensagem}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="pt-2">
         <button
           type="submit"
-          disabled={!canSubmit}
+          disabled={status === "sending"}
+          aria-describedby={mostrarPendencias ? "pendencias-demo" : undefined}
           className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand-500 px-6 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === "sending"
@@ -371,6 +437,7 @@ function Field({
   onChange,
   placeholder,
   required,
+  erro,
 }: {
   id: string;
   label: string;
@@ -378,6 +445,8 @@ function Field({
   onChange: (v: string) => void;
   placeholder?: string;
   required?: boolean;
+  /** Mensagem do que falta neste campo — só depois de a pessoa tentar enviar. */
+  erro?: string | null;
 }) {
   return (
     <div>
@@ -392,8 +461,20 @@ function Field({
         required={required}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        aria-invalid={Boolean(erro)}
+        aria-describedby={erro ? `erro-${id}` : undefined}
+        /* O `!` na borda de erro é obrigatório: a regra base de `globals.css`
+           (`input:not(…)` com sete `:not`) tem especificidade maior que qualquer
+           utilitário e engole a cor. Mesma armadilha do checkout. */
+        className={`w-full rounded-xl border bg-paper px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-brand-100 ${
+          erro ? "!border-red-400" : "border-line2 focus:border-brand-400"
+        }`}
       />
+      {erro && (
+        <p id={`erro-${id}`} className="mt-1 text-xs font-semibold text-red-600">
+          {erro}
+        </p>
+      )}
     </div>
   );
 }

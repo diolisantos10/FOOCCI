@@ -37,16 +37,40 @@
  *     a tela diz a partir de quanto a conta vira, que é honesto e ainda vende.
  *   - Antes de calcular a tela não fica vazia: já mostra o mecanismo (a taxa é um %
  *     que sobe com a venda; o Foocci é fixo) com o próximo passo.
+ *
+ * ── Três correções de 05/08/2026 (varredura de percurso em produção, no celular) ──
+ *
+ *  1. **A faixa conservadora mentia.** "Começando devagar" multiplicava a comissão
+ *     pela fatia migrada e chamava aquilo de "no seu caixa" SEM descontar a
+ *     mensalidade — o número grande logo acima descontava, e este não. A conta
+ *     inteira mudou-se para `@/lib/site/savings`, que é puro e tem teste. Quando a
+ *     faixa não fecha, a tela DIZ que não fecha (guardrail 7 em forma numérica).
+ *  2. **Faltava trava para cima.** Havia trava embaixo ("parece baixo demais") e na
+ *     taxa ("parece alta demais"), mas 999.999.999 produzia "você economiza
+ *     R$ 229.999.571 por mês" — um zero a mais transformava a ferramenta mais
+ *     confiável do site em piada. Agora existe `MAX_PLAUSIBLE_REVENUE`, com o
+ *     mesmo tom das outras duas.
+ *  3. **No celular o resultado nascia fora da tela** (a 375px o bloco "Você
+ *     economiza" começava 221px abaixo da dobra, sem rolagem). Duas medidas, e a
+ *     primeira é a que vale sem JavaScript nenhum: o miolo entre o campo e o
+ *     resultado foi comprimido no celular. A segunda é a rolagem até o resultado
+ *     quando a conta fecha — condicionada a ele estar mesmo fora de vista, então
+ *     no desktop ela nunca dispara.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MARKETPLACE_NAME,
-  MIGRATION_RANGE,
   ASSUMED_RATE_PERCENT,
   formatBRL,
 } from "@/lib/site/commissionRates";
+import {
+  migrationSavings,
+  MIGRATION_LOW,
+  MIGRATION_HIGH,
+  type MigrationSavings,
+} from "@/lib/site/savings";
 import { planByIdOrNull } from "@/lib/site/plans";
 import { DEMO_URL, DEMO_CTA_LABEL } from "./config";
 
@@ -85,6 +109,16 @@ const PRESETS = [20_000, 40_000, 80_000, 150_000];
 const DEFAULT_RATE_PERCENT = String(ASSUMED_RATE_PERCENT);
 /** Acima disso o número quase certamente é erro de digitação, não taxa. */
 const MAX_PLAUSIBLE_RATE = 90;
+/**
+ * Teto do faturamento — a trava que faltava, e ela é irmã das outras duas.
+ *
+ * R$ 5 milhões de delivery POR MÊS são ~R$ 165 mil por dia: existe, mas não é um
+ * restaurante que se atende por formulário — é conversa. Acima disso o caso quase
+ * sempre é zero a mais, e a calculadora respondia com "você economiza
+ * R$ 229.999.571 por mês" em vez de desconfiar. Número absurdo dito com convicção
+ * queima a credibilidade de TODOS os outros números da página.
+ */
+const MAX_PLAUSIBLE_REVENUE = 5_000_000;
 
 export function CommissionCalculator() {
   const [revenueText, setRevenueText] = useState("");
@@ -94,11 +128,14 @@ export function CommissionCalculator() {
   const ratePercent = parseRate(rateText);
   const rate = ratePercent / 100;
 
-  const hasValue = revenue > 0 && ratePercent > 0 && ratePercent <= MAX_PLAUSIBLE_RATE;
   // Abaixo disso as porcentagens produzem números pequenos demais para argumentar —
   // melhor dizer isso do que mostrar um resultado que enfraquece a conta.
   const tooSmall = revenue > 0 && revenue < 1_000;
+  const tooBig = revenue > MAX_PLAUSIBLE_REVENUE;
   const rateOutOfRange = ratePercent > MAX_PLAUSIBLE_RATE;
+
+  const hasValue =
+    revenue > 0 && !tooSmall && !tooBig && ratePercent > 0 && !rateOutOfRange;
 
   const demoHref = DEMO_URL;
 
@@ -109,15 +146,47 @@ export function CommissionCalculator() {
 
   // Toda a conta sai de dois números: o faturamento e a taxa, ambos informados por
   // quem está lendo. A faixa de migração é nossa e vem rotulada como conservadora.
-  const monthlyCommission = revenue * rate;
-  const savingsLow = monthlyCommission * MIGRATION_RANGE.low;
-  const savingsHigh = monthlyCommission * MIGRATION_RANGE.high;
+  // A aritmética inteira mora em `savings.ts` — pura, com teste, e a MESMA que a
+  // página de planos usa. Duas cópias da mesma conta foi como o erro nasceu.
+  const conta = migrationSavings({
+    monthlyRevenue: revenue,
+    ratePercent,
+    planMonthly: foocciFixed ?? 0,
+  });
+  const monthlyCommission = conta.monthlyCommission;
 
   const savings = foocciFixed === null ? 0 : monthlyCommission - foocciFixed;
   /** Só existe economia para mostrar quando a comissão passa da mensalidade fixa. */
   const hasSavings = foocciFixed !== null && savings > 0;
   /** Faturamento a partir do qual o plano fixo custa menos que a taxa informada. */
-  const breakEven = foocciFixed === null || rate <= 0 ? 0 : foocciFixed / rate;
+  const breakEven = foocciFixed === null ? 0 : conta.breakEvenFull;
+
+  /*
+    ROLAR ATÉ O RESULTADO — a segunda metade da correção do celular.
+    Só dispara quando (a) houve interação de verdade, (b) a conta fecha e (c) o
+    resultado está mesmo fora de vista. No desktop a condição (c) é falsa e nada
+    acontece. O atraso deixa a pessoa terminar de digitar antes de a tela se mexer,
+    e `prefers-reduced-motion` desliga a animação — a rolagem continua, sem o efeito.
+  */
+  const resultadoRef = useRef<HTMLDivElement>(null);
+  const interagiu = useRef(false);
+
+  useEffect(() => {
+    if (!interagiu.current || !hasValue) return;
+    const alvo = resultadoRef.current;
+    if (!alvo) return;
+
+    const t = window.setTimeout(() => {
+      const caixa = alvo.getBoundingClientRect();
+      // "Fora de vista" = sobra menos de 160px de tela abaixo do topo do
+      // resultado — não dá para ler nem a comparação, quanto mais o número grande.
+      if (caixa.top < window.innerHeight - 160) return;
+      const semAnimacao = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      alvo.scrollIntoView({ block: "start", behavior: semAnimacao ? "auto" : "smooth" });
+    }, 450);
+
+    return () => window.clearTimeout(t);
+  }, [hasValue, revenue, ratePercent]);
 
   return (
     <section id="calculadora" className="scroll-mt-16 bg-canvas py-12 sm:py-20">
@@ -136,16 +205,18 @@ export function CommissionCalculator() {
           <h2 className="mt-2 text-balance text-[1.7rem] font-semibold leading-tight text-ink sm:mt-3 sm:text-4xl">
             Quanto o {MARKETPLACE_NAME} leva do seu faturamento todo mês?
           </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-ink2 sm:mt-4">
+          {/* Uma linha a menos no celular (`text-[15px]`) é uma linha a mais de
+              resultado acima da dobra — ver a correção 3 no topo do arquivo. */}
+          <p className="mx-auto mt-2.5 max-w-2xl text-[15px] leading-relaxed text-ink2 sm:mt-4 sm:text-base">
             Coloque o que você fatura no delivery e a taxa que você paga hoje. A conta é
             feita na hora, com os seus números — e mostra quanto sobraria no seu bolso
             com o Foocci.
           </p>
         </header>
 
-        <div className="mt-6 rounded-2xl border border-line bg-paper p-5 shadow-sm sm:mt-10 sm:p-8">
+        <div className="mt-5 rounded-2xl border border-line bg-paper p-5 shadow-sm sm:mt-10 sm:p-8">
           {/* ── Entradas ── */}
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
             <div>
               <label htmlFor="faturamento" className="block text-sm font-semibold text-ink">
                 Faturamento no delivery por mês
@@ -159,7 +230,10 @@ export function CommissionCalculator() {
                   inputMode="numeric"
                   autoComplete="off"
                   value={maskRevenue(revenueText)}
-                  onChange={(e) => setRevenueText(e.target.value)}
+                  onChange={(e) => {
+                    interagiu.current = true;
+                    setRevenueText(e.target.value);
+                  }}
                   placeholder="40.000"
                   className="w-full rounded-xl border border-line bg-paper py-3 pl-10 pr-3 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                 />
@@ -169,7 +243,10 @@ export function CommissionCalculator() {
                   <button
                     key={p}
                     type="button"
-                    onClick={() => setRevenueText(String(p))}
+                    onClick={() => {
+                      interagiu.current = true;
+                      setRevenueText(String(p));
+                    }}
                     className="rounded-xl border border-line px-3 py-1.5 text-xs font-semibold text-ink2 transition-colors hover:border-brand-500 hover:text-brand-600"
                   >
                     {formatBRL(p)}
@@ -194,7 +271,10 @@ export function CommissionCalculator() {
                   inputMode="decimal"
                   autoComplete="off"
                   value={rateText}
-                  onChange={(e) => setRateText(e.target.value)}
+                  onChange={(e) => {
+                    interagiu.current = true;
+                    setRateText(e.target.value);
+                  }}
                   placeholder="23"
                   aria-describedby="taxa-ajuda"
                   className="w-full rounded-xl border border-line bg-paper py-3 pl-3 pr-9 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
@@ -203,20 +283,33 @@ export function CommissionCalculator() {
                   %
                 </span>
               </div>
+              {/* Encurtado no celular (era quatro linhas) sem perder o que importa:
+                  o QUE somar e ONDE conferir. Ver correção 3 no topo do arquivo. */}
               <p id="taxa-ajuda" className="mt-2 text-xs leading-relaxed text-muted">
-                Some tudo que sai do seu faturamento no aplicativo: comissão, taxa de
-                pagamento e entrega. O valor exato está no seu extrato — este aqui é só
-                um ponto de partida.
+                Some tudo que sai no aplicativo: comissão, taxa de pagamento e entrega. O
+                valor exato está no seu extrato.
               </p>
             </div>
           </div>
 
           {/* ── Resultado: antes de calcular · inválido · calculado ── */}
-          <div className="mt-8 border-t border-line pt-8" aria-live="polite">
+          <div
+            ref={resultadoRef}
+            className="mt-6 scroll-mt-16 border-t border-line pt-6 sm:mt-8 sm:pt-8"
+            aria-live="polite"
+          >
             {tooSmall ? (
               <p className="text-center text-sm text-ink2">
                 Esse valor parece baixo demais para uma conta mensal. Confira o número —
                 a calculadora usa o faturamento do mês inteiro.
+              </p>
+            ) : tooBig ? (
+              /* A trava de cima, no mesmo tom das outras duas: desconfiar do número
+                 em vez de repetir com convicção o que quase sempre é um zero a mais. */
+              <p className="text-center text-sm text-ink2">
+                Esse valor parece alto demais para um mês só. Confira o número — se for
+                esse mesmo, a sua operação passa do que cabe numa calculadora: fale com a
+                gente que a conta a gente faz junto.
               </p>
             ) : rateOutOfRange ? (
               <p className="text-center text-sm text-ink2">
@@ -260,8 +353,19 @@ export function CommissionCalculator() {
                   foocciFixed={foocciFixed}
                 />
 
-                {/* 2 · A economia — o maior número da tela. É o dado que vende. */}
-                {hasSavings && (
+                {/*
+                  2 · A economia — o maior número da tela. É o dado que vende.
+
+                  ⚠️ E ele NÃO aparece quando a faixa conservadora é negativa. Com
+                  R$ 2.000/mês a 23% a conta de migração total dá R$ 31 — verdadeira,
+                  mas exibida a 3rem em laranja ela vira manchete de um cenário que a
+                  linha de baixo desmente ("no ritmo realista, a mensalidade não se
+                  paga"). Tamanho é hierarquia, e hierarquia também afirma: número
+                  minúsculo com tratamento de manchete é o melhor caso vendido como
+                  resultado. Nesse faturamento quem manda é o ponto de equilíbrio,
+                  no cartão calmo logo abaixo.
+                */}
+                {hasSavings && conta.outcome !== "negativo" && (
                   <div className="mt-4 rounded-2xl border border-brand-200 bg-brand-50 p-5 text-center sm:p-7">
                     <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">
                       Você economiza
@@ -280,7 +384,9 @@ export function CommissionCalculator() {
                   </div>
                 )}
 
-                {/* Faturamento em que o plano ainda não compensa: dizer, não esconder. */}
+                {/* Faturamento em que o plano ainda não compensa: dizer, não esconder.
+                    Dois motivos diferentes levam a este cartão, e cada um merece a
+                    frase que é verdadeira para ele. */}
                 {foocciFixed !== null && !hasSavings && (
                   <div className="mt-4 rounded-2xl border border-line bg-canvas p-5 text-center">
                     <p className="text-sm leading-relaxed text-ink2">
@@ -288,6 +394,23 @@ export function CommissionCalculator() {
                       conta passa a sobrar para você a partir de{" "}
                       <strong className="text-ink">{formatBRL(breakEven)}</strong> por mês no
                       delivery — e o cliente vira seu desde o primeiro pedido.
+                    </p>
+                  </div>
+                )}
+
+                {foocciFixed !== null && hasSavings && conta.outcome === "negativo" && (
+                  <div className="mt-4 rounded-2xl border border-line bg-canvas p-5 text-center">
+                    <p className="text-sm leading-relaxed text-ink2">
+                      Nesse faturamento a conta ainda não compensa. Mesmo levando{" "}
+                      <strong className="text-ink">todo</strong> o movimento para o canal
+                      direto sobrariam{" "}
+                      <strong className="text-ink tabular-nums">{formatBRL(savings)}</strong> por
+                      mês — e no ritmo realista de {PCT_BAIXO}% a {PCT_ALTO}% a mensalidade
+                      ainda não se paga. Ela passa a sobrar a partir de{" "}
+                      <strong className="text-ink tabular-nums">
+                        {formatBRL(conta.breakEvenLow)}
+                      </strong>{" "}
+                      por mês no delivery — e o cliente vira seu desde o primeiro pedido.
                     </p>
                   </div>
                 )}
@@ -301,24 +424,12 @@ export function CommissionCalculator() {
                 </p>
 
                 {/*
-                  4 · O piso conservador: mesmo migrando pouco, já sobra. Só aparece
-                  quando existe economia — abaixo do ponto de equilíbrio ele argumentaria
-                  com trocados e enfraqueceria a conta em vez de sustentá-la.
+                  4 · O piso conservador — e o número que o site errava. Ver a
+                  correção 1 no topo do arquivo: o que aparece aqui já vem LÍQUIDO,
+                  com a mensalidade descontada, e quando a faixa não fecha a frase
+                  diz isso em vez de sumir com a informação.
                 */}
-                {hasSavings && (
-                  <p className="mx-auto mt-4 max-w-xl rounded-2xl bg-canvas p-4 text-center text-sm leading-relaxed text-ink2">
-                    Começando devagar: levando de{" "}
-                    <strong className="text-ink">
-                      {Math.round(MIGRATION_RANGE.low * 100)}% a{" "}
-                      {Math.round(MIGRATION_RANGE.high * 100)}%
-                    </strong>{" "}
-                    desse movimento para o seu canal direto, já ficam{" "}
-                    <strong className="text-ink tabular-nums">
-                      {formatBRL(savingsLow)} a {formatBRL(savingsHigh)}
-                    </strong>{" "}
-                    por mês no seu caixa.
-                  </p>
-                )}
+                {hasSavings && conta.outcome !== "negativo" && <FaixaConservadora conta={conta} />}
 
                 {/*
                   O ÚNICO CTA comercial da home, e ele mora aqui de propósito: só
@@ -356,6 +467,65 @@ export function CommissionCalculator() {
       </div>
     </section>
   );
+}
+
+/* ── "Começando devagar" — a faixa conservadora, agora líquida ───────────────── */
+
+const PCT_BAIXO = Math.round(MIGRATION_LOW * 100);
+const PCT_ALTO = Math.round(MIGRATION_HIGH * 100);
+
+/**
+ * Dois finais possíveis aqui, e nenhum deles esconde nada:
+ *
+ *  - `positivo` — mesmo na ponta baixa já sobra dinheiro DEPOIS da mensalidade.
+ *  - `parcial`  — só a ponta alta cobre a mensalidade; a tela diz a partir de
+ *                 quanto a ponta baixa também cobre.
+ *
+ * O terceiro (`negativo` — nenhuma das pontas cobre, que era o caso em que o site
+ * dizia "já ficam R$ 92 no seu caixa" para quem pagaria R$ 429/mês) não passa por
+ * aqui: ele toma conta do bloco inteiro, no cartão do ponto de equilíbrio, porque
+ * naquele faturamento a manchete tem de ser o equilíbrio e não a economia.
+ */
+function FaixaConservadora({ conta }: { conta: MigrationSavings }) {
+  const caixa = "mx-auto mt-4 max-w-xl rounded-2xl bg-canvas p-4 text-center text-sm leading-relaxed text-ink2";
+  const num = "font-semibold text-ink tabular-nums";
+
+  if (conta.outcome === "positivo") {
+    return (
+      <p className={caixa}>
+        Começando devagar: levando de{" "}
+        <strong className="font-semibold text-ink">
+          {PCT_BAIXO}% a {PCT_ALTO}%
+        </strong>{" "}
+        desse movimento para o seu canal direto —{" "}
+        <strong className="font-semibold text-ink">já descontada a mensalidade</strong> —,
+        sobram{" "}
+        <strong className={num}>
+          {formatBRL(conta.netLow)} a {formatBRL(conta.netHigh)}
+        </strong>{" "}
+        por mês no seu caixa.
+      </p>
+    );
+  }
+
+  if (conta.outcome === "parcial") {
+    return (
+      <p className={caixa}>
+        Começando devagar, depende do ritmo: levando{" "}
+        <strong className="font-semibold text-ink">{PCT_ALTO}%</strong> desse movimento
+        sobram <strong className={num}>{formatBRL(conta.netHigh)}</strong> por mês, já
+        descontada a mensalidade. Com{" "}
+        <strong className="font-semibold text-ink">{PCT_BAIXO}%</strong>, ela ainda não se
+        paga — essa ponta fecha a partir de{" "}
+        <strong className={num}>{formatBRL(conta.breakEvenLow)}</strong> por mês no
+        delivery.
+      </p>
+    );
+  }
+
+  // `negativo` — tratado pelo cartão do ponto de equilíbrio, acima. Repetir aqui
+  // seria dizer duas vezes a mesma má notícia na mesma tela.
+  return null;
 }
 
 /* ── Os dois lados da conta, sempre no mesmo formato ─────────────────────────── */

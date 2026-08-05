@@ -1213,3 +1213,78 @@ teria pegado — é a mesma lição do `QRCard`: a largura é conhecimento do us
 Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, worktree `agent-ae1e1e13fe82206cb`
+
+---
+
+## 2026-08-05 — Seis defeitos do site comercial (varredura de percurso, celular)
+
+**O que foi feito:** os seis achados da varredura em produção, todos reproduzidos
+antes de mexer. Worktree `agent-a344cbc90aaf550b7`, sem commit (ordem do Diretor).
+
+**1 · P0 — o botão de pagar que ficava mudo (`/contratar/novo`).** Com tudo
+preenchido menos o Termo, "Aceitar e pagar R$ 214,50" seguia apagado e nenhuma
+mensagem aparecia. **A escolha: botão habilitado, validação no toque.** Botão
+desabilitado é uma resposta que ninguém consegue ouvir — ele não tem estado de
+"por quê", e no celular não há hover nem foco para insinuar. Habilitado, o toque
+vira pergunta e a tela responde em três lugares: resumo âmbar colado no botão
+(cada item leva ao campo), frase vermelha no campo, e foco no primeiro pendente.
+A trava do dinheiro nunca foi o `disabled` — é o servidor, que revalida tudo.
+O mesmo desenho, peça por peça, foi para o `DemoForm` (achado 2): dois
+formulários do mesmo site não podem responder diferente ao mesmo toque.
+
+**2 · A armadilha que quase engoliu a correção: `globals.css` vence utilitário
+de borda em input.** A regra base é
+`input:not([type=checkbox]):not(…)` com **sete `:not`** — especificidade (0,7,1).
+Qualquer `border-red-400` (0,1,0) perde, em qualquer camada. A borda de erro
+simplesmente não pintava: cor computada seguia `rgb(229,229,229)`, e só o
+`getComputedStyle` no navegador mostrou — no screenshot a 375px dava para
+acreditar que era o laranja do foco. Correção: `!border-red-400`. Corolário que
+vale para o projeto inteiro: **todo `focus:border-brand-500` escrito em input
+neste repositório também é decorativo** — quem pinta é a regra base.
+
+**3 · O número conservador mentia, e mentia em dois lugares.** `savingsLow =
+comissão × 20%` era anunciado como "no seu caixa" sem descontar a mensalidade —
+R$ 920 onde o certo é R$ 491. A conta virou `@/lib/site/savings.ts`, pura e com
+teste (`savings.test.ts`, 7 casos, incluindo os dois pedidos: 20.000/23% e
+2.000/23%). O bloco "Faz a conta" de `/site/precos` tinha o **mesmo** vício nos
+três planos e passou a ler o mesmo módulo. Duas cópias da mesma conta foi como o
+erro nasceu; a terceira não deve existir.
+
+**Aprendizado que passa do número: tamanho também afirma.** Com R$ 2.000/mês a
+23%, "Você economiza **R$ 31**" a 3rem em laranja é aritmeticamente verdadeiro
+(migração total) e mesmo assim é mentira de hierarquia — é o melhor caso vestido
+de resultado, e a linha de baixo o desmente. Nesse faturamento a manchete passou
+a ser o ponto de equilíbrio, no cartão calmo. Guardrail 7 não se cumpre só no
+valor: cumpre-se no corpo tipográfico que se dá a ele.
+
+**4 · Trava para cima.** Havia trava embaixo e na taxa, não em cima:
+999.999.999 produzia "R$ 229.999.571 por mês". `MAX_PLAUSIBLE_REVENUE = 5 mi`,
+com o tom das outras duas (desconfiar do número, não repetir com convicção).
+
+**5 · Resultado fora da tela no celular.** Medido: bloco "Você economiza" a
+1.033px, dobra a 812px. Duas medidas, e a estrutural vem primeiro — miolo
+comprimido no celular (parágrafo `text-[15px]`, ajuda da taxa encurtada, divisor
+`mt-6/pt-6`) devolveu 56px, o suficiente para o topo do comparativo espiar acima
+da dobra. A segunda é a rolagem até o resultado, **condicionada a ele estar mesmo
+fora de vista** (`caixa.top < innerHeight − 160`): por isso ela **nunca dispara no
+desktop** — conferido, a 1280px a página fica exatamente onde estava. Depois do
+toque no chip, "Você economiza" nasce a **296px** do topo. A animação é opcional
+(`prefers-reduced-motion` → `auto`); a rolagem, não.
+
+**6 · O 404 em inglês.** `app/site/not-found.tsx` **não teria funcionado**:
+`not-found.tsx` de segmento só atende a `notFound()` chamado DENTRO dele; endereço
+que não casa com rota nenhuma cai sempre na RAIZ. O arquivo é `app/not-found.tsx`,
+com moldura de marketing montada à mão (ele não vive sob `site/layout.tsx`).
+Consequência que veio junto e teve de ser tratada: virando o 404 de todo endereço
+solto, ele passaria a vestir a marca Foocci para quem digita errado o link de uma
+**loja** — daí `app/pedido/not-found.tsx` e `app/qr/not-found.tsx`, neutros, sem
+marca nenhuma (não há `--brand-primary` de uma loja que não existe). Sem CTA
+comercial laranja no corpo: quem chega ali errou de endereço, não de produto.
+
+**Verificação:** `npx tsc --noEmit` limpo · `npx vitest run` **429 arquivos /
+5.495 testes, todos verdes**. Playwright em 375/768/1280 nas cinco telas
+(`scrollWidth` igual à janela nos três tamanhos, em todas).
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, worktree `agent-a344cbc90aaf550b7`

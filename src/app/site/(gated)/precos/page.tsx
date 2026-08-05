@@ -56,10 +56,10 @@ import {
 import { DEMO_URL, CALCULADORA_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
 import {
   ASSUMED_RATE_PERCENT,
-  ASSUMED_RATE,
   MIGRATION_RANGE,
   formatBRL as formatBRLReais,
 } from "@/lib/site/commissionRates";
+import { migrationSavings } from "@/lib/site/savings";
 import {
   SITE_PLAN_IDS,
   SITE_PLAN_TO_CODE,
@@ -342,27 +342,30 @@ const ADDONS = [
    Nenhum valor deste bloco é digitado: a comissão sai da PREMISSA (que o dono
    pode ajustar na calculadora da home), a economia sai da faixa conservadora de
    migração, e o retorno sai do preço real do plano. Trocar a premissa em
-   `commissionRates.ts` reescreve os três cartões de uma vez. */
+   `commissionRates.ts` reescreve os três cartões de uma vez.
+
+   ⚠️ CORREÇÃO DE 05/08/2026 — o mesmo vício da calculadora da home morava aqui,
+   nos TRÊS planos: `commission × 20%` era anunciado como "ficam no caixa" sem
+   descontar a mensalidade que o lojista passa a pagar. No Essencial isso inflava
+   R$ 741 para R$ 920. A conta agora vem de `@/lib/site/savings` — o mesmo módulo
+   puro e testado que a home usa —, e o "×" do retorno passou a ser calculado
+   sobre o valor LÍQUIDO. Duas cópias da mesma conta foi como o erro nasceu; não
+   recrie a terceira. */
 
 const MIGRATION_PCT = Math.round(MIGRATION_RANGE.low * 100);
 
-function roiNumbers(revenue: number, planMonthlyCents: number) {
-  const commission = revenue * ASSUMED_RATE;
-  const savings = commission * MIGRATION_RANGE.low;
-  const planMonthly = planMonthlyCents / 100;
-  return {
-    revenue: formatBRLReais(revenue),
-    commission: formatBRLReais(commission),
-    savings: formatBRLReais(savings),
-    payback: (savings / planMonthly).toLocaleString("pt-BR", {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }),
-  };
-}
-
 function RoiBlock({ revenue, planMonthlyCents }: { revenue: number; planMonthlyCents: number }) {
-  const n = roiNumbers(revenue, planMonthlyCents);
+  const planMonthly = planMonthlyCents / 100;
+  const conta = migrationSavings({
+    monthlyRevenue: revenue,
+    ratePercent: ASSUMED_RATE_PERCENT,
+    planMonthly,
+  });
+  const payback = (conta.netLow / planMonthly).toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+
   return (
     <div className="mt-4 rounded-2xl border border-line bg-canvas p-4">
       <div className="flex items-center gap-2">
@@ -373,13 +376,38 @@ function RoiBlock({ revenue, planMonthlyCents }: { revenue: number; planMonthlyC
         Considerando uma comissão de{" "}
         <strong className="font-semibold text-ink tabular-nums">{ASSUMED_RATE_PERCENT}%</strong>{" "}
         <span className="text-muted">— ajuste para a sua —</span>, quem fatura{" "}
-        <strong className="font-semibold text-ink tabular-nums">{n.revenue}</strong>/mês no
-        aplicativo paga <strong className="font-semibold text-ink tabular-nums">{n.commission}</strong>{" "}
+        <strong className="font-semibold text-ink tabular-nums">{formatBRLReais(revenue)}</strong>/mês no
+        aplicativo paga{" "}
+        <strong className="font-semibold text-ink tabular-nums">
+          {formatBRLReais(conta.monthlyCommission)}
+        </strong>{" "}
         de comissão. Levando <strong className="font-semibold text-ink">{MIGRATION_PCT}%</strong>{" "}
-        desse movimento para o canal direto, ficam{" "}
-        <strong className="font-semibold text-ink tabular-nums">{n.savings}</strong>/mês no caixa —{" "}
-        <strong className="font-semibold text-ink tabular-nums">{n.payback}×</strong> a mensalidade
-        deste plano.
+        desse movimento para o canal direto e{" "}
+        <strong className="font-semibold text-ink">já descontada a mensalidade</strong>,{" "}
+        {conta.outcome === "positivo" ? (
+          <>
+            sobram{" "}
+            <strong className="font-semibold text-ink tabular-nums">
+              {formatBRLReais(conta.netLow)}
+            </strong>
+            /mês no caixa —{" "}
+            <strong className="font-semibold text-ink tabular-nums">{payback}×</strong> o que o
+            plano custa.
+          </>
+        ) : (
+          /* Nunca aconteceu com os faturamentos de exemplo de hoje — e é
+             exatamente por isso que este ramo existe: se alguém trocar o
+             `roiRevenue` de um plano, a página não pode voltar a prometer lucro
+             onde ele não existe (guardrail 7). */
+          <>
+            a economia ainda não cobre a mensalidade neste exemplo — ela passa a sobrar a
+            partir de{" "}
+            <strong className="font-semibold text-ink tabular-nums">
+              {formatBRLReais(conta.breakEvenLow)}
+            </strong>
+            /mês no aplicativo.
+          </>
+        )}
       </p>
       <a
         href={CALCULADORA_URL}
