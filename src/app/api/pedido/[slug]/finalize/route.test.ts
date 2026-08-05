@@ -375,3 +375,44 @@ describe("POST finalize — variant price guard", () => {
     expect(input.items[0].variantName).toBe("Grande");
   });
 });
+
+/**
+ * A trava de canal — o risco NOVO criado em 05/08/2026.
+ *
+ * A partir do caso da Júlia (sushi-cazza), o Garçom passou a CONTAR sobre itens
+ * que a casa só serve no salão: "Temos rodízio sim, R$ 99, só no salão". Falar de
+ * um produto e poder vendê-lo são coisas diferentes — e antes desta data a rota
+ * de finalização não olhava `showInDelivery`. Um id de rodízio presencial que
+ * chegasse ao carrinho viraria um pedido de ENTREGA de um rodízio.
+ *
+ * Nenhum pedido legítimo se perde: a loja só renderiza `showInDelivery: true`
+ * (`page.tsx:336`), então o filtro aqui é o espelho do que o cliente vê.
+ */
+describe("POST finalize — item de salão nunca vira pedido de entrega", () => {
+  it("a consulta do carrinho exige showInDelivery — o canal é parte da validação", async () => {
+    await POST(postReq(baseBody([{ id: "item_1", name: "Calabresa", price: 52.9, qty: 1 }])), { params });
+
+    const where = (db.menuItem.findMany.mock.calls[0] as Array<{ where: Record<string, unknown> }>)[0].where;
+    expect(where).toMatchObject({ isActive: true, isAvailable: true, showInDelivery: true });
+  });
+
+  it("rodízio presencial no carrinho é recusado com 400, não vira pedido", async () => {
+    // O banco não devolve o item porque ele é showInDelivery=false — exatamente
+    // o que o `where` acima provoca.
+    db.menuItem.findMany.mockResolvedValue([]);
+
+    const res = await POST(postReq(baseBody([{
+      id: "rodizio-presencial", name: "RODIZIO PRESENCIAL", price: 99, qty: 2,
+    }])), { params });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("indisponível") });
+    expect(createOrderRecord).not.toHaveBeenCalled();
+  });
+
+  it("item normal de delivery continua finalizando (a trava não é destrutiva)", async () => {
+    const res = await POST(postReq(baseBody([{ id: "item_1", name: "Calabresa", price: 52.9, qty: 1 }])), { params });
+    expect(res.status).toBe(200);
+    expect(createOrderRecord).toHaveBeenCalledTimes(1);
+  });
+});

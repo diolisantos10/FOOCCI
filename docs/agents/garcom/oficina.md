@@ -219,3 +219,117 @@ estava escrita em código, e a instrução equivalente no prompt mandava o model
 fazer o mesmo.
 
 — especialista garcom, a partir de `c1759805` (produção no ar no momento do P0)
+
+---
+
+2026-08-05 (2ª parte) — **"Preciso confirmar" era o piso, não o teto.** O CEO leu
+o conserto e decidiu: *"O rodízio não deve aparecer no cardápio delivery, mas tem
+que ter a mesma informação que o agente de WhatsApp tem. Então: existe o rodízio,
+e passar o preço, como funciona e tudo mais — mas é só pessoalmente."*
+
+Mandar o cliente falar com humano uma pergunta que o sistema responde é
+atendimento pior, não melhor.
+
+**O que existe na base de conhecimento do sushi-cazza: NÃO CONSEGUI VERIFICAR.**
+`GET /api/knowledge` em produção devolve **401** — a rota exige sessão
+(`getTenantContext`) e não há caminho de leitura por token. Não existe outra rota
+que exponha `RestaurantKnowledgeItem`. Registro isto como fato, não como
+suposição: **eu não sei se o lojista cadastrou o Q&A do rodízio.** Por isso o
+desenho **não depende** de haver item lá.
+
+**De onde a resposta sai, então: do CADASTRO.** `RODIZIO PRESENCIAL`, R$ 99,00,
+`showInDineIn=true`, `showInDelivery=false` — dado que eu consigo ler e provar, e
+que **envelhece sozinho**: mudou o preço no painel, mudou a fala do Garçom. O Q&A
+do lojista entra **por cima**, quando existe, e só ele pode dizer "como funciona"
+— isso é informação do restaurante, não minha (guardrail 1).
+
+**A regra que ficou, e ela não fala de rodízio:** *item que o restaurante vende só
+no salão existe para ser **contado**, nunca para ser **vendido** no delivery.*
+O critério é o cadastro (`showInDineIn && !showInDelivery`), nunca o nome do
+prato — vale para couvert, buffet, self-service, chopp na torneira. Sem
+`if (slug === "sushi-cazza")` em lugar nenhum.
+
+**A assimetria que era a tarefa de verdade.** `WhatsAppReceptionistService.ts:1337`
+lia `RestaurantKnowledgeItem` (ACTIVE, take 10) para o contexto do GPT; o Garçom
+do cardápio não lia nada. A régua de casamento vivia dentro de
+`RestaurantKnowledgeService`, que importa `prisma` — e o Garçom é puro, então
+ficava de fora **por construção**. Extraí a régua para
+`src/services/knowledge/knowledgeMatch.ts` (pura, um dono, dois consumidores).
+Agora o Q&A do lojista chega ao cardápio por dois caminhos: match determinístico
+(quando a busca no cardápio voltou vazia) e bloco `RESPOSTAS OFICIAIS DO
+RESTAURANTE` no prompt da IA. Isso vale muito além do rodízio: toda pergunta que
+o lojista respondeu na base sumia no cardápio.
+
+**Um achado dentro do achado: o plural matava o Q&A.** `tokenize` casava token
+exato — "rodízios" (o que a Júlia digitou) não casava com "rodízio" (o que o
+lojista cadastra). O Q&A existia e não era encontrado: silêncio parecendo
+sucesso, de novo. Dobra de plural simples (≥4 letras, sufixo "s"), aplicada dos
+**dois lados** para a régua seguir simétrica. Isso melhora o WhatsApp junto —
+mesma função, mesmo dono.
+
+**O risco NOVO, tratado como tal.** O Garçom passou a falar de um produto que ele
+não pode vender neste canal. Quatro camadas, todas em código:
+
+| Camada | Onde |
+|---|---|
+| item de salão nunca entra no `catalog` | consulta separada em `AIOrderService.loadDineInOnlyItems` |
+| resposta de salão sai com `cards: []` | `WaiterBrainV2` — card é o único caminho para o carrinho |
+| id fora do catálogo é derrubado | `validateWaiterResponse` regra 2 (já existia) |
+| **o pedido não se cria** | `finalize/route.ts` e `AITools.add_item` passaram a exigir `showInDelivery: true` |
+
+A última era um buraco real: `finalize` validava `isActive`+`isAvailable` e **não
+olhava o canal**. Nenhum pedido legítimo se perde — a loja só renderiza
+`showInDelivery: true` (`page.tsx:336`), então o filtro é o espelho do que o
+cliente vê.
+
+**Um detalhe de precedência que custou um teste.** "quero um rodízio pra entrega"
+faz `searchMenuByQuery` devolver **Yakisoba com confiança `high`** — a pendência
+do matcher difuso, viva. Por isso o item de salão casado pelo **termo curado**
+(regex escrita à mão contra texto do cadastro) vence a busca difusa; o casado só
+pelo nome respeita a busca, como qualquer outro caminho. Sinal curado ganha de
+sinal aproximado.
+
+**Como ficou, com o catálogo real de produção (124 itens) + o item de salão:**
+
+```
+cliente: "Vocês tem rodízios"
+garçom : Temos sim! RODIZIO PRESENCIAL sai a R$ 99,00 e é só no salão — não vai para entrega.
+         Rodízio todos os dias das 18h às 23h, no salão. Crianças até 5 anos não pagam.   ← só com Q&A cadastrado
+         (sem Q&A: "Quer falar com a equipe para os detalhes?")
+cards=0  botões=[💬 Falar com o restaurante | Ver cardápio]
+
+cliente: "quero 2 rodízios"        → mesma resposta, cards=0, nada de carrinho
+cliente: "adiciona aí"             → "Qual deles você quer?" — não inventa item
+cliente: "tem estacionamento?"     → "preciso confirmar" (o piso, intacto)
+cliente: "tem temaki?"             → 17 cards (intacto)
+```
+
+**Verificação:** `npx tsc --noEmit` limpo · `npx vitest run` **435 arquivos /
+5618 testes verdes**. Os 17 testes da 1ª parte **não mudaram de expectativa** —
+nada foi afrouxado. 18 testes novos em
+`WaiterBrainV2.salao-conta-nao-vende.test.ts`, 8 em `knowledgeMatch.test.ts`, 3
+em `finalize/route.test.ts`. Simuladores idênticos à 1ª parte: golden set 37/37
+score 100 e 28/37 score 76; conversas ok 13 · aviso 9 · falha 2 · P0 0 · P1 2 ·
+P2 9 (os catálogos sintéticos não têm item de salão, então a neutralidade é o
+resultado esperado — a prova do comportamento novo é o roteiro acima com o
+catálogo real).
+
+**Uma coisa que consertei fora do meu domínio, e por quê.** `runRequest.test.ts`
+estourava os 5 s padrão do vitest **só na suíte cheia**, por disputa de CPU — 3,6 s
+isolado. É o mesmo remédio que `noSideEffects.test.ts` recebeu de dois
+especialistas hoje (prazo de 60 s, nenhuma asserção afrouxada). Portão que
+reprova por carga ensina a rodar de novo até passar, e aí deixou de ser portão.
+
+**Pendências que NÃO toquei:** as 4 negações do caminho WhatsApp listadas na
+entrada anterior seguem abertas; a base de conhecimento do sushi-cazza segue não
+verificada (precisa de sessão do lojista).
+
+**Proposta de vitrine** (quem promove é o Diretor): *"Existe é diferente de
+vendível — e o cadastro sabe a diferença."* O recorte de canal (`showInDelivery`)
+governa o que pode ir ao carrinho; **não** governa o que o agente pode contar. Um
+agente que trata os dois como a mesma coisa ou nega o que a casa vende (o P0 da
+Júlia), ou vende o que a casa não entrega (o risco inverso). As duas listas têm
+que ser separadas na origem, e a que pode virar pedido tem que ser validada
+**no servidor**, no momento de criar o pedido — não na tela.
+
+— especialista garcom, a partir de `8e4ba0cf` (branch padrão, já com a 1ª parte)

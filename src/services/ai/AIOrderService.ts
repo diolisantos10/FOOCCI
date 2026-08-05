@@ -35,10 +35,13 @@ import * as WaiterBrainV2 from "./WaiterBrainV2";
 import { cartLineBaseIds } from "./cartNormalization";
 import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
 import { upsellCategoryLabels } from "./waiter/upsellCategories";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 import {
   catalogProvesOffering,
   detectOfferingQuestion,
+  findDineInOnlyOffering,
   sanitizeUnprovenDenial,
+  type DineInOnlyItem,
 } from "./waiter/offeringClaims";
 import { getExperienceBrief } from "@/services/brain/experience/ExperienceBriefService";
 import { getWaiterRuntimeKnowledge } from "@/services/waiterRuntime/WaiterLibraryRuntimeBridge";
@@ -81,6 +84,18 @@ export interface AIWebTurnInput {
    * Vazio/ausente → padrão legado (bebida → sobremesa).
    */
   upsellCategories?: readonly string[] | null;
+  /**
+   * Itens que a casa só serve no salão (`showInDineIn && !showInDelivery`).
+   * Nunca entram em `catalogItems`: existem para ser CONTADOS, nunca vendidos
+   * neste canal. Quando omitido, o serviço busca no banco.
+   */
+  dineInOnlyItems?: readonly DineInOnlyItem[];
+  /**
+   * Q&A ATIVO do lojista. Quando omitido, o serviço busca no banco.
+   * Era lido só pelo WhatsApp até 05/08/2026 — daí o mesmo restaurante
+   * responder duas coisas conforme a porta pela qual o cliente entrou.
+   */
+  knowledgeItems?: readonly WaiterBrainV2.WaiterKnowledgeItem[];
 }
 
 export interface AIWebTurnOutput {
@@ -182,6 +197,75 @@ async function loadUpsellCategories(restaurantId: string): Promise<readonly stri
   }
 }
 
+/**
+ * O que a casa serve SÓ NO SALÃO — `showInDineIn && !showInDelivery`.
+ *
+ * Consulta separada de propósito, e a separação é a trava: o resultado nunca
+ * entra no `catalogItems`, que é a lista do que pode virar card, carrinho e
+ * pedido. Estes itens existem para o Garçom CONTAR que existem, com preço, e
+ * dizer que é presencial.
+ *
+ * Erro de leitura → lista vazia → o Garçom cai no "preciso confirmar". Nunca
+ * numa negação (guardrail 1).
+ */
+async function loadDineInOnlyItems(restaurantId: string): Promise<readonly DineInOnlyItem[]> {
+  try {
+    const rows = await prisma.menuItem.findMany({
+      where: {
+        isActive:       true,
+        isAvailable:    true,
+        showInDineIn:   true,
+        showInDelivery: false,
+        category: { restaurantId, isActive: true },
+      },
+      orderBy: { sortOrder: "asc" },
+      take:    30,
+      select:  {
+        id: true, name: true, description: true,
+        price: true, priceDineIn: true,
+        category: { select: { name: true } },
+      },
+    });
+    return rows.map((i) => ({
+      id:           i.id,
+      name:         i.name,
+      categoryName: i.category?.name ?? "",
+      // Preço do canal em que o item de fato é servido — o de salão.
+      price:        channelPrice(i, "DINE_IN"),
+      description:  i.description ?? null,
+    }));
+  } catch (err) {
+    console.error("[waiter] falha ao ler itens de salão — seguindo sem eles", { restaurantId, err });
+    return [];
+  }
+}
+
+/**
+ * O Q&A ATIVO do lojista — a mesma leitura que `WhatsAppReceptionistService` já
+ * fazia. Só o WhatsApp lia isto até 05/08/2026; o cardápio não lia nada.
+ */
+async function loadActiveKnowledge(
+  restaurantId: string,
+): Promise<readonly WaiterBrainV2.WaiterKnowledgeItem[]> {
+  try {
+    const rows = await prisma.restaurantKnowledgeItem.findMany({
+      where:   { restaurantId, status: "ACTIVE" },
+      orderBy: { usageCount: "desc" },
+      take:    20,
+      select:  { title: true, category: true, questionPatterns: true, answer: true },
+    });
+    return rows.map((r) => ({
+      title:            r.title,
+      category:         r.category,
+      questionPatterns: Array.isArray(r.questionPatterns) ? (r.questionPatterns as string[]) : [],
+      answer:           r.answer,
+    }));
+  } catch (err) {
+    console.error("[waiter] falha ao ler base de conhecimento — seguindo sem ela", { restaurantId, err });
+    return [];
+  }
+}
+
 // ─── web turn (unified pipeline, stateless HTTP) ──────────────
 
 async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutput> {
@@ -241,6 +325,22 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     upsellCategories = await loadUpsellCategories(restaurantId);
   }
 
+  // ── A verdade que o WhatsApp já tinha e o cardápio não ─────────────────────
+  // Itens de salão + Q&A ativo do lojista. O chamador (/api/pedido) traz os dois
+  // na mesma leva das outras buscas; simulador/autopilot deixam vir do banco.
+  // Falha de leitura devolve lista vazia: o Garçom volta ao "preciso confirmar",
+  // nunca a uma negação.
+  let dineInOnlyItems = input.dineInOnlyItems;
+  let knowledgeItems  = input.knowledgeItems;
+  if (event === "ON_USER_MESSAGE" && (dineInOnlyItems === undefined || knowledgeItems === undefined)) {
+    const [dineIn, know] = await Promise.all([
+      dineInOnlyItems === undefined ? loadDineInOnlyItems(restaurantId) : Promise.resolve(dineInOnlyItems),
+      knowledgeItems  === undefined ? loadActiveKnowledge(restaurantId)  : Promise.resolve(knowledgeItems),
+    ]);
+    dineInOnlyItems = dineIn;
+    knowledgeItems  = know;
+  }
+
   const v2 = WaiterBrainV2.decide({
     event,
     cartItemIds,
@@ -251,6 +351,8 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     memory: waiterMemory,
     storeChannels,
     upsellCategories: upsellCategories ?? null,
+    dineInOnlyItems: dineInOnlyItems ?? [],
+    knowledgeItems:  knowledgeItems  ?? [],
   });
 
   if (!v2.requiresAI) {
@@ -360,6 +462,29 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     }
   }
 
+  // ── A verdade do restaurante que só o WhatsApp tinha ────────────────────────
+  // Q&A ativo do lojista + itens de salão. Sem isto, o mesmo restaurante responde
+  // duas coisas diferentes conforme a porta pela qual o cliente entrou.
+  if (event === "ON_USER_MESSAGE" && (knowledgeItems?.length || dineInOnlyItems?.length)) {
+    if (knowledgeItems?.length) {
+      const linhas = knowledgeItems
+        .filter((k) => k.category !== "UNKNOWN_GAP" && k.answer?.trim())
+        .slice(0, 10)
+        .map((k) => `  • ${k.title}: ${k.answer.trim()}`)
+        .join("\n");
+      if (linhas) {
+        sysAddendum += `\n\n━━━ RESPOSTAS OFICIAIS DO RESTAURANTE ━━━\n${linhas}\n→ Isto é VERDADE do restaurante, escrita pelo próprio lojista. Prefira estas palavras.\n→ O que não estiver aqui nem no cardápio, você NÃO sabe: diga que vai confirmar.`;
+      }
+    }
+    if (dineInOnlyItems?.length) {
+      const linhas = dineInOnlyItems
+        .slice(0, 10)
+        .map((i) => `  • ${i.name} — R$ ${i.price.toFixed(2)} (${i.categoryName})`)
+        .join("\n");
+      sysAddendum += `\n\n━━━ SÓ NO SALÃO — EXISTE, MAS NÃO SE VENDE AQUI ━━━\n${linhas}\n→ Se o cliente perguntar, CONFIRME que existe, diga o preço e diga que é presencial (não sai para entrega).\n→ PROIBIDO chamar add_item ou suggest_upsell para qualquer um destes: eles não têm ID no cardápio de entrega.\n→ PROIBIDO prometer adicionar ao pedido, reservar ou cobrar por eles neste canal.`;
+    }
+  }
+
   // ── Menu intent context injection (hallucination prevention) ─────────────────
   // Tells AI exactly what the catalog found so it never claims items exist that don't.
   if (event === "ON_USER_MESSAGE" && message.trim()) {
@@ -392,7 +517,12 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
       // rodízio. A trava de verdade é a de saída (sanitizeUnprovenDenial);
       // esta é só a instrução coerente com ela.
       const offering = detectOfferingQuestion(message);
-      if (offering && !catalogProvesOffering(offering, catalogItems)) {
+      const salao    = findDineInOnlyOffering(message, dineInOnlyItems ?? [], offering);
+      if (salao) {
+        // O cadastro RESPONDE. "Preciso confirmar" aqui seria mandar o cliente
+        // falar com humano uma pergunta que o sistema sabe responder.
+        sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nNão há produto de ENTREGA para esta consulta, mas o restaurante TEM isto no salão: ${salao.name} — R$ ${salao.price.toFixed(2)}.\n→ OBRIGATÓRIO: confirmar que existe, dizer o preço e dizer que é só no salão (não sai para entrega).\n→ PROIBIDO: negar, chamar add_item/suggest_upsell para ele ou prometer adicionar ao pedido.`;
+      } else if (offering && !catalogProvesOffering(offering, catalogItems)) {
         sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nO cliente perguntou sobre ${offering.label} — isso é SERVIÇO/MODALIDADE do restaurante, não item de cardápio.\nResultado da busca: nada no cardápio deste canal, o que NÃO prova ausência.\n→ PROIBIDO: dizer "não temos", "não encontrei", "não fazemos" ou qualquer negação sobre ${offering.label}.\n→ OBRIGATÓRIO: dizer que vai confirmar com o restaurante e oferecer falar com a equipe.`;
       } else {
         sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nResultado: NENHUM PRODUTO ENCONTRADO para esta consulta.\n→ OBRIGATÓRIO: Informe ao cliente que não encontrou esse item/categoria no cardápio.\n→ PROIBIDO: Afirmar que o produto existe ou chamar suggest_upsell para este item.`;
@@ -519,7 +649,11 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   //    qualquer resposta do modelo, com ou sem instrução, e roda antes dos três
   //    caminhos de retorno abaixo. Só a frase ofensora é trocada.
   {
-    const denial = sanitizeUnprovenDenial({ reply: finalResponse, catalog: catalogItems });
+    const denial = sanitizeUnprovenDenial({
+      reply:      finalResponse,
+      catalog:    catalogItems,
+      dineInOnly: dineInOnlyItems ?? [],
+    });
     if (denial.blocked) {
       console.warn("[waiter-unproven-denial]", JSON.stringify({
         source:       "openai",

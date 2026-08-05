@@ -12,12 +12,17 @@
  *   Products are ALWAYS shown via cards, never listed in text.
  */
 
+import { matchKnowledgeItems } from "@/services/knowledge/knowledgeMatch";
 import { isDessertCategory } from "./ConversationGuardrails";
 import {
+  buildDineInOnlyAnswer,
   cannotConfirmSentence,
   catalogProvesOffering,
   detectOfferingQuestion,
+  findDineInByName,
+  findDineInByOfferingTerm,
   sanitizeUnprovenDenial,
+  type DineInOnlyItem,
 } from "./waiter/offeringClaims";
 import {
   isDrinkCategory,
@@ -227,6 +232,32 @@ export interface V2Input {
     instagram?: string | null;
     tiktok?:    string | null;
   };
+  /**
+   * O que a casa vende SÓ NO SALÃO (`showInDineIn && !showInDelivery`).
+   *
+   * Fica DE FORA do `catalog` de propósito, e essa separação é a trava: o
+   * catálogo é a lista do que pode virar card, carrinho e pedido. Isto aqui é
+   * só para CONTAR — existe, custa X, é presencial. Nunca para vender.
+   */
+  dineInOnlyItems?: readonly DineInOnlyItem[];
+  /**
+   * O Q&A ATIVO que o lojista cadastrou (`RestaurantKnowledgeItem`).
+   *
+   * Até 05/08/2026 só o agente do WhatsApp lia isto
+   * (`WhatsAppReceptionistService`), e o Garçom do cardápio não lia nada — o
+   * mesmo restaurante respondendo duas coisas diferentes conforme a porta pela
+   * qual o cliente entrou. "Como funciona" é informação do restaurante: sai
+   * daqui, na voz do lojista, ou não é dito.
+   */
+  knowledgeItems?: readonly WaiterKnowledgeItem[];
+}
+
+/** O Q&A do lojista, do jeito que o Garçom precisa ler. */
+export interface WaiterKnowledgeItem {
+  title:            string;
+  category:         string;
+  questionPatterns: string[];
+  answer:           string;
 }
 
 /** Rendering mode returned to the client so the UI knows how to behave. */
@@ -3230,26 +3261,52 @@ function handleUserMessage(input: V2Input): V2Output {
   // Caso real: 05/08/2026, Sushi Cazza, cliente Júlia — o agente respondeu
   // "Não encontrei rodízios no nosso cardápio" para uma casa que vende
   // RODIZIO PRESENCIAL a R$ 99, invisível aqui só porque showInDelivery=false.
+  //
+  // A escada, do que se SABE para o que não se sabe — decisão do CEO 05/08:
+  // "preciso confirmar" é o PISO, não o teto. Mandar o cliente falar com humano
+  // uma pergunta que o sistema responde é atendimento pior, não melhor.
+  //
+  //   1. o item existe no cadastro e é de salão  → conta tudo: existe, preço,
+  //      presencial. Nunca oferece adicionar ao carrinho.
+  //   2. o lojista respondeu isso na base        → responde com as palavras dele.
+  //   3. ninguém sabe                            → "preciso confirmar" + escalada.
   {
-    const offering = detectOfferingQuestion(msgRaw);
+    const offering     = detectOfferingQuestion(msgRaw);
+    const dineInOnly   = input.dineInOnlyItems ?? [];
+    const knowledge    = input.knowledgeItems  ?? [];
+    // O termo de oferta é sinal CURADO (regex escrita à mão contra texto do
+    // cadastro); a busca no cardápio é difusa e já aproximou demais nesta casa —
+    // "quero um rodízio pra entrega" devolve Yakisoba com confiança "high".
+    // Por isso o item de salão casado pelo termo vence a busca; o casado só pelo
+    // nome respeita a busca, como qualquer outro caminho.
+    const dineInPorTermo = findDineInByOfferingTerm(dineInOnly, offering);
+    const dineInPorNome  = findDineInByName(msgRaw, dineInOnly);
+    const knowledgeHit   = matchKnowledgeItems(knowledge, msgRaw);
+
     // Só assume a conversa quando a busca no cardápio também voltou vazia. Se o
     // cliente citou uma oferta E um prato que existe ("vocês fazem entrega de
     // temaki?"), os temakis continuam aparecendo — a trava não pode roubar a
     // resposta boa (guardrail 5). A negação, essa, segue proibida pela regra 10
     // do validador de saída, aconteça o que acontecer daqui pra frente.
-    const semResultado = offering
+    const precisaResponderAqui = offering || dineInPorNome || knowledgeHit;
+    const semResultado = precisaResponderAqui
       ? (() => {
           const r = searchMenuByQuery(msgRaw, catalog, cartItemIds, [], maxBudget, excludedIngredients);
           return r.confidence === "low" || r.ids.length === 0;
         })()
       : false;
-    if (offering && semResultado && !catalogProvesOffering(offering, catalog)) {
+
+    // O cadastro provou a oferta pelo termo curado: responde, mesmo que a busca
+    // difusa tenha "achado" algo. Nunca o contrário.
+    if (dineInPorTermo) {
       const wa = input.storeChannels?.whatsapp?.replace(/\D/g, "");
       return {
-        message:     wa
-          ? `${cannotConfirmSentence(offering)} Quer falar com a equipe?`
-          : `${cannotConfirmSentence(offering)} Posso ajudar com o cardápio 😊`,
-        cards:       [],
+        message: buildDineInOnlyAnswer({
+          item:            dineInPorTermo,
+          knowledgeAnswer: knowledgeHit?.answer ?? null,
+          hasHumanChannel: !!wa,
+        }),
+        cards:       [],   // a trava: item de salão nunca vira card, card é o caminho do carrinho
         mode:        "BROWSE",
         options:     wa
           ? [
@@ -3260,6 +3317,62 @@ function handleUserMessage(input: V2Input): V2Output {
         requiresAI:  false,
         aiDirective: "",
       };
+    }
+
+    if (semResultado) {
+      const dineInHit = dineInPorNome;
+      const wa = input.storeChannels?.whatsapp?.replace(/\D/g, "");
+      const opcoes: WaiterOption[] = wa
+        ? [
+            { label: "💬 Falar com o restaurante", value: `open_whatsapp:${wa}` },
+            { label: "Ver cardápio",               value: "browse_menu" },
+          ]
+        : [{ label: "Ver cardápio", value: "browse_menu" }];
+
+      // 1. O cadastro sabe: existe, custa isso, e é de salão.
+      //    `cards: []` não é economia de tela — é a trava. Item de salão nunca
+      //    vira card, e card é o único caminho para o carrinho.
+      if (dineInHit) {
+        return {
+          message: buildDineInOnlyAnswer({
+            item:            dineInHit,
+            knowledgeAnswer: knowledgeHit?.answer ?? null,
+            hasHumanChannel: !!wa,
+          }),
+          cards:       [],
+          mode:        "BROWSE",
+          options:     opcoes,
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+
+      // 2. O lojista respondeu isso na base de conhecimento — a voz dele vale
+      //    mais que qualquer redação nossa.
+      if (knowledgeHit) {
+        return {
+          message:     knowledgeHit.answer.trim(),
+          cards:       [],
+          mode:        "BROWSE",
+          options:     opcoes,
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+
+      // 3. Ninguém sabe. Aqui, e só aqui, "preciso confirmar".
+      if (offering && !catalogProvesOffering(offering, catalog)) {
+        return {
+          message:     wa
+            ? `${cannotConfirmSentence(offering)} Quer falar com a equipe?`
+            : `${cannotConfirmSentence(offering)} Posso ajudar com o cardápio 😊`,
+          cards:       [],
+          mode:        "BROWSE",
+          options:     opcoes,
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
     }
   }
 
@@ -3575,6 +3688,8 @@ export function validateWaiterResponse(
   output:  V2Output,
   catalog: V2CatalogItem[],
   event:   V2Event,
+  /** Itens de salão — para a regra 10 saber a diferença entre "não sei" e "existe, mas é presencial". */
+  dineInOnly: readonly DineInOnlyItem[] = [],
 ): V2Output {
   let { message, cards, mode, options, requiresAI, aiDirective } = output;
 
@@ -3656,7 +3771,7 @@ export function validateWaiterResponse(
     //     É o guardrail 4 aplicado: aviso no perfil do agente já falhou em
     //     produção; isto é mecanismo.
     if (!requiresAI && message.length > 0) {
-      const denial = sanitizeUnprovenDenial({ reply: message, catalog });
+      const denial = sanitizeUnprovenDenial({ reply: message, catalog, dineInOnly });
       if (denial.blocked) {
         message = denial.reply;
         // console.warn, não waiterLog: waiterLog só fala com WAITER_DEBUG=true, e
@@ -3817,7 +3932,7 @@ export function decide(input: V2Input): V2Output {
       return { ...SAFE_FALLBACK };
     }
   })();
-  const validated   = validateWaiterResponse(raw, input.catalog, input.event);
+  const validated   = validateWaiterResponse(raw, input.catalog, input.event, input.dineInOnlyItems ?? []);
   // computeMemoryPatch reads raw.memoryPatch (set by handlers like handleCheckoutStarted).
   // Must receive `raw` not `validated` — validateWaiterResponse strips memoryPatch/pinnedCardId.
   const memoryPatch = computeMemoryPatch(input, raw);

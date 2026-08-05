@@ -13,6 +13,9 @@
  */
 
 import { prisma } from "@/lib/prisma";
+// A régua de casamento vive em `knowledgeMatch` (pura, sem prisma) porque o Garçom
+// do cardápio também precisa dela e não pode importar DB. UM dono, dois consumidores.
+import { matchKnowledgeItems, scoreMatch, tokenize } from "./knowledgeMatch";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -83,43 +86,8 @@ export interface UpdateKnowledgeInput {
 }
 
 // ── Keyword matching ───────────────────────────────────────────────────────────
-
-const PT_STOPWORDS = new Set([
-  "a","o","e","é","em","de","da","do","dos","das","que","se","por","com",
-  "um","uma","mais","como","para","não","nao","sim","mas","ou","eu","tu",
-  "ele","ela","nós","vocês","eles","tem","ter","ser","foi","são","sao",
-  "esse","esta","este","essa","isso","aqui","ali","lá","la","já","ja",
-  "pode","pois","pelo","pela","meu","minha","seu","sua","qual","quando",
-  "onde","quem","há","ha","até","ate","ai","aí","tudo","todo","toda","bem",
-]);
-
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")   // strip accents
-    .replace(/[^\w\s]/g, " ")           // remove punctuation
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !PT_STOPWORDS.has(w));
-}
-
-/**
- * Score how well a customer message matches a knowledge item's question patterns.
- * Returns 0.0–1.0. A score ≥ MATCH_THRESHOLD means the item is relevant.
- */
-const MATCH_THRESHOLD = 0.25;
-
-function scoreMatch(customerTokens: string[], questionPatterns: string[]): number {
-  if (questionPatterns.length === 0 || customerTokens.length === 0) return 0;
-
-  const patternTokens = new Set(
-    questionPatterns.flatMap((p) => tokenize(p))
-  );
-  if (patternTokens.size === 0) return 0;
-
-  const matchCount = customerTokens.filter((t) => patternTokens.has(t)).length;
-  return matchCount / Math.max(customerTokens.length, patternTokens.size);
-}
+// Ver `./knowledgeMatch` — `tokenize`, `scoreMatch` e `MATCH_THRESHOLD` moraram
+// aqui até 05/08/2026 e saíram para poder ser lidos pelo Garçom do cardápio.
 
 // ── Service ────────────────────────────────────────────────────────────────────
 
@@ -156,24 +124,7 @@ export const RestaurantKnowledgeService = {
    */
   async findMatch(restaurantId: string, customerMessage: string): Promise<KnowledgeItem | null> {
     const active = await RestaurantKnowledgeService.getActive(restaurantId);
-    if (active.length === 0) return null;
-
-    const tokens = tokenize(customerMessage);
-    if (tokens.length === 0) return null;
-
-    let best: KnowledgeItem | null = null;
-    let bestScore = MATCH_THRESHOLD;
-
-    for (const item of active) {
-      if (item.category === "UNKNOWN_GAP") continue; // gaps have no answer to give
-      const score = scoreMatch(tokens, item.questionPatterns);
-      if (score > bestScore) {
-        bestScore = score;
-        best = item;
-      }
-    }
-
-    return best;
+    return matchKnowledgeItems(active, customerMessage);
   },
 
   // ── Create ─────────────────────────────────────────────────────────────────

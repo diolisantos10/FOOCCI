@@ -192,6 +192,133 @@ export function catalogProvesOffering(
   );
 }
 
+// ─── O que a casa vende SÓ NO SALÃO ──────────────────────────────────────────
+//
+// Decisão do CEO, 05/08/2026: *"O rodízio não deve aparecer no cardápio delivery,
+// mas tem que ter a mesma informação que o agente de WhatsApp tem. Então: existe
+// o rodízio, e passar o preço, como funciona e tudo mais — mas é só
+// pessoalmente."*
+//
+// A regra geral, que não fala de rodízio nenhum:
+//   **item que o restaurante vende só no salão existe para ser CONTADO,
+//   nunca para ser VENDIDO no delivery.**
+// Vale para couvert, self-service, buffet, chopp na torneira — o que for. O
+// critério é o cadastro (`showInDineIn && !showInDelivery`), não o nome do prato.
+//
+// Por que ele NÃO entra no catálogo do Garçom: o catálogo é a lista do que pode
+// virar card, carrinho e pedido. Um item de salão lá dentro seria vendável por
+// construção. Ele viaja numa lista separada, só de leitura.
+
+/** Item que o restaurante serve no salão e não manda para entrega. */
+export interface DineInOnlyItem {
+  id:           string;
+  name:         string;
+  categoryName: string;
+  price:        number;
+  description?: string | null;
+}
+
+/** Normaliza para comparação: minúsculas, sem acento, sem pontuação. */
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Porta 1 — o TERMO DE OFERTA reconhecido casa com um item de salão.
+ * Caminho do "vocês tem rodízio?". Sinal forte: a régua é a lista curada acima,
+ * casada contra texto real do cadastro. Nada de aproximação.
+ */
+export function findDineInByOfferingTerm(
+  items: readonly DineInOnlyItem[],
+  term:  OfferingTerm | null,
+): DineInOnlyItem | null {
+  if (!term || items.length === 0) return null;
+  return items.find((i) =>
+    term.catalogRe.test(`${i.name} ${i.categoryName} ${i.description ?? ""}`),
+  ) ?? null;
+}
+
+/**
+ * Porta 2 — o cliente escreveu o NOME (ou a categoria) do item de salão.
+ * Caminho do "quero o festival presencial".
+ *
+ * Palavra com menos de 4 letras não vale como âncora: "hot", "mix" e afins
+ * casariam com meia dúzia de coisas e a resposta erraria o produto. Exige TODAS
+ * as palavras longas do nome — casamento estreito de propósito, porque o matcher
+ * difuso desta casa já aproximou "lasanha" de "yakisoba" e isso é pendência
+ * aberta.
+ */
+export function findDineInByName(
+  message: string,
+  items:   readonly DineInOnlyItem[],
+): DineInOnlyItem | null {
+  if (items.length === 0) return null;
+  const msg = ` ${norm(message)} `;
+  for (const item of items) {
+    for (const candidate of [item.name, item.categoryName]) {
+      const words = norm(candidate).split(" ").filter((w) => w.length >= 4);
+      if (words.length > 0 && words.every((w) => msg.includes(` ${w} `))) return item;
+    }
+  }
+  return null;
+}
+
+/** As duas portas, na ordem: termo curado primeiro, nome depois. */
+export function findDineInOnlyOffering(
+  message: string,
+  items:   readonly DineInOnlyItem[],
+  term:    OfferingTerm | null,
+): DineInOnlyItem | null {
+  return findDineInByOfferingTerm(items, term) ?? findDineInByName(message, items);
+}
+
+function formatBRL(v: number): string {
+  return `R$ ${v.toFixed(2).replace(".", ",")}`;
+}
+
+/**
+ * A resposta do CEO, montada do CADASTRO — nunca de frase escrita à mão.
+ *
+ * Três coisas obrigatórias, e a terceira é a que protege:
+ *   1. confirma que existe;
+ *   2. diz o preço;
+ *   3. diz que é presencial, e **não oferece adicionar ao carrinho**.
+ *
+ * "Como funciona" é informação do restaurante, não nossa: sai do Q&A que o
+ * lojista cadastrou (`knowledgeAnswer`) e, quando ele não cadastrou nada,
+ * simplesmente não é dito — a equipe responde. Guardrail 1: o que a base não
+ * sustenta, o agente não afirma.
+ *
+ * Montada do cadastro, ela envelhece sozinha: mudou o preço no painel, mudou a
+ * frase.
+ */
+export function buildDineInOnlyAnswer(params: {
+  item:            DineInOnlyItem;
+  knowledgeAnswer?: string | null;
+  hasHumanChannel:  boolean;
+}): string {
+  const { item, knowledgeAnswer, hasHumanChannel } = params;
+  const nome  = item.name.trim();
+  const comoFunciona = knowledgeAnswer?.trim();
+
+  // Sem markdown: o balão do Garçom renderiza texto cru, e um asterisco
+  // aparecendo na tela do cliente parece defeito.
+  const abertura = `Temos sim! ${nome} sai a ${formatBRL(item.price)} e é só no salão — não vai para entrega.`;
+  if (comoFunciona) {
+    // A voz do lojista tem precedência sobre qualquer redação nossa.
+    return `${abertura}\n${comoFunciona}`;
+  }
+  return hasHumanChannel
+    ? `${abertura}\nQuer falar com a equipe para os detalhes?`
+    : `${abertura}\nA equipe do restaurante passa os detalhes 😊`;
+}
+
 /**
  * Frases de negação. O ponto não é a palavra "não": é o verbo de posse/oferta
  * logo depois dela — que é o que transforma "não achei" em "não temos".
@@ -232,15 +359,21 @@ export interface SanitizeResult {
  *   2. a MESMA frase nomeia uma oferta da lista acima;
  *   3. o catálogo deste canal não prova essa oferta.
  *
+ * O que entra no lugar depende do que se sabe — a trava não empurra tudo para o
+ * "preciso confirmar":
+ *   • existe no salão  → a verdade completa ("temos sim, R$ X, só no salão");
+ *   • ninguém sabe     → "preciso confirmar".
+ *
  * Só a frase ofensora é trocada — o resto da resposta é preservado, porque
  * proteção que dispara não pode ser mais destrutiva que o problema que ela
  * evita (guardrail 5).
  */
 export function sanitizeUnprovenDenial(params: {
-  reply:    string;
-  catalog:  readonly OfferingCatalogItem[];
+  reply:       string;
+  catalog:     readonly OfferingCatalogItem[];
+  dineInOnly?: readonly DineInOnlyItem[];
 }): SanitizeResult {
-  const { reply, catalog } = params;
+  const { reply, catalog, dineInOnly = [] } = params;
   if (!reply || !DENIAL_RE.test(reply)) {
     return { reply, blocked: false, term: null, evidence: null };
   }
@@ -254,10 +387,18 @@ export function sanitizeUnprovenDenial(params: {
       if (!DENIAL_RE.test(sentence)) return sentence;
       const term = OFFERING_TERMS.find((t) => t.questionRe.test(sentence));
       if (!term) return sentence;
+      // Provado pelo catálogo DESTE canal → o agente está falando da verdade.
       if (catalogProvesOffering(term, catalog)) return sentence;
+
       blocked  = true;
       hitTerm  = hitTerm ?? term;
       evidence = evidence ?? sentence.trim();
+
+      // Existe, mas é do salão: a negação era falsa e a verdade está no cadastro.
+      const salao = findDineInOnlyOffering(sentence, dineInOnly, term);
+      if (salao) {
+        return `Temos sim! ${salao.name.trim()} sai a ${formatBRL(salao.price)} e é só no salão — não vai para entrega.`;
+      }
       return cannotConfirmSentence(term);
     })
     .join(" ")

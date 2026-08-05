@@ -244,6 +244,12 @@ export async function POST(
         id:          { in: itemIds },
         isActive:    true,
         isAvailable: true,
+        // A trava final do canal. A loja só renderiza `showInDelivery: true`
+        // (page.tsx:336), então nenhum pedido legítimo se perde aqui — mas a
+        // partir de 05/08/2026 o Garçom CONTA sobre itens que a casa só serve no
+        // salão, e um id desses chegando ao carrinho vira "Item indisponível"
+        // em vez de um pedido de entrega de um rodízio presencial.
+        showInDelivery: true,
         category:    { restaurantId, isActive: true },
       },
       select: {
