@@ -14,6 +14,7 @@
  */
 
 import { useState } from "react";
+import { leOrigemGuardada } from "./leadOriginStorage";
 
 const TIPOS = [
   "Pizzaria",
@@ -54,6 +55,10 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
     setStatus("sending");
     setError(null);
 
+    // A origem NÃO é a página em que o visitante está agora — é a que ele abriu
+    // primeiro nesta visita, com os parâmetros da campanha. Ver LeadOriginTracker.
+    const origemDaVisita = leOrigemGuardada();
+
     try {
       const res = await fetch("/api/site/leads", {
         method: "POST",
@@ -65,7 +70,17 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
           cidade,
           tipo,
           desafio: includeChallenge ? desafio : "",
+          // `origem` (legado) segue sendo a página do formulário: é a resposta a
+          // "de qual página ele enviou", que continua útil e nunca foi atribuição.
           origem: typeof window !== "undefined" ? window.location.pathname : "",
+          utmSource:   origemDaVisita.utmSource   ?? "",
+          utmMedium:   origemDaVisita.utmMedium   ?? "",
+          utmCampaign: origemDaVisita.utmCampaign ?? "",
+          utmContent:  origemDaVisita.utmContent  ?? "",
+          utmTerm:     origemDaVisita.utmTerm     ?? "",
+          clickId:     origemDaVisita.clickId     ?? "",
+          landingPath: origemDaVisita.landingPath ?? "",
+          referrer:    origemDaVisita.referrer    ?? "",
         }),
       });
 
