@@ -309,8 +309,30 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <p>Recebimento: <b>{view?.scope === "RESTAURANT_WIDE" ? "Todos os clientes" : "Só conta de teste"}</b></p>
             <p>Último Direct recebido: <b>{fmtDate(view?.lastWebhookAt ?? null)}</b></p>
           </div>
+
+          {/* "Conectado" não é evidência de saúde. Esta conta ficou treze dias com o
+              selo verde e o acesso morto, sem receber uma única mensagem, porque o
+              erro registrado não aparecia em lugar nenhum desta tela — só no card
+              Diagnóstico, que é preciso lembrar de rodar. Enquanto houver erro, ele
+              aparece aqui, junto do botão que o resolve. */}
+          {view?.lastError && (
+            <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-left">
+              <p className="text-sm font-semibold text-red-800">A conexão está com problema — as mensagens não estão chegando.</p>
+              <p className="mt-1 text-xs text-red-700">{view.lastError}</p>
+              <a href="/api/integrations/instagram/login/start"
+                className="mt-2 inline-block rounded-md bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+                Reconectar agora
+              </a>
+            </div>
+          )}
+
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={runTest} disabled={testing} className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50">{testing ? "Testando…" : "Rodar diagnóstico"}</button>
+            {/* Sem isto, renovar um acesso vencido exigia passar pelo botão vermelho
+                "Desconectar" — um caminho que ninguém escolhe quando a tela diz que
+                está tudo verde. Reconectar por cima é seguro: o fluxo regrava a
+                mesma configuração. */}
+            {canEdit && <a href="/api/integrations/instagram/login/start" className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Reconectar Instagram</a>}
             {canEdit && view?.mode !== "REPLY_ONLY" && <button onClick={() => save({ mode: "REPLY_ONLY" }, "Resposta manual ativada.")} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Ativar resposta manual</button>}
             {canEdit && view?.scope !== "RESTAURANT_WIDE" && <button onClick={() => save({ scope: "RESTAURANT_WIDE" }, "Pronto — recebendo DMs de todos os clientes.")} disabled={saving} className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Receber de todos os clientes</button>}
             {canEdit && view?.scope === "RESTAURANT_WIDE" && <button onClick={() => save({ scope: "TEST_ACCOUNT_ONLY" }, "Restrito à conta de teste.")} disabled={saving} className="rounded-md border border-line2 px-3 py-1.5 text-sm hover:bg-paper">Restringir a conta de teste</button>}
