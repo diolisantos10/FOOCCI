@@ -43,6 +43,14 @@ interface Subscription {
 }
 
 
+/** O que `/api/admin/billing/gateway` responde. Espelho leve, sem importar server. */
+interface GatewayVerdict {
+  vivo: boolean;
+  motivo?: string;
+  recado: string;
+  conta?: { id: number | null; apelido: string | null; pais: string | null };
+}
+
 const STATUS_STYLE: Record<string, string> = {
   ATIVA: "bg-green-50 text-green-700 border-green-200",
   AGUARDANDO_ACEITE: "bg-amber-50 text-amber-700 border-amber-200",
@@ -62,6 +70,8 @@ export function AssinaturasClient() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [nfseReason, setNfseReason] = useState<string | null>(null);
   const [mpConfigured, setMpConfigured] = useState(false);
+  /** Veredito do gateway. `null` = ainda não sei — nunca "está tudo bem". */
+  const [gateway, setGateway] = useState<GatewayVerdict | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -89,6 +99,24 @@ export function AssinaturasClient() {
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Falha ao carregar");
       setSubs([]);
+    }
+
+    /*
+      A SEGUNDA PERGUNTA, e a que realmente importa. A de cima só sabe dizer que
+      a variável existe — token vencido ou rotacionado responde "configurado" do
+      mesmo jeito, e quem descobre a diferença é o cliente, na tela sem link de
+      pagamento. Esta chamada pergunta ao Mercado Pago se a chave responde.
+      Vai DEPOIS e em separado de propósito: é uma ida à rede externa, e ela não
+      pode atrasar nem derrubar a lista de assinaturas, que é o conteúdo da tela.
+    */
+    try {
+      const res = await fetch("/api/admin/billing/gateway");
+      const body = await res.json();
+      setGateway(body?.gateway ?? null);
+    } catch {
+      // Sem veredito é DIFERENTE de veredito ruim: a tela dirá "não deu para
+      // conferir", nunca "está tudo bem". Guardrail 1.
+      setGateway(null);
     }
   }, []);
 
@@ -172,11 +200,33 @@ export function AssinaturasClient() {
           🧾 NFS-e em fila: {nfseReason} As cobranças pagas acumulam como PENDENTE e são emitidas quando liberar.
         </div>
       ) : null}
+      {/*
+        UM aviso sobre o gateway, não dois. A pergunta fraca ("a variável existe")
+        só aparece quando ela é a resposta inteira — sem variável não há o que
+        perguntar ao Mercado Pago. Havendo variável, quem fala é o veredito real.
+      */}
       {!mpConfigured ? (
         <div className="mt-2 rounded-xl border border-line bg-canvas px-4 py-3 text-sm text-ink2">
           💳 Gateway não configurado (MP_PLATFORM_ACCESS_TOKEN) — modo manual: combine o pagamento e use “Ativar”.
         </div>
-      ) : null}
+      ) : gateway === null ? (
+        /* Não deu para conferir NUNCA vira "está tudo bem" (guardrail 1). */
+        <div className="mt-2 rounded-xl border border-line bg-canvas px-4 py-3 text-sm text-ink2">
+          💳 Não deu para conferir a chave de cobrança agora. A variável existe; se o
+          Mercado Pago estiver recusando, o cliente contrata e não recebe link.
+        </div>
+      ) : gateway.vivo ? (
+        <div className="mt-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          💳 Chave de cobrança respondendo{gateway.conta?.apelido ? ` — conta ${gateway.conta.apelido}` : ""}. O
+          checkout emite link de pagamento.
+        </div>
+      ) : (
+        /* Guardrail 6: o alerta traz o motivo que o gateway deu, não "falhou". */
+        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <strong>💳 O checkout NÃO consegue cobrar.</strong> {gateway.recado}
+          {gateway.motivo ? <span className="mt-1 block text-red-600">Motivo: {gateway.motivo}</span> : null}
+        </div>
+      )}
       {notice ? <div className="mt-3 rounded-xl border border-line bg-paper px-4 py-3 text-sm text-ink break-all">{notice}</div> : null}
       {loadError ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</div> : null}
 
