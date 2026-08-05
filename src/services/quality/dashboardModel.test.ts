@@ -1,4 +1,25 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+/*
+  PRAZO PRÓPRIO PARA O ARQUIVO INTEIRO, e a causa é uma só.
+
+  Todo caso deste arquivo passa por `runAll()`, que executa TODOS os auditores —
+  inclusive os que rodam baterias de cenário. Isso leva vários segundos por
+  natureza, contra o limite padrão de 5s do vitest. Rodando sozinho ele passa;
+  na bateria completa, disputando CPU, reprova por CARGA — e a falha não tem
+  relação nenhuma com o que mudou no commit.
+
+  Este é o TERCEIRO teste desta pasta a reprovar assim em um único dia (os outros
+  dois foram `noSideEffects` e `runRequest`, corrigidos hoje um a um). Três
+  ocorrências não são azar: é a família inteira medindo determinismo com um
+  cronômetro pensado para teste unitário. Portão que reprova por sorte ensina a
+  rodar de novo até passar — e aí deixou de ser portão.
+
+  Nenhuma asserção foi afrouxada. O que se mede aqui é CONTEÚDO, nunca velocidade.
+  Se um dia estourar 60s, aí sim é sinal de verdade: algum auditor ficou lento.
+*/
+vi.setConfig({ testTimeout: 60_000 });
+
 import {
   buildExecutiveSummary,
   emptyExecutiveSummary,

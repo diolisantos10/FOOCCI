@@ -21,12 +21,23 @@ interface ThreadSummary {
   messageCount: number;
 }
 
+interface ThreadAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  bytes: number;
+  kind: "IMAGE" | "PDF" | "AUDIO";
+  /** Rota de ADMIN — a do lojista confere tenant e responderia 404 aqui. */
+  url: string;
+}
+
 interface ThreadMessage {
   id: string;
   role: string;
   content: string;
   authorName: string | null;
   createdAt: string;
+  attachments?: ThreadAttachment[];
 }
 
 interface ThreadDetail {
@@ -488,18 +499,70 @@ function AdminMessage({ message }: { message: ThreadMessage }) {
         <span className="mb-0.5 block px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           {label} · {fmtTime(message.createdAt)}
         </span>
-        <div
-          className={`whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-            isUs
-              ? "rounded-br-md bg-violet-600 text-white"
-              : message.role === "ASSISTANT"
-                ? "rounded-bl-md bg-gray-800 text-gray-300"
-                : "rounded-bl-md bg-gray-700 text-white"
-          }`}
-        >
-          {message.content}
-        </div>
+        {message.content && (
+          <div
+            className={`whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+              isUs
+                ? "rounded-br-md bg-violet-600 text-white"
+                : message.role === "ASSISTANT"
+                  ? "rounded-bl-md bg-gray-800 text-gray-300"
+                  : "rounded-bl-md bg-gray-700 text-white"
+            }`}
+          >
+            {message.content}
+          </div>
+        )}
+
+        {/* O print/PDF/áudio que o lojista mandou. Sem isto, quem atende lê
+            "a tela está assim" e não vê a tela. */}
+        {(message.attachments?.length ?? 0) > 0 && (
+          <div className="mt-1 flex flex-wrap gap-2">
+            {message.attachments!.map((a) => (
+              <AdminAttachment key={a.id} file={a} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function AdminAttachment({ file }: { file: ThreadAttachment }) {
+  const kb =
+    file.bytes < 1024 * 1024
+      ? `${Math.max(1, Math.round(file.bytes / 1024))} KB`
+      : `${(file.bytes / 1048576).toFixed(1)} MB`;
+
+  if (file.kind === "IMAGE") {
+    return (
+      <a href={file.url} target="_blank" rel="noreferrer" title={`${file.fileName} · ${kb}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={file.url}
+          alt={file.fileName}
+          className="max-h-48 max-w-[16rem] rounded-lg border border-gray-700 object-cover"
+        />
+      </a>
+    );
+  }
+  if (file.kind === "AUDIO") {
+    return (
+      <span className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-2 py-1.5">
+        <span aria-hidden>🎤</span>
+        <audio controls src={file.url} className="h-8 max-w-[14rem]" />
+      </span>
+    );
+  }
+  return (
+    <a
+      href={file.url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-xs text-gray-200 transition-colors hover:border-violet-600"
+    >
+      <span aria-hidden>📄</span>
+      <span className="max-w-[12rem] truncate font-semibold">{file.fileName}</span>
+      <span className="text-gray-500">{kb}</span>
+    </a>
   );
 }

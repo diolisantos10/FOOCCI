@@ -13,6 +13,7 @@ import type { HelpMessage, HelpThread } from "@prisma/client";
 import { SupportTicketService } from "@/services/support/SupportTicketService";
 import type { SupportActionProposal } from "@/services/support/actions/SupportActionExecutor";
 import { answerHelpQuestion } from "./helpAssistant";
+import { HelpAttachmentService, type AttachmentDTO } from "./HelpAttachmentService";
 
 export interface HelpMessageDTO {
   id: string;
@@ -20,6 +21,8 @@ export interface HelpMessageDTO {
   content: string;
   authorName: string | null;
   createdAt: string;
+  /** Print, foto ou PDF que veio junto. Vazio na maioria das mensagens. */
+  attachments: AttachmentDTO[];
 }
 
 export interface HelpThreadDTO {
@@ -33,15 +36,22 @@ export interface HelpThreadDTO {
 export interface ThreadWithMessages {
   thread: HelpThreadDTO;
   messages: HelpMessageDTO[];
+  /**
+   * Arquivos já escolhidos mas ainda não enviados. Vêm no GET porque o lojista
+   * pode fechar o balão no meio do anexo e voltar depois — sem isto, o arquivo
+   * ficaria órfão no banco e invisível na tela.
+   */
+  pendingAttachments?: AttachmentDTO[];
 }
 
-function msgDTO(m: HelpMessage): HelpMessageDTO {
+function msgDTO(m: HelpMessage, attachments: AttachmentDTO[] = []): HelpMessageDTO {
   return {
     id: m.id,
     role: m.role,
     content: m.content,
     authorName: m.authorName,
     createdAt: m.createdAt.toISOString(),
+    attachments,
   };
 }
 
@@ -53,6 +63,33 @@ function threadDTO(t: HelpThread): HelpThreadDTO {
     createdAt: t.createdAt.toISOString(),
     lastMessageAt: t.lastMessageAt.toISOString(),
   };
+}
+
+/**
+ * A evidência do chamado precisa DIZER que houve anexo. Um chamado que só
+ * transcreve o texto some com o print que o lojista mandou — e quem atende
+ * responde no escuro (guardrail 6: o alerta carrega a própria evidência).
+ */
+async function withAttachmentNotes(
+  history: HelpMessage[],
+): Promise<{ role: string; content: string }[]> {
+  let byMessage: Map<string, AttachmentDTO[]>;
+  try {
+    byMessage = await HelpAttachmentService.byMessages(history.map((m) => m.id));
+  } catch (err) {
+    // Enfeite do chamado não pode derrubar o chamado. Se a busca de anexos
+    // falhar, a escalada segue com o texto — o pior caso é a nota faltando,
+    // nunca o lojista sem número de chamado (guardrail 5).
+    console.error("[HelpThreadService] anexos não listados para a evidência:", err);
+    byMessage = new Map();
+  }
+  return history.map((m) => {
+    const files = byMessage.get(m.id) ?? [];
+    const note = files.length
+      ? `\n[anexos: ${files.map((f) => `${f.fileName} (${f.kind})`).join(", ")}]`
+      : "";
+    return { role: m.role, content: `${m.content}${note}` };
+  });
 }
 
 export class HelpThreadService {
@@ -71,6 +108,14 @@ export class HelpThreadService {
     });
   }
 
+  /**
+   * O id da conversa ativa. Público porque o upload de anexo precisa saber a
+   * qual conversa o arquivo pertence ANTES de existir mensagem.
+   */
+  static async activeThreadId(restaurantId: string, userId: string): Promise<string> {
+    return (await this.getOrCreate(restaurantId, userId)).id;
+  }
+
   static async loadActiveThread(
     restaurantId: string,
     userId: string,
@@ -81,9 +126,11 @@ export class HelpThreadService {
         where: { threadId: thread.id },
         orderBy: { createdAt: "asc" },
       });
+      const byMessage = await HelpAttachmentService.byMessages(messages.map((m) => m.id));
       return serviceOk({
         thread: threadDTO(thread),
-        messages: messages.map(msgDTO),
+        messages: messages.map((m) => msgDTO(m, byMessage.get(m.id) ?? [])),
+        pendingAttachments: await HelpAttachmentService.listPending(thread.id),
       });
     } catch (err) {
       console.error("[HelpThreadService.loadActiveThread]", err);
@@ -95,6 +142,12 @@ export class HelpThreadService {
     restaurantId: string,
     userId: string,
     content: string,
+    /**
+     * Rascunhos escolhidos pelo lojista. Só são amarrados à mensagem AQUI, no
+     * envio — antes disso são removíveis. Ids de outra conversa não colam:
+     * quem filtra é `attachToMessage`.
+     */
+    attachmentIds: string[] = [],
   ): Promise<
     ServiceResult<{
       threadId: string;
@@ -126,7 +179,13 @@ export class HelpThreadService {
         data: { lastMessageAt: new Date() },
       });
 
-      const out: HelpMessageDTO[] = [msgDTO(userMsg)];
+      const attached = await HelpAttachmentService.attachToMessage(
+        thread.id,
+        userMsg.id,
+        attachmentIds,
+      );
+
+      const out: HelpMessageDTO[] = [msgDTO(userMsg, attached)];
       let assistant: { shouldEscalate: boolean; coherence: string } | null = null;
       let proposedAction: SupportActionProposal | null = null;
 
@@ -232,7 +291,7 @@ export class HelpThreadService {
           threadId: thread.id,
           subject: lastQuestion.slice(0, 200),
           reason: reason?.trim() || "O lojista pediu para falar com a equipe Foocci.",
-          transcript: history.map((m) => ({ role: m.role, content: m.content })),
+          transcript: await withAttachmentNotes(history),
         });
         ticket = { code: opened.code, notified: opened.notified };
         if (opened.notifyError) {

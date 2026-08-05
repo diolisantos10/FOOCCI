@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import type { HelpThreadStatus } from "@prisma/client";
+import { HelpAttachmentService, type AttachmentDTO } from "./HelpAttachmentService";
 
 export type SupportListFilter = "ESCALATED" | "RESOLVED" | "ALL";
 
@@ -29,6 +30,12 @@ export interface SupportThreadMessage {
   content: string;
   authorName: string | null;
   createdAt: string;
+  /**
+   * O print/PDF que o lojista mandou. A URL aqui é a de ADMIN — a rota do
+   * lojista (/api/help/attachments/[id]) confere o tenant da sessão e a área
+   * /admin não tem tenant nenhum: ela responderia 404 para o time.
+   */
+  attachments: AttachmentDTO[];
 }
 
 export interface SupportThreadDetail {
@@ -88,6 +95,8 @@ export class SupportInboxService {
       });
       if (!t) return serviceFail("Conversa não encontrada", 404);
 
+      const byMessage = await HelpAttachmentService.byMessages(t.messages.map((m) => m.id));
+
       return serviceOk({
         id: t.id,
         restaurantName: t.restaurant?.name ?? "—",
@@ -101,6 +110,10 @@ export class SupportInboxService {
           content: m.content,
           authorName: m.authorName,
           createdAt: m.createdAt.toISOString(),
+          attachments: (byMessage.get(m.id) ?? []).map((a) => ({
+            ...a,
+            url: `/api/admin/support/attachments/${a.id}`,
+          })),
         })),
       });
     } catch (err) {
