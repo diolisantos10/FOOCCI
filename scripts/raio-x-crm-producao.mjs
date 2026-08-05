@@ -207,13 +207,59 @@ const main = async () => {
     p(`C. POR QUE FOI BLOQUEADO / FALHOU — códigos de máquina, ${DIAS_LONGO}d`);
     p("═".repeat(78));
     for (const st of ["BLOCKED", "FAILED"]) {
-      const g = await prisma.campaignExecution.groupBy({
-        by: ["errorMessage"], where: { status: st, createdAt: { gte: corteLongo } }, _count: { _all: true },
-      });
-      p(`   ${st}:`);
-      const linhas = g.sort((a, b) => b._count._all - a._count._all).slice(0, 15);
-      if (!linhas.length) p("      (nenhuma)");
-      for (const x of linhas) p(`      ${n(x._count._all)} × ${String(x.errorMessage ?? "(sem código)").slice(0, 46)}`);
+      // Duas colunas, porque elas contam coisas diferentes: `errorMessage` é o
+      // CÓDIGO DE MÁQUINA (o que a classificação lê para decidir retentativa e
+      // exclusão de cliente) e `failedReason` é a frase para o lojista. Ler só a
+      // primeira produziu "700 × (sem código)" na rodada inicial — um zero que
+      // não explica nada.
+      for (const campo of ["errorMessage", "failedReason"]) {
+        const g = await prisma.campaignExecution.groupBy({
+          by: [campo], where: { status: st, createdAt: { gte: corteLongo } }, _count: { _all: true },
+        });
+        p(`   ${st} · por ${campo}:`);
+        const linhas = g.sort((a, b) => b._count._all - a._count._all).slice(0, 12);
+        if (!linhas.length) p("      (nenhuma)");
+        for (const x of linhas) p(`      ${n(x._count._all)} × ${String(x[campo] ?? "(vazio)").slice(0, 60)}`);
+      }
+    }
+
+    /* PENDING é a linha que nasceu e nunca saiu — precisa de idade, não de contagem. */
+    const pend = await prisma.campaignExecution.aggregate({
+      where: { status: "PENDING" }, _count: { _all: true }, _min: { createdAt: true }, _max: { createdAt: true },
+    });
+    p(`\n   PENDING (criado e nunca enviado) — total ${pend._count._all}, ` +
+      `do mais antigo ${dia(pend._min.createdAt)} ao mais recente ${dia(pend._max.createdAt)}.`);
+    p("   PENDING recente é fila viva; PENDING só antigo é resíduo de um motor que parou.");
+
+    /* A série por dia. "Enviou 4 mil em 30 dias" e "está enviando hoje" são
+     * afirmações diferentes, e só a segunda responde se a promessa vale AGORA. */
+    p("\n" + "═".repeat(78));
+    p(`C2. ESTÁ ENVIANDO HOJE? — enviados por dia, últimos ${DIAS_CURTO} dias`);
+    p("═".repeat(78));
+    const porDia = await prisma.$queryRawUnsafe(
+      `SELECT to_char("sentAt" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS d, COUNT(*)::int AS n
+         FROM campaign_executions
+        WHERE status IN ('SENT','DELIVERED','READ') AND "sentAt" >= $1
+        GROUP BY 1 ORDER BY 1`,
+      corteCurto,
+    );
+    if (!porDia.length) p("   (nenhum envio na janela)");
+    for (const r of porDia) p(`   ${r.d}  ${"█".repeat(Math.min(60, Math.ceil(r.n / 10)))} ${r.n}`);
+
+    /* O catálogo: das 16 campanhas prontas, quantas cada casa realmente ligou. */
+    p("\n" + "═".repeat(78));
+    p("C3. O CATÁLOGO LIGADO — quantas das 16 campanhas prontas cada casa ativou");
+    p("═".repeat(78));
+    for (const r of restaurantes) {
+      const minhas = campanhas.filter((c) => c.restaurantId === r.id);
+      const ativasAuto = new Set(minhas.filter((c) => ["ACTIVE", "SCHEDULED"].includes(c.status) && c.templateId && AUTOMATICAS.has(c.templateId)).map((c) => c.templateId));
+      if (!minhas.length && ativasAuto.size === 0) {
+        p(`   ${String(r.slug ?? r.id.slice(0, 8)).padEnd(20)} NENHUMA campanha existe nesta casa (nem rascunho).`);
+        continue;
+      }
+      const faltando = [...AUTOMATICAS].filter((id) => !ativasAuto.has(id));
+      p(`   ${String(r.slug ?? r.id.slice(0, 8)).padEnd(20)} ligadas ${ativasAuto.size}/16`);
+      if (faltando.length) p(`      desligadas: ${faltando.join(", ")}`);
     }
 
     /* O teto de verdade: quanto sairia hoje se nada estivesse quebrado. */
@@ -269,7 +315,13 @@ const main = async () => {
   p("F. POR QUE CADA CAMPANHA ATIVA NÃO DISPARA AGORA (rota de diagnóstico)");
   p("═".repeat(78));
   const rs = await get("/api/admin/restaurants", secret);
-  const lista = Array.isArray(rs.json) ? rs.json : Array.isArray(rs.json?.restaurants) ? rs.json.restaurants : [];
+  // A rota devolve `{ data: [...] }` (route.ts:92). As outras formas ficam como
+  // tolerância: um HTTP 200 com formato inesperado NÃO pode virar "não há
+  // restaurante" — na primeira rodada isso apareceu como "HTTP 200 e lista vazia".
+  const lista = Array.isArray(rs.json?.data) ? rs.json.data
+    : Array.isArray(rs.json) ? rs.json
+    : Array.isArray(rs.json?.restaurants) ? rs.json.restaurants
+    : [];
   if (!lista.length) {
     p(`   (não consegui listar restaurantes — HTTP ${rs.status}. Sem lista, NÃO concluo nada.)`);
     return;

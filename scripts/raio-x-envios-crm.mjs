@@ -132,25 +132,33 @@ async function emParalelo(itens, fn, concorrencia) {
 }
 
 /**
- * Classifica o `reason` do runner nas TRÊS FAMÍLIAS do diagnóstico do carrinho —
- * a pergunta do CEO é se o padrão se repete no CRM inteiro.
+ * Classifica o `reason` do runner nas famílias do diagnóstico do carrinho — a
+ * pergunta do CEO é se o padrão se repete no CRM inteiro.
  *
  *   NUNCA_DISPARA  — o gatilho não chega a rodar / sai na primeira condição
  *   SEM_AUDIENCIA  — roda, e não acha ninguém
  *   BLOQUEADO      — acha gente e a proteção segura
+ *   RITMO          — nem uma coisa nem outra: o ciclo foi ADIADO para o próximo
+ *                    tick. Ficou fora das três de propósito, porque somar
+ *                    "aguardando 10 minutos" a "nunca dispara" faria a foto
+ *                    parecer avaria onde há espaçamento funcionando.
  *   ENVIOU         — saiu mensagem
  */
 function familia(reason, r) {
   if ((r?.sent ?? 0) > 0) return "ENVIOU";
   const t = String(reason ?? "").toLowerCase();
   if (!t) return (r?.eligible ?? 0) > 0 ? "BLOQUEADO" : "SEM_AUDIENCIA";
-  if (t.includes("not due") || t.includes("not found") || t.includes("aguardando")) return "NUNCA_DISPARA";
+  if (t.includes("intervalo mínimo") || t.includes("intervalo minimo") ||
+      t.includes("próximo ciclo") || t.includes("proximo ciclo") ||
+      t.includes("melhor horário") || t.includes("melhor horario")) return "RITMO";
+  if (t.includes("not due") || t.includes("not found") || t.includes("dry run")) return "NUNCA_DISPARA";
   if (t.includes("no new eligible") || t.includes("audience exhausted") ||
       t.includes("elegíveis") || t.includes("elegiveis")) return "SEM_AUDIENCIA";
   if (t.includes("daily limit") || t.includes("cap global") || t.includes("silêncio") ||
-      t.includes("silencio") || t.includes("quiet") || t.includes("fim de semana") ||
-      t.includes("weekend") || t.includes("intervalo mínimo") || t.includes("intervalo minimo")) return "BLOQUEADO";
-  if (t.includes("dry run")) return "NUNCA_DISPARA";
+      t.includes("silencio") || t.includes("quiet") || t.includes("quieto") ||
+      t.includes("fim de semana") || t.includes("weekend") || t.includes("desconectado") ||
+      t.includes("pausado") || t.includes("limite") || t.includes("esgotado") ||
+      t.includes("desativado")) return "BLOQUEADO";
   return "OUTRO";
 }
 

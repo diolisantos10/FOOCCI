@@ -83,8 +83,12 @@ jobs:
       - name: Publicar o resultado na branch de diagnóstico
         if: always()
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # --global de propósito: a identidade precisa valer no repositório NOVO
+          # criado em /tmp/pub pelo `git init` abaixo. Configurar sem --global
+          # grava só no checkout e o commit lá embaixo morre com "empty ident
+          # name" — foi exatamente o que aconteceu na primeira rodada.
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           rm -rf /tmp/pub && mkdir -p /tmp/pub
           cp /tmp/banco.txt   /tmp/pub/A-BANCO-E-ROTAS.txt || echo "sem saída" > /tmp/pub/A-BANCO-E-ROTAS.txt
           cp /tmp/motivos.txt /tmp/pub/B-MOTIVOS-DO-CRON.txt || echo "sem saída" > /tmp/pub/B-MOTIVOS-DO-CRON.txt
