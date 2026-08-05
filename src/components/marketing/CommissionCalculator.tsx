@@ -124,7 +124,7 @@ export function CommissionCalculator() {
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
         {/*
           É AQUI que o marketplace é nomeado — e em nenhum lugar antes (ordem do CEO,
-          05/08). No hero a menção só serviria para o visitante conhecer a Foocci
+          05/08). No hero a menção só serviria para o visitante conhecer o Foocci
           falando de outra empresa. Neste bloco ela é legítima: os números são do
           próprio dono, a taxa é editável, e a pergunta é exatamente a que a
           calculadora responde na linha de baixo.

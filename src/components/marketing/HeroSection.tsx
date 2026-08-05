@@ -4,7 +4,7 @@
  * O CONCORRENTE NÃO APARECE AQUI (2026-08-05, ordem do CEO). O hero anterior
  * perguntava "quanto o {marketplace} leva do seu faturamento". Funcionava como
  * conta, mas queimava o primeiro impacto falando de outra empresa: a primeira
- * imagem que o dono forma da Foocci não pode ser a de alguém apontando para o
+ * imagem que o dono forma do Foocci não pode ser a de alguém apontando para o
  * vizinho. Aquela pergunta NÃO foi descartada — ela foi para o topo da
  * `CommissionCalculator`, que é onde a comparação tem lastro (os números são os
  * dele, e a taxa é editável).
@@ -13,7 +13,7 @@
  * mas o que machuca de verdade é que **o cliente não é seu**. Quem recebe o pedido
  * fica com o nome, o telefone e o histórico — e cobra de novo para devolver a
  * mesma pessoa amanhã. Comissão é consequência; posse do cliente é a causa. É
- * também a única dor que a Foocci resolve inteira, e por isso ela abre o site.
+ * também a única dor que o Foocci resolve inteira, e por isso ela abre o site.
  *
  * REESCRITA COMERCIAL ANTERIOR (2026-08-04): o hero de antes falava do NOSSO ponto
  * de vista ("todo mundo vende um pedaço; o Foocci faz os quatro conversarem") e
