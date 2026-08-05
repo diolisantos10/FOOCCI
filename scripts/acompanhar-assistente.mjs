@@ -83,18 +83,63 @@ async function get(caminho, secret) {
 /** `undefined` vira "—" e não some do relatório: ausência é informação aqui. */
 const ou = (v) => (v === undefined || v === null ? "—" : v);
 
+/**
+ * Descobre em QUAL restaurante o movimento está acontecendo.
+ *
+ * Existia por trás disto um erro de método: na primeira execução eu apontei para
+ * um slug chutado e reportei o número dele como se fosse "o canal". Número certo
+ * do restaurante errado é pior que nenhum número — ele parece resposta.
+ * Com `SLUG=auto`, o script varre os restaurantes ativos e reporta o que TEM
+ * conversa na janela, dizendo qual escolheu.
+ */
+async function descobrirSlug(secret) {
+  const r = await get(`/api/admin/restaurants`, secret);
+  const lista = r.json?.restaurants ?? r.json?.data ?? r.json;
+  if (!Array.isArray(lista)) {
+    p("⚠️  Não consegui listar restaurantes — seguindo com o slug informado.");
+    return null;
+  }
+  const slugs = lista.map((x) => x?.slug).filter(Boolean);
+  p(`🔎 ${slugs.length} restaurante(s) para varrer.`);
+
+  const comMovimento = [];
+  for (const slug of slugs) {
+    const m = await get(
+      `/api/admin/whatsapp/live-monitor?restaurantSlug=${encodeURIComponent(slug)}&period=${encodeURIComponent(PERIODO)}`,
+      secret,
+    );
+    const n = Number(m.json?.metrics?.conversations ?? m.json?.summary?.conversations ?? 0);
+    if (n > 0) comMovimento.push({ slug, n });
+  }
+
+  if (!comMovimento.length) {
+    p("⚠️  NENHUM restaurante com conversa na janela.");
+    return null;
+  }
+  comMovimento.sort((a, b) => b.n - a.n);
+  p(`📍 Movimento em: ${comMovimento.map((c) => `${c.slug} (${c.n})`).join(", ")}`);
+  return comMovimento[0].slug;
+}
+
 const main = async () => {
   const secret = await lerAdminSecret();
   p(`🔑 ADMIN_SECRET lido do Railway (não impresso).`);
-  p(`🎯 Restaurante: ${SLUG} · janela: ${PERIODO}\n`);
+
+  let alvo = SLUG;
+  if (SLUG === "auto") {
+    const achado = await descobrirSlug(secret);
+    if (!achado) { p("\nNada a relatar."); return; }
+    alvo = achado;
+  }
+  p(`🎯 Restaurante: ${alvo} · janela: ${PERIODO}\n`);
 
   const r = await get(
-    `/api/admin/whatsapp/live-monitor?restaurantSlug=${encodeURIComponent(SLUG)}&period=${encodeURIComponent(PERIODO)}`,
+    `/api/admin/whatsapp/live-monitor?restaurantSlug=${encodeURIComponent(alvo)}&period=${encodeURIComponent(PERIODO)}`,
     secret,
   );
 
   if (r.status === 404) {
-    p(`❌ Restaurante "${SLUG}" não encontrado. Confira o slug (entrada SLUG do workflow).`);
+    p(`❌ Restaurante "${alvo}" não encontrado. Confira o slug (entrada SLUG do workflow).`);
     process.exit(1);
   }
   if (r.status !== 200 || !r.json) {
