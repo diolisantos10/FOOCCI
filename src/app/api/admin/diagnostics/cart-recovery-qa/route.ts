@@ -179,8 +179,10 @@ export async function GET(req: NextRequest) {
     } else {
       addWarn(
         "business_hours",
-        "Restaurant is currently CLOSED. Cart recovery will show skippedRestaurantClosed=1 " +
-        "in dryRun — this is expected. recoveryAttempts is NOT incremented when closed.",
+        "Loja FECHADA agora. Como o rascunho de teste é datado alguns minutos atrás, " +
+        "a recuperação vai mostrar skippedRestaurantClosed=1 no dryRun — e isso é " +
+        "DEFINITIVO: desde 05/08/2026 carrinho abandonado com a loja fechada não é " +
+        "cobrado nem agora nem quando a loja abrir. O rascunho não é carimbado.",
         { isOpen, skipReason: "restaurant_closed" },
       );
     }
@@ -448,8 +450,9 @@ export async function GET(req: NextRequest) {
     } else if (skippedRestaurantClosed > 0) {
       addWarn(
         "dry_run_eligible",
-        `Restaurant CLOSED — ${skippedRestaurantClosed} draft(s) deferred (recoveryAttempts NOT incremented). ` +
-        "Recovery will fire on next scheduler tick when restaurant reopens.",
+        `Loja FECHADA no instante do abandono — ${skippedRestaurantClosed} carrinho(s) NÃO serão cobrados. ` +
+        "Recusa definitiva (decisão do CEO 05/08/2026): não há disparo quando a loja reabrir. " +
+        "recoveryAttempts NÃO é incrementado — o carrinho do cliente continua intacto.",
         { ...(dryRunResult as unknown as Record<string, unknown>), skipReason: "restaurant_closed" },
       );
       if (verdict === "PASS") verdict = "PARTIAL";
@@ -460,6 +463,8 @@ export async function GET(req: NextRequest) {
         : dryRunResult.skippedOrderedAfter > 0 ? "skipped_ordered_after"
         : dryRunResult.skippedPendingPayment > 0 ? "skipped_pending_payment"
         : dryRunResult.skippedNoConfig    > 0 ? "skipped_no_whatsapp_config"
+        : dryRunResult.skippedTooLate     > 0 ? "skipped_too_late — abandono fora da janela de entrega"
+        : dryRunResult.skippedTooOld      > 0 ? "skipped_too_old — carrinho venceu"
         : dryRunResult.skippedAlreadySent > 0 ? "skipped_already_sent"
         : checked === 0                        ? "no_eligible_drafts_in_db"
         : "unknown";
@@ -549,7 +554,7 @@ export async function GET(req: NextRequest) {
         : !customerId || !phone      ? "no phone/customer"
         : !draftId                   ? "no draft"
         : failedStep                 ? `earlier step failed: ${failedStep}`
-        : !isOpen                    ? "restaurant_closed — recovery deferred until reopening"
+        : !isOpen                    ? "restaurant_closed — carrinho abandonado com a loja fechada não é cobrado, nem depois"
         : dryRunResult?.eligible === 0 ? "0 eligible in dryRun"
         : "unknown";
       liveTestResult = { accepted: false, detail: `Skipped — ${skipReason}` };

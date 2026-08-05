@@ -8,6 +8,33 @@
  * Designed for fast food-delivery cadence — default threshold is 2 minutes.
  * The goal is to catch customers who added items and then drifted away.
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A DECISÃO DO CEO — 05/08/2026, textual:
+ *
+ *   "A mensagem de carrinho tem que ser enviada quando o cliente fecha o Foocci
+ *    e 2 min depois mandar. Se o cliente abre de madrugada não precisa enviar
+ *    nada, porque ele queria comer de madrugada e não quando o restaurante
+ *    abrir."
+ *
+ * Duas consequências, e as duas moram no código abaixo:
+ *
+ * 1. "FECHOU O FOOCCI" NÃO É DETECTÁVEL. Não existe sinal confiável de
+ *    fechamento de aba no navegador (`beforeunload`/`visibilitychange` não
+ *    chegam, ou chegam duplicados, em celular). O que existe é INATIVIDADE.
+ *    Por isso a regra implementada é: rascunho não finalizado + 2 minutos sem
+ *    atividade = abandonado. Quem for "melhorar" isto inventando um detector de
+ *    fechamento de aba vai trocar um sinal que funciona por um que não chega.
+ *
+ * 2. LOJA FECHADA NO MOMENTO DO ABANDONO = NÃO MANDA, E NÃO GUARDA PARA DEPOIS.
+ *    Quem monta pedido de madrugada queria comer NAQUELA HORA. Mandar de manhã
+ *    é lembrete de uma vontade que já passou — irrita e não vende. O carrinho
+ *    morre em silêncio, de propósito: não é adiamento, não é fila, não é
+ *    pendência. Antes de 05/08 o motor ADIAVA (pulava sem carimbar, na
+ *    esperança de o próximo tick achar a loja aberta) e o prazo de validade de
+ *    6 h vencia antes de a loja abrir — promessa de segunda chance que nunca
+ *    acontecia. Ver `docs/agents/crm/oficina.md`, 2026-08-05, item (c).
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Eligibility rules — ALL must be true:
  *   1.  status = OPEN
  *   2.  updatedAt < NOW − inactivityMinutes
@@ -19,6 +46,10 @@
  *       within the last 24 hours (one recovery per customer per day)
  *   7.  no non-cancelled Order after draft.updatedAt
  *   8.  no AWAITING_PAYMENT order for the same restaurant
+ *   9.  a loja estava ABERTA no instante do abandono (updatedAt + inatividade)
+ *       — avaliado naquele instante, nunca em "agora"
+ *   10. o abandono aconteceu há menos de `deliveryWindowMinutes` — passou disso,
+ *       a mensagem chegaria tarde demais e não sai nunca mais
  *
  * Idempotent: recoveryAttempts + lastRecoveryAt are written atomically after
  * a successful send; re-running within the same window sends nothing extra.
@@ -71,7 +102,17 @@ export interface RecoverySendResult {
   /** Combined: order found via Rule 7 + AWAITING_PAYMENT via Rule 8. */
   skippedOrderOrPaymentExists: number;
   skippedNoConfig:            number; // restaurant has no working Meta WhatsApp config → nothing was attempted
-  skippedRestaurantClosed:    number; // restaurant is closed — recovery deferred, attempts NOT incremented
+  /**
+   * A loja estava FECHADA no instante do abandono → a mensagem NÃO sai, e não
+   * fica guardada para quando a loja abrir (decisão do CEO, 05/08/2026).
+   *
+   * Mudou de significado nesta data: antes era "adiado até reabrir". Agora é
+   * DEFINITIVO — o mesmo rascunho vai continuar sendo avaliado nos próximos
+   * ticks e vai continuar dando o mesmo resultado, porque a pergunta é sobre um
+   * instante do passado, não sobre agora. Quem lê este número em painel deve
+   * ler "não vamos cobrar este carrinho", nunca "vamos cobrar mais tarde".
+   */
+  skippedRestaurantClosed:    number;
   failed:                     number; // Meta was called and returned an error
   /**
    * A Meta RECUSOU o texto livre porque o cliente está fora da janela de 24h e
@@ -91,6 +132,15 @@ export interface RecoverySendResult {
   maxAgeHours:                number;
   /** Carrinhos que venceram e por isso NÃO foram cobrados. */
   skippedTooOld:              number;
+  /** Quanto tempo depois do abandono a mensagem ainda faz sentido. */
+  deliveryWindowMinutes:      number;
+  /**
+   * Abandonos velhos demais para a mensagem ainda ser útil — fora da janela de
+   * entrega, ainda dentro da validade. Sem este número, o carrinho que o motor
+   * decidiu não cobrar sumiria da conta e a diferença entre "não havia" e
+   * "chegou tarde" ficaria invisível.
+   */
+  skippedTooLate:             number;
   durationMs:                 number;
 }
 
@@ -110,6 +160,31 @@ export interface RecoverySendResult {
  * O que vence é o direito de COBRAR por ele.
  */
 const MAX_AGE_HOURS = 6;
+
+/**
+ * A JANELA DE ENTREGA: quanto tempo depois do abandono a mensagem ainda serve.
+ *
+ * Decorre direto da decisão do CEO de 05/08/2026 ("manda 2 min depois" +
+ * "não guarda para depois"). Se a mensagem não conseguiu sair logo — servidor
+ * reiniciando, cron do GitHub atrasado (ele entrega ~1 execução por hora, não
+ * a cada 5 minutos como está escrito no workflow), loja que fechou no meio,
+ * canal fora do ar — ela deixa
+ * de ser recuperação de carrinho e vira cutucada sobre um pedido que a pessoa
+ * já esqueceu.
+ *
+ * É também a TRAVA MECÂNICA contra enxurrada: por construção, um carrinho
+ * parado há horas ou dias **não pode** virar mensagem, aconteça o que
+ * acontecer com as outras regras. Prompt é aviso; isto é trava (guardrail 4).
+ *
+ * Medida a partir do INSTANTE DO ABANDONO (`updatedAt + inactivityMinutes`), e
+ * não da última atividade — assim ela não depende do valor de inatividade
+ * usado na chamada.
+ *
+ * O prazo de validade de 6 h (`MAX_AGE_HOURS`) continua existindo e é mais
+ * frouxo que esta janela: ele governa a BUSCA e a contagem de vencidos que o
+ * `CartRecoveryHealthService` lê. Quem manda no envio é a janela de entrega.
+ */
+const JANELA_DE_ENTREGA_MINUTOS = 30;
 
 // Unambiguous alphanumeric charset (no 0/O, 1/I/l)
 const RECOVERY_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -268,6 +343,7 @@ export class OrderDraftRecoverySendService {
   static async sendCartRecoveryMessages({
     inactivityMinutes = 2,
     maxAgeHours       = MAX_AGE_HOURS,
+    deliveryWindowMinutes = JANELA_DE_ENTREGA_MINUTOS,
     limit             = 50,
     dryRun            = false,
     restaurantId,
@@ -275,6 +351,11 @@ export class OrderDraftRecoverySendService {
     inactivityMinutes?: number;
     /** Prazo de validade do carrinho. Mais velho que isso não é mais cobrado. */
     maxAgeHours?:       number;
+    /**
+     * Quanto tempo depois do abandono a mensagem ainda pode sair. Fora disso o
+     * carrinho morre em silêncio — ver `JANELA_DE_ENTREGA_MINUTOS`.
+     */
+    deliveryWindowMinutes?: number;
     limit?:             number;
     dryRun?:            boolean;
     /**
@@ -351,6 +432,7 @@ export class OrderDraftRecoverySendService {
         skippedNoConfig: 0, skippedRestaurantClosed: 0, failed: 0,
         skippedTemplateRequired: 0,
         dryRun, inactivityMinutes, maxAgeHours, skippedTooOld,
+        deliveryWindowMinutes, skippedTooLate: 0,
         durationMs: Date.now() - startMs,
       };
     }
@@ -447,15 +529,39 @@ export class OrderDraftRecoverySendService {
     let skippedRestaurantClosed     = 0;
     let failed                      = 0;
     let skippedTemplateRequired     = 0;
+    let skippedTooLate              = 0;
 
-    // Cache open/closed status per restaurant for this tick — avoids N DB round-trips
-    // when multiple drafts belong to the same restaurant.
-    const restaurantOpenCache = new Map<string, boolean>();
-    const isOpen = async (restaurantId: string): Promise<boolean> => {
-      if (restaurantOpenCache.has(restaurantId)) return restaurantOpenCache.get(restaurantId)!;
-      const open = await isRestaurantOpenNow(restaurantId);
-      restaurantOpenCache.set(restaurantId, open);
-      return open;
+    /**
+     * A loja estava aberta NAQUELE INSTANTE?
+     *
+     * `isRestaurantOpenNow` já aceita a data a consultar — é a fonte de verdade
+     * única do horário da loja (fuso do restaurante, turnos partidos, virada de
+     * meia-noite, e "sem horário cadastrado = sem restrição"). Perguntar sobre o
+     * passado não exige regra nova: exige passar a data certa. Segunda régua de
+     * "está aberto" seria a maneira garantida de divergir da loja.
+     *
+     * Cacheado por restaurante + MINUTO consultado: vários rascunhos abandonados
+     * no mesmo minuto respondem com uma consulta só.
+     *
+     * Falha fechada: se a apuração explodir, a resposta é NÃO ABERTA (não
+     * envia) com log do caso concreto. Ausência de informação não é permissão de
+     * disparo — guardrail 1.
+     */
+    const aberturaCache = new Map<string, boolean>();
+    const estavaAbertaEm = async (restaurantId: string, quando: Date): Promise<boolean> => {
+      const chave = `${restaurantId}:${Math.floor(quando.getTime() / 60_000)}`;
+      if (aberturaCache.has(chave)) return aberturaCache.get(chave)!;
+      let aberta = false;
+      try {
+        aberta = await isRestaurantOpenNow(restaurantId, quando);
+      } catch (e) {
+        aberta = false;
+        console.error(`[OrderDraftRecoverySendService] leitura do horário da loja falhou — falhando fechado (não envia)`, {
+          restaurantId, quando: quando.toISOString(), error: e instanceof Error ? e.message : String(e),
+        });
+      }
+      aberturaCache.set(chave, aberta);
+      return aberta;
     };
 
     // Portão de config, cacheado por tick. A pergunta antiga era "existe config da
@@ -559,11 +665,49 @@ export class OrderDraftRecoverySendService {
         continue;
       }
 
-      // Business hours gate — do NOT increment recoveryAttempts when closed.
-      // Recovery is deferred until the next tick when the restaurant reopens.
-      // Returns true (open) when no BusinessHours row is configured.
-      if (!(await isOpen(draft.restaurantId))) {
+      // ── O INSTANTE DO ABANDONO ────────────────────────────────────────────
+      // "Fechou o Foocci" não é detectável no navegador; inatividade é. Então o
+      // abandono é datado: última atividade + o silêncio que o define.
+      const momentoDoAbandono = new Date(draft.updatedAt.getTime() + inactivityMinutes * 60_000);
+      const atrasoMinutos     = (Date.now() - momentoDoAbandono.getTime()) / 60_000;
+
+      // Regra 10 — JANELA DE ENTREGA. A mensagem de carrinho é do momento; fora
+      // dele ela não recupera nada, só cutuca. Este portão é a trava mecânica
+      // contra enxurrada: carrinho parado há horas não vira mensagem por
+      // caminho nenhum, nem que todas as outras regras mudem.
+      if (atrasoMinutos > deliveryWindowMinutes) {
+        skippedTooLate++;
+        console.info(`[OrderDraftRecoverySendService] abandono fora da janela de entrega — não será cobrado`, {
+          draftId: draft.id, restaurantId: draft.restaurantId,
+          abandonadoEm: momentoDoAbandono.toISOString(),
+          atrasoMinutos: Math.round(atrasoMinutos),
+          janelaMinutos: deliveryWindowMinutes,
+        });
+        continue;
+      }
+
+      // Regra 9 — HORÁRIO DA LOJA, PERGUNTADO NO INSTANTE DO ABANDONO.
+      //
+      // Decisão do CEO (05/08/2026): quem monta o carrinho de madrugada queria
+      // comer de madrugada. Loja fechada naquele instante → NÃO MANDA e NÃO
+      // GUARDA para quando abrir. O carrinho morre em silêncio, de propósito.
+      //
+      // Por que a pergunta é sobre o PASSADO e não sobre "agora": a resposta
+      // precisa ser a MESMA em todo tick futuro. Assim o rascunho não fica
+      // "esperando a loja abrir" — não existe fila, não existe estado preso, e
+      // nenhum carrinho de ontem pode virar mensagem hoje porque a loja abriu.
+      // Era exatamente esse adiamento que prometia uma segunda chance que o
+      // prazo de validade nunca deixava acontecer.
+      //
+      // Não se carimba o rascunho aqui: ele continua OPEN e o cliente que voltar
+      // pelo próprio link acha o carrinho dele intacto. O que não acontece é a
+      // cobrança.
+      if (!(await estavaAbertaEm(draft.restaurantId, momentoDoAbandono))) {
         skippedRestaurantClosed++;
+        console.info(`[OrderDraftRecoverySendService] loja fechada no momento do abandono — não cobra agora nem depois`, {
+          draftId: draft.id, restaurantId: draft.restaurantId,
+          abandonadoEm: momentoDoAbandono.toISOString(),
+        });
         continue;
       }
 
@@ -801,6 +945,8 @@ export class OrderDraftRecoverySendService {
       inactivityMinutes,
       maxAgeHours,
       skippedTooOld,
+      deliveryWindowMinutes,
+      skippedTooLate,
       durationMs: Date.now() - startMs,
     };
   }

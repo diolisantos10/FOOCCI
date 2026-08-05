@@ -126,7 +126,13 @@ export class CartRecoveryScheduler {
           skippedPendingPayment:      result.skippedPendingPayment,
           skippedOrderOrPaymentExists: result.skippedOrderOrPaymentExists,
           skippedNoConfig:            result.skippedNoConfig,
+          // Desde 05/08/2026 estes dois são recusas DEFINITIVAS, não adiamentos:
+          // loja fechada no instante do abandono, e abandono velho demais para a
+          // mensagem ainda servir. Ler como "não vamos cobrar", nunca como "vai
+          // sair depois".
           skippedRestaurantClosed:    result.skippedRestaurantClosed,
+          skippedTooLate:             result.skippedTooLate,
+          skippedTooOld:              result.skippedTooOld,
           durationMs:                 result.durationMs,
         });
       }

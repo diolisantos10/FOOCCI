@@ -23,7 +23,13 @@ interface RecoverySendResult {
   skippedOrderedAfter:     number;
   skippedPendingPayment:   number;
   skippedNoConfig:         number;
+  /** Loja fechada NO INSTANTE DO ABANDONO — recusa definitiva, não adiamento. */
   skippedRestaurantClosed: number;
+  /** Abandono fora da janela de entrega — a mensagem chegaria tarde demais. */
+  skippedTooLate?:         number;
+  /** Carrinho que passou do prazo de validade. */
+  skippedTooOld?:          number;
+  deliveryWindowMinutes?:  number;
   failed:                  number;
   dryRun:                  boolean;
   inactivityMinutes:       number;
@@ -140,8 +146,13 @@ function DryRunGrid({ r }: { r: RecoverySendResult }) {
     ["ordered after",  r.skippedOrderedAfter, r.skippedOrderedAfter > 0 ? "text-yellow-400" : "text-gray-500"],
     ["pending pay",    r.skippedPendingPayment, r.skippedPendingPayment > 0 ? "text-yellow-400" : "text-gray-500"],
     ["no config",      r.skippedNoConfig, r.skippedNoConfig > 0 ? "text-red-400" : "text-gray-500"],
-    ["rest. closed",   r.skippedRestaurantClosed, r.skippedRestaurantClosed > 0 ? "text-yellow-400" : "text-gray-500"],
+    // "loja fechada" e "fora da janela" são recusas DEFINITIVAS desde 05/08/2026 —
+    // não some da tela, senão a decisão de não cobrar vira silêncio.
+    ["loja fechada",   r.skippedRestaurantClosed, r.skippedRestaurantClosed > 0 ? "text-yellow-400" : "text-gray-500"],
+    ["fora da janela", r.skippedTooLate ?? 0, (r.skippedTooLate ?? 0) > 0 ? "text-yellow-400" : "text-gray-500"],
+    ["vencidos",       r.skippedTooOld ?? 0, (r.skippedTooOld ?? 0) > 0 ? "text-yellow-400" : "text-gray-500"],
     ["inactivity min", r.inactivityMinutes, "text-gray-400"],
+    ["janela min",     r.deliveryWindowMinutes ?? "—", "text-gray-400"],
     ["duration ms",    r.durationMs, "text-gray-400"],
   ];
 
@@ -206,7 +217,9 @@ export default function CartRecoveryQAPage() {
             { label: "daily limit",   value: dr.skippedDailyLimit },
             { label: "ordered after", value: dr.skippedOrderedAfter },
             { label: "pending pay",   value: dr.skippedPendingPayment },
-            { label: "rest. closed",  value: dr.skippedRestaurantClosed },
+            { label: "loja fechada",  value: dr.skippedRestaurantClosed },
+            { label: "fora da janela", value: dr.skippedTooLate ?? 0 },
+            { label: "vencidos",      value: dr.skippedTooOld ?? 0 },
             { label: "duration ms",   value: dr.durationMs },
           ],
         }] : []),
