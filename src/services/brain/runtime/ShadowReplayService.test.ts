@@ -63,6 +63,16 @@ describe("ShadowReplayService — treinar o boletim com conversas reais", () => 
     expect(r.errors).toBe(0);
   });
 
+  it("a amostra do replay é marcada como REPLAY — não se passa por produção", async () => {
+    // A pergunta é de gente de verdade, mas ninguém recebeu a resposta. Antes
+    // deste campo, o boletim do recepcionista somava replay e atendimento ao
+    // vivo no mesmo contador e "100 amostras" não dizia o que tinha acontecido.
+    await replayShadowFromHistory({ maxSamples: 500 });
+    for (const [rec] of evidence.recordShadowOutcome.mock.calls) {
+      expect(rec.sampleOrigin).toBe("REPLAY");
+    }
+  });
+
   it("filtro de menu: saudação/'cardápio'/número NÃO viram evidência", async () => {
     recep.detectIntent.mockReturnValue("MENU_REQUEST");
     const r = await replayShadowFromHistory({});

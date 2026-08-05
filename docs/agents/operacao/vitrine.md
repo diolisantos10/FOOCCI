@@ -4,6 +4,25 @@
 
 ---
 
+## Adiar um envio que vai expirar é prometer o que não se cumpre
+
+O motor de carrinho abandonado **adiava** o envio para quando a loja abrisse — e o
+carrinho expira em 6h, antes disso. O resultado não era "manda mais tarde": era
+**nunca manda**, sem erro, sem log, sem ninguém saber.
+
+**Antes de adiar qualquer coisa, compare o adiamento com a validade do que está
+sendo adiado.** Se o prazo vence primeiro, adiar é mentir — e a recusa honesta e
+imediata é melhor em todos os aspectos.
+
+Decisão do CEO que resolveu o caso (ver o corredor): loja fechada **não manda e não
+guarda para depois**. Como a regra é avaliada **no momento do abandono**, os ~51
+carrinhos represados nunca viram mensagem — a proteção contra enxurrada veio da
+forma da regra, não de uma trava de data.
+
+— promovido em 2026-08-05 pelo Diretor · origem: bloco do carrinho abandonado, PR #101
+
+---
+
 ## O guard de preço do finalize é a única verdade de cobrança — e variante se precifica pela VARIANTE do banco
 
 O `/api/pedido/[slug]/finalize` recalcula TODO preço no servidor a partir do

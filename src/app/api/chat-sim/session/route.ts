@@ -7,7 +7,7 @@
 
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
-import { ok, unauthorized, badRequest, serverError } from "@/lib/api-response";
+import { ok, unauthorized, badRequest, notFound, serverError } from "@/lib/api-response";
 import { ChatSimService } from "@/services/ai/ChatSimService";
 
 export async function POST(req: NextRequest) {
@@ -34,8 +34,24 @@ export async function DELETE(req: NextRequest) {
   if (!sessionId || !customerId) return badRequest("sessionId and customerId required.");
 
   try {
-    await ChatSimService.deleteSession(sessionId, customerId);
-    return ok({ deleted: true });
+    /*
+      O `restaurantId` vem do CONTEXTO autenticado, nunca do corpo — se viesse do
+      corpo a trava seria decorativa, porque quem escolhe o alvo escolheria também
+      o escopo. Este era o P0: `customerId` do corpo ia direto para o `delete`.
+    */
+    const r = await ChatSimService.deleteSession({
+      restaurantId: ctx.restaurantId,
+      sessionId,
+      customerId,
+    });
+
+    if (r.reason) {
+      // Mesmo texto para "não existe" e "não é simulação": a resposta não conta
+      // ao chamador se o id existe em outro restaurante.
+      console.warn(`[DELETE /api/chat-sim/session] recusado (${r.reason}) — restaurante ${ctx.restaurantId}`);
+      return notFound("Sessão de simulação não encontrada.");
+    }
+    return ok({ deleted: r.deleted });
   } catch (err) {
     console.error("[DELETE /api/chat-sim/session]", err);
     return serverError();

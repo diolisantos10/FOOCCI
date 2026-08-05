@@ -10,11 +10,35 @@
 
 import { prisma } from "@/lib/prisma";
 
+/**
+ * DE ONDE a amostra veio. Existe porque a evidência da escada passou a ter mais
+ * de uma fonte e somar tudo num contador só faz "100 amostras" significar coisas
+ * diferentes conforme a semana.
+ *
+ *  • PRODUCTION — houve atendimento/disparo REAL do outro lado. Alguém recebeu
+ *    a mensagem que a sombra acompanhou.
+ *  • REPLAY — conversa real, reprocessada depois. A pergunta é de gente de
+ *    verdade; a resposta não chegou a ninguém.
+ *  • TRAINING — caso de esteira. Perfil derivado de dado real, destinatário
+ *    SINTÉTICO. Ninguém do lado de lá, por construção.
+ */
+export type ShadowSampleOrigin = "PRODUCTION" | "REPLAY" | "TRAINING";
+
+/** Balde das linhas gravadas antes do campo existir: origem indeterminável. */
+export const SHADOW_ORIGIN_UNKNOWN = "UNKNOWN" as const;
+export type ShadowOriginBucket = ShadowSampleOrigin | typeof SHADOW_ORIGIN_UNKNOWN;
+
 export interface ShadowOutcomeRecord {
   restaurantId: string;
   conversationId: string;
   /** Agente que raciocinou em sombra. Omitido = recepcionista (whatsapp). */
   agentId?: string;
+  /**
+   * OBRIGATÓRIO de propósito. Um default silencioso aqui carimbaria simulação
+   * como vida real — que é exatamente o erro que este campo veio impedir. Quem
+   * grava evidência declara de onde ela veio.
+   */
+  sampleOrigin: ShadowSampleOrigin;
   intent: string;
   reasoningMode: string;
   engine: string;
@@ -24,6 +48,12 @@ export interface ShadowOutcomeRecord {
   wouldReply: string;
 }
 
+export interface ShadowOriginBreakdown {
+  samples: number;
+  llmSamples: number;
+  coherencePass: number;
+}
+
 export interface ShadowStats {
   samples: number;
   llmSamples: number;
@@ -31,6 +61,19 @@ export interface ShadowStats {
   avgConfidence: number; // sobre amostras LLM
   escalationRate: number;
   sinceDays: number;
+  /** Origens que ESTA leitura contou. `null` = todas (nenhum filtro aplicado). */
+  originsCounted: ShadowSampleOrigin[] | null;
+  /** Composição da amostra, sempre — para o relatório poder dizer quanto é simulação. */
+  byOrigin: Record<ShadowOriginBucket, ShadowOriginBreakdown>;
+}
+
+function emptyBreakdown(): Record<ShadowOriginBucket, ShadowOriginBreakdown> {
+  return {
+    PRODUCTION: { samples: 0, llmSamples: 0, coherencePass: 0 },
+    REPLAY: { samples: 0, llmSamples: 0, coherencePass: 0 },
+    TRAINING: { samples: 0, llmSamples: 0, coherencePass: 0 },
+    UNKNOWN: { samples: 0, llmSamples: 0, coherencePass: 0 },
+  };
 }
 
 const REPLY_SAMPLE_CHARS = 200;
@@ -52,10 +95,14 @@ export async function recordShadowOutcome(record: ShadowOutcomeRecord): Promise<
 
 export async function getShadowStats(
   restaurantId: string,
-  opts: { agentId?: string; sinceDays?: number } = {},
+  opts: { agentId?: string; sinceDays?: number; origins?: readonly ShadowSampleOrigin[] } = {},
 ): Promise<ShadowStats> {
   const sinceDays = opts.sinceDays ?? 7;
-  const empty: ShadowStats = { samples: 0, llmSamples: 0, coherencePassRate: 0, avgConfidence: 0, escalationRate: 0, sinceDays };
+  const originsCounted = opts.origins && opts.origins.length ? [...opts.origins] : null;
+  const empty: ShadowStats = {
+    samples: 0, llmSamples: 0, coherencePassRate: 0, avgConfidence: 0, escalationRate: 0, sinceDays,
+    originsCounted, byOrigin: emptyBreakdown(),
+  };
   try {
     const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
     // Escada por-agente: cada agente lê SÓ a própria evidência. Para o
@@ -65,11 +112,28 @@ export async function getShadowStats(
         ? { OR: [{ agentId: "whatsapp" }, { agentId: null }] }
         : { agentId: opts.agentId }
       : {};
+    // Filtro de origem: `{ in: [...] }` NÃO casa NULL — e é exatamente o que se
+    // quer. Linha de origem desconhecida nunca entra num degrau que pede uma
+    // origem específica.
+    const originFilter = originsCounted ? { sampleOrigin: { in: originsCounted } } : {};
     const rows = await prisma.brainShadowLog.findMany({
-      where: { restaurantId, createdAt: { gte: since }, ...agentFilter },
-      select: { reasoningMode: true, coherence: true, confidence: true, wouldEscalate: true },
+      where: { restaurantId, createdAt: { gte: since }, ...agentFilter, ...originFilter },
+      select: { reasoningMode: true, coherence: true, confidence: true, wouldEscalate: true, sampleOrigin: true },
     });
     if (!rows.length) return empty;
+
+    const byOrigin = emptyBreakdown();
+    for (const r of rows) {
+      const bucket: ShadowOriginBucket =
+        r.sampleOrigin === "PRODUCTION" || r.sampleOrigin === "REPLAY" || r.sampleOrigin === "TRAINING"
+          ? r.sampleOrigin
+          : SHADOW_ORIGIN_UNKNOWN;
+      byOrigin[bucket].samples += 1;
+      if (r.reasoningMode === "LLM") {
+        byOrigin[bucket].llmSamples += 1;
+        if (r.coherence === "PASS") byOrigin[bucket].coherencePass += 1;
+      }
+    }
 
     const llm = rows.filter((r) => r.reasoningMode === "LLM");
     const pass = llm.filter((r) => r.coherence === "PASS").length;
@@ -81,6 +145,8 @@ export async function getShadowStats(
       avgConfidence: llm.length ? llm.reduce((s, r) => s + r.confidence, 0) / llm.length : 0,
       escalationRate: rows.length ? escalations / rows.length : 0,
       sinceDays,
+      originsCounted,
+      byOrigin,
     };
   } catch {
     return empty;

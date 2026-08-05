@@ -7,7 +7,7 @@
 
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
-import { ok, unauthorized, badRequest, serverError } from "@/lib/api-response";
+import { ok, unauthorized, badRequest, notFound, serverError } from "@/lib/api-response";
 import { ChatSimService } from "@/services/ai/ChatSimService";
 
 export const maxDuration = 60;
@@ -25,6 +25,24 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    /*
+      Mesmo portão do encerramento. Sem ele, o restaurante A mandava mensagem para
+      dentro de uma conversa REAL do restaurante B usando o `sessionId` dele: a
+      mensagem entrava como INBOUND, o operador do B via no painel de atendimento
+      como se o cliente tivesse escrito, e a chamada de IA saía na conta.
+      `runTurn` recebia `restaurantId` do contexto e nunca conferia que a conversa
+      era dele — parecia escopado e não era.
+    */
+    const recusa = await ChatSimService.checkSession({
+      restaurantId: ctx.restaurantId,
+      sessionId,
+      customerId,
+    });
+    if (recusa) {
+      console.warn(`[POST /api/chat-sim/message] recusado (${recusa}) — restaurante ${ctx.restaurantId}`);
+      return notFound("Sessão de simulação não encontrada.");
+    }
+
     const result = await ChatSimService.runTurn({
       conversationId: sessionId,
       restaurantId:   ctx.restaurantId,

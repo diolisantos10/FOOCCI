@@ -124,6 +124,8 @@ export async function proposeSupportAction(input: ProposeInput): Promise<Support
       restaurantId: input.restaurantId,
       conversationId: input.conversationId,
       agentId: "suporte-tecnico",
+      // Proposta feita dentro de um atendimento real ao lojista.
+      sampleOrigin: "PRODUCTION",
       intent: `ACAO_PROPOSTA:${action.key}`,
       // Não é uma amostra de raciocínio LLM — não polui a taxa de coerência da
       // escada do free-form, que só conta reasoningMode === "LLM".

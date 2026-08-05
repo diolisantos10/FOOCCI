@@ -22,6 +22,7 @@ import { PEDIDO_ITEM_SELECT, mapPedidoItem } from "@/services/menu/pedidoMenuIte
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { aiWaiterIncluded } from "@/lib/plan-features";
+import { identificacaoPodeSerPulada } from "@/lib/identificacao-loja";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,10 @@ export default async function PedidoPage({
     select: {
       id: true, name: true, logoUrl: true, phone: true, timezone: true,
       plan: true, aiWaiterEnabled: true,
+      // `isDemo` decide UMA coisa nesta página: se a identificação da entrada tem
+      // saída. Precisa vir do SELECT — campo ausente chega `undefined` e a trava
+      // falha fechada (ver `identificacaoPodeSerPulada`).
+      isDemo: true,
       isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true,
       storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true } },
     },
@@ -93,6 +98,14 @@ export default async function PedidoPage({
 
 
   if (!restaurant) notFound();
+
+  /* A identificação da entrada tem saída? Só na VITRINE de demonstração — a
+   * decisão é do servidor e vem da coluna `isDemo`, nunca do slug e nunca de um
+   * literal no cliente. O motivo inteiro está em `src/lib/identificacao-loja.ts`:
+   * `/site/experimente` promete "sem cadastro" e mandava o visitante para um
+   * painel de telefone sem saída, enquanto a obrigatoriedade continua necessária
+   * em toda loja de cliente de verdade (pedido precisa de contato). */
+  const identificacaoOpcional = identificacaoPodeSerPulada(restaurant);
 
   // ── Delivery config (fee + mode shown in checkout) ───────────────────────────
   const deliveryConfig = await prisma.deliveryConfig.findUnique({
@@ -540,6 +553,7 @@ gtag('config', '${ga4Id}');
         recoveryCart={recoveryCart.length > 0 ? recoveryCart : undefined}
         repeatOrder={repeatOrder}
         repeatMenuItems={repeatMenuItems}
+        identificacaoOpcional={identificacaoOpcional}
       />
       ) : (
       /* Loja: o MESMO cardápio do QR da mesa, que compra (retrabalho aprovado
@@ -577,6 +591,7 @@ gtag('config', '${ga4Id}');
         pedidoToken={pedidoToken}
         restaurantIsOpen={restaurantIsOpen}
         closedMessage={closedMessage}
+        identificacaoOpcional={identificacaoOpcional}
       />
       )}
     </>

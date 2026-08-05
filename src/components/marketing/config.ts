@@ -114,6 +114,13 @@ export const DEMO_CTA_LABEL = "Ver no meu restaurante";
  *
  * As exceções vivem comentadas no ponto de uso, nunca aqui. Regra sem exceção
  * documentada vira lei burra.
+ *
+ * ⚠️ A HOME TEM DUAS, e é a única. A regra nasceu de manhã e a varredura de percurso
+ * da tarde a corrigiu: quem rola a home inteira chega ao fecho e, sem convite ali,
+ * sai de mãos vazias justamente o visitante que leu tudo. Ficaram o da calculadora
+ * (pico emocional — logo depois de ver a economia DELE) e o do fecho (depois do
+ * argumento inteiro). Estão separados por várias telas; não competem na mesma dobra.
+ * A justificativa mora em `FinalCTASection.tsx` e a decisão em `docs/decisoes.md`.
  */
 
 /** CTA copy. */
@@ -122,7 +129,32 @@ export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
 
 /** Launch messaging. */
 export const PRELAUNCH_BADGE = "Para restaurantes que querem ser donos dos próprios clientes";
-export const PRELAUNCH_NOTE = "Fale com a gente e veja o Foocci no seu restaurante.";
+
+/**
+ * A microcopy sob o botão das páginas internas.
+ *
+ * ANTES ela dizia **"Fale com a gente e veja o Foocci no seu restaurante."** — e a
+ * varredura de percurso de 05/08 mostrou o tamanho do problema: essa frase aparecia
+ * em quatro páginas, sempre como TEXTO MORTO, sem link. E não existe telefone,
+ * WhatsApp nem e-mail em lugar nenhum do site (`WHATSAPP_SALES_NUMBER` está
+ * desligado em produção). O visitante que JÁ tinha decidido falar com a gente lia
+ * "fale com a gente" e não tinha com quem falar.
+ *
+ * Convite sem porta é a forma mais barata de perder quem já estava convencido. O
+ * texto novo não convida: DESCREVE o que acontece depois do clique no botão que
+ * está logo acima dele. É a mesma informação, no tempo verbal certo.
+ *
+ * Quando `WHATSAPP_SALES_NUMBER` for ligado, o convite direto volta a fazer sentido
+ * — e aí ele nasce com link de verdade, não como frase.
+ */
+export const CONTATO_NOTE = "Você deixa nome e WhatsApp; uma pessoa do Foocci chama você.";
+
+/**
+ * @deprecated Use `CONTATO_NOTE`. O nome antigo sobrevive só como apelido porque o
+ * site saiu do pré-lançamento em 03/08 e "PRELAUNCH" descreve um estado que acabou.
+ * Some quando as últimas páginas migrarem — não escreva código novo com ele.
+ */
+export const PRELAUNCH_NOTE = CONTATO_NOTE;
 
 const DEFAULT_WA_MESSAGE = "Olá! Quero saber mais sobre o Foocci.";
 

@@ -1,0 +1,112 @@
+name: Raio-X — o CRM inteiro dispara quanto, e por quê não
+
+# Somente leitura sobre a produção. Responde à pergunta do site — "dispara as
+# campanhas certas no automático" — com número por campanha, separando o que é
+# volume real do que é defeito.
+#
+# Duas fontes, de propósito:
+#   • BANCO (campaign_executions) — o TOTAL. É a única fonte honesta, porque o
+#     `ScheduledCampaignScheduler` roda dentro do Railway e não passa pelo
+#     Actions; contar só o log daria um limite inferior chamado de prova.
+#   • LOGS DO ACTIONS (crm-cron.yml) — os MOTIVOS. Cada tick imprime o `reason`
+#     de cada campanha que não saiu.
+#
+# ⚠️ O log deste repositório é PÚBLICO. Os scripts imprimem apenas contagens,
+# slugs de restaurante e códigos de máquina — nunca nome, telefone, e-mail ou
+# texto de mensagem. Ao adicionar campo, pergunte antes se ele pode ficar
+# visível para qualquer pessoa.
+#
+# A saída também é publicada na branch `diagnostico/raio-x-crm-resultado`
+# porque quem pediu o diagnóstico alcança o git, mas não alcança o log do
+# Actions. A branch é descartável e reescrita a cada rodada.
+#
+# Este workflow NÃO envia mensagem, NÃO cria campanha e NÃO promove nada.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dias_longo:
+        description: 'Janela longa, em dias'
+        required: false
+        default: '90'
+      dias_curto:
+        description: 'Janela curta, em dias'
+        required: false
+        default: '30'
+  push:
+    paths:
+      - 'scripts/raio-x-crm-producao.mjs'
+      - 'scripts/raio-x-envios-crm.mjs'
+      - '.github/workflows/raio-x-crm-envios.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  raio-x:
+    name: Perguntar à produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências e gerar o cliente do banco
+        run: |
+          npm ci --ignore-scripts
+          npx prisma generate
+
+      # `|| true` nos dois passos: a falha de um coletor não pode impedir a
+      # publicação do outro — diagnóstico que morre calado é o defeito que este
+      # bloco veio investigar.
+      - name: Coletar do banco e das rotas de diagnóstico
+        env:
+          RAILWAY_TOKEN:      ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          DIAS_LONGO:         ${{ github.event.inputs.dias_longo || '90' }}
+          DIAS_CURTO:         ${{ github.event.inputs.dias_curto || '30' }}
+        run: |
+          set -o pipefail
+          node scripts/raio-x-crm-producao.mjs 2>&1 | tee /tmp/banco.txt || true
+
+      - name: Reconstruir a série histórica pelos logs do cron
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIAS:     ${{ github.event.inputs.dias_longo || '90' }}
+        run: |
+          set -o pipefail
+          node scripts/raio-x-envios-crm.mjs 2>&1 | tee /tmp/motivos.txt || true
+
+      - name: Publicar o resultado na branch de diagnóstico
+        if: always()
+        run: |
+          # --global de propósito: a identidade precisa valer no repositório NOVO
+          # criado em /tmp/pub pelo `git init` abaixo. Configurar sem --global
+          # grava só no checkout e o commit lá embaixo morre com "empty ident
+          # name" — foi exatamente o que aconteceu na primeira rodada.
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/pub && mkdir -p /tmp/pub
+          cp /tmp/banco.txt   /tmp/pub/A-BANCO-E-ROTAS.txt || echo "sem saída" > /tmp/pub/A-BANCO-E-ROTAS.txt
+          cp /tmp/motivos.txt /tmp/pub/B-MOTIVOS-DO-CRON.txt || echo "sem saída" > /tmp/pub/B-MOTIVOS-DO-CRON.txt
+          {
+            echo "# Raio-X do CRM — quanto dispara, e por que não dispara"
+            echo
+            echo "Rodada em: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "Commit examinado: ${GITHUB_SHA}"
+            echo
+            echo "A-BANCO-E-ROTAS.txt  — o total por campanha (fonte: campaign_executions)"
+            echo "B-MOTIVOS-DO-CRON.txt — o motivo de cada campanha calada (fonte: log do cron)"
+            echo
+            echo "Somente leitura. Nenhuma mensagem foi enviada."
+          } > /tmp/pub/LEIA-ME.md
+          cd /tmp/pub
+          git init -q
+          git checkout -q -b diagnostico/raio-x-crm-resultado
+          git add -A
+          git commit -q -m "Raio-X do CRM (${GITHUB_SHA})"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -q --force origin diagnostico/raio-x-crm-resultado

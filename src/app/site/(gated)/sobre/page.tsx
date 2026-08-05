@@ -15,7 +15,12 @@ import { VisualStoryBlock } from "@/components/marketing/VisualStoryBlock";
 import { MascotHostScene } from "@/components/marketing/MascotHostScene";
 import { RelationshipRevenuePanel } from "@/components/marketing/RelationshipRevenuePanel";
 import { Eyebrow } from "@/components/marketing/premium";
-import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import {
+  COMO_FUNCIONA_URL,
+  CONTATO_NOTE,
+  DEMO_CTA_LABEL,
+  DEMO_URL,
+} from "@/components/marketing/config";
 import {
   TrendingUpIcon,
   HeartIcon,
@@ -62,7 +67,7 @@ export default function SobrePage() {
         subtitle="O Foocci nasceu para ajudar restaurantes a transformar atendimento digital em venda, experiência e recorrência."
         primaryLabel="Ver como o Foocci funciona"
         primaryHref={COMO_FUNCIONA_URL}
-        note={PRELAUNCH_NOTE}
+        note={CONTATO_NOTE}
         /* A única página institucional do site: a abertura é gente, não tela.
            A tese é "hospitalidade digital" — cliente no salão, com o celular na
            mão. Não há candidato de produto aqui de propósito. */
@@ -167,11 +172,23 @@ export default function SobrePage() {
         </div>
       </section>
 
-      {/* 6. CTA */}
+      {/*
+        6. CTA — o fecho.
+
+        Até 05/08 esta página terminava mandando o visitante para MAIS uma página
+        institucional (`/site/como-funciona`). Era o único fim de página do site,
+        junto com a home, sem o convite comercial: todas as outras fecham com o
+        `DEMO_CTA_LABEL`. Institucional que aponta para institucional é passo que
+        sobra — quem leu a proposta inteira já passou da fase de ser convencido.
+
+        O rótulo NUNCA é escrito à mão aqui: `DEMO_CTA_LABEL` é o texto único de
+        todo CTA comercial do site (ver `config.ts`). Foi assim que nasceram os nove
+        textos diferentes para a mesma porta que a gente acabou de unificar.
+      */}
       <CtaBand
         title="Quer construir uma operação mais inteligente para seu restaurante?"
-        label="Ver como o Foocci funciona"
-        href={COMO_FUNCIONA_URL}
+        label={DEMO_CTA_LABEL}
+        href={DEMO_URL}
       />
     </>
   );

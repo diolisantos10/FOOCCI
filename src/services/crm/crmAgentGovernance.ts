@@ -14,18 +14,39 @@
  */
 
 import { runGateForBrain } from "@/services/brain/quality/BrainQualityGate";
-import { getShadowStats } from "@/services/brain/runtime/BrainShadowEvidenceService";
+import {
+  getShadowStats,
+  type ShadowOriginBucket,
+  type ShadowOriginBreakdown,
+  type ShadowSampleOrigin,
+} from "@/services/brain/runtime/BrainShadowEvidenceService";
 import { getCrmPilotConfig, writeCrmPilotConfig, type CrmPilotMode } from "./CrmAgentPilotService";
 
 export const PROMOTE_CRM_ALLOWLIST_CONFIRM = "PROMOTE_CRM_AGENT_ALLOWLIST";
 export const PROMOTE_CRM_WIDE_CONFIRM = "PROMOTE_CRM_AGENT_RESTAURANT_WIDE";
 export const ROLLBACK_CRM_CONFIRM = "ROLLBACK_CRM_AGENT";
 
-/** Evidência de sombra mínima por degrau — números auditáveis, não achismo. */
+/**
+ * Evidência de sombra mínima por degrau — números auditáveis, não achismo.
+ *
+ * `origins` é a parte nova (05/08/2026) e existe para que a esteira de treino
+ * NÃO mude o significado dos números que já estavam escritos aqui:
+ *
+ *  • ALLOWLIST aceita TRAINING. O CEO cancelou o degrau "primeira mensagem real
+ *    para o time" (feedback humano artesanal não escala e não chega) e o
+ *    substituiu por esteira de treino: é dela que sai a evidência deste degrau.
+ *  • RESTAURANT_WIDE aceita SÓ PRODUCTION. Abrir para os clientes reais do
+ *    restaurante inteiro é a decisão mais cara da escada; ela continua exigindo
+ *    as mesmas 100 amostras de vida real que exigia antes de a esteira existir.
+ *    Simulação destrava o primeiro degrau, não o último.
+ *
+ * REPLAY não entra em nenhum dos dois: o CRM não tem replay, e listar uma origem
+ * que não existe seria abrir porta por antecipação.
+ */
 export const CRM_SHADOW_EVIDENCE = {
-  ALLOWLIST: { minSamples: 20, minPassRate: 0.7 },
-  RESTAURANT_WIDE: { minSamples: 100, minPassRate: 0.85 },
-} as const;
+  ALLOWLIST: { minSamples: 20, minPassRate: 0.7, origins: ["PRODUCTION", "TRAINING"] },
+  RESTAURANT_WIDE: { minSamples: 100, minPassRate: 0.85, origins: ["PRODUCTION"] },
+} as const satisfies Record<string, { minSamples: number; minPassRate: number; origins: readonly ShadowSampleOrigin[] }>;
 
 export interface CrmPilotGates {
   gatePass: boolean; // diagnóstico + probes adversariais (p0=0)
@@ -33,6 +54,10 @@ export interface CrmPilotGates {
   shadowEvidence: boolean; // amostras crm + coerência PASS ≥ mínimos do degrau
   shadowSamples: number;
   shadowPassRate: number;
+  /** Quais origens ESTE degrau aceitou contar. */
+  shadowOriginsCounted: readonly ShadowSampleOrigin[];
+  /** Composição da amostra contada — quanto é vida real e quanto é simulação. */
+  shadowByOrigin: Record<ShadowOriginBucket, ShadowOriginBreakdown>;
   allPass: boolean;
   notes: string[];
 }
@@ -56,14 +81,31 @@ export async function runCrmPilotGates(
   if (!gate.passed) notes.push(`gate crm: ${gate.reason}`);
 
   const required = CRM_SHADOW_EVIDENCE[stage];
-  const stats = await getShadowStats(restaurantId, { agentId: "crm" });
+  const stats = await getShadowStats(restaurantId, { agentId: "crm", origins: required.origins });
   const shadowEvidence = stats.llmSamples >= required.minSamples && stats.coherencePassRate >= required.minPassRate;
   if (!shadowEvidence) {
     notes.push(
       `evidência de sombra insuficiente para ${stage} (amostras LLM ${stats.llmSamples}/${required.minSamples}, ` +
-        `coerência PASS ${(stats.coherencePassRate * 100).toFixed(0)}%/${required.minPassRate * 100}%) — deixe o shadow colher disparos reais`,
+        `coerência PASS ${(stats.coherencePassRate * 100).toFixed(0)}%/${required.minPassRate * 100}%) ` +
+        `contando origem ${required.origins.join("+")}` +
+        (stage === "RESTAURANT_WIDE" ? " — treino NÃO conta neste degrau, precisa de disparo real" : ""),
     );
   }
+  // O relatório sempre diz a composição: promover sem saber quanto veio de
+  // simulação é promover com um número que ninguém consegue interpretar.
+  //
+  // Se a composição não vier, o relatório DIZ que não sabe em vez de estourar:
+  // uma exceção aqui derrubaria o relatório inteiro do piloto para o `.catch`
+  // que devolve "0 pendências" — o pior desfecho possível para um detalhe de
+  // formatação.
+  const byOrigin = stats.byOrigin ?? null;
+  notes.push(
+    byOrigin
+      ? `composição da amostra: produção ${byOrigin.PRODUCTION.llmSamples}, ` +
+          `treino ${byOrigin.TRAINING.llmSamples}, replay ${byOrigin.REPLAY.llmSamples}, ` +
+          `origem desconhecida ${byOrigin.UNKNOWN.llmSamples}`
+      : "composição da amostra INDISPONÍVEL — não dá para dizer quanto é simulação",
+  );
 
   return {
     gatePass: gate.passed,
@@ -71,6 +113,13 @@ export async function runCrmPilotGates(
     shadowEvidence,
     shadowSamples: stats.llmSamples,
     shadowPassRate: stats.coherencePassRate,
+    shadowOriginsCounted: required.origins,
+    shadowByOrigin: byOrigin ?? {
+      PRODUCTION: { samples: 0, llmSamples: 0, coherencePass: 0 },
+      REPLAY: { samples: 0, llmSamples: 0, coherencePass: 0 },
+      TRAINING: { samples: 0, llmSamples: 0, coherencePass: 0 },
+      UNKNOWN: { samples: 0, llmSamples: 0, coherencePass: 0 },
+    },
     allPass: gate.passed && shadowEvidence,
     notes,
   };

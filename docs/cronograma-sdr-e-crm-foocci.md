@@ -38,8 +38,43 @@
 | **1** | Agente registrado com **nome próprio** (⚠️ `sdr` já é da agência), perfil, verdade da Foocci e portão de qualidade com casos adversariais de venda. **Redige e não envia.** | 1 bloco |
 | **2** | **Freios em código:** teto de tentativas por lead, janela 9h–19h em dia útil (mais rígida que a do CRM — lá é cliente, aqui é estranho), opt-out do lead, registro de consentimento (aceite + data + versão da política), teto de 90 dias. Cada trava com **as duas metades** de teste. | 1 bloco |
 | **3** | **Sombra com leads reais** — o agente redige, ninguém recebe. Meta: 20 mensagens / 70% de coerência (mesmo molde do CRM). O CEO lê uma amostra e responde: *"você mandaria essa mensagem com seu nome?"* | dias |
-| **4** | **Primeira mensagem real — para o próprio time**, nos celulares de vocês. | após o 3 |
-| **5** | **Leads reais**, com o botão de desligar já testado. Promoção é ato do CEO. | após o 4 |
+| **4** | ❌ **CANCELADO em 05/08 pelo CEO.** Era "primeira mensagem real para o próprio time". **Substituído por esteira de treino** (ver quadro abaixo). | — |
+| **5** | **Leads reais**, com o botão de desligar já testado. Promoção é ato do CEO. | após o 3 + esteira |
+
+### O degrau 4 caiu — e por quê (decisão do CEO, 05/08/2026)
+
+Textual: *"Eu não vou passar telefone nenhum pra IA ficar mandando teste. Esquece
+essa fase, tira isso do programa. Ele precisa adquirir conhecimento pra
+trabalhar. O que a gente precisa construir é ambiente de teste."*
+
+O motivo é bom e vale registrar: **feedback humano artesanal não escala e, pior,
+não chega**. Ninguém tem tempo de ler mensagem de IA no celular e dar nota — o
+degrau ficou parado desde 03/08 esperando uma lista de telefones que nunca veio.
+
+**No lugar dele: esteira de treino.** Roda de madrugada, sozinha. Monta casos a
+partir de comportamento REAL de clientes, com **destinatário sintético** (nenhum
+telefone real entra no caso, em caminho nenhum), pede ao agente que componha,
+julga com portão determinístico e grava a amostra com origem `TRAINING`.
+
+| | Degrau 4 antigo | Esteira de treino |
+|---|---|---|
+| Quem avalia | uma pessoa lendo no celular | portão determinístico + crítico do Brain |
+| Volume | 3–5 mensagens, quando alguém lembrava | dezenas por noite, todas as noites |
+| Depende de | lista de telefones do time | nada — roda no cron |
+| Quem recebe | o time | **ninguém** |
+
+**O que NÃO mudou, e é inegociável:** o agente continua sem falar com cliente ou
+lead real enquanto não houver evidência suficiente. Mudou **de onde a evidência
+vem**, não a régua. E amostra de esteira é contada **separada** da de produção:
+treino destrava o primeiro degrau, abrir para todos os clientes reais continua
+exigindo vida real.
+
+**Vale igual para o SDR quando ele existir** — ele nasce com esteira, não com
+"manda pro meu celular pra eu ver".
+
+Construído para o CRM em 05/08: `src/services/crm/training/` +
+`.github/workflows/crm-shadow-training.yml` + coluna `sampleOrigin` em
+`brain_shadow_logs`.
 
 ---
 

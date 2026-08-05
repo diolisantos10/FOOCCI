@@ -116,6 +116,8 @@ async function runShadowReasoning(
   await recordShadowOutcome({
     restaurantId,
     conversationId,
+    // Sombra ao vivo: o cliente REAL escreveu e foi atendido neste turno.
+    sampleOrigin: "PRODUCTION",
     intent: outcome.result.primaryIntent,
     reasoningMode: outcome.reasoningMode,
     engine: `${outcome.engine.provider}:${outcome.engine.model}`,

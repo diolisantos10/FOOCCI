@@ -85,6 +85,13 @@ interface Props {
   pedidoToken?: string | null;
   restaurantIsOpen?: boolean;
   closedMessage?: string | null;
+  /**
+   * A identificação da entrada pode ser PULADA? Só a vitrine de demonstração
+   * recebe `true` — quem decide é o servidor, por `Restaurant.isDemo`
+   * (`src/lib/identificacao-loja.ts`). Padrão `false`: falha fechada, porque
+   * prop esquecida em loja de cliente não pode virar loja anônima.
+   */
+  identificacaoOpcional?: boolean;
 }
 
 type Step =
@@ -138,6 +145,7 @@ export function LojaClient({
   knownCustomerPhone = null, knownCustomerName = null, knownCustomerId = null,
   knownDefaultAddress = null, pedidoToken = null,
   restaurantIsOpen = true, closedMessage = null,
+  identificacaoOpcional = false,
 }: Props) {
   const pc = brandPrimaryColor || "#f97316";
 
@@ -252,10 +260,20 @@ export function LojaClient({
   }, [slug, knownCustomerPhone]);
 
   function handleWelcomeClose(identity: CustomerIdentity | null) {
-    // Sem identidade não há saída: o modal da Loja não oferece "pular", e se
-    // algum caminho futuro chamar com null, a tela continua barrada em vez de
-    // liberar em silêncio.
-    if (!identity?.name) return;
+    // Fechou sem se identificar (×, Esc, clique fora ou "Pular").
+    //
+    // Na loja de um cliente de verdade isso NÃO acontece — o modal abre com
+    // `required` e nenhuma dessas saídas existe. Se acontecer mesmo assim (um
+    // caminho futuro chamando com null), a tela continua barrada em vez de
+    // liberar em silêncio: obrigatoriedade que um bug desliga não é obrigatória.
+    //
+    // Na vitrine, fechar é uma escolha legítima: o visitante navega o cardápio
+    // inteiro anônimo. O telefone volta a ser pedido só no `openCheckout`, que é
+    // onde o contato passa a ser mesmo necessário.
+    if (!identity?.name) {
+      if (identificacaoOpcional) setShowWelcome(false);
+      return;
+    }
 
     setIdentifiedName(identity.name);
     setIdentifiedPhone(identity.displayPhone);
@@ -521,7 +539,9 @@ export function LojaClient({
   return (
     <div style={{ '--brand-primary': pc } as React.CSSProperties}>
       {showWelcome && (
-        <WelcomeModal slug={slug} onClose={handleWelcomeClose} required />
+        /* `required` é o INVERSO do que o servidor liberou. Não existe literal
+           aqui de propósito: quem decide é `Restaurant.isDemo`, no servidor. */
+        <WelcomeModal slug={slug} onClose={handleWelcomeClose} required={!identificacaoOpcional} />
       )}
 
       {selectedItem && (
@@ -718,7 +738,13 @@ export function LojaClient({
           {step === "identify" && (
             <>
               <h3 className="text-lg font-bold text-gray-900">Seu WhatsApp</h3>
-              <p className="mt-1 text-sm text-gray-500">Para acompanhar o pedido e agilizar as próximas compras.</p>
+              {/* Aqui o contato deixa de ser cadastro e passa a ser NECESSÁRIO: é
+                  por ele que o restaurante confirma o pedido e avisa quando sai.
+                  Quem entrou sem se identificar (vitrine) chega neste ponto com o
+                  carrinho montado — e o pedido explica a si mesmo. */}
+              <p className="mt-1 text-sm text-gray-500">
+                É por ele que o restaurante confirma seu pedido e avisa quando ele sai.
+              </p>
               <input
                 inputMode="tel"
                 autoComplete="tel"

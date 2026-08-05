@@ -168,10 +168,19 @@ export async function GET(req: NextRequest) {
           safetyError = err instanceof Error ? err.message : String(err);
         }
 
+        // "Último envio" tem que EXCLUIR as linhas sem `sentAt` — as bloqueadas,
+        // as falhas e as pendentes nascem com ele nulo. No Postgres, `ORDER BY
+        // "sentAt" DESC` devolve NULLS FIRST, então o `findFirst` sem filtro
+        // pegava uma linha nula e a rota respondia "nunca" para campanha com
+        // centenas de envios. Foi assim que `recuperar-perdidos` apareceu como
+        // "último envio: nunca" tendo 948 envios em 30 dias (raio-x de 05/08).
+        // O irmão desta leitura já fazia certo — diagnostics/crm-performance
+        // usa groupBy com `sentAt: { not: null }` + `_max`. Duas rotas, duas
+        // respostas para a mesma pergunta, e a errada é a que o diagnóstico lê.
         let lastExecutionAt: string | null = null;
         try {
           const lastExec = await prisma.campaignExecution.findFirst({
-            where:   { campaignId: c.id },
+            where:   { campaignId: c.id, sentAt: { not: null } },
             orderBy: { sentAt: "desc" },
             select:  { sentAt: true },
           });

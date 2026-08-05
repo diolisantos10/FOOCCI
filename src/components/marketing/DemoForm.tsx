@@ -37,6 +37,7 @@ import { useState } from "react";
 import { leOrigemGuardada } from "./leadOriginStorage";
 import { WhatsAppIcon, CheckIcon } from "./icons";
 import { buildLeadWhatsAppMessage, formatSalesNumber, whatsappUrl } from "./config";
+import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 
 const TIPOS = [
   "Pizzaria",
@@ -69,6 +70,15 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
   const [error, setError] = useState<string | null>(null);
   /** Código devolvido pelo servidor. Só existe se o lead foi gravado. */
   const [codigo, setCodigo] = useState<string | null>(null);
+  /**
+   * O número LIDO, no formato limpo — é ele que a confirmação mostra.
+   *
+   * Antes a tela repetia o texto cru: "vamos chamar você no WhatsApp <o que ela
+   * digitou>". Com um número incompleto, a confirmação virava falsa segurança —
+   * ela ia esperar uma ligação que ninguém consegue fazer. Mostrar o número
+   * normalizado dá a ela a última chance de ver o engano.
+   */
+  const [whatsappLido, setWhatsappLido] = useState("");
 
   // Calculado no render: o número é constante de build, não estado.
   const numeroLegivel = formatSalesNumber();
@@ -79,6 +89,15 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+
+    /* O MESMO analisador do servidor, rodando aqui só para a pessoa ver o erro
+       sem esperar a ida e volta. Não é a trava — a trava é o `refine` do
+       `createSiteLeadSchema`, que roda mesmo para quem posta direto na API. */
+    const analise = analisarWhatsappBr(whatsapp);
+    if (!analise.ok) {
+      setError(analise.mensagem);
+      return;
+    }
 
     setStatus("sending");
     setError(null);
@@ -124,6 +143,7 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
       }
 
       setCodigo(data?.codigo ?? null);
+      setWhatsappLido(analise.formatado);
       setStatus("sent");
     } catch {
       setError("Sem conexão. Verifique a internet e tente de novo.");
@@ -146,12 +166,22 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
           <div role="status" className="rounded-2xl border border-brand-200 bg-brand-50 p-7 text-center">
             {/* A MESMA promessa da página, repetida no momento em que ela passa a
                 valer: uma pessoa, o WhatsApp que ela digitou, o cardápio dela — e
-                nenhum prazo, porque prazo a gente não tem para prometer. */}
+                nenhum prazo, porque prazo a gente não tem para prometer.
+
+                O número sai NORMALIZADO (`whatsappLido`), não como foi digitado:
+                é a última chance de a pessoa ver que trocou um dígito antes de
+                ir esperar por uma conversa que nunca chegaria. */}
             <p className="text-lg font-semibold text-ink">Recebemos seu pedido! 🎉</p>
             <p className="mt-2 text-base leading-relaxed text-ink2">
-              Uma pessoa do Foocci vai chamar você no WhatsApp <strong>{whatsapp}</strong> para
+              Uma pessoa do Foocci vai chamar você no WhatsApp <strong>{whatsappLido}</strong> para
               combinar um horário e mostrar o sistema funcionando com o cardápio do seu
               restaurante.
+            </p>
+            {/* Sem promessa sobre o que acontece por dentro: um reenvio com outro
+                número cria outro contato, e quem atende decide. Dizer "a gente usa
+                o último" seria inventar uma regra que o serviço não tem. */}
+            <p className="mt-3 text-sm text-muted">
+              Não é esse o número? Recarregue a página e preencha de novo com o número certo.
             </p>
           </div>
         )}
