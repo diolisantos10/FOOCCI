@@ -77,7 +77,7 @@ import { getTastingState, type ScheduleLine } from "@/lib/site/demoTasting";
 import { DEMO_BAKERY_SLUG } from "@/lib/demo-restaurant";
 import { getPublicQrUrl, getPublicMenuUrl } from "@/lib/public-url";
 
-const TITLE = "Experimente o Foocci | Cardápio de mesa, loja e Garçom de IA";
+const TITLE = "Veja o Foocci funcionando | Cardápio de mesa, loja e Garçom de IA";
 const DESCRIPTION =
   "Entre na padaria de demonstração do Foocci e teste as três formas de pedir: o cardápio de mesa por QR, a loja de delivery e a mesma loja com o Garçom de IA. Nada é cobrado.";
 
@@ -361,7 +361,12 @@ export default async function ExperimentePage() {
     <>
       <PageHero
         badge="Degustação"
-        title="Experimente o Foocci antes de contratar."
+        /* "Veja como funciona" e não "Experimente" (CEO, 05/08 — terceira vez que
+           ele aponta a mesma palavra): "experimentar" promete USAR o sistema num
+           período de avaliação que não existe. O que existe é uma padaria de
+           demonstração já montada, para VER funcionando. Guardrail 7 aplicado ao
+           verbo: degrau que não existe não se anuncia. */
+        title="Veja como funciona o Foocci antes de contratar."
         subtitle="Abrimos uma padaria de demonstração no ar. Você entra como se fosse o cliente do restaurante e testa as três formas de pedir — inclusive a MESMA loja com e sem o Garçom de IA, para comparar."
         /* A abertura mostra EXATAMENTE a tela que o botão abre — a promessa e o
            destino são a mesma imagem. Preferimos a captura da própria padaria;
@@ -496,22 +501,22 @@ export default async function ExperimentePage() {
       <section aria-labelledby="experiencias-title" className="bg-paper py-14 lg:py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
-            <Eyebrow>Três experiências</Eyebrow>
+            <Eyebrow>Três cardápios</Eyebrow>
             <h2
               id="experiencias-title"
               className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl"
             >
-              Três jeitos de pedir. Teste os três.
+              Um cardápio para o salão, dois para o delivery.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-ink2">
               {live
-                ? "Cada uma abre numa aba nova, para você voltar aqui quando quiser."
-                : "As três voltam ao ar em instantes — enquanto isso, veja abaixo o que cada uma faz."}
+                ? "O primeiro é o do cliente sentado à mesa, atendido na hora. Os outros dois são de quem pede de casa — o mesmo delivery, um sem IA e um com o Garçom, para você comparar lado a lado. Cada um abre numa aba nova, para você voltar aqui quando quiser."
+                : "Os três voltam ao ar em instantes — enquanto isso, veja abaixo para que serve cada um."}
               {/* Só faz sentido para quem tem os QR na frente — some junto com eles. */}
               {live && (
                 <span className="hidden lg:inline">
                   {" "}
-                  As três foram feitas para o celular: aponte a câmera para o código do
+                  Os três foram feitos para o celular: aponte a câmera para o código do
                   cartão e continue no seu telefone.
                 </span>
               )}
@@ -531,10 +536,10 @@ export default async function ExperimentePage() {
             <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
                 <ExperienceHeader
-                  step="Experiência 1 · na mesa"
+                  step="Cardápio 1 · para quem está no salão"
                   icon={<QrIcon className="h-4 w-4" />}
                   title="Cardápio de mesa, por QR"
-                  lead="É o que o cliente vê ao apontar a câmera para o código na mesa: o cardápio inteiro, com descrição e preço, sem baixar aplicativo e sem cadastro."
+                  lead="É o cardápio de quem está SENTADO no seu restaurante, sendo atendido na hora. O cliente aponta a câmera para o código na mesa e vê o cardápio inteiro, com descrição e preço — sem baixar aplicativo e sem cadastro. Substitui o cardápio impresso."
                 />
                 <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
                   Abra e navegue como se estivesse sentado à mesa. Funciona a qualquer
@@ -563,11 +568,12 @@ export default async function ExperimentePage() {
             <div className="mx-auto max-w-2xl text-center">
               <Eyebrow>O comparativo</Eyebrow>
               <h3 className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-                A mesma loja, sem IA e com IA.
+                Os dois cardápios de delivery: com IA e sem IA.
               </h3>
               <p className="mt-3 text-[15px] leading-relaxed text-ink2">
-                Mesmo cardápio, mesmos preços, mesma marca — {itemsCount} nas duas. A única
-                diferença é quem atende. Abra as duas e compare.
+                Estes são para quem pede de casa. Mesmo cardápio, mesmos preços, mesma
+                marca — {itemsCount} nas duas. A única diferença é quem atende. Abra as
+                duas e compare.
               </p>
             </div>
 
@@ -575,10 +581,10 @@ export default async function ExperimentePage() {
               {/* Sem IA */}
               <div className="flex flex-col rounded-2xl border border-line bg-paper p-6 shadow-[0_1px_2px_rgba(11,11,11,.03)] sm:p-7">
                 <ExperienceHeader
-                  step="Experiência 2 · sem IA"
+                  step="Cardápio 2 · delivery, sem IA"
                   icon={<StorefrontIcon className="h-4 w-4" />}
-                  title="A loja, do jeito que você já conhece"
-                  lead="A loja de delivery com a marca do restaurante: você navega pelas categorias, monta o carrinho e fecha o pedido sozinho, como em qualquer aplicativo."
+                  title="A loja de delivery, do jeito que você já conhece"
+                  lead="O cardápio de quem pede de CASA, com a marca do restaurante: o cliente navega pelas categorias, monta o carrinho e fecha o pedido sozinho, como em qualquer aplicativo — só que sem comissão."
                 />
                 <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
                   Monte um pedido e vá até o fim — nada é cobrado.
@@ -601,9 +607,9 @@ export default async function ExperimentePage() {
                   A diferença
                 </span>
                 <ExperienceHeader
-                  step="Experiência 3 · com IA"
+                  step="Cardápio 3 · delivery, com IA"
                   icon={<SparklesIcon className="h-4 w-4" />}
-                  title="A mesma loja, com o Garçom de IA"
+                  title="O mesmo delivery, com o Garçom de IA"
                   lead="Agora tem alguém atendendo. Escreva “um café e algo doce para levar” e veja o pedido se montar: ele sugere o que combina, monta o combo e respeita restrição alimentar."
                 />
                 <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
@@ -647,18 +653,31 @@ export default async function ExperimentePage() {
               A padaria acima é o Foocci configurado em um restaurante. O seu fica igual — com
               o seu nome, as suas cores e os seus preços.
             </p>
-            {/* O único CTA comercial da página (rótulo único: `DEMO_CTA_LABEL`). */}
-            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <PrimaryCta label="Contratar agora" href={PRECOS_URL} className="w-full sm:w-auto" />
-              <SecondaryCta
-                label={DEMO_CTA_LABEL}
-                href={DEMO_URL}
-                demoCta
+            {/*
+              UM BOTÃO SÓ, e ele vai para o PREÇO (decisão do CEO, 05/08 à noite).
+
+              O segundo botão daqui levava ao formulário do SDR, e o CEO leu o rótulo
+              antigo ("Ver no meu restaurante") como uma promessa de testar o Foocci
+              dentro do restaurante DELE — algo que não existe. O rótulo já foi trocado
+              em todo o site para "Agende uma demonstração", mas o botão continua
+              sobrando AQUI, e por um motivo de percurso: quem chegou ao fim desta
+              página acabou de usar o produto. Ele não precisa de mais uma prova nem de
+              conversar com alguém para se convencer — precisa saber quanto custa.
+
+              Mandar quem já viu funcionando para uma fila de contato é adicionar um
+              passo entre a vontade e a compra. Quem ainda quiser falar com gente tem o
+              "Agende uma demonstração" fixo no header e na barra do celular, na tela o
+              tempo todo.
+            */}
+            <div className="mt-7 flex justify-center">
+              <PrimaryCta
+                label="Conhecer os planos e contratar"
+                href={PRECOS_URL}
                 className="w-full sm:w-auto"
               />
             </div>
             <p className="mt-4 text-[13px] text-muted">
-              “Contratar agora” abre os planos e preços — você escolhe lá.
+              Os três planos, com o preço de cada um — você escolhe lá.
             </p>
           </div>
         </div>

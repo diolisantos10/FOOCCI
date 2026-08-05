@@ -42,6 +42,7 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
+import { SinaisDeVenda } from "@/components/marketing/SinaisDeVenda";
 import { heroShot } from "@/components/marketing/HeroShot";
 import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
@@ -57,7 +58,6 @@ import {
   DEMO_URL,
   CALCULADORA_URL,
   EXPERIMENTE_URL,
-  EXPERIMENTE_CTA_LABEL,
 } from "@/components/marketing/config";
 import {
   ASSUMED_RATE_PERCENT,
@@ -575,13 +575,15 @@ export default function PrecosPage() {
         badge="Planos"
         title="Três planos, e o motivo de cada um valer o preço."
         subtitle="Cada plano abre pelo que só ele tem. Sem comissão sobre as suas vendas — você paga um valor fixo, e pronto."
-        primaryLabel="Contratar agora"
-        primaryHref={checkoutUrl("crescimento")}
-        /* Quem chega no preço sem ter visto o produto trava aqui. O segundo botão
-           é a saída sem atrito: a degustação, que não pede dado nenhum. O convite
-           para a demonstração vive na faixa de fechamento — uma vez, no fim. */
-        secondaryLabel={EXPERIMENTE_CTA_LABEL}
-        secondaryHref={EXPERIMENTE_URL}
+        /* SEM BOTÃO NO TOPO (CEO, 05/08 à noite): *"esses dois aqui não fazem
+           sentido, porque logo embaixo já tem cinquenta botões falando do contrate
+           agora — a gente JÁ está na página dos planos"*.
+
+           Ele está certo, e o erro tinha nome: o "Contratar agora" do topo precisava
+           escolher um plano por conta própria (mandava todo mundo para o Crescimento)
+           uma tela ANTES de a pessoa ver os três preços. Botão que decide pelo
+           visitante antes de ele ter a informação não acelera a compra — atropela.
+           Cada cartão já tem o seu, com o plano certo. */
         /* Página de preço abre pelo que o dinheiro compra. Primeiro a tela de
            resultado — a que ele abre de manhã; sem ela, a cena que o resultado
            produz: o cliente sentado, voltando. `journey-5` é um recorte redondo,
@@ -609,6 +611,14 @@ export default function PrecosPage() {
           <h2 id="planos-title" className="sr-only">
             Os três planos
           </h2>
+
+          {/*
+            Os dois fatos ANTES dos cartões, não depois: nesta página o visitante já
+            está com a calculadora mental ligada. Ler "metade no primeiro mês" depois
+            de ver os três preços é ler tarde — a comparação com o marketplace já foi
+            feita com o número cheio.
+          */}
+          <SinaisDeVenda className="mb-8" />
           <div className="grid items-start gap-6 lg:grid-cols-3 lg:gap-5">
             {PLANS.map((plan) => (
               <PlanCard key={plan.name} plan={plan} />

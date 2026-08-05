@@ -263,6 +263,17 @@ export const NAV_LINKS: { href: string; label: string }[] = [
   { href: ATENDIMENTO_IA_URL, label: "Atendimento com IA" },
   { href: CRM_URL, label: "CRM" },
   { href: SOLUCOES_URL, label: "Soluções" },
-  { href: EXPERIMENTE_URL, label: "Experimente" },
+  /*
+    "Ver funcionando" e não "Experimente": mesma correção do CEO aplicada ao menu,
+    porque o problema é a PALAVRA e ela estava em três lugares (botão do fecho,
+    título da página e aqui). Deixar o menu dizendo "Experimente" enquanto a página
+    de destino diz "Veja como funciona" é o visitante clicando numa promessa e
+    chegando noutra.
+
+    "Ver funcionando" e não "Veja como funciona" só por caber: item de menu divide
+    a barra com outros quatro, e a 1280px a frase inteira empurrava o botão laranja
+    para fora. Mesmo verbo, mesma promessa, metade do comprimento.
+  */
+  { href: EXPERIMENTE_URL, label: "Ver funcionando" },
   { href: PRECOS_URL, label: "Planos e preços" },
 ];

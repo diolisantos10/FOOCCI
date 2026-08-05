@@ -35,6 +35,7 @@
 import type { Metadata } from "next";
 
 import { HeroSection } from "@/components/marketing/HeroSection";
+import { SinaisDeVenda } from "@/components/marketing/SinaisDeVenda";
 import { CommissionCalculator } from "@/components/marketing/CommissionCalculator";
 import { FourContractsSection } from "@/components/marketing/FourContractsSection";
 import { DifferentiatorsSection } from "@/components/marketing/DifferentiatorsSection";
