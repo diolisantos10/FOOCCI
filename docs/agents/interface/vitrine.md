@@ -7,6 +7,43 @@
 
 ---
 
+## Unificar rótulo revela colisão que a variação escondia
+
+Onze CTAs com nove textos diferentes pareciam nove ofertas. Com o mesmo texto,
+duas delas na mesma dobra viraram **um defeito visível**: a barra fixa do celular
+e o botão da página ficaram gêmeos, laranja idêntico, empilhados.
+
+A lição não é sobre copy: **quem unifica rótulo tem de reconferir sobreposição, não
+só semântica.** Foi assim que apareceu também uma barra fixa apontando para a
+página onde a pessoa já estava — um botão que não fazia nada, escondido pela
+variação de texto.
+
+— promovido em 2026-08-05 pelo Diretor · origem: bloco dos CTAs do site, commit `a8312e41`,
+medido no DOM com Playwright em 375/768/1280
+
+---
+
+## Ferramenta de navegador nasce como peça única, ou apodrece em três ritmos
+
+Microfone, câmera, notificação — qualquer recurso que dependa do navegador — tem
+uma regra que ninguém lembra de repetir: `supported` só pode ser resolvido
+**depois do mount**, porque o servidor não sabe se aquele aparelho tem o recurso.
+Botão que aparece e não funciona é pior que botão nenhum.
+
+A prova de que a regra não sobrevive à cópia: existiam **três** implementações de
+microfone no produto, e **cada uma quebrava a regra de um jeito diferente** — a da
+Ajuda técnica mandava o áudio direto ao suporte sem o lojista ler o que a máquina
+entendeu; a da Campanha por IA desenhava o botão em computador sem microfone. As
+três viraram `@/components/voice`.
+
+Corolário que vale além do microfone: **transcrição não envia sozinha.** O texto
+cai no campo, acrescentando ao que já havia, e a pessoa aperta enviar. Máquina que
+ouve erra, e mensagem errada enviada custa mais que um toque a mais.
+
+— promovido em 2026-08-05 pelo Diretor · origem: bloco do microfone, commit `690ed3aa`
+
+---
+
 ## Rota de plateia dupla precisa do middleware como cúmplice
 
 Uma rota que promete atender duas plateias (tenant E admin) morre em silêncio se

@@ -10,6 +10,30 @@
 
 ---
 
+## Antes de culpar a plataforma, pergunte a ela — com a chave que ainda vive
+
+O Instagram ficou 13 dias sem entregar DM com um diagnóstico que apontava para a
+Meta ("falta vincular a Página, precisa do login do dono"). **Os dois pontos eram
+falsos**: a assinatura do aplicativo estava ativa com o campo `messages`, e o
+campo da Página é gravado vazio **de propósito** pelo fluxo que dispensa Facebook.
+
+O que destravou foi perguntar à Meta pela **chave do aplicativo** — a única
+leitura que não depende do token morto. Quando a credencial do usuário morre,
+sobra a do app: use-a antes de concluir que o problema é do outro lado.
+
+A causa real era nossa e tinha prova aritmética: a conexão nascia com **1 hora de
+vida** em vez de 60 dias (validade menos criação = 1h), duas vezes seguidas. E a
+conta **nunca era inscrita** para receber mensagens — assinar o aplicativo não
+basta, a conta também precisa.
+
+**A regra que fica:** o motivo da falha tem de **sobreviver ao deploy**. A retenção
+de log do Railway é por deploy; nas duas primeiras vezes a explicação morreu junto,
+e por isso ninguém nunca soube a causa.
+
+— promovido em 2026-08-05 pelo Diretor · origem: raio-x do Instagram, PR #99
+
+---
+
 ## Editar as configurações do app por API FUNCIONA — a chave está ligada
 
 Até 02/08 a Graph API respondia:
