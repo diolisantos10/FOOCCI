@@ -19,19 +19,39 @@ Duas frentes, em paralelo, cada uma na própria árvore:
 Termos e Privacidade seguem sem imagem, **por decisão**: são documento, e foto
 ali é peso sem argumento. Reversível em meia hora se o CEO discordar.
 
-## 🐞 Dois defeitos do painel achados durante a captura (05/08) — ABERTOS
+## ✅ Dois defeitos do painel de pedidos — FECHADOS na mesma noite (05/08)
 
-Encontrados por quem foi fotografar as telas, e **não propagados** porque estavam
-fora do escopo daquela frente. Nenhum é P0; os dois enganam o lojista:
+Encontrados por quem foi fotografar as telas para o site, corrigidos por
+`operacao` logo em seguida.
 
-1. **KPI "Total hoje" do painel de pedidos conta os pedidos CARREGADOS, não os do
-   dia.** Com a lista paginada em 100, o número que o dono lê de manhã é o total
-   da página, não o do dia. Número errado numa tela de dinheiro.
-2. **Os campos de data ao lado do botão "Filtrar" são decorativos** — o botão não
-   tem ação. Controle que não faz nada é pior que controle ausente: o lojista
-   acredita que filtrou.
+**O primeiro era pior que o relato.** O "Total hoje" não contava o dia *nem* a
+página: contava **quantos pedidos recentes couberam no limite de 100, misturando
+dias**. Numa loja de 30 pedidos/dia ele mostraria 100 — a soma de quatro dias — e
+só acertava por coincidência. Agora lista e KPI saem da **mesma consulta**, então
+não existe estado em que um diga uma coisa e o outro diga outra: é fonte única, e
+não um comentário pedindo cuidado.
 
-Dono: `operacao`. Cada um pede as duas metades de teste.
+**O botão "Filtrar" de fato não tinha ação** — as datas alimentavam só os próprios
+campos. Decisão: **fazer funcionar, não remover.** O dono que procura o
+faturamento de ontem procura na tela de Pedidos (o Analytics responde outra
+pergunta: agregado, não a lista de comandas), e o servidor já aceitava o período e
+já devolvia a contagem certa — era o painel que jogava fora.
+
+Vieram junto: período inválido vira **erro visível** (lista vazia se lê como "não
+teve pedido"), faixa avisando que o filtro está ativo com volta em um clique, e o
+total passa a aparecer **no celular**, onde o dono mais olha.
+
+19 testes, cada um com as duas metades — a que prova o acerto e a que reproduz o
+erro antigo.
+
+> ⚠️ **Não foi visto em loja real.** A prova foi na padaria de demonstração.
+
+## 🕐 Dívida nomeada: o "hoje" do painel é o fuso de Brasília, fixo
+
+Achado ao corrigir o KPI acima. Vale para o produto inteiro, não só para essa
+tela: **loja fora do fuso de Brasília vê o dia virar na hora errada.** Não foi
+corrigido junto de propósito — é decisão de produto (fuso por restaurante) e não
+conserto de tela. Dono: `operacao`.
 
 ## ✅ Domínio `www` — FECHADO pelo Diretor em 04/08, ponta a ponta
 
