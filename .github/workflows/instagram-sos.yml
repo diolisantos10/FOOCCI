@@ -43,3 +43,9 @@ jobs:
           SLUG: ${{ github.event.inputs.slug || 'sushi-cazza' }}
           APLICAR: ${{ github.event.inputs.aplicar || '0' }}
         run: node scripts/instagram-sos.mjs
+      - name: Perícia da credencial
+        if: ${{ github.event_name == 'push' || github.event.inputs.pericia == '1' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/instagram-sos-credencial.mjs
