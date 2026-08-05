@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { TopBar } from "@/components/layout/TopBar";
 import { ChatSimClient } from "./ChatSimClient";
 
 export const metadata = { title: "Chat Sim — Teste Manual IA" };
@@ -24,13 +25,17 @@ export default async function ChatSimPage() {
 
   const pedidoUrl = `${appOrigin}/pedido/${restaurant.slug}`;
 
+  // A tela desconta `--topbar` da altura: sem o cabeçalho, sobrava uma faixa.
   return (
-    <div className="h-[calc(100vh-56px-var(--assistant-bar,0px))]">
-      <ChatSimClient
-        restaurantName={restaurant.name}
-        restaurantSlug={restaurant.slug}
-        pedidoUrl={pedidoUrl}
-      />
-    </div>
+    <>
+      <TopBar title="Chat Sim" />
+      <div className="h-[calc(100vh-var(--topbar))]">
+        <ChatSimClient
+          restaurantName={restaurant.name}
+          restaurantSlug={restaurant.slug}
+          pedidoUrl={pedidoUrl}
+        />
+      </div>
+    </>
   );
 }

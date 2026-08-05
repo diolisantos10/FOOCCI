@@ -983,7 +983,7 @@ export function AtendimentoClient({
   return (
     <div
       className="flex overflow-hidden"
-      style={{ height: "calc(100vh - 56px - var(--assistant-bar, 0px))" }}
+      style={{ height: "calc(100vh - var(--topbar))" }}
     >
       {/* ── LEFT PANEL ───────────────────────────────────────────────────── */}
       <aside

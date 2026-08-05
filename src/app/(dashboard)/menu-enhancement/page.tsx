@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { TopBar } from "@/components/layout/TopBar";
 import { EnhancementClient } from "./EnhancementClient";
 
 export const dynamic = "force-dynamic";
@@ -80,12 +81,17 @@ export default async function MenuEnhancementPage() {
 
   const totalWithImage = jobs.length + unprocessedItems.length;
 
+  // O cabeçalho é a ÚNICA régua do topo — e é dentro dele que mora a pílula do
+  // Assistente. Tela do menu lateral sem `TopBar` ficava sem assistente nenhum.
   return (
-    <EnhancementClient
-      restaurant={restaurant}
-      jobs={JSON.parse(JSON.stringify(jobs))}
-      unprocessedItems={unprocessedItems}
-      totalWithImage={totalWithImage}
-    />
+    <>
+      <TopBar title="Fotos do Cardápio" />
+      <EnhancementClient
+        restaurant={restaurant}
+        jobs={JSON.parse(JSON.stringify(jobs))}
+        unprocessedItems={unprocessedItems}
+        totalWithImage={totalWithImage}
+      />
+    </>
   );
 }

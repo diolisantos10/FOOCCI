@@ -91,17 +91,29 @@ export function relTime(iso: string): string {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
+/**
+ * `status` existe porque lista vazia e busca que falhou eram indistinguíveis: a
+ * tela dizia "tudo em ordem por aqui" quando a verdade era "não sei". Ausência
+ * de informação não é informação (guardrail 1) — e §6.1 do DESIGN.md pede os
+ * três estados. Uma vez `ready`, o polling que falha NÃO derruba a lista boa
+ * para "erro": mantém o que já estava na tela.
+ */
+export type NotifStatus = "loading" | "ready" | "error";
+
 export interface UseNotifications {
   notifs: NotificationItem[];
   readIds: Set<string>;
   unreadCount: number;
   hasCritical: boolean;
+  status: NotifStatus;
+  reload: () => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
 }
 
 export function useNotifications(pollMs = 10_000): UseNotifications {
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
+  const [status, setStatus] = useState<NotifStatus>("loading");
   const [readIds, setReadIdsState] = useState<Set<string>>(new Set());
 
   // Hydrate read IDs and keep in sync with other hook instances / tabs.
@@ -120,13 +132,24 @@ export function useNotifications(pollMs = 10_000): UseNotifications {
   const fetchNotifs = useCallback(async () => {
     try {
       const res = await fetch("/api/notifications");
-      if (!res.ok) return;
+      if (!res.ok) {
+        setStatus((s) => (s === "ready" ? s : "error"));
+        return;
+      }
       const json = await res.json();
       setNotifs((json.data ?? []) as NotificationItem[]);
+      setStatus("ready");
     } catch {
-      // network error — keep current state
+      // network error — mantém a lista que já estava boa; só o primeiro
+      // carregamento vira "erro", senão um soluço de rede apagaria a tela.
+      setStatus((s) => (s === "ready" ? s : "error"));
     }
   }, []);
+
+  const reload = useCallback(() => {
+    setStatus("loading");
+    void fetchNotifs();
+  }, [fetchNotifs]);
 
   useEffect(() => {
     fetchNotifs();
@@ -156,5 +179,5 @@ export function useNotifications(pollMs = 10_000): UseNotifications {
     });
   }, [notifs]);
 
-  return { notifs, readIds, unreadCount, hasCritical, markRead, markAllRead };
+  return { notifs, readIds, unreadCount, hasCritical, status, reload, markRead, markAllRead };
 }
