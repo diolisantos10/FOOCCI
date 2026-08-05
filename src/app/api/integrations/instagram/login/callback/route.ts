@@ -28,9 +28,19 @@ export async function GET(req: NextRequest) {
     redirectUri: instagramLoginRedirectUri(req.nextUrl.origin),
   });
 
-  // A short-lived token means the connection formed but is NOT durable (it dies in ~1h).
-  // Distinguish it from a healthy connect so the panel can warn instead of showing green.
-  const status = !result.ok ? "error" : result.shortLived ? "connected_shortlived" : "connected";
+  // Three ways a connection can form and still not work, in order of severity:
+  //  • error                 — não conectou;
+  //  • connected_shortlived  — token de ~1h em vez de 60 dias (morre hoje);
+  //  • connected_nosubscribe — conta fora do webhook de mensagens (nenhuma DM chega).
+  // Só o quarto caso é "conectado". Verde sem essa distinção foi o que escondeu a
+  // queda de 23/07 por treze dias.
+  const status = !result.ok
+    ? "error"
+    : result.shortLived
+      ? "connected_shortlived"
+      : result.subscribeError
+        ? "connected_nosubscribe"
+        : "connected";
   settings.searchParams.set("ig", status);
   return NextResponse.redirect(settings);
 }

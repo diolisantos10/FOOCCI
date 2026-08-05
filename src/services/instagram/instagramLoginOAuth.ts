@@ -25,6 +25,11 @@ const IG_GRAPH = "https://graph.instagram.com";
 const GRAPH_VERSION = "v21.0";
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+/** Attempts at the short→long token exchange before accepting the doomed ~1h token. */
+export const LONG_LIVED_ATTEMPTS = 5;
+/** Base backoff between attempts; grows linearly (2s, 4s, 6s, 8s ≈ 20s total). */
+export const LONG_LIVED_BACKOFF_MS = 2000;
+
 /** Marker stored on the OAuth state row so the callback knows this is the IG-login flow. */
 export const INSTAGRAM_LOGIN_PLATFORM = "instagram_login";
 
@@ -103,10 +108,28 @@ export interface InstagramProfile {
   username: string | null;
   longLivedToken: string;
   expiresInSeconds: number | null;
+  /**
+   * The exact reason `ig_exchange_token` refused, when the long-lived exchange failed
+   * and we fell back to the ~1h token. Without this the panel could only say "veio
+   * curto" — never WHY — and the console line dies with the next deploy. It happened
+   * twice (25/07 and 04/08) and both times the reason was already gone when we looked.
+   */
+  longLivedError?: string | null;
+}
+
+export interface SubscribeResult {
+  ok: boolean;
+  /** The exact reason Meta gave, so a silent channel can be diagnosed later. */
+  error?: string;
 }
 
 export interface InstagramLoginGraph {
   exchange(input: { code: string; redirectUri: string; creds: InstagramLoginCreds }): Promise<InstagramProfile>;
+  /**
+   * Subscribes the connected IG account to the `messages` webhook field.
+   * Optional so existing test doubles keep working; the real client implements it.
+   */
+  subscribe?(input: { igUserId: string; token: string }): Promise<SubscribeResult>;
 }
 
 export const realInstagramLoginGraph: InstagramLoginGraph = {
@@ -136,19 +159,22 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
       throw new Error(shortBody.error_message ?? `Troca de código falhou (HTTP ${shortRes.status})`);
     }
 
-    // 2) short-lived → long-lived (60-day) token. RETRY: a transient failure here used to
-    //    silently fall back to the 1h short token, which then died in ~1h and killed
-    //    inbound DMs. Retry a few times before accepting the short token.
+    // 2) short-lived → long-lived (60-day) token. RETRY: a transient failure here
+    //    silently falls back to the 1h short token, which then dies in ~1h and kills
+    //    inbound DMs. It has now happened TWICE (25-Jul and 04-Aug), so the old 3
+    //    attempts spread over ~2 seconds were clearly not enough of a net: widened to
+    //    LONG_LIVED_ATTEMPTS spread over ~30s, which still fits inside an OAuth redirect
+    //    and gives a slow/propagating Meta side a real chance.
     const longUrl = `${IG_GRAPH}/access_token?grant_type=ig_exchange_token`
       + `&client_secret=${encodeURIComponent(creds.appSecret)}`
       + `&access_token=${encodeURIComponent(shortToken)}`;
     let longToken = shortToken;
     let expiresIn: number | null = null;
     let lastErr = "none";
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= LONG_LIVED_ATTEMPTS; attempt++) {
       const longRes = await fetch(longUrl);
       const longBody = (await longRes.json().catch(() => ({}))) as {
-        access_token?: string; expires_in?: number; error?: { message?: string };
+        access_token?: string; expires_in?: number; error?: { message?: string; code?: number; type?: string };
       };
       if (longBody.access_token) {
         longToken  = longBody.access_token;
@@ -156,14 +182,17 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
         console.log(`[ig-oauth] longLived OK attempt=${attempt} expiresIn=${expiresIn ?? "null"}`);
         break;
       }
-      lastErr = longBody.error?.message ?? `HTTP ${longRes.status}`;
+      const code = longBody.error?.code != null ? ` (code ${longBody.error.code})` : "";
+      lastErr = `${longBody.error?.message ?? `HTTP ${longRes.status}`}${code}`;
       console.warn(`[ig-oauth] longLived FAILED attempt=${attempt} err=${lastErr}`);
-      if (attempt < 3) await new Promise((r) => setTimeout(r, 700 * attempt));
+      if (attempt < LONG_LIVED_ATTEMPTS) await new Promise((r) => setTimeout(r, LONG_LIVED_BACKOFF_MS * attempt));
     }
     // If every attempt failed we keep the short token so the connection still forms, but
     // its (short) expiry is recorded so the refresh cron / health check flags it fast.
+    let longLivedError: string | null = null;
     if (expiresIn === null && longToken === shortToken) {
       expiresIn = 3600; // short-lived tokens last ~1h — record it, don't pretend it's 60 days
+      longLivedError = lastErr; // carried to the config so the reason survives the deploy
       console.error(`[ig-oauth] LONG-LIVED EXCHANGE FAILED — stored SHORT token (dies in ~1h). lastErr=${lastErr}`);
     }
 
@@ -178,7 +207,29 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
       igUserId = String(meBody.user_id ?? meBody.id ?? tokenUserId);
     } catch { /* keep the id from the token exchange */ }
 
-    return { igUserId, username, longLivedToken: longToken, expiresInSeconds: expiresIn };
+    return { igUserId, username, longLivedToken: longToken, expiresInSeconds: expiresIn, longLivedError };
+  },
+
+  /**
+   * Subscribes the account to the `messages` webhook field. WITHOUT this the app-level
+   * subscription is not enough: Meta only delivers a DM when the ACCOUNT is subscribed
+   * too. The connect flow never did it — the operator had to remember to call
+   * graph-check?subscribe=true by hand, and nobody did, so a reconnect could produce a
+   * green panel that still receives nothing. Failure is reported, never swallowed.
+   */
+  async subscribe({ igUserId, token }) {
+    try {
+      const res = await fetch(
+        `${IG_GRAPH}/${GRAPH_VERSION}/${igUserId}/subscribed_apps?subscribed_fields=messages`
+        + `&access_token=${encodeURIComponent(token)}`,
+        { method: "POST" },
+      );
+      const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+      if (res.ok && body.success !== false) return { ok: true };
+      return { ok: false, error: body.error?.message ?? `HTTP ${res.status}` };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "subscribe falhou" };
+    }
   },
 };
 
@@ -248,6 +299,10 @@ export interface CallbackResult {
   /** True when the long-lived exchange fell back to a short token (dies in ~1h). The
    *  connection still forms, but it is NOT healthy — the panel must say so, not show green. */
   shortLived?: boolean;
+  /** True when the account was subscribed to the `messages` webhook field. */
+  subscribed?: boolean;
+  /** Why the subscription failed, when it did. */
+  subscribeError?: string | null;
 }
 
 /** A token below this is treated as short-lived (the ~1h fallback), not a real 60-day token. */
@@ -288,9 +343,33 @@ export async function handleInstagramLoginCallback(
     // and clear any stale error on a genuinely durable reconnect.
     const shortLived =
       typeof profile.expiresInSeconds === "number" && profile.expiresInSeconds < DURABLE_TOKEN_MIN_SECONDS;
-    const lastError = shortLived
-      ? "Conexão instável: o Instagram devolveu um token de curta duração (expira em ~1h) em vez do token de 60 dias. Reconecte a conta; se repetir, a troca long-lived está falhando em produção."
-      : null;
+
+    // Subscribe the ACCOUNT to `messages`. The app-level subscription (object=instagram)
+    // is necessary but NOT sufficient — Meta only delivers when the account is subscribed
+    // too, and nothing in the connect flow used to do it. Best-effort: a failure here
+    // must never lose the connection, but it must be visible instead of silent.
+    let subscribed = false;
+    let subscribeError: string | null = null;
+    if (graph.subscribe) {
+      const sub = await graph.subscribe({ igUserId: profile.igUserId, token: profile.longLivedToken });
+      subscribed = sub.ok;
+      subscribeError = sub.ok ? null : (sub.error ?? "motivo não informado");
+    }
+
+    // The alert carries its own evidence (guardrail 6): not "deu ruim", but WHICH step
+    // failed and exactly what Meta answered — the reason used to die with the next deploy.
+    const problemas: string[] = [];
+    if (shortLived) {
+      problemas.push(
+        "o Instagram devolveu um token de curta duração (expira em ~1h) em vez do de 60 dias"
+        + (profile.longLivedError ? ` — a Meta respondeu: "${profile.longLivedError}"` : "")
+        + ". Reconecte; se repetir, a troca long-lived está falhando em produção.",
+      );
+    }
+    if (subscribeError) {
+      problemas.push(`a conta não foi inscrita no webhook de mensagens — a Meta respondeu: "${subscribeError}". Sem isso nenhuma DM chega.`);
+    }
+    const lastError = problemas.length > 0 ? `Conexão instável: ${problemas.join(" Além disso, ")}` : null;
 
     const result = await upsertInstagramConfig(row.restaurantId, {
       instagramBusinessAccountId: profile.igUserId,
@@ -312,6 +391,9 @@ export async function handleInstagramLoginCallback(
         tokenExpiresAt: profile.expiresInSeconds
           ? new Date(Date.now() + profile.expiresInSeconds * 1000).toISOString()
           : null,
+        webhookSubscribedAt: subscribed ? new Date().toISOString() : null,
+        webhookSubscribeError: subscribeError,
+        longLivedExchangeError: profile.longLivedError ?? null,
       },
     });
 
@@ -327,6 +409,8 @@ export async function handleInstagramLoginCallback(
       username: profile.username,
       tokenExpiresInSeconds: profile.expiresInSeconds ?? null,
       shortLived,
+      subscribed,
+      subscribeError,
     };
   } catch (err) {
     const reason = err instanceof Error ? err.message.slice(0, 200) : "erro ao conectar com o Instagram";

@@ -87,6 +87,18 @@ const META_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> 
 // Flash messages for the direct "Entrar com Instagram" flow (?ig=...).
 const IG_FLASH: Record<string, { kind: "ok" | "err" | "info"; text: string }> = {
   connected: { kind: "ok", text: "Instagram conectado! As mensagens e os comentários vão aparecer na Central." },
+  // A conexão FORMA e mesmo assim não funciona: nestes dois casos dizer "conectado"
+  // é mentir. Em 04/08 o callback devolveu connected_shortlived, este mapa não tinha
+  // a chave, e a tela não mostrou aviso NENHUM — a conexão morreu em uma hora e
+  // ninguém soube. Chave que falta aqui vira silêncio, não erro.
+  connected_shortlived: {
+    kind: "err",
+    text: "Conectado, mas a conexão NÃO durou: o Instagram devolveu um acesso de 1 hora em vez do de 60 dias. Tente conectar de novo e, se repetir, avise o suporte Foocci — o motivo fica registrado no Diagnóstico.",
+  },
+  connected_nosubscribe: {
+    kind: "err",
+    text: "Conectado, mas a conta não ficou inscrita para receber as mensagens — nenhuma DM vai chegar. Tente conectar de novo; o motivo fica registrado no Diagnóstico.",
+  },
   error: { kind: "err", text: "Não foi possível concluir o login com o Instagram. Tente novamente." },
   blocked_env: { kind: "err", text: "Login com Instagram indisponível no momento. Fale com o suporte Foocci." },
   blocked_base_url: { kind: "err", text: "Login com Instagram indisponível no momento. Fale com o suporte Foocci." },
