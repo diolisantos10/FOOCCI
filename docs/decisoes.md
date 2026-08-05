@@ -11,6 +11,41 @@
 
 ---
 
+## Carrinho abandonado: manda em 2 minutos, e loja fechada não manda nunca
+
+**Decidido em** 2026-08-05 · **por** CEO · **origem:** o diagnóstico que mostrou
+**4 mensagens de recuperação em 2 meses e meio**
+
+Palavras dele: *"a mensagem tem que ser enviada quando o cliente fecha o Foocci,
+e 2 min depois mandar. Se o cliente abre de madrugada não precisa enviar nada,
+porque ele queria comer de madrugada e não quando o restaurante abrir."*
+
+**O que muda:** carrinho não finalizado + 2 minutos sem atividade → manda, **se a
+loja estiver aberta naquele momento**. Loja fechada: **não manda, e não guarda
+para depois**. O carrinho morre em silêncio.
+
+**Por que a segunda metade é a mais importante:** antes o motor *adiava* o envio
+para quando a loja abrisse — e o carrinho expirava em 6h, antes disso. Ou seja,
+ele prometia um envio que nunca acontecia. Agora a recusa é honesta e imediata.
+
+**O que muda para todos:**
+
+1. **A regra é avaliada no MOMENTO do abandono, não depois.** É essa escolha —
+   e não uma trava de data — que impede enxurrada: os ~51 carrinhos represados
+   que o diagnóstico encontrou **nunca** viram mensagem, por construção. Provado
+   por três caminhos independentes, inclusive um teste que injeta os 51 com a
+   validade afrouxada de propósito e exige zero envio.
+2. **"Fechou o app" não existe como sinal.** O navegador não avisa isso de forma
+   confiável; o que existe é **inatividade**. Quem for "melhorar" isso depois vai
+   tentar detectar fechamento de aba e vai falhar em silêncio — está escrito no
+   código para não tentar.
+3. **Lembrete tardio é pior que lembrete nenhum.** Vontade de madrugada não
+   sobrevive até o restaurante abrir; a mensagem de manhã chega como cobrança de
+   um desejo que já passou. Vale como princípio para qualquer recuperação futura,
+   não só a de carrinho.
+
+---
+
 ## O concorrente não abre o site — a comparação só vale onde tem lastro
 
 **Decidido em** 2026-08-05 · **por** CEO · **origem:** revisão do site ao vivo,
