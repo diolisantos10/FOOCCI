@@ -16,6 +16,13 @@ import { getToken } from "next-auth/jwt";
 import { TENANT_HEADER, USER_HEADER, ROLE_HEADER } from "@/lib/tenant";
 
 // Routes that do NOT require authentication
+/**
+ * Caminho reservado da prova de posse do domínio (ACME / Let's Encrypt).
+ * Fica fora de PUBLIC_PATHS de propósito: não é rota da aplicação — é servido
+ * pela borda do Railway, e o que precisamos é apenas NÃO atrapalhar.
+ */
+const ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
+
 const PUBLIC_PATHS: RegExp[] = [
   /^\/$/,                              // landing page
   /^\/privacidade$/,                   // PUBLIC privacy policy (required by Meta/Google app review)
@@ -75,8 +82,26 @@ export async function middleware(req: NextRequest) {
   // todo link gerado — o www é só porta de entrada. Inerte enquanto o DNS do
   // www não existir; passa a valer no momento em que Railway + Hostinger
   // registrarem o subdomínio (docs/dominio-www-diagnostico.md).
+  //
+  // ⚠️ A EXCEÇÃO DO ACME NÃO É DETALHE — ELA É O QUE PERMITE O `www` EXISTIR.
+  // Para emitir o certificado TLS do `www`, a autoridade certificadora busca um
+  // arquivo de prova em `http://www.<dominio>/.well-known/acme-challenge/<token>`.
+  // Sem esta exceção, o redirecionamento acima responde 308 para a apex — e a
+  // apex não tem o token, porque ele é emitido por domínio. A validação nunca
+  // completa, o Railway fica preso em `TYPE_VALIDATING_OWNERSHIP` para sempre, e
+  // o navegador mostra `ERR_CERT_COMMON_NAME_INVALID` a quem digita com `www`.
+  //
+  // Foi exatamente o que aconteceu em 04–05/08/2026: DNS certo, CNAME propagado,
+  // domínio cadastrado — e 18 horas presas nesse estado. O diagnóstico anterior
+  // apontava "Railway travado, apagar e recriar o domínio", o que **não teria
+  // resolvido**: o domínio recriado cairia na mesma armadilha, e ainda custaria
+  // uma edição de DNS na Hostinger (recriar sorteia um CNAME novo).
+  //
+  // Regra geral, para quem for mexer aqui: **redirecionamento de domínio nunca
+  // pode engolir `/.well-known/`.** É o caminho reservado para provas de posse e
+  // metadados de protocolo — ele pertence ao domínio pedido, não ao canônico.
   const host = req.headers.get("host") ?? "";
-  if (host.startsWith("www.")) {
+  if (host.startsWith("www.") && !pathname.startsWith(ACME_CHALLENGE_PREFIX)) {
     const dest = req.nextUrl.clone();
     dest.host = host.slice(4);
     return NextResponse.redirect(dest, 308);
