@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
+import { TopBar } from "@/components/layout/TopBar";
 import {
   apiFetch,
   Feedback,
@@ -521,9 +522,20 @@ export default function MarcaPage() {
     setSaving(false);
   }
 
-  if (loading) return <p className="py-8 text-sm text-muted">Carregando…</p>;
+  // O cabeçalho é a ÚNICA régua do topo — e é dentro dele que mora a pílula do
+  // Assistente. Tela do menu lateral sem `TopBar` ficava sem assistente nenhum.
+  if (loading) {
+    return (
+      <>
+        <TopBar title="Marca" />
+        <p className="p-6 text-sm text-muted">Carregando…</p>
+      </>
+    );
+  }
 
   return (
+    <>
+    <TopBar title="Marca" />
     <form onSubmit={handleSubmit} className="space-y-5">
       <Feedback success={success} error={error} onDismiss={() => setError(null)} />
 
@@ -928,5 +940,6 @@ export default function MarcaPage() {
 
       <SaveButton saving={saving} label="Salvar persona da marca" />
     </form>
+    </>
   );
 }

@@ -1953,7 +1953,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   }
 
   return (
-    <div className="flex flex-col bg-canvas" style={{ height: "calc(100vh - 56px - var(--assistant-bar, 0px))" }}>
+    <div className="flex flex-col bg-canvas" style={{ height: "calc(100vh - var(--topbar))" }}>
 
       <div className="flex shrink-0 items-center gap-3 border-b border-line bg-paper px-6 py-2.5">
         <PerformanceBar orders={orders} />

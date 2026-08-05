@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * AssistantPanel — o que aparece assim que o lojista toca na barra do topo:
+ * AssistantPanel — o que aparece assim que o lojista toca na pílula do cabeçalho:
  * ações rápidas, sugestões da TELA em que ele está e a trilha de primeiros passos.
  *
- * No desktop desce como um painel ancorado embaixo da barra; no celular sobe como
- * folha, com a lista rolável e o campo de escrita ao alcance do polegar (quem
- * monta a moldura é o AssistantBar).
+ * As ações rápidas moram AQUI desde 04/08: elas ficavam ao lado da pílula, em
+ * fileira, e faziam o cabeçalho parecer uma segunda barra. O CEO reprovou.
+ *
+ * No desktop desce como painel ancorado embaixo da pílula (caixa de escrever no
+ * topo); no celular vira folha de tela cheia, com a lista rolável e o campo ao
+ * alcance do polegar. Quem monta a moldura é o `AssistantPill`.
  */
 
 import { useState } from "react";
@@ -27,6 +30,7 @@ interface Props {
   trailOpen: boolean;
   onTrailToggle: (open: boolean) => void;
   unreadCount: number;
+  hasCritical?: boolean;
   onOpenAvisos: () => void;
 }
 
@@ -39,6 +43,7 @@ export default function AssistantPanel({
   trailOpen,
   onTrailToggle,
   unreadCount,
+  hasCritical = false,
   onOpenAvisos,
 }: Props) {
   const contextual = [
@@ -48,13 +53,48 @@ export default function AssistantPanel({
   ].slice(0, 4);
 
   return (
-    <div className="flex min-h-full flex-col gap-4 px-4 py-4">
+    // Sem `min-h-full`: a folha do celular abria um vão de 200px entre a trilha
+    // e o rodapé só para empurrar o rodapé até embaixo.
+    <div className="flex flex-col gap-4 px-4 py-4">
+      {/* ── Avisos não lidos — sobem para o topo, senão ninguém acha ──── */}
+      {unreadCount > 0 && (
+        <button
+          type="button"
+          onClick={onOpenAvisos}
+          className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+            hasCritical
+              ? "border-red-200 bg-red-50 hover:bg-red-100"
+              : "border-brand-200 bg-brand-50 hover:bg-brand-100"
+          }`}
+        >
+          <span className="shrink-0 text-[15px] leading-none" aria-hidden>
+            🔔
+          </span>
+          <span
+            className={`min-w-0 flex-1 text-[12.5px] font-semibold leading-snug ${
+              hasCritical ? "text-red-700" : "text-brand-700"
+            }`}
+          >
+            {unreadCount} aviso{unreadCount > 1 ? "s" : ""} da operação
+            {hasCritical ? " — algum é urgente" : ""}
+          </span>
+          <span
+            className={`shrink-0 text-[12px] ${hasCritical ? "text-red-600" : "text-brand-600"}`}
+            aria-hidden
+          >
+            ›
+          </span>
+        </button>
+      )}
+
       {/* ── Ações rápidas ─────────────────────────────────────────────── */}
       <section>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.06em] text-muted">
           Ações rápidas
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        {/* `auto-rows-fr`: "Conectar WhatsApp" quebra em duas linhas a 375px e
+            deixava a primeira fileira mais alta que as outras duas. */}
+        <div className="grid auto-rows-fr grid-cols-2 gap-2">
           {QUICK_ACTIONS.map((a) => (
             <button
               key={a.id}
@@ -115,11 +155,6 @@ export default function AssistantPanel({
           className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink2 transition-colors hover:text-brand-600"
         >
           🔔 Avisos da operação
-          {unreadCount > 0 && (
-            <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-semibold leading-none text-white">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
         </button>
         <span className="text-right text-[11px] leading-snug text-muted">
           Sempre aprendendo — pode errar.

@@ -527,3 +527,105 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, bloco do Agente de Suporte (Frente 2, cara do assistente),
 branch `claude/foocci-brain-vaamrx`
+
+---
+
+## 2026-08-05 · A barra dupla morre: a pílula entra DENTRO do cabeçalho
+
+**Reprovado pelo CEO.** A entrega anterior deu ao assistente uma **faixa própria**
+(`--assistant-bar`, 52px) logo acima do conteúdo. Como quase toda tela do painel já
+renderiza o `TopBar` (56px), o lojista via **duas réguas horizontais empilhadas**.
+Palavra dele: *"eu não gostei de duas barras… é uma barra só com tudo que está junto
+ali, fazer bem minimalista e discreto."*
+
+### O que mudou
+
+- **`AssistantBar.tsx` morreu.** Nasceram dois arquivos com responsabilidades
+  separadas:
+  - `AssistantProvider.tsx` — o **estado** (conversa, rascunho, trilha, avisos,
+    voz) + a conversa em tela cheia. Vive no `layout.tsx` do painel.
+  - `AssistantPill.tsx` — o **desenho**: a pílula e o painel ancorado. Vive dentro
+    do `TopBar`.
+- **Por que separar:** o `TopBar` é renderizado por *página*, então ele é
+  **remontado a cada rota**. Se o estado morasse nele, minimizar a conversa e
+  navegar (que é exatamente o que `onNavigate` faz) apagaria a conversa. O estado
+  sobe para o layout; só a âncora remonta.
+- **A pílula:** ícone + "Como posso te ajudar?" + microfone + **um** atalho
+  ("Suporte"). A fileira de três chips ao lado dela — a verdadeira culpada pela
+  sensação de segunda barra — foi embora; `BAR_QUICK_ACTION_IDS` virou
+  `PILL_SHORTCUT_ID`/`_LABEL`, com teste travando "um atalho, rótulo de uma palavra".
+- **As ações rápidas migraram para dentro do painel**, junto com a caixa de
+  escrever **no topo** (o CEO: *"quando ele clica ali na tela de escrever, abre a
+  tela pra baixo"*). O painel abre a 8px abaixo da régua, centrado na pílula.
+- **`--assistant-bar` → `--topbar: 3.5rem`.** As cinco telas de altura fixa passaram
+  de `calc(100vh - 56px - var(--assistant-bar,0px))` para `calc(100vh - var(--topbar))`.
+  O `56px` cravado na mão em cinco arquivos era o mesmo drift que o token anterior
+  tinha vindo consertar.
+- **Telas sem `TopBar` ganharam um** (`/agente-ia`, `/marca`, `/menu-enhancement`,
+  `/test-ai`, `/chat-sim`). Sem isso elas ficariam **sem assistente nenhum** — e
+  `/test-ai` e `/chat-sim` já descontavam 56px de um cabeçalho que não existia
+  (sobra silenciosa em produção).
+
+### Três armadilhas que só o screenshot pegou
+
+1. **`scrollWidth` não enxerga transbordo para a ESQUERDA.** O cluster de conta
+   (`justify-end` com filhos `shrink-0`) media 442px de caixa e 442 de `scrollWidth`
+   — e mesmo assim o botão "Pausar pedidos" aparecia **por baixo da pílula**. O
+   conteúdo real era ~513px e vazava para a esquerda; `scrollWidth` só conta
+   transbordo no fim. **A prova é o `getBoundingClientRect` do filho, não o
+   `scrollWidth` do pai.**
+2. **Centralizar com `flex-1 / shrink-0 / flex-1` só funciona se cada lado couber na
+   metade livre.** A conta é: `centro exato ⇔ conteúdo do lado mais gordo ≤
+   (largura − pílula − gaps) / 2`. Com nome do restaurante + nome do usuário + cargo
+   + "Pausar pedidos" + "Sair" por extenso, o lado direito só cabia acima de ~1620px
+   de viewport. Enxugar (nome do usuário e rótulos longos a partir de `2xl`, com
+   `title` no avatar) foi o que devolveu o centro — e é mais Linear/Stripe do que a
+   versão anterior.
+3. **`@layer base` com `@apply` vence utilitário por ESPECIFICIDADE, não por camada.**
+   `globals.css` estiliza `input:not([type=…]):…:focus { @apply focus:ring-2
+   focus:ring-orange-200 }` — um seletor com ~8 `:not()`. Nenhum `focus:ring-0` de
+   classe ganha dele. Resultado: **todo campo com moldura `focus-within` ganha um
+   anel laranja duplo**, e isso estava em produção nas caixas de escrever do
+   assistente. A saída pontual foi `focus:!ring-0`. A saída definitiva é baixar a
+   especificidade do seletor global — fica anotado, é conserto de projeto.
+
+### Fora do pedido, mas do mesmo pano
+
+- **`TopBar` virou `sticky top-0 z-30`.** A faixa antiga vivia FORA do `main` e
+  nunca sumia; agora que o assistente mora no cabeçalho, sem `sticky` ele rolaria
+  para fora da tela em toda página comprida. Conferido a 375 e 1280 com `scrollTop`
+  de ~680px.
+- **Avisos ganharam carregando e erro.** A superfície dizia *"Tudo em ordem por
+  aqui"* tanto para lista vazia quanto para busca que falhou — ausência de
+  informação virando informação (guardrail 1). Agora: esqueleto enquanto busca;
+  *"Não consegui buscar os avisos… quer dizer que eu ainda não sei"* + "Tentar de
+  novo" quando falha. Polling que falha **não** derruba uma lista boa para erro.
+- **O ponto de não lido saiu do meio da pílula e foi para cima do ícone.** Solto
+  entre o texto e o microfone parecia sujeira na tela — badge só se lê grudado.
+- **Emoji `⏸` sem rótulo virava um risquinho cinza de 4px.** Controle de emergência
+  não pode parecer poeira: virou SVG de 15px.
+- Hierarquia invertida no cabeçalho: o título da página era `text-muted` (o mais
+  fraco) e o nome do restaurante `font-bold text-ink` (o mais forte). Inverteu-se.
+- Drift do `DESIGN.md` corrigido no arquivo tocado: `bg-white`→`bg-paper`,
+  `bg-[#E5E5E5]`→`bg-line2`, `text-gray-300`→token, `font-medium/bold`→`semibold`,
+  `hover:orange-*`→`amber` no botão de pausa.
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` **396 arquivos / 4956 testes verdes**.
+Screenshots 375/768/1280 de: barra fechada (com recorte ampliado do cabeçalho),
+painel aberto ancorado, conversa, pílula com aviso não lido, painel com a chamada
+de avisos, pílula minimizada ("Retomar conversa"), avisos carregando/vazio/erro e
+cabeçalho grudado depois de rolar 680px.
+
+Medido no navegador, `/orders`: **um único `<header>` de 56px** nos três tamanhos;
+`scrollWidth == viewport` exato; painel a `top: 64` (8px abaixo da régua) a 768 e
+1280 e tela cheia a 375. Varredura em `/atendimento`, `/marca`, `/agente-ia`,
+`/menu`, `/settings`, `/dashboard`: **um header cada, pílula presente em todos**, e
+o contêiner de altura fixa do `/atendimento` terminando exatamente em 850 de 850 —
+sem buraco nem sobra.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, refação da barra do assistente (reprovada pelo CEO em 04/08),
+worktree `agent-ab1c4bec24dce0fe6` a partir de `claude/foocci-brain-vaamrx`
