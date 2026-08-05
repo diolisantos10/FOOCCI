@@ -25,6 +25,38 @@ import type OpenAI from "openai";
 
 const MAX_TOOL_ITERATIONS = 6;
 
+/**
+ * A MARCA DO CLIENTE DE SIMULAÇÃO — e por que ela virou trava.
+ *
+ * Achado da varredura de multi-inquilino de 05/08/2026 (P0): a rota de encerrar
+ * sessão recebia `customerId` no corpo e mandava apagar. Sem conferir de qual
+ * restaurante era o cliente, sem conferir se era de teste, e sem conferir o cargo
+ * de quem pediu. O efeito: qualquer pessoa logada — inclusive `STAFF` — apagava um
+ * cliente REAL e **todo o histórico de pedidos dele**, colando na chamada o
+ * `customerId` que a própria tela de CRM mostra.
+ *
+ * O que torna isso pior que um furo comum é que ele **contornava as três
+ * proteções que já existiam** para exatamente esta operação:
+ *   · `api/customers/[id]` exige OWNER/MANAGER, escopa por restaurante e apenas
+ *     DESATIVA — não apaga;
+ *   · `CRMService` RECUSA excluir cliente que tenha pedido;
+ *   · aqui os pedidos eram apagados PRIMEIRO, justamente para o cliente poder cair
+ *     depois.
+ *
+ * A lição, e ela é maior que este arquivo: **a porta dos fundos é a ferramenta de
+ * teste**. Quem escreve sandbox pensa em dado descartável e esquece que a rota
+ * roda no mesmo servidor, no mesmo banco. Entre ~140 rotas de inquilino revisadas
+ * na varredura, esta foi a única sem check-then-write.
+ *
+ * A marca já existia desde sempre no nome do cliente criado — só nunca tinha sido
+ * conferida na saída. Agora é constante única: quem muda a criação muda a trava
+ * junto, e não dá para elas discordarem em silêncio.
+ */
+export const CHATSIM_NAME_PREFIX = "[CHATSIM]";
+
+/** Motivo pelo qual a sessão foi recusada — `null` quando ela é legítima. */
+export type ChatSimRejection = "SESSAO_INEXISTENTE" | "NAO_E_SIMULACAO";
+
 // ─── public types ──────────────────────────────────────────────
 
 export interface ChatSession {
@@ -57,7 +89,7 @@ export class ChatSimService {
     const customer = await prisma.customer.create({
       data: {
         restaurantId,
-        name:  `[CHATSIM] ${new Date().toLocaleTimeString("pt-BR")}`,
+        name:  `${CHATSIM_NAME_PREFIX} ${new Date().toLocaleTimeString("pt-BR")}`,
         phone: simPhone,
       },
     });
@@ -71,6 +103,50 @@ export class ChatSimService {
     });
 
     return { sessionId: conversation.id, customerId: customer.id };
+  }
+
+  /**
+   * O PORTÃO ÚNICO DA SIMULAÇÃO. Toda rota de `chat-sim` passa por aqui antes de
+   * escrever ou apagar qualquer coisa.
+   *
+   * Ele responde três perguntas que a rota antiga não fazia, e as três precisam
+   * ser "sim" para a operação seguir:
+   *   1. a conversa e o cliente existem **dentro deste restaurante**? (o par
+   *      `{id, restaurantId}` vai no `where` — nunca `findUnique` por id puro);
+   *   2. a conversa é DESTE cliente? (senão dá para injetar mensagem numa conversa
+   *      real usando um `customerId` de simulação — o achado A2 da mesma varredura);
+   *   3. o cliente é de simulação, e não gente de verdade?
+   *
+   * Devolve o motivo em vez de lançar: a rota decide o código HTTP, e o motivo é o
+   * que aparece no log — alerta sem o caso concreto é ruído (guardrail 6).
+   *
+   * Guardrail 5 aplicado: a recusa é inerte. Ela **não apaga nada** e no pior caso
+   * deixa um cliente `[CHATSIM]` parado no banco — infinitamente mais barato que a
+   * exclusão indevida que ela evita.
+   */
+  static async checkSession(params: {
+    restaurantId: string;
+    sessionId:    string;
+    customerId:   string;
+  }): Promise<ChatSimRejection | null> {
+    const { restaurantId, sessionId, customerId } = params;
+
+    const [conversa, cliente] = await Promise.all([
+      prisma.conversation.findFirst({
+        where:  { id: sessionId, restaurantId },
+        select: { id: true, customerId: true },
+      }),
+      prisma.customer.findFirst({
+        where:  { id: customerId, restaurantId },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    if (!conversa || !cliente) return "SESSAO_INEXISTENTE";
+    if (conversa.customerId !== cliente.id) return "SESSAO_INEXISTENTE";
+    if (!(cliente.name ?? "").startsWith(CHATSIM_NAME_PREFIX)) return "NAO_E_SIMULACAO";
+
+    return null;
   }
 
   static async runTurn(params: {
@@ -266,18 +342,43 @@ export class ChatSimService {
     };
   }
 
-  static async deleteSession(sessionId: string, customerId: string): Promise<void> {
+  /**
+   * Apaga a sessão de simulação — e **somente** uma sessão de simulação.
+   *
+   * Devolve o motivo da recusa quando não apaga. Antes esta função engolia tudo num
+   * `catch` que só dava `console.warn`: falha de exclusão saía como sucesso para
+   * quem chamou. "Não deu para apagar" é informação, não silêncio.
+   *
+   * Todo `where` daqui em diante carrega `restaurantId`. Não é redundância com o
+   * portão: é a mesma trava escrita duas vezes, no lugar onde o dano acontece — um
+   * `deleteMany` sem escopo é uma linha de distância de virar incidente de novo.
+   */
+  static async deleteSession(params: {
+    restaurantId: string;
+    sessionId:    string;
+    customerId:   string;
+  }): Promise<{ deleted: boolean; reason: ChatSimRejection | null }> {
+    const { restaurantId, sessionId, customerId } = params;
+
+    const recusa = await ChatSimService.checkSession(params);
+    if (recusa) return { deleted: false, reason: recusa };
+
     try {
-      await prisma.order.deleteMany({ where: { customerId } });
-      const drafts = await prisma.orderDraft.findMany({ where: { customerId }, select: { id: true } });
+      await prisma.order.deleteMany({ where: { customerId, restaurantId } });
+      const drafts = await prisma.orderDraft.findMany({
+        where:  { customerId, restaurantId },
+        select: { id: true },
+      });
       if (drafts.length > 0) {
         await prisma.orderDraftItem.deleteMany({ where: { orderDraftId: { in: drafts.map((d) => d.id) } } });
-        await prisma.orderDraft.deleteMany({ where: { customerId } });
+        await prisma.orderDraft.deleteMany({ where: { customerId, restaurantId } });
       }
-      await prisma.conversation.delete({ where: { id: sessionId } }).catch(() => null);
-      await prisma.customer.delete({ where: { id: customerId } }).catch(() => null);
+      await prisma.conversation.deleteMany({ where: { id: sessionId, restaurantId } });
+      await prisma.customer.deleteMany({ where: { id: customerId, restaurantId } });
+      return { deleted: true, reason: null };
     } catch (err) {
       console.warn("[ChatSimService] Cleanup error (non-fatal):", err);
+      return { deleted: false, reason: null };
     }
   }
 }
