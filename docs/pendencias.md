@@ -1,6 +1,57 @@
 # Pendências — o que está aberto
 
-> Última atualização: 04/08/2026.
+> Última atualização: 05/08/2026.
+
+## 🖼️ Site com imagem em toda página — FEITO na madrugada de 05/08
+
+O CEO olhou o site e disse: *"está só com texto, botão e detalhes gráficos"*.
+Estava certo — seis das oito páginas abriam sem nenhuma imagem própria.
+
+Duas frentes, em paralelo, cada uma na própria árvore:
+1. **O produto foi fotografado**, não comprado: cinco capturas da tela real do
+   Foocci rodando na padaria de demonstração (`scripts/site/capturar-produto.mjs`
+   refaz quando a tela mudar). 696 KB no total — o site já carregava um PNG de
+   3 MB sozinho.
+2. **Um sistema de abertura visual** (`HeroShot`), um cartão com três conteúdos
+   possíveis (celular, navegador, fotografia). Não são oito soluções: os oito
+   cabeçalhos medem a mesma altura no desktop sem ajuste manual.
+
+Termos e Privacidade seguem sem imagem, **por decisão**: são documento, e foto
+ali é peso sem argumento. Reversível em meia hora se o CEO discordar.
+
+## ✅ Dois defeitos do painel de pedidos — FECHADOS na mesma noite (05/08)
+
+Encontrados por quem foi fotografar as telas para o site, corrigidos por
+`operacao` logo em seguida.
+
+**O primeiro era pior que o relato.** O "Total hoje" não contava o dia *nem* a
+página: contava **quantos pedidos recentes couberam no limite de 100, misturando
+dias**. Numa loja de 30 pedidos/dia ele mostraria 100 — a soma de quatro dias — e
+só acertava por coincidência. Agora lista e KPI saem da **mesma consulta**, então
+não existe estado em que um diga uma coisa e o outro diga outra: é fonte única, e
+não um comentário pedindo cuidado.
+
+**O botão "Filtrar" de fato não tinha ação** — as datas alimentavam só os próprios
+campos. Decisão: **fazer funcionar, não remover.** O dono que procura o
+faturamento de ontem procura na tela de Pedidos (o Analytics responde outra
+pergunta: agregado, não a lista de comandas), e o servidor já aceitava o período e
+já devolvia a contagem certa — era o painel que jogava fora.
+
+Vieram junto: período inválido vira **erro visível** (lista vazia se lê como "não
+teve pedido"), faixa avisando que o filtro está ativo com volta em um clique, e o
+total passa a aparecer **no celular**, onde o dono mais olha.
+
+19 testes, cada um com as duas metades — a que prova o acerto e a que reproduz o
+erro antigo.
+
+> ⚠️ **Não foi visto em loja real.** A prova foi na padaria de demonstração.
+
+## 🕐 Dívida nomeada: o "hoje" do painel é o fuso de Brasília, fixo
+
+Achado ao corrigir o KPI acima. Vale para o produto inteiro, não só para essa
+tela: **loja fora do fuso de Brasília vê o dia virar na hora errada.** Não foi
+corrigido junto de propósito — é decisão de produto (fuso por restaurante) e não
+conserto de tela. Dono: `operacao`.
 
 ## ✅ Domínio `www` — FECHADO pelo Diretor em 04/08, ponta a ponta
 
@@ -1351,3 +1402,43 @@ já existe. `SUPPORT_FROM_EMAIL` é opcional.
 **Dívidas técnicas nomeadas:** webhook de billing ainda sem verificação HMAC
 (agora que ele cria contas, a assinatura de origem vale mais); `noSideEffects.test.ts`
 estoura tempo por falta de Postgres no sandbox (ambiental, domínio da `qualidade`).
+
+---
+
+# Fechamento 05/08 — cinco frentes no ar + DOIS BLOQUEIOS DE RECEITA
+
+**No ar** (commit `9456c4ca`): barra única do assistente (dentro do TopBar, sem
+segunda régua); upsell configurável pelo lojista (categorias do cardápio dele, em
+ordem — a Foocci Bakery nasce com Bebidas → Confeitaria); o agente de suporte
+passou a **admitir que não sabe** (pisos de retrieval calibrados em corpus real);
+QR nas três experiências (desktop) com link direto no celular; cofre de
+credenciais em `/admin/credenciais`.
+
+**Bug que estava escondido em produção:** o botão "Pausar pedidos" ficava POR
+BAIXO da pílula do assistente — o conteúdo do cluster de conta vazava ~71px para
+a ESQUERDA, e `scrollWidth` é cego para isso. Se o gás acabasse, o lojista não
+conseguia pausar a loja. Corrigido.
+
+## 🔴 DOIS BLOQUEIOS QUE SÓ O CEO RESOLVE (conferidos variável a variável no Railway)
+
+1. **`MP_PLATFORM_ACCESS_TOKEN` NÃO EXISTE no Railway.** É o token da conta DA
+   FOOCCI (diferente do token de cada restaurante, que está no app). Sem ele,
+   `isPlatformBillingConfigured()` é falso e o checkout registra a contratação
+   com aceite mas **devolve `paymentUrl: null`** — o cliente não recebe link de
+   pagamento. O checkout self-service está no ar e **não consegue cobrar**.
+2. **`RESEND_API_KEY` e `LEADS_NOTIFY_EMAIL` NÃO EXISTEM no Railway.** Não há
+   serviço de e-mail configurado. Os leads do formulário do site **estão salvos**
+   no banco, mas **nenhum aviso foi enviado desde o lançamento** — com campanhas
+   de Facebook rodando. Vale checar a lista de leads no admin AGORA.
+   O mesmo vale para o chamado do agente de suporte: o ticket persiste, o e-mail
+   não sai. `SUPPORT_NOTIFY_EMAIL` idem.
+
+## Outras pendências
+- Especificidade do seletor global `input:focus` em `globals.css` (anel duplo
+  neutralizado pontualmente; o conserto definitivo é baixar a especificidade).
+- `RestaurantKnowledgeAdapter` tem o MESMO defeito de "ordena e não corta" que
+  acabamos de consertar no suporte — mas ali o interlocutor é o cliente final.
+  Não mexido de propósito: exige corpus de calibração por restaurante.
+- Auditoria de cobertura do agente de suporte: ensinar 75% · diagnosticar ~30% ·
+  agir 0%. O probe não recebe `restaurantId` — se o WhatsApp de UM restaurante
+  cair, ele responde "tudo saudável". É a obra que leva o suporte de 75% a 85%.

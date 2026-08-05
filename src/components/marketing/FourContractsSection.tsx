@@ -32,13 +32,20 @@ export function FourContractsSection() {
     <section className="bg-paper py-12 sm:py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <header className="text-center">
-          <h2 className="text-[1.7rem] font-semibold leading-tight text-ink sm:text-4xl">
-            Quatro serviços que não se falam. Ou um que conversa.
+          {/*
+            O título anterior era um trocadilho ("quatro que não se falam / um que
+            conversa") — bonito de ler e lento de entender, e num site de venda o
+            visitante não paga esse pedágio. Agora é uma PERGUNTA de compra, com as
+            duas opções na cara. O argumento do dado que não circula não sumiu: virou
+            a linha de baixo, que é o lugar de explicar.
+          */}
+          <h2 className="text-balance text-[1.7rem] font-semibold leading-tight text-ink sm:text-4xl">
+            Você prefere contratar quatro serviços — ou os quatro em um?
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-ink2 sm:mt-4">
-            No mercado, isso aqui são quatro serviços diferentes, de quatro empresas
-            diferentes. Você paga quatro vezes — e o dado de um não chega no outro. No
-            Foocci, tudo incluso num serviço só.
+            Cardápio, PDV, atendimento e CRM são quatro empresas diferentes lá fora:
+            quatro contas, quatro suportes, e o que acontece num deles não chega no
+            outro. No Foocci os quatro vêm juntos — e, principalmente, conversam entre si.
           </p>
         </header>
 

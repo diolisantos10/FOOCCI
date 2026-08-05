@@ -14,6 +14,8 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { WaiterRealShowcase } from "@/components/marketing/WaiterRealShowcase";
 import { Eyebrow } from "@/components/marketing/premium";
@@ -69,6 +71,22 @@ export default function AtendimentoComIaPage() {
         primaryHref={DEMO_URL}
         secondaryLabel="Ver as outras soluções"
         secondaryHref={SOLUCOES_URL}
+        /* A abertura é a própria prova: o Garçom respondendo, numa tela real.
+           Se a captura nova da padaria ainda não existir, entra a tela que o CEO
+           já capturou em 03/08 e que esta página inteira usa mais abaixo — a
+           promessa do hero nunca fica sem imagem. */
+        visual={heroShot([
+          {
+            kind: "phone",
+            src: PRODUCT_SHOTS.atendimentoCelular,
+            alt: "Tela de celular: o cliente escreve para o Garçom de IA e recebe a resposta com pratos do cardápio, com foto e preço.",
+          },
+          {
+            kind: "phone",
+            src: "/site/waiter/passo-2-sugestao.png",
+            alt: "Tela de celular: o cliente escreve “Quero uma sugestão” e o Garçom responde com três pratos do cardápio — Teppan de Salmão, Yakissoba Especial e Yakisoba de Camarão — com foto e preço.",
+          },
+        ])}
       />
 
       {/* O que o Garçom faz — nomeado antes da prova */}

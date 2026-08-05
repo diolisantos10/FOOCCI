@@ -9,7 +9,12 @@ const db = vi.hoisted(() => ({
   siteLead: {
     create: vi.fn(),
     update: vi.fn(),
+    findFirst: vi.fn(),
   },
+  siteLeadInteraction: {
+    create: vi.fn(),
+  },
+  $transaction: vi.fn(async (ops: unknown[]) => ops),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -29,6 +34,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.siteLead.create.mockResolvedValue({ id: "lead1" });
   db.siteLead.update.mockResolvedValue({});
+  db.siteLead.findFirst.mockResolvedValue(null);
+  db.siteLeadInteraction.create.mockResolvedValue({});
+  db.$transaction.mockImplementation(async (ops: unknown[]) => ops);
   vi.stubGlobal("fetch", vi.fn());
 });
 
@@ -121,6 +129,83 @@ describe("SiteLeadService.capture", () => {
     );
   });
 
+  /* ── O código curto: o elo entre o formulário e o "oi" do WhatsApp ───────── */
+
+  it("gera e GRAVA um código curto junto com o lead", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.codigo).toMatch(/^[A-Z2-9]{5}$/);
+    // Não basta devolver: tem que estar na linha gravada, senão o "oi" que chegar
+    // no WhatsApp não tem para onde apontar.
+    const data = db.siteLead.create.mock.calls[0][0].data as { codigo: string };
+    expect(data.codigo).toBe(r.codigo);
+  });
+
+  it("o código nasce ANTES do aviso — chega no e-mail que o time lê", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "dono@exemplo.com");
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true, status: 200, text: async () => "",
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    const body = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string,
+    ) as { text: string };
+    expect(body.text).toContain(`#${r.codigo}`);
+  });
+
+  it("tenta outro código quando o banco acusa colisão", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    const colisao = Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["codigo"] } });
+    db.siteLead.create
+      .mockRejectedValueOnce(colisao)
+      .mockResolvedValueOnce({ id: "lead1" });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(db.siteLead.create).toHaveBeenCalledTimes(2);
+    expect(r.id).toBe("lead1");
+    expect(r.codigo).toMatch(/^[A-Z2-9]{5}$/);
+    // E o segundo código é outro — não insistiu no mesmo.
+    const primeiro = (db.siteLead.create.mock.calls[0][0].data as { codigo: string }).codigo;
+    const segundo = (db.siteLead.create.mock.calls[1][0].data as { codigo: string }).codigo;
+    expect(segundo).not.toBe(primeiro);
+  });
+
+  it("colidiu todas as vezes: grava o lead SEM código — perder o lead nunca é opção", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    const colisao = Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["codigo"] } });
+    // Só a gravação SEM código passa — é a última linha de defesa do serviço.
+    db.siteLead.create.mockImplementation(async (args: { data: { codigo: string | null } }) => {
+      if (args.data.codigo !== null) throw colisao;
+      return { id: "lead-sem-codigo" };
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.id).toBe("lead-sem-codigo");
+    expect(r.codigo).toBeNull();
+  });
+
+  it("erro que NÃO é colisão sobe na hora — não fica insistindo em banco caído", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    db.siteLead.create.mockRejectedValue(new Error("connection refused"));
+
+    await expect(SiteLeadService.capture(LEAD)).rejects.toThrow("connection refused");
+    expect(db.siteLead.create).toHaveBeenCalledOnce();
+  });
+
   it("never puts the visitor's data in the alert subject line beyond their name", async () => {
     vi.stubEnv("RESEND_API_KEY", "re_test");
     vi.stubEnv("LEADS_NOTIFY_EMAIL", "dono@exemplo.com");
@@ -139,5 +224,183 @@ describe("SiteLeadService.capture", () => {
     expect(body.subject).toContain("Ana");
     expect(body.subject).not.toContain(LEAD.whatsapp);
     expect(body.text).toContain(LEAD.whatsapp);
+  });
+});
+
+/**
+ * O contato entra na base do CRM da Foocci já com origem e já com linha do
+ * tempo. Se qualquer uma das duas coisas falhar em silêncio, o CEO perde a
+ * resposta de "qual anúncio funciona" e o SDR recebe um contato sem histórico.
+ */
+describe("SiteLeadService.capture — entrada no CRM da Foocci", () => {
+  const COM_ORIGEM = {
+    ...LEAD,
+    utmSource: "facebook",
+    utmMedium: "cpc",
+    utmCampaign: "Restaurantes-SP",
+    utmContent: "video-30s",
+    clickId: "fbclid-abc",
+    landingPath: "/site?utm_source=facebook",
+    referrer: "l.facebook.com",
+  };
+
+  beforeEach(() => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+  });
+
+  it("grava a origem do primeiro toque, não só a página do formulário", async () => {
+    await SiteLeadService.capture(COM_ORIGEM);
+
+    const dados = db.siteLead.create.mock.calls[0]![0].data;
+    expect(dados.utmSource).toBe("facebook");
+    expect(dados.utmCampaign).toBe("Restaurantes-SP");
+    expect(dados.utmContent).toBe("video-30s");
+    expect(dados.clickId).toBe("fbclid-abc");
+    expect(dados.landingPath).toBe("/site?utm_source=facebook");
+    // O legado continua: é "de qual página ele enviou", que nunca foi atribuição.
+    expect(dados.origem).toBe("/site/demonstracao");
+  });
+
+  it("normaliza o WhatsApp para a chave da base", async () => {
+    await SiteLeadService.capture({ ...LEAD, whatsapp: "(11) 99999-8888" });
+    expect(db.siteLead.create.mock.calls[0]![0].data.whatsappDigits).toBe("5511999998888");
+  });
+
+  it("abre a linha do tempo com o evento de captura", async () => {
+    await SiteLeadService.capture(LEAD);
+
+    const interacao = db.siteLeadInteraction.create.mock.calls[0]![0].data;
+    expect(interacao.tipo).toBe("CAPTURA");
+    expect(interacao.toStage).toBe("NOVO");
+    expect(interacao.actor).toBe("sistema");
+  });
+
+  it("falha ao registrar a interação NÃO derruba a captura", async () => {
+    // O contato já está salvo quando a linha do tempo é escrita. Perder o lead
+    // por causa de um evento de histórico seria a proteção sendo pior que o
+    // problema que ela evita.
+    db.siteLeadInteraction.create.mockRejectedValueOnce(new Error("boom"));
+    const r = await SiteLeadService.capture(LEAD);
+    expect(r.id).toBe("lead1");
+  });
+
+  it("campo em branco vira null, não string vazia", async () => {
+    await SiteLeadService.capture({ ...LEAD, cidade: "", utmCampaign: "" } as typeof COM_ORIGEM);
+    const dados = db.siteLead.create.mock.calls[0]![0].data;
+    expect(dados.cidade).toBeNull();
+    expect(dados.utmCampaign).toBeNull();
+  });
+});
+
+describe("SiteLeadService.capture — a mesma pessoa não vira dois contatos", () => {
+  beforeEach(() => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+  });
+
+  it("reenvio do mesmo WhatsApp vira interação, não contato novo", async () => {
+    // Base com a mesma pessoa três vezes faz o SDR abordá-la três vezes.
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-existente", nome: "Ana", restaurante: "Cantina da Ana",
+      cidade: null, tipo: null, desafio: null,
+      utmSource: "facebook", utmMedium: null, utmCampaign: "Campanha-de-junho",
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+
+    const r = await SiteLeadService.capture({ ...LEAD, whatsapp: "+55 11 99999-8888" });
+
+    expect(r.duplicado).toBe(true);
+    expect(r.id).toBe("lead-existente");
+    expect(db.siteLead.create).not.toHaveBeenCalled();
+
+    const interacao = db.siteLeadInteraction.create.mock.calls[0]![0].data;
+    expect(interacao.tipo).toBe("REENVIO_FORMULARIO");
+    expect(interacao.leadId).toBe("lead-existente");
+  });
+
+  it("o reenvio COMPLETA campos vazios sem sobrescrever os que já existiam", async () => {
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-existente", nome: "Ana", restaurante: "Cantina da Ana",
+      cidade: null, tipo: null, desafio: null,
+      utmSource: "facebook", utmMedium: null, utmCampaign: "Campanha-de-junho",
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+
+    await SiteLeadService.capture({
+      ...LEAD, restaurante: "Outro nome", cidade: "Campinas",
+      utmCampaign: "Campanha-de-agosto",
+    } as never);
+
+    const dados = db.siteLead.update.mock.calls[0]![0].data;
+    expect(dados.restaurante).toBe("Cantina da Ana"); // o que já havia vence
+    expect(dados.cidade).toBe("Campinas");            // o que faltava é preenchido
+    expect(dados.utmCampaign).toBe("Campanha-de-junho"); // primeiro toque manda
+    expect(dados.submissions).toEqual({ increment: 1 });
+  });
+
+  it("se a busca por duplicata falhar, CRIA — perder contato é pior que duplicar", async () => {
+    db.siteLead.findFirst.mockRejectedValue(new Error("banco tossiu"));
+    const r = await SiteLeadService.capture(LEAD);
+    expect(r.duplicado).toBe(false);
+    expect(db.siteLead.create).toHaveBeenCalledOnce();
+  });
+
+  it("o reenvio reaproveita o código que a pessoa já tinha", async () => {
+    // Se o reenvio gerasse código novo, a mensagem antiga — que a pessoa pode
+    // mandar amanhã — apontaria para um código que não existe mais.
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-existente", nome: "Ana", codigo: "A7K2M", restaurante: "Cantina da Ana",
+      cidade: null, tipo: null, desafio: null,
+      utmSource: null, utmMedium: null, utmCampaign: null,
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.codigo).toBe("A7K2M");
+    // Um único update: o de completar campos. Nenhum update extra de código.
+    expect(db.siteLead.update.mock.calls.every((c) => c[0].data.codigo === undefined)).toBe(true);
+  });
+
+  it("contato da safra antiga, sem código, ganha um no reenvio", async () => {
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-antigo", nome: "Ana", codigo: null, restaurante: null,
+      cidade: null, tipo: null, desafio: null,
+      utmSource: null, utmMedium: null, utmCampaign: null,
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.codigo).toMatch(/^[A-Z2-9]{5}$/);
+    const atribuicao = db.siteLead.update.mock.calls.find((c) => typeof c[0].data.codigo === "string");
+    expect(atribuicao?.[0].where.id).toBe("lead-antigo");
+  });
+
+  it("não conseguir dar código NUNCA derruba o reenvio", async () => {
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-antigo", nome: "Ana", codigo: null, restaurante: null,
+      cidade: null, tipo: null, desafio: null,
+      utmSource: null, utmMedium: null, utmCampaign: null,
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+    // Só o update de código falha; o de notificação segue normal.
+    db.siteLead.update.mockImplementation(async (args: { data: { codigo?: string } }) => {
+      if (typeof args.data.codigo === "string") throw new Error("banco tossiu");
+      return {};
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.id).toBe("lead-antigo");
+    expect(r.codigo).toBeNull(); // sem código é diferente de sem contato
+  });
+
+  it("WhatsApp impossível de normalizar não deduplica com ninguém", async () => {
+    await SiteLeadService.capture({ ...LEAD, whatsapp: "não tenho" });
+    expect(db.siteLead.findFirst).not.toHaveBeenCalled();
+    expect(db.siteLead.create).toHaveBeenCalledOnce();
+    expect(db.siteLead.create.mock.calls[0]![0].data.whatsappDigits).toBeNull();
   });
 });

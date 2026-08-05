@@ -9,6 +9,17 @@ import { EmptyState, ConfirmDialog } from "@/components/ui";
 import { createAutoPrintGuard } from "@/utils/autoPrintGuard";
 import { SOUND_PREF_KEY, readSoundPref, fetchRestaurantSoundSettings } from "@/lib/sound-prefs";
 import { isPaymentPendingOrder } from "@/lib/order-alert";
+import {
+  applyDateInputs,
+  formatPeriodTotal,
+  ordersListUrl,
+  ORDERS_PAGE_LIMIT,
+  parseOrdersListResponse,
+  periodTotalFromResponse,
+  periodTotalLabel,
+  todayCountUrl,
+  type OrdersPeriod,
+} from "@/lib/orders-panel-period";
 
 // Display name for the active manager/POS integration shown in order detail.
 // When Saipos is active this is "Saipos". Replace here (or derive from order data)
@@ -497,6 +508,9 @@ function SearchBar({
   onSearchChange,
   onDateFromChange,
   onDateToChange,
+  onApplyPeriod,
+  periodError,
+  applying,
   onClear,
   onManualOrder,
   onReconcile,
@@ -508,13 +522,23 @@ function SearchBar({
   onSearchChange: (v: string) => void;
   onDateFromChange: (v: string) => void;
   onDateToChange: (v: string) => void;
+  /** O que o botão "Filtrar" faz. Sem isto ele volta a ser enfeite — ver
+   *  src/lib/orders-panel-period.ts. */
+  onApplyPeriod: () => void;
+  periodError?: string | null;
+  applying?: boolean;
   onClear: () => void;
   onManualOrder?: () => void;
   onReconcile?: () => void;
   reconciling?: boolean;
 }) {
   const inputCls = "min-w-0 rounded-xl border border-line2 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition";
+  const errorInputCls = "min-w-0 rounded-xl border border-red-300 bg-paper px-3 py-2 text-[13px] text-ink placeholder:text-muted focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100 transition";
+  const dateCls = periodError ? errorInputCls : inputCls;
   const ghostBtn = "rounded-xl border border-line2 bg-paper px-4 py-2 text-[13px] font-semibold text-ink2 transition-colors hover:bg-[#FAFAF8]";
+  const applyOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); onApplyPeriod(); }
+  };
   return (
     <div className="shrink-0 border-b border-line bg-paper px-6 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -524,13 +548,33 @@ function SearchBar({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Buscar cliente ou nº do pedido…"
-          className={`${inputCls} w-full flex-1 sm:w-auto`}
+          // No celular a busca fica em linha própria: com `flex-1` ela disputava
+          // a linha com os dois campos de data e os três viravam tocos ilegíveis.
+          className={`${inputCls} w-full sm:flex-1`}
         />
-        {/* Date inputs */}
-        <input type="date" value={dateFrom} onChange={(e) => onDateFromChange(e.target.value)} className={`${inputCls} flex-1 sm:flex-none`} />
-        <input type="date" value={dateTo} onChange={(e) => onDateToChange(e.target.value)} className={`${inputCls} flex-1 sm:flex-none`} />
+        {/* Date inputs — aplicados no botão "Filtrar" (ou Enter) */}
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => onDateFromChange(e.target.value)}
+          onKeyDown={applyOnEnter}
+          aria-label="Data inicial"
+          aria-invalid={Boolean(periodError)}
+          className={`${dateCls} min-w-[8.5rem] flex-1 sm:flex-none`}
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => onDateToChange(e.target.value)}
+          onKeyDown={applyOnEnter}
+          aria-label="Data final"
+          aria-invalid={Boolean(periodError)}
+          className={`${dateCls} min-w-[8.5rem] flex-1 sm:flex-none`}
+        />
         {/* Action buttons */}
-        <button className={ghostBtn}>Filtrar</button>
+        <button onClick={onApplyPeriod} disabled={applying} className={`${ghostBtn} disabled:opacity-50`}>
+          {applying ? "Filtrando…" : "Filtrar"}
+        </button>
         <button onClick={onClear} className={`${ghostBtn} text-muted`}>Limpar</button>
         {onReconcile && (
           <button
@@ -551,6 +595,9 @@ function SearchBar({
           </button>
         )}
       </div>
+      {periodError && (
+        <p role="alert" className="mt-2 text-[12.5px] font-semibold text-red-600">{periodError}</p>
+      )}
     </div>
   );
 }
@@ -628,7 +675,28 @@ export function StatusRow({
 
 // ─── PerformanceBar ───────────────────────────────────────────
 
-export function PerformanceBar({ orders }: { orders: MockOrder[] }) {
+/**
+ * PerformanceBar — os indicadores do topo do painel de pedidos.
+ *
+ * `periodTotal` NÃO é derivado de `orders`, e isso é de propósito: `orders` é a
+ * página carregada (teto de 100) e usá-la como "Total hoje" foi o defeito de
+ * 05/08 — o dono lia 100 num dia de 137. O total só entra por este prop, e ele
+ * só pode ter vindo da contagem do servidor (periodTotalFromResponse).
+ * `null` = ainda não sei → "—", nunca 0.
+ *
+ * Os demais indicadores (tempo médio, atrasados, mix delivery/retirada/mesa)
+ * seguem sendo sobre o que está na tela, que é o que a operação precisa ver
+ * agora — e o rótulo do total diz explicitamente o período que ele cobre.
+ */
+export function PerformanceBar({
+  orders,
+  periodTotal,
+  totalLabel,
+}: {
+  orders: MockOrder[];
+  periodTotal: number | null;
+  totalLabel: string;
+}) {
   const active     = orders.filter((o) => !TERMINAL.includes(o.status));
   const delayed    = orders.filter(isDelayed).length;
   const pctDelayed = active.length > 0 ? Math.round((delayed / active.length) * 100) : 0;
@@ -644,10 +712,18 @@ export function PerformanceBar({ orders }: { orders: MockOrder[] }) {
     </div>
   );
   return (
+    <>
+      {/* Celular: o total é o único KPI que cabe, e é justamente o que o dono
+          abre o telefone para ver. Escondê-lo aqui seria consertar o número no
+          aparelho em que ele quase não é lido. */}
+      <div className="flex items-baseline gap-1.5 sm:hidden">
+        <span className="text-[11px] font-medium text-muted">{totalLabel}</span>
+        <span className="text-[15px] font-bold tracking-[-.01em] text-ink">{formatPeriodTotal(periodTotal)}</span>
+      </div>
     <div className="hidden items-center gap-6 sm:flex">
       {kpi("Tempo médio", "22 min")}
       {kpi("Atrasados", `${pctDelayed}%`, pctDelayed >= 20)}
-      {kpi("Total hoje", orders.length)}
+      {kpi(totalLabel, formatPeriodTotal(periodTotal))}
       <div className="h-5 w-px bg-line2 shrink-0" />
       <div className="flex items-center gap-2">
         {[{ label: "Delivery", count: delivery }, { label: "Retirada", count: pickup }, { label: "Mesa", count: table }].map(({ label, count }) => (
@@ -658,6 +734,7 @@ export function PerformanceBar({ orders }: { orders: MockOrder[] }) {
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -879,8 +956,17 @@ function OrderListPane({
   onManualConfirm,
   onVerifyPix,
   verifyingPixIds,
+  loading,
+  periodLabel,
+  truncatedAt,
 }: {
   orders: MockOrder[];
+  loading?: boolean;
+  /** Rótulo do período aplicado, para o vazio dizer QUAL período veio vazio. */
+  periodLabel?: string | null;
+  /** Quantos pedidos a página traz quando ela enche — a lista precisa dizer que
+   *  não é tudo, senão o contador "Todos 100" volta a passar por total do dia. */
+  truncatedAt?: number | null;
   selectedId: string | null;
   checkedIds: Set<string>;
   onSelect: (id: string) => void;
@@ -909,8 +995,22 @@ function OrderListPane({
       )}
 
       <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
-        {orders.length === 0 ? (
-          <EmptyState icon="📭" title="Nenhum pedido neste período" sub="Os novos pedidos aparecem aqui em tempo real." />
+        {loading && orders.length === 0 ? (
+          // Carregando: esqueleto, não "nenhum pedido" — dizer que não há pedido
+          // antes de saber é a mesma classe de erro do KPI.
+          <div className="space-y-2.5" aria-busy="true" aria-label="Carregando pedidos">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[116px] animate-pulse rounded-2xl border border-line bg-canvas" />
+            ))}
+          </div>
+        ) : orders.length === 0 ? (
+          <EmptyState
+            icon="📭"
+            title={periodLabel ? `Nenhum pedido em ${periodLabel}` : "Nenhum pedido no momento"}
+            sub={periodLabel
+              ? "Escolha outro período ou volte para os pedidos de hoje."
+              : "Os novos pedidos aparecem aqui em tempo real."}
+          />
         ) : (
           orders.map((order) => (
             <OrderCard
@@ -927,6 +1027,16 @@ function OrderListPane({
               verifyingPix={verifyingPixIds?.has(order.id)}
             />
           ))
+        )}
+
+        {/* A lista é uma PÁGINA, e ela precisa dizer isso: sem esta linha, o
+            contador "Todos 100" ao lado de "Total hoje 104" volta a ser lido
+            como o total do dia — a mesma leitura errada que originou o defeito. */}
+        {!loading && truncatedAt != null && orders.length > 0 && (
+          <p className="pt-1 text-center text-[12px] text-muted">
+            Mostrando os {truncatedAt} pedidos mais recentes
+            {periodLabel ? ` de ${periodLabel}` : ""}. Use o filtro de datas para ver outro período.
+          </p>
         )}
       </div>
     </div>
@@ -1553,6 +1663,14 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   const [searchQuery,  setSearchQuery]  = useState("");
   const [dateFrom,     setDateFrom]     = useState("");
   const [dateTo,       setDateTo]       = useState("");
+  // Período APLICADO (o que foi ao servidor), separado do que está digitado nos
+  // campos. `null` = sem recorte: a lista operacional de sempre.
+  const [appliedPeriod, setAppliedPeriod] = useState<OrdersPeriod | null>(null);
+  const [periodError,   setPeriodError]   = useState<string | null>(null);
+  // Contagem do período, vinda do servidor. `null` = carregando ou falhou → "—".
+  const [periodTotal,   setPeriodTotal]   = useState<number | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [loadError,     setLoadError]     = useState<string | null>(null);
   const [sortBy,       setSortBy]       = useState<SortKey>("recent");
   // Sound config lives ONLY in Configurações → Sons e alertas (DB-backed).
   // localStorage mirror is just the instant fallback before the API responds.
@@ -1630,49 +1748,110 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
 
   const hasPendingOrders = actionableAlertIds.length > 0;
 
-  const fetchOrders = useCallback(() => {
-    fetch("/api/orders?limit=100")
-      .then((r) => r.json())
-      .then((res: { success: boolean; data?: { data: ApiOrder[] } }) => {
-        if (res.success && Array.isArray(res.data?.data)) {
-          const incoming = res.data.data.map(apiOrderToMock);
+  /**
+   * Uma busca só, e ela decide TUDO que a tela mostra: a lista e o número do
+   * KPI saem da MESMA resposta quando há período aplicado. Sem período, a lista
+   * segue sendo o fluxo operacional recente e o KPI do dia vem de uma contagem
+   * própria (`todayCountUrl`) — porque "hoje" e "os últimos 100" não são a
+   * mesma pergunta, e foi confundi-las que produziu o número errado.
+   */
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res  = await fetch(ordersListUrl(appliedPeriod, ORDERS_PAGE_LIMIT));
+      const page = parseOrdersListResponse<ApiOrder>(await res.json());
+      if (!page) {
+        setLoadError("Não foi possível carregar os pedidos. Tentando de novo em instantes.");
+        setPeriodTotal(null);
+        return;
+      }
+      setLoadError(null);
+      const incoming = page.data.map(apiOrderToMock);
 
-          // Queue newly-arrived orders for the accept/reject modal. Adding them
-          // here flows into `actionableAlertIds`, which drives the alert
-          // controller (it owns the immediate play + repeat). No direct
-          // audio.play() here — a single engine prevents overlapping sounds.
-          // (Modal-queue selection is unchanged from before this refactor.)
-          if (hasFetched.current) {
-            const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
-            const newPending = newOnes.filter(
-              (o) =>
-                (o.status === "PENDING" || o.status === "CONFIRMED") &&
-                !shownInModal.current.has(o.id)
-            );
-            if (newPending.length > 0) {
-              newPending.forEach((o) => shownInModal.current.add(o.id));
-              setModalQueue((prev) => [...prev, ...newPending]);
-            }
-          }
-          hasFetched.current = true;
-          incoming.forEach((o) => knownIds.current.add(o.id));
-
-          setOrders(incoming);
+      // Queue newly-arrived orders for the accept/reject modal. Adding them
+      // here flows into `actionableAlertIds`, which drives the alert
+      // controller (it owns the immediate play + repeat). No direct
+      // audio.play() here — a single engine prevents overlapping sounds.
+      //
+      // SÓ sem período aplicado: com a lista recortada por data, "não estava na
+      // lista antes" não significa "acabou de chegar" — enfileirar ali abriria
+      // uma enxurrada de modais de pedidos antigos. O alarme sonoro de pedido
+      // novo NÃO depende desta tela (GlobalAlertEngine tem o próprio poll), então
+      // filtrar por data não faz ninguém perder pedido.
+      if (hasFetched.current && !appliedPeriod) {
+        const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
+        const newPending = newOnes.filter(
+          (o) =>
+            (o.status === "PENDING" || o.status === "CONFIRMED") &&
+            !shownInModal.current.has(o.id)
+        );
+        if (newPending.length > 0) {
+          newPending.forEach((o) => shownInModal.current.add(o.id));
+          setModalQueue((prev) => [...prev, ...newPending]);
         }
-      })
-      .catch((err) => console.error("[OrdersClient] fetch failed", err));
-  }, []);
+      }
+      hasFetched.current = true;
+      incoming.forEach((o) => knownIds.current.add(o.id));
 
-  // Initial load
+      setOrders(incoming);
+
+      if (appliedPeriod) {
+        // Mesma resposta, mesmo `where`: filtro e KPI não têm como divergir.
+        setPeriodTotal(periodTotalFromResponse(page));
+      } else {
+        const countRes  = await fetch(todayCountUrl(new Date()));
+        const countPage = parseOrdersListResponse<ApiOrder>(await countRes.json());
+        setPeriodTotal(periodTotalFromResponse(countPage));
+      }
+    } catch (err) {
+      console.error("[OrdersClient] fetch failed", err);
+      setLoadError("Falha de rede ao carregar os pedidos.");
+      setPeriodTotal(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [appliedPeriod]);
+
+  // Carga inicial e recarga a cada troca de período
   useEffect(() => {
-    fetchOrders();
+    void fetchOrders();
   }, [fetchOrders]);
 
   // Poll every 30 seconds
   useEffect(() => {
-    const id = setInterval(fetchOrders, 30_000);
+    const id = setInterval(() => { void fetchOrders(); }, 30_000);
     return () => clearInterval(id);
   }, [fetchOrders]);
+
+  /** O que o botão "Filtrar" faz — ele deixou de ser enfeite em 05/08. */
+  function handleApplyPeriod() {
+    const result = applyDateInputs({ from: dateFrom, to: dateTo });
+    if (!result.ok) {
+      // Período inválido nunca vira lista vazia silenciosa: lista vazia parece
+      // "não teve pedido nesse dia", e isso é outra mentira.
+      setPeriodError(result.error);
+      return;
+    }
+    setPeriodError(null);
+    setLoading(true);
+    setPeriodTotal(null);
+    // A próxima resposta é a nova linha de base do "o que eu já conhecia" —
+    // sem isso, voltar do histórico para hoje abriria modal de pedido já visto.
+    hasFetched.current = false;
+    setAppliedPeriod(result.period);
+  }
+
+  function handleClearFilters() {
+    setSearchQuery("");
+    setDateFrom("");
+    setDateTo("");
+    setPeriodError(null);
+    if (appliedPeriod) {
+      setLoading(true);
+      setPeriodTotal(null);
+      hasFetched.current = false;
+      setAppliedPeriod(null);
+    }
+  }
 
   const filtered  = useMemo(
     () => applySort(orders, sortBy),
@@ -1956,7 +2135,11 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     <div className="flex flex-col bg-canvas" style={{ height: "calc(100vh - var(--topbar))" }}>
 
       <div className="flex shrink-0 items-center gap-3 border-b border-line bg-paper px-6 py-2.5">
-        <PerformanceBar orders={orders} />
+        <PerformanceBar
+          orders={orders}
+          periodTotal={periodTotal}
+          totalLabel={periodTotalLabel(appliedPeriod)}
+        />
         <div className="ml-auto flex items-center gap-2">
           {/* Active alert banner — sound-only visual cue */}
           {hasPendingOrders && soundEnabled && (
@@ -1998,6 +2181,14 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         </div>
       )}
 
+      {/* Falha de carga — o lojista precisa saber que o que está na tela pode
+          estar velho, em vez de ler número desatualizado achando que é o de agora. */}
+      {loadError && (
+        <div className="mx-6 mt-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-[12.5px] font-medium text-red-700">
+          {loadError}
+        </div>
+      )}
+
       <SearchBar
         searchQuery={searchQuery}
         dateFrom={dateFrom}
@@ -2005,11 +2196,29 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         onSearchChange={setSearchQuery}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
-        onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+        onApplyPeriod={handleApplyPeriod}
+        periodError={periodError}
+        applying={loading && Boolean(appliedPeriod)}
+        onClear={handleClearFilters}
         onManualOrder={isManagerOrOwner ? handleOpenManualOrder : undefined}
         onReconcile={isManagerOrOwner ? handleReconcile : undefined}
         reconciling={reconciling}
       />
+
+      {/* Período aplicado: a lista deixou de ser a fila de agora, e isso tem
+          que estar dito na tela — com o caminho de volta a um clique. */}
+      {appliedPeriod && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-brand-50 px-6 py-2 text-[12.5px] text-ink2">
+          <span className="font-semibold text-brand-700">Período: {appliedPeriod.label}</span>
+          <span className="text-muted">Pedidos novos não entram nesta lista enquanto o filtro estiver ativo.</span>
+          <button
+            onClick={handleClearFilters}
+            className="ml-auto rounded-xl border border-brand-200 bg-paper px-3 py-1 text-[12.5px] font-semibold text-brand-600 transition-colors hover:bg-brand-50"
+          >
+            Ver pedidos de hoje
+          </button>
+        </div>
+      )}
 
       <StatusRow
         orders={filtered}
@@ -2022,6 +2231,9 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       <div className="flex flex-1 overflow-hidden">
         <OrderListPane
           orders={displayed}
+          loading={loading}
+          periodLabel={appliedPeriod?.label ?? null}
+          truncatedAt={orders.length >= ORDERS_PAGE_LIMIT ? ORDERS_PAGE_LIMIT : null}
           selectedId={selectedId}
           checkedIds={checkedIds}
           onSelect={handleSelect}

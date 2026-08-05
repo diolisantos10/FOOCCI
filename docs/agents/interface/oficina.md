@@ -707,3 +707,328 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, refação da barra do assistente (reprovada pelo CEO em 04/08),
 worktree `agent-ab1c4bec24dce0fe6` a partir de `claude/foocci-brain-vaamrx`
+
+---
+
+## 2026-08-05 — O formulário passa a ter dois destinos: salvar o lead e mandar o "oi"
+
+Ideia do CEO. Quem aborda estranho no WhatsApp queima número e, no oficial, precisa
+de modelo aprovado pela Meta. **Se quem manda o "oi" é o cliente**, abre a janela de
+24h de texto livre e o consentimento fica evidente. O formulário de
+`/site/demonstracao` continua salvando o lead — isso é inegociável — e, depois,
+entrega a pessoa no WhatsApp com a mensagem já escrita.
+
+### A trava de ordem não está no cliente, está no que a rota devolve
+
+Escrever "salva primeiro, redireciona depois" no componente seria prompt, não trava.
+O que impede o pulo é que a mensagem carrega um `#código` **que só existe na resposta
+do servidor**: `POST /api/site/leads` devolve `{ ok, codigo }` e o `codigo` nasce
+dentro do `create`. Sem gravação não há código; sem código não há tela de WhatsApp.
+O teste da rota prova os dois lados — 200 com código depois de gravar, 500 sem
+código nenhum quando a gravação falha.
+
+### Não redirecionamos sozinhos, e isso foi decisão, não preguiça
+
+Abrir o WhatsApp depois de um `fetch` exige `window.open` fora do gesto do usuário
+(bloqueado por padrão no celular) ou uma navegação de topo que leva a pessoa embora
+da página — e junto vai o plano B, que existe justamente para quando o WhatsApp
+**não** abre. Ficou um botão grande, explícito, com a mensagem à vista antes de
+enviar. Funciona em todo navegador e respeita quem vai assinar aquele texto.
+
+### Duas armadilhas de gênero na frase que a pessoa assina
+
+1. `Sou o João` exigiria saber o gênero de quem preencheu — erra com Andrea, Darci
+   e nome estrangeiro. Virou `Sou João`.
+2. `do Pizzaria Nonna` estava errado no primeiro screenshot. O nome do
+   estabelecimento também tem gênero imprevisível (`a Pizzaria`, `o Bar do Zé`).
+   Solução: `do restaurante Pizzaria Nonna` — a preposição concorda com
+   "restaurante", que é sempre masculino. Foi **o screenshot que pegou**, não a
+   leitura do código.
+
+### O código curto é lido por gente, e isso muda o alfabeto
+
+Nem `generateWaMenuCode` (7 chars misturando caixa) nem `generateUniqueShortCode`
+(preso ao `trackingLink`) serviam: os dois nasceram para caber em URL, onde ninguém
+lê o código. Aqui são 5 MAIÚSCULAS sem `O 0 I 1 L S 5`, com amostragem por rejeição
+(módulo cru sobre um byte faria as 8 primeiras letras saírem ~14% mais).
+`extractLeadCode` **exige o `#`**: sem ele, `TARDE` casa com o alfabeto e o
+atendimento gruda no lead errado — pior que não achar.
+
+O teste "2.000 códigos, zero colisão" **piscou de primeira** (29⁵ ≈ 20,5 milhões dá
+~9% de chance de uma colisão nesse volume). Virou `> 1995` com o motivo escrito: a
+garantia de verdade é o UNIQUE do banco + o retry, não a sorte. Cravar um número que
+falha 9% das vezes ensina o time a ignorar teste vermelho.
+
+### O que aconteceu com os outros CTAs — nada, e por escolha
+
+Todo CTA comercial do site já leva ao formulário (decisão do CEO de 04/08). Como o
+formulário agora termina no WhatsApp, **todos herdaram o caminho novo sem tocar em
+nenhum**. Pendurar `wa.me` direto num CTA produziria um "oi" sem lead e sem código —
+exatamente o problema que este bloco resolve. O `WhatsAppCta` continua reservado e
+não importado.
+
+### Dois defeitos achados de raspão, corrigidos porque a tela foi tocada
+
+- **A barra fixa do celular competia com o formulário.** Dois botões laranja de
+  largura cheia na mesma dobra, e o da barra levava a pessoa PARA LONGE da conversão
+  que ela já tinha começado. Agora a `StickyMobileCta` se cala quando
+  `[data-demo-form]` está na dobra — marca posta pelo próprio formulário, então vale
+  para qualquer página que o carregue, sem a barra conhecer rota nenhuma.
+- **O título de `/admin/leads` era invisível.** `text-gray-900` sobre o shell
+  `bg-gray-950`: preto sobre quase-preto desde que a página nasceu. Só se enxergou
+  no screenshot. Virou `text-paper`.
+
+### Drift do DESIGN.md corrigido nos arquivos tocados
+
+`gray-*` → `ink/ink2/muted/line/line2`; `bg-white` → `bg-paper`; `#0B0B0B` →
+`text-ink`; `font-medium` → `font-semibold`; input `rounded-lg` → `rounded-xl`;
+`text-orange-600` → `text-brand-600`.
+
+**Não** mexi no `rounded-full` dos botões do site comercial: é a linguagem de CTA de
+todas as páginas, e trocar só neste formulário criaria uma inconsistência nova
+dentro do mesmo cartão. Fica anotado como decisão, não esquecimento.
+
+**A cor do botão do WhatsApp é laranja, não verde.** Verde é cor de status no
+`DESIGN.md`; usá-la como cor de ação abriria drift novo. O reconhecimento fica por
+conta do glifo do WhatsApp em branco sobre o `brand-500`.
+
+### Provas
+
+`npx tsc --noEmit` limpo. Testes novos: `leadCode.test.ts` (9), `config.test.ts`
+(13), rota `/api/site/leads` (5) e 5 casos novos no `SiteLeadService` — incluindo
+"colidiu 4 vezes: grava o lead SEM código" e "erro que não é colisão sobe na hora"
+(insistir num banco caído atrasa o erro e arrisca duplicata).
+
+Screenshots 375/768/1280 do formulário e da tela pós-envio nos **dois cenários**
+(sem número — o de hoje — e com número simulado via
+`NEXT_PUBLIC_WHATSAPP_SALES_NUMBER`), mais carregando e erro a 375, mais
+`/admin/leads` nos três tamanhos com a coluna Código.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
+
+— interface, worktree `agent-a6275215662ae39c4` a partir de `claude/foocci-brain-vaamrx`
+
+---
+
+## 2026-08-05 · Toda página de `/site` passou a abrir com imagem própria
+
+**O pedido, do CEO:** *"o site está só com texto, botão e detalhes gráficos. A
+gente só tem uma imagem do Foocci, na primeira página."* Ele estava certo: seis
+das oito páginas abriam com `PageHero`, que é texto centralizado sobre uma cena
+de restaurante a 30% de opacidade sob um véu branco — ou seja, **nenhuma imagem
+própria**. Só `/como-funciona` e `/demonstracao` tinham visual, e ainda assim um
+mockup desenhado em CSS, não uma imagem.
+
+### A decisão: um cartão, três conteúdos
+
+Oito aberturas diferentes seriam oito soluções, não um sistema. O novo
+`components/marketing/HeroShot.tsx` define **um** cartão — mesmo raio, mesmo
+anel, mesma sombra quente e o mesmo halo âmbar que a home já usa atrás da cena do
+mascote — e três conteúdos que vivem dentro dele:
+
+| peça | o que é | onde |
+|---|---|---|
+| `phone` | captura real de celular, dentro do aparelho, com a base cortada pela borda do cartão | atendimento-com-ia, experimente, como-funciona, demonstração |
+| `browser` | captura real do painel, numa janela de navegador (aqui a janela **é** o cartão — moldura dentro de moldura é ruído) | crm, soluções, preços, demonstração |
+| `photo` | fotografia da cena, cheia ou em medalhão | sobre, e o degrau de baixo de crm/soluções/preços |
+
+A prova de que virou sistema é numérica: no desktop **os oito heros medem
+exatamente 609px de altura**. Não foi ajustado à mão — caiu igual porque a peça é
+a mesma.
+
+### `pickShot`: a cadeia de degradação é o produto, não o remendo
+
+As capturas do produto (`PRODUCT_SHOTS`) estavam sendo geradas por outra frente e
+**não existiam** na minha árvore. Em vez de esperar, cada página declara uma
+**cadeia de candidatos**, do melhor para o mais garantido, e `heroShot()` entrega
+o primeiro arquivo que existir. Duas regras que valem para a próxima vez:
+
+1. **O último candidato da cadeia é sempre um arquivo versionado.** Assim a
+   ausência de asset nunca vira buraco de layout. As cinco capturas do Garçom
+   (`public/site/waiter/passo-*.png`) e as cinco fotos de `SITE_ASSETS.journey`
+   deram degrau para todas as oito páginas — nenhuma depende da outra frente.
+2. **`heroShot` é FUNÇÃO, não componente.** Quem chama precisa saber se sobrou
+   algo para desenhar, porque `PageHero` troca de layout (duas colunas ×
+   centralizado) conforme exista visual. Um componente que retorna `null`
+   deixaria uma coluna vazia no grid — exatamente o buraco que o arquivo existe
+   para evitar.
+
+### Dois heros viraram um (drift #8 pago, não ampliado)
+
+`PageHero` e `InternalVisualHero` faziam quase a mesma coisa, com a cena de fundo
+copiada nos dois arquivos. Quando o pedido chegou, havia **dois lugares para
+consertar e duas chances de ficarem diferentes**. `PageHero` ganhou `visual?` e
+`InternalVisualHero` foi apagado. Nenhuma página perdeu comportamento.
+
+### O que os screenshots decidiram (de novo: eles são instrumento, não conferência)
+
+- **Ordem no celular.** Com a imagem depois dos botões ela começava a ~630px em
+  375px — fora da primeira tela de um iPhone SE. Movida para entre o subtítulo e
+  os botões, entra a ~470px. E os botões passaram a vir DEPOIS da prova, que é a
+  ordem que converte. Feito com `row-start`/`col-start` explícitos e **sem
+  duplicar os CTAs em dois blocos com `hidden`**: dois links de mesmo nome
+  acessível é ruído para leitor de tela e mentira para quem mede clique.
+- **Captura de celular em retrato não cabe num hero de celular.** Um telefone
+  inteiro tem ~450px de altura a 375px de largura. A saída foi o cartão 4:3 com
+  `overflow-hidden`: o aparelho entra por cima e a base é cortada pela borda. O
+  corte lê como intenção, e a altura fica sob controle.
+- **Foto quadrada em cartão 4:3 corta cabeça.** As fotos do repositório são
+  quadradas; `object-cover` centralizado decapitava quem está sentado à mesa. Daí
+  a prop `focus` (um `object-position`): quem **escolhe** a foto é quem conhece o
+  enquadramento, não o componente.
+- **`journey-4` e `journey-5` são recortes REDONDOS com cantos brancos.** Em
+  retângulo aparecia o branco. Viraram medalhão sobre o fundo quente — mesmo
+  cartão, conteúdo diferente. Quem for reusar essas duas: nunca em `object-cover`
+  retangular.
+- **Título de 2.9rem numa coluna de 560px vira parede.** O h1 de `/sobre` (16
+  palavras) virava cinco linhas coladas. `2.7rem` + `leading-[1.13]` resolveu sem
+  tocar na copy — que não é minha.
+
+### Um defeito real encontrado de raspão
+
+`/site/sobre` tinha **22px de rolagem horizontal a 768px**. A causa não estava no
+hero: `RelationshipRevenuePanel` virava linha no `sm:`, e quatro cartões de 168px
++ setas + respiro somam ~832px num contêiner de 728. Virou `lg:`. Vale a regra:
+*a linha horizontal é o luxo de quem tem largura; empilhado é a forma segura.*
+E a nota da vitrine se confirmou de novo — o sinal que vale é
+`document.documentElement.scrollWidth`, e um detector de elemento isolado não
+achava nada, porque o estouro nascia do somatório de irmãos, não de uma peça.
+
+### Peso da página
+
+O véu de restaurante do hero **perdeu o `priority`** e ganhou `quality={45}`: é um
+PNG de 1,35 MB desfocado a 25% de opacidade sob um gradiente branco. Quem carrega
+significado é a abertura visual, e num 4G a fila importa. `sizes` de cada peça é
+a largura real que ela ocupa em cada breakpoint, não `100vw` preguiçoso.
+
+### Fronteira respeitada, e como testei mesmo assim
+
+`public/brand/foocci/produto/` e `scripts/site/` são da outra frente e **não
+foram tocados** — o diretório não existe no commit. Para conferir a moldura de
+navegador (o único formato sem asset disponível) gerei três capturas falsas
+naquele caminho, tirei os screenshots de layout nos três tamanhos e **apaguei o
+diretório antes de commitar**, com `git status public/` limpo como prova. Os
+screenshots que subiram para o CEO são do estado real (degradado), não do
+simulado — mostrar a foto de mentira como se fosse entrega seria vender piloto
+como pronto.
+
+### Páginas legais
+
+`/termos-de-uso` e `/politica-de-privacidade` **não** ganharam imagem, por
+decisão: são documento, e foto ali é peso sem argumento. Ganharam só os tokens
+(`LegalShell` estava em `gray-*` e `#0B0B0B` literais).
+
+### Provas
+
+`npx tsc --noEmit` limpo. `npx vitest run`: 5.209 de 5.210 verdes — a única falha
+é o timeout ambiental conhecido de `noSideEffects.test.ts`, que passa isolado com
+`--testTimeout=60000` (confirmado). O portão `brandName.test.ts` está verde,
+inclusive com os três deslizes de "a Foocci" corrigidos em `HeroSection` e
+`CommissionCalculator`.
+
+Screenshots das **oito** páginas em 375/768/1280 (24 capturas), mais a rodada com
+capturas simuladas para validar a janela de navegador. Zero rolagem horizontal nos
+três tamanhos, zero imagem sem `alt`.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+**Proposta de vitrine** (quem promove é o Diretor): *"Asset que ainda não existe
+não é motivo para adiar tela — é motivo para declarar a cadeia de degradação. O
+último degrau tem de ser um arquivo versionado, e a escolha tem de ser função e
+não componente, para quem chama saber se sobrou algo para desenhar."*
+
+— interface, worktree `agent-a938cdf774d29b496`
+## 2026-08-05 · Fotografar o produto para o site comercial (5 slots de `PRODUCT_SHOTS`)
+
+O CEO viu o site "só com texto, botão e detalhe gráfico". A resposta acordada não
+foi banco de imagens: foi capturar as telas reais da padaria de demonstração
+(`foocci-bakery`). Entregues os cinco slots de `src/components/marketing/siteAssets.ts`
+e o roteiro que os refaz: `scripts/site/capturar-produto.mjs` (+ `dados-demonstracao.mjs`
+e `fotos-do-cardapio.mjs`). Nada em `src/`.
+
+### O que a noite ensinou
+
+**1. Foto de produto é foto de DADO, e dado velho aparece na imagem.**
+A primeira leva saiu com "Atrasados 50%" em vermelho no painel de pedidos: os
+pedidos ativos tinham sido semeados minutos antes e cruzaram o `DELAY_THRESHOLD`
+de 20 min durante a própria captura (login + compilação em dev custam tempo). A
+fila viva agora cabe em 8 minutos, com folga deliberada. Fila colada no limite
+chega vermelha.
+
+**2. O relógio é o inimigo silencioso.** Três descobertas encadeadas:
+- `DashboardClient.tsx:588` fixa `timeZone: "America/Sao_Paulo"` e **nunca lê**
+  `Restaurant.timezone`. Alinhar a coluna ao fuso da máquina não muda nada —
+  perdi uma volta nisso. Quem se ajusta é o dado.
+- O painel de pedidos formata a hora com `date.getHours()`, ou seja, o fuso do
+  **processo**. Duas telas do mesmo produto, dois fusos.
+- A hora das bolhas de conversa é escrita pelo **navegador**. Sem
+  `context.clock.install()`, a foto do atendimento marcava 04:46 (hora real do
+  runner) enquanto o painel marcava 13:20.
+
+A saída foi ancorar tudo numa hora de parede de São Paulo (10h20, ou o agora se
+já for mais tarde) e dar ao navegador o mesmo relógio. **Regra que fica: numa
+captura, o instante tem que ser o mesmo em todas as telas — e ele não é, por
+padrão.**
+
+**3. Período "hoje" não serve para captura em servidor.** Runner roda de
+madrugada no Brasil; o dia corrente é sempre parcial. Em "7 dias" a última barra
+virava um toco e os comparativos ficavam negativos — a foto diria que a padaria
+despencou. O painel de resultado é fotografado em **"Ontem"**: único recorte
+completo a qualquer hora, e é de fato o que o dono abre de manhã.
+
+**4. Número inflado é tão perigoso quanto número falso.** Com uma só semana de
+histórico o painel comparava semana cheia contra vazio e estampava **"+375%
+acima"**. Duas semanas de histórico e um **ritmo semanal** (mesmo multiplicador
+para o mesmo dia da semana) fazem a comparação medir tendência, não ruído.
+
+**5. A vitrine "Mais vendidos" é montada a partir das vendas reais.** Com sorteio
+uniforme de itens, "Água Mineral" subia a 2º mais vendido e a loja abria com foto
+de garrafa d'água; e o ticket médio dava R$ 70 — número de restaurante, não de
+padaria. Peso por preço **e** por categoria resolveu os dois de uma vez. Ticket
+final R$ 38–40.
+
+**6. Sem `OPENAI_API_KEY` o cardápio local fica com 40 retângulos cinza.** As
+fotos nascem de chamada paga (`npm run bakery:imagens`). Em vez de inventar
+imagem, `fotos-do-cardapio.mjs` **espelha as que a padaria já serve em produção**
+(`/api/media/<id>`, públicas, geradas pelo próprio produto), casando por nome de
+item e reduzindo com `sharp`. Item sem par continua sem foto.
+
+**7. `loading="lazy"` + barra de categorias fixa.** Rolar até o fim para acordar
+as imagens fazia a barra de categorias acompanhar, e a foto saía com "Da Nossa
+Despensa" aceso sobre a seção "Padaria". Duas telas de rolagem bastam.
+
+**8. Peso.** Captura de interface é quase toda cor chapada: `png({ palette: true })`
+corta o arquivo à metade sem borrar texto. Escada de degraus (paleta → escala) com
+teto de 400 KB e saída não-zero se estourar. As cinco ficaram entre 110 e 174 KB.
+
+### Dois defeitos do painel de pedidos, encontrados e NÃO propagados
+
+Estão em `src/`, que eu não podia tocar. Sobem para o Diretor:
+
+1. **`OrdersClient.tsx:649` — "Total hoje" mente.** O KPI mostra `orders.length`,
+   que é o total CARREGADO (`/api/orders?limit=100`, sem filtro de data), não o
+   total do dia. `OrderService.list` só filtra por data se `from`/`to` vierem, e
+   a tela nunca os envia.
+2. **`OrdersClient.tsx:530-533` — o filtro de data é decorativo.** `dateFrom` /
+   `dateTo` existem em estado, são renderizados nos dois `input[type=date]` e
+   **não aparecem em lugar nenhum** da consulta; o botão "Filtrar" não tem
+   `onClick`. Cheguei a usá-lo na captura para tornar o KPI verdadeiro — não
+   funciona, e preencher aquelas datas só encenaria um filtro inexistente.
+
+Como a captura contornou sem maquiar: a padaria de demonstração passou a ter
+movimento de padaria movimentada de verdade (~104 pedidos/dia). Com isso o "Total
+hoje 100" que a tela exibe é verdade sobre o dia — e deixa de brigar com o
+"Pedidos" da foto do resultado.
+
+### Provas
+
+Nenhum arquivo `.ts/.tsx` alterado (`git status` só acusa os dois diretórios
+novos), então não há superfície para `tsc`/`vitest`; os três roteiros passam em
+`node --check`. Execução completa de ponta a ponta (`--dados --fotos --auditoria`)
+refez os cinco slots e a conferência de responsivo do cardápio: **375 / 768 /
+1280 px sem rolagem horizontal** (`scrollWidth` = largura da janela nos três).
+
+Autoavaliação das cinco imagens: hierarquia 9, tipografia 9, espaçamento 9,
+consistência 9.
+
+— interface, worktree `agent-ad7ca2b138d044884`

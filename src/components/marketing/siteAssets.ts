@@ -51,3 +51,35 @@ export const SITE_ASSETS = {
   /** Foocci app on phone in restaurant (product shot). */
   appPhone: "brand/foocci/site/app-phone.jpg",
 } as const;
+
+/**
+ * O PRODUTO DE VERDADE, fotografado (2026-08-05).
+ *
+ * O CEO olhou o site e viu o que faltava: "só texto, botão e detalhe gráfico".
+ * Ele estava certo — seis das oito páginas abriam sem uma única imagem.
+ *
+ * A resposta NÃO é banco de imagens. Todo arquivo aqui é uma captura da tela
+ * real do Foocci rodando na padaria de demonstração (`foocci-bakery`) — mesmo
+ * cardápio, mesmo painel, mesmo agente que o visitante encontra em
+ * `/site/experimente`. Consequências práticas, e é por isso que vale a pena:
+ *
+ *  • **Não existe distância entre a foto e o produto.** Nada aqui promete tela
+ *    que não existe — guardrail 7 aplicado à imagem, não só ao texto.
+ *  • **Envelhece junto.** Mudou a tela, a captura fica velha e dá para refazer
+ *    rodando o mesmo roteiro (`scripts/site/capturar-produto.mjs`).
+ *
+ * Slots vazios são normais: `hasAsset()` faz a página cair no visual anterior
+ * em vez de quebrar. Ausência de arquivo nunca vira erro de layout.
+ */
+export const PRODUCT_SHOTS = {
+  /** Cardápio da padaria no celular — a loja que o cliente final vê. */
+  lojaCelular: "brand/foocci/produto/loja-cardapio-celular.png",
+  /** Conversa com o agente no cardápio: pergunta do cliente e resposta. */
+  atendimentoCelular: "brand/foocci/produto/atendimento-conversa-celular.png",
+  /** Painel do lojista: os pedidos chegando, no desktop. */
+  painelPedidos: "brand/foocci/produto/painel-pedidos-desktop.png",
+  /** Painel do lojista: CRM — campanhas e o retorno que elas deram. */
+  painelCrm: "brand/foocci/produto/painel-crm-desktop.png",
+  /** Painel do lojista: a visão de resultado (o que o dono abre de manhã). */
+  painelResultado: "brand/foocci/produto/painel-resultado-desktop.png",
+} as const;

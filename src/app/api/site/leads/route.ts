@@ -37,8 +37,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await SiteLeadService.capture(parsed.data);
-    return NextResponse.json({ ok: true });
+    const lead = await SiteLeadService.capture(parsed.data);
+    // `codigo` sai daqui e nada mais: a tela só monta a mensagem do WhatsApp com
+    // um código que veio da resposta, e a resposta só existe depois da gravação.
+    // É esta a trava de "salvar antes de redirecionar" — não uma ordem no cliente.
+    return NextResponse.json({ ok: true, codigo: lead.codigo });
   } catch (e) {
     // Storage itself failed — this IS the visitor's problem: their data is gone.
     // Say so honestly so they can try again or reach out another way.

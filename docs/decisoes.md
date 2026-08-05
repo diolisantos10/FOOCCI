@@ -11,6 +11,86 @@
 
 ---
 
+## O concorrente não abre o site — a comparação só vale onde tem lastro
+
+**Decidido em** 2026-08-05 · **por** CEO · **origem:** revisão do site ao vivo,
+olhando a home no celular
+
+O hero da home abria com *"Quanto o {marketplace} leva do seu faturamento?"*.
+Convertia como conta, e queimava o primeiro impacto: **a primeira imagem que o
+dono forma do Foocci não pode ser a de alguém apontando para o vizinho.** A
+pergunta não foi descartada — desceu para o topo da calculadora.
+
+**Por que a linha passa aí:** na calculadora a comparação tem lastro — os números
+são do próprio dono e a taxa é um campo editável. No hero seria afirmação nossa
+sobre a casa dos outros, que é justamente o que a trava jurídica de 04/08 evita.
+
+**O que muda para todos:**
+
+1. **A regra é de LUGAR, não de proibição.** Nomear o marketplace é permitido
+   onde o visitante informa os próprios números; não é, em peça de primeiro
+   contato.
+2. **O gancho de abertura é a dor de fundo, não o sintoma.** Comissão dói todo
+   mês, mas a causa é o cliente não ser do restaurante. Quem escrever peça nova
+   de topo — página, anúncio, e-mail — parte daí.
+3. Vale para qualquer superfície de aquisição, não só a home.
+
+---
+
+## Imagem do site é o produto fotografado, nunca banco de imagens
+
+**Decidido em** 2026-08-05 · **por** Diretor, sob autorização do CEO ·
+**origem:** *"o site está só com texto, botão e detalhes gráficos"*
+
+Toda página de `/site` abre com um elemento visual. Onde o argumento é o produto,
+a imagem é **captura da tela real** do Foocci rodando na padaria de demonstração
+(`foocci-bakery`) — a mesma que o visitante pode experimentar em
+`/site/experimente`. Fotografia de estilo de vida fica para o que é ambiente
+(hospitalidade, salão, cliente), nunca para representar tela.
+
+**Por que:** guardrail 7 aplicado à imagem. Mockup bonito de tela que não existe é
+a versão visual de vender piloto como pronto — e é mais difícil de auditar que
+texto, porque ninguém relê uma imagem.
+
+**O que muda para todos:**
+
+1. **Captura de produto é reproduzível ou não entra.**
+   `scripts/site/capturar-produto.mjs` refaz as cinco; quem criar slot novo cria o
+   passo no roteiro junto.
+2. **Slot vazio degrada, nunca quebra.** `hasAsset()` decide em tempo de request;
+   página sem a imagem cai no visual anterior em vez de abrir um buraco.
+3. **Peso é requisito, não detalhe.** O público abre no 4G: cada captura fica
+   abaixo de 400 KB.
+
+---
+
+## Diagnóstico de credencial é leitura pura — nunca uma cobrança de teste
+
+**Decidido em** 2026-08-05 · **por** Diretor · **origem:** o CEO colocou o
+`MP_PLATFORM_ACCESS_TOKEN` no Railway e a pergunta virou "entrou certo?"
+
+Para saber se uma credencial de terceiro funciona, o sistema **pergunta pela via
+mais barata que o provedor oferece** (no Mercado Pago, `GET /users/me`). Nunca
+executa a operação real — nada de contratação de mentira em produção para
+descobrir se o gateway responde.
+
+**Por que:** a operação real deixa rastro que não se apaga: contrato falso na
+carteira, objeto de recorrência no gateway, e-mail para um cliente que não existe.
+E "presença de variável" **não é** a mesma pergunta que "a chave funciona" — token
+vencido devolve `true` do mesmo jeito, e quem descobre a diferença é o cliente.
+
+**O que muda para todos:**
+
+1. Toda integração externa que sustenta dinheiro deve expor um diagnóstico
+   **verificável de fora**, com veredito e a razão que o provedor deu.
+2. **"Não deu para conferir" nunca vira "está tudo bem"** (guardrail 1). A tela
+   diz que não sabe.
+3. **O segredo nunca sai no veredito.** Isto é trava em código (`semSegredo`),
+   não combinado — o teste que exigia isso reprovou a primeira versão, que ecoava
+   um campo do gateway direto para o admin.
+
+---
+
 ## Identificação por telefone: obrigatória onde nasce pedido, pulável só na mesa
 
 **Decidido em** 2026-08-04 · **por** CEO · **origem:** conferência da Loja do
