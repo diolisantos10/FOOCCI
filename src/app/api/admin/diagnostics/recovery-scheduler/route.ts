@@ -21,6 +21,7 @@ import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { OrderDraftRecoverySendService } from "@/services/order/OrderDraftRecoverySendService";
 import { CartRecoveryScheduler } from "@/services/order/CartRecoveryScheduler";
+import { CartRecoveryHealthService } from "@/services/order/CartRecoveryHealthService";
 
 export async function GET(req: NextRequest) {
   if (!process.env.ADMIN_SECRET) {
@@ -70,10 +71,22 @@ export async function GET(req: NextRequest) {
     ...(restaurantId ? { restaurantId } : {}),
   });
 
+  // ── 4. Saúde histórica — o que o dry-run de AGORA não consegue contar ──────
+  // O dry-run responde "há carrinho cobrável neste minuto?". Ele não responde
+  // "quando saiu a última mensagem?" nem "quantos venceram sem tentativa?" — e
+  // era exatamente essa a pergunta impossível de responder pela tela.
+  const health = restaurantId
+    ? await CartRecoveryHealthService
+        .get(restaurantId, await CartRecoveryHealthService.estaAtiva(restaurantId))
+        .catch(() => null)
+    : await CartRecoveryHealthService.varredura().catch(() => []);
+
   return NextResponse.json({
     ok:        true,
     queriedAt: new Date().toISOString(),
     scope:     slug ? { slug, restaurantId } : { slug: null, note: "global pool (all restaurants)" },
+
+    health,
 
     schedulerEnv: {
       NODE_ENV:     nodeEnv,
@@ -95,8 +108,14 @@ export async function GET(req: NextRequest) {
         ? dryRunResult.checked === 0
           ? "No OPEN drafts with recoveryAttempts=0 and items found. Check draft status and recoveryAttempts."
           : dryRunResult.skippedRestaurantClosed > 0
-            ? `${dryRunResult.checked} drafts checked; ${dryRunResult.skippedRestaurantClosed} skipped because restaurant(s) are currently closed. Recovery will be retried on the next tick when they reopen. recoveryAttempts was NOT incremented.`
-            : `${dryRunResult.checked} drafts checked but none eligible. See skip counts above.`
+            // Decisão do CEO 05/08/2026: loja fechada no instante do abandono
+            // não é adiamento — é recusa definitiva. O texto de antes prometia
+            // uma retentativa que nem naquela época existia de fato (o prazo de
+            // 6h vencia antes de a loja abrir).
+            ? `${dryRunResult.checked} carrinho(s) avaliado(s); ${dryRunResult.skippedRestaurantClosed} NÃO será(ão) cobrado(s): a loja estava fechada no instante do abandono. Isto é definitivo — não há reenvio quando a loja abrir. O rascunho não foi carimbado; o cliente que voltar pelo link acha o carrinho intacto.`
+            : dryRunResult.skippedTooLate > 0
+              ? `${dryRunResult.checked} carrinho(s) avaliado(s); ${dryRunResult.skippedTooLate} fora da janela de entrega de ${dryRunResult.deliveryWindowMinutes} min contados do abandono. Mensagem de carrinho é do momento — passou disso, não sai mais.`
+              : `${dryRunResult.checked} drafts checked but none eligible. See skip counts above.`
         : `${dryRunResult.eligible} draft(s) eligible — would send ${dryRunResult.eligible} message(s).`,
     },
   });

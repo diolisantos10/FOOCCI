@@ -1002,3 +1002,162 @@ Quando existir filtro, lista e número saem da MESMA resposta, senão o filtro
 mente. E controle que não faz nada é pior que controle ausente: ou ele manda de
 verdade no que a tela mostra, ou ele sai da tela."* Origem: este bloco; arquivos
 `src/lib/orders-panel-period.ts`, `src/app/(dashboard)/orders/OrdersClient.tsx`.
+
+---
+
+## 2026-08-05 · Carrinho abandonado: loja fechada não manda, e não guarda para depois
+
+**Ordem do CEO, textual:** *"A mensagem de carrinho tem que ser enviada quando o
+cliente fecha o Foocci e 2 min depois mandar. Se o cliente abre de madrugada não
+precisa enviar nada, porque ele queria comer de madrugada e não quando o
+restaurante abrir."* Decisão de produto — implementada, não relitigada.
+
+Parti do diagnóstico do `crm` de 05/08 (commit `a2c03c56`, oficina do crm, item
+c): a validade de 6 h corre com a loja fechada, então o carrinho da madrugada
+vencia antes de a loja abrir e o adiamento por horário prometia uma segunda
+chance que nunca acontecia.
+
+### a) O que já estava certo, e por isso NÃO mexi
+
+Os "2 minutos" **já eram o padrão em produção** nos três pontos de entrada:
+`CartRecoveryScheduler.ts:27` (`INACTIVITY_MINUTES = 2`, tick de 60 s),
+`api/cron/send-cart-recovery/route.ts:66` (default 2) e o próprio serviço
+(`OrderDraftRecoverySendService.ts`, parâmetro `inactivityMinutes = 2`).
+Conclusão que importa para o relatório: **a decisão do CEO não acelera nada** —
+o que ela muda é o que acontece com a loja fechada. Não inventei aceleração para
+parecer que entreguei mais.
+
+### b) A tradução técnica, escrita no código para não ser "melhorada" depois
+
+"Fechou o Foocci" não é detectável no navegador. O que existe é inatividade. O
+cabeçalho do serviço agora diz isso e diz por quê — quem tentar trocar por um
+detector de fechamento de aba vai trocar um sinal que funciona por um que não
+chega no celular.
+
+### c) O conserto: a pergunta do horário mudou de tempo verbal
+
+`OrderDraftRecoverySendService.ts` — o portão era `isRestaurantOpenNow(restId)`
+("está aberto AGORA?") e pulava sem carimbar, esperando o próximo tick. Agora é
+`estavaAbertaEm(restId, momentoDoAbandono)`, com
+`momentoDoAbandono = updatedAt + inactivityMinutes`.
+
+Três consequências, e a segunda é a que fecha a decisão do CEO:
+
+1. **Fonte de verdade única.** `isRestaurantOpenNow(id, quando)` já aceitava a
+   data (`src/lib/business-hours.ts:142`) — fuso do restaurante, turnos
+   partidos, virada de meia-noite, "sem horário cadastrado = sem restrição".
+   Não criei segunda régua de "está aberto"; passei a data certa.
+2. **A resposta é a MESMA em todo tick futuro**, porque a pergunta é sobre um
+   instante do passado. É isso que torna a recusa definitiva sem precisar de
+   carimbo, de fila ou de estado novo: o carrinho da madrugada não fica
+   "esperando a loja abrir" — ele simplesmente nunca é elegível. Sem estado
+   novo, sem migração, sem nada que possa prender trabalho (a lei do domínio).
+3. **O rascunho não é carimbado.** `recoveryAttempts` continua 0 e o carrinho
+   segue OPEN: quem voltar pelo próprio link acha tudo lá. Morre a cobrança, não
+   o carrinho. Isso também evita mentir na medição do `crm`
+   (`CartRecoveryHealthService` conta "enviadas" por `recoveryAttempts > 0`).
+
+Falha fechada: erro na leitura do horário = **não aberta** (não envia) + log com
+o caso concreto. Antes, uma exceção ali derrubava o tick inteiro.
+
+### d) A trava que o Diretor pediu, e por que ela é mecânica
+
+Nasceu a **janela de entrega** (`JANELA_DE_ENTREGA_MINUTOS = 30`, parâmetro
+`deliveryWindowMinutes`): passou de 30 min do abandono, a mensagem não sai — nem
+naquele tick, nem em nenhum outro; contador próprio `skippedTooLate`.
+
+Ela é a consequência necessária de "não guarda para depois". Sem ela, qualquer
+atraso (servidor reiniciando, cron do Actions que entrega ~1 execução/hora em vez
+das declaradas, canal fora do ar, limite diário do cliente) faria a mensagem sair
+horas depois — exatamente o "lembrete de uma vontade que já passou" que a decisão
+condena. E é uma trava de **código**, não de comentário: mesmo que alguém afrouxe
+o filtro da busca ou alargue a validade, carrinho velho não vira mensagem.
+
+Medida do **abandono**, não da última atividade — assim não depende do valor de
+inatividade usado na chamada (o QA de produção envelhece o rascunho em
+`inatividade + 5 min`; contada da atividade, a janela reprovaria o próprio QA).
+
+### e) A prova de que os ~51 represados não viram enxurrada — três caminhos
+
+1. **Filtro do banco:** a busca já tinha `updatedAt >= agora − 6 h`
+   (`gte: vencimentoDate`). Carrinho de dias atrás não entra na consulta.
+2. **Portão no motor:** teste que injeta os 51 rascunhos de 3 a 21 dias **com a
+   validade afrouxada de propósito** (`maxAgeHours: 24*365`) e exige `sent = 0`,
+   `skippedTooLate = 51`, zero chamadas ao WhatsApp e zero carimbos.
+3. **Não existe segundo motor.** O runner recorrente só executa
+   `scheduleConfig.mode === "RECURRING"` (`ScheduledCampaignRunnerService.ts:676`)
+   e a campanha do carrinho nasce com `mode: "CART_RECOVERY"`
+   (`readyMadeCampaigns.ts:626`); e o segmento `carrinho-abandonado` do
+   `CrmAudienceService.ts:408` devolve `computed:false` com **0 elegíveis** — uma
+   campanha de CRM apontada para esse segmento não alcança ninguém.
+
+### f) Teto diário, cooldown e disjuntor — o que apurei
+
+A recuperação de carrinho **não passa** pelo `ContactSafetyService`, nem pelo
+teto diário/semanal, nem pelo horário de silêncio, nem pelo disjuntor: é motor de
+evento próprio (nenhum import desses no serviço; e `crm-safety.ts:328-331`
+registra que o carrinho "roda no próprio motor"). As travas dele são outras, e
+conferi as duas metades de cada uma:
+
+- **uma recuperação por rascunho, para sempre** (`recoveryAttempts = 0` no
+  filtro; carimbo após envio);
+- **uma por cliente a cada 24 h** (`lastRecoveryAt` nas últimas 24 h + guarda em
+  memória para o mesmo tick);
+- **quem já pediu não recebe** (regra 7, com janela de 30 min para trás);
+- **pagamento em aberto não é interrompido** (regra 8).
+
+O caso citado pelo Diretor — abrir e fechar o cardápio três vezes em dez minutos
+— **não gera três mensagens por desenho, não por sorte**:
+`api/pedido/[slug]/draft/route.ts:132` faz upsert de UM rascunho OPEN por
+restaurante+cliente, e cada toque renova `updatedAt`, tirando o carrinho da busca
+até haver 2 min de silêncio de verdade. Provei mesmo assim as duas metades, com
+dois rascunhos do mesmo cliente no mesmo tick: 1 enviada, 1 em `skippedDailyLimit`.
+
+### g) O que NÃO fechei, e é honesto dizer
+
+**A corrida entre os dois motores.** O `CartRecoveryScheduler` (dentro do
+Railway, a cada 60 s) e o cron do GitHub chamam o mesmo serviço; a leitura do
+candidato e o carimbo não são atômicos. Duas execuções simultâneas podem, em
+tese, enviar duas vezes o mesmo carrinho. O conserto seria reivindicar o rascunho
+com `updateMany({ where: { id, recoveryAttempts: 0 } })` antes de enviar — mas
+isso **derruba** a decisão anterior de "BLOCKED não carimba, volta no próximo
+tick", que está travada em teste desde 04/08. Não desfaço decisão de outro bloco
+sem mandato. Fica proposto ao Diretor, com o desenho pronto.
+
+**Nada foi provado em loja de verdade.** Nenhuma mensagem foi enviada neste
+bloco — nem para número meu. Tudo em teste com dublês. Mesmo estatuto da
+impressão física: conserto no papel até haver confirmação humana.
+
+### h) Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` **420 arquivos / 5.400 testes
+verdes**. Testes novos: 18 em
+`src/services/order/tests/CartRecoveryLojaFechada.test.ts`, com as duas metades
+em cada regra. **Teste de mutação feito:** desligando os dois portões novos, caem
+exatamente 4 testes (a data do abandono, a loja que abriu depois, o abandono de 3
+horas e os 51 represados) — os testes não passam por acaso.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **"Regra sobre o passado não precisa de fila."** Quando a decisão é *"se X
+   valia no instante do evento, faça; senão, não faça nunca"*, pergunte pelo
+   INSTANTE DO EVENTO, não por "agora". A resposta passa a ser idempotente e o
+   trabalho não precisa de estado "aguardando", de carimbo nem de resgate — não
+   há como vazar. O adiamento é que criava a promessa impossível.
+   Origem: carrinho abandonado, `OrderDraftRecoverySendService.ts`, 2026-08-05.
+
+2. **"Toda mensagem disparada por evento precisa de uma JANELA DE ENTREGA, não
+   só de um prazo de validade."** Validade responde "o dado ainda vale?"; janela
+   de entrega responde "chegar agora ainda ajuda?". Sem a segunda, qualquer
+   atraso de infraestrutura vira mensagem fora de hora — e é ela que torna
+   mecanicamente impossível um backlog represado virar enxurrada quando alguém
+   religa o motor. Origem: idem.
+
+3. **"O contador que muda de significado tem que mudar de texto no mesmo
+   commit."** `skippedRestaurantClosed` deixou de ser "adiado até reabrir" e
+   virou "não vamos cobrar". Os três lugares que explicavam o comportamento
+   antigo em português foram reescritos junto
+   (`api/admin/diagnostics/recovery-scheduler/route.ts`,
+   `api/admin/diagnostics/cart-recovery-qa/route.ts` e a tela do QA). Esta casa
+   já pagou por comentário que descrevia o contrário do que o servidor fazia.
+   Origem: idem.

@@ -1,6 +1,26 @@
 /**
  * POST /api/cron/mark-abandoned-drafts
  *
+ * ⚠️ ROTA ÓRFÃ DE PROPÓSITO — NÃO A AGENDE SEM LER ISTO (auditado em 05/08/2026)
+ *
+ * Nenhum agendador chama esta rota: nem `.github/workflows/crm-cron.yml`, nem o
+ * Railway, nem o `instrumentation.ts`. Isso NÃO é esquecimento a ser corrigido
+ * com uma linha de cron.
+ *
+ * O motor que realmente envia (`OrderDraftRecoverySendService`) só considera
+ * rascunho com `status: "OPEN"`, dentro da janela de 2 minutos a 6 horas de
+ * inatividade. Esta rota vira `OPEN → ABANDONED` a partir de 60 minutos. Ligá-la
+ * como está encolhe a janela útil de recuperação de 6 h para 1 h e joga o resto
+ * dos carrinhos num estado que o motor não enxerga — ou seja, ligar a "Fase 2"
+ * DESLIGA a Fase 3 para a maior parte dos casos.
+ *
+ * Quem quiser a Fase 2 de verdade precisa, no mesmo bloco, ensinar o motor de
+ * envio a ler ABANDONED. Travado em
+ * `src/services/order/tests/CartRecoveryCronOrfao.test.ts`.
+ *
+ * Hoje o estado ABANDONED só é escrito pelo fluxo do próprio pedido
+ * (`OrderDraftService`) e é lido pela analítica.
+ *
  * Phase 2 of abandoned cart recovery: marks stale OPEN OrderDrafts as ABANDONED
  * so Phase 3 can send recovery messages to eligible customers.
  *

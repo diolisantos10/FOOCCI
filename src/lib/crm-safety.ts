@@ -326,9 +326,18 @@ export async function getContactBudgetStatus(restaurantId: string): Promise<Cont
  * across ALL campaigns and automations.
  */
 /** Campaigns that NEVER consume (nor are blocked by) the global send budget —
- *  they must not fail for lack of quota. Birthday is sacred; cart recovery runs
- *  on its own event engine and never created executions here anyway. */
-export const BUDGET_EXEMPT_TEMPLATE_IDS = ["aniversariantes"] as const;
+ *  they must not fail for lack of quota.
+ *
+ *  Aniversariantes é sagrado. **Carrinho abandonado entrou em 05/08/2026**: ele
+ *  passou a gravar `campaign_executions` (antes não gravava nada, e por isso a
+ *  tela ficava em traço mesmo quando enviava). Sem a isenção, esse registro novo
+ *  começaria a comer, em silêncio, a cota diária das outras campanhas — mudança
+ *  de comportamento que ninguém pediu, disfarçada de melhoria de medição.
+ *  Medir não pode custar envio.
+ *
+ *  A isenção NÃO liga o carrinho no runner recorrente: a campanha dele tem
+ *  `scheduleConfig.mode = "CART_RECOVERY"` e o runner só pega `RECURRING`. */
+export const BUDGET_EXEMPT_TEMPLATE_IDS = ["aniversariantes", "carrinho-abandonado"] as const;
 
 export async function getTodayGlobalSendCount(restaurantId: string): Promise<number> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
