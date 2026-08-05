@@ -4840,6 +4840,13 @@ model SiteLead {
   desafio     String?
   /// Página de onde o formulário foi enviado (ex.: "/site/demonstracao").
   origem      String?
+  /// Código curto (ex.: "A7K2M") que vai DENTRO da mensagem que o lead manda no
+  /// WhatsApp. É o que liga um "oi" que chega no número de vendas ao formulário
+  /// que a pessoa acabou de preencher — sem ele, chega um "oi" sem contexto.
+  ///
+  /// Opcional de propósito: se a geração falhar, o lead é gravado assim mesmo.
+  /// Perder o código é aceitável; perder o lead nunca é.
+  codigo      String?   @unique
   /// null = ainda não notificado; data = quando o aviso saiu.
   notifiedAt  DateTime?
   /// Última falha de notificação, para o alerta carregar a própria evidência.

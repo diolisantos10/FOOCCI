@@ -5,6 +5,12 @@
  * is read straight from the database and cannot. If a lead ever "did not arrive",
  * it is here — check the aviso column to see why the e-mail did not go out.
  *
+ * A coluna CÓDIGO é o que fecha o ciclo novo: o formulário leva a pessoa ao
+ * WhatsApp com uma mensagem que termina em `#A7K2M`. Quando esse "oi" chegar, é
+ * aqui que se descobre quem falou e o que ela já tinha contado. Sem número de
+ * vendas configurado a coluna fica preenchida do mesmo jeito — o código nasce na
+ * gravação do lead, não no redirecionamento.
+ *
  * Server component: the admin area is gated by the admin cookie in its own layout,
  * so reading with Prisma directly here is safe and avoids an extra round trip.
  */
@@ -44,9 +50,16 @@ export default async function AdminLeadsPage() {
   return (
     <div className="p-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Contatos do site</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Pedidos de demonstração vindos de <code className="rounded bg-gray-100 px-1">/site/demonstracao</code>.
+        {/*
+          O shell do admin é ESCURO (`bg-gray-950`), e este título vinha em
+          `text-gray-900` desde que a página nasceu: preto sobre quase-preto,
+          ilegível em produção. O corpo da página continua em cartão claro — o que
+          funciona sobre o escuro —, mas o que encosta direto no fundo precisa ser
+          claro. `text-paper` é o branco dos tokens.
+        */}
+        <h1 className="text-2xl font-semibold text-paper">Contatos do site</h1>
+        <p className="mt-1 text-sm text-muted">
+          Pedidos de demonstração vindos de <code className="rounded bg-canvas px-1">/site/demonstracao</code>.
           Esta lista é a fonte da verdade — o e-mail é só o aviso.
         </p>
       </header>
@@ -61,18 +74,19 @@ export default async function AdminLeadsPage() {
 
       {leads.length === 0 ? (
         /* Empty state — DESIGN.md §6.1 */
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-          <p className="text-base font-medium text-gray-700">Nenhum contato ainda.</p>
-          <p className="mt-1 text-sm text-gray-500">
+        <div className="rounded-xl border border-dashed border-line2 bg-paper px-6 py-14 text-center">
+          <p className="text-base font-semibold text-ink2">Nenhum contato ainda.</p>
+          <p className="mt-1 text-sm text-muted">
             Quando alguém pedir uma demonstração pelo site, aparece aqui na hora.
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-paper">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <thead className="bg-canvas text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3 font-semibold">Quando</th>
+                <th className="px-4 py-3 font-semibold">Código</th>
                 <th className="px-4 py-3 font-semibold">Nome</th>
                 <th className="px-4 py-3 font-semibold">WhatsApp</th>
                 <th className="px-4 py-3 font-semibold">Restaurante</th>
@@ -82,31 +96,40 @@ export default async function AdminLeadsPage() {
                 <th className="px-4 py-3 font-semibold">Aviso</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-line">
               {leads.map((l) => {
                 const wa = waLink(l.whatsapp);
                 return (
-                  <tr key={l.id} className="align-top hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-500">{formatDate(l.createdAt)}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{l.nome}</td>
+                  <tr key={l.id} className="align-top hover:bg-canvas">
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDate(l.createdAt)}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {l.codigo ? (
+                        <span className="rounded-lg bg-brand-50 px-2 py-1 font-semibold tabular-nums text-brand-700">
+                          #{l.codigo}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-ink">{l.nome}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {wa ? (
                         <a
                           href={wa}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-orange-600 hover:underline"
+                          className="font-semibold text-brand-600 hover:underline"
                         >
                           {l.whatsapp}
                         </a>
                       ) : (
-                        <span className="text-gray-700">{l.whatsapp}</span>
+                        <span className="text-ink2">{l.whatsapp}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{l.restaurante ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-700">{l.cidade ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-700">{l.tipo ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-700">{l.desafio ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink2">{l.restaurante ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink2">{l.cidade ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink2">{l.tipo ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink2">{l.desafio ?? "—"}</td>
                     <td className="px-4 py-3">
                       {l.notifiedAt ? (
                         <span className="text-green-700">enviado</span>
