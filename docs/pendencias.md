@@ -1,6 +1,37 @@
 # Pendências — o que está aberto
 
-> Última atualização: 04/08/2026.
+> Última atualização: 05/08/2026.
+
+## 🖼️ Site com imagem em toda página — FEITO na madrugada de 05/08
+
+O CEO olhou o site e disse: *"está só com texto, botão e detalhes gráficos"*.
+Estava certo — seis das oito páginas abriam sem nenhuma imagem própria.
+
+Duas frentes, em paralelo, cada uma na própria árvore:
+1. **O produto foi fotografado**, não comprado: cinco capturas da tela real do
+   Foocci rodando na padaria de demonstração (`scripts/site/capturar-produto.mjs`
+   refaz quando a tela mudar). 696 KB no total — o site já carregava um PNG de
+   3 MB sozinho.
+2. **Um sistema de abertura visual** (`HeroShot`), um cartão com três conteúdos
+   possíveis (celular, navegador, fotografia). Não são oito soluções: os oito
+   cabeçalhos medem a mesma altura no desktop sem ajuste manual.
+
+Termos e Privacidade seguem sem imagem, **por decisão**: são documento, e foto
+ali é peso sem argumento. Reversível em meia hora se o CEO discordar.
+
+## 🐞 Dois defeitos do painel achados durante a captura (05/08) — ABERTOS
+
+Encontrados por quem foi fotografar as telas, e **não propagados** porque estavam
+fora do escopo daquela frente. Nenhum é P0; os dois enganam o lojista:
+
+1. **KPI "Total hoje" do painel de pedidos conta os pedidos CARREGADOS, não os do
+   dia.** Com a lista paginada em 100, o número que o dono lê de manhã é o total
+   da página, não o do dia. Número errado numa tela de dinheiro.
+2. **Os campos de data ao lado do botão "Filtrar" são decorativos** — o botão não
+   tem ação. Controle que não faz nada é pior que controle ausente: o lojista
+   acredita que filtrou.
+
+Dono: `operacao`. Cada um pede as duas metades de teste.
 
 ## ✅ Domínio `www` — FECHADO pelo Diretor em 04/08, ponta a ponta
 
