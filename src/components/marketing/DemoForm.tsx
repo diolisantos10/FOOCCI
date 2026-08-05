@@ -137,6 +137,15 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
       return;
     }
 
+    /* O MESMO analisador do servidor, rodando aqui só para a pessoa ver o erro
+       sem esperar a ida e volta. Não é a trava — a trava é o `refine` do
+       `createSiteLeadSchema`, que roda mesmo para quem posta direto na API. */
+    const analise = analisarWhatsappBr(whatsapp);
+    if (!analise.ok) {
+      setError(analise.mensagem);
+      return;
+    }
+
     setStatus("sending");
     setError(null);
 
