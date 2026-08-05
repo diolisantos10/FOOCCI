@@ -781,6 +781,15 @@ function GavetaContato({ id, onFechar, onMudou }: { id: string; onFechar: () => 
                 <Linha rotulo="Último contato nosso" valor={dossie.lastContactedAt ? dataHora(dossie.lastContactedAt) : "nunca abordado"} />
                 <Linha rotulo="Formulários preenchidos" valor={String(dossie.submissions)} />
               </dl>
+              {/* Guardrail 6: o aviso por e-mail é conveniência, mas quando ele
+                  falha o motivo aparece — com o caso concreto, não "algo falhou". */}
+              {!dossie.notifiedAt && (
+                <p className="mt-3 rounded-xl border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs leading-relaxed text-amber-200/90">
+                  O aviso por e-mail deste contato não saiu
+                  {dossie.notifyError ? `: ${dossie.notifyError}` : "."} O contato está salvo do
+                  mesmo jeito — esta base é o cofre, o e-mail é só o aviso.
+                </p>
+              )}
             </section>
 
             {/* O que ele respondeu */}
