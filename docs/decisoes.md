@@ -680,3 +680,47 @@ Aplicação (04/08, mesmo dia):
 - Corolário para todo caminho novo de checkout: **canal de cobrança = canal de
   exibição.** A pergunta a responder antes de precificar é "que canal a tela
   usou?". Promovido à vitrine do `operacao`.
+
+## O fecho da home passa a pedir — e a home é a única página com dois CTAs
+
+**Data:** 2026-08-05 · **Decidido por:** Diretor do Foocci ·
+**Origem:** varredura de percurso do `experiencia`, feita em produção no celular
+
+Contexto: o último bloco da home ainda era a faixa de pré-lançamento — *"uma nova
+forma de vender, relacionar e fidelizar **está chegando**"*, com dois botões
+institucionais. Enquanto isso `/contratar/novo` já cobrava cartão e prometia loja
+e acesso prontos na hora. O visitante que chega de anúncio lia o site inteiro
+sendo convencido e, na última linha, era informado de que ainda não era hora.
+
+**A regra que muda:** de manhã eu escrevi em `config.ts` "no máximo UM CTA
+comercial por página", e a home gastava o dela na calculadora. A varredura da
+tarde mostrou o custo: quem rola a home inteira chega ao fecho e sai de mãos
+vazias — justamente quem leu tudo. **A home passa a ter dois**, o da calculadora
+(pico emocional, logo depois de ver a economia dele) e o do fecho (depois do
+argumento inteiro), separados por várias telas. A regra continua valendo para
+todas as outras páginas, e esta é a única exceção.
+
+**O que ficou travado no código, não no aviso:** um teste varre `/site/**` e
+`components/marketing` procurando linguagem de pré-lançamento no texto visível
+(`semPreLancamento.test.ts`). A faxina dos "em breve" já tinha sido dada como
+concluída uma vez e esta frase sobreviveu — faxina conserta o que alguém lembrou
+de olhar; varredura conserta o que ninguém lembrou.
+
+**Corolário, e ele vale para todo produto Dioli:** o guardrail 7 tem duas
+direções. Proibimos vender como pronto o que está em piloto, e pelo mesmo motivo
+proibimos anunciar como futuro o que já está à venda. Mentira em qualquer direção
+custa a mesma confiança. Candidato a subir ao Diretor Geral.
+
+## Convite sem porta: "fale com a gente" só existe se houver com quem falar
+
+**Data:** 2026-08-05 · **Decidido por:** Diretor do Foocci ·
+**Origem:** mesma varredura
+
+A frase "Fale com a gente e veja o Foocci no seu restaurante" aparecia em quatro
+páginas, sempre como **texto morto, sem link** — e não há telefone, WhatsApp nem
+e-mail em lugar nenhum do site (`WHATSAPP_SALES_NUMBER` está desligado em
+produção). O visitante que já tinha decidido falar não tinha com quem.
+
+**A regra:** microcopy de contato **descreve o que acontece depois do clique**, e
+não convida para um canal que não existe. Quando o número de vendas for ligado, o
+convite direto volta — com link de verdade.

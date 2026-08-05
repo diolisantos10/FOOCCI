@@ -46,9 +46,25 @@ export function HeroSection() {
 
         {/* ── Mensagem: o gancho em uma pergunta ──────────────────────────────── */}
         <div className="relative z-10 order-2 text-center lg:order-1 lg:max-w-xl lg:text-left">
+          {/*
+            A SOBRANCELHA DIZ O QUE O PRODUTO É — e antes ela não dizia (05/08).
+
+            A varredura de percurso derrubou o hero num ponto só: em toda a primeira
+            tela do celular não havia UMA palavra explicando o que o Foocci é. Tinha
+            o mascote, a dor ("você vende mais e ganha a mesma coisa") e um botão de
+            calcular. As palavras cardápio, pedido, PDV, CRM e sistema só apareciam
+            depois de rolar — "sistema para restaurantes" só no rodapé.
+
+            Para quem chega de anúncio isso pode ser um curso, uma consultoria ou uma
+            maquininha. Ele tem três minutos e nenhuma paciência para adivinhar.
+
+            A manchete NÃO muda: ela é escolha do CEO e o gancho está certo. Quem
+            carrega a categoria é a sobrancelha, que existe exatamente para isso e
+            estava gasta com um público que a manchete já deixa óbvio.
+          */}
           <span className="inline-flex items-center gap-3">
             <span aria-hidden className="hidden h-0.5 w-6 rounded-full bg-brand-500 lg:block" />
-            <Eyebrow>Para donos de restaurante</Eyebrow>
+            <Eyebrow>Sistema completo para restaurantes</Eyebrow>
           </span>
 
           {/*
@@ -75,8 +91,9 @@ export function HeroSection() {
             leitor, não uma afirmação sobre a tabela de ninguém (trava jurídica 04/08).
           */}
           <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
-            Porque o que cresce junto com a venda é a comissão. No Foocci o custo é
-            fixo — o que você vender a mais fica com você.
+            Porque o que cresce junto com a venda é a comissão. No Foocci — cardápio,
+            pedido, PDV e CRM no mesmo sistema — o custo é fixo: o que você vender a
+            mais fica com você.
           </p>
 
           {/*
