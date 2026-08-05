@@ -13,11 +13,37 @@
  *     mês) e o que sai na renovação. Anunciar só o desconto e cobrar o cheio no
  *     segundo mês é a reclamação que a gente não vai ter.
  *  3. O aceite do Termo é um checkbox EXPLÍCITO, com o texto do contrato aberto
- *     na própria página. Sem ele o botão não habilita, e o servidor recusa.
+ *     na própria página. O servidor recusa sem ele — e a tela também, mas
+ *     DIZENDO que falta (ver abaixo).
  *
  * Estados obrigatórios do DESIGN.md §6.1: enviando (botão travado + rótulo),
  * erro (mensagem com o motivo real) e — como não há lista carregada — nada de
  * vazio a tratar. Preço vem pronto do servidor, então não há loading de dados.
+ *
+ * ── P0 CORRIGIDO EM 05/08/2026: o botão morto ───────────────────────────────
+ *
+ * O botão "Aceitar e pagar" ficava DESABILITADO até tudo estar válido, e não
+ * dizia o que faltava. Reproduzido em produção, no celular: com nome, e-mail,
+ * WhatsApp, restaurante e senha preenchidos, o botão seguia apagado porque o
+ * Termo, lá embaixo, não estava marcado — e NENHUMA mensagem aparecia em lugar
+ * nenhum. Depois, com o e-mail inválido, o botão apagava de novo, também em
+ * silêncio. No celular não existe `hover` nem foco visível: o dono toca, nada
+ * acontece, e conclui que o site quebrou. É a última tela antes do dinheiro
+ * entrar.
+ *
+ * A ESCOLHA, e o porquê: **o botão fica habilitado e a validação acontece no
+ * toque.** Botão desabilitado é uma resposta que não se pode ouvir — ele não
+ * tem estado de "por quê". Habilitado, o toque vira uma pergunta que a tela
+ * responde em três lugares ao mesmo tempo:
+ *   1. um resumo do que falta LOGO ACIMA do botão (onde o polegar já está),
+ *      com cada item clicável, levando ao campo;
+ *   2. a mensagem no campo, em vermelho, junto do rótulo;
+ *   3. o foco vai para o primeiro campo com problema.
+ * Assim ninguém precisa rolar a página para descobrir o que a tela quer, que é
+ * exatamente o que o defeito custava.
+ *
+ * A trava real do dinheiro nunca foi o `disabled` — é o servidor, que valida
+ * tudo de novo e recusa sem aceite. O botão só travado enquanto envia.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -115,18 +141,82 @@ export function CheckoutClient({
     return () => clearTimeout(t);
   }, [slug]);
 
-  const canSubmit =
-    state !== "sending" &&
-    nome.trim().length >= 3 &&
-    /.+@.+\..+/.test(email) &&
-    whatsapp.replace(/\D/g, "").length >= 10 &&
-    restaurante.trim().length >= 2 &&
-    validateSlugShape(slug).ok &&
-    slugState.kind !== "taken" &&
-    senha.length >= 8 &&
-    aceite;
+  /**
+   * O que falta, em linguagem de gente, na ordem em que os campos aparecem.
+   *
+   * Uma lista só, lida por três consumidores (o resumo acima do botão, a
+   * mensagem de cada campo e o foco no primeiro problema) — porque três
+   * verificações separadas viram três verdades diferentes na mesma tela.
+   */
+  const problemas = useMemo(() => {
+    const p: { campo: string; rotulo: string; mensagem: string }[] = [];
+
+    if (nome.trim().length < 3)
+      p.push({ campo: "nome", rotulo: "Seu nome", mensagem: "Escreva seu nome completo (ao menos 3 letras)." });
+
+    if (!/.+@.+\..+/.test(email))
+      p.push({
+        campo: "email",
+        rotulo: "E-mail",
+        mensagem:
+          email.trim() === ""
+            ? "Informe o e-mail — é com ele que você entra no painel."
+            : "Esse e-mail parece incompleto. Confira o @ e o final (ex.: voce@restaurante.com.br).",
+      });
+
+    if (whatsapp.replace(/\D/g, "").length < 10)
+      p.push({ campo: "whatsapp", rotulo: "WhatsApp", mensagem: "Informe o WhatsApp com DDD." });
+
+    if (restaurante.trim().length < 2)
+      p.push({ campo: "restaurante", rotulo: "Nome do restaurante", mensagem: "Diga como o seu restaurante se chama." });
+
+    const shape = validateSlugShape(slug);
+    if (!shape.ok)
+      p.push({
+        campo: "slug",
+        rotulo: "Endereço da loja",
+        mensagem: shape.error ?? "Use letras minúsculas, números e hífen.",
+      });
+    else if (slugState.kind === "taken")
+      p.push({ campo: "slug", rotulo: "Endereço da loja", mensagem: slugState.reason });
+
+    if (senha.length < 8)
+      p.push({ campo: "senha", rotulo: "Senha do painel", mensagem: "A senha precisa de ao menos 8 caracteres." });
+
+    if (!aceite)
+      p.push({
+        campo: "aceite",
+        rotulo: "Termo de Contratação",
+        mensagem: "Marque o aceite do Termo para concluir a contratação.",
+      });
+
+    return p;
+  }, [nome, email, whatsapp, restaurante, slug, slugState, senha, aceite]);
+
+  /** Só depois do primeiro toque no botão — ninguém merece campo vermelho antes de tentar. */
+  const [tentouEnviar, setTentouEnviar] = useState(false);
+  const mostrarPendencias = tentouEnviar && problemas.length > 0;
+  const erroDe = (campo: string) =>
+    tentouEnviar ? (problemas.find((p) => p.campo === campo)?.mensagem ?? null) : null;
+
+  /** Leva a pessoa ATÉ o campo — e deixa o cursor lá dentro. */
+  const irParaCampo = useCallback((campo: string) => {
+    const el = document.getElementById(campo);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    // O foco depois da rolagem: focar antes faz o navegador saltar de volta.
+    window.setTimeout(() => el.focus({ preventScroll: true }), 250);
+  }, []);
 
   const submit = useCallback(async () => {
+    setTentouEnviar(true);
+    // O botão nunca fica mudo: se falta algo, a tela DIZ o que falta e leva ao
+    // primeiro campo, em vez de simplesmente não reagir ao toque.
+    if (problemas.length > 0) {
+      irParaCampo(problemas[0]!.campo);
+      return;
+    }
+
     setState("sending");
     setError(null);
     try {
@@ -166,11 +256,36 @@ export function CheckoutClient({
       setError("Falha de conexão. Verifique a internet e tente de novo — nada foi cobrado.");
       setState("error");
     }
-  }, [plan, cycle, nome, email, whatsapp, cnpj, restaurante, slug, senha]);
+  }, [plan, cycle, nome, email, whatsapp, cnpj, restaurante, slug, senha, problemas, irParaCampo]);
 
-  const inputClass =
-    "mt-1.5 w-full rounded-xl border border-line bg-paper px-4 py-3 text-sm text-ink placeholder:text-muted focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100";
+  const inputBase =
+    "mt-1.5 w-full rounded-xl border bg-paper px-4 py-3 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2";
+  const inputClass = `${inputBase} border-line focus:border-brand-500 focus:ring-brand-100`;
+  /**
+   * Campo com problema: a borda vermelha é o que se vê de longe; a frase, o que resolve.
+   *
+   * ⚠️ O `!` NÃO É PREGUIÇA. A regra base de `globals.css`
+   * (`input:not([type=checkbox]):not(…)` — sete `:not`) tem especificidade (0,7,1)
+   * e ENGOLE qualquer utilitário de cor de borda em input, inclusive
+   * `border-red-400`. Sem o `!important` a borda de erro simplesmente não pinta —
+   * conferido no navegador: a cor computada continuava `rgb(229,229,229)`.
+   * O anel de foco fica no laranja da marca de propósito (DESIGN.md §4: um único
+   * acento de foco); quem diz "tem problema aqui" é a borda, que persiste.
+   */
+  const inputErroClass = `${inputBase} !border-red-400 focus:ring-brand-100`;
+  const campoClass = (campo: string) => (erroDe(campo) ? inputErroClass : inputClass);
   const labelClass = "block text-sm font-semibold text-ink";
+
+  /** A frase de erro do campo, no mesmo formato em todos eles. */
+  function ErroCampo({ campo }: { campo: string }) {
+    const msg = erroDe(campo);
+    if (!msg) return null;
+    return (
+      <p id={`erro-${campo}`} className="mt-1 text-xs font-semibold text-red-600">
+        {msg}
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -243,20 +358,22 @@ export function CheckoutClient({
             <label className={labelClass} htmlFor="nome">
               Seu nome completo
             </label>
-            <input id="nome" className={inputClass} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome e sobrenome" autoComplete="name" />
+            <input id="nome" className={campoClass("nome")} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome e sobrenome" autoComplete="name" aria-invalid={Boolean(erroDe("nome"))} aria-describedby={erroDe("nome") ? "erro-nome" : undefined} />
+            <ErroCampo campo="nome" />
           </div>
           <div>
             <label className={labelClass} htmlFor="email">
               E-mail
             </label>
-            <input id="email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@restaurante.com.br" autoComplete="email" />
-            <p className="mt-1 text-xs text-muted">É com ele que você entra no painel.</p>
+            <input id="email" type="email" className={campoClass("email")} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@restaurante.com.br" autoComplete="email" aria-invalid={Boolean(erroDe("email"))} aria-describedby={erroDe("email") ? "erro-email" : undefined} />
+            {erroDe("email") ? <ErroCampo campo="email" /> : <p className="mt-1 text-xs text-muted">É com ele que você entra no painel.</p>}
           </div>
           <div>
             <label className={labelClass} htmlFor="whatsapp">
               WhatsApp
             </label>
-            <input id="whatsapp" inputMode="tel" className={inputClass} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(11) 90000-0000" autoComplete="tel" />
+            <input id="whatsapp" inputMode="tel" className={campoClass("whatsapp")} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(11) 90000-0000" autoComplete="tel" aria-invalid={Boolean(erroDe("whatsapp"))} aria-describedby={erroDe("whatsapp") ? "erro-whatsapp" : undefined} />
+            <ErroCampo campo="whatsapp" />
           </div>
           <div className="sm:col-span-2">
             <label className={labelClass} htmlFor="cnpj">
@@ -275,13 +392,20 @@ export function CheckoutClient({
             <label className={labelClass} htmlFor="restaurante">
               Nome do restaurante
             </label>
-            <input id="restaurante" className={inputClass} value={restaurante} onChange={(e) => setRestaurante(e.target.value)} placeholder="Pizzaria do Zé" />
+            <input id="restaurante" className={campoClass("restaurante")} value={restaurante} onChange={(e) => setRestaurante(e.target.value)} placeholder="Pizzaria do Zé" aria-invalid={Boolean(erroDe("restaurante"))} aria-describedby={erroDe("restaurante") ? "erro-restaurante" : undefined} />
+            <ErroCampo campo="restaurante" />
           </div>
           <div>
             <label className={labelClass} htmlFor="slug">
               Endereço da sua loja
             </label>
-            <div className="mt-1.5 flex items-center overflow-hidden rounded-xl border border-line bg-paper focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
+            <div
+              className={`mt-1.5 flex items-center overflow-hidden rounded-xl border bg-paper focus-within:ring-2 ${
+                erroDe("slug")
+                  ? "border-red-400 focus-within:ring-brand-100"
+                  : "border-line focus-within:border-brand-500 focus-within:ring-brand-100"
+              }`}
+            >
               <span className="shrink-0 border-r border-line bg-canvas px-3 py-3 text-sm text-muted">foocci.com.br/pedido/</span>
               <input
                 id="slug"
@@ -294,22 +418,30 @@ export function CheckoutClient({
                 placeholder="pizzaria-do-ze"
               />
             </div>
-            <p
-              className={`mt-1 text-xs ${
-                slugState.kind === "taken" ? "text-red-600" : slugState.kind === "free" ? "text-green-700" : "text-muted"
-              }`}
-            >
-              {slugState.kind === "checking" && "Conferindo se está livre…"}
-              {slugState.kind === "free" && "Endereço livre."}
-              {slugState.kind === "taken" && slugState.reason}
-              {slugState.kind === "idle" && "Letras minúsculas, números e hífen."}
-            </p>
+            {/* Um lugar só para a situação do endereço: o que falta (depois de
+                tentar enviar) tem precedência sobre a dica neutra — a dica não
+                explica por que o envio parou. */}
+            {erroDe("slug") ? (
+              <ErroCampo campo="slug" />
+            ) : (
+              <p
+                className={`mt-1 text-xs ${
+                  slugState.kind === "taken" ? "text-red-600" : slugState.kind === "free" ? "text-green-700" : "text-muted"
+                }`}
+              >
+                {slugState.kind === "checking" && "Conferindo se está livre…"}
+                {slugState.kind === "free" && "Endereço livre."}
+                {slugState.kind === "taken" && slugState.reason}
+                {slugState.kind === "idle" && "Letras minúsculas, números e hífen."}
+              </p>
+            )}
           </div>
           <div>
             <label className={labelClass} htmlFor="senha">
               Senha de acesso ao painel
             </label>
-            <input id="senha" type="password" className={inputClass} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Ao menos 8 caracteres" autoComplete="new-password" />
+            <input id="senha" type="password" className={campoClass("senha")} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Ao menos 8 caracteres" autoComplete="new-password" aria-invalid={Boolean(erroDe("senha"))} aria-describedby={erroDe("senha") ? "erro-senha" : undefined} />
+            <ErroCampo campo="senha" />
             <p className="mt-1 text-xs text-muted">
               É a senha que você vai usar com o seu e-mail para entrar assim que o pagamento for confirmado.
             </p>
@@ -338,16 +470,29 @@ export function CheckoutClient({
           </div>
         )}
 
-        <label className="mt-4 flex cursor-pointer items-start gap-3">
+        {/* Quando é ESTE o item que falta, ele precisa se anunciar: era o aceite
+            não marcado, lá no fim da página, que deixava o botão apagado sem
+            explicação nenhuma. */}
+        <label
+          className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl ${
+            erroDe("aceite") ? "border border-red-200 bg-red-50 p-3" : ""
+          }`}
+        >
           <input
+            id="aceite"
             type="checkbox"
             checked={aceite}
             onChange={(e) => setAceite(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-line text-brand-500 focus:ring-brand-500"
+            aria-invalid={Boolean(erroDe("aceite"))}
+            aria-describedby={erroDe("aceite") ? "erro-aceite" : undefined}
+            className={`mt-0.5 h-4 w-4 shrink-0 rounded text-brand-500 focus:ring-brand-500 ${
+              erroDe("aceite") ? "border-red-400" : "border-line"
+            }`}
           />
           <span className="text-sm leading-relaxed text-ink2">
             Li e aceito o Termo de Contratação do serviço Foocci. O aceite registra data, hora, IP e a versão do
             Termo — vale como assinatura eletrônica.
+            <ErroCampo campo="aceite" />
           </span>
         </label>
       </section>
@@ -360,10 +505,50 @@ export function CheckoutClient({
         </div>
       )}
 
+      {/*
+        O RESUMO DO QUE FALTA — colado no botão, que é onde a pessoa está olhando
+        quando nada acontece. Cada item leva ao campo: no celular, procurar a
+        pendência rolando uma página de quatro seções é o mesmo que não saber.
+        Tom `amber` (aviso) e não `red` (erro) de propósito: isto é uma lista de
+        pendências do próprio formulário; o vermelho fica reservado para a falha
+        do servidor, logo acima, que é outra conversa.
+      */}
+      {mostrarPendencias && (
+        <div
+          id="pendencias"
+          role="alert"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
+        >
+          <p className="text-sm font-semibold text-amber-700">
+            {problemas.length === 1 ? "Falta 1 coisa para concluir" : `Faltam ${problemas.length} coisas para concluir`}
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {problemas.map((p) => (
+              <li key={p.campo}>
+                {/* Sublinhado SÓ no rótulo: com a frase inteira sublinhada, três
+                    itens empilhados viram um bloco riscado ilegível no celular.
+                    O rótulo carrega a afordância de link; a frase, a instrução. */}
+                <button
+                  type="button"
+                  onClick={() => irParaCampo(p.campo)}
+                  className="text-left text-sm leading-relaxed text-amber-700 hover:text-amber-800"
+                >
+                  <span className="font-semibold underline decoration-amber-300 underline-offset-4">
+                    {p.rotulo}
+                  </span>
+                  : {p.mensagem}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={submit}
-        disabled={!canSubmit}
+        disabled={state === "sending"}
+        aria-describedby={mostrarPendencias ? "pendencias" : undefined}
         className="w-full rounded-xl bg-brand-500 px-6 py-4 text-[15px] font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {state === "sending" ? "Preparando o pagamento…" : `Aceitar e pagar ${formatBRL(q.firstChargeCents)}`}
