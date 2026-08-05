@@ -270,13 +270,15 @@ const main = async () => {
     p("   e a soma dos limites diários dessas campanhas. O teto real é o MENOR entre");
     p("   a soma dos limites e o que a audiência viva comporta.");
     for (const r of restaurantes) {
-      const [contactaveis, totalClientes, ativas] = await Promise.all([
+      const [contactaveis, totalClientes, ativas, tocados30, tocados90] = await Promise.all([
         prisma.customer.count({ where: { restaurantId: r.id, isGuest: false, isActive: true, crmContactable: true, hasOptedOut: false, phone: { not: null } } }),
         prisma.customer.count({ where: { restaurantId: r.id, isGuest: false } }),
         prisma.campaign.findMany({
           where: { restaurantId: r.id, status: { in: ["ACTIVE", "SCHEDULED"] } },
           select: { id: true, templateId: true, scheduleConfig: true },
         }),
+        prisma.campaignExecution.groupBy({ by: ["customerId"], where: { restaurantId: r.id, status: { in: ENVIADOS }, sentAt: { gte: corteCurto } } }),
+        prisma.campaignExecution.groupBy({ by: ["customerId"], where: { restaurantId: r.id, status: { in: ENVIADOS }, sentAt: { gte: corteLongo } } }),
       ]);
       if (totalClientes === 0 && ativas.length === 0) continue;
       const somaLimites = ativas.reduce((s, c) => {
@@ -284,9 +286,14 @@ const main = async () => {
         const lim = cfg && typeof cfg === "object" && typeof cfg.dailyLimit === "number" ? cfg.dailyLimit : 20;
         return s + Math.max(1, Math.min(lim, 200));
       }, 0);
+      const cobertura = contactaveis > 0 ? ((tocados30.length / contactaveis) * 100).toFixed(0) : "—";
       p(`   ${String(r.slug ?? r.id.slice(0, 8)).slice(0, 20).padEnd(20)}${r.isDemo ? " (demo)" : "      "} ` +
         `clientes ${n(totalClientes, 6)} · contactáveis ${n(contactaveis, 6)} · ` +
         `campanhas ativas ${n(ativas.length, 3)} · soma dos limites/dia ${n(somaLimites, 5)}`);
+      // A saturação é o outro lado do teto, e ninguém olhava: uma casa que já
+      // falou com quase toda a base não tem para quem mandar mais — e isso NÃO
+      // é defeito, é o fim natural do estoque de gente.
+      p(`   ${" ".repeat(26)}pessoas distintas contatadas: ${DIAS_CURTO}d ${n(tocados30.length, 5)} (${cobertura}% dos contactáveis) · ${DIAS_LONGO}d ${n(tocados90.length, 5)}`);
     }
 
     /* Pedidos: separar "não teve o que enviar" de "tinha e não enviou". */
@@ -327,13 +334,36 @@ const main = async () => {
     return;
   }
   for (const r of lista) {
+    // O teto APLICADO, não o configurado. A vitrine já registra que ler o
+    // `dailyGlobalCap` cru é a armadilha — aqui ele vem de `getSafetyConfig`,
+    // que é o que o runner consulta. Do `contact-safety` só se lê o bloco
+    // `safety` e os contadores: as `evaluations` trazem nome de cliente e este
+    // log é público.
+    const cs = await get(`/api/admin/diagnostics/contact-safety?restaurantId=${r.id}&limit=1`, secret);
+    if (cs.status === 200 && cs.json?.safety) {
+      const s = cs.json.safety;
+      p(`   ┌─ ${r.slug} — canal ${cs.json.whatsappAvailable ? "disponível" : "INDISPONÍVEL"} · ` +
+        `loja ${cs.json.restaurantOpen ? "aberta" : "fechada"} · enviados hoje ${cs.json.globalSentToday}`);
+      p(`   │  teto diário aplicado ${s.dailyGlobalCap} · cooldown ${s.customerCooldownHours}h · ` +
+        `máx/semana por cliente ${s.maxPerWeekPerCustomer} · ` +
+        `silêncio ${s.quietHoursEnabled ? `${s.quietHoursStart}–${s.quietHoursEnd}` : "desligado"} · ` +
+        `fim de semana ${s.sendOnWeekends ? "sim" : "não"}`);
+    } else {
+      p(`   ┌─ ${r.slug} — contact-safety HTTP ${cs.status} (proteções não lidas)`);
+    }
     const d = await get(`/api/admin/diagnostics/crm-campaigns?restaurantId=${r.id}&limit=200`, secret);
     if (d.status !== 200 || !d.json) { p(`   · ${r.slug}: HTTP ${d.status}`); continue; }
     const ativas = (d.json.campaigns ?? []).filter((c) => ["ACTIVE", "SCHEDULED"].includes(c.status));
-    if (!ativas.length) continue;
-    p(`   ┌─ ${r.slug} — ${ativas.length} campanha(s) ativa(s), ${d.json.dueCampaigns} de vez agora`);
-    p(`   │  agendador interno: ${d.json.scheduler?.active ? "ATIVO" : "inativo neste processo"}` +
+    if (!ativas.length) { p("   └─ (nenhuma campanha ativa nesta casa)"); continue; }
+    p(`   │  ${ativas.length} campanha(s) ativa(s), ${d.json.dueCampaigns} de vez agora`);
+    p(`   │  agendador interno: ${d.json.scheduler?.active ? "ATIVO" : "inativo NESTE processo"}` +
       (d.json.scheduler?.lastRun ? ` · última rodada ${d.json.scheduler.lastRun.at} (env ${d.json.scheduler.lastRun.sent})` : " · sem rodada registrada"));
+    p("   │  (o agendador é estado de MEMÓRIA de um processo; 'inativo' aqui pode ser");
+    p("   │   só a réplica que atendeu esta requisição. Quem prova envio é a seção A.)");
+    // `audiência` sai truncada em MAX_AUDIENCE=500 (CrmCampaignService.ts:110):
+    // "500" quer dizer "500 ou mais", não "exatamente 500". Sem esta linha o
+    // número parece um platô e não é.
+    p("   │  (audiência 500 = teto de resolução, não o tamanho real do segmento)");
     for (const c of ativas) {
       p(`   │  ${String(c.templateId ?? c.targetSegment ?? c.name).slice(0, 28).padEnd(28)} ` +
         `de vez=${c.isDueNow ? "sim" : "não"} · audiência ${c.audience?.total ?? "?"} (nova ${c.audience?.newEligible ?? "?"}) · ` +
