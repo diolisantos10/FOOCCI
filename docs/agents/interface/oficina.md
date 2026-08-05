@@ -1288,3 +1288,45 @@ comercial laranja no corpo: quem chega ali errou de endereço, não de produto.
 Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, worktree `agent-a344cbc90aaf550b7`
+
+---
+
+## 2026-08-05 · A hierarquia dos cartões de plano em `/site/precos`
+
+Ordem do CEO: o desenho do cartão está aprovado, muda **o que vem depois do
+botão e em que ordem**. Nada de moldura, cor, selo "Mais vendido", bloco de
+ciclos ou botão foi tocado.
+
+**O que mudou.** Depois do CTA, o cartão passou a ter dois blocos:
+
+1. **Três vantagens em 16px semibold** (`plan.benefits`), com apoio em 13px.
+   Antes o primeiro conteúdo pós-botão era o "Só aqui você tem" — bullets de
+   13px com **prova técnica** ("a comanda volta pra fila 5×"). Prova excelente,
+   primeira linha péssima: prova antes de a pessoa ter entendido o que ganha.
+2. **"Tudo que está incluído"** — rótulo de bloco + herança ("Tudo do
+   Essencial, mais:") na mesma linha, e aí sim `onlyHere`, os grupos e o
+   "Substitui". Lista completa preservada, nada escondido, nada colapsado.
+
+**A regra que ficou: benefício sobe, prova desce.** E a ordem das vantagens
+segue a dor-chefe do plano, não a força do recurso — a primeira vantagem de cada
+cartão entrega a manchete daquele cartão, e nenhuma se repete entre os três.
+
+**Escala é o que separa os dois blocos, não moldura.** 16px (vantagem) contra
+12,5px (lista) — os itens de lista caíram de 13px para 12,5px e o check ficou
+`brand-500/70`. Com os dois em 13px, o cartão lia como uma lista longa só.
+
+**Teto de três.** A quarta vantagem foi escrita e cortada nos três planos
+(Performance perdia "Bronze a Diamante", que continua no `onlyHere`): com quatro,
+nenhuma é grande.
+
+**Medido** com Playwright em 375/768/1280: `scrollWidth` igual à janela nos três;
+a 1280 os três cartões alinhados no topo (`top` 217 nos três) e o do meio segue
+sendo o mais alto pelo próprio conteúdo, como já era.
+
+**Verificação:** `npx tsc --noEmit` limpo · `npx vitest run` 435 arquivos /
+5.618 testes verdes. Sem commit, por ordem do Diretor.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
+
+— interface, worktree `agent-a478e73f658b2abd5`, branch `work-precos` (de
+`origin/claude/foocci-site-hero`)

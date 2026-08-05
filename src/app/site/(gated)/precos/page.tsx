@@ -98,6 +98,26 @@ export const metadata: Metadata = {
 
 type FeatureGroupData = { label: string; items: string[] };
 
+/**
+ * HIERARQUIA DO CARTÃO (05/08, ordem do CEO) — depois do preço e do botão vêm
+ * DOIS blocos, nesta ordem:
+ *
+ *   1. `benefits` — 3 vantagens, tipografia grande. É o que o dono GANHA, no
+ *      vocabulário dele. A PRIMEIRA de cada plano entrega a manchete daquele
+ *      plano ("Pare de pagar comissão" → venda direta sem comissão), e nunca se
+ *      repete entre os cartões.
+ *   2. O resto (prova + lista completa), visualmente subordinado.
+ *
+ * A regra que organiza a ordem: **benefício sobe, prova desce.** "A comanda não
+ * some: volta pra fila 5×" é ótima prova e péssima primeira linha — ela prova
+ * antes de o dono ter entendido o que ganha. Por isso `onlyHere` ficou no bloco
+ * de baixo. Teto de 3: a quarta vantagem enfraquece as três primeiras.
+ *
+ * Toda vantagem tem lastro em recurso que já está na lista do próprio plano —
+ * nada aqui é escrito solto (guardrail 7).
+ */
+type Benefit = { title: string; sub: string };
+
 type Plan = {
   /** Id comercial — é ele que viaja para o checkout e vira o enum do banco. */
   id: SitePlanId;
@@ -105,6 +125,7 @@ type Plan = {
   tagline: string;
   limit: string;
   limitSub: string;
+  benefits: Benefit[];
   onlyHere: string[];
   /**
    * O faturamento de EXEMPLO do bloco "Faz a conta", em reais por mês. É o único
@@ -126,6 +147,20 @@ const PLANS: Plan[] = [
     tagline: "Pare de pagar comissão.",
     limit: "Até 300 pedidos/mês",
     limitSub: "≈ 10 por dia",
+    benefits: [
+      {
+        title: "Venda direto, sem comissão nenhuma",
+        sub: "Sua loja, com a sua marca — o cliente não vê Foocci. Você paga um valor fixo, venda o quanto vender.",
+      },
+      {
+        title: "O cliente passa a ser seu",
+        sub: "Nome, telefone e histórico de quem pede ficam na sua base — não na do aplicativo.",
+      },
+      {
+        title: "Um preço para cada canal, no mesmo prato",
+        sub: "Delivery, salão e iFood com três preços. E a cozinha só recebe pedido que ela confirmou.",
+      },
+    ],
     onlyHere: [
       "Preço diferente por canal, no mesmo prato — delivery, salão e iFood com três preços.",
       "A comanda não some: não imprimiu, volta pra fila 5×, o alarme repete até alguém aceitar, e só um aparelho toca.",
@@ -181,6 +216,20 @@ const PLANS: Plan[] = [
     highlighted: true,
     limit: "Até 1.200 pedidos/mês",
     limitSub: "≈ 40 por dia · 3.000 mensagens",
+    benefits: [
+      {
+        title: "O cliente volta sem você lembrar dele",
+        sub: "16 campanhas prontas e resgate automático de quem está esfriando — antes de ele virar cliente do concorrente.",
+      },
+      {
+        title: "Atendimento com IA que vende",
+        sub: "No WhatsApp e no cardápio, a qualquer hora: sugere, monta o combo, respeita alergia — e você assume quando quiser.",
+      },
+      {
+        title: "O mesmo cliente reconhecido nos três canais",
+        sub: "WhatsApp, site e QR da mesa numa Central de Conversas só, com o histórico junto.",
+      },
+    ],
     onlyHere: [
       "Seu WhatsApp não queima: silêncio das 21h às 8h, teto diário, descanso por cliente, atraso aleatório e ninguém recebe a mesma campanha duas vezes.",
       "A IA é impedida de mentir: um verificador barra o que não bate com o cardápio, e toda madrugada um simulador testa o agente.",
@@ -242,6 +291,20 @@ const PLANS: Plan[] = [
     tagline: "Gerencie como gente grande.",
     limit: "Até 4.000 pedidos/mês",
     limitSub: "≈ 130 por dia · 10.000 mensagens",
+    benefits: [
+      {
+        title: "Saber se cada prato dá lucro",
+        sub: "Ficha técnica real, CMV do mês e o preço que fecha a conta. Subiu o insumo, o custo do prato sobe junto.",
+      },
+      {
+        title: "O preço se corrige sozinho",
+        sub: "Reprecificação automática até o teto que você define, com histórico de cada mudança.",
+      },
+      {
+        title: "A IA escreve a campanha e explica a queda",
+        sub: "Ela monta a campanha com o contexto de cada cliente e diz, em português, por que as vendas caíram.",
+      },
+    ],
     onlyHere: [
       "Saber se o prato dá lucro e reprecificar sozinho: ficha técnica real e markup sobre a despesa real.",
       "A IA escreve a campanha sozinha com o contexto de cada cliente — e explica, em português, por que as vendas caíram.",
@@ -429,8 +492,10 @@ function RoiBlock({ revenue, planMonthlyCents }: { revenue: number; planMonthlyC
 function CheckItem({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2">
-      <CheckIcon className="mt-[3px] h-3.5 w-3.5 shrink-0 text-brand-500" />
-      <span className="text-[13px] leading-relaxed text-ink2">{children}</span>
+      {/* Escala subordinada de propósito: 12,5px contra os 16px das vantagens —
+          é o que faz o olho ler "lista completa", não "manchete". */}
+      <CheckIcon className="mt-[3px] h-3.5 w-3.5 shrink-0 text-brand-500/70" />
+      <span className="text-[12.5px] leading-relaxed text-ink2">{children}</span>
     </li>
   );
 }
@@ -524,43 +589,69 @@ function PlanCard({ plan }: { plan: Plan }) {
         </p>
       </div>
 
-      {/* Só aqui você tem */}
-      <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
-        <div className="flex items-center gap-2">
-          <SparklesIcon className="h-4 w-4 text-brand-600" />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-700">Só aqui você tem</p>
-        </div>
-        <ul className="mt-3 space-y-2.5">
-          {plan.onlyHere.map((o) => (
-            <li key={o} className="flex items-start gap-2">
-              <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-              <span className="text-[13px] leading-relaxed text-ink2">{o}</span>
-            </li>
-          ))}
-        </ul>
+      {/* ── BLOCO 1: as vantagens ─────────────────────────────────────────────
+          O que o dono ganha, grande e em primeiro lugar. Três, no vocabulário
+          dele, começando pela dor que a manchete deste plano promete resolver. */}
+      <div className="mt-7 space-y-4">
+        {plan.benefits.map((b) => (
+          <div key={b.title} className="flex items-start gap-2.5">
+            <CheckIcon className="mt-[5px] h-4 w-4 shrink-0 text-brand-500" />
+            <div>
+              <p className="text-[16px] font-semibold leading-snug tracking-tight text-ink">{b.title}</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-ink2">{b.sub}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ROI — premissa declarada, números calculados (ver trava jurídica no topo) */}
       <RoiBlock revenue={plan.roiRevenue} planMonthlyCents={monthly} />
 
-      {/* Substitui */}
-      <p className="mt-4 text-[13px] leading-relaxed text-muted">
-        <span className="font-semibold text-ink2">Substitui:</span> {plan.substitui}
-      </p>
-
-      {/* Recursos agrupados */}
-      <div className="mt-6 border-t border-line pt-6">
-        {plan.inheritLabel && (
-          <p className="mb-5 inline-flex items-center gap-2 rounded-lg bg-canvas px-3 py-1.5 text-[12.5px] font-semibold text-ink">
-            <RepeatIcon className="h-3.5 w-3.5 text-brand-500" />
-            {plan.inheritLabel}
+      {/* ── BLOCO 2: o resto ──────────────────────────────────────────────────
+          Nada se perde — a prova e a lista inteira continuam no cartão, abaixo
+          e menores. A divisória é dupla de propósito (linha + rótulo), para o
+          olho enxergar dois blocos e não uma lista longa. */}
+      <div className="mt-7 border-t border-line pt-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+            Tudo que está incluído
           </p>
-        )}
-        <div className="space-y-5">
+          {/* A herança abre o bloco: quem lê "Crescimento" precisa saber que o
+              Essencial inteiro está aqui ANTES de correr a lista. */}
+          {plan.inheritLabel && (
+            <p className="inline-flex items-center gap-2 rounded-lg bg-canvas px-3 py-1.5 text-[12.5px] font-semibold text-ink">
+              <RepeatIcon className="h-3.5 w-3.5 text-brand-500" />
+              {plan.inheritLabel}
+            </p>
+          )}
+        </div>
+
+        {/* Só aqui você tem — prova, não manchete */}
+        <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+          <div className="flex items-center gap-2">
+            <SparklesIcon className="h-3.5 w-3.5 text-brand-600" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-700">Só aqui você tem</p>
+          </div>
+          <ul className="mt-3 space-y-2.5">
+            {plan.onlyHere.map((o) => (
+              <li key={o} className="flex items-start gap-2">
+                <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
+                <span className="text-[12.5px] leading-relaxed text-ink2">{o}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="mt-5 space-y-5">
           {plan.groups.map((g) => (
             <FeatureGroup key={g.label} label={g.label} items={g.items} />
           ))}
         </div>
+
+        {/* Substitui — fecha o bloco de baixo (é comparação de custo, não vantagem) */}
+        <p className="mt-6 border-t border-line pt-4 text-[12.5px] leading-relaxed text-muted">
+          <span className="font-semibold text-ink2">Substitui:</span> {plan.substitui}
+        </p>
       </div>
     </div>
   );
