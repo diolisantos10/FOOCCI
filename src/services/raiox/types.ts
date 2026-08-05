@@ -219,6 +219,31 @@ export interface GatesSample {
   blockingFindings: { auditorId: string; severity: string; title: string }[];
 }
 
+/**
+ * A sombra de UM agente. Existe porque o total agregado esconde o caso que mais
+ * importa: um agente parado enquanto outro produz. Antes deste recorte, um
+ * recepcionista movimentado bastava para o Cérebro inteiro parecer saudável e a
+ * sombra do CRM podia estar morta há meses sem uma linha de alerta.
+ */
+export interface BrainAgentShadow {
+  /** "whatsapp" | "crm" | … — a linha antiga com agentId nulo conta como "whatsapp". */
+  agentId: string;
+  /** Amostras dentro da janela de coleta (windowHours). */
+  amostras: number;
+  coherencePass: number;
+  coherenceFail: number;
+  coherenceNeedsReview: number;
+  /**
+   * Horas desde a última amostra deste agente em TODA a história da tabela —
+   * não só na janela. `null` = o agente nunca gravou uma amostra sequer.
+   *
+   * É este campo, e não `amostras`, que responde "faz quanto tempo que essa
+   * sombra não grava nada". Campanha que não roda hoje é normal; sombra que não
+   * grava há uma semana é a régua de promoção lendo zero.
+   */
+  ultimaAmostraHorasAtras: number | null;
+}
+
 export interface BrainSample {
   windowHours: number;
   shadowSamples: number;
@@ -230,6 +255,16 @@ export interface BrainSample {
   liveConfigs: { restaurantId: string; mode: string; paused: boolean }[];
   /** Limiares da escada de liberação, para o relatório citar sem inventar. */
   promotionThresholds: { minSamples: number; minCoherencePassPct: number };
+  /** Um item por agente que JÁ gravou alguma vez. Agente que nunca gravou não aparece aqui. */
+  porAgente: BrainAgentShadow[];
+  /**
+   * Os agentes de quem se ESPERA evidência de sombra. Declaração humana escrita
+   * no coletor — não é inferida do que a tabela contém, senão um agente que
+   * nunca gravou nada nunca seria cobrado (o silêncio se autoabsolveria).
+   */
+  agentesEsperados: string[];
+  /** A partir de quantas horas sem gravar a sombra de um agente esperado vira alarme. */
+  silencioAlarmaAposHoras: number;
 }
 
 export interface StuckJob {

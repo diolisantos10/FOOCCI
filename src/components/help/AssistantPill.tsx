@@ -26,7 +26,8 @@ import {
 import { PILL_SHORTCUT_ID, PILL_SHORTCUT_LABEL, QUICK_ACTIONS } from "./assistantCatalog";
 import AssistantPanel from "./AssistantPanel";
 import { AI_DISCLAIMER } from "./AssistantChat";
-import { CloseIcon, MicIcon, SendIcon, SparkIcon } from "./icons";
+import { VoiceButton, VoiceStatus } from "@/components/voice";
+import { CloseIcon, SendIcon, SparkIcon } from "./icons";
 
 const shortcut = QUICK_ACTIONS.find((a) => a.id === PILL_SHORTCUT_ID) ?? null;
 
@@ -116,32 +117,18 @@ export function AssistantPill() {
           </span>
         </button>
 
-        {/* Microfone — colado dentro da pílula, só onde há largura */}
-        {voice.supported && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!open) a!.openSuggest();
-              voice.toggle();
-            }}
-            disabled={voice.transcribing}
-            aria-label={voice.recording ? "Parar gravação" : "Ditar por voz"}
-            title={voice.recording ? "Parar gravação" : "Ditar por voz"}
-            className={`hidden h-7 w-7 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-50 sm:grid ${
-              voice.recording
-                ? "bg-red-50 text-red-600"
-                : "text-muted hover:bg-[#F4F4F2] hover:text-ink2"
-            }`}
-          >
-            {voice.recording ? (
-              <span className="h-2 w-2 animate-pulse rounded-sm bg-red-500" />
-            ) : voice.transcribing ? (
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-line2 border-t-brand-500" />
-            ) : (
-              <MicIcon className="h-4 w-4" />
-            )}
-          </button>
-        )}
+        {/* Microfone — colado dentro da pílula, só onde há largura.
+            Ditar aqui abre o painel: a pessoa precisa VER o texto cair no campo. */}
+        <VoiceButton
+          voice={voice}
+          size="sm"
+          shape="round"
+          label="Ditar uma dúvida por voz"
+          onBeforeToggle={() => {
+            if (!open) a!.openSuggest();
+          }}
+          className="hidden sm:grid"
+        />
 
         {/* O ÚNICO atalho da barra fechada — o resto mora no painel */}
         {shortcut && (
@@ -200,34 +187,16 @@ export function AssistantPill() {
                 aria-label="Perguntar ao assistente Foocci"
                 className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13.5px] text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
               />
-              {voice.supported && (
-                <button
-                  type="button"
-                  onClick={voice.toggle}
-                  disabled={voice.transcribing}
-                  aria-label={voice.recording ? "Parar gravação" : "Ditar por voz"}
-                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-colors disabled:opacity-50 ${
-                    voice.recording
-                      ? "bg-red-50 text-red-600"
-                      : "text-muted hover:bg-[#F4F4F2] hover:text-ink2"
-                  }`}
-                >
-                  {voice.recording ? (
-                    <span className="h-2 w-2 animate-pulse rounded-sm bg-red-500" />
-                  ) : (
-                    <MicIcon className="h-4 w-4" />
-                  )}
-                </button>
-              )}
+              <VoiceButton voice={voice} size="sm" label="Ditar a dúvida por voz" />
               <button
                 type="submit"
                 aria-label="Enviar pergunta"
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-brand-500 text-white transition-colors hover:bg-brand-600"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-brand-500 text-white transition-colors hover:bg-brand-600"
               >
                 <SendIcon className="h-3.5 w-3.5" />
               </button>
             </div>
-            {voice.error && <p className="mt-1.5 text-[11.5px] text-red-600">{voice.error}</p>}
+            <VoiceStatus voice={voice} />
           </form>
 
           {/* Ações rápidas + sugestões + trilha */}
@@ -259,32 +228,16 @@ export function AssistantPill() {
                 aria-label="Perguntar ao assistente Foocci"
                 className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14px] text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
               />
-              {voice.supported && (
-                <button
-                  type="button"
-                  onClick={voice.toggle}
-                  disabled={voice.transcribing}
-                  aria-label={voice.recording ? "Parar gravação" : "Ditar por voz"}
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors disabled:opacity-50 ${
-                    voice.recording ? "bg-red-50 text-red-600" : "text-muted hover:bg-[#F4F4F2]"
-                  }`}
-                >
-                  {voice.recording ? (
-                    <span className="h-2 w-2 animate-pulse rounded-sm bg-red-500" />
-                  ) : (
-                    <MicIcon className="h-4 w-4" />
-                  )}
-                </button>
-              )}
+              <VoiceButton voice={voice} size="sm" label="Ditar a dúvida por voz" />
               <button
                 type="submit"
                 aria-label="Enviar pergunta"
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-500 text-white transition-colors hover:bg-brand-600"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-brand-500 text-white transition-colors hover:bg-brand-600"
               >
                 <SendIcon className="h-4 w-4" />
               </button>
             </div>
-            {voice.error && <p className="mt-1.5 text-[11.5px] text-red-600">{voice.error}</p>}
+            <VoiceStatus voice={voice} />
             <p className="mt-2 text-center text-[11px] leading-snug text-muted">{AI_DISCLAIMER}</p>
           </form>
         </div>

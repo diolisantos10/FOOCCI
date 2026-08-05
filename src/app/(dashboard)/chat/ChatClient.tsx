@@ -8,6 +8,7 @@ import {
   useMemo,
   FormEvent,
 } from "react";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -472,6 +473,11 @@ function ThreadPanel({
   const isHuman   = !thread.aiEnabled && thread.status === "HUMANO_ASSUMIU";
   const isAI      = thread.aiEnabled;
 
+  // Ditado: a fala vira texto NO CAMPO — quem atende revisa e aperta enviar.
+  const voice = useVoiceInput((t) => setReplyText(appendTranscript(replyText, t)), {
+    fileName: "resposta.webm",
+  });
+
   return (
     <>
       {/* Header */}
@@ -572,27 +578,33 @@ function ThreadPanel({
               ⚠️ Resposta registrada internamente — envio ao cliente será conectado na próxima etapa.
             </span>
           </div>
-          <form onSubmit={onSend} className="flex items-end gap-2 px-4 py-3">
-            <textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onSend(e as unknown as FormEvent);
-                }
-              }}
-              placeholder="Digite uma resposta… (Enter para enviar)"
-              rows={1}
-              className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
-            />
-            <button
-              type="submit"
-              disabled={sending || !replyText.trim()}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
-            >
-              {sending ? "…" : "Enviar"}
-            </button>
+          <form onSubmit={onSend} className="px-4 py-3">
+            <div className="flex items-end gap-2">
+              <div className="flex min-w-0 flex-1 items-end gap-1 rounded-xl border border-line2 bg-paper px-1.5 py-1 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      onSend(e as unknown as FormEvent);
+                    }
+                  }}
+                  placeholder="Digite ou fale…"
+                  rows={1}
+                  className="min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
+                />
+                <VoiceButton voice={voice} label="Ditar a resposta por voz" disabled={sending} />
+              </div>
+              <button
+                type="submit"
+                disabled={sending || !replyText.trim()}
+                className="shrink-0 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              >
+                {sending ? "…" : "Enviar"}
+              </button>
+            </div>
+            <VoiceStatus voice={voice} />
           </form>
         </div>
       ) : (

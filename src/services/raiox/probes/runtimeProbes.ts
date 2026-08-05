@@ -503,14 +503,51 @@ export const cerebroSombraProbe: RaioXProbe = {
     const s = requireBlock(sample.brain, "registro de raciocínio em sombra");
     const avaliadas = s.coherencePass + s.coherenceFail + s.coherenceNeedsReview;
     const taxaPass = pct(s.coherencePass, avaliadas);
+
+    // Silêncio por agente: um agente esperado que não grava há mais tempo que a
+    // janela dos gates é uma escada de promoção lendo zero. Sem este recorte, um
+    // recepcionista movimentado bastava para o Cérebro inteiro parecer saudável.
+    const mudos = s.agentesEsperados
+      .map((agentId) => {
+        const linha = s.porAgente.find((a) => a.agentId === agentId);
+        const horas = linha?.ultimaAmostraHorasAtras ?? null;
+        return { agentId, horas, nunca: !linha || horas === null };
+      })
+      .filter((a) => a.nunca || (a.horas ?? 0) > s.silencioAlarmaAposHoras);
+
     const metrics = {
       amostras: s.shadowSamples,
       coerenciaPassPct: taxaPass,
       coerenciaFalha: s.coherenceFail,
       configsForaDeSombra: s.liveConfigs.length,
+      agentesMudos: mudos.length,
     };
 
     const out: RaioXFinding[] = [];
+
+    if (mudos.length > 0) {
+      const dias = Math.round(s.silencioAlarmaAposHoras / 24);
+      out.push({
+        probeId: "cerebro-sombra",
+        area: "Cérebro",
+        status: "FAIL",
+        severity: "P1",
+        title: "Sombra parada: agente em teste que não grava evidência",
+        summary:
+          `${N(mudos.length)} agente(s) de quem se espera sombra não gravam amostra há mais de ${dias} dia(s). ` +
+          `Enquanto isso, o gate de promoção lê ZERO para eles — tempo em sombra sem amostra não é teste, ` +
+          `é a aparência de teste.`,
+        evidence: mudos.map((a) =>
+          a.nunca
+            ? `agente "${a.agentId}": NUNCA gravou uma amostra sequer`
+            : `agente "${a.agentId}": última amostra há ${N(Math.round((a.horas ?? 0) / 24))} dia(s) (${N(a.horas ?? 0)}h)`,
+        ),
+        metrics,
+        recommendation:
+          "Conferir se o caminho que grava está sendo exercitado (para o CRM: CRM_BRAIN_SHADOW_ENABLED=true " +
+          "e campanhas com envio real). Não promover nada com base em tempo decorrido — a régua lê os últimos 7 dias.",
+      });
+    }
 
     if (s.liveConfigs.length > 0) {
       out.push({
@@ -547,25 +584,60 @@ export const cerebroSombraProbe: RaioXProbe = {
     const prontoParaAvaliacao =
       avaliadas >= s.promotionThresholds.minSamples && taxaPass >= s.promotionThresholds.minCoherencePassPct;
 
-    out.push({
-      probeId: "cerebro-sombra",
-      area: "Cérebro",
-      status: "PASS",
-      severity: "INFO",
-      title: "Evidência de sombra acumulada",
-      summary:
-        `${N(s.shadowSamples)} amostras na janela; ${taxaPass}% de coerência PASS entre as ${N(avaliadas)} avaliadas; ` +
-        `${N(s.fallbackModes)} caíram no caminho determinístico.` +
-        (prontoParaAvaliacao
-          ? " Os limiares de amostra e coerência estão atingidos — há material para o CEO avaliar a promoção."
-          : ""),
-      evidence: [
-        `limiares da escada: ≥${s.promotionThresholds.minSamples} amostras e ≥${s.promotionThresholds.minCoherencePassPct}% de coerência PASS`,
-      ],
-      metrics,
-      recommendation:
-        "A promoção de SHADOW_ONLY para ALLOWLIST é decisão humana. Esta linha prepara a evidência; ela não promove nada.",
-    });
+    // Zero amostra NÃO pode sair como PASS. A versão anterior desta linha
+    // anunciava "Evidência de sombra acumulada: 0 amostras" com status PASS — um
+    // portão que não registrou resultado se apresentando como saudável. Quando o
+    // silêncio já passou dos 7 dias, o FAIL acima já disse o essencial e este
+    // aviso seria a mesma notícia duas vezes.
+    if (s.shadowSamples === 0 && mudos.length === 0) {
+      out.push({
+        probeId: "cerebro-sombra",
+        area: "Cérebro",
+        status: "WARNING",
+        severity: "P2",
+        title: "Nenhuma amostra de sombra na janela",
+        summary:
+          `Nenhum raciocínio em sombra foi gravado nas últimas ${s.windowHours}h. Ainda dentro do prazo de ` +
+          `${Math.round(s.silencioAlarmaAposHoras / 24)} dia(s), mas nada foi acrescentado à evidência hoje.`,
+        evidence:
+          s.porAgente.length > 0
+            ? s.porAgente.map(
+                (a) =>
+                  `agente "${a.agentId}": última amostra há ${a.ultimaAmostraHorasAtras === null ? "—" : `${N(a.ultimaAmostraHorasAtras)}h`}`,
+              )
+            : ["nenhum agente jamais gravou uma amostra"],
+        metrics,
+        recommendation: "Um dia sem movimento é normal; uma sequência deles vira o alarme de sombra parada.",
+      });
+      return out;
+    }
+
+    if (s.shadowSamples > 0) {
+      out.push({
+        probeId: "cerebro-sombra",
+        area: "Cérebro",
+        status: "PASS",
+        severity: "INFO",
+        title: "Evidência de sombra acumulada",
+        summary:
+          `${N(s.shadowSamples)} amostras na janela; ${taxaPass}% de coerência PASS entre as ${N(avaliadas)} avaliadas; ` +
+          `${N(s.fallbackModes)} caíram no caminho determinístico.` +
+          (prontoParaAvaliacao
+            ? " Os limiares de amostra e coerência estão atingidos — há material para o CEO avaliar a promoção."
+            : ""),
+        evidence: [
+          `limiares da escada: ≥${s.promotionThresholds.minSamples} amostras e ≥${s.promotionThresholds.minCoherencePassPct}% de coerência PASS`,
+          // Por agente, sempre: é o que impede o total de um agente movimentado
+          // de cobrir o silêncio de outro.
+          ...s.porAgente.map(
+            (a) => `agente "${a.agentId}": ${N(a.amostras)} na janela · PASS ${N(a.coherencePass)} · FALHA ${N(a.coherenceFail)}`,
+          ),
+        ],
+        metrics,
+        recommendation:
+          "A promoção de SHADOW_ONLY para ALLOWLIST é decisão humana. Esta linha prepara a evidência; ela não promove nada.",
+      });
+    }
 
     return out;
   },

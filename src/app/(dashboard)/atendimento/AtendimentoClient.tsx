@@ -20,6 +20,7 @@ import {
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import { formatOrderNumber } from "@/lib/order-number";
 
 // ── Internal command detection (client-safe pure helper) ──────────────────────
@@ -1750,6 +1751,11 @@ export function ThreadPanel({
   onOrderCreated,
 }: ThreadPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ditado: a fala vira texto NO CAMPO — quem atende revisa antes de mandar
+  // para o cliente. Mensagem errada enviada custa mais que um toque a mais.
+  const voice = useVoiceInput((t) => setText(appendTranscript(text, t)), {
+    fileName: "resposta.webm",
+  });
   const badge          = getHandlerBadge(thread);
   const typeBadge      = getConvTypeBadge(thread);
   const channel        = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
@@ -2094,27 +2100,35 @@ export function ThreadPanel({
                 📎
               </button>
             )}
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onSend(e as unknown as FormEvent);
-                }
-              }}
-              placeholder={isInstagramComment ? "Responder publicamente o comentário… (Enter para enviar)" : attachment ? "Legenda (opcional)…" : "Digite uma mensagem… (Enter para enviar)"}
-              rows={1}
-              className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            />
+            <div className="flex min-w-0 flex-1 items-end gap-1 rounded-xl border border-line2 bg-paper px-1.5 py-1 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSend(e as unknown as FormEvent);
+                  }
+                }}
+                placeholder={isInstagramComment ? "Responda o comentário…" : attachment ? "Legenda (opcional)…" : "Digite ou fale…"}
+                rows={1}
+                className="min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
+              />
+              <VoiceButton
+                voice={voice}
+                label="Ditar a mensagem por voz"
+                disabled={sending || uploading}
+              />
+            </div>
             <button
               type="submit"
               disabled={sending || uploading || (!text.trim() && !attachment)}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               {uploading ? "Enviando…" : sending ? "…" : "Enviar"}
             </button>
           </div>
+          <VoiceStatus voice={voice} />
         </form>
       ) : isResolved ? (
         <div className="shrink-0 border-t border-line2 bg-canvas px-4 py-3 text-center text-xs text-muted">

@@ -18,8 +18,8 @@ import type { ContextGuide, QuickAction } from "./assistantCatalog";
 import { SUGGESTIONS } from "./assistantCatalog";
 import type { HelpChatMessage, HelpProposedAction, UseHelpThread } from "./useHelpThread";
 import { Button, Card, Pill } from "@/components/ui";
-import { useVoiceInput } from "./useVoiceInput";
-import { MicIcon, SendIcon, SparkIcon } from "./icons";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
+import { SendIcon, SparkIcon } from "./icons";
 
 export const AI_DISCLAIMER =
   "O assistente está sempre aprendendo e pode cometer erros. Confira o que for importante.";
@@ -64,10 +64,15 @@ export default function AssistantChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const voice = useVoiceInput((text) => {
-    setDraft((d) => (d ? `${d} ${text}` : text));
-    inputRef.current?.focus();
-  });
+  // A transcrição cai no campo e a pessoa revisa antes de enviar — nunca envia
+  // sozinha. Se já havia texto, acrescenta.
+  const voice = useVoiceInput(
+    (text) => {
+      setDraft((d) => appendTranscript(d, text));
+      inputRef.current?.focus();
+    },
+    { fileName: "pergunta.webm" },
+  );
 
   const hasUserMessages = messages.some((m) => m.role === "USER");
   const isHuman = thread?.mode === "HUMAN";
@@ -244,11 +249,11 @@ export default function AssistantChat({
       )}
 
       {/* ── Erro de envio ────────────────────────────────────────────────── */}
-      {(sendError || voice.error) && (
+      {sendError && (
         <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <p className="min-w-0 flex-1 text-[12px] text-red-700">{sendError ?? voice.error}</p>
-            {sendError && draft.trim() && (
+            <p className="min-w-0 flex-1 text-[12px] text-red-700">{sendError}</p>
+            {draft.trim() && (
               <button
                 type="button"
                 onClick={() => void submit(draft)}
@@ -259,10 +264,7 @@ export default function AssistantChat({
             )}
             <button
               type="button"
-              onClick={() => {
-                dismissSendError();
-                voice.clearError();
-              }}
+              onClick={dismissSendError}
               aria-label="Dispensar aviso"
               className="shrink-0 rounded-lg px-1.5 py-1 text-[12px] font-semibold text-red-600 transition-colors hover:bg-red-100"
             >
@@ -298,28 +300,7 @@ export default function AssistantChat({
               }
               className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
             />
-            {voice.supported && (
-              <button
-                type="button"
-                onClick={voice.toggle}
-                disabled={voice.transcribing}
-                aria-label={voice.recording ? "Parar gravação" : "Ditar por voz"}
-                title={voice.recording ? "Parar gravação" : "Ditar por voz"}
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition-colors disabled:opacity-50 ${
-                  voice.recording
-                    ? "border-red-200 bg-red-50 text-red-600"
-                    : "border-transparent text-muted hover:bg-[#F4F4F2] hover:text-ink2"
-                }`}
-              >
-                {voice.recording ? (
-                  <span className="h-2.5 w-2.5 animate-pulse rounded-sm bg-red-500" />
-                ) : voice.transcribing ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line2 border-t-brand-500" />
-                ) : (
-                  <MicIcon className="h-4 w-4" />
-                )}
-              </button>
-            )}
+            <VoiceButton voice={voice} label="Ditar a pergunta por voz" />
             <button
               type="submit"
               disabled={!draft.trim() || sending}
@@ -329,6 +310,7 @@ export default function AssistantChat({
               <SendIcon className="h-4 w-4" />
             </button>
           </div>
+          <VoiceStatus voice={voice} />
           <p className="mt-2 text-center text-[11px] leading-snug text-muted">{AI_DISCLAIMER}</p>
         </div>
       </form>

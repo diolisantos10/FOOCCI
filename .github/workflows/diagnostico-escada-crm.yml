@@ -1,0 +1,74 @@
+name: Diagnóstico — escada do Agente de CRM em produção
+
+# Somente leitura sobre a produção. Responde "o tempo em SHADOW_ONLY produziu
+# evidência ou silêncio?" consultando as rotas de leitura que já existem, com o
+# ADMIN_SECRET lido do Railway dentro do runner. O segredo nunca é impresso;
+# nenhuma mensagem de sombra é impressa (o log deste repositório é público).
+#
+# A saída também é publicada na branch `diagnostico/escada-crm-resultado`
+# porque quem pediu o diagnóstico alcança o git, mas não alcança o log do
+# Actions. A branch é descartável e reescrita a cada rodada.
+#
+# Este workflow NÃO promove nada — a promoção na escada é ato humano.
+
+on:
+  workflow_dispatch:
+    inputs:
+      limite:
+        description: 'Quantos restaurantes examinar (0 = todos)'
+        required: false
+        default: '12'
+  push:
+    paths:
+      - 'scripts/diagnostico-escada-crm.mjs'
+      - '.github/workflows/diagnostico-escada-crm.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  diagnosticar:
+    name: Perguntar à produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Rodar diagnóstico da escada
+        id: diag
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          LIMITE_RESTAURANTES: ${{ github.event.inputs.limite || '12' }}
+        # `set -o pipefail` + `|| true`: a falha do script não pode impedir a
+        # publicação da saída — diagnóstico que morre calado é o defeito que
+        # este bloco veio investigar.
+        run: |
+          set -o pipefail
+          node scripts/diagnostico-escada-crm.mjs 2>&1 | tee /tmp/resultado.txt || true
+
+      - name: Publicar o resultado na branch de diagnóstico
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/pub && mkdir -p /tmp/pub
+          cp /tmp/resultado.txt /tmp/pub/RESULTADO.txt || echo "sem saída" > /tmp/pub/RESULTADO.txt
+          {
+            echo "# Diagnóstico da escada do Agente de CRM"
+            echo
+            echo "Rodada em: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "Commit examinado: ${GITHUB_SHA}"
+            echo
+            echo "Somente leitura. Nenhuma promoção foi feita."
+          } > /tmp/pub/LEIA-ME.md
+          cd /tmp/pub
+          git init -q
+          git checkout -q -b diagnostico/escada-crm-resultado
+          git add -A
+          git commit -q -m "Resultado do diagnóstico da escada do CRM (${GITHUB_SHA})"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -q --force origin diagnostico/escada-crm-resultado

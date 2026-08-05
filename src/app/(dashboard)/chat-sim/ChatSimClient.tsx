@@ -484,6 +484,12 @@ export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl, embed
                 </button>
               </div>
             )}
+            {/* SEM MICROFONE, DE PROPÓSITO (05/08/2026).
+                Isto é bancada de teste: quem digita aqui está fingindo ser o CLIENTE
+                para conferir o comportamento do agente. O valor do simulador está em
+                repetir a MESMA frase, palavra por palavra — transcrição introduz
+                variação e ainda gastaria uma chamada paga por teste. Vale igual para
+                waiter-lab, aprendizado-whatsapp e os simuladores do admin. */}
             <form onSubmit={handleSubmit} className="flex items-end gap-2">
               <textarea
                 value={input}

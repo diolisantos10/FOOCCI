@@ -4,6 +4,125 @@
 
 ---
 
+## 2026-08-05 — "O agente de CRM já devia estar em 100%": evidência ou silêncio?
+
+**Pedido:** o CEO afirmou que o agente de CRM está em teste há muito tempo e já
+deveria rodar sozinho. A pergunta que decide não é essa — é se o tempo em sombra
+**gravou** alguma coisa. Trazer o número de produção, o veredito e o que falta.
+
+### O que tentei e o que descobri
+
+**1. Não consegui o número de produção, e isso é um achado sobre a casa, não um
+detalhe.** Segui o molde certo (`scripts/diagnostico-crm-instagram.mjs` +
+workflow lendo `RAILWAY_TOKEN` dos segredos) e escrevi o par
+`scripts/diagnostico-escada-crm.mjs` + `.github/workflows/diagnostico-escada-crm.yml`.
+O push saiu, mas **o workflow não disparou**: push autenticado pelo token do
+ambiente não cria execução de Actions (regra do GitHub contra laço), e a API
+(`api.github.com`) responde 401 com `GH_TOKEN`/`GITHUB_TOKEN` desta sessão e 403
+sem token. Procurei credencial antes de desistir: `.env` do repo aponta para
+`localhost:5432`, e não há token do Railway fora dos segredos. **Registrei o
+limite em vez de inventar número** — o script está pronto e o resultado dele
+volta pelo git (branch `diagnostico/escada-crm-resultado`), porque descobri no
+meio que quem pede o diagnóstico não alcança o log do Actions. *Diagnóstico cujo
+resultado ninguém consegue ler é o mesmo silêncio que ele veio medir.*
+
+**2. A pergunta do CEO tem resposta de CÓDIGO, que não depende de medir nada: a
+régua nunca contou os meses.** `runCrmPilotGates` chama
+`getShadowStats(restaurantId, { agentId: "crm" })` (`crmAgentGovernance.ts:59`)
+**sem `sinceDays`**, e o padrão é 7 (`BrainShadowEvidenceService.ts:57`). Então
+"está em teste há muito tempo" é irrelevante por construção: o gate só enxerga os
+**últimos 7 dias**. Tempo em sombra não acumula — ele expira.
+
+**3. A sombra do CRM tem duas torneiras em série, e a segunda ninguém tinha
+notado.** A primeira já estava documentada pelo `crm` (a flag
+`CRM_BRAIN_SHADOW_ENABLED`, `ScheduledCampaignRunnerService.ts:1518`). A segunda:
+mesmo ligada, `_runCrmShadow` só roda para clientes que **receberam envio real**
+(o `push` está na linha 1830, depois do `sent++`), com teto de 3 por disparo
+(linha 2004). Ou seja: **campanha que não envia = sombra que não grava**. A
+hipótese do briefing estava certa e é estrutural, não conjuntural.
+
+**4. A assimetria que explica tudo: o recepcionista tem esteira, o CRM não tem.**
+`brain-shadow-replay.yml` roda todo dia às 03:20 e enche `brain_shadow_logs` —
+mas com `agentId: "whatsapp"` fixo (`ShadowReplayService.ts:155`). O CRM **não
+tem motor equivalente**. Por isso o tempo passa e a evidência do recepcionista
+cresce enquanto a do CRM fica parada. Foi aqui que a peça encaixou.
+
+**5. E o instrumento que devia ter gritado isso estava aprovando.** A sonda
+noturna `cerebroSombraProbe` (`runtimeProbes.ts:498`) somava **todos os agentes**
+(`RaioXCollector.collectBrain` nem selecionava `agentId`) e emitia
+`status: "PASS"` com o título *"Evidência de sombra acumulada"* — inclusive com
+`shadowSamples: 0`. Duas falhas na mesma linha: (a) um recepcionista movimentado
+bastava para cobrir um CRM mudo; (b) **zero amostra saía como PASS**, que é o
+guardrail 2 invertido — máquina que não registrou resultado nenhum se
+apresentando como saudável. É o mesmo padrão do carrinho abandonado que o CEO
+flagrou: a tela diz "ativo", o número diz traço.
+
+**6. O conserto, com as duas metades.** `BrainSample` ganhou `porAgente` +
+`agentesEsperados` + `silencioAlarmaAposHoras` (`types.ts:222`); o coletor passou
+a agrupar por agente e a buscar a **última amostra de todos os tempos**
+(`groupBy`/`_max`, sem recorte de janela — a pergunta "faz quanto tempo que não
+grava" não tem resposta dentro de uma janela vazia). A sonda ganhou FAIL/P1 para
+agente esperado em silêncio, e o PASS deixou de sair sem amostra.
+- O limiar **não é chutado**: 7 dias = a janela que os gates leem. *O alarme
+  dispara exatamente no momento em que o tempo em sombra deixa de valer.*
+- A lista `AGENTES_COM_SOMBRA_ESPERADA` é **declaração humana escrita no
+  coletor**, não derivada da tabela. Derivar do que existe faria o silêncio se
+  autoabsolver: agente que nunca gravou nada nunca seria cobrado.
+- **A metade que deixa passar:** a janela da coleta é de 24h e a régua do
+  silêncio é de 7 dias. Campanha que não rodou ontem **não** vira alarme — barrar
+  isso daria ruído diário e o relatório pararia de ser lido em duas semanas.
+- Provei que os testes reprovam mesmo: apliquei o comportamento antigo por cima
+  do novo e **4 dos 5 caíram**; o "NÃO ACUSA" passou nos dois, que é o esperado
+  de um teste de falso positivo.
+
+### O que quebrou
+
+- Nada de tipo (`tsc` limpo). A suíte fechou 5.365 verdes com **1 falha**:
+  `QualityControlService.test.ts` estourando 5 s sob carga paralela — passa
+  isolada em 12,9 s e não referencia `raiox`. É a mesma falha ambiental
+  (auditores procurando Postgres) já registrada nas duas entradas anteriores.
+- Meu primeiro workflow imprimia só no log do Actions. Só fui perceber que não
+  conseguia ler esse log **depois** de escrevê-lo. Ficou a regra: quem escreve
+  diagnóstico precisa saber, antes, por onde a resposta volta.
+
+### Achados fora do meu escopo (para o Diretor)
+
+- **`CrmPilotObservability.ts:264` informa mal quando o portão falha.** Se
+  `runCrmPilotGates` lança, o `.catch(() => null)` zera os gates e **a lista de
+  bloqueios sai vazia** — o relatório diz *"Ainda NÃO promover. 0 pendência(s)"*.
+  Não promove nada (o `prontoParaPromover` exige `gates?.allPass`), então não é
+  P0; mas quem lê "0 pendências" conclui que é só apertar o botão. É do `crm` —
+  não toquei, outro especialista está no arquivo.
+- **O custo real da régua, para o CEO decidir com o número na frente:** com 3
+  amostras por disparo e janela de 7 dias, o 1º degrau (20 amostras) exige ~7
+  disparos com envio real **por semana**; o 2º (100 amostras) exige ~34. Sem um
+  replay de sombra do CRM, esse volume depende inteiramente de campanha
+  enviando. **Não afrouxei nada** — régua que se ajusta ao resultado nunca
+  reprovou ninguém.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. *"Tempo em sombra não acumula — ele expira."* O gate de promoção do CRM lê os
+   **últimos 7 dias** (`crmAgentGovernance.ts:59` sem `sinceDays` +
+   `BrainShadowEvidenceService.ts:57`). "Está em teste há meses" nunca foi
+   argumento para promover. Origem: leitura do gate neste bloco, 2026-08-05.
+2. *"A sombra do CRM só grava depois de um envio real."* `_runCrmShadow` recebe
+   apenas quem já recebeu mensagem (`ScheduledCampaignRunnerService.ts:1830`),
+   até 3 por disparo (linha 2004), e só com `CRM_BRAIN_SHADOW_ENABLED="true"`
+   (linha 1518). Campanha parada = escada travada, sem nenhum erro aparecer.
+   Origem: leitura do runner neste bloco, 2026-08-05.
+3. *"O recepcionista tem esteira de evidência; o CRM não."* `brain-shadow-replay`
+   roda diariamente mas grava sempre como `"whatsapp"`
+   (`ShadowReplayService.ts:155`). Comparar o progresso dos dois agentes sem
+   saber disso leva à conclusão errada sobre qual está "pronto". Origem:
+   2026-08-05.
+4. *"Sonda que soma agentes esconde o agente parado."* Corrigido em
+   `runtimeProbes.ts:498` + `RaioXCollector.collectBrain`: recorte por agente,
+   alarme de silêncio em 7 dias e fim do PASS com zero amostra. Origem: este
+   bloco, 2026-08-05.
+
+---
+
 ## 2026-08-05 — Raio-X noturno: a metade determinística da coleta
 
 **Pedido:** construir a coleta que roda toda madrugada e produz evidência para

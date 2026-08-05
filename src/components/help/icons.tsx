@@ -23,14 +23,10 @@ export function SparkIcon({ className }: P) {
   );
 }
 
-export function MicIcon({ className }: P) {
-  return (
-    <svg className={className} {...base}>
-      <rect x="9" y="3" width="6" height="11" rx="3" />
-      <path d="M5 11a7 7 0 0014 0M12 18v3" />
-    </svg>
-  );
-}
+// O microfone saiu daqui: ele agora mora com a peça que o usa, em
+// `@/components/voice` (VoiceButton). Um ícone de microfone solto neste arquivo
+// convidava a próxima tela a desenhar o botão à mão de novo — foi assim que
+// nasceram as três implementações que este bloco matou.
 
 export function SendIcon({ className }: P) {
   return (

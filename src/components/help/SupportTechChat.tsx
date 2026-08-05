@@ -7,10 +7,16 @@
  *
  * Shadow-safe: o endpoint (/api/support/tech) NUNCA executa remediação — só
  * diagnostica. Segue o DESIGN.md (laranja + tokens ink/muted/line, rounded-2xl).
+ *
+ * Microfone: usa o gancho único (`@/components/voice`). Esta tela tinha uma
+ * implementação própria que mandava o áudio direto para /api/support/tech —
+ * o relato saía sem a pessoa ler o que a máquina entendeu. Agora a fala vira
+ * texto NO CAMPO e o lojista confere antes de pedir o diagnóstico.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { MicIcon, SendIcon } from "./icons";
+import { useState } from "react";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
+import { SendIcon } from "./icons";
 
 interface Diagnosis {
   classification: "INCIDENT" | "NO_INCIDENT_DETECTED" | "NEEDS_MORE_INFO";
@@ -41,27 +47,23 @@ export default function SupportTechChat() {
   const [loading, setLoading] = useState(false);
   const [diag, setDiag] = useState<Diagnosis | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  // Microfone só aparece quando o navegador realmente grava — botão falso é
-  // pior que ausência. Resolvido depois do mount (o servidor não sabe disso).
-  const [micSupported, setMicSupported] = useState(false);
-  useEffect(() => {
-    setMicSupported(
-      typeof window !== "undefined" &&
-        typeof window.MediaRecorder !== "undefined" &&
-        Boolean(navigator.mediaDevices?.getUserMedia),
-    );
-  }, []);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
 
-  async function diagnose(body: BodyInit, headers?: HeadersInit) {
+  const voice = useVoiceInput((text) => setReport((r) => appendTranscript(r, text)), {
+    fileName: "relato.webm",
+  });
+
+  // Só texto sobe daqui: a voz já virou texto no campo e passou pelos olhos do
+  // lojista. O endpoint continua aceitando áudio para quem o chama por outro caminho.
+  async function diagnose(text: string) {
     setLoading(true); setErr(null); setDiag(null);
     try {
-      const r = await fetch("/api/support/tech", { method: "POST", body, headers });
-      const j = (await r.json()) as { ok: boolean; diagnosis?: Diagnosis; transcript?: string; error?: string };
+      const r = await fetch("/api/support/tech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report: text }),
+      });
+      const j = (await r.json()) as { ok: boolean; diagnosis?: Diagnosis; error?: string };
       if (!r.ok || !j.ok || !j.diagnosis) { setErr(j.error ?? "Não consegui diagnosticar agora."); return; }
-      if (j.transcript) setReport(j.transcript);
       setDiag(j.diagnosis);
     } catch {
       setErr("Falha de conexão — tente de novo.");
@@ -73,35 +75,8 @@ export default function SupportTechChat() {
   const submitText = () => {
     const text = report.trim();
     if (!text || loading) return;
-    void diagnose(JSON.stringify({ report: text }), { "Content-Type": "application/json" });
+    void diagnose(text);
   };
-
-  async function toggleRecording() {
-    if (recording) {
-      recorderRef.current?.stop();
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
-      chunksRef.current = [];
-      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      rec.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setRecording(false);
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        if (blob.size === 0) return;
-        const form = new FormData();
-        form.append("audio", blob, "relato.webm");
-        void diagnose(form);
-      };
-      recorderRef.current = rec;
-      rec.start();
-      setRecording(true);
-    } catch {
-      setErr("Não consegui acessar o microfone. Você pode digitar o relato.");
-    }
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-canvas">
@@ -199,26 +174,7 @@ export default function SupportTechChat() {
               placeholder="Descreva o problema…"
               className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
             />
-            {micSupported && (
-              <button
-                type="button"
-                onClick={() => void toggleRecording()}
-                disabled={loading}
-                aria-label={recording ? "Parar gravação" : "Relatar por voz"}
-                title={recording ? "Parar gravação" : "Relatar por voz"}
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition-colors disabled:opacity-50 ${
-                  recording
-                    ? "border-red-200 bg-red-50 text-red-600"
-                    : "border-transparent text-muted hover:bg-[#F4F4F2] hover:text-ink2"
-                }`}
-              >
-                {recording ? (
-                  <span className="h-2.5 w-2.5 animate-pulse rounded-sm bg-red-500" />
-                ) : (
-                  <MicIcon className="h-4 w-4" />
-                )}
-              </button>
-            )}
+            <VoiceButton voice={voice} label="Relatar o problema por voz" disabled={loading} />
             <button
               type="button"
               onClick={submitText}
@@ -229,6 +185,7 @@ export default function SupportTechChat() {
               <SendIcon className="h-4 w-4" />
             </button>
           </div>
+          <VoiceStatus voice={voice} />
           <p className="mt-2 text-center text-[11px] leading-snug text-muted">
             O diagnóstico é uma leitura dos sinais do sistema — nada é executado sem você.
           </p>
