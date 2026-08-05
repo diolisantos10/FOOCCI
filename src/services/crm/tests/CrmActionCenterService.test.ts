@@ -44,7 +44,7 @@ function baseInput(overrides: Partial<ComputeActionsInput> = {}): ComputeActions
   return {
     customers: [],
     now: NOW,
-    hasEvolutionConfig: true,
+    hasWhatsAppChannel: true,
     couponUserIds: new Set(),
     segmentConfig: DEFAULT_SEGMENT_CONFIG,
     recentCampaignStats: null,
@@ -210,12 +210,12 @@ describe("E — DIAMANTE QUENTE → VIP_APPRECIATION", () => {
   });
 });
 
-// ── Test F — no Evolution config → SAFETY_ISSUE_ALERT ────────────────────────
+// ── Test F — canal WhatsApp fora do ar → SAFETY_ISSUE_ALERT ──────────────────
 
-describe("F — no Evolution config → SAFETY_ISSUE_ALERT first", () => {
-  it("generates SAFETY_ISSUE_ALERT when hasEvolutionConfig=false", () => {
+describe("F — sem canal WhatsApp → SAFETY_ISSUE_ALERT first", () => {
+  it("generates SAFETY_ISSUE_ALERT when hasWhatsAppChannel=false", () => {
     const actions = computeActions(
-      baseInput({ hasEvolutionConfig: false, customers: [makeCustomer()] }),
+      baseInput({ hasWhatsAppChannel: false, customers: [makeCustomer()] }),
     );
 
     const alert = actions.find((a) => a.type === "SAFETY_ISSUE_ALERT");
@@ -229,14 +229,14 @@ describe("F — no Evolution config → SAFETY_ISSUE_ALERT first", () => {
       makeCustomer({ lastOrderAt: daysAgo(80) }), // also FRIO
     ];
     const actions = computeActions(
-      baseInput({ hasEvolutionConfig: false, customers }),
+      baseInput({ hasWhatsAppChannel: false, customers }),
     );
 
     expect(actions[0].type).toBe("SAFETY_ISSUE_ALERT");
   });
 
-  it("does not generate SAFETY_ISSUE_ALERT when Evolution is configured", () => {
-    const actions = computeActions(baseInput({ hasEvolutionConfig: true }));
+  it("does not generate SAFETY_ISSUE_ALERT when the channel is connected", () => {
+    const actions = computeActions(baseInput({ hasWhatsAppChannel: true }));
     expect(actions.find((a) => a.type === "SAFETY_ISSUE_ALERT")).toBeUndefined();
   });
 });

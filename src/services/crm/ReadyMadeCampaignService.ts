@@ -161,7 +161,7 @@ export class ReadyMadeCampaignService {
     const config = await getConfig(restaurantId);
 
     // Meta approval state per campaign, matched by the deterministic template name.
-    // Best-effort: an Evolution-only restaurant simply has no rows here.
+    // Best-effort: restaurante sem modelos aprovados simplesmente não tem linhas aqui.
     const metaByName = new Map<string, { name: string; status: string; rejectedReason: string | null }>();
     try {
       for (const t of await MetaTemplateService.list(restaurantId)) {
@@ -221,9 +221,11 @@ export class ReadyMadeCampaignService {
   }
 
   /**
-   * Whether the official Meta Cloud API is connected for this restaurant — the gate for
-   * showing the "Aprovação da Meta" UI. When true, marketing needs approved templates;
-   * Evolution-only restaurants never see it.
+   * Se o canal oficial está conectado — portão de EXIBIÇÃO da tela "Aprovação da
+   * Meta". De propósito lê o status gravado, e não o `isWhatsAppChannelConnected`
+   * (que também exige o token resolver): esconder a tela de aprovação quando o
+   * token está ilegível esconderia justamente onde o lojista conserta o problema.
+   * Para DECIDIR ENVIO, use sempre o helper — aqui é só o que a tela mostra.
    */
   static async isMetaConnected(restaurantId: string): Promise<boolean> {
     const cfg = await prisma.metaWhatsAppConfig.findUnique({

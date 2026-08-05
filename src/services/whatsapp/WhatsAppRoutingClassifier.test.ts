@@ -1,7 +1,7 @@
 /**
  * WhatsApp Routing Test Lab — classifier + runner tests (A–L).
  *
- * Pure: no DB, no Evolution, no LLM. These tests are the executable contract
+ * Pure: no DB, no WhatsApp send, no LLM. These tests are the executable contract
  * that replaces manual WhatsApp testing.
  *
  *   A — classifier: normal inbound customer
@@ -15,7 +15,7 @@
  *   I — (API route protected — covered structurally; see note)
  *   J — quick suite returns pass/fail summary
  *   K — custom simulation returns a classification
- *   L — NO scenario ever calls Evolution send for an internal command
+ *   L — NO scenario ever sends to the customer for an internal command
  */
 
 import { describe, it, expect } from "vitest";
@@ -35,7 +35,7 @@ describe("A — normal inbound customer", () => {
     expect(d.direction).toBe("INBOUND");
     expect(d.shouldRenderAsCustomerBubble).toBe(true);
     expect(d.shouldCallWhatsAppAgent).toBe(true);
-    expect(d.shouldCallEvolutionSend).toBe(false);
+    expect(d.shouldCallProviderSend).toBe(false);
   });
 
   it("respects conversation gating — no agent when aiEnabled=false", () => {
@@ -61,7 +61,7 @@ describe("B — customer /build is suppressed", () => {
     expect(d.shouldRenderAsCustomerBubble).toBe(false);
     expect(d.shouldCallWhatsAppAgent).toBe(false);
     expect(d.shouldCallWaiter).toBe(false);
-    expect(d.shouldCallEvolutionSend).toBe(false);
+    expect(d.shouldCallProviderSend).toBe(false);
   });
 });
 
@@ -75,7 +75,7 @@ describe("C — fromMe /build is an outbound mirror, hidden", () => {
     expect(d.isInternalCommand).toBe(true);
     expect(d.direction).toBe("OUTBOUND");
     expect(d.visibility).toBe("HIDDEN");
-    expect(d.shouldCallEvolutionSend).toBe(false);
+    expect(d.shouldCallProviderSend).toBe(false);
     expect(d.shouldShowInAtendimento).toBe(false);
     expect(d.safetyNotes.join(" ")).toMatch(/mirror/i);
   });
@@ -87,7 +87,7 @@ describe("D — operator manual /build is blocked", () => {
     const d = classifyRoutingEvent({ source: "MANUAL_OPERATOR", messageText: "/build teste", operatorId: "op-1" });
     expect(d.isInternalCommand).toBe(true);
     expect(d.blockReason).toBeTruthy();
-    expect(d.shouldCallEvolutionSend).toBe(false);
+    expect(d.shouldCallProviderSend).toBe(false);
     expect(d.shouldPersistConversationMessage).toBe(false);
   });
 
@@ -95,7 +95,7 @@ describe("D — operator manual /build is blocked", () => {
     const d = classifyRoutingEvent({ source: "MANUAL_OPERATOR", messageText: "Olá, posso ajudar?" });
     expect(d.actor).toBe("OPERATOR");
     expect(d.blockReason).toBeNull();
-    expect(d.shouldCallEvolutionSend).toBe(true);
+    expect(d.shouldCallProviderSend).toBe(true);
   });
 });
 
@@ -106,7 +106,7 @@ describe("E — handler exception does not change suppression", () => {
     // irrelevant because the pre-flight gate uses detection only.
     const d = classifyRoutingEvent({ source: "WEBHOOK", fromMe: false, messageText: "/build raio-x" });
     expect(d.isInternalCommand).toBe(true);
-    expect(d.shouldCallEvolutionSend).toBe(false);
+    expect(d.shouldCallProviderSend).toBe(false);
     expect(d.shouldRenderAsCustomerBubble).toBe(false);
   });
 });
@@ -119,7 +119,7 @@ describe("F — unauthorized build is suppressed", () => {
       buildOsEnabled: true, authorizedBuildPhone: false,
     });
     expect(d.isInternalCommand).toBe(true);
-    expect(d.shouldCallEvolutionSend).toBe(false);
+    expect(d.shouldCallProviderSend).toBe(false);
     expect(d.shouldPersistConversationMessage).toBe(false);
     expect(d.safetyNotes.join(" ")).toMatch(/not authorized/i);
   });
@@ -180,18 +180,18 @@ describe("K — custom simulation returns a classification", () => {
   it("classifies an ad-hoc fromMe /build event", () => {
     const r = runCustomEvent({ source: "WEBHOOK", fromMe: true, messageText: "/build x", fromPhone: "+5511990001122", connectedBusinessPhone: "+5511990001122" });
     expect(r.actual.isInternalCommand).toBe(true);
-    expect(r.wouldCallEvolutionSend).toBe(false);
+    expect(r.wouldCallProviderSend).toBe(false);
     expect(r.scenarioId).toBe("custom");
   });
 });
 
 // ── L ──────────────────────────────────────────────────────────────────────
-describe("L — no internal command ever calls Evolution send", () => {
+describe("L — nenhum comando interno chega a enviar mensagem", () => {
   it("across every built-in scenario, internal commands never send and never bubble", () => {
     const s = runRoutingScenarios("full");
     for (const r of s.results) {
       if (r.actual.isInternalCommand) {
-        expect(r.wouldCallEvolutionSend).toBe(false);
+        expect(r.wouldCallProviderSend).toBe(false);
         expect(r.wouldRenderAsCustomerBubble).toBe(false);
         expect(r.wouldCallWhatsAppAgent).toBe(false);
         expect(r.wouldCallWaiter).toBe(false);
@@ -207,7 +207,7 @@ describe("L — no internal command ever calls Evolution send", () => {
       for (const source of sources) {
         for (const fromMe of [true, false]) {
           const d = classifyRoutingEvent({ source, messageText: text, fromMe });
-          expect(d.shouldCallEvolutionSend).toBe(false);
+          expect(d.shouldCallProviderSend).toBe(false);
           expect(d.shouldRenderAsCustomerBubble).toBe(false);
         }
       }

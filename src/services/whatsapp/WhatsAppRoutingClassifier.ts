@@ -1,11 +1,11 @@
 /**
  * WhatsAppRoutingClassifier — PURE routing decision engine (no DB, no network).
  *
- * Given a simulated WhatsApp/Evolution event, this answers — deterministically
+ * Given a simulated WhatsApp event, this answers — deterministically
  * and WITHOUT any side effects — exactly how the live pipeline would treat it:
  *
  *   • Is it an internal command (/build, /cmd, /prompt)?
- *   • Would it be sent externally via Evolution?
+ *   • Would it be sent externally to the customer?
  *   • Would it be persisted to a Conversation / shown in Atendimento?
  *   • Would it render as a customer chat bubble?
  *   • Which agent (WhatsApp receptionist / Waiter) would be invoked?
@@ -17,7 +17,7 @@
  *   WebhookParserService    : fromMe=true → external_outbound (HUMAN_EXTERNAL);
  *                             fromMe=false → inbound (CUSTOMER).
  *   WebhookProcessorService : TEXT + isInternalCommandText → suppress BEFORE any
- *                             persist / AI / Evolution send (both inbound and
+ *                             persist / AI / envio externo (both inbound and
  *                             fromMe branches). Pre-flight gate, exception-safe.
  *   Operator/manual routes  : isInternalCommandText(content) → 400, never sent.
  *   AtendimentoClient       : a /build-prefixed message renders as the
@@ -25,7 +25,7 @@
  *                             customer bubble; excluded from list preview.
  *
  * The classifier imports ONLY the pure detector from BuildCommandRouter. It must
- * never import anything that touches the DB, Evolution, or the network.
+ * never import anything that touches the DB, the provider, or the network.
  */
 
 import { detectBuildCommand } from "@/services/buildos/BuildCommandRouter";
@@ -33,7 +33,7 @@ import { detectBuildCommand } from "@/services/buildos/BuildCommandRouter";
 // ── Public input/output contracts ─────────────────────────────────────────────
 
 export type RoutingEventSource =
-  | "WEBHOOK"          // a real Evolution webhook event (inbound or fromMe)
+  | "WEBHOOK"          // a real webhook event da Meta (inbound or fromMe)
   | "MANUAL_OPERATOR"  // operator typed a reply in Atendimento / send-whatsapp
   | "CARDAPIO"         // a /pedido (cardápio) chat message
   | "SYSTEM";          // a system/handoff event
@@ -47,7 +47,7 @@ export interface SimulatedRoutingEvent {
   fromPhone?: string;
   /** The store's connected WhatsApp number, when known (helps explain mirrors). */
   connectedBusinessPhone?: string;
-  /** Evolution fromMe flag (only meaningful for source=WEBHOOK). */
+  /** Sinalizador fromMe do provedor (só faz sentido para source=WEBHOOK). */
   fromMe?: boolean;
   messageText: string;
   messageId?: string;
@@ -105,7 +105,7 @@ export interface RoutingDecision {
   shouldRenderAsCustomerBubble: boolean;
   shouldCallWhatsAppAgent: boolean;
   shouldCallWaiter: boolean;
-  shouldCallEvolutionSend: boolean;
+  shouldCallProviderSend: boolean;
   blockReason: string | null;
   safetyNotes: string[];
   expectedLabel: string;
@@ -134,7 +134,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
   const safetyNotes: string[] = [];
 
   // The hard invariant, shared by every branch: an internal command never goes
-  // out via Evolution, never reaches the WhatsApp agent, never reaches Waiter,
+  // out to the customer, never reaches the WhatsApp agent, never reaches Waiter,
   // and never renders as a customer bubble.
   const baseInternalCommandDecision = (
     partial: Pick<RoutingDecision, "actor" | "direction" | "visibility" | "shouldPersistConversationMessage" | "shouldShowInAtendimento" | "blockReason" | "expectedLabel" | "explanation">,
@@ -145,7 +145,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
     shouldRenderAsCustomerBubble: false,
     shouldCallWhatsAppAgent: false,
     shouldCallWaiter: false,
-    shouldCallEvolutionSend: false,
+    shouldCallProviderSend: false,
     safetyNotes,
     ...partial,
   });
@@ -164,7 +164,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
       shouldRenderAsCustomerBubble: false,
       shouldCallWhatsAppAgent: false,
       shouldCallWaiter: false,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       blockReason: null,
       safetyNotes,
       expectedLabel: "Evento do sistema",
@@ -186,7 +186,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
         blockReason: "Comandos internos (/build, /cmd, /prompt) não podem ser enviados por esta interface.",
         expectedLabel: "Bloqueado (comando interno)",
         explanation:
-          "Operator tried to send an internal command. Both manual routes (/api/customers/[id]/send-whatsapp and /api/chat/conversations/[id]/messages) call isInternalCommandText() and return 400 — no persist, no Evolution send.",
+          "Operator tried to send an internal command. Both manual routes (/api/customers/[id]/send-whatsapp and /api/chat/conversations/[id]/messages) call isInternalCommandText() and return 400 — no persist, no send.",
       });
     }
     return {
@@ -201,22 +201,22 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
       shouldRenderAsCustomerBubble: false,
       shouldCallWhatsAppAgent: false,
       shouldCallWaiter: false,
-      shouldCallEvolutionSend: true, // operator reply IS delivered to the customer
+      shouldCallProviderSend: true, // operator reply IS delivered to the customer
       blockReason: null,
       safetyNotes,
       expectedLabel: "Operador",
       explanation:
-        "Operator manual reply. Persisted as HUMAN/OUTBOUND, shown in Atendimento, and delivered to the customer via Evolution.",
+        "Operator manual reply. Persisted as HUMAN/OUTBOUND, shown in Atendimento, and delivered to the customer via the Meta Cloud API.",
     };
   }
 
   // ── CARDÁPIO (/pedido) ───────────────────────────────────────────────────────
   if (event.source === "CARDAPIO") {
-    // Cardápio never calls Evolution. Internal commands typed in the cardápio chat
+    // O cardápio nunca envia WhatsApp. Comandos internos digitados no chat do cardápio
     // are not a real vector (the cardápio AI handles them as text), but we still
     // classify them as internal to keep the UI hide-rule consistent.
     if (isInternalCommand) {
-      safetyNotes.push("Cardápio chat never reaches Evolution; an internal-command-looking message is still hidden in Atendimento.");
+      safetyNotes.push("O chat do cardápio nunca envia WhatsApp; uma mensagem parecida com comando interno segue oculta no Atendimento.");
       return baseInternalCommandDecision({
         actor: "INTERNAL_COMMAND",
         direction: "INBOUND",
@@ -226,7 +226,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
         blockReason: null,
         expectedLabel: "Comando interno ocultado",
         explanation:
-          "An internal-command prefix in the cardápio chat. Cardápio has no Evolution send path; treated as internal and hidden.",
+          "Prefixo de comando interno no chat do cardápio. O cardápio não tem caminho de envio; tratado como interno e oculto.",
       });
     }
     return {
@@ -241,12 +241,12 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
       shouldRenderAsCustomerBubble: true,
       shouldCallWhatsAppAgent: false,
       shouldCallWaiter: false,
-      shouldCallEvolutionSend: false,
+      shouldCallProviderSend: false,
       blockReason: null,
       safetyNotes,
       expectedLabel: "Cliente · Cardápio",
       explanation:
-        "Cardápio (/pedido) customer message. Persisted as CUSTOMER_CARDAPIO, shown as a customer bubble. Cardápio never sends via Evolution.",
+        "Cardápio (/pedido) customer message. Persisted as CUSTOMER_CARDAPIO, shown as a customer bubble. O cardápio nunca envia por WhatsApp.",
     };
   }
 
@@ -285,7 +285,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
       blockReason: null,
       expectedLabel: "Comando interno ocultado (fromMe)",
       explanation:
-        "Evolution reported a fromMe message (sent from the business line) whose text is an internal command. WebhookProcessorService suppresses it before persistence. No Evolution send, no agent, no customer bubble. This is the 'mirror' that previously looked like an echo.",
+        "O provedor reportou uma mensagem fromMe (sent from the business line) whose text is an internal command. o webhook da Meta suprime antes de persistir (InboundAgentDispatch.interceptBuildOsCommand). Sem envio, sem agente, sem balão de cliente. This is the 'mirror' that previously looked like an echo.",
     });
   }
 
@@ -303,7 +303,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
       shouldRenderAsCustomerBubble: false,
       shouldCallWhatsAppAgent: false,
       shouldCallWaiter: false,
-      shouldCallEvolutionSend: false, // Foocci does NOT re-send a fromMe message
+      shouldCallProviderSend: false, // Foocci does NOT re-send a fromMe message
       blockReason: null,
       safetyNotes,
       expectedLabel: "WhatsApp externo",
@@ -314,7 +314,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
 
   // fromMe=false inbound internal command → suppressed before normal flow.
   if (isInternalCommand) {
-    safetyNotes.push("Inbound internal command suppressed before customer/conversation/message creation, AI, and Evolution send.");
+    safetyNotes.push("Comando interno de entrada suprimido antes de criar Customer/Conversation/Message, antes da IA e antes do envio.");
     if (event.buildOsEnabled && !event.authorizedBuildPhone) {
       safetyNotes.push("Build OS enabled but sender not authorized → intercepted silently (no record, no reply).");
     }
@@ -327,7 +327,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
       blockReason: null,
       expectedLabel: "Comando interno ocultado",
       explanation:
-        "Inbound /build|/cmd|/prompt from a customer. The pre-flight isInternalCommandText() gate in WebhookProcessorService suppresses it (exception-safe) before any persist, AI routing, or Evolution send.",
+        "Inbound /build|/cmd|/prompt from a customer. O portão isInternalCommandText() em InboundAgentDispatch.interceptBuildOsCommand suprime (à prova de exceção) antes de qualquer persistência, roteamento de IA ou envio.",
     });
   }
 
@@ -360,7 +360,7 @@ export function classifyRoutingEvent(event: SimulatedRoutingEvent): RoutingDecis
     shouldRenderAsCustomerBubble: true,
     shouldCallWhatsAppAgent: wouldRespond && !isWaiterMode,
     shouldCallWaiter: wouldRespond && isWaiterMode,
-    shouldCallEvolutionSend: false, // the inbound message itself is never echoed; any AI reply is a separate generated message
+    shouldCallProviderSend: false, // the inbound message itself is never echoed; any AI reply is a separate generated message
     blockReason: null,
     safetyNotes,
     expectedLabel: "Cliente · WhatsApp",

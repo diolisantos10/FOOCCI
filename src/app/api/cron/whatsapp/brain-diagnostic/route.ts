@@ -3,7 +3,7 @@
  *
  * Cron-safe, hermetic check of the WhatsApp Brain Adapter: runs the 6 canonical
  * synthetic cases (Alelo / order / hours / attendant / delivery / complaint) and
- * proves noSend / noEvolution / noOrder / noPix / runtimeTouched=false. Reads
+ * proves noSend / noWhatsAppSend / noOrder / noPix / runtimeTouched=false. Reads
  * nothing, sends nothing, never touches the runtime.
  *
  * Auth: Authorization: Bearer {CRON_SECRET}. POST only, never public.

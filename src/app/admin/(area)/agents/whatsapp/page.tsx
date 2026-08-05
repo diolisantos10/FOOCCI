@@ -149,7 +149,7 @@ export default function WhatsAppCockpitPage() {
           <span className={`rounded-md border px-3 py-1 text-sm font-bold ${STATUS_STYLE[sim.status]}`}>{sim.status}</span>
           <span className="text-sm text-gray-300">✅ {sim.passed} · ⚠ {sim.warned} · ❌ {sim.failed} · P0 {sim.p0}</span>
           <span className="text-xs text-gray-500">
-            Segurança: {sim.safety.noEvolution ? "sem Evolution" : "⚠"} · {sim.safety.noRealOrder ? "sem pedido real" : "⚠"} · {sim.safety.noRealPix ? "sem Pix real" : "⚠"} · runtimeTouched={String(sim.safety.runtimeTouched)}
+            Segurança: {sim.safety.noWhatsAppSend ? "sem Evolution" : "⚠"} · {sim.safety.noRealOrder ? "sem pedido real" : "⚠"} · {sim.safety.noRealPix ? "sem Pix real" : "⚠"} · runtimeTouched={String(sim.safety.runtimeTouched)}
           </span>
         </div>
       )}
@@ -264,7 +264,7 @@ function ScenarioCard({ scenario: s, open, onToggle }: { scenario: SimScenarioRe
                 <p className="mt-1 text-xs text-gray-500">Nenhuma ação — só conversa, nada seria criado.</p>
               )}
               <p className="mt-2 text-[11px] text-gray-500">
-                Segurança: {s.safety.noEvolution ? "✓ sem Evolution" : "✗ Evolution"} · {s.safety.noRealOrder ? "✓ sem pedido real" : "✗ pedido real"} · {s.safety.noRealPix ? "✓ sem Pix real" : "✗ Pix real"} · runtimeTouched={String(s.safety.runtimeTouched)}
+                Segurança: {s.safety.noWhatsAppSend ? "✓ sem Evolution" : "✗ Evolution"} · {s.safety.noRealOrder ? "✓ sem pedido real" : "✗ pedido real"} · {s.safety.noRealPix ? "✓ sem Pix real" : "✗ Pix real"} · runtimeTouched={String(s.safety.runtimeTouched)}
               </p>
             </div>
             <div>

@@ -6,7 +6,7 @@
  *   ✗ Does NOT send real WhatsApp messages.
  *   ✗ Does NOT create real orders.
  *   ✗ Does NOT generate real Pix.
- *   ✗ Does NOT call Evolution send.
+ *   ✗ Does NOT send WhatsApp.
  *   ✗ Does NOT affect real customers.
  *   ✓ allowSideEffects=false always.
  */
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
     "nenhum pedido real criado",
     "nenhum Pix real gerado",
     "nenhuma campanha disparada",
-    "Evolution send nunca chamado",
+    "envio de WhatsApp nunca chamado",
   ];
   const sideEffectsPerformed: string[] = [];
 

@@ -4,7 +4,7 @@
  *
  * Turns a WhatsApp message into a structured, SAFE decision (intent + recommended
  * action + handoff/order-link signals) using the Brain's deterministic guardrails.
- * It REASONS — it never sends, never calls Evolution, never creates an order/Pix,
+ * It REASONS — it never sends WhatsApp, never creates an order/Pix,
  * never touches the runtime. v1 is pure (no DB, no LLM) so it is hermetic and
  * cron-diagnostic friendly. The webhook does NOT consume it yet (shadow/off).
  *

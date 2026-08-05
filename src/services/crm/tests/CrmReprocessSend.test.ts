@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Live recoverable-reprocess GATES — Evolution + _sendBatch mocked, NO real sends.
+// Live recoverable-reprocess GATES — canal + _sendBatch mockados, NENHUM envio real.
 
 const db = vi.hoisted(() => ({
   campaign: { findUnique: vi.fn(), update: vi.fn() },
@@ -12,8 +12,7 @@ const db = vi.hoisted(() => ({
   message: { create: vi.fn() },
   $transaction: vi.fn(async (arr: unknown) => (Array.isArray(arr) ? Promise.all(arr as Promise<unknown>[]) : undefined)),
 }));
-const evoCfg = vi.hoisted(() => ({ getSnapshot: vi.fn() }));
-const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn(), getInstanceStatus: vi.fn() }));
+const channel = vi.hoisted(() => ({ getConnectionStatus: vi.fn(), sendText: vi.fn(), sendTemplate: vi.fn() }));
 const svc = vi.hoisted(() => ({ resolveAudience: vi.fn(async () => []), personalizeMessage: vi.fn(() => "oi") }));
 const safety = vi.hoisted(() => ({
   getSafetyConfig: vi.fn(async () => ({})), getTodayGlobalSendCount: vi.fn(async () => 0), getWeekGlobalSendCount: vi.fn(async () => 0),
@@ -24,11 +23,7 @@ const safety = vi.hoisted(() => ({
 const contact = vi.hoisted(() => ({ ContactSafetyService: { buildGlobalContext: vi.fn(async () => ({})), assertSendable: vi.fn(async () => ({ sendable: true })) } }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: evoCfg }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({
-  EvolutionClient: evoClient,
-  EvolutionApiError: class extends Error { constructor(public status: number, public body: unknown, m: string) { super(m); } },
-}));
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({ WhatsAppMessagingService: channel }));
 vi.mock("./CrmCampaignService", () => svc);
 vi.mock("@/lib/crm-safety", () => safety);
 vi.mock("@/services/crm/ContactSafetyService", () => contact);
@@ -40,15 +35,18 @@ vi.mock("./crmDedupePolicy", () => ({ readDedupePolicy: () => ({}), readOverride
 vi.mock("./messageFingerprint", () => ({ generateMessageFingerprint: () => "fp" }));
 vi.mock("./CRMContactLedgerService", () => ({ getImpactedByConcept: vi.fn(async () => new Set()), getImpactedByMessage: vi.fn(async () => new Set()), recordLedger: vi.fn(async () => {}) }));
 
-import { ScheduledCampaignRunnerService } from "../ScheduledCampaignRunnerService";
+import { ScheduledCampaignRunnerService, META_CLOUD_MAX_PER_RUN } from "../ScheduledCampaignRunnerService";
 
 const dec = (n: number) => ({ toNumber: () => n });
 
-// One recoverable (transient session-400) failed execution per customer.
+// Uma execução recuperável (falha transitória de canal) por cliente.
 function rec(i: number) {
   return { id: `f${i}`, customerId: `c${i}`, customerName: `C${i}`, customerPhone: `551199999${1000 + i}`,
-    status: "FAILED", failedReason: "Error: Connection Closed", errorMessage: "EVOLUTION_HTTP_400" };
+    status: "FAILED", failedReason: "timeout ao falar com o canal", errorMessage: "HTTP_504" };
 }
+
+/** Recuperáveis suficientes para o teto por rodada precisar cortar. */
+const RECOVERABLE_COUNT = META_CLOUD_MAX_PER_RUN + 5;
 function contactRow(i: number) {
   return { id: `c${i}`, name: `C${i}`, phone: `551199999${1000 + i}`, tier: "BRONZE", segment: "FRIO",
     totalOrders: 1, totalSpend: dec(10), lastOrderAt: null, importedLastOrderAt: null };
@@ -58,21 +56,20 @@ let sendSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // 8 distinct recoverable executions.
+  // Recuperáveis distintos em número maior que o teto por rodada.
   db.campaign.findUnique.mockResolvedValue({
     id: "cmp1", restaurantId: "r1", name: "Pedido de avaliação", status: "ACTIVE",
     message: "Olá", templateId: null, targetSegment: "FRIO", scheduleConfig: null,
     campaignFamilyKey: null, messageFingerprint: "fp",
-    executions: Array.from({ length: 8 }, (_, i) => rec(i)),
+    executions: Array.from({ length: RECOVERABLE_COUNT }, (_, i) => rec(i)),
   });
   db.customer.findMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) =>
     where.id.in.map((id) => contactRow(Number(id.slice(1)))));
   db.campaignExecution.findMany.mockResolvedValue([]); // alreadySent + created
-  evoCfg.getSnapshot.mockResolvedValue({ ok: true, data: { instanceName: "sushicazza", baseUrl: "x", apiKey: "y" } });
-  evoClient.getInstanceStatus.mockResolvedValue({ state: "open", instance: "sushicazza" });
+  channel.getConnectionStatus.mockResolvedValue({ provider: "META_CLOUD_API", connected: true, detail: "+55 11 90000-0000" });
 
   sendSpy = vi.spyOn(ScheduledCampaignRunnerService as unknown as { _sendBatch: (...a: unknown[]) => unknown }, "_sendBatch")
-    .mockResolvedValue({ sent: 5, failed: 0, blocked: 0, skipped: 0, aborted: false });
+    .mockResolvedValue({ sent: META_CLOUD_MAX_PER_RUN, failed: 0, blocked: 0, skipped: 0, aborted: false });
 });
 
 describe("reprocessRecoverableBatch — safety gates", () => {
@@ -84,8 +81,8 @@ describe("reprocessRecoverableBatch — safety gates", () => {
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it("blocks when the instance is not open — sends nothing", async () => {
-    evoClient.getInstanceStatus.mockResolvedValue({ state: "close", instance: "sushicazza" });
+  it("blocks when the channel is disconnected — sends nothing", async () => {
+    channel.getConnectionStatus.mockResolvedValue({ provider: "META_CLOUD_API", connected: false, detail: null });
     const r = await ScheduledCampaignRunnerService.reprocessRecoverableBatch("cmp1", { restaurantId: "r1", confirm: true });
     expect(r.ok).toBe(false);
     expect(r.reason).toBe("INSTANCE_NOT_CONNECTED");
@@ -111,20 +108,20 @@ describe("reprocessRecoverableBatch — safety gates", () => {
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it("confirm + open: sends ONLY the capped (≤5) deduped batch; never mutates old rows", async () => {
+  it("confirm + conectado: envia SÓ o lote deduplicado até o teto; nunca mexe em linha antiga", async () => {
     const r = await ScheduledCampaignRunnerService.reprocessRecoverableBatch("cmp1", { restaurantId: "r1", confirm: true });
     expect(r.ok).toBe(true);
-    expect(r.plan.nextBatchCount).toBe(5);              // capped from 8 distinct
+    expect(r.plan.nextBatchCount).toBe(META_CLOUD_MAX_PER_RUN);  // cortado pelo teto por rodada
     expect(sendSpy).toHaveBeenCalledTimes(1);
     const customersArg = sendSpy.mock.calls[0]![1] as unknown[];
-    expect(customersArg.length).toBe(5);                // exactly the cap
-    expect(r.sent).toBe(5);
+    expect(customersArg.length).toBe(META_CLOUD_MAX_PER_RUN);    // exatamente o teto
+    expect(r.sent).toBe(META_CLOUD_MAX_PER_RUN);
     // reprocess never updates existing executions (new rows only, inside _sendBatch).
     expect((db.campaignExecution as { update?: unknown }).update).toBeUndefined();
   });
 
   it("revalidation drops opt-out / not-contactable (absent from the contactable query) and already-sent", async () => {
-    // Only c0 and c1 come back contactable; c2..c4 (in the batch of 5) are filtered out.
+    // Só c0 e c1 voltam contactáveis; o resto do lote é filtrado na revalidação.
     db.customer.findMany.mockResolvedValue([contactRow(0), contactRow(1)]);
     // c1 already successfully sent → excluded too. Two calls to findMany: alreadySent then created.
     db.campaignExecution.findMany
@@ -134,6 +131,6 @@ describe("reprocessRecoverableBatch — safety gates", () => {
     expect(r.ok).toBe(true);
     const customersArg = sendSpy.mock.calls[0]![1] as unknown[];
     expect(customersArg.length).toBe(1);   // only c0 survives revalidation
-    expect(r.ignored).toBeGreaterThanOrEqual(4);
+    expect(r.ignored).toBeGreaterThanOrEqual(META_CLOUD_MAX_PER_RUN - 1);
   });
 });

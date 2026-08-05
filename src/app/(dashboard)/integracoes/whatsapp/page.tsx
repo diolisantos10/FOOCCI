@@ -6,9 +6,9 @@ import { MetaProviderCard } from "./MetaProviderCard";
 
 export const metadata = { title: "WhatsApp — Integrações" };
 
-// Evolution (WhatsAppIntegrationClient) is intentionally not rendered here: the product
-// now runs on the official Meta Cloud API (+ Coexistence). The Evolution backend stays
-// intact for any legacy connection; only the management UI was removed for clarity.
+// Canal único: a conta oficial da Meta (+ Coexistência). O painel de QR/pareamento
+// que existia aqui (`WhatsAppIntegrationClient`) foi apagado em 04/08/2026 junto com
+// a Evolution — na Meta não há QR: o número é conectado pela própria Meta.
 export default async function WhatsAppIntegrationPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");

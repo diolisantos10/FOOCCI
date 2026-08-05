@@ -19,10 +19,9 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions } from "@/services/crm/crmExecutionClassification";
-import { EVOLUTION_WEB_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
+import { META_CLOUD_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
 import { computeRecoverablePlan, REPROCESSABLE_CAMPAIGN_STATUSES } from "@/services/crm/recoverableReprocessPlan";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { isWhatsAppChannelConnected } from "@/services/crm/crmWhatsAppChannel";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -61,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // Preview is capped to the Evolution Web safe batch — one reprocess run would
     // attempt at most this many.
-    const preview = recoverableRows.slice(0, EVOLUTION_WEB_MAX_PER_RUN).map((e) => {
+    const preview = recoverableRows.slice(0, META_CLOUD_MAX_PER_RUN).map((e) => {
       const c = classifyExecution({ status: e.status, failedReason: e.failedReason, errorMessage: e.errorMessage });
       return {
         executionId:       e.id,
@@ -85,32 +84,25 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         customerPhone: e.customerPhone, status: e.status,
         failedReason: e.failedReason, errorMessage: e.errorMessage,
       })),
-      EVOLUTION_WEB_MAX_PER_RUN,
+      META_CLOUD_MAX_PER_RUN,
     );
 
-    // Live, read-only Evolution connection state so the UI can gate the action.
-    let instanceConnected = false;
-    let instanceState: string | null = null;
-    try {
-      const snap = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
-      if (snap.ok) {
-        const status = await EvolutionClient.getInstanceStatus(snap.data).catch(() => null);
-        instanceState = status?.state ?? null;
-        instanceConnected = instanceState === "open";
-      }
-    } catch { /* read-only probe — treat any failure as not connected */ }
+    // Estado vivo da conexão (somente leitura) para a UI liberar ou não a ação.
+    // Falha ao apurar conta como NÃO conectado: liberar o botão sem saber é
+    // convidar o lojista a disparar contra um canal fora do ar.
+    const channelConnected = await isWhatsAppChannelConnected(campaign.restaurantId);
 
     const campaignReprocessable = REPROCESSABLE_CAMPAIGN_STATUSES.has(campaign.status);
-    const safeToSend = campaignReprocessable && instanceConnected && plan.nextBatchCount > 0;
+    const safeToSend = campaignReprocessable && channelConnected && plan.nextBatchCount > 0;
 
     return ok({
       campaignId:   campaign.id,
       campaignName: campaign.name,
       campaignStatus: campaign.status,
       safeSend: {
-        provider:    "EVOLUTION_WEB",
-        maxPerCycle: EVOLUTION_WEB_MAX_PER_RUN,
-        note:        `Modo seguro WhatsApp Web: até ${EVOLUTION_WEB_MAX_PER_RUN} envios por ciclo.`,
+        provider:    "META_CLOUD",
+        maxPerCycle: META_CLOUD_MAX_PER_RUN,
+        note:        `Modo seguro: até ${META_CLOUD_MAX_PER_RUN} envios por ciclo.`,
       },
       // Deduped plan + live gate for the "Reprocessar N agora" action.
       plan: {
@@ -120,7 +112,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         cap:                   plan.cap,
         nextBatchCount:        plan.nextBatchCount,
       },
-      instance:   { connected: instanceConnected, state: instanceState },
+      instance:   { connected: channelConnected },
       safeToSend,
       diagnostics: {
         sent:             summary.sent,
@@ -135,7 +127,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       recoverablePreview: preview,
       recommendation: recoverableRows.length === 0
         ? "Nenhuma falha recuperável agora. Falhas que precisam de correção (telefone, 400, instância) ou opt-out não são reenviadas automaticamente."
-        : `${recoverableRows.length} destinatário(s) com falha temporária podem ser reenviados depois — em lotes de até ${EVOLUTION_WEB_MAX_PER_RUN} por ciclo (modo seguro WhatsApp Web).`,
+        : `${recoverableRows.length} destinatário(s) com falha temporária podem ser reenviados depois — em lotes de até ${META_CLOUD_MAX_PER_RUN} por ciclo (modo seguro WhatsApp Web).`,
     });
   } catch (err) {
     console.error("[GET /api/crm/campaigns/[id]/recoverable]", err);

@@ -22,20 +22,12 @@ export async function POST(req: NextRequest) {
   try {
     await MetaConfigService.remove(ctx.restaurantId);
 
-    // If Meta was the active provider, fall back to the previous connection so the
-    // restaurant keeps sending/receiving. Only touches the row when it points at Meta.
-    const r = await prisma.restaurant.findUnique({
-      where:  { id: ctx.restaurantId },
-      select: { whatsappProvider: true },
-    });
-    if (r?.whatsappProvider === "META_CLOUD_API") {
-      await prisma.restaurant.update({
-        where: { id: ctx.restaurantId },
-        data:  { whatsappProvider: "EVOLUTION" },
-      });
-    }
-
-    return ok({ disconnected: true, activeProvider: "EVOLUTION" });
+    // Antes, desconectar a Meta gravava `whatsappProvider = "EVOLUTION"` para o
+    // restaurante "continuar enviando pela conexão anterior". Depois da extração
+    // não existe conexão anterior: isso escreveria um provedor que não existe e
+    // deixaria a loja MUDA sem dizer. Desconectar agora é o que o nome diz —
+    // remover a conexão — e a resposta admite que não sobrou canal nenhum.
+    return ok({ disconnected: true, connectedChannel: null });
   } catch (err) {
     console.error("[POST meta/disconnect]", err);
     return serverError();

@@ -4,7 +4,7 @@
  * cards, deduplicates them, and queues DISTINCT learnings for HUMAN approval.
  *
  * Hard guarantees (verified by tests + production dry-run):
- *   - NEVER sends WhatsApp (no Evolution).
+ *   - NEVER sends WhatsApp.
  *   - NEVER creates an order or Pix.
  *   - NEVER changes the live agent. Approving a learning only marks it for the
  *     next training round — it does NOT alter production automatically.
@@ -32,7 +32,7 @@ import {
 } from "./constants";
 
 export interface LiveLearningSafety {
-  noEvolution: boolean;
+  noWhatsAppSend: boolean;
   noRealOrder: boolean;
   noRealPix: boolean;
   noMessageSent: boolean;
@@ -68,7 +68,7 @@ export async function runLiveLearningReview(input: LiveLearningInput): Promise<L
   const windowHours = Math.min(Math.max(input.windowHours ?? 24, 1), 168);
   const dryRun = input.dryRun === true;
   const slug = input.restaurantSlug ?? null;
-  const safety: LiveLearningSafety = { noEvolution: true, noRealOrder: true, noRealPix: true, noMessageSent: true };
+  const safety: LiveLearningSafety = { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, noMessageSent: true };
   const notes: string[] = [];
 
   let restaurantId = input.restaurantId ?? null;

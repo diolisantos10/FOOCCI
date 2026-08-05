@@ -1,7 +1,7 @@
 /**
  * Routing diagnostic — answers, for ONE specific phone, whether a real WhatsApp
  * message would enter the Text Order engine or fall back to the receptionist,
- * and why. Pure read: never sends WhatsApp, never calls Evolution, never creates
+ * and why. Pure read: never sends WhatsApp, never creates
  * an order or Pix, never changes config. The phone is always MASKED in output.
  *
  * When no phone is given, it self-tests the FIRST allowlisted phone — letting
@@ -61,7 +61,7 @@ export interface RoutingDiagnosticResult {
   /** Exact payload to add the phone — returned ONLY, never applied. */
   addAllowlistPayload: { allowlistedPhones: string[] } | null;
   runtimeTouched: false;
-  noEvolution: true;
+  noWhatsAppSend: true;
   noRealOrder: true;
   noRealPix: true;
 }
@@ -114,7 +114,7 @@ export async function runRoutingDiagnostic(input: RoutingDiagnosticInput): Promi
     wouldEnterTextOrder: false, wouldFallbackToReceptionist: true, declineReason: null,
     firstStage: null, hasActiveSession: false, conversationBlocks: [],
     effectiveDecision: "UNKNOWN_RESTAURANT", addAllowlistPayload: null,
-    runtimeTouched: false, noEvolution: true, noRealOrder: true, noRealPix: true,
+    runtimeTouched: false, noWhatsAppSend: true, noRealOrder: true, noRealPix: true,
   };
 
   // Resolve restaurant.

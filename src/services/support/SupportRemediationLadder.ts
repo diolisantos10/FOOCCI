@@ -46,12 +46,10 @@ export const REMEDIATION_CATALOG: readonly RemediationAction[] = [
     description: "Reprocessa a fila de webhooks de entrada dos últimos minutos que ficaram presos.",
     reversible: true, idempotent: true, maxAttempts: 2, enabled: false,
   },
-  {
-    key: "reconnect_evolution",
-    label: "Reconectar instância Evolution",
-    description: "Dispara a reconexão de uma instância Evolution que caiu para 'close'.",
-    reversible: true, idempotent: true, maxAttempts: 2, enabled: false,
-  },
+  // A ação "reconectar instância Evolution" saiu em 04/08/2026 junto com o
+  // provedor. Não foi substituída: reconectar a Meta exige login do dono pela
+  // própria Meta (OAuth), e não há botão que o Agente de TI possa apertar. Uma
+  // ação que não existe na escada de remediação é melhor que uma que finge.
   {
     key: "requeue_stuck_campaign",
     label: "Reenfileirar campanha travada",

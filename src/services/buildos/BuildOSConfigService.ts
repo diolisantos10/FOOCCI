@@ -21,7 +21,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { getAdminWhatsAppRow } from "./AdminWhatsAppConfigService";
+import { buildOsPhoneNumberId, isBuildOsMetaChannelEnabled } from "./BuildOsMetaChannel";
 import {
   isBuildOsEnabled as isEnvBuildOsEnabled,
   isAuthorizedBuildSender as isEnvAuthorizedSender,
@@ -63,75 +63,83 @@ export async function getBuildOSConfigRow() {
 // ── Build OS WhatsApp Master/Admin channel ──────────────────────────────────────
 
 export interface BuildOsChannelConfig {
-  /** True when a Master instance is configured AND enabled. */
+  /** True quando o número Master está configurado E o canal consegue responder. */
   configured: boolean;
-  instanceName: string | null;
+  /**
+   * Identidade do canal Master. Desde 04/08/2026 é o **`phone_number_id` da
+   * Meta** — antes era o `instanceName` de uma instância Evolution, que deixou de
+   * existir junto com a Evolution. O nome do campo ficou para não quebrar as
+   * telas de diagnóstico que já o leem.
+   */
+  channelId: string | null;
   enabled: boolean;
   legacyFallbackEnabled: boolean;
 }
 
 /**
- * Read the Build OS Master/Admin channel config. The instanceName + enabled come
- * from the SYSTEM-level admin WhatsApp config (BuildOSMasterWhatsAppConfig) —
- * NEVER from a restaurant EvolutionConfig. The legacy restaurant fallback flag
- * stays on BuildOSConfig (default off).
+ * Lê a configuração do canal Master do Build OS.
+ *
+ * A identidade vem do número DEDICADO da Meta (`BUILDOS_META_PHONE_NUMBER_ID` +
+ * `BUILDOS_META_ACCESS_TOKEN`) — **nunca** de um restaurante. O sinalizador de
+ * fallback legado continua no `BuildOSConfig` (padrão desligado).
  */
 export async function getBuildOsChannel(): Promise<BuildOsChannelConfig> {
-  const [adminRow, cfgRow] = await Promise.all([getAdminWhatsAppRow(), getBuildOSConfigRow()]);
-  const instanceName = adminRow?.instanceName?.trim() || null;
-  const enabled = !!adminRow?.isEnabled;
+  const cfgRow    = await getBuildOSConfigRow();
+  const channelId = buildOsPhoneNumberId();
+  const enabled   = isBuildOsMetaChannelEnabled();
   return {
-    configured: !!instanceName && enabled,
-    instanceName,
+    configured: !!channelId && enabled,
+    channelId,
     enabled,
     legacyFallbackEnabled: !!cfgRow?.legacyRestaurantInstanceFallbackEnabled,
   };
 }
 
 export interface BuildOsChannelDecision {
-  /** True if Build OS command logic should run for this instance. */
+  /** True se a lógica de comando do Build OS deve rodar para este canal. */
   isBuildOsChannel: boolean;
-  /** True if a Master instance is configured + enabled at all. */
+  /** True se existe um canal Master configurado + habilitado. */
   masterConfigured: boolean;
-  /** True if this decision came from the explicit legacy restaurant fallback. */
+  /** True se a decisão veio do fallback legado explícito para restaurante. */
   viaLegacyFallback: boolean;
-  /** True when the instance IS the system-level Admin instance (not a restaurant). */
+  /** True quando o número É o Master do sistema (não é de restaurante). */
   isAdminInstance: boolean;
-  masterInstanceName: string | null;
+  /** `phone_number_id` do Master (ver `BuildOsChannelConfig.channelId`). */
+  masterChannelId: string | null;
 }
 
 /**
- * Decide whether an incoming Evolution instance is the Build OS command channel.
+ * Decide se um `phone_number_id` que acabou de receber mensagem é o canal de
+ * comando do Build OS.
  *
- *   • Master instance configured + enabled + matches → YES (the normal path).
- *   • No Master configured BUT legacy restaurant fallback explicitly ON → YES
- *     (temporary; the UI labels it "fallback legado").
- *   • Otherwise → NO. Restaurant instances never act as Build OS by default.
+ *   • Master configurado + habilitado + bate → SIM (o caminho normal).
+ *   • Sem Master configurado MAS fallback legado explicitamente LIGADO → SIM
+ *     (temporário; a tela rotula "fallback legado").
+ *   • Caso contrário → NÃO. Número de restaurante nunca é Build OS por padrão.
  */
-export async function resolveBuildOsChannel(instanceName: string | null | undefined): Promise<BuildOsChannelDecision> {
+export async function resolveBuildOsChannel(channelId: string | null | undefined): Promise<BuildOsChannelDecision> {
   const ch = await getBuildOsChannel();
-  return decideBuildOsChannel(ch, instanceName);
+  return decideBuildOsChannel(ch, channelId);
 }
 
 /**
- * Pure routing decision (no DB) — exported for testing. Given the Master channel
- * config and an incoming instance, decide whether Build OS should run.
+ * Decisão pura (sem banco) — exportada para teste.
  */
 export function decideBuildOsChannel(
   ch: BuildOsChannelConfig,
-  instanceName: string | null | undefined,
+  channelId: string | null | undefined,
 ): BuildOsChannelDecision {
   const masterConfigured = ch.configured;
-  const matchesMaster = !!instanceName && !!ch.instanceName && ch.enabled && instanceName === ch.instanceName;
+  const matchesMaster = !!channelId && !!ch.channelId && ch.enabled && channelId === ch.channelId;
 
   if (matchesMaster) {
-    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: false, isAdminInstance: true, masterInstanceName: ch.instanceName };
+    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: false, isAdminInstance: true, masterChannelId: ch.channelId };
   }
-  // Legacy fallback ONLY when no Master is configured and it was explicitly enabled.
+  // Fallback legado SÓ quando não há Master configurado e ele foi ligado de propósito.
   if (!masterConfigured && ch.legacyFallbackEnabled) {
-    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: true, isAdminInstance: false, masterInstanceName: ch.instanceName };
+    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: true, isAdminInstance: false, masterChannelId: ch.channelId };
   }
-  return { isBuildOsChannel: false, masterConfigured, viaLegacyFallback: false, isAdminInstance: false, masterInstanceName: ch.instanceName };
+  return { isBuildOsChannel: false, masterConfigured, viaLegacyFallback: false, isAdminInstance: false, masterChannelId: ch.channelId };
 }
 
 /**

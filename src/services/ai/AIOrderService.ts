@@ -8,19 +8,19 @@
  *   4. Call OpenAI with tool definitions.
  *   5. Execute tool calls in a loop (max MAX_TOOL_ITERATIONS).
  *   6. On handoff_to_human tool: transition to HUMAN, send handoff message, stop.
- *   7. Send final text response via Evolution API.
+ *   7. Send final text response via the Meta Cloud API (WhatsAppMessagingService).
  *   8. Log the interaction (tokens, cost, tool calls, latency).
  *   9. On any unrecoverable error: transition to HUMAN, send fallback message.
  *
  * Safety:
  *   - AI cannot invent items/prices (PromptBuilder + tool executor validation).
  *   - Hard limit of MAX_TOOL_ITERATIONS per turn prevents infinite loops.
- *   - Evolution API send errors are caught; conversation falls to HUMAN.
+ *   - WhatsApp send errors are caught; conversation falls to HUMAN.
  */
 
 import { prisma } from "@/lib/prisma";
 import { openai } from "@/lib/openai";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { BrandConfigService } from "./BrandConfigService";
 import { PromptBuilderService } from "./PromptBuilderService";
@@ -622,23 +622,24 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     data: { status: ConversationStatus.BOT },
   });
 
-  // 3. Load brand config + Evolution config
-  const [brandConfig, restaurantName, configResult] = await Promise.all([
+  // 3. Load brand config + a credencial do canal único (Meta)
+  const [brandConfig, restaurantName, metaConfig] = await Promise.all([
     BrandConfigService.getOrDefault(restaurantId),
     prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } })
       .then((r) => r?.name ?? ""),
-    EvolutionConfigService.getSnapshot(restaurantId),
+    // `null` cobre "não configurado" E "banco tossiu". Nos dois casos não dá para
+    // responder — e ausência de informação não é permissão (guardrail 1).
+    MetaConfigService.getResolved(restaurantId).catch((err) => {
+      console.error(`[AIOrderService] leitura da config Meta falhou p/ ${restaurantId}`, err);
+      return null;
+    }),
   ]);
 
-  // Only Evolution needs a local config; a Meta-official restaurant sends via the
-  // stored Cloud API credentials (activeProvider routes it).
-  const activeProviderName = await prisma.restaurant
-    .findUnique({ where: { id: restaurantId }, select: { whatsappProvider: true } })
-    .then((r) => r?.whatsappProvider ?? "EVOLUTION")
-    .catch(() => "EVOLUTION");
-  if (!configResult.ok && activeProviderName !== "META_CLOUD_API") {
+  // Falha fechado: sem credencial da Meta não há canal de saída. Devolve a
+  // conversa para OPEN (nunca deixa presa em BOT) e registra o caso concreto.
+  if (!metaConfig) {
     console.warn(
-      `[AIOrderService] No Evolution config for restaurant ${restaurantId} — cannot send reply`
+      `[AIOrderService] sem config Meta para o restaurante ${restaurantId} — turno abortado (conv ${conversationId})`
     );
     await prisma.conversation.update({
       where: { id: conversationId },
@@ -1007,7 +1008,7 @@ async function sendWhatsAppReply(
   conversationId: string
 ): Promise<void> {
   try {
-    // Route through the restaurant's ACTIVE provider (Meta official or Evolution).
+    // Canal único: a Meta homologada. Não existe caminho alternativo em erro.
     const result = await sendWhatsAppText(restaurantId, toPhone, text);
     if (!result.ok) {
       console.error("[AIOrderService] send failed:", result.errorCode, result.error);
@@ -1048,7 +1049,7 @@ async function safeHandoff(conversationId: string, message: string): Promise<voi
       data: { status: ConversationStatus.HUMAN },
     });
 
-    // Attempt to find Evolution config and send the fallback message
+    // Localiza a conversa para mandar a mensagem de queda pelo canal oficial
     const conv = await prisma.conversation.findUnique({
       where: { id: conversationId },
       select: { restaurantId: true, customerPhone: true, customer: { select: { phone: true } } },

@@ -14,7 +14,7 @@ import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-
 import { prisma } from "@/lib/prisma";
 import { isMetaWhatsAppEnabled } from "@/services/whatsapp/metaFlag";
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
-import { normalizePhoneForEvolution } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR } from "@/lib/crm/normalizePhone";
 
 export async function POST(req: NextRequest) {
   const ctx = getTenantContext(req);
@@ -28,18 +28,19 @@ export async function POST(req: NextRequest) {
     const restaurant = await prisma.restaurant.findUnique({ where: { id: ctx.restaurantId }, select: { phone: true } });
     const allowed = new Set(
       [restaurant?.phone, process.env.META_TEST_PHONE]
-        .map((p) => normalizePhoneForEvolution(p ?? ""))
+        .map((p) => normalizePhoneBR(p ?? ""))
         .filter((p): p is string => !!p),
     );
 
     const to = body.to ?? restaurant?.phone ?? "";
-    const toNorm = normalizePhoneForEvolution(to);
+    const toNorm = normalizePhoneBR(to);
     if (!toNorm || !allowed.has(toNorm)) {
       return badRequest("Por segurança, o teste só pode ser enviado para o telefone do restaurante ou para o número de teste interno (META_TEST_PHONE).");
     }
 
-    // Direct Meta provider — independent of the active provider selection.
-    const result = await WhatsAppMessagingService.providers.meta.sendText({
+    // A Meta é o único provedor desde 04/08 — não há mais "seleção" da qual se
+    // manter independente, então o teste usa o caminho normal de envio.
+    const result = await WhatsAppMessagingService.sendText({
       restaurantId: ctx.restaurantId,
       to:           toNorm,
       text:         body.text?.slice(0, 300) || "Teste de conexão Foocci · WhatsApp Meta ✅",

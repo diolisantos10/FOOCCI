@@ -40,9 +40,25 @@ describe("alarm contract — replying IS acknowledging (auto-ack on human outbou
     expect(count).toBeGreaterThanOrEqual(2);
   });
 
-  it("external outbound (staff answering from their own phone) also auto-acks", () => {
-    const src = read("src/services/evolution/WebhookProcessorService.ts");
-    expect(src).toMatch(/lastMessageAt:\s*now,\s*handoffAlarmAckAt:\s*now/);
+  // ⚠️ LACUNA CONHECIDA, registrada de propósito em vez de apagada.
+  //
+  // Até 04/08/2026 o webhook da Evolution tratava `fromMe`: resposta dada pelo
+  // celular do atendente entrava na Central e carimbava `handoffAlarmAckAt` — a
+  // correção do crônico "apita e não para". A Evolution saiu do Foocci por ordem
+  // do CEO e o equivalente na Meta (`smb_message_echoes`) NÃO foi implementado:
+  // o formato do payload nunca foi validado contra um evento ao vivo, e escrever
+  // no banco a partir de um formato adivinhado cria mensagem fantasma e silencia
+  // alarme que deveria tocar.
+  //
+  // Este teste trava o estado HONESTO: o webhook da Meta reconhece o evento e diz
+  // que NÃO o ingere. Quando o eco for implementado, este teste deve ser trocado
+  // por um que exija `handoffAlarmAckAt` — e não simplesmente apagado.
+  it("eco de resposta pelo celular: a lacuna está declarada, não escondida", () => {
+    const src = read("src/app/api/webhooks/meta/whatsapp/route.ts");
+    expect(src).toContain("smb_message_echoes");
+    expect(src).toContain("NÃO ingerido");
+    // E não ingere de fato: nenhuma escrita de mensagem a partir do eco.
+    expect(src).not.toMatch(/smb_message_echoes[\s\S]{0,400}prisma\.message\.create/);
   });
 
   it("operator chat route auto-acks", () => {

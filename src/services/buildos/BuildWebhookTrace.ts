@@ -1,7 +1,7 @@
 /**
  * BuildWebhookTrace — persist a diagnostic trace of each Build OS webhook attempt.
  *
- * Lets the admin confirm — without console/Railway — whether the REAL Evolution
+ * Lets the admin confirm — without console/Railway — whether the REAL
  * webhook reached the Build OS branch and what happened. Best-effort: never
  * throws into the webhook hot path. Stores NO secrets (phone is masked).
  */
@@ -12,7 +12,7 @@ export interface WebhookTraceInput {
   maskedPhone?: string | null;
   /** Full normalized E.164 phone — stored server-side only, never logged/exposed. */
   rawPhone?: string | null;
-  /** Evolution instance the event arrived on (Master vs restaurant channel). */
+  /** Identidade do canal (hoje o `phone_number_id` da Meta). Coluna com nome legado. */
   instanceName?: string | null;
   prefixDetected?: string | null;
   configEnabled?: boolean | null;

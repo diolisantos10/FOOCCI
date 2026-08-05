@@ -185,7 +185,7 @@ export function isGlobalPauseEngaged(): boolean {
 /**
  * Format-tolerant phone membership test. Both the candidate and every list entry
  * are canonicalised with the same BR normaliser the live webhook uses, so an
- * allowlist entry typed as +5511…, 5511…, or 11… all match the Evolution JID.
+ * allowlist entry typed as +5511…, 5511…, or 11… all match the webhook JID.
  */
 export function isPhoneInList(phone: string, list: string[]): boolean {
   const normalized = normalizePhone(phone);
@@ -194,7 +194,7 @@ export function isPhoneInList(phone: string, list: string[]): boolean {
 }
 
 /**
- * Computes the exact live-routing decision the Evolution webhook applies.
+ * Computes the exact live-routing decision the live webhook applies.
  * Single source of truth shared by webhook handler and admin diagnostics.
  *
  * Gate logic:
@@ -258,7 +258,7 @@ function parseList(raw: string | undefined): string[] {
  *
  * This is the same tolerance the customer-identity phoneCandidates() helper uses;
  * without it an allowlist entry typed in one format silently fails to match the
- * E.164 JID Evolution delivers, and the message falls through to the old agent.
+ * E.164 JID the webhook delivers, and the message falls through to the old agent.
  */
 function normalizePhone(phone: string): string {
   let digits = phone.replace(/\D/g, "");

@@ -1,14 +1,25 @@
 /**
- * Provider-agnostic WhatsApp messaging contract.
+ * Contrato de envio de WhatsApp — UM provedor só: a Meta Cloud API.
  *
- * Foocci services call WhatsAppMessagingService (provider-agnostic); each provider
- * (Evolution, Meta Cloud API) implements this interface. Evolution stays the
- * default; Meta is added in parallel.
+ * HISTÓRIA, para ninguém reintroduzir o que saiu: até 04/08/2026 este contrato
+ * era "provider-agnostic" e tinha duas implementações (Evolution e Meta). A
+ * Evolution era muleta do começo, usada enquanto a homologação da Meta não saía.
+ * A homologação saiu, o CEO confirmou que nenhum restaurante depende mais dela,
+ * e ela foi eliminada.
+ *
+ * `WhatsAppProviderId` tem **um valor de propósito**: reintroduzir um segundo
+ * canal de envio passa a ser erro de compilação, não decisão de configuração
+ * (guardrail 4 — prompt é aviso, código é trava). Um caminho de envio não
+ * homologado é exatamente o risco de banimento que a homologação eliminou.
+ *
+ * ⚠️ Isto é o tipo do CÓDIGO, não o histórico do BANCO: `Message.provider` ainda
+ * guarda "EVOLUTION" em linhas antigas, e essas linhas continuam legíveis — elas
+ * são `string` no Prisma, não este union.
  */
 
 import type { NormalizedInboundMessage, NormalizedStatus } from "./metaWebhook";
 
-export type WhatsAppProviderId = "EVOLUTION" | "META_CLOUD_API";
+export type WhatsAppProviderId = "META_CLOUD_API";
 
 export interface SendTextInput {
   restaurantId: string;
@@ -56,10 +67,10 @@ export interface WebhookValidationResult {
   reason?: string;
 }
 
-/** Provider-neutral normalized inbound webhook (item shapes shared with metaWebhook). */
+/** Normalized inbound webhook (item shapes shared with metaWebhook). */
 export interface NormalizedWebhookResult {
   provider:   WhatsAppProviderId;
-  channelIds: string[]; // Meta phone_number_ids (Evolution: instance names)
+  channelIds: string[]; // Meta phone_number_ids
   messages:   NormalizedInboundMessage[];
   statuses:   NormalizedStatus[];
 }
@@ -67,8 +78,11 @@ export interface NormalizedWebhookResult {
 export interface WhatsAppProvider {
   readonly id: WhatsAppProviderId;
   sendText(input: SendTextInput): Promise<SendResult>;
-  /** Template send — required for Meta outside the 24h window; optional for Evolution. */
-  sendTemplate?(input: SendTemplateInput): Promise<SendResult>;
+  /**
+   * Envio por modelo aprovado. **Obrigatório**: na Meta, o template é o caminho
+   * OFICIAL para falar fora da janela de 24h — não é um extra opcional.
+   */
+  sendTemplate(input: SendTemplateInput): Promise<SendResult>;
   /** Media send (image/audio/video/document) by URL. */
   sendMedia?(input: SendMediaInput): Promise<SendResult>;
   getConnectionStatus(restaurantId: string): Promise<ConnectionStatus>;

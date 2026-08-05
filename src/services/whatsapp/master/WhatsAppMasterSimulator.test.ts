@@ -2,7 +2,7 @@
  * WhatsAppMasterSimulator.test.ts
  *
  * Validates the MasterReport contract: safety flags, scenario coverage, area
- * grouping, P0 checks on known regressions. All hermetic — no DB, no Evolution,
+ * grouping, P0 checks on known regressions. All hermetic — no DB, no WhatsApp send,
  * no real order/Pix.
  */
 
@@ -31,9 +31,9 @@ describe("Safety invariants", () => {
     expect(r.safety.runtimeTouched).toBe(false);
   });
 
-  it("noEvolution is always true", async () => {
+  it("noWhatsAppSend is always true", async () => {
     const r = await getReport();
-    expect(r.safety.noEvolution).toBe(true);
+    expect(r.safety.noWhatsAppSend).toBe(true);
   });
 
   it("noRealOrder is always true", async () => {

@@ -25,30 +25,30 @@ import {
   summarizeExecutions,
   type ExecutionInput,
 } from "../crmExecutionClassification";
-import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR, isValidPhoneBR } from "@/lib/crm/normalizePhone";
 
 // ════════════════════════════════════════════════════════════════════════════
 // A. Invalid phone is blocked BEFORE Evolution is called
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("A. Invalid phone preflight guard (pure)", () => {
-  it("normalizePhoneForEvolution returns null for a clearly invalid phone", () => {
-    expect(normalizePhoneForEvolution("000")).toBeNull();
-    expect(normalizePhoneForEvolution("")).toBeNull();
-    expect(normalizePhoneForEvolution(null)).toBeNull();
+  it("normalizePhoneBR returns null for a clearly invalid phone", () => {
+    expect(normalizePhoneBR("000")).toBeNull();
+    expect(normalizePhoneBR("")).toBeNull();
+    expect(normalizePhoneBR(null)).toBeNull();
   });
 
-  it("isValidEvolutionPhone rejects null returned from normalizePhoneForEvolution", () => {
-    const normalized = normalizePhoneForEvolution("abc");
-    expect(isValidEvolutionPhone(normalized)).toBe(false);
+  it("isValidPhoneBR rejects null returned from normalizePhoneBR", () => {
+    const normalized = normalizePhoneBR("abc");
+    expect(isValidPhoneBR(normalized)).toBe(false);
   });
 
-  it("normalizePhoneForEvolution + isValidEvolutionPhone pipeline rejects short numbers", () => {
+  it("normalizePhoneBR + isValidPhoneBR pipeline rejects short numbers", () => {
     // All of these would produce junk before normalization fix
     const badInputs = ["123456789", "1234", "+55", "55"];
     for (const input of badInputs) {
-      const phone = normalizePhoneForEvolution(input);
-      expect(isValidEvolutionPhone(phone)).toBe(false);
+      const phone = normalizePhoneBR(input);
+      expect(isValidPhoneBR(phone)).toBe(false);
     }
   });
 

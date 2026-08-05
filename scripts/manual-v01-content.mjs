@@ -149,7 +149,7 @@ Foocci é um sistema modular, state-driven, com agentes de IA especializados, UI
 - PostgreSQL / Railway;
 - NextAuth JWT;
 - OpenAI SDK;
-- Evolution API v2.3.7+;
+- WhatsApp Business Platform (Meta Cloud API);
 - Mercado Pago Pix;
 - Stone;
 - AWS S3;
@@ -548,22 +548,19 @@ Mensagem enviada pelo CRM não vira atendimento ativo até o cliente responder.
 
 Quando o cliente responde, a conversa entra como resposta CRM.
 
-## Evolution API
+## WhatsApp (Meta Cloud API)
 
 Decisões técnicas:
-- usar Evolution API v2.3.7+;
-- webhookByEvents deve ser false;
-- endpoint único: \`/api/webhooks/evolution\`;
-- autenticação por query-token;
-- token validado server-side;
-- não expor token ao restaurante;
-- preservar sessão conectada;
+- canal ÚNICO: WhatsApp Business Platform, pelo aplicativo homologado da Foocci;
+- endpoint único: \`/api/webhooks/meta/whatsapp\`;
+- assinatura do webhook verificada server-side (X-Hub-Signature-256);
+- não expor token nem segredo ao restaurante;
+- fora da janela de 24h só sai modelo aprovado pela Meta;
 - mensagens reais aparecem em \`/atendimento\`.
 
 ## UI da integração WhatsApp
 
 Restaurante deve ver:
-- QR;
 - status conectado/desconectado;
 - número/perfil conectado;
 - saúde básica do webhook;
@@ -571,10 +568,9 @@ Restaurante deve ver:
 - reconectar.
 
 Não deve ver:
-- API key;
-- webhook secret;
-- Evolution server;
-- instanceName;
+- token de acesso;
+- segredo do aplicativo;
+- identificadores internos da Meta;
 - env vars;
 - probes;
 - logs crus;
@@ -907,19 +903,16 @@ Integrações conectam o Foocci ao ecossistema real do restaurante.
 
 Devem ser simples para o dono e técnicas apenas para suporte/admin.
 
-## WhatsApp / Evolution API
+## WhatsApp (Meta Cloud API)
 
 Estado e decisões:
-- Evolution API v2.3.7+;
-- endpoint único \`/api/webhooks/evolution\`;
-- webhookByEvents=false;
-- autenticação por query-token;
-- token validado server-side;
-- preservar sessão;
+- canal ÚNICO: WhatsApp Business Platform, pelo aplicativo homologado da Foocci;
+- endpoint único \`/api/webhooks/meta/whatsapp\`;
+- assinatura do webhook verificada server-side;
+- token renovado automaticamente; expiração aparece como erro visível;
 - mensagens aparecem em Atendimento.
 
 UI para restaurante:
-- QR;
 - status conectado/desconectado;
 - número/perfil;
 - saúde básica;
@@ -928,7 +921,7 @@ UI para restaurante:
 Ocultar:
 - API keys;
 - webhook secret;
-- servidor Evolution;
+- endereços internos do provedor;
 - instanceName;
 - env vars;
 - probes;
@@ -1329,7 +1322,7 @@ Backlog não é comportamento atual.
 - Mercado Pago começa Pix only.
 - Pedido Pix pending não deve entrar como pedido operacional.
 - Cliente deve poder cancelar/voltar da tela Pix.
-- WhatsApp Evolution usa endpoint único e query-token auth.
+- WhatsApp (Meta Cloud API) usa endpoint único com assinatura verificada.
 - CRM deve ter segmentação configurável.
 - Campanhas ativas devem aparecer no topo.
 - UI/UX é responsável por como o usuário vê, clica, confirma, entende e compra.

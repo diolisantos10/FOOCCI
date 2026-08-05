@@ -69,15 +69,9 @@ model Restaurant {
   // Incremented atomically inside the order-creation transaction.
   lastOrderNumber Int @default(0)
 
-  // WhatsApp provider selection (dual-provider). EVOLUTION (default, current) |
-  // META_CLOUD_API (official Meta WhatsApp Business Platform). Existing restaurants
-  // stay on EVOLUTION until explicitly switched — additive, non-breaking.
-  whatsappProvider String @default("EVOLUTION")
-
-  // Optional, OFF by default. When the active provider send FAILS (not BLOCKED),
-  // retry once via fallbackProvider. Never double-sends; only triggers on failure.
-  allowWhatsAppProviderFallback Boolean @default(false)
-  fallbackProvider              String  @default("EVOLUTION")
+  // Seleção de provedor de WhatsApp (whatsappProvider / fallbackProvider /
+  // allowWhatsAppProviderFallback) foi REMOVIDA em 04/08/2026: a Meta Cloud API
+  // é o canal único e não há segundo provedor para escolher nem para onde cair.
 
   users                   User[]
   customers               Customer[]
@@ -90,7 +84,6 @@ model Restaurant {
   offers                  Offer[]
   customerSegments        CustomerSegment[]
   aiLogs                  AIInteractionLog[]
-  evolutionConfig         EvolutionConfig?
   metaWhatsAppConfig      MetaWhatsAppConfig?
   metaMessageTemplates    MetaMessageTemplate[]
   brandConfig             RestaurantBrandConfig?
@@ -1352,22 +1345,6 @@ model AIInteractionLog {
 //  emoji usage, upsell style) consumed by the Phase 4 AI layer.
 // ═══════════════════════════════════════════
 
-model EvolutionConfig {
-  id            String   @id @default(cuid())
-  restaurantId  String   @unique
-  instanceName  String // Evolution instance identifier (used to route inbound webhooks)
-  baseUrl       String // e.g. https://evo.example.com
-  apiKey        String // AES-256-GCM encrypted
-  webhookSecret String // AES-256-GCM encrypted; used to verify inbound webhook signatures
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-
-  @@map("evolution_configs")
-}
-
 // ═══════════════════════════════════════════
 //  META WHATSAPP CLOUD API CONFIG  (official provider — parallel to Evolution)
 //  Stored per restaurant. Connected via Meta Embedded Signup. accessToken is
@@ -1513,27 +1490,6 @@ model MetaMessageTemplate {
 //  Diagnostic-only ring buffer for the last webhook events received.
 //  Stores no message content — only metadata useful for debugging.
 // ═══════════════════════════════════════════
-
-model EvolutionWebhookEventLog {
-  id                  String   @id @default(cuid())
-  restaurantId        String? // null when instanceName not found in DB
-  instanceName        String
-  eventName           String // raw event field from Evolution payload
-  normalizedEventName String? // normalized form used internally (may differ)
-  accepted            Boolean  @default(false) // true = passed auth + processing started
-  ignored             Boolean  @default(false) // true = auth passed but event was ignored
-  error               String? // first 200 chars of processing error if any
-  bodyKeys            String[] // top-level keys present in webhook body
-  dataKeys            String[] // keys present in body.data (if object)
-  messageId           String? // externalMessageId for messages.upsert
-  remoteJidMasked     String? // "551199***0000@s.whatsapp.net" — privacy safe
-  direction           String? // INBOUND | OUTBOUND (from fromMe field)
-  createdAt           DateTime @default(now())
-
-  @@index([restaurantId, createdAt])
-  @@index([instanceName, createdAt])
-  @@map("evolution_webhook_event_logs")
-}
 
 // ═══════════════════════════════════════════
 //  GENERIC INTEGRATION CONFIG

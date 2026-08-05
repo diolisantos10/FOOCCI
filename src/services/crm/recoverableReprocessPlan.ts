@@ -18,7 +18,7 @@
  */
 
 import { classifyExecution } from "./crmExecutionClassification";
-import { normalizePhoneForEvolution } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR } from "@/lib/crm/normalizePhone";
 
 export interface PlanExecutionRow {
   id: string;
@@ -81,7 +81,7 @@ export function computeRecoverablePlan(rows: PlanExecutionRow[], cap: number): R
   const deduped: PlanRecipient[] = [];
   for (const r of recoverable) {
     const customerId = r.customerId as string;
-    const phoneKey = normalizePhoneForEvolution(r.customerPhone ?? "");
+    const phoneKey = normalizePhoneBR(r.customerPhone ?? "");
     if (seenCustomer.has(customerId)) continue;
     if (phoneKey && seenPhone.has(phoneKey)) continue;
     seenCustomer.add(customerId);
@@ -129,8 +129,12 @@ export interface ReprocessGuardInput {
   confirm:        unknown;
   campaignStatus: string;
   nextBatchCount: number;
-  /** Evolution connection state ("open" = connected), or null when unknown. */
-  instanceState:  string | null;
+  /**
+   * Canal WhatsApp oficial conectado. `null` = **não foi possível saber**, e isso
+   * bloqueia igual a desconectado: ausência de informação não é informação.
+   * (Antes este campo era a string de estado da instância Evolution, "open".)
+   */
+  channelConnected: boolean | null;
 }
 
 export type ReprocessGuardResult =
@@ -139,7 +143,7 @@ export type ReprocessGuardResult =
 
 /**
  * Decides whether a confirmed live reprocess may proceed. Pure — the route/service
- * supplies the freshly-computed batch count and live instance state.
+ * supplies the freshly-computed batch count and the live channel state.
  */
 export function assertReprocessAllowed(input: ReprocessGuardInput): ReprocessGuardResult {
   if (input.confirm !== true) {
@@ -151,8 +155,14 @@ export function assertReprocessAllowed(input: ReprocessGuardInput): ReprocessGua
   if (input.nextBatchCount <= 0) {
     return { ok: false, reason: "NO_RECOVERABLE", message: "Nenhum destinatário recuperável no próximo lote." };
   }
-  if (input.instanceState !== "open") {
-    return { ok: false, reason: "INSTANCE_NOT_CONNECTED", message: "Instância WhatsApp não está conectada (open)." };
+  if (input.channelConnected !== true) {
+    return {
+      ok: false,
+      reason: "INSTANCE_NOT_CONNECTED",
+      message: input.channelConnected === null
+        ? "Não foi possível confirmar a conexão do WhatsApp — reprocessamento bloqueado."
+        : "WhatsApp (Meta) não está conectado.",
+    };
   }
   return { ok: true };
 }

@@ -54,7 +54,7 @@ const AREA_INSPECTION_HINTS: Record<string, string[]> = {
     "Prompt assembly and product/menu reading logic",
   ],
   whatsapp: [
-    "Evolution webhook receiver, parser and processor",
+    "Recebimento e processamento do webhook da Meta (WhatsApp)",
     "Message sending service and instance config (metadata only)",
   ],
   crm: ["CRM campaign/automation services and segments"],

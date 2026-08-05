@@ -75,17 +75,17 @@ async function main() {
   // ── 2. Batch-fetch all related data ─────────────────────────────────────────
 
   const [
-    evolutionConfigs,
+    whatsappConfigs,
     whatsappAgentConfigs,
     conversationStats,
     draftStats,
     menuStats,
     orderStats,
   ] = await Promise.all([
-    // Evolution configs — instanceName and isActive only (NO apiKey/webhookSecret)
-    prisma.evolutionConfig.findMany({
+    // Canal de WhatsApp — Meta Cloud API (único desde 04/08/2026). Nunca token.
+    prisma.metaWhatsAppConfig.findMany({
       where:  { restaurantId: { in: ids } },
-      select: { restaurantId: true, instanceName: true, baseUrl: true, isActive: true, createdAt: true, updatedAt: true },
+      select: { restaurantId: true, connectionStatus: true, displayPhoneNumber: true, createdAt: true, updatedAt: true },
     }),
 
     // WhatsApp agent config — especially menuUrl
@@ -151,7 +151,7 @@ async function main() {
 
   // ── 3. Print per-restaurant detail ─────────────────────────────────────────
   for (const r of restaurants) {
-    const evo    = evolutionConfigs.find((e) => e.restaurantId === r.id);
+    const wa     = whatsappConfigs.find((c) => c.restaurantId === r.id);
     const agCfg  = whatsappAgentConfigs.find((a) => a.restaurantId === r.id);
     const convG  = conversationStats.find((c) => c.restaurantId === r.id);
 
@@ -185,11 +185,10 @@ async function main() {
     console.log(`  updatedAt  : ${r.updatedAt.toISOString()}`);
 
     console.log(`\n  ── Evolution config ──`);
-    if (evo) {
-      console.log(`  instanceName : ${evo.instanceName}`);
-      console.log(`  baseUrl      : ${evo.baseUrl}`);
-      console.log(`  isActive     : ${evo.isActive}`);
-      console.log(`  createdAt    : ${evo.createdAt.toISOString()}`);
+    if (wa) {
+      console.log(`  phone        : ${wa.displayPhoneNumber ?? "—"}`);
+      console.log(`  connection   : ${wa.connectionStatus ?? "—"}`);
+      console.log(`  createdAt    : ${wa.createdAt.toISOString()}`);
     } else {
       console.log(`  ❌ NO Evolution config`);
     }
@@ -243,7 +242,7 @@ async function main() {
   console.log("─".repeat(header.length));
 
   for (const r of restaurants) {
-    const evo    = evolutionConfigs.find((e) => e.restaurantId === r.id);
+    const wa     = whatsappConfigs.find((c) => c.restaurantId === r.id);
     const convG  = conversationStats.find((c) => c.restaurantId === r.id);
     const draftRows = draftStats.filter((d) => d.restaurantId === r.id);
     const openDrafts = draftRows.find((d) => d.status === "OPEN")?._count.id ?? 0;
@@ -255,17 +254,17 @@ async function main() {
 
     // Determine likely role
     let role = "UNKNOWN";
-    if (evo && convCount > 0 && recentOrders > 0) role = "CANONICAL_WHATSAPP_ACTIVE";
-    else if (evo && convCount > 0)                 role = "CANONICAL_WHATSAPP_ACTIVE";
-    else if (evo && !convCount)                    role = "CANONICAL_NO_CONVS";
-    else if (!evo && r.slug === "sushi-cazza")     role = "PUBLIC_SLUG_NO_EVO";
-    else if (!evo && totalItems > 0)               role = "HAS_MENU_NO_EVO";
-    else if (!evo)                                 role = "LEGACY_NO_EVO";
+    if (wa && convCount > 0 && recentOrders > 0) role = "CANONICAL_WHATSAPP_ACTIVE";
+    else if (wa && convCount > 0)                role = "CANONICAL_WHATSAPP_ACTIVE";
+    else if (wa && !convCount)                   role = "CANONICAL_NO_CONVS";
+    else if (!wa && r.slug === "sushi-cazza")    role = "PUBLIC_SLUG_NO_WHATSAPP";
+    else if (!wa && totalItems > 0)              role = "HAS_MENU_NO_WHATSAPP";
+    else if (!wa)                                role = "LEGACY_NO_WHATSAPP";
 
     console.log([
       pad(r.id, 30),
       pad(r.slug, 32),
-      pad(evo ? `✅ ${evo.isActive ? "active" : "inactive"}` : "❌ none", 10),
+      pad(wa ? `✅ ${wa.connectionStatus === "CONNECTED" ? "conectado" : "desconect."}` : "❌ none", 10),
       pad(String(convCount), 9),
       pad(String(openDrafts), 11),
       pad(String(totalItems), 10),
@@ -282,8 +281,8 @@ async function main() {
   });
   if (canonical) {
     console.log(`  /pedido/sushi-cazza  →  restaurantId: ${canonical.id}  (${canonical.name}, active: ${canonical.isActive})`);
-    const hasEvo = evolutionConfigs.some((e) => e.restaurantId === canonical.id);
-    console.log(`  This restaurant has Evolution config: ${hasEvo ? "✅ YES" : "❌ NO"}`);
+    const hasWa  = whatsappConfigs.some((c) => c.restaurantId === canonical.id);
+    console.log(`  This restaurant has WhatsApp (Meta) config: ${hasWa ? "✅ YES" : "❌ NO"}`);
   } else {
     console.log("  ⚠  No restaurant has slug = 'sushi-cazza' exactly.");
   }
@@ -301,13 +300,14 @@ async function main() {
       select: { id: true, slug: true, name: true, isActive: true },
     });
     if (r) {
-      const hasEvo = !!(await prisma.evolutionConfig.findUnique({ where: { restaurantId: id }, select: { instanceName: true } }));
+      const cfgWa = await prisma.metaWhatsAppConfig.findUnique({ where: { restaurantId: id }, select: { connectionStatus: true } });
+      const hasWa = cfgWa?.connectionStatus === "CONNECTED";
       console.log(`  ${label}`);
       console.log(`    id       : ${r.id}`);
       console.log(`    slug     : ${r.slug}`);
       console.log(`    name     : ${r.name}`);
       console.log(`    active   : ${r.isActive}`);
-      console.log(`    hasEvo   : ${hasEvo ? "✅ YES" : "❌ NO"}`);
+      console.log(`    whatsapp : ${hasWa ? "✅ conectado (Meta)" : "❌ não conectado"}`);
     } else {
       console.log(`  ${label}`);
       console.log(`    ❌ NOT FOUND in DB (id: ${id})`);

@@ -7,7 +7,7 @@ function input(over: Record<string, unknown> = {}) {
     phone: "5511999990000",
     hasOptedOut: false,
     crmContactable: true,
-    evolutionAvailable: true,
+    whatsappAvailable: true,
     restaurantOpen: true,
     isBirthday: false,
     enforceTimeWindows: false,

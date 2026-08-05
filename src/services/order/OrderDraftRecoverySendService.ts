@@ -38,10 +38,8 @@
 
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { EvolutionApiError } from "@/lib/evolution/EvolutionClient";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
-import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
@@ -72,9 +70,21 @@ export interface RecoverySendResult {
   skippedPendingPayment:      number;
   /** Combined: order found via Rule 7 + AWAITING_PAYMENT via Rule 8. */
   skippedOrderOrPaymentExists: number;
-  skippedNoConfig:            number; // restaurant has no working WhatsApp integration (Meta or Evolution)
+  skippedNoConfig:            number; // restaurant has no working Meta WhatsApp config → nothing was attempted
   skippedRestaurantClosed:    number; // restaurant is closed — recovery deferred, attempts NOT incremented
-  failed:                     number; // the active provider (Meta or Evolution) was called but returned an error
+  failed:                     number; // Meta was called and returned an error
+  /**
+   * A Meta RECUSOU o texto livre porque o cliente está fora da janela de 24h e
+   * não havia modelo aprovado para esta mensagem.
+   *
+   * Isto NÃO é "nada a enviar" e NÃO é falha de rede: é a política da Meta
+   * dizendo que só um template aprovado passa. Sem este número, a recuperação
+   * de carrinho pareceria estar rodando (checked>0, failed=0) enquanto nenhuma
+   * mensagem chegava a ninguém — exatamente o tipo de silêncio que esta casa
+   * não aceita. O rascunho NÃO é carimbado, então ele volta a ser candidato no
+   * próximo tick — e vence sozinho pelo prazo de validade de 6h.
+   */
+  skippedTemplateRequired:    number;
   dryRun:                     boolean;
   inactivityMinutes:          number;
   /** Idade máxima de um carrinho recuperável — depois disso ele vence. */
@@ -276,6 +286,7 @@ export class OrderDraftRecoverySendService {
         skippedOrderedAfter: 0, skippedPendingPayment: 0,
         skippedOrderOrPaymentExists: 0,
         skippedNoConfig: 0, skippedRestaurantClosed: 0, failed: 0,
+        skippedTemplateRequired: 0,
         dryRun, inactivityMinutes, maxAgeHours, skippedTooOld,
         durationMs: Date.now() - startMs,
       };
@@ -307,10 +318,20 @@ export class OrderDraftRecoverySendService {
 
     // Meta official per restaurant: cart messages to web-cart customers (no open
     // 24h window) must go out as APPROVED templates, not freeform.
+    // Se esta consulta falhar, o mapa fica vazio e TODO restaurante cairia no
+    // caminho freeform — o que é degradar em silêncio. O caminho freeform hoje
+    // devolve BLOCKED e é contado (skippedTemplateRequired), então nada some;
+    // mas a falha da consulta precisa aparecer no log para não ser confundida
+    // com "nenhum restaurante tem CRM Meta ligado".
     const metaCfgs = await prisma.metaWhatsAppConfig.findMany({
       where:  { restaurantId: { in: candidateRestaurantIds } },
       select: { restaurantId: true, metaCrmEnabled: true, connectionStatus: true },
-    }).catch(() => [] as { restaurantId: string; metaCrmEnabled: boolean; connectionStatus: string | null }[]);
+    }).catch((e) => {
+      console.error(`[OrderDraftRecoverySendService] leitura das configs Meta falhou — nenhum template será usado neste tick`, {
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return [] as { restaurantId: string; metaCrmEnabled: boolean; connectionStatus: string | null }[];
+    });
     const metaCfgByRestaurant = new Map(metaCfgs.map((m) => [m.restaurantId, m]));
 
     const cartDisabled = new Set(
@@ -362,6 +383,7 @@ export class OrderDraftRecoverySendService {
     let skippedNoConfig             = 0;
     let skippedRestaurantClosed     = 0;
     let failed                      = 0;
+    let skippedTemplateRequired     = 0;
 
     // Cache open/closed status per restaurant for this tick — avoids N DB round-trips
     // when multiple drafts belong to the same restaurant.
@@ -373,27 +395,32 @@ export class OrderDraftRecoverySendService {
       return open;
     };
 
-    // Config gate, provider-aware and cached per tick: a restaurant with no working
-    // WhatsApp integration must be SKIPPED (skippedNoConfig), not attempted. Without
-    // this gate the send fails every cron minute (draft never gets stamped) and the
-    // error log fills with EVOLUTION_NOT_CONFIGURED for restaurants that simply
-    // never connected WhatsApp.
+    // Portão de config, cacheado por tick. A pergunta antiga era "existe config da
+    // Evolution?"; a Evolution saiu do Foocci, então a pergunta equivalente — e
+    // agora ÚNICA — é "existe config da Meta para este restaurante?".
+    //
+    // Restaurante sem config é PULADO (skippedNoConfig), nunca tentado: sem este
+    // portão o envio falharia a cada minuto de cron, o rascunho nunca seria
+    // carimbado e o log encheria de META_NOT_CONNECTED de lojas que simplesmente
+    // nunca conectaram o WhatsApp.
+    //
+    // E ausência de informação não é informação: qualquer erro na leitura da
+    // config vira `false` (falha fechada, não envia) COM log — não pode virar
+    // "pode enviar" nem sumir como se não houvesse nada a enviar.
     const sendableCache = new Map<string, boolean>();
     const canSendWhatsApp = async (restaurantId: string): Promise<boolean> => {
       if (sendableCache.has(restaurantId)) return sendableCache.get(restaurantId)!;
       let ok = false;
       try {
-        const r = await prisma.restaurant.findUnique({
-          where:  { id: restaurantId },
-          select: { whatsappProvider: true },
-        });
-        if (r?.whatsappProvider === "META_CLOUD_API") {
-          ok = (await MetaConfigService.getResolved(restaurantId)) != null;
-        } else {
-          ok = (await EvolutionConfigService.getSnapshot(restaurantId)).ok;
+        ok = (await MetaConfigService.getResolved(restaurantId)) != null;
+        if (!ok) {
+          console.warn(`[OrderDraftRecoverySendService] sem config Meta — recuperação NÃO enviada`, { restaurantId });
         }
-      } catch {
+      } catch (e) {
         ok = false;
+        console.error(`[OrderDraftRecoverySendService] leitura da config Meta falhou — falhando fechado (não envia)`, {
+          restaurantId, error: e instanceof Error ? e.message : String(e),
+        });
       }
       sendableCache.set(restaurantId, ok);
       return ok;
@@ -408,7 +435,7 @@ export class OrderDraftRecoverySendService {
         continue;
       }
 
-      // No working WhatsApp integration → skip without attempting (see gate above).
+      // Sem config Meta → pula sem tentar (ver portão acima).
       if (!(await canSendWhatsApp(draft.restaurantId))) {
         skippedNoConfig++;
         continue;
@@ -419,9 +446,9 @@ export class OrderDraftRecoverySendService {
         skippedNoPhone++;
         continue;
       }
-      // Normalize phone for Evolution: digits only, no leading "+", no spaces/dashes.
-      // E.164 phones from /pedido are stored as "+5511999990000"; webhook phones as "+5511999990000".
-      // Full digit-strip matches the proven pattern in OrderNotificationService.
+      // Normaliza o telefone: só dígitos, sem "+", sem espaço nem traço.
+      // Telefones E.164 vindos do /pedido são gravados como "+5511999990000".
+      // Mesmo padrão já provado no OrderNotificationService.
       const toPhone = customer.phone.replace(/\D/g, "");
       if (!toPhone.match(/^\d{10,15}$/)) {
         skippedNoPhone++;
@@ -486,8 +513,7 @@ export class OrderDraftRecoverySendService {
 
       // ── Send ──────────────────────────────────────────────────────────────
       try {
-        // Provider config is validated inside the active provider at send time
-        // (Evolution snapshot or Meta Cloud credentials — whichever is ACTIVE).
+        // A credencial da Meta é revalidada dentro do provedor na hora do envio.
 
         // Generate short recovery code and persist it BEFORE sending so the
         // URL resolves in the DB the moment the customer taps the link.
@@ -534,12 +560,14 @@ export class OrderDraftRecoverySendService {
           phoneMasked:  maskPhone(customer.phone),
         });
 
-        // On the official Meta API, a web-cart customer usually has NO open 24h
-        // service window — freeform text is REJECTED. Send the phrase's APPROVED
-        // template (same mechanics as the CRM runner); freeform stays the
-        // fallback for Evolution / in-window customers.
+        // Na Meta oficial, o cliente que montou o carrinho no site normalmente NÃO
+        // tem janela de 24h aberta — texto livre é RECUSADO. O caminho bom é o
+        // modelo APROVADO da frase sorteada (mesma mecânica do runner do CRM).
+        // O texto livre continua existindo, mas só serve para quem está DENTRO da
+        // janela; fora dela ele volta BLOCKED e isso é contado, não engolido.
         const metaCfg = metaCfgByRestaurant.get(draft.restaurantId);
-        if (metaCfg?.metaCrmEnabled && metaCfg.connectionStatus === "CONNECTED" && cartRow) {
+        // Idem ao cron: o gate é a CONEXÃO, não o interruptor antigo de provedor.
+        if (metaCfg?.connectionStatus === "CONNECTED" && cartRow) {
           const renderCtx = {
             restaurantName: draft.restaurant.name ?? "nossa loja",
             pedidoUrl:      shortRecoveryUrl,
@@ -563,7 +591,29 @@ export class OrderDraftRecoverySendService {
           }
           if (usedTemplate) console.info(`[OrderDraftRecoverySendService] sent via approved Meta template`, { draftId: draft.id });
         } else {
-          const sendRes = await sendWhatsAppText(draft.restaurantId, toPhone, message);
+          const sendRes = await WhatsAppMessagingService.sendText({
+            restaurantId: draft.restaurantId,
+            to:           toPhone,
+            text:         message,
+          });
+
+          // BLOCKED não é falha de rede: é a política da Meta recusando texto
+          // livre fora da janela de 24h. Precisa APARECER — no contador e no log
+          // —, senão a recuperação "roda" todo minuto sem nada chegar ao cliente
+          // e o painel mostra checked>0 / failed=0, que lê como sucesso.
+          if (!sendRes.ok && sendRes.status === "BLOCKED") {
+            skippedTemplateRequired++;
+            console.warn(`[OrderDraftRecoverySendService] recuperação NÃO enviada: a Meta exige modelo aprovado fora da janela de 24h`, {
+              draftId:      draft.id,
+              restaurantId: draft.restaurantId,
+              phoneMasked:  maskPhone(customer.phone),
+              blockReason:  sendRes.blockReason ?? null,
+              detalhe:      sendRes.error ?? null,
+              acao:         "cadastrar e aprovar um modelo de carrinho abandonado na Meta e ligar o CRM Meta desta loja",
+            });
+            continue; // não carimba o rascunho: ele vence sozinho pelo prazo de 6h
+          }
+
           if (!sendRes.ok) throw new Error(sendRes.errorCode ?? sendRes.error ?? "SEND_FAILED");
         }
 
@@ -620,15 +670,11 @@ export class OrderDraftRecoverySendService {
         });
         sent++;
       } catch (err) {
-        const isApiErr = err instanceof EvolutionApiError;
         console.error(`[OrderDraftRecoverySendService] send failed`, {
           draftId:      draft.id,
           restaurantId: draft.restaurantId,
           phoneMasked:  maskPhone(customer.phone),
           errorMessage: err instanceof Error ? err.message : String(err),
-          ...(isApiErr
-            ? { statusCode: (err as EvolutionApiError).status, responseBody: (err as EvolutionApiError).body }
-            : {}),
         });
         failed++;
       }
@@ -647,6 +693,7 @@ export class OrderDraftRecoverySendService {
       skippedNoConfig,
       skippedRestaurantClosed,
       failed,
+      skippedTemplateRequired,
       dryRun,
       inactivityMinutes,
       maxAgeHours,

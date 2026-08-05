@@ -23,12 +23,9 @@ export async function register() {
     );
     ScheduledCampaignScheduler.start();
 
-    // Re-register Evolution webhook after every deploy so WhatsApp never goes
-    // silent due to Evolution marking the endpoint as failed during downtime.
-    const { syncAllEvolutionWebhooks } = await import(
-      "./services/evolution/EvolutionWebhookStartupSync"
-    );
-    void syncAllEvolutionWebhooks();
+    // Antes daqui saía um re-registro do webhook da Evolution a cada deploy. A
+    // Evolution foi eliminada em 04/08/2026 e a Meta NÃO precisa disso: o webhook
+    // é registrado uma vez no aplicativo e não é marcado como falho por downtime.
   }
 }
 

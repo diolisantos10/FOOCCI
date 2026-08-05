@@ -5,9 +5,9 @@
  *
  * Outbound flow:
  *   1. Validate conversation belongs to restaurant and is not resolved.
- *   2. Fetch decrypted EvolutionConfig for the restaurant.
- *   3. Call EvolutionClient to deliver the message.
- *   4. Persist the outbound Message with the returned externalMessageId.
+ *   2. Resolve the restaurant's provider (Meta Cloud API — o único desde 04/08/2026).
+ *   3. Deliver via `provider.sendText`.
+ *   4. Persist the outbound Message with the returned providerMessageId.
  *   5. Update Conversation.lastMessageAt.
  *
  * Note: The content sent here is authored by a human agent.

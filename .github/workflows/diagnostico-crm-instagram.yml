@@ -1,0 +1,35 @@
+name: Diagnóstico — CRM e Instagram em produção
+
+# Somente leitura. Consulta as rotas de diagnóstico já existentes em produção
+# usando o ADMIN_SECRET lido do Railway dentro do runner — o segredo nunca é
+# impresso, e a saída é uma projeção de campos escolhidos a dedo, porque o log
+# deste repositório é público e o diagnóstico de contato conhece dado pessoal.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Slug do restaurante'
+        required: false
+        default: 'sushi-cazza'
+  push:
+    paths:
+      - 'scripts/diagnostico-crm-instagram.mjs'
+      - '.github/workflows/diagnostico-crm-instagram.yml'
+
+jobs:
+  diagnosticar:
+    name: Perguntar à produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Rodar diagnóstico
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          SLUG: ${{ github.event.inputs.slug || 'sushi-cazza' }}
+        run: node scripts/diagnostico-crm-instagram.mjs

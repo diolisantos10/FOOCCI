@@ -70,6 +70,7 @@ export function buildMetaSetupInstructions(baseUrl: string = META_DEFAULT_BASE_U
     "3) Permissões: whatsapp_business_messaging, whatsapp_business_management (+ business_management)",
     "",
     "4) Validar em Integrações → WhatsApp → Avançado: todos os itens ✓ → Conectar (Embedded Signup) →",
-    "Testar conexão → Simular recebimento. O Evolution continua sendo o provedor até o teste passar.",
+    "Testar conexão → Simular recebimento. Enquanto o teste não passar, o restaurante NÃO envia nem recebe",
+    "por WhatsApp — não existe mais canal reserva.",
   ].join("\n");
 }

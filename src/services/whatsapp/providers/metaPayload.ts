@@ -5,11 +5,11 @@
  * POST /{PHONE_NUMBER_ID}/messages on the Graph API.
  *
  * Recipient phone: Graph API accepts an E.164 number; we send digits-only
- * (e.g. "5511999990000") produced by the SAME normalizer Evolution already uses,
+ * (e.g. "5511999990000") produced by the SAME normalizador de telefone BR do projeto,
  * so phone handling stays consistent across providers.
  */
 
-import { normalizePhoneForEvolution, isValidEvolutionPhone } from "@/lib/crm/normalizePhone";
+import { normalizePhoneBR, isValidPhoneBR } from "@/lib/crm/normalizePhone";
 
 export interface MetaTextPayload {
   messaging_product: "whatsapp";
@@ -41,8 +41,8 @@ export interface MetaTemplatePayload {
 
 /** Normalizes a raw phone to Meta's recipient format (digits, E.164 w/o '+'). */
 export function toMetaRecipient(rawPhone: string | null | undefined): string | null {
-  const normalized = normalizePhoneForEvolution(rawPhone ?? "");
-  return normalized && isValidEvolutionPhone(normalized) ? normalized : null;
+  const normalized = normalizePhoneBR(rawPhone ?? "");
+  return normalized && isValidPhoneBR(normalized) ? normalized : null;
 }
 
 /** Builds a freeform text message payload (only valid inside the 24h window). */

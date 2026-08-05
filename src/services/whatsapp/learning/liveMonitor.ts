@@ -35,7 +35,7 @@ export interface MonitorSnapshot {
   topErrors: MonitorErrorCount[]; // up to 5
   pendingLearnings: number;
   /** Safety: this endpoint never sends nor charges. Always true/true/true. */
-  safety: { noEvolution: true; noRealOrder: true; noRealPix: true; noMessageSent: true };
+  safety: { noWhatsAppSend: true; noRealOrder: true; noRealPix: true; noMessageSent: true };
   generatedAt: string;
   error: string | null;
 }
@@ -97,7 +97,7 @@ export function buildMonitorSnapshot(input: MonitorInputs): MonitorSnapshot {
     errorsByCategory,
     topErrors: errorsByCategory.slice(0, 5),
     pendingLearnings: input.pendingLearnings,
-    safety: { noEvolution: true, noRealOrder: true, noRealPix: true, noMessageSent: true },
+    safety: { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, noMessageSent: true },
     generatedAt: new Date().toISOString(),
     error: null,
   };
@@ -108,7 +108,7 @@ function emptySnapshot(slug: string | null, periodHours: number, error: string):
     ok: false, restaurantSlug: slug, periodHours, conversations: 0, ordersGenerated: 0,
     revenue: 0, conversationToOrderRate: 0, handoffs: 0, abandonos: 0,
     errorsByCategory: [], topErrors: [], pendingLearnings: 0,
-    safety: { noEvolution: true, noRealOrder: true, noRealPix: true, noMessageSent: true },
+    safety: { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, noMessageSent: true },
     generatedAt: new Date().toISOString(), error,
   };
 }

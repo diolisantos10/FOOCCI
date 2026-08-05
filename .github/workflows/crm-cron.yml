@@ -102,7 +102,7 @@ jobs:
 
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
             # Scheduled run: always live. The runner enforces the real per-provider
-            # caps (Evolution Web: 5/run with long delays; Meta official: 40/run
+            # caps (Meta: 40/run — o teto antigo de 5/run era do provedor aposentado
             # with 1-2 s pacing) — this limit is just an upper-bound guard.
             echo 'body={"dryRun":false,"limit":40}' >> "$GITHUB_OUTPUT"
             echo "dry_run=false"                    >> "$GITHUB_OUTPUT"

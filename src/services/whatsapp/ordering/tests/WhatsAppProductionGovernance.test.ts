@@ -215,7 +215,7 @@ describe("(11) full-test-readiness", () => {
     expect(r.p0).toBe(0);
     expect(r.noRealOrder).toBe(true);
     expect(r.noRealPix).toBe(true);
-    expect(r.noEvolution).toBe(true);
+    expect(r.noWhatsAppSend).toBe(true);
     expect(r.runtimeTouched).toBe(false);
   });
 });

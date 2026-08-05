@@ -304,7 +304,7 @@ describe("isCycleIntervalActive (min interval between cycles)", () => {
 
 describe("AUDIENCE distribution — daily budget proportional to audience size", () => {
   const cfg = (over: Partial<import("@/lib/crm-safety").CRMWhatsAppBudgetConfig> = {}) => ({
-    enabled: true, providerMode: "EVOLUTION_WEB" as const,
+    enabled: true, providerMode: "META_CLOUD" as const,
     globalDailyLimit: 100, globalCycleLimit: 40, minMinutesBetweenCycles: 0,
     distributionMode: "AUDIENCE" as const,
     stopOnInstanceDisconnected: true, pauseOnFailureRatePercent: 0, maxConsecutiveProviderFailures: 0,

@@ -14,8 +14,7 @@
  *   - @/services/whatsapp/ordering/WhatsAppTextOrderService (processCustomerMessage)
  *   - @/services/whatsapp/ordering/WhatsAppOrderingSessionService (session)
  *   - @/lib/handoff (markConversationNeedsHuman)
- *   - @/services/evolution/EvolutionConfigService (send)
- *   - @/lib/evolution/EvolutionClient (send)
+ *   - @/services/whatsapp/activeProvider (envio pela Meta — o canal único)
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -49,11 +48,12 @@ const sessionMock = vi.hoisted(() => ({
 vi.mock("@/services/whatsapp/ordering/WhatsAppOrderingSessionService", () => sessionMock);
 
 vi.mock("@/lib/handoff", () => ({ markConversationNeedsHuman: vi.fn() }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({
-  EvolutionConfigService: { getSnapshot: vi.fn(async () => ({ ok: false })) },
-}));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({
-  EvolutionClient: { sendTextMessage: vi.fn() },
+// Canal único: a Meta. O envio real nunca acontece nos testes.
+vi.mock("@/services/whatsapp/activeProvider", () => ({
+  sendWhatsAppText: vi.fn(async () => ({
+    ok: false, provider: "META_CLOUD_API", status: "FAILED",
+    providerMessageId: null, errorCode: "NOT_CONFIGURED",
+  })),
 }));
 
 // ── Import AFTER mocks ────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ describe("F — PHONE_ALLOWLIST scope rejects unlisted phone", () => {
 // ── G. Engine error (send failure) logs and doesn't swallow ──────────────────
 
 describe("G — send failure logs but engine still returns handled=true", () => {
-  it("EvolutionClient send throws → replySent=false, handled=true, error logged", async () => {
+  it("envio pela Meta lança → replySent=false, handled=true, error logged", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     configMock.resolveWaConfig.mockResolvedValue(dbConfig({
       enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE",
@@ -272,10 +272,8 @@ describe("G — send failure logs but engine still returns handled=true", () => 
     sessionMock.WhatsAppOrderingSessionService.updateSession.mockResolvedValue({});
     processMock.processCustomerMessage.mockResolvedValue(processResult("Olá!"));
 
-    const { EvolutionConfigService } = await import("@/services/evolution/EvolutionConfigService");
-    vi.mocked(EvolutionConfigService.getSnapshot).mockResolvedValue({ ok: true, data: {} as never });
-    const { EvolutionClient } = await import("@/lib/evolution/EvolutionClient");
-    vi.mocked(EvolutionClient.sendTextMessage).mockRejectedValue(new Error("network error"));
+    const { sendWhatsAppText } = await import("@/services/whatsapp/activeProvider");
+    vi.mocked(sendWhatsAppText).mockRejectedValue(new Error("network error"));
 
     const r = await handleInboundForOrdering({
       restaurantId: REST, phone: PHONE, conversationId: CONV, messageText: "Bom dia",
@@ -403,10 +401,10 @@ describe("K — REPLY_ONLY + reply sent → textOrderingHandled=true (old agent 
     processMock.processCustomerMessage.mockResolvedValue(processResult("Adicionei 1 yakisoba!"));
     prismaMock.$transaction.mockResolvedValue([]);
 
-    const { EvolutionConfigService } = await import("@/services/evolution/EvolutionConfigService");
-    vi.mocked(EvolutionConfigService.getSnapshot).mockResolvedValue({ ok: true, data: {} as never });
-    const { EvolutionClient } = await import("@/lib/evolution/EvolutionClient");
-    vi.mocked(EvolutionClient.sendTextMessage).mockResolvedValue({ key: { id: "msg-test-1" } } as never);
+    const { sendWhatsAppText } = await import("@/services/whatsapp/activeProvider");
+    vi.mocked(sendWhatsAppText).mockResolvedValue({
+      ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.test-1",
+    });
 
     const r = await handleInboundForOrdering({
       restaurantId: REST, phone: PHONE, conversationId: CONV,

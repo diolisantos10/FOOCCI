@@ -9,7 +9,7 @@
  *
  *   • opt-out (LGPD)               • daily global cap
  *   • contactability / phone       • per-customer cooldown
- *   • Evolution availability       • per-customer weekly cap
+ *   • canal WhatsApp conectado     • per-customer weekly cap
  *   • quiet hours / weekend        • cross-campaign 24h dedup
  *   • sending window               • duplicate-in-campaign dedup
  *   • restaurant operational status (opt-in)
@@ -37,6 +37,7 @@ import {
   checkWeekendBlock,
 } from "@/lib/crm-safety";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
+import { isWhatsAppChannelConnected } from "./crmWhatsAppChannel";
 
 // ─── Decision types ───────────────────────────────────────────────────────────
 
@@ -45,7 +46,8 @@ export type ContactBlockReason =
   | "CUSTOMER_NOT_CONTACTABLE"
   | "MISSING_PHONE"
   | "INVALID_PHONE_FORMAT"
-  | "NO_EVOLUTION_CONFIG"
+  /** Canal WhatsApp oficial (Meta) ausente ou desconectado. */
+  | "NO_WHATSAPP_CONFIG"
   | "QUIET_HOURS"
   | "WEEKEND_BLOCKED"
   | "OUTSIDE_SENDING_WINDOW"
@@ -107,7 +109,11 @@ export interface ContactSafetyEvalInput {
 
   // ── global context ──
   safety: CRMWhatsAppSafetyConfig;
-  evolutionAvailable: boolean;
+  /**
+   * Canal WhatsApp oficial (Meta) disponível E conectado para este restaurante.
+   * Não existe mais provedor alternativo: false = nada sai, e sai bloqueio escrito.
+   */
+  whatsappAvailable: boolean;
   globalSentToday: number;
   restaurantOpen: boolean;
 
@@ -197,9 +203,9 @@ export function evaluateContactSafety(input: ContactSafetyEvalInput): ContactSaf
     return block("INVALID_PHONE_FORMAT", "Formato de telefone inválido");
   }
 
-  // 5. Evolution integration available?
-  if (!input.evolutionAvailable) {
-    return block("NO_EVOLUTION_CONFIG", "WhatsApp (Evolution) não configurado");
+  // 5. Canal WhatsApp oficial conectado?
+  if (!input.whatsappAvailable) {
+    return block("NO_WHATSAPP_CONFIG", "WhatsApp (Meta) não conectado");
   }
 
   // 6. Restaurant operational status (opt-in).
@@ -330,7 +336,8 @@ export function detectOptOutIntent(text: string | null | undefined): boolean {
 
 export interface ContactSafetyGlobalContext {
   safety: CRMWhatsAppSafetyConfig;
-  evolutionAvailable: boolean;
+  /** Canal WhatsApp oficial (Meta) conectado. */
+  whatsappAvailable: boolean;
   globalSentToday: number;
   restaurantOpen: boolean;
 }
@@ -365,25 +372,40 @@ export interface AssertSendableInput {
 }
 
 export class ContactSafetyService {
-  /** Compute the once-per-batch global signals. */
+  /**
+   * Compute the once-per-batch global signals.
+   *
+   * `whatsappAvailable` deixou de ter default otimista. Quem sabe o estado do canal
+   * passa o booleano (o runner e o envio manual já consultaram a conexão); quem não
+   * passa faz a pergunta agora, ao `WhatsAppMessagingService`. Se a pergunta falhar,
+   * a resposta é **false** — ausência de informação não vira permissão de envio.
+   *
+   * `evolutionAvailable` sobrevive apenas como apelido de entrada, para chamadores
+   * ainda não migrados; ele NÃO reintroduz a Evolution — o valor só alimenta o
+   * mesmo gate de canal único.
+   */
   static async buildGlobalContext(
     restaurantId: string,
-    opts: { evolutionAvailable?: boolean; checkRestaurantOpen?: boolean; now?: Date } = {},
+    opts: {
+      whatsappAvailable?: boolean;
+      /** @deprecated apelido de `whatsappAvailable`; a Evolution saiu do sistema. */
+      evolutionAvailable?: boolean;
+      checkRestaurantOpen?: boolean;
+      now?: Date;
+    } = {},
   ): Promise<ContactSafetyGlobalContext> {
-    const [safety, globalSentToday, restaurantOpen] = await Promise.all([
+    const supplied = opts.whatsappAvailable ?? opts.evolutionAvailable;
+    const [safety, globalSentToday, restaurantOpen, whatsappAvailable] = await Promise.all([
       getSafetyConfig(restaurantId),
       getTodayGlobalSendCount(restaurantId),
       opts.checkRestaurantOpen
         ? isRestaurantOpenNow(restaurantId, opts.now)
         : Promise.resolve(true),
+      supplied !== undefined
+        ? Promise.resolve(supplied)
+        : isWhatsAppChannelConnected(restaurantId),
     ]);
-    return {
-      safety,
-      globalSentToday,
-      restaurantOpen,
-      // When not explicitly told, assume available; callers that know pass it in.
-      evolutionAvailable: opts.evolutionAvailable ?? true,
-    };
+    return { safety, globalSentToday, restaurantOpen, whatsappAvailable };
   }
 
   /**
@@ -455,7 +477,7 @@ export class ContactSafetyService {
         otherCampaignSendsWithin24h,
         sameCampaignSends,
         safety: ctx.safety,
-        evolutionAvailable: ctx.evolutionAvailable,
+        whatsappAvailable: ctx.whatsappAvailable,
         globalSentToday: ctx.globalSentToday,
         restaurantOpen: ctx.restaurantOpen,
         isBirthday: input.isBirthday ?? false,

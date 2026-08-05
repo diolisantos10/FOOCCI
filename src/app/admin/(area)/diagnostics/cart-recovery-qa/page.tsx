@@ -32,7 +32,7 @@ interface RecoverySendResult {
 }
 
 interface LiveTestOutcome {
-  evolutionAccepted: boolean;
+  accepted: boolean;
   detail:            string;
   externalMessageId?: string;
 }
@@ -442,17 +442,17 @@ export default function CartRecoveryQAPage() {
                 Resultado do envio real
               </h2>
               <div className={`rounded-lg border px-4 py-3 text-sm ${
-                liveTestResult.evolutionAccepted
+                liveTestResult.accepted
                   ? "border-green-700 bg-green-950/30 text-green-200"
                   : "border-yellow-700 bg-yellow-950/30 text-yellow-200"
               }`}>
                 <div className="flex items-center gap-2">
-                  <span>{liveTestResult.evolutionAccepted ? "✅" : "⚠️"}</span>
+                  <span>{liveTestResult.accepted ? "✅" : "⚠️"}</span>
                   <span>{liveTestResult.detail}</span>
                 </div>
                 {liveTestResult.externalMessageId && (
                   <p className="mt-1 text-xs text-gray-400">
-                    Evolution message ID:{" "}
+                    ID da mensagem na Meta:{" "}
                     <code className="font-mono text-gray-300">{liveTestResult.externalMessageId}</code>
                   </p>
                 )}

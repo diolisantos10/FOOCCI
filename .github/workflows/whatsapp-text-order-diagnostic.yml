@@ -4,7 +4,7 @@
 # Runs the synthetic "anotador de pedido" diagnostic in production: pure state
 # machine + Brain adapter + injected Fute settings. Proves PASS / p0=0 / footer
 # `0. menu` / official payment options / saved address / order-and-Pix only after
-# confirmation — with noSend / noEvolution / noOrder / noPix / runtimeTouched=false.
+# confirmation — with noSend / noWhatsAppSend / noOrder / noPix / runtimeTouched=false.
 # Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ jobs:
           echo "← replyOnlyNoOrder              : $(jq -r '.replyOnlyNoOrder' /tmp/diag.json)"
           echo "← fullTestOrderOnlyAfterConfirm : $(jq -r '.fullTestOrderOnlyAfterConfirmation' /tmp/diag.json)"
           echo "← pixOnlyAfterConfirmation      : $(jq -r '.pixOnlyAfterConfirmation' /tmp/diag.json)"
-          echo "← noSend/noEvolution/noOrder/noPix: $(jq -r '.noSend' /tmp/diag.json)/$(jq -r '.noEvolution' /tmp/diag.json)/$(jq -r '.noOrder' /tmp/diag.json)/$(jq -r '.noPix' /tmp/diag.json)"
+          echo "← noSend/noWhatsAppSend/noOrder/noPix: $(jq -r '.noSend' /tmp/diag.json)/$(jq -r '.noWhatsAppSend' /tmp/diag.json)/$(jq -r '.noOrder' /tmp/diag.json)/$(jq -r '.noPix' /tmp/diag.json)"
           echo "← runtimeTouched                : $RUNTIME_TOUCHED"
           echo "── casos ──"
           jq -r '.cases[]? | "\(if .pass then "✓" else "✗" end) \(.name)\(if .pass then "" else " — " + .note end)"' /tmp/diag.json 2>/dev/null || true

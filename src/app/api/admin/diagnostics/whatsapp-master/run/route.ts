@@ -2,7 +2,7 @@
  * POST /api/admin/diagnostics/whatsapp-master/run
  *
  * Admin-only endpoint that runs the WhatsApp Master Simulator and returns the
- * full MasterReport. Zero side effects: no Evolution, no real order, no real Pix.
+ * full MasterReport. Zero side effects: no WhatsApp send, no real order, no real Pix.
  */
 
 import { NextRequest, NextResponse } from "next/server";

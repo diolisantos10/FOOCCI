@@ -9,7 +9,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions, buildEligibilityMetrics } from "@/services/crm/crmExecutionClassification";
-import { EVOLUTION_WEB_MAX_PER_RUN, ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
+import { META_CLOUD_MAX_PER_RUN, ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
 import { parseMessagePool } from "@/services/crm/crmMessagePool";
 import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
@@ -136,9 +136,9 @@ export async function GET(
       eligibility: buildEligibilityMetrics(performance, campaign.totalAudience),
       // Evolution Web safe-send cap surfaced for the UI (recurring campaigns run in batches).
       safeSend: {
-        provider:    "EVOLUTION_WEB",
-        maxPerCycle: EVOLUTION_WEB_MAX_PER_RUN,
-        note:        `Modo seguro WhatsApp Web: até ${EVOLUTION_WEB_MAX_PER_RUN} envios por ciclo.`,
+        provider:    "META_CLOUD",
+        maxPerCycle: META_CLOUD_MAX_PER_RUN,
+        note:        `Modo seguro: até ${META_CLOUD_MAX_PER_RUN} envios por ciclo.`,
       },
       // Global WhatsApp budget snapshot (read-only): daily used/limit, this
       // campaign's quota vs sent today, and its next-cycle allocation + reason.

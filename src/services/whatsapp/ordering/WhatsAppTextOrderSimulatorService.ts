@@ -11,7 +11,7 @@
  * actions that WOULD run (CREATE_ORDER/GENERATE_PIX surfaced as WOULD_*), safety
  * flags and graded checks (P0/P1/P2). Config scenarios reuse `assessReadiness`.
  *
- * HARD INVARIANTS: no Evolution, no real order, no real Pix, runtimeTouched=false.
+ * HARD INVARIANTS: no WhatsApp send, no real order, no real Pix, runtimeTouched=false.
  */
 
 import { processCustomerMessage } from "./WhatsAppTextOrderService";
@@ -53,7 +53,7 @@ const SIM_MODE_TO_WA: Record<SimMode, "DRY_RUN_ONLY" | "ALLOWLIST_REPLY_ONLY" | 
 
 export interface SimTranscriptLine { actor: "CUSTOMER" | "AGENT" | "SYSTEM"; text: string; }
 export interface SimCheck { name: string; passed: boolean; severity: "P0" | "P1" | "P2"; message: string; }
-export interface SimSafety { noEvolution: boolean; noRealOrder: boolean; noRealPix: boolean; runtimeTouched: false; }
+export interface SimSafety { noWhatsAppSend: boolean; noRealOrder: boolean; noRealPix: boolean; runtimeTouched: false; }
 
 /** Operator-facing summary of what the flow did (synthetic data only, no PII). */
 export interface SimScenarioSummary {
@@ -339,7 +339,7 @@ async function runFlowScenario(sc: FlowScenario, mode: SimMode): Promise<SimScen
     orderDraft,
     actions: displayActions,
     summary,
-    safety: { noEvolution: true, noRealOrder: !createdRealOrder, noRealPix: !createdRealPix, runtimeTouched: false },
+    safety: { noWhatsAppSend: true, noRealOrder: !createdRealOrder, noRealPix: !createdRealPix, runtimeTouched: false },
     checks,
   };
 }
@@ -359,7 +359,7 @@ function runConfigScenario(id: string, name: string, input: Parameters<typeof as
     orderDraft: null,
     actions: [],
     summary: { itemsFound: [], itemsAmbiguous: [], paymentMethod: null, deliveryType: null, addressUsed: null },
-    safety: { noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false },
+    safety: { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, runtimeTouched: false },
     checks,
   };
 }
@@ -400,7 +400,7 @@ export async function runTextOrderSimulator(mode: SimMode = "REPLY_ONLY"): Promi
     total: scenarios.length,
     passed, warned, failed, p0, mode,
     scenarios,
-    safety: { noEvolution: true, noRealOrder: scenarios.every(s => s.safety.noRealOrder), noRealPix: scenarios.every(s => s.safety.noRealPix), runtimeTouched: false },
+    safety: { noWhatsAppSend: true, noRealOrder: scenarios.every(s => s.safety.noRealOrder), noRealPix: scenarios.every(s => s.safety.noRealPix), runtimeTouched: false },
     runtimeTouched: false,
   };
 }

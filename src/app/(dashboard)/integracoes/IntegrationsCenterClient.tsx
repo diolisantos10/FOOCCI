@@ -38,7 +38,7 @@ const INTEGRATIONS: {
   {
     provider:      "whatsapp",
     name:          "WhatsApp",
-    description:   "Conecte por QR Code ou pela conta oficial da Meta, com login em um clique.",
+    description:   "Conecte a conta oficial da Meta, com login em um clique.",
     icon:          "💬",
     color:         "bg-green-500",
     configureHref: "/integracoes/whatsapp",
@@ -323,286 +323,37 @@ function SelectField({
 // ── Per-provider config forms ─────────────────────────────────────────────────
 
 /**
- * Evolution connection panel — TRANSITIONAL. Foocci is moving to the Meta Cloud
- * API; this exists for restaurants still on Evolution during the migration.
+ * WhatsApp — SEM formulário aqui, de propósito.
  *
- * It used to report "connected" whenever no QR image came back. `/api/evolution/qr`
- * has THREE shapes, not two — `{base64}`, `{pairingCode, code}` and `{error}` — so a
- * pairing code (no image, no error) landed in the `else` and printed
- * "WhatsApp já está conectado!" to an owner who had connected nothing. They closed
- * the screen believing they were done, and the WhatsApp never worked: no error, no
- * log, nothing to investigate.
+ * ⚠️ MUDOU EM 04/08/2026. Aqui vivia o painel de **QR Code / código de pareamento**
+ * (`WhatsAppQRPanel`) mais um formulário de credenciais da Evolution (instanceName,
+ * baseUrl, apiKey, webhookSecret, URL de webhook para colar no servidor). A
+ * Evolution foi eliminada do Foocci por ordem do CEO.
  *
- * Guardrail 1 applied to a screen: the absence of an image is not information that
- * a connection exists. Every shape is now handled explicitly and the `else` is an
- * honest unknown state, never success.
+ * Na Meta **não existe QR nem pareamento**: o lojista conecta a conta oficial com
+ * login em um clique, e não há credencial para digitar. Por isso o card manda para
+ * a tela dedicada em vez de mostrar um formulário que não tem mais o que preencher.
+ *
+ * A lição que o painel antigo deixou continua valendo em qualquer tela de canal, e
+ * está na vitrine: **ausência de imagem/erro não é informação de que conectou.**
+ * Um `else` tratado como sucesso dizia "WhatsApp já está conectado!" para quem não
+ * tinha conectado nada.
  */
-function WhatsAppQRPanel() {
-  const [qrBase64, setQrBase64]   = useState<string | null>(null);
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [qrState, setQrState]     = useState<
-    "idle" | "loading" | "shown" | "pairing" | "connected" | "waiting" | "unknown" | "error"
-  >("idle");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopPolling = () => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-  };
-
-  const fetchQR = async () => {
-    const res  = await fetch("/api/evolution/qr");
-    const data = await res.json().catch(() => ({}));
-    const qr   = (data?.data ?? data) as {
-      base64?: string | null;
-      pairingCode?: string | null;
-      connected?: boolean;
-      generating?: boolean;
-      restarting?: boolean;
-      error?: string;
-    };
-
-    // 1 · QR image
-    if (qr.base64) {
-      setQrBase64(qr.base64);
-      setPairingCode(null);
-      setQrState("shown");
-      return;
-    }
-
-    // 2 · Pairing code instead of an image — a connection still has to happen.
-    if (qr.pairingCode) {
-      setPairingCode(qr.pairingCode);
-      setQrBase64(null);
-      setQrState("pairing");
-      return;
-    }
-
-    // 3 · Only an explicit flag may claim success.
-    if (qr.connected) {
-      setQrBase64(null);
-      setPairingCode(null);
-      setQrState("connected");
-      stopPolling();
-      return;
-    }
-
-    // 4 · Transient: Evolution is still producing the QR. KEEP POLLING — these two
-    //     are the reason the old `else` was so wrong. They mean "wait", and the
-    //     panel was reading them as "connected".
-    if (qr.generating || qr.restarting) {
-      setQrBase64(null);
-      setPairingCode(null);
-      setQrState("waiting");
-      return;
-    }
-
-    // 5 · Declared failure.
-    if (qr.error) {
-      setQrBase64(null);
-      setPairingCode(null);
-      setQrState(qr.error === "not_configured" ? "error" : "unknown");
-      stopPolling();
-      return;
-    }
-
-    // 6 · Anything else is unknown — and unknown is NOT connected.
-    setQrBase64(null);
-    setPairingCode(null);
-    setQrState("unknown");
-    stopPolling();
-  };
-
-  const handleConnect = async () => {
-    setQrState("loading");
-    setQrBase64(null);
-    await fetchQR();
-    // Auto-refresh every 30 s so QR doesn't expire
-    intervalRef.current = setInterval(async () => {
-      await fetchQR();
-    }, 30_000);
-  };
-
-  // Stop polling when component unmounts or instance becomes connected
-  useEffect(() => () => stopPolling(), []);
-
+function WhatsAppForm() {
   return (
-    <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-4">
-      <p className="mb-3 text-sm font-semibold text-green-800">Conectar WhatsApp</p>
-
-      {qrState === "idle" && (
-        <button
-          type="button"
-          onClick={handleConnect}
-          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition"
-        >
-          Gerar QR Code
-        </button>
-      )}
-
-      {qrState === "loading" && (
-        <div className="flex items-center gap-2 text-sm text-green-700">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
-          Gerando QR Code…
-        </div>
-      )}
-
-      {qrState === "shown" && qrBase64 && (
-        <div className="flex flex-col items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={qrBase64}
-            alt="QR Code WhatsApp"
-            className="rounded-xl border border-green-200 shadow-sm"
-            style={{ width: 200, height: 200 }}
-          />
-          <p className="text-center text-[11px] text-green-700">
-            Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar aparelho
-          </p>
-          <button
-            type="button"
-            onClick={handleConnect}
-            className="rounded-lg border border-green-300 bg-paper px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
-          >
-            Atualizar QR
-          </button>
-        </div>
-      )}
-
-      {qrState === "pairing" && pairingCode && (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-center text-sm text-green-800">
-            O WhatsApp mandou um <strong>código de pareamento</strong> em vez do QR.
-          </p>
-          <p className="rounded-xl border border-green-200 bg-paper px-5 py-3 font-mono text-2xl font-semibold tracking-[0.2em] text-green-800">
-            {pairingCode}
-          </p>
-          <p className="text-center text-[11px] text-green-700">
-            Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar aparelho →
-            <strong> Conectar com número de telefone</strong> e digite o código acima.
-          </p>
-          <button
-            type="button"
-            onClick={handleConnect}
-            className="rounded-lg border border-green-300 bg-paper px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
-          >
-            Gerar outro código
-          </button>
-        </div>
-      )}
-
-      {qrState === "waiting" && (
-        <div className="flex items-center gap-2 text-sm text-green-700">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
-          O WhatsApp ainda está preparando o código. Aguarde…
-        </div>
-      )}
-
-      {qrState === "connected" && (
-        <p className="flex items-center gap-2 text-sm font-medium text-green-700">
-          <span className="h-2 w-2 rounded-full bg-green-500" />
-          WhatsApp já está conectado!
-        </p>
-      )}
-
-      {/* Honest unknown — never rendered as success. */}
-      {qrState === "unknown" && (
-        <div className="text-sm text-amber-700">
-          <p className="font-medium">Não deu para confirmar o estado da conexão.</p>
-          <p className="mt-1 text-xs">
-            Isso <strong>não</strong> quer dizer que conectou. Tente de novo; se
-            insistir, confira as credenciais em Integrações → WhatsApp.
-          </p>
-          <button
-            type="button"
-            onClick={handleConnect}
-            className="mt-2 rounded-lg border border-amber-300 bg-paper px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 transition"
-          >
-            Tentar de novo
-          </button>
-        </div>
-      )}
-
-      {qrState === "error" && (
-        <p className="text-sm text-red-600">
-          Integração não configurada. Salve as credenciais primeiro.
-        </p>
-      )}
+    <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-4">
+      <p className="text-sm font-semibold text-ink2">Conectar pela conta oficial da Meta</p>
+      <p className="mt-1 text-sm text-muted">
+        Não há credencial para digitar nem QR Code para escanear: a conexão é feita com login
+        na própria Meta, em um clique.
+      </p>
+      <a
+        href="/integracoes/whatsapp"
+        className="mt-3 inline-block rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600"
+      >
+        Abrir a tela do WhatsApp
+      </a>
     </div>
-  );
-}
-
-function WhatsAppForm({
-  view, saving, onSave,
-}: {
-  view: IntegrationView | null;
-  saving: boolean;
-  onSave: (data: Record<string, unknown>) => void;
-}) {
-  const f = view?.fields ?? {};
-  const [instanceName, setInstanceName] = useState(f.instanceName ?? "");
-  const [baseUrl, setBaseUrl]           = useState(f.baseUrl ?? "");
-  const [apiKey, setApiKey]             = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
-
-  useEffect(() => {
-    setInstanceName(f.instanceName ?? "");
-    setBaseUrl(f.baseUrl ?? "");
-    setApiKey("");
-    setWebhookSecret("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view?.provider]);
-
-  return (
-    <form
-      onSubmit={(e) => { e.preventDefault(); onSave({ instanceName, baseUrl, apiKey, webhookSecret }); }}
-      className="space-y-4"
-    >
-      <WhatsAppQRPanel />
-      <TextField
-        label="Nome da instância"
-        name="instanceName"
-        placeholder="meu-restaurante"
-        hint="Identificador único da sua instância no Evolution."
-        value={instanceName}
-        onChange={setInstanceName}
-      />
-      <TextField
-        label="URL do servidor Evolution"
-        name="baseUrl"
-        placeholder="https://evo.seuservidor.com"
-        type="url"
-        value={baseUrl}
-        onChange={setBaseUrl}
-      />
-      <SecretField
-        label="API Key"
-        name="apiKey"
-        placeholder={f.apiKeyPreview ? `Atual: ${f.apiKeyPreview} — deixe em branco para manter` : "Cole sua API Key"}
-        hint="Deixe em branco para manter a chave atual."
-        value={apiKey}
-        onChange={setApiKey}
-      />
-      <SecretField
-        label="Webhook Secret"
-        name="webhookSecret"
-        placeholder={f.webhookSecretPreview ? `Atual: ${f.webhookSecretPreview} — deixe em branco para manter` : "Cole o Webhook Secret"}
-        hint="Usado para validar mensagens recebidas."
-        value={webhookSecret}
-        onChange={setWebhookSecret}
-      />
-      <div className="rounded-xl border border-line bg-[#FAFAF8] px-4 py-3">
-        <p className="text-xs font-medium text-ink2">URL do Webhook para configurar na Evolution:</p>
-        <p className="mt-1 break-all font-mono text-xs text-muted">
-          {window.location.origin}/api/webhooks/evolution
-        </p>
-      </div>
-      <div className="flex justify-end pt-1">
-        <button type="submit" disabled={saving}
-          className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 transition">
-          {saving ? "Salvando…" : "Salvar"}
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -1501,7 +1252,7 @@ function DetailPanel({
           {isOwner ? (
             <div>
               <p className="mb-4 text-sm font-semibold text-ink2">Configuração</p>
-              {provider === "whatsapp"    && <WhatsAppForm    view={view} saving={saving} onSave={handleSave} />}
+              {provider === "whatsapp"    && <WhatsAppForm    />}
               {provider === "stone"       && <StoneForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "mercadopago" && <MercadoPagoForm view={view} saving={saving} onSave={handleSave} />}
               {provider === "sumup"       && <SumUpForm       view={view} saving={saving} onSave={handleSave} />}
@@ -1566,13 +1317,16 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
           : (r.value.data as IntegrationView);
       }
     });
-    // Combine Evolution + Meta statuses for the single WhatsApp card
+    // Um único card de WhatsApp: `/api/integrations/whatsapp` e
+    // `/api/integrations/whatsapp-business` olham a MESMA conta da Meta por ângulos
+    // diferentes (config gravada × conta conectada). `mergeStatus` continua sendo o
+    // conservador entre os dois — nenhum dos dois sozinho pode dizer "conectado".
     if (metaResult.ok && metaResult.data) {
       const metaView = metaResult.data as IntegrationView;
-      const evoView  = map["whatsapp"];
-      const combined = mergeStatus(evoView?.status, metaView.status);
-      map["whatsapp"] = evoView
-        ? { ...evoView, status: combined, isActive: combined === "active" }
+      const waView   = map["whatsapp"];
+      const combined = mergeStatus(waView?.status, metaView.status);
+      map["whatsapp"] = waView
+        ? { ...waView, status: combined, isActive: combined === "active" }
         : { ...metaView, status: combined, isActive: combined === "active" };
     }
     setViews(map);
@@ -1583,15 +1337,15 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
     const { ok, data } = await apiFetch(`/api/integrations/${provider}`);
     if (!ok) return;
     if (provider === "whatsapp") {
-      // Re-fetch Meta status and combine
+      // Rebusca o status da conta da Meta e combina (ver loadAll).
       const metaResult = await apiFetch("/api/integrations/whatsapp-business");
-      const evoView = data as IntegrationView;
+      const waView = data as IntegrationView;
       if (metaResult.ok && metaResult.data) {
         const metaView = metaResult.data as IntegrationView;
-        const combined = mergeStatus(evoView.status, metaView.status);
-        setViews((prev) => ({ ...prev, whatsapp: { ...evoView, status: combined, isActive: combined === "active" } }));
+        const combined = mergeStatus(waView.status, metaView.status);
+        setViews((prev) => ({ ...prev, whatsapp: { ...waView, status: combined, isActive: combined === "active" } }));
       } else {
-        setViews((prev) => ({ ...prev, whatsapp: evoView }));
+        setViews((prev) => ({ ...prev, whatsapp: waView }));
       }
     } else {
       setViews((prev) => ({ ...prev, [provider]: data as IntegrationView }));

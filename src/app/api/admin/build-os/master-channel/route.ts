@@ -1,60 +1,30 @@
 /**
- * GET   /api/admin/build-os/master-channel — focused Admin channel status (masked).
- * PATCH /api/admin/build-os/master-channel — save admin WhatsApp config (system-level).
+ * GET /api/admin/build-os/master-channel
  *
- * Admin-only (ADMIN_SECRET). The Build OS WhatsApp channel is SYSTEM-level and has
- * NO restaurant. Credentials are stored encrypted; the API never returns the full
- * apiKey/token or full phone. No Claude/GitHub/LLM.
+ * Estado do canal WhatsApp Master/Admin do Build OS. **Somente leitura.**
+ *
+ * ⚠️ MUDOU EM 04/08/2026. Esta rota tinha GET/PUT/PATCH/DELETE e provisionava uma
+ * instância Evolution do Admin: gravava baseUrl e apiKey criptografada, criava a
+ * instância, sincronizava webhook, gerava QR e resetava a sessão. A Evolution foi
+ * eliminada do Foocci por ordem do CEO. Na Meta não existe instância, servidor
+ * próprio nem QR: o número é registrado dentro do aplicativo da Meta (trabalho do
+ * especialista `meta`) e vira um `phone_number_id`.
+ *
+ * Sobrou o que ainda faz sentido: dizer se o canal está pronto. As credenciais
+ * moram no ambiente (Railway) e **nenhum segredo sai daqui** — só presença
+ * (sim/não) e os 4 últimos dígitos do phone_number_id, que não é segredo.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { checkAdminRequest } from "@/lib/admin-auth";
-import { getMasterChannelStatus } from "@/services/buildos/BuildOSMasterChannelService";
-import { upsertAdminWhatsApp } from "@/services/buildos/AdminWhatsAppConfigService";
+import { describeBuildOsMetaChannel } from "@/services/buildos/BuildOsMetaChannel";
 
-function guardAdmin(req: NextRequest): NextResponse | null {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!process.env.ADMIN_SECRET) {
-    return NextResponse.json({ error: "Admin access not configured." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Endpoint desabilitado — ADMIN_SECRET não configurado." }, { status: 403 });
   }
   if (!checkAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Não autorizado." }, { status: 401 });
   }
-  return null;
-}
-
-export async function GET(req: NextRequest) {
-  const guard = guardAdmin(req);
-  if (guard) return guard;
-
-  const status = await getMasterChannelStatus();
-  return NextResponse.json({ ok: true, status });
-}
-
-const patchSchema = z.object({
-  instanceName: z.string().min(1).max(120).optional(),
-  baseUrl: z.string().min(1).max(300).optional(),
-  // Plaintext API key — encrypted server-side, never echoed back. Omit to keep.
-  apiKey: z.string().min(1).max(500).optional(),
-  // Remove the saved apiKey so resolution falls back to EVOLUTION_DEFAULT_API_KEY.
-  clearApiKey: z.boolean().optional(),
-  isEnabled: z.boolean().optional(),
-});
-
-export async function PATCH(req: NextRequest) {
-  const guard = guardAdmin(req);
-  if (guard) return guard;
-
-  const raw = await req.json().catch(() => ({}));
-  const parsed = patchSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const result = await upsertAdminWhatsApp(parsed.data);
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error ?? "Falha ao salvar." }, { status: 400 });
-  }
-  const status = await getMasterChannelStatus();
-  return NextResponse.json({ ok: true, status });
+  return NextResponse.json({ ok: true, status: describeBuildOsMetaChannel() });
 }

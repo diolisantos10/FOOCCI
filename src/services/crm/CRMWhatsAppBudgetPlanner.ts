@@ -10,8 +10,8 @@
  *    campaign drain the whole day, and redistributing slots a campaign cannot
  *    use to the ones that can?"
  *
- * A "cycle" = one ScheduledCampaignRunnerService run. In Evolution Web mode the
- * cycle limit is the TOTAL across all campaigns in that run, never per campaign.
+ * A "cycle" = one ScheduledCampaignRunnerService run. O limite de ciclo é o TOTAL
+ * somando todas as campanhas daquela rodada, nunca por campanha.
  *
  * This module is intentionally pure (no DB, no clock, no I/O) so the fairness math
  * is fully unit-testable. The scheduler feeds it counts and consumes the plan.
@@ -106,7 +106,7 @@ export interface BudgetPlannerInput {
   config:             CRMWhatsAppBudgetConfig;
   /** CRM messages already sent across ALL campaigns in the rolling daily window. */
   globalSentToday:    number;
-  /** Whether the WhatsApp/Evolution instance is currently connected (state=open). */
+  /** Se o canal WhatsApp oficial do restaurante está conectado agora. */
   instanceConnected:  boolean;
   /** True once the circuit breaker has tripped for this cycle. */
   failureRatePaused?: boolean;
@@ -380,10 +380,10 @@ export function isCycleIntervalActive(
   return now.getTime() - t < minMinutes * 60_000;
 }
 
-// ─── Circuit breaker (Evolution Web) ────────────────────────────────────────────
+// ─── Circuit breaker do canal ───────────────────────────────────────────────────
 
 export interface CircuitBreakerTally {
-  /** Real provider/Evolution send failures so far this cycle (NOT safety blocks/skips). */
+  /** Falhas REAIS de envio do canal neste ciclo (NÃO bloqueios de segurança/skips). */
   providerFailures: number;
   /** Successful sends so far this cycle. */
   sent: number;
@@ -396,7 +396,7 @@ export interface CircuitBreakerVerdict {
 }
 
 /**
- * Decide whether the cycle should stop sending because Evolution is failing.
+ * Decide whether the cycle should stop sending because the channel is failing.
  *
  * Trips when EITHER:
  *   - provider failures reach maxConsecutiveProviderFailures, OR

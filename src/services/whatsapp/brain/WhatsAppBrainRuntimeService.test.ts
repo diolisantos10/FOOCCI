@@ -9,17 +9,13 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
+// Canal ÚNICO: toda resposta do Cérebro sai por esta porta. Se algum dia
+// aparecer outro caminho de envio aqui, estes testes não o veem — e é de
+// propósito: o segundo canal é o risco que a homologação eliminou.
 const messaging = vi.hoisted(() => ({
-  resolveProviderId: vi.fn(),
   WhatsAppMessagingService: { sendConversationReply: vi.fn() },
 }));
 vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => messaging);
-
-const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn() }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: evoClient }));
-
-const evoCfg = vi.hoisted(() => ({ getSnapshot: vi.fn() }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: evoCfg }));
 
 const handoff = vi.hoisted(() => ({ markConversationNeedsHuman: vi.fn() }));
 vi.mock("@/lib/handoff", () => handoff);
@@ -77,7 +73,9 @@ beforeEach(() => {
   db.message.findMany.mockResolvedValue([]);
   db.brainFreeFormConfig.findUnique.mockResolvedValue(null); // default: SHADOW_ONLY
   db.brainShadowLog.create.mockResolvedValue({});
-  messaging.resolveProviderId.mockResolvedValue("EVOLUTION");
+  messaging.WhatsAppMessagingService.sendConversationReply.mockResolvedValue({
+    ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.ext_1",
+  });
   db.conversation.findUnique.mockResolvedValue({
     id: "conv_1", restaurantId: "rest_1", status: "BOT", aiEnabled: true,
     customer: { id: "cust_1", phone: "5511999", name: "Ana" },
@@ -87,8 +85,6 @@ beforeEach(() => {
     .mockResolvedValueOnce(null) // alreadyReplied = none
     .mockResolvedValueOnce({ id: "prev_ai_msg" }); // sessão ativa: bot já respondeu (menu já aberto)
   db.$transaction.mockResolvedValue([{}, {}]);
-  evoCfg.getSnapshot.mockResolvedValue({ ok: true, data: { instanceName: "i", baseUrl: "u", apiKey: "k" } });
-  evoClient.sendTextMessage.mockResolvedValue({ key: { id: "ext_1" } });
   handoff.markConversationNeedsHuman.mockResolvedValue(true);
   brain.reasonAsAgent.mockResolvedValue(brainOutcome());
   critic.judgeReply.mockResolvedValue({ approved: true, mode: "JUDGED", reason: "coerente" });
@@ -112,7 +108,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(brain.reasonAsAgent).not.toHaveBeenCalled();
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
     expect(out.status).toBe("REPLIED");
     expect(out.reason).toContain("free-form disabled");
   });
@@ -122,7 +118,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(brain.reasonAsAgent).not.toHaveBeenCalled();
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
     expect(out.status).toBe("REPLIED");
   });
 
@@ -157,7 +153,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     expect(brain.reasonAsAgent).toHaveBeenCalledTimes(1);
     // Janela de conversa vai junto no raciocínio vivo
     expect(brain.reasonAsAgent.mock.calls[0][0]).toHaveProperty("sanitizedHistory");
-    expect(evoClient.sendTextMessage).toHaveBeenCalledTimes(1);
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).toHaveBeenCalledTimes(1);
     expect(out.status).toBe("REPLIED");
     expect(recep.WhatsAppReceptionistService.respond).not.toHaveBeenCalled();
   });
@@ -186,7 +182,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
       brainOutcome({ coherenceCheck: { verdict: "NEEDS_REVIEW", answersUserQuestion: true, matchesIntent: true, doesNotInventFacts: false, keepsBusinessObjective: true, reason: "preço fora da base" } }),
     );
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(out.reason).toContain("critic gate");
   });
@@ -197,7 +193,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     });
     brain.reasonAsAgent.mockResolvedValue(brainOutcome({ confidence: 0.3 }));
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
     expect(out.reason).toContain("critic gate");
   });
 
@@ -206,7 +202,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
       restaurantId: "rest_1", mode: "ALLOWLIST", allowlistedPhones: ["5599000"], paused: false, minConfidence: 0.6, notes: null,
     });
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(out.reason).toContain("free-form disabled");
   });
@@ -217,7 +213,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     });
     critic.judgeReply.mockResolvedValue({ approved: false, mode: "JUDGED", reason: "afirma promoção que não existe" });
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
     expect(recep.WhatsAppReceptionistService.respond).toHaveBeenCalledWith("conv_1");
     expect(out.reason).toContain("judge gate");
   });
@@ -237,7 +233,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     const req = brain.reasonAsAgent.mock.calls[0][0];
     expect(req.sanitizedHistory.length).toBeGreaterThan(0);
     // Sombra NUNCA envia nada ao cliente.
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
   });
 
   it("never touches a conversation a human took over", async () => {
@@ -248,7 +244,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
     expect(out.status).toBe("SKIPPED");
     expect(brain.reasonAsAgent).not.toHaveBeenCalled();
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
   });
 
   it("is idempotent — skips if the AI already replied after the last inbound", async () => {
@@ -258,7 +254,7 @@ describe("WhatsAppBrainRuntimeService.respond (the cutover)", () => {
       .mockResolvedValueOnce({ id: "already" });
     const out = await WhatsAppBrainRuntimeService.respond("conv_1");
     expect(out.status).toBe("SKIPPED");
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(messaging.WhatsAppMessagingService.sendConversationReply).not.toHaveBeenCalled();
   });
 
   it("never throws into the webhook — returns SKIPPED on error", async () => {

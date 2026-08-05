@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   campaign: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-  campaignExecution: { findMany: vi.fn(), create: vi.fn(), count: vi.fn() },
+  campaignExecution: { findMany: vi.fn(), create: vi.fn(), createMany: vi.fn(), count: vi.fn(), groupBy: vi.fn() },
   restaurant: { findUnique: vi.fn() },
   restaurantBrandConfig: { findUnique: vi.fn() },
   whatsAppAgentConfig: { findUnique: vi.fn() },
   customer: { findMany: vi.fn(), findUnique: vi.fn() },
-  // Meta CRM lookup no _sendBatch — null = Meta desligado, caminho Evolution (o que a suíte cobre).
   metaWhatsAppConfig: { findUnique: vi.fn() },
+  customerCoupon: { findMany: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
   message: { create: vi.fn() },
   cRMContactLedger: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
@@ -19,8 +19,13 @@ const ledger = vi.hoisted(() => ({
   getImpactedByMessage: vi.fn(async () => new Set<string>()),
   recordLedger: vi.fn(async () => {}),
 }));
-const evoCfg = vi.hoisted(() => ({ getSnapshot: vi.fn() }));
-const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn() }));
+// Canal único (Meta). `channel` responde pelo ESTADO da conexão; `send` é o envio.
+// Nada sai de verdade: os dois são espiões.
+const channel = vi.hoisted(() => ({
+  getConnectionStatus: vi.fn(),
+  sendText:            vi.fn(),
+  sendTemplate:        vi.fn(),
+}));
 const svc = vi.hoisted(() => ({ resolveAudience: vi.fn(), personalizeMessage: vi.fn(() => "oi") }));
 const safety = vi.hoisted(() => ({
   getSafetyConfig: vi.fn(), getTodayGlobalSendCount: vi.fn(() => 0), getWeekGlobalSendCount: vi.fn(() => 0),
@@ -33,8 +38,9 @@ const contact = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: evoCfg }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: evoClient }));
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({ WhatsAppMessagingService: channel }));
+// Sem modelo aprovado → o envio sai como texto livre (o caminho que esta suíte cobre).
+vi.mock("@/services/whatsapp/MetaTemplateService", () => ({ MetaTemplateService: { findApproved: vi.fn(async () => null) } }));
 vi.mock("../CrmCampaignService", () => svc);
 vi.mock("@/lib/crm-safety", () => safety);
 vi.mock("@/services/crm/ContactSafetyService", () => contact);
@@ -66,12 +72,16 @@ beforeEach(() => {
   db.whatsAppAgentConfig.findUnique.mockResolvedValue(null);
   db.customer.findMany.mockResolvedValue([]); // none opted out
   db.customer.findUnique.mockResolvedValue({ id: "c1", name: "Ana" });
-  db.metaWhatsAppConfig.findUnique.mockResolvedValue(null); // Meta CRM off → Evolution
+  db.metaWhatsAppConfig.findUnique.mockResolvedValue(null);
+  db.campaignExecution.createMany.mockResolvedValue({ count: 0 });
+  db.campaignExecution.groupBy.mockResolvedValue([]);
+  db.customerCoupon.findMany.mockResolvedValue([]);
   db.conversation.findFirst.mockResolvedValue(null);
   db.conversation.create.mockResolvedValue({ id: "conv1" });
   db.message.create.mockResolvedValue({ id: "msg1" });
-  evoClient.sendTextMessage.mockResolvedValue({ key: { id: "wamid1" } });
-  evoCfg.getSnapshot.mockResolvedValue({ ok: true, data: {} });
+  channel.getConnectionStatus.mockResolvedValue({ provider: "META_CLOUD_API", connected: true, detail: "+55 11 90000-0000" });
+  channel.sendText.mockResolvedValue({ ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid1" });
+  channel.sendTemplate.mockResolvedValue({ ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid1" });
   ledger.getImpactedByConcept.mockResolvedValue(new Set());
   ledger.getImpactedByMessage.mockResolvedValue(new Set());
   ledger.recordLedger.mockResolvedValue(undefined);
@@ -80,7 +90,7 @@ beforeEach(() => {
 });
 
 describe("ScheduledCampaignRunner — safety blocks are not failures (no useless retry)", () => {
-  it("(1) a weekly-cap block is recorded as status BLOCKED, not FAILED; no Evolution send", async () => {
+  it("(1) a weekly-cap block is recorded as status BLOCKED, not FAILED; nada é enviado", async () => {
     contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: false, reason: "CUSTOMER_WEEKLY_CAP_REACHED", detail: "Limite semanal atingido (1/1)" });
 
     const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
@@ -88,7 +98,7 @@ describe("ScheduledCampaignRunner — safety blocks are not failures (no useless
     const created = db.campaignExecution.create.mock.calls[0][0].data;
     expect(created.status).toBe("BLOCKED");
     expect(created.errorMessage).toBe("CUSTOMER_WEEKLY_CAP_REACHED");
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(channel.sendText).not.toHaveBeenCalled();
     expect(r.blocked).toBe(1);
     expect(r.failed).toBe(0);
     // campaign.totalFailed must NOT be incremented by a safety block
@@ -151,11 +161,44 @@ describe("ScheduledCampaignRunner — safety blocks are not failures (no useless
     expect(contact.ContactSafetyService.assertSendable).toHaveBeenCalledWith(expect.objectContaining({ allowWeeklyCapOverride: true }));
   });
 
-  it("(9) dry-run records nothing and never calls Evolution", async () => {
+  it("(9) dry-run records nothing and never calls the channel", async () => {
     contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: true, reason: null });
     const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { dryRun: true, limit: 5 });
     expect(r.sent).toBe(0);
     expect(db.campaignExecution.create).not.toHaveBeenCalled();
-    expect(evoClient.sendTextMessage).not.toHaveBeenCalled();
+    expect(channel.sendText).not.toHaveBeenCalled();
+  });
+
+  // ── Canal único: desconectado tem que FALHAR VISÍVEL ────────────────────────
+  // Não existe mais provedor reserva. O que não pode acontecer é o lote sumir em
+  // silêncio: o lojista precisa ver, por destinatário, por que nada saiu.
+  it("canal desconectado: nada é enviado e cada destinatário fica com BLOCKED explicado", async () => {
+    contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: true, reason: null });
+    channel.getConnectionStatus.mockResolvedValue({ provider: "META_CLOUD_API", connected: false, detail: null });
+
+    const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+
+    expect(channel.sendText).not.toHaveBeenCalled();
+    expect(channel.sendTemplate).not.toHaveBeenCalled();
+    expect(r.sent).toBe(0);
+    expect(r.failed).toBe(0);          // canal fora do ar não é falha do destinatário
+    expect(r.blocked).toBe(1);
+    const rows = db.campaignExecution.createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("BLOCKED");
+    expect(rows[0].errorMessage).toBe("NO_WHATSAPP_CONFIG");
+  });
+
+  it("estado do canal indisponível (consulta falhou) também trava o lote", async () => {
+    contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: true, reason: null });
+    // Espião novo: ver a nota em CrmWhatsAppChannel.test.ts sobre lançar em espião
+    // que já teve mockResolvedValue.
+    channel.getConnectionStatus = vi.fn(() => { throw new Error("graph fora do ar"); });
+
+    const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+
+    expect(channel.sendText).not.toHaveBeenCalled();
+    expect(r.sent).toBe(0);
+    expect(r.blocked).toBe(1);
   });
 });

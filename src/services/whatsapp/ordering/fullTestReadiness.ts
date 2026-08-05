@@ -4,7 +4,7 @@
  * order/Pix only AFTER final confirmation, REPLY_ONLY never creates, FULL_TEST
  * stays allowlist-bound, `0. menu` keeps working, handoff available, rollback
  * documented. Runs the REAL machine via the simulator in FULL_TEST mode with
- * allowSideEffects=false — noRealOrder/noRealPix/noEvolution always true.
+ * allowSideEffects=false — noRealOrder/noRealPix/noWhatsAppSend always true.
  */
 
 import { runTextOrderSimulator } from "./WhatsAppTextOrderSimulatorService";
@@ -22,7 +22,7 @@ export interface FullTestReadinessResult {
   checks: Check[];
   noRealOrder: true;
   noRealPix: true;
-  noEvolution: true;
+  noWhatsAppSend: true;
   runtimeTouched: false;
 }
 
@@ -44,7 +44,7 @@ export async function runFullTestReadiness(): Promise<FullTestReadinessResult> {
   add("Pix só geraria após confirmação final",
     !!pix?.actions.includes("WOULD_GENERATE_PIX") && pix.safety.noRealPix, "fluxo não chegou ao WOULD_GENERATE_PIX seguro");
   add("nenhum pedido/Pix real em FULL_TEST simulado",
-    sim.safety.noRealOrder && sim.safety.noRealPix && sim.safety.noEvolution, "efeito real detectado");
+    sim.safety.noRealOrder && sim.safety.noRealPix && sim.safety.noWhatsAppSend, "efeito real detectado");
   add("0. menu permanece no fluxo", zero?.status !== "FAIL", "cenário do 0 falhou");
   add("handoff disponível", handoff?.status === "PASS", "handoff falhou");
   add("simulação FULL_TEST sem P0", sim.p0 === 0, `p0=${sim.p0}`);
@@ -69,5 +69,5 @@ export async function runFullTestReadiness(): Promise<FullTestReadinessResult> {
   const passed = checks.filter(c => c.pass).length;
   const p0 = checks.filter(c => !c.pass).length; // every check here is a hard gate
   const status = p0 === 0 ? "PASS" : "FAIL";
-  return { ok: status === "PASS", status, total: checks.length, passed, p0, checks, noRealOrder: true, noRealPix: true, noEvolution: true, runtimeTouched: false };
+  return { ok: status === "PASS", status, total: checks.length, passed, p0, checks, noRealOrder: true, noRealPix: true, noWhatsAppSend: true, runtimeTouched: false };
 }

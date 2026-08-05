@@ -253,7 +253,7 @@ function InspectorSeguranca({ turn }: { turn: SimTurn }) {
         <p className="text-[11px] text-emerald-300">✓ Sem pedido real criado</p>
         <p className="text-[11px] text-emerald-300">✓ Sem Pix real gerado</p>
         <p className="text-[11px] text-emerald-300">✓ allowSideEffects=false fixo</p>
-        <p className="text-[11px] text-emerald-300">✓ Evolution send nunca chamado</p>
+        <p className="text-[11px] text-emerald-300">✓ envio de WhatsApp nunca chamado</p>
       </div>
       <div className="space-y-0.5">
         {turn.safetyNotes.map((n, i) => (
