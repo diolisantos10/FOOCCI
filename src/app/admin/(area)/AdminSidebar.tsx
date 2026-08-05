@@ -40,7 +40,7 @@ export function AdminSidebar() {
     {
       title: "Operação",
       items: [
-        { href: "/admin/leads",              label: "Contatos do site", icon: "📨" },
+        { href: "/admin/foocci-crm",         label: "CRM da Foocci",    icon: "📨" },
         { href: "/admin/demo-videos",        label: "Vídeos do site",   icon: "🎬" },
         { href: "/admin/padaria-vitrine",    label: "Padaria de vitrine", icon: "🥐" },
         { href: "/admin/restaurants",        label: "Restaurantes", icon: "🏪" },

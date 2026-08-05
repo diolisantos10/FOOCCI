@@ -180,3 +180,103 @@ preservadas; buckets A/B intactos). Quebra-vidro (se nada de Node estiver à mã
    banco; o ciclo real promover→rollback contra Postgres foi provado à mão em
    2026-08-03 (este registro). Quem mexer no `writeCrmPilotConfig` (upsert, JSON,
    merge de notas com teto de 2000 chars) não tem rede automática de banco real.
+
+---
+
+## 2026-08-05 — CRM da Foocci: funil, origem de verdade e base para o SDR
+
+Pedido do CEO, ampliado no meio da execução: não era "uma tela de métricas de
+leads", era **o CRM da própria Foocci** — a base de prospects de onde o agente
+SDR (outra frente) vai trabalhar.
+
+### a) O que existia
+
+- `SiteLead`: 11 colunas, nenhuma de estado. `/admin/leads` era uma tabela de
+  leitura, 129 linhas, sem nada além de listar.
+- **`origem` era `window.location.pathname`** (`DemoForm.tsx:68`). Ou seja: todo
+  contato tinha origem `/site/demonstracao`. Uma resposta constante não é
+  resposta — não havia como saber qual anúncio funcionava, e o CEO já estava
+  rodando campanha de Facebook contra isso.
+- O e-mail (Resend) era o destino de fato; a tela era arquivo morto.
+
+### b) O que reaproveitei do CRM do produto (em vez de inventar)
+
+1. **`computePeriodRange`** de `src/lib/dashboard-periods.ts` — o motor canônico,
+   ancorado em 03:00 UTC. A vitrine já registra que existem 3+ réguas de período
+   independentes neste repo; não criei a quarta.
+2. **A régua de amostra mínima do `CrmPhraseConfidence`** — o CRM do produto já
+   se recusa a julgar frase com pouca amostra. Copiei o raciocínio (não o código,
+   que é de outro domínio) para `MIN_LEADS_PARA_TAXA = 10`.
+3. **O `CRMContactLedger` como forma** — `SiteLeadInteraction` é o mesmo desenho:
+   append-only, quem tocou / quando / em que direção. Mudança de etapa é UM tipo
+   de interação, não uma tabela separada, para o SDR ler **uma** linha do tempo.
+
+### c) As três decisões que mudam número e ficaram documentadas
+
+1. **Coorte de chegada**, não data de fechamento. O período filtra `createdAt` do
+   contato. A outra leitura daria crédito ao anúncio errado.
+2. **PERDIDO fora da sequência do funil**, mas contando na etapa mais alta que
+   alcançou. Sem isso, um mês de propostas recusadas apareceria como um mês sem
+   propostas — e a conclusão seria consertar a etapa errada.
+3. **Primeiro toque, não último**, com uma exceção nomeada: "direto" guardado é
+   substituído se depois aparecer sinal de campanha.
+
+### d) Uma armadilha nova, achada na tela
+
+`src/app/globals.css` (linha ~23) tem uma regra `@layer base` que pinta
+`input/select/textarea` com `border-[#E5E5E5]`. O seletor tem sete `:not()` e
+**vence qualquer `border-gray-800` por especificidade**. No admin (tema escuro)
+isso desenha borda branca em todo campo. Corrigi com `!border-*` só nos campos da
+tela que toquei — não ampliei o drift, mas ele continua lá para as outras telas
+escuras do admin.
+
+### e) O que NÃO fiz, de propósito
+
+- **Não construí o agente SDR.** O pedido era preparar o terreno.
+- **Não liguei proteção de canal nesta base.** O CRM do produto tem horário de
+  silêncio, teto diário e dedupe; nada disso existe aqui, porque hoje quem manda
+  mensagem é gente. Registrei em `docs/crm-foocci.md` que **isso é bloqueador
+  antes de o agente enviar em volume**, e que decidir quais proteções valem para
+  prospect é do CEO.
+- **Não liguei `SiteLead` a `Restaurant`.** Seria a primeira ponte entre a base
+  sem tenant e a base com tenant, e ninguém pediu.
+- **Não inventei conversão.** Com a base zerada de hoje, a tela mostra contagens e
+  escreve "ainda não dá para dizer" onde a razão não fecha.
+
+### f) Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` 406 arquivos / 5165 testes verdes.
+Testes novos: 89 (funil, origem, serviço, performance, guarda de rota).
+Screenshots em 375/768/1280 nos quatro estados (vazio real, funil, base, dossiê).
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **"CRM" neste repositório é ambíguo, e a ambiguidade é cara.**
+   `src/services/crm/` é do RESTAURANTE para os clientes dele (multi-tenant);
+   `src/services/foocci-crm/` é da FOOCCI para os prospects dela (sem tenant).
+   Regra prática: se você está escrevendo `restaurantId` em `foocci-crm/`, está no
+   diretório errado; se está lendo `SiteLead` em `crm/`, também.
+   Origem: criação do CRM da Foocci, 2026-08-05.
+
+2. **"A origem do lead" era sempre a mesma resposta, e ninguém tinha percebido.**
+   `origem = window.location.pathname` grava `/site/demonstracao` em 100% dos
+   contatos. Métrica constante parece dado e não é. A regra que fica: **antes de
+   confiar num campo de atribuição, olhe a DISTRIBUIÇÃO dele** — um campo com um
+   único valor distinto está quebrado, não concentrado.
+   Origem: leitura do `DemoForm.tsx:68` contra as campanhas de Facebook no ar,
+   2026-08-05.
+
+3. **A trava de amostra tem que valer por LINHA, não só no total.**
+   O funil inteiro respeitar `MIN_LEADS_PARA_TAXA` e a tabela por origem não
+   respeitar é o caminho natural do bug: uma campanha com 2 contatos e 1
+   fechamento aparece como "50% de conversão" no topo do relatório de mídia — e é
+   exatamente a linha que decide orçamento. Vale para qualquer quebra por
+   dimensão (origem, campanha, criativo), não só para esta tela.
+   Origem: `FoocciCrmPerformanceService.test.ts`, 2026-08-05.
+
+4. **Regra base de CSS vence utilitário do Tailwind por especificidade.**
+   `globals.css` linha ~23 pinta `input/select/textarea` com a borda clara do
+   painel do lojista, usando um seletor com sete `:not()`. Em qualquer tela escura
+   do admin, `border-gray-800` **não** funciona — precisa de `!border-gray-800`.
+   Já mordeu aqui; vai morder de novo em toda tela escura com campo.
+   Origem: screenshot do CRM da Foocci em 1280, 2026-08-05.
