@@ -36,6 +36,16 @@
  * Agora o veredito de capacidade viaja no coherenceCheck e, se ele não vier
  * PASS explícito, a fala NÃO chega ao lojista — portão que não registrou
  * resultado reprova.
+ *
+ * TERCEIRO PORTÃO DE SAÍDA (04/08/2026, P0 de confiança): ENSINAR SEM LASTRO.
+ * Os dois de cima são cegos para a terceira mentira, que é a mais comum aqui: o
+ * agente ENSINA UM CAMINHO DE TELA que ninguém confirmou. Não é preço inventado
+ * (o verificador de fato não vê número) nem execução inventada (o de capacidade
+ * não vê verbo no pretérito) — é "vá em Configurações → Fiscal e clique em
+ * Emitir NFC-e" para uma tela que não existe. Enquanto o retrieval nunca voltava
+ * vazio, isso passava com cara de fundamentado. Agora: sem NENHUMA verdade
+ * recuperada (nem guia, nem runbook), resposta que descreve navegação não chega
+ * ao lojista.
  */
 
 import { reasonAsAgent } from "@/services/brain/reasoning/BrainReasoner";
@@ -94,8 +104,44 @@ const BLOCKED =
 const OVERPROMISED =
   "Corrigindo antes de te enganar: eu ia dizer que já tinha feito isso, e não fiz — eu não altero nada sozinho. O que eu consigo é te levar até a tela certa e preparar a prévia; quem confirma é sempre você. Se preferir, toque em “Falar com a FOOD” que a equipe faz junto com você.";
 
+/**
+ * Fala honesta quando o agente ia ENSINAR UM CAMINHO sem nenhuma verdade
+ * recuperada. Ele não errou um dado nem se atribuiu uma ação: ele descreveu uma
+ * tela que ninguém confirmou que existe.
+ */
+const UNGROUNDED_HOWTO =
+  "Isso eu não sei te dizer com segurança — não achei esse assunto nos guias do Foocci, e prefiro não te mandar pra uma tela que talvez nem exista. Toque em “Falar com a FOOD” que eu abro um chamado e a equipe te responde com o caminho certo.";
+
 /** Limite de turnos de histórico enviados ao Brain (janela curta, sem PII crua). */
 const HISTORY_WINDOW = 6;
+
+/**
+ * Marcas de "estou te ensinando um caminho de tela". Curadas e deliberadamente
+ * restritas ao que descreve NAVEGAÇÃO — não a qualquer resposta útil.
+ *
+ * A metade que deixa passar é tão importante quanto a que barra: "não sei, quer
+ * que eu abra um chamado?", "me conta o que aparece na tela?" e "isso é com a
+ * equipe" NÃO casam nada aqui. Se casassem, o portão viraria carimbo e o agente
+ * pararia de conversar (guardrail 5).
+ */
+const NAVIGATION_MARKERS: RegExp[] = [
+  // "Vá em Configurações", "vá no menu", "vá até a aba"
+  /(^|[\s.,;:!?"'“(])v[áa]\s+(em|no|na|ao|at[ée])\s/iu,
+  /(^|[\s.,;:!?"'“(])acess[ae]\s+(o|a|os|as|em|no|na)\s/iu,
+  /menu\s+lateral/iu,
+  /→/u, // o separador de caminho de tela, usado no manual inteiro
+  /(^|[\s.,;:!?"'“(])clique\s+(em|no|na|aqui|sobre)\s/iu,
+  // "toque em Salvar" ensina caminho; "toque em “Falar com a FOOD”" é a escalada.
+  /(^|[\s.,;:!?"'“(])toque\s+(em|no|na)\s+(?!“?Falar)/iu,
+  /(^|[\s.,;:!?"'“(])(no|na|o|a)\s+(bot[ãa]o|aba|cart[ãa]o|tela)\s+["“'A-ZÀ-Ú]/u,
+  /configura[çc][õo]es\s*(→|>|\/|—|-)\s*\S/iu,
+  /passo\s+a\s+passo/iu,
+];
+
+/** A resposta descreve um caminho de tela (ensina navegação)? Puro e testável. */
+export function describesNavigation(text: string): boolean {
+  return NAVIGATION_MARKERS.some((re) => re.test(text));
+}
 
 function manualTruth(chapters: RetrievedChapter[]): Array<Record<string, string>> {
   return chapters.map((c) => ({ guia: c.title, trecho: c.content }));
@@ -167,7 +213,7 @@ export async function answerHelpQuestion(params: {
     "Nunca cite 'segundo o manual' nem número de trecho — responda com naturalidade.",
     chapters.length
       ? `Trechos de manual disponíveis: ${chapters.length}.`
-      : "Nenhum trecho de manual casou com a pergunta — se você não souber pela base, diga com honestidade e ofereça abrir um chamado (shouldEscalate=true). Não invente tela nem botão.",
+      : "NENHUM trecho de manual casou com a pergunta. Isso NÃO quer dizer que o Foocci não tem o recurso — quer dizer que você não tem a fonte. Diga que não sabe, NÃO descreva caminho de tela nem nome de botão de memória, e ofereça abrir um chamado (shouldEscalate=true).",
     suspected
       ? `Modo de falha suspeito (do mapa curado): ${suspected.subsystem} — ${suspected.symptom}.`
       : "Nenhum modo de falha conhecido casou com o relato.",
@@ -250,6 +296,25 @@ export async function answerHelpQuestion(params: {
         escalationReason:
           outcome.result.coherenceCheck?.reason ?? "afirmou execução sem execução registrada",
         suspectedSubsystem: suspected?.subsystem ?? null,
+        proposedAction: null,
+      };
+    }
+
+    // Portão de saída 3 — ENSINAR SEM LASTRO: nenhuma verdade foi recuperada
+    // (nem guia, nem runbook) e mesmo assim a fala descreve um caminho de tela.
+    // Aqui a tela veio da memória do modelo, não da base. É prompt virando trava:
+    // o contextHint já pedia isso, e pedir não basta para o que causa dano real.
+    if (!grounded && describesNavigation(text)) {
+      return {
+        answer: UNGROUNDED_HOWTO,
+        sources,
+        grounded,
+        reasoningMode: outcome.reasoningMode,
+        coherence: verdict === "PASS" ? "NEEDS_REVIEW" : verdict,
+        shouldEscalate: true,
+        escalationReason: "ensinou caminho de tela sem nenhum guia recuperado",
+        // Sem lastro por definição: `grounded` falso já implica `suspected` nulo.
+        suspectedSubsystem: null,
         proposedAction: null,
       };
     }

@@ -9,7 +9,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  BAR_QUICK_ACTION_IDS,
+  PILL_SHORTCUT_ID,
+  PILL_SHORTCUT_LABEL,
   CONTEXT_GUIDES,
   QUICK_ACTIONS,
   guideForPath,
@@ -47,10 +48,16 @@ describe("guideForPath — a tela em que o lojista está", () => {
 });
 
 describe("ações rápidas", () => {
-  it("os atalhos da barra existem mesmo no catálogo", () => {
-    for (const id of BAR_QUICK_ACTION_IDS) {
-      expect(QUICK_ACTIONS.some((a) => a.id === id)).toBe(true);
-    }
+  it("o atalho da pílula existe mesmo no catálogo", () => {
+    expect(QUICK_ACTIONS.some((a) => a.id === PILL_SHORTCUT_ID)).toBe(true);
+  });
+
+  it("a pílula do cabeçalho carrega UM atalho e ele é curto", () => {
+    // O CEO reprovou a fileira de chips ao lado da pílula: ela fazia o cabeçalho
+    // parecer uma segunda barra. Um atalho, rótulo de uma palavra.
+    expect(typeof PILL_SHORTCUT_ID).toBe("string");
+    expect(PILL_SHORTCUT_LABEL.trim().split(/\s+/)).toHaveLength(1);
+    expect(PILL_SHORTCUT_LABEL.length).toBeLessThanOrEqual(12);
   });
 
   it("toda ação leva a algum lugar — nenhuma é botão morto", () => {

@@ -68,14 +68,22 @@ export default function ExperimenteLoading() {
             <Bar className="mt-4 h-4 w-3/4" />
           </div>
 
+          {/* Cartão do QR de mesa — a coluna do quadradinho só existe no desktop,
+              igual à página real (`hidden lg:…`), para o esqueleto não prometer
+              uma peça que o celular nunca vai receber. */}
           <div className="mt-10 rounded-2xl border border-line bg-paper p-6 sm:p-8">
-            <Bar className="h-9 w-9 rounded-xl" />
-            <Bar className="mt-4 h-6 w-64" />
-            <Bar className="mt-3 h-4 w-full max-w-lg" />
-            <Bar className="mt-5 h-12 w-full max-w-[16rem] rounded-full" />
+            <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div>
+                <Bar className="h-9 w-9 rounded-xl" />
+                <Bar className="mt-4 h-6 w-64" />
+                <Bar className="mt-3 h-4 w-full max-w-lg" />
+                <Bar className="mt-5 h-12 w-full max-w-[16rem] rounded-full" />
+              </div>
+              <Bar className="hidden h-[172px] w-[172px] justify-self-center rounded-2xl lg:block" />
+            </div>
           </div>
 
-          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+          <div className="mt-8 grid gap-5 md:grid-cols-2">
             {[0, 1].map((i) => (
               <div key={i} className="rounded-2xl border border-line bg-paper p-6 sm:p-7">
                 <Bar className="h-9 w-9 rounded-xl" />
@@ -83,6 +91,7 @@ export default function ExperimenteLoading() {
                 <Bar className="mt-3 h-4 w-full" />
                 <Bar className="mt-2 h-4 w-5/6" />
                 <Bar className="mt-6 h-12 w-full rounded-full" />
+                <Bar className="mt-5 hidden h-[122px] w-full rounded-2xl lg:block" />
               </div>
             ))}
           </div>

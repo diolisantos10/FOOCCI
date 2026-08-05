@@ -197,7 +197,7 @@ export default function SupportTechChat() {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitText(); } }}
               rows={1}
               placeholder="Descreva o problema…"
-              className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:ring-0"
+              className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
             />
             {micSupported && (
               <button

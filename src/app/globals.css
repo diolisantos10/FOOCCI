@@ -6,9 +6,10 @@
   --foreground-rgb: 11, 11, 11;
   --background-rgb: 255, 255, 255;
 
-  /* Altura da barra do Assistente no topo do painel (AssistantBar).
-     Telas de altura fixa descontam ESTE token — nunca um número repetido. */
-  --assistant-bar: 3.25rem; /* 52px */
+  /* Altura do cabeçalho do painel (`TopBar`, h-14). É a ÚNICA régua horizontal
+     do topo — o Assistente mora dentro dela, não numa faixa própria.
+     Telas de altura fixa descontam ESTE token, nunca um número repetido. */
+  --topbar: 3.5rem; /* 56px */
 }
 
 body {

@@ -19,8 +19,8 @@ export type QuickAction = {
 );
 
 /**
- * As ações reais do lojista. As três primeiras também aparecem como chips
- * dentro da barra do topo no desktop (ver `BAR_QUICK_ACTION_IDS`).
+ * As ações reais do lojista. Elas vivem DENTRO do painel que abre — a barra
+ * fechada carrega no máximo um atalho (ver `PILL_SHORTCUT_ID`).
  */
 export const QUICK_ACTIONS: QuickAction[] = [
   {
@@ -67,8 +67,17 @@ export const QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-/** Os atalhos que cabem dentro da própria barra (desktop largo). */
-export const BAR_QUICK_ACTION_IDS = ["cardapio", "whatsapp", "diagnostico"];
+/**
+ * O ÚNICO atalho que fica dentro da pílula do cabeçalho (desktop largo).
+ *
+ * Era uma fileira de três chips ao lado da pílula — e foi justamente ela que fez
+ * o cabeçalho parecer uma segunda barra. O CEO reprovou em 04/08: "é uma barra só
+ * com tudo que está junto ali, bem minimalista e discreto". As outras ações
+ * rápidas não sumiram: elas abrem com o painel.
+ */
+export const PILL_SHORTCUT_ID = "diagnostico";
+/** Rótulo curto do atalho na pílula (dentro do painel ele é "Algo não funciona"). */
+export const PILL_SHORTCUT_LABEL = "Suporte";
 
 // ── Sugestões gerais ──────────────────────────────────────────────────────────
 

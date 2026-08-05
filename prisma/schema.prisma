@@ -1692,6 +1692,14 @@ model RestaurantBrandConfig {
   // Injected into the Waiter system prompt AFTER all hard rules.
   waiterPrompt String? @db.Text
 
+  // ── Ofertas no fechamento do pedido ───────────────────────────
+  // Lista ORDENADA de nomes de categoria DESTE cardápio que o Garçom oferece
+  // quando o cliente vai fechar. Antes era constante no código ("bebida" e
+  // "sobremesa" por regex) — uma padaria não tem "sobremesa", tem "Confeitaria",
+  // e o upsell simplesmente não acontecia.
+  // Vazio = usar o padrão legado (bebida → sobremesa), derivado do cardápio.
+  waiterUpsellCategories String[] @default([])
+
   // ── Brand Persona (marketing strategy) ───────────────────────
   // Stored as JSON to allow flexible evolution without migrations.
   brandPersona Json?
@@ -5018,4 +5026,81 @@ model PlanInvoice {
   @@index([subscriptionId])
   @@index([status])
   @@map("plan_invoices")
+}
+
+// ═══════════════════════════════════════════
+//  COFRE DE CREDENCIAIS DE INFRAESTRUTURA (Admin → Credenciais)
+// ═══════════════════════════════════════════
+//
+// Onde o token do Railway (e de qualquer outro serviço de infraestrutura) fica
+// guardado UMA VEZ, em vez de ser regerado a cada necessidade.
+//
+// Regras que a modelagem sustenta — não são só convenção:
+//   • `tokenEncrypted` é AES-256-GCM (mesma ENCRYPTION_KEY do Meta/Evolution).
+//     NÃO existe coluna com o valor em texto puro; não há onde vazar por engano.
+//   • `last4` é gravado no ato do save justamente para que LISTAR não precise
+//     descriptografar. Abrir a tela nunca toca no segredo.
+//   • Um token de conta do Railway é chave-mestra (lê e altera TODO segredo do
+//     projeto). Por isso toda LEITURA para uso grava linha em
+//     InfraCredentialAccess: sem trilha, o risco é cego.
+
+/// Uma credencial de infraestrutura guardada no cofre. Uma linha por serviço.
+model InfraCredential {
+  id String @id @default(cuid())
+
+  /// Identificador do serviço em minúsculas, ex. "railway". Único por construção.
+  service String @unique
+  /// Nome que o CEO lê na tela, ex. "Railway (deploy e variáveis)".
+  label   String
+
+  /// AES-256-GCM. Nunca sai daqui em texto puro por nenhuma rota.
+  tokenEncrypted String
+  /// Últimos 4 caracteres — o único pedaço que a tela pode mostrar.
+  last4          String
+  /// Tamanho do token, para conferir "colei inteiro?" sem revelar nada.
+  tokenLength    Int
+
+  /// Quem salvou (o admin é único hoje; o campo já existe para depois).
+  savedBy String?
+
+  /// Resultado da validação feita NO ATO DE SALVAR:
+  /// "valid" | "unknown" (não deu para testar, ex. sem rede). "invalid" nunca é
+  /// gravado — token recusado pelo serviço não entra no cofre.
+  validationStatus String    @default("unknown")
+  /// O que o serviço respondeu, em linguagem de gente ("conta dioli@…").
+  validationDetail String?
+  validatedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accesses InfraCredentialAccess[]
+
+  @@map("infra_credentials")
+}
+
+/// Trilha de auditoria: uma linha por LEITURA do token para uso.
+///
+/// Sobrevive à remoção da credencial de propósito (`onDelete: SetNull`) — apagar
+/// o token não pode apagar o registro de quem já o usou.
+model InfraCredentialAccess {
+  id String @id @default(cuid())
+
+  credentialId String?
+  /// Repetido aqui porque a trilha precisa sobreviver ao delete da credencial.
+  service      String
+
+  /// Quem pediu (ex. "admin", nome de um job).
+  actor   String
+  /// Para quê — frase curta e obrigatória. Leitura sem motivo é leitura cega.
+  purpose String
+  /// "ok" | "missing" | "decrypt_failed"
+  outcome String
+
+  createdAt DateTime @default(now())
+
+  credential InfraCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
+  @@index([service, createdAt])
+  @@map("infra_credential_accesses")
 }

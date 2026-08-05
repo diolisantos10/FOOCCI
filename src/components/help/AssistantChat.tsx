@@ -3,7 +3,8 @@
 /**
  * AssistantChat — a conversa com o Assistente Foocci.
  *
- * É a superfície que abre a partir da barra do topo (ver AssistantBar). Fala com
+ * É a superfície que abre a partir da pílula do cabeçalho (ver AssistantPill;
+ * quem guarda o estado é o AssistantProvider, no layout do painel). Fala com
  * o backend que já existe (HelpThreadService via /api/help/*), inclusive o
  * chamado numerado que a escalada devolve.
  *
@@ -295,7 +296,7 @@ export default function AssistantChat({
               placeholder={
                 isHuman ? "Escreva para a equipe Foocci…" : "Pergunte qualquer coisa…"
               }
-              className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:ring-0"
+              className="max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[14px] leading-snug text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
             />
             {voice.supported && (
               <button

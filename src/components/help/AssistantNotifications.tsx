@@ -13,6 +13,7 @@ import {
   TYPE_LABEL,
   type NotifType,
   type NotifPriority,
+  type NotifStatus,
   type NotificationItem,
 } from "./useNotifications";
 
@@ -40,6 +41,8 @@ interface Props {
   readIds: Set<string>;
   unreadCount: number;
   hasCritical: boolean;
+  status: NotifStatus;
+  onReload: () => void;
   onMarkAll: () => void;
   onOpen: (n: NotificationItem) => void;
 }
@@ -49,6 +52,8 @@ export default function AssistantNotifications({
   readIds,
   unreadCount,
   hasCritical,
+  status,
+  onReload,
   onMarkAll,
   onOpen,
 }: Props) {
@@ -81,7 +86,43 @@ export default function AssistantNotifications({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {notifs.length === 0 ? (
+        {/* Carregando — esqueleto, nunca "tudo em ordem" antes de saber. */}
+        {status === "loading" && notifs.length === 0 ? (
+          <ul className="mx-auto w-full max-w-3xl divide-y divide-line/60" aria-busy>
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="px-4 py-3.5">
+                <div className="flex items-start gap-2.5">
+                  <span className="h-4 w-4 shrink-0 animate-pulse rounded bg-line2" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <span className="block h-3 w-4/5 animate-pulse rounded bg-line2" />
+                    <span className="block h-2.5 w-1/3 animate-pulse rounded bg-line" />
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : status === "error" && notifs.length === 0 ? (
+          /* Erro — o que houve + como resolver, nunca tela morta. */
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+            <span className="text-3xl opacity-40" aria-hidden>
+              📡
+            </span>
+            <p className="text-[13.5px] font-semibold text-ink2">
+              Não consegui buscar os avisos
+            </p>
+            <p className="max-w-xs text-[12.5px] leading-snug text-muted">
+              Pode ser a conexão. Não quer dizer que está tudo em ordem — quer dizer que eu
+              ainda não sei.
+            </p>
+            <button
+              type="button"
+              onClick={onReload}
+              className="mt-2 inline-flex items-center justify-center rounded-xl border border-brand-500 bg-brand-500 px-4 py-2 text-[13px] font-semibold text-paper shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        ) : notifs.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center">
             <span className="text-3xl opacity-40" aria-hidden>
               🔔

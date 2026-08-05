@@ -4,6 +4,103 @@
 
 ---
 
+## 2026-08-04 · Cofre de credenciais de infraestrutura — o token do Railway para de ser regerado
+
+**Contexto:** pedido direto do CEO — *"cria um lugar no admin para eu colocar os
+tokens do Railway, porque não aguento mais gerar token."* Worktree
+`agent-ab2c12f8eebc260d0`, a partir de `claude/foocci-brain-vaamrx`.
+
+**O que foi feito**
+
+Tela `/admin/credenciais` (sidebar → Sistema → 🔒 Credenciais), rotas
+`/api/admin/infra-credentials` (GET/PUT) e `/api/admin/infra-credentials/[service]`
+(DELETE), serviço `InfraCredentialService`, catálogo `infraProviders`, duas tabelas
+novas (`infra_credentials`, `infra_credential_accesses`).
+
+**Reaproveitamento, não invenção:** a cripto é a MESMA de
+`@/lib/crypto` (`encrypt/decrypt`, AES-256-GCM, `ENCRYPTION_KEY`) que já guarda o
+`appSecret` da Meta; a guarda é a MESMA `checkAdminRequest` de `@/lib/admin-auth`;
+o formato de resposta é o `ok/badRequest/unauthorized` de `@/lib/api-response`. O
+modelo do `MetaAppCredentials` foi o molde. Zero esquema novo.
+
+**As quatro travas, e onde elas ficam no código**
+
+1. **Criptografado em repouso** — `InfraCredentialService.ts:259` grava
+   `encrypt(token)`. Não existe coluna de texto puro na migração
+   (`20260804210000_infra_credentials/migration.sql`): não há onde vazar por engano.
+2. **Escrita-só** — `list()` (`InfraCredentialService.ts:145`) monta a vista a
+   partir de `last4`/`tokenLength` gravados no save. **Listar não descriptografa** —
+   abrir a tela não toca no segredo. A única porta para o texto puro é
+   `useToken()` (`InfraCredentialService.ts:310`), servidor-só.
+3. **Validação antes da gravação** — `save()` chama o validador do serviço ANTES do
+   `upsert` (`InfraCredentialService.ts:243-256`). `invalid` lança
+   `InvalidCredentialError` e o `upsert` nunca acontece.
+4. **Trilha de uso** — `recordAccess()` (`InfraCredentialService.ts:361`) grava linha
+   em `infra_credential_accesses` + `auditLog` em TODA leitura, inclusive `missing` e
+   `decrypt_failed`. `ON DELETE SET NULL`: apagar o token não apaga o registro de
+   quem já o usou.
+
+**A distinção que decide se o token entra no cofre** (`infraProviders.ts:68-135`)
+
+- Railway RESPONDEU recusando → `invalid` → **não guarda**, 400 com frase em português.
+- `fetch` estourou (rede/DNS/timeout) → `unknown` → **guarda**, e a tela diz
+  "Guardado, mas NÃO testado".
+
+Tratar as duas como a mesma coisa quebra de um dos dois lados: ou o CEO não
+consegue salvar porque o wifi caiu, ou lixo entra no cofre em silêncio. É o
+guardrail 1 aplicado a rede: o silêncio do `fetch` não é informação.
+
+Detalhe que só apareceu lendo a API: o Railway aceita **dois** tipos de token com
+cabeçalhos diferentes (`Authorization: Bearer` para token de conta,
+`Project-Access-Token` para token de projeto) e o CEO não tem como saber qual
+gerou. O validador tenta os dois e a tela diz qual é.
+
+**Provas** (`npx tsc --noEmit` limpo · `npx vitest run` **4990/4990 em 399
+arquivos**, incluindo o gate `src/security/routeGuards.test.ts`):
+
+- `InfraCredentialService.test.ts` (17) — **a cripto NÃO é dublê aqui, de
+  propósito**: com um stand-in `enc:<plain>` a asserção "o texto puro não vai para o
+  banco" passaria sem provar nada (foi exatamente assim que a primeira versão do
+  teste passou verde e estava vazia). Com o AES real, `JSON.stringify(upsert)` de
+  fato não contém o token, o ciphertext casa `iv:tag:dados` e duas gravações do
+  mesmo token dão resultados diferentes (IV aleatório).
+- `route.test.ts` (11) — 401 sem admin nos três verbos, token nunca ecoa (nem no
+  caminho de erro, onde o `Error` cru continha o token de propósito), recusa volta
+  400 com `rejected: true`, DELETE sem `?confirmar=1` é 400.
+- `infraProviders.test.ts` (7) — `invalid` vs `unknown`, e a mensagem de falha de
+  rede não vaza o token.
+
+**Verificado contra o mundo real, não só contra mock** (dev local, DB
+propositalmente inalcançável):
+
+- `GET` sem cookie → `401 {"success":false,"error":"Unauthorized"}`; com cookie →
+  catálogo sem nenhum campo de token.
+- `PUT` com token falso → o **Railway de verdade** recusou e a rota devolveu
+  `400 · "O Railway respondeu que não reconhece este token…"` com
+  `details.rejected: true`. Nada foi gravado.
+- Telas em 375 / 768 / 1280 (estado vazio), sem estouro horizontal.
+
+**O que NÃO está provado:** o caminho gravado **nunca rodou contra um banco de
+verdade** — a migração não foi aplicada em lugar nenhum e nenhum token real foi
+guardado. O estado "guardado" da tela não foi visto com dado real, só o vazio.
+Isso só fecha com deploy + alguém salvando um token e conferindo os 4 últimos
+caracteres. Não dizer "está pronto" antes disso.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Credencial de terceiro tem UM
+padrão nesta casa e ele se reaproveita inteiro: `encrypt/decrypt` de `@/lib/crypto`
+com `ENCRYPTION_KEY`, `checkAdminRequest` na rota, e a vista da tela montada de
+campos derivados (`last4`, `tokenLength`) gravados no save — porque LISTAR NÃO PODE
+DESCRIPTOGRAFAR. Duas regras andam junto: (1) validação de credencial tem TRÊS
+respostas, não duas — recusado pelo serviço não grava, mas 'não deu para perguntar'
+grava e DIZ que não testou, porque silêncio de rede não é reprovação nem aprovação;
+(2) teste que prova cripto não pode usar cripto de mentira — com um dublê
+`enc:<plain>` a asserção 'o texto puro não foi gravado' passa verde sem provar
+nada."* Origem: este bloco; arquivos `src/services/infra/InfraCredentialService.ts`,
+`src/services/infra/infraProviders.ts`,
+`src/app/api/admin/infra-credentials/route.ts`.
+
+---
+
 ## 2026-08-04 · A1 do CR — cancelar não cancelava no MP; webhook ressuscitava a sub
 
 **Contexto:** CR `docs/CR-seguranca-cibernetica-2026-08-03.md`, item A1 (🟠). Base:

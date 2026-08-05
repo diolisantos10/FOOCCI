@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useSidebar } from "./SidebarContext";
 import { SoundStatusChip } from "./SoundStatusChip";
+import { AssistantPill } from "@/components/help/AssistantPill";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -110,10 +111,18 @@ export function TopBar({ title }: TopBarProps) {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // UMA barra só (decisão do CEO, 04/08): título da página à esquerda, a pílula
+  // do Assistente no meio e os ícones de conta à direita. O assistente NÃO tem
+  // faixa própria — duas réguas empilhadas foi exatamente o que ele reprovou.
+  // A altura (h-14) é publicada em `--topbar`, que as telas de altura fixa
+  // descontam. Medida que uma tela precisa saber de outra vira token.
   return (
-    <header className="flex h-14 items-center justify-between border-b border-line2 bg-white px-6">
+    // `sticky`: a faixa antiga do assistente vivia FORA do `main` e nunca sumia.
+    // Agora que ele mora aqui dentro, o cabeçalho precisa grudar no topo — senão
+    // o assistente rolava para fora da tela em toda página comprida.
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line2 bg-paper px-3 sm:px-4 lg:px-6 print:hidden">
       {/* Left: hamburger (mobile) + brand / page breadcrumb + sound control */}
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
         {/* Hamburger — mobile only */}
         <button
           type="button"
@@ -126,19 +135,28 @@ export function TopBar({ title }: TopBarProps) {
           </svg>
         </button>
 
+        {/* Anagrama some no celular: ali a marca já está no menu, e o espaço é do
+            título + da pílula do assistente. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="h-7 w-7 shrink-0 rounded-lg lg:hidden" />
+        <img src="/brand/foocci/foocci-anagram.png" alt="Foocci" className="hidden h-7 w-7 shrink-0 rounded-lg sm:block lg:hidden" />
+        {/* O título da página é o texto mais forte da barra. Antes ele era o mais
+            fraco (`text-muted`) e o nome do restaurante o mais forte — hierarquia
+            invertida. */}
         {title && (
-          <span className="min-w-0 truncate text-sm font-semibold text-ink2 sm:text-muted">{title}</span>
+          <span className="min-w-0 truncate text-[13.5px] font-semibold text-ink">{title}</span>
         )}
         {/* Sound control lives right here in the white bar on every tab (owner's
             request, 2026-07-30) — not a floating balloon over the account cluster. */}
-        <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-[#E5E5E5] sm:block" />
+        <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-line2 sm:block" />
+        {/* Fica no celular também: é aqui que o lojista arma o som dos pedidos. */}
         <SoundStatusChip />
       </div>
 
-      {/* Right: pause + bell + sign out */}
-      <div className="flex items-center gap-1">
+      {/* Center: o Assistente — pílula compacta dentro DESTA barra */}
+      <AssistantPill />
+
+      {/* Right: pause + account + sign out */}
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
 
         {/* ── Emergency pause button ───────────────────────────────────── */}
         {canPause && (
@@ -169,17 +187,23 @@ export function TopBar({ title }: TopBarProps) {
               type="button"
               onClick={() => { setModalReason(PAUSE_REASONS[0]!); setModalResume(60); setModalCustomMinutes(60); setShowPauseModal(true); }}
               title="Pausar pedidos de emergência"
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-orange-50 hover:text-orange-700 border border-transparent hover:border-orange-200"
+              aria-label="Pausar pedidos de emergência"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-transparent px-2 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 sm:px-2.5"
             >
-              <span>⏸</span>
-              <span className="hidden sm:inline">Pausar pedidos</span>
+              {/* O emoji ⏸ virava um risquinho cinza de 4px quando o rótulo
+                  sumia — controle de emergência não pode parecer sujeira. */}
+              <svg className="h-[15px] w-[15px] shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+                <rect x="4" y="3" width="3" height="10" rx="1.2" />
+                <rect x="9" y="3" width="3" height="10" rx="1.2" />
+              </svg>
+              <span className="hidden 2xl:inline">Pausar pedidos</span>
             </button>
           )
         )}
 
         {/* ── Account: partner restaurant + logged-in user ─────────────── */}
-        <div className="mx-1 hidden h-6 w-px bg-[#E5E5E5] sm:block" />
-        <div className="flex items-center gap-2.5">
+        <div className="mx-1 hidden h-6 w-px shrink-0 bg-line2 sm:block" />
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           {/* Partner restaurant brand */}
           {(restaurant.logoUrl || restaurant.name) && (
             <div className="flex items-center gap-2">
@@ -191,21 +215,26 @@ export function TopBar({ title }: TopBarProps) {
                   className="h-7 w-7 shrink-0 rounded-lg border border-line2 object-cover"
                 />
               ) : (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line2 bg-[#FAFAF8] text-[12px] font-bold text-ink2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line2 bg-[#FAFAF8] text-[12px] font-semibold text-ink2">
                   {(restaurant.name ?? "?").charAt(0).toUpperCase()}
                 </div>
               )}
-              <span className="hidden max-w-[150px] truncate text-[13px] font-bold text-ink lg:block">
+              <span className="hidden min-w-0 max-w-[150px] truncate text-[13px] text-ink2 xl:block">
                 {restaurant.name ?? "Restaurante"}
               </span>
             </div>
           )}
-          {/* Logged-in user */}
+          {/* Logged-in user — abaixo de 2xl fica só a inicial, com o nome no
+              title: a pílula do assistente precisa do meio da barra, e nome +
+              cargo por extenso comiam 130px que ninguém lê duas vezes por dia. */}
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-white">
+            <div
+              title={`${session?.user?.name ?? "—"}${session?.user?.role ? ` · ${session.user.role}` : ""}`}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-semibold text-paper"
+            >
               {(session?.user?.name ?? "?").charAt(0).toUpperCase()}
             </div>
-            <div className="hidden leading-tight lg:block">
+            <div className="hidden min-w-0 leading-tight 2xl:block">
               <p className="max-w-[120px] truncate text-[12.5px] font-semibold text-ink">{session?.user?.name ?? "—"}</p>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">{session?.user?.role}</p>
             </div>
@@ -223,10 +252,10 @@ export function TopBar({ title }: TopBarProps) {
             window.location.href = "/login";
           }}
           aria-label="Sair"
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-[#F4F4F2] hover:text-ink"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-[#F4F4F2] hover:text-ink sm:px-2.5"
         >
-          <span className="hidden sm:inline">Sair</span>
-          <span className="text-gray-300">↗</span>
+          <span className="hidden 2xl:inline">Sair</span>
+          <span aria-hidden>↗</span>
         </button>
       </div>
 
@@ -241,11 +270,11 @@ export function TopBar({ title }: TopBarProps) {
             className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/45"
             onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
           >
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl mx-4">
+            <div className="w-full max-w-sm rounded-2xl bg-paper p-6 shadow-2xl mx-4">
               <div className="mb-4 flex items-start gap-3">
                 <span className="text-2xl">⏸</span>
                 <div>
-                  <h2 className="text-base font-bold text-ink">Pausar pedidos</h2>
+                  <h2 className="text-base font-semibold text-ink">Pausar pedidos</h2>
                   <p className="text-xs text-muted mt-0.5">
                     Todos os canais (cardápio online, WhatsApp) vão bloquear novos pedidos imediatamente.
                   </p>
@@ -256,7 +285,7 @@ export function TopBar({ title }: TopBarProps) {
               <select
                 value={modalReason}
                 onChange={(e) => setModalReason(e.target.value)}
-                className="mb-4 w-full rounded-xl border border-line2 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className="mb-4 w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 {PAUSE_REASONS.map((r) => (
                   <option key={r} value={r}>{r}</option>
@@ -267,7 +296,7 @@ export function TopBar({ title }: TopBarProps) {
               <select
                 value={modalResume ?? ""}
                 onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
-                className="mb-3 w-full rounded-xl border border-line2 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className="mb-3 w-full rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 {AUTO_RESUME_OPTIONS.map((o) => (
                   <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>
@@ -282,7 +311,7 @@ export function TopBar({ title }: TopBarProps) {
                     max={480}
                     value={modalCustomMinutes}
                     onChange={(e) => setModalCustomMinutes(Math.max(1, Math.min(480, Number(e.target.value) || 60)))}
-                    className="w-24 rounded-xl border border-line2 bg-white px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    className="w-24 rounded-xl border border-line2 bg-paper px-3 py-2 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                   <span className="text-sm text-ink2">minutos</span>
                 </div>
@@ -302,7 +331,7 @@ export function TopBar({ title }: TopBarProps) {
                 <button
                   type="button"
                   onClick={() => setShowPauseModal(false)}
-                  className="flex-1 rounded-xl border border-line2 px-4 py-2 text-sm font-medium text-ink2 transition-colors hover:bg-canvas"
+                  className="flex-1 rounded-xl border border-line2 px-4 py-2 text-sm font-semibold text-ink2 transition-colors hover:bg-canvas"
                 >
                   Cancelar
                 </button>
@@ -310,7 +339,7 @@ export function TopBar({ title }: TopBarProps) {
                   type="button"
                   onClick={handleActivatePause}
                   disabled={pauseLoading}
-                  className="flex-1 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
+                  className="flex-1 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-amber-600 disabled:opacity-60"
                 >
                   {pauseLoading ? "Pausando…" : "Pausar agora"}
                 </button>

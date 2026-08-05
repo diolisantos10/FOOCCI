@@ -118,6 +118,19 @@ export const BAKERY_STORE: BakeryStore = {
 };
 
 /** Estações de impressão da padaria. Sem impressora atribuída — a vitrine não tem papel. */
+/**
+ * Categorias que o Garçom oferece no FECHAMENTO do pedido, nesta ordem.
+ *
+ * A padaria não tem "sobremesa" — tem **Confeitaria**. Enquanto a sequência era
+ * constante no código ("bebida" → "sobremesa" por regex), a segunda etapa não
+ * casava com nada aqui e o upsell simplesmente não acontecia: dinheiro deixado
+ * na mesa em todo pedido, sem nenhum alerta.
+ *
+ * Os nomes precisam bater EXATAMENTE com os de `BAKERY_MENU` — o casamento é por
+ * nome normalizado, nunca difuso. O teste do seed trava essa correspondência.
+ */
+export const BAKERY_UPSELL_CATEGORIES: readonly string[] = ["Café & Bebidas", "Confeitaria"];
+
 export const BAKERY_PRINT_STATIONS = [
   { key: "CAIXA", name: "Caixa", position: 0 },
   { key: "COZINHA_1", name: "Forno / Produção", position: 1 },

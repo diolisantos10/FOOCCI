@@ -27,6 +27,19 @@
  * O preço da aba nova — perder o visitante para outra aba — é pago com
  * `rel="noopener"` e mantendo ESTA página viva atrás, com os botões de contratar.
  *
+ * ─── QR NAS TRÊS, SÓ NO DESKTOP ──────────────────────────────────────────────
+ * As três experiências são feitas para o celular. Quem chega pelo computador só
+ * vive a cena de verdade se conseguir passar para o telefone sem digitar endereço —
+ * por isso CADA cartão tem o seu QR, com o endereço absoluto de produção
+ * (`@/lib/public-url`), não só o cardápio de mesa.
+ *
+ * No celular o QR não aparece: ninguém escaneia a própria tela. O corte é por
+ * **CSS** (`hidden lg:…`), nunca por user-agent no servidor — esta página é
+ * estática e cacheável, e HTML por aparelho quebra no primeiro cache compartilhado.
+ * Também não se decide no render por `window`/`matchMedia`: o servidor não tem
+ * janela e a hidratação divergiria. Em toda largura o botão continua lá; o QR é
+ * caminho a mais, nunca substituto.
+ *
  * ─── HORÁRIO DA PADARIA ──────────────────────────────────────────────────────
  * A padaria abre 6h e fecha 20h/21h (13h no domingo). Fora disso a loja pausa o
  * ENVIO do pedido, e quem visita o site às 22h bateria nisso sem aviso. Resolvido
@@ -60,7 +73,7 @@ import {
 import { DEMO_URL, PRECOS_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
 import { getTastingState, type ScheduleLine } from "@/lib/site/demoTasting";
 import { DEMO_BAKERY_SLUG } from "@/lib/demo-restaurant";
-import { getPublicQrUrl } from "@/lib/public-url";
+import { getPublicQrUrl, getPublicMenuUrl } from "@/lib/public-url";
 
 const TITLE = "Experimente o Foocci | Cardápio de mesa, loja e Garçom de IA";
 const DESCRIPTION =
@@ -74,9 +87,18 @@ export const metadata: Metadata = {
 
 /* ── Os três endereços da vitrine ─────────────────────────────────────────────
    Montados do slug canônico — nunca escritos à mão em três lugares. */
+const LOJA_QUERY = "?modo=loja";
 const QR_PATH = `/qr/${DEMO_BAKERY_SLUG}`;
-const LOJA_PATH = `/pedido/${DEMO_BAKERY_SLUG}?modo=loja`;
 const GARCOM_PATH = `/pedido/${DEMO_BAKERY_SLUG}`;
+const LOJA_PATH = `${GARCOM_PATH}${LOJA_QUERY}`;
+
+/* Os MESMOS três endereços em forma absoluta — é o que entra no QR.
+   Quem escaneia está em OUTRO aparelho: caminho relativo não existe fora desta aba.
+   O domínio vem de `@/lib/public-url`, o mesmo mecanismo do QR que já existia aqui
+   (e que já barra `localhost`/`.railway.app` vazarem para o cliente em produção). */
+const QR_URL = getPublicQrUrl(DEMO_BAKERY_SLUG);
+const GARCOM_URL = getPublicMenuUrl(DEMO_BAKERY_SLUG);
+const LOJA_URL = `${GARCOM_URL}${LOJA_QUERY}`;
 
 /**
  * O que muda entre a mesma loja sem IA e com IA. É o argumento de venda da página.
@@ -91,6 +113,23 @@ function contrastRows(menuLabel: string): { label: string; sem: string; com: str
     { label: "Restrição alimentar", sem: "Você confere item a item", com: "Você diz uma vez" },
     { label: "O cardápio", sem: menuLabel, com: menuLabel },
   ];
+}
+
+/**
+ * Um QR em SVG, nas cores dos tokens (`ink` no traço, `paper` no fundo) — hex
+ * literal aqui é obrigação da biblioteca, que recebe cor e não classe.
+ * Nunca lança: quem chama trata `null` escondendo só o quadradinho.
+ */
+async function renderQr(url: string): Promise<string | null> {
+  try {
+    return await QRCode.toString(url, {
+      type: "svg",
+      margin: 0,
+      color: { dark: "#0B0B0B", light: "#FFFFFF" },
+    });
+  } catch {
+    return null;
+  }
 }
 
 /* ── Peças ────────────────────────────────────────────────────────────────── */
@@ -195,6 +234,73 @@ function ScheduleList({ schedule }: { schedule: ScheduleLine[] }) {
 }
 
 /**
+ * O quadradinho de cada experiência — **só no desktop, e por CSS**.
+ *
+ * Por que só no desktop: ninguém escaneia a própria tela. No celular o visitante já
+ * está no aparelho certo e o caminho é o botão; o QR ali seria enfeite roubando a
+ * dobra de quem mais importa (a maioria entra pelo celular).
+ *
+ * Por que por CSS e não por aparelho: esta página é estática e cacheável, e servir
+ * HTML diferente por user-agent quebra no primeiro cache compartilhado — o visitante
+ * de celular receberia a versão do desktop e vice-versa. Ler `window`/`matchMedia`
+ * no render tem o defeito irmão: o servidor não tem janela, e a hidratação diverge.
+ * `hidden lg:…` decide na hora de pintar, no aparelho certo, sempre.
+ *
+ * O QR **não substitui** o botão: no notebook os dois convivem — quem quer abrir na
+ * mesma máquina clica, quem quer viver a cena no celular aponta a câmera.
+ *
+ * `layout` é do chamador, não do componente: o cartão 1 ocupa a largura toda e leva
+ * o QR na coluna do lado; os cartões 2 e 3 vivem num grid de duas colunas e levam o
+ * QR numa faixa no rodapé. Quem monta o grid é quem conhece a largura real do cartão.
+ */
+function QrPanel({
+  svg,
+  label,
+  layout,
+}: {
+  svg: string;
+  label: string;
+  layout: "side" | "footer";
+}) {
+  /* O SVG é decorativo: o endereço que ele carrega já está no botão ao lado, com
+     nome acessível. Quem usa leitor de tela recebe o rótulo em texto, não a imagem. */
+  const code = (size: string) => (
+    <div className="shrink-0 rounded-xl border border-line bg-paper p-3">
+      <div
+        aria-hidden
+        className={`${size} [&>svg]:h-full [&>svg]:w-full`}
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+    </div>
+  );
+
+  if (layout === "side") {
+    return (
+      <div className="hidden w-[172px] justify-self-center rounded-2xl border border-line bg-canvas p-4 text-center lg:block">
+        {code("h-28 w-28")}
+        {/* `text-balance`: sem ele o rótulo de duas linhas deixa "celular" sozinho. */}
+        <p className="mt-3 text-balance text-[12px] font-semibold leading-snug text-ink">{label}</p>
+        <p className="mt-1 text-[11.5px] leading-snug text-muted">
+          Aponte a câmera do celular
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 hidden items-center gap-4 rounded-2xl border border-line bg-canvas p-4 lg:flex">
+      {code("h-[88px] w-[88px]")}
+      <div>
+        <p className="text-[12.5px] font-semibold leading-snug text-ink">{label}</p>
+        <p className="mt-1 text-pretty text-[11.5px] leading-relaxed text-muted">
+          Aponte a câmera do celular para abrir no seu telefone.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
  * O lugar do botão quando a vitrine NÃO está no ar.
  *
  * Mesma silhueta do CTA de verdade, de propósito: o cartão não muda de altura e o
@@ -235,23 +341,19 @@ export default async function ExperimentePage() {
   const semFoto = ok && state.photoCount === 0;
 
   /*
-    O QR de verdade, gerado do endereço público da vitrine — quem estiver no
-    computador escaneia com o celular e vive a cena da mesa, que é o que se está
-    vendendo. Se a geração falhar, a página perde o quadradinho e mantém o botão:
-    um enfeite nunca derruba a degustação.
+    Os TRÊS QR de verdade, gerados dos endereços públicos da vitrine — as três
+    experiências são feitas para o celular, e quem está no computador só vive a cena
+    de verdade se puder passar para o telefone sem digitar endereço.
+
+    A condição é `live`, a MESMA do botão, de propósito: quando a vitrine está
+    comprovadamente sem cardápio, o botão apaga e o QR some junto — um quadradinho
+    que leva a 404 é pior que botão morto, porque o erro só aparece no celular do
+    visitante, longe desta página. E se a geração falhar, o cartão perde o
+    quadradinho e mantém o botão: enfeite nunca derruba a degustação.
   */
-  let qrSvg: string | null = null;
-  if (ok) {
-    try {
-      qrSvg = await QRCode.toString(getPublicQrUrl(DEMO_BAKERY_SLUG), {
-        type: "svg",
-        margin: 0,
-        color: { dark: "#0B0B0B", light: "#FFFFFF" },
-      });
-    } catch {
-      qrSvg = null;
-    }
-  }
+  const [qrMesa, qrLoja, qrGarcom] = live
+    ? await Promise.all([renderQr(QR_URL), renderQr(LOJA_URL), renderQr(GARCOM_URL)])
+    : [null, null, null];
 
   return (
     <>
@@ -382,6 +484,14 @@ export default async function ExperimentePage() {
               {live
                 ? "Cada uma abre numa aba nova, para você voltar aqui quando quiser."
                 : "As três voltam ao ar em instantes — enquanto isso, veja abaixo o que cada uma faz."}
+              {/* Só faz sentido para quem tem os QR na frente — some junto com eles. */}
+              {live && (
+                <span className="hidden lg:inline">
+                  {" "}
+                  As três foram feitas para o celular: aponte a câmera para o código do
+                  cartão e continue no seu telefone.
+                </span>
+              )}
             </p>
             {semFoto && (
               <p className="mx-auto mt-4 max-w-xl rounded-xl bg-canvas px-4 py-3 text-[13px] leading-relaxed text-ink2">
@@ -395,7 +505,7 @@ export default async function ExperimentePage() {
 
           {/* 2.1 · Cardápio de mesa (QR) */}
           <div className="mt-10 rounded-2xl border border-line bg-paper p-6 shadow-[0_1px_2px_rgba(11,11,11,.03)] sm:p-8">
-            <div className="grid gap-7 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
                 <ExperienceHeader
                   step="Experiência 1 · na mesa"
@@ -404,8 +514,8 @@ export default async function ExperimentePage() {
                   lead="É o que o cliente vê ao apontar a câmera para o código na mesa: o cardápio inteiro, com descrição e preço, sem baixar aplicativo e sem cadastro."
                 />
                 <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
-                  {qrSvg ? "Aponte a câmera do celular para o código — ou abra aqui mesmo." : "Abra e navegue como se estivesse sentado à mesa."}{" "}
-                  Funciona a qualquer hora, mesmo com a padaria fechada.
+                  Abra e navegue como se estivesse sentado à mesa. Funciona a qualquer
+                  hora, mesmo com a padaria fechada.
                 </p>
                 <div className="mt-5">
                   {live ? (
@@ -421,16 +531,7 @@ export default async function ExperimentePage() {
                 </div>
               </div>
 
-              {qrSvg && (
-                <div className="hidden justify-self-center rounded-2xl border border-line bg-paper p-4 sm:block">
-                  <div
-                    aria-hidden
-                    className="h-32 w-32 [&>svg]:h-full [&>svg]:w-full"
-                    dangerouslySetInnerHTML={{ __html: qrSvg }}
-                  />
-                  <p className="mt-2.5 text-center text-[11px] text-muted">Escaneie com o celular</p>
-                </div>
-              )}
+              {qrMesa && <QrPanel svg={qrMesa} label="Cardápio de mesa no celular" layout="side" />}
             </div>
           </div>
 
@@ -465,6 +566,9 @@ export default async function ExperimentePage() {
                   ) : (
                     <CtaEmPreparo block />
                   )}
+                  {qrLoja && (
+                    <QrPanel svg={qrLoja} label="Loja sem IA no celular" layout="footer" />
+                  )}
                 </div>
               </div>
 
@@ -487,6 +591,9 @@ export default async function ExperimentePage() {
                     <PrimaryCta label="Abrir a loja com o Garçom" href={GARCOM_PATH} newTab block />
                   ) : (
                     <CtaEmPreparo block />
+                  )}
+                  {qrGarcom && (
+                    <QrPanel svg={qrGarcom} label="Loja com o Garçom no celular" layout="footer" />
                   )}
                 </div>
               </div>
