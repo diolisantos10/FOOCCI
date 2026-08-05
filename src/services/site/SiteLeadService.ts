@@ -37,6 +37,7 @@ import { prisma } from "@/lib/prisma";
 import { generateLeadCode } from "@/lib/site/leadCode";
 import type { CreateSiteLeadInput } from "@/validators/site-lead";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
+import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 
 /** Sender identity. Resend's shared onboarding domain works with zero DNS setup. */
 const FROM = process.env.LEADS_FROM_EMAIL || "Foocci <onboarding@resend.dev>";
@@ -70,7 +71,17 @@ export const SiteLeadService = {
    * ou seja, só depois da gravação ter acontecido de verdade.
    */
   async capture(input: CreateSiteLeadInput): Promise<CreatedLead> {
-    const whatsappDigits = normalizaWhatsapp(input.whatsapp);
+    /* A chave humana do contato. Quem manda é `analisarWhatsappBr` — o mesmo
+     * analisador que o validador da entrada usa, então o que foi aceito na porta
+     * SEMPRE vira chave. O `normalizaWhatsapp` fica de reserva por compatibilidade
+     * com quem chamar este serviço fora da rota do site.
+     *
+     * Por que a troca importa: o antigo devolvia `null` para "(55) 99999-8888"
+     * (Santa Maria/RS — ele tira o "55" achando que é DDI) e para "011 98765-4321"
+     * (o zero da operadora). `null` aqui desliga a busca de duplicata E deixa o
+     * contato sem link de conversa no CRM — o lead entra, mas chega mudo. */
+    const analise = analisarWhatsappBr(input.whatsapp);
+    const whatsappDigits = analise.ok ? analise.digitos : normalizaWhatsapp(input.whatsapp);
 
     const existente = whatsappDigits ? await buscaDuplicata(whatsappDigits) : null;
 

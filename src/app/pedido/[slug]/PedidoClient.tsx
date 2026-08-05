@@ -452,6 +452,17 @@ interface Props {
    * that predate the entry plan.
    */
   aiIncluded?: boolean;
+  /**
+   * A identificação da entrada pode ser PULADA? Só a vitrine de demonstração
+   * recebe `true` — quem decide é o servidor, por `Restaurant.isDemo`
+   * (`src/lib/identificacao-loja.ts`). Padrão `false`: falha fechada, porque
+   * prop esquecida em loja de cliente não pode virar loja anônima.
+   *
+   * Pular NÃO significa pedir anônimo: significa navegar e conversar anônimo. Na
+   * hora de fechar, o `handleCheckout` traz a tela de telefone de volta dizendo
+   * por que ela apareceu — e sem a saída, para não virar laço.
+   */
+  identificacaoOpcional?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1686,9 +1697,12 @@ function PhoneEntryCard({
         >
           {loading ? "Verificando…" : "Continuar →"}
         </button>
+        {/* A saída só existe quando quem chama passa `onSkip` — hoje, só a
+            vitrine de demonstração. O rótulo diz para onde ela leva: "Pular →"
+            sozinho não conta o que acontece depois. */}
         {onSkip && (
           <button type="button" onClick={onSkip} className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            Pular →
+            Pular e ver o cardápio →
           </button>
         )}
       </form>
@@ -2445,6 +2459,7 @@ export function PedidoClient({
   pixOnlineEnabled = true,
   cardOnlineEnabled = false,
   aiIncluded = true,
+  identificacaoOpcional = false,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -2774,6 +2789,22 @@ export function PedidoClient({
     sessionStorage.setItem(`foocci-entry-${slug}`, "1");
     if (name) { setIdentifiedName(name); setCustomerName(name); }
     setEntryPhase("browsing");
+  }
+
+  /* ── Identificação pulada (só na vitrine) ─────────────────────────────────
+   * `true` a partir do momento em que o telefone vira condição para FECHAR o
+   * pedido. Serve para tirar o "Pular →" da segunda vez que a tela aparece: sem
+   * isso, pular no checkout devolveria a pessoa ao mesmo botão de finalizar que
+   * a mandou para cá — um laço, e laço é a assinatura de tela mal fechada. */
+  const [identidadeExigida, setIdentidadeExigida] = useState(false);
+
+  /** Só a vitrine oferece saída, e só enquanto o telefone ainda não é exigido. */
+  const podePularIdentificacao = identificacaoOpcional && !identidadeExigida;
+
+  function handleSkipIdentification() {
+    // Segue anônimo: navega o cardápio e conversa com o Garçom. O `enterBrowsing`
+    // grava a marca de entrada, então recarregar a página não repete a cobrança.
+    enterBrowsing(null);
   }
 
   // customerId state updated when PhoneEntryCard resolves identity client-side
@@ -4273,6 +4304,23 @@ export function PedidoClient({
       pushAssistantMessage("Adicione pelo menos um item antes de finalizar 👆");
       return;
     }
+    /* Entrou sem se identificar (só possível na vitrine) e agora quer FECHAR.
+     * É aqui que o contato deixa de ser cadastro e vira necessidade — então é
+     * aqui que ele é pedido, com o motivo junto. O carrinho e a conversa ficam
+     * onde estão; a tela de telefone volta SEM o "Pular", porque uma segunda
+     * recusa devolveria a pessoa a este mesmo botão.
+     *
+     * Vem DEPOIS do carrinho vazio de propósito: cobrar telefone de quem clicou
+     * em finalizar sem nada na sacola seria pedir dado para não fazer nada. */
+    if (identificacaoOpcional && !effectiveCustomerPhone && !resolvedCustomerId) {
+      setIdentidadeExigida(true);
+      setEntryPhase("identifying");
+      pushAssistantMessage(
+        "Pra fechar o pedido preciso do seu WhatsApp — é por ele que o restaurante " +
+        "confirma e avisa quando fica pronto. Seu carrinho está guardado. 📱",
+      );
+      return;
+    }
     if (stage !== "BROWSE") return;
 
     // Rapid-click guard: if a request is already in flight, ignore.
@@ -4283,7 +4331,8 @@ export function PedidoClient({
     // CHECKOUT_SUPPORT   → sendText auto-advances via proceedToCheckoutRef.
     checkoutPendingRef.current = true;
     sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
-  }, [cart, stage, entryPhase, isOrderingPaused, pausedUntil, sendText, pushAssistantMessage, aiPermState]);
+  }, [cart, stage, entryPhase, isOrderingPaused, pausedUntil, sendText, pushAssistantMessage, aiPermState,
+      identificacaoOpcional, effectiveCustomerPhone, resolvedCustomerId]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
@@ -5881,13 +5930,27 @@ export function PedidoClient({
           {/* Phone entry inside chat — doesn't block menu on desktop */}
           {entryPhase === "identifying" && (
             <>
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
-                  Olá! 👋 Informe seu WhatsApp para identificarmos seu cadastro. 📱
+              {/* Na entrada da vitrine o convite diz que dá para ver antes de se
+                  identificar — a promessa da página de degustação ("sem cadastro")
+                  precisa valer na tela para a qual ela manda. Quando a tela volta
+                  no fechamento, o motivo já foi dito no balão anterior. */}
+              {!identidadeExigida && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
+                    {podePularIdentificacao
+                      ? "Olá! 👋 Informe seu WhatsApp para eu já te chamar pelo nome — ou é só pular e ver o cardápio. 📱"
+                      : "Olá! 👋 Informe seu WhatsApp para identificarmos seu cadastro. 📱"}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="flex justify-start">
-                <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} />
+                {/* `onSkip` só existe na vitrine, e some assim que o telefone
+                    passa a ser condição para fechar o pedido. */}
+                <PhoneEntryCard
+                  slug={slug}
+                  onIdentified={handlePhoneIdentified}
+                  onSkip={podePularIdentificacao ? handleSkipIdentification : undefined}
+                />
               </div>
             </>
           )}
@@ -6267,7 +6330,11 @@ export function PedidoClient({
           </>
         ) : stage === "BROWSE" ? (
           <div className="flex flex-1 items-center justify-center p-8 text-center">
-            <p className="text-sm text-gray-400">Informe seu WhatsApp no chat para ver o cardápio 📱</p>
+            <p className="text-sm text-gray-400">
+              {podePularIdentificacao
+                ? "Informe seu WhatsApp no chat — ou pule e veja o cardápio 📱"
+                : "Informe seu WhatsApp no chat para ver o cardápio 📱"}
+            </p>
           </div>
         ) : (
           /* Checkout in progress — right panel shows context */

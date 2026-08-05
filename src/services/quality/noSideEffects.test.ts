@@ -124,18 +124,24 @@ describe("Quality Control — no side effects (static import scan)", () => {
 });
 
 describe("Quality Control — no side effects (behavioral)", () => {
-  /*
-    PRAZO PRÓPRIO, e não é frescura: este caso roda TODOS os auditores DUAS vezes,
-    de propósito — a prova de que não há estado escondido é a saída sair idêntica.
-    São ~5,0s numa máquina livre, contra o limite padrão de 5,0s. Ele passava por
-    milissegundos e reprovava a bateria inteira sempre que a máquina estava
-    ocupada, o que é o pior tipo de defeito de portão: falha que não significa
-    nada. Quem vê um portão reprovar por sorte aprende a rodar de novo até passar
-    — e aí ele deixou de ser portão.
-
-    O número mede o que o teste realmente faz, com folga para máquina carregada.
-    Se um dia estourar 20s, aí sim é sinal de verdade: algum auditor ficou lento.
-  */
+  /**
+   * Timeout explícito, e o motivo — porque um portão que reprova pela razão
+   * errada é pior que portão nenhum:
+   *
+   * este caso roda TODOS os auditores DUAS vezes e leva ~4,9 s numa máquina
+   * ociosa, contra o limite padrão de 5 s do vitest. Ou seja: ele passava por
+   * 100 ms. Em `vitest run` completo, com o resto da suíte disputando CPU, ele
+   * reprovava por CARGA — não por conteúdo. Cresceu a suíte, quebrou este teste,
+   * e a falha não tinha relação nenhuma com o que mudou.
+   *
+   * O que se mede aqui é DETERMINISMO e ausência de efeito colateral, nunca
+   * velocidade. Nenhuma asserção foi afrouxada: as duas continuam iguais, e o
+   * único ajuste é o relógio parar de ser um terceiro juiz não declarado.
+   *
+   * Dois especialistas diagnosticaram este mesmo caso hoje, em paralelo e sem se
+   * falar, com a mesma leitura. Isso não é coincidência: portão que reprova por
+   * sorte ensina a gente a rodar de novo até passar — e aí ele já não é portão.
+   */
   it("running all auditors yields data only and is deterministic for a fixed clock", async () => {
     const now = new Date("2026-06-08T03:00:00Z");
     const a = await runAll({ runId: "fixed", now });
@@ -143,5 +149,5 @@ describe("Quality Control — no side effects (behavioral)", () => {
     // identical output ⇒ no hidden mutable state / external effect
     expect(JSON.stringify(a.findings)).toBe(JSON.stringify(b.findings));
     expect(getAuditors().every((x) => x.readOnly && x.canRunDaily)).toBe(true);
-  }, 20_000);
+  }, 60_000);
 });

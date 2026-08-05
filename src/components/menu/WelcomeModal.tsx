@@ -12,11 +12,22 @@
  * `required` define se dá para entrar sem se identificar (decisão do CEO em
  * 04/08): na **Loja** e no **chat com IA** a identificação é obrigatória — é ali
  * que nasce pedido, cupom e histórico, e cliente anônimo quebra a atribuição de
- * receita do CRM. Só o **QR da mesa** segue pulável: quem já está sentado no
- * salão não deve ser barrado para ver o cardápio.
+ * receita do CRM. O **QR da mesa** segue pulável (quem já está sentado no salão
+ * não deve ser barrado para ver o cardápio) e, desde 05/08, a **vitrine de
+ * demonstração** também — ver `src/lib/identificacao-loja.ts`.
+ *
+ * ─── Quando é dispensável, é dispensável DE VERDADE ──────────────────────────
+ * Com `required=false` o painel fecha pelos TRÊS gestos que qualquer pessoa já
+ * tentou num modal: o "×", a tecla Esc e o toque fora. Antes só existia o link
+ * "Pular identificação" no rodapé — Esc e clique fora não faziam nada, e o modal
+ * que ignora Esc lê como tela travada, não como escolha. Os três caminhos chamam
+ * o MESMO `onClose(null)`: uma saída só, três portas.
+ *
+ * Com `required=true` nada disso existe — nem o "×", nem o Esc, nem o clique
+ * fora. A obrigatoriedade da Loja de cliente continua intacta.
  */
 
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { fmtPhone } from "./format";
 import type { CustomerIdentity } from "./types";
 
@@ -37,6 +48,21 @@ export function WelcomeModal({
   const [collectedPhone, setCollectedPhone] = useState("");
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
+
+  /** Dispensável = existe saída. Uma variável só, para os três gestos não divergirem. */
+  const dispensavel = !required;
+
+  /* Esc fecha — a expectativa universal de modal. Não fecha durante o envio: a
+     requisição de identificação já está a caminho e sumir com a tela no meio
+     deixaria a pessoa sem saber se foi ou não. */
+  useEffect(() => {
+    if (!dispensavel) return;
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) onClose(null);
+    }
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [dispensavel, loading, onClose]);
 
   async function handlePhoneSubmit(e: FormEvent) {
     e.preventDefault();
@@ -95,21 +121,45 @@ export function WelcomeModal({
   const btnCls   = "w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm"
+      /* Clique fora fecha — só onde há saída, e nunca no meio do envio. */
+      onClick={dispensavel && !loading ? () => onClose(null) : undefined}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={step === "phone" ? "Identificação rápida" : "Novo cadastro"}
+        className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* A alcinha do topo é o gesto universal de "arraste para fechar". Numa
             tela que não fecha, ela promete uma saída que não existe. */}
-        {!required && (
+        {dispensavel && (
           <div className="flex justify-center pt-3 sm:hidden">
             <div className="h-1 w-10 rounded-full bg-gray-200" />
           </div>
         )}
 
-        <div className="mx-6 mt-5 rounded-2xl px-5 py-4 text-white shadow-sm" style={{ backgroundColor: "var(--brand-primary)" }}>
+        <div className="relative mx-6 mt-5 rounded-2xl px-5 py-4 text-white shadow-sm" style={{ backgroundColor: "var(--brand-primary)" }}>
+          {/* O "×", dentro da faixa da marca. A alcinha acima só aparece no
+              celular e é gesto, não botão — no computador não havia NADA visível
+              dizendo que dava para sair. */}
+          {dispensavel && (
+            <button
+              type="button"
+              onClick={() => onClose(null)}
+              disabled={loading}
+              aria-label="Fechar e continuar sem se identificar"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xl font-bold leading-none text-white transition hover:bg-white/30 active:scale-95 disabled:opacity-40"
+            >
+              ×
+            </button>
+          )}
           <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
             {step === "phone" ? "Identificação rápida" : "Novo cadastro"}
           </p>
-          <p className="mt-0.5 text-base font-bold leading-snug">
+          <p className={`mt-0.5 text-base font-bold leading-snug${dispensavel ? " pr-8" : ""}`}>
             {step === "phone"
               ? required
                 // Sem saída: o texto diz o porquê. "Informe seu WhatsApp" sem

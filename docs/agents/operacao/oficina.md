@@ -1161,3 +1161,129 @@ horas e os 51 represados) — os testes não passam por acaso.
    `api/admin/diagnostics/cart-recovery-qa/route.ts` e a tela do QA). Esta casa
    já pagou por comentário que descrevia o contrário do que o servidor fazia.
    Origem: idem.
+
+---
+
+## 2026-08-05 · A vitrine trancada atrás do telefone, e o WhatsApp que ninguém conferia
+
+Dois defeitos reproduzidos numa varredura de PERCURSO em produção, no celular.
+Branch: worktree `agent-ab9faec967b8a445b`. **Não commitado** por instrução —
+entregue na árvore de trabalho.
+
+### 1 · P0 — a única prova do produto estava atrás de um pedido de telefone sem saída
+
+`/site/experimente` promete, com estas palavras, *"peça à vontade, nada é
+cobrado"* e *"sem baixar aplicativo e sem cadastro"*, e manda o visitante para
+`/pedido/foocci-bakery`. Lá abria o painel **IDENTIFICAÇÃO RÁPIDA** sem × , sem
+Esc, sem clique fora — só "Continuar →". O visitante mais qualificado do site (o
+desconfiado que quer ver antes de acreditar) era obrigado a entregar o telefone
+para ver um pão, depois de o site ter prometido o contrário.
+
+**Onde mexi, e por que não mexi em toda loja.** A obrigatoriedade é decisão do
+CEO (04/08) e continua necessária: pedido precisa de contato, cupom vive amarrado
+a cliente, e anônimo quebra a atribuição de receita do CRM. Afrouxar geral seria
+o guardrail 5 — trocar atrito na demonstração por pedido órfão em loja de
+cliente. A folga é **só do restaurante de demonstração**, e a marca é a coluna
+`Restaurant.isDemo`, nunca o slug (guardrail 4).
+
+- `src/lib/identificacao-loja.ts` — `identificacaoPodeSerPulada()`. Puro (sem
+  Prisma, para o cliente poder importar) e de **falha fechada**: `undefined`,
+  `null` e valores "parecidos com verdadeiro" devolvem `false`. Se um dia o
+  SELECT esquecer `isDemo`, ninguém pula.
+- `src/app/pedido/[slug]/page.tsx:92,108` — `isDemo` no SELECT e a prop
+  calculada **no servidor**, entregue igual aos dois clientes.
+- `src/components/menu/WelcomeModal.tsx` — onde o painel é dispensável, ele fecha
+  pelos três gestos (× dentro da faixa da marca, Esc, clique no fundo), todos no
+  mesmo `onClose(null)`. Nenhum deles existe com `required`. Nem Esc nem clique
+  fora fecham durante o envio: sumir com a tela no meio da verificação deixaria a
+  pessoa sem saber se o telefone foi registrado.
+- `src/app/pedido/[slug]/LojaClient.tsx:544` — `required={!identificacaoOpcional}`.
+  Quem fecha sem se identificar navega o cardápio inteiro; o telefone volta a ser
+  pedido no `openCheckout`, que já existia, agora dizendo POR QUE ("é por ele que
+  o restaurante confirma seu pedido e avisa quando ele sai").
+- `src/app/pedido/[slug]/PedidoClient.tsx` (Garçom) — `onSkip` condicionado a
+  `podePularIdentificacao = identificacaoOpcional && !identidadeExigida`. No
+  `handleFinalizeClick`, quem pulou volta para `identifying` **sem a saída**, com
+  o carrinho guardado e o motivo dito. Sem esse `identidadeExigida`, pular no
+  fechamento devolveria a pessoa ao mesmo botão — laço.
+
+**O que NÃO fiz, e é decisão que não é minha:** a padaria continua exigindo
+telefone para *concluir* o pedido. O site diz "pode ir até o fim do checkout" —
+e dá, mas com um número. Terminar de verdade anônimo exigiria aceitar pedido sem
+contato no `finalize`, o que mexe na máquina que atende loja de cliente. Pergunta
+para o CEO, não para mim.
+
+### 2 · Um WhatsApp digitado errado virava lead perdido em silêncio
+
+`src/validators/site-lead.ts:17` era `z.string().trim().min(8)` — **oito
+caracteres quaisquer**. "não tenho" entrava, e a tela devolvia *"vamos chamar
+você no WhatsApp não tenho"*. A confirmação com o valor na cara da pessoa era o
+que transformava o erro em espera.
+
+- `src/lib/whatsapp-br.ts` + `whatsapp-br.test.ts` — 55 casos, **duas listas**:
+  quem DEVE passar (com/sem DDI, com/sem máscara, com/sem nono dígito, com o zero
+  da operadora, e o DDD 55 que parece DDI) e quem DEVE ser recusado (tamanho
+  impossível, DDD nunca atribuído, celular de 9 dígitos que não começa com 9,
+  número de serviço).
+- **Fixo de 8 dígitos ENTRA — decisão registrada no arquivo.** WhatsApp Business
+  roda em linha fixa, é o número que o dono tem na cabeça, e os dois erros custam
+  diferente: fixo aceito = uma ligação a mais para o SDR; fixo recusado = cliente
+  perdido na porta.
+- **Ambiguidade assumida, não escondida:** `01987654321` é, em dígitos, a mesma
+  coisa que `0 (19) 8765-4321` e que um DDD digitado como "01". Nenhum código
+  separa. A leitura adotada é a que existe, e a tela devolve o número LIDO para a
+  pessoa poder discordar.
+- `src/components/marketing/DemoForm.tsx` — a confirmação passou a mostrar o
+  número **normalizado**, não o texto cru. É a última chance de ver o dígito
+  trocado. A checagem também roda no formulário, mas a trava é o `refine` do
+  servidor (quem posta direto na API passa por ela igual).
+- `src/services/site/SiteLeadService.ts:73` — `whatsappDigits` passa a sair do
+  mesmo analisador. O antigo `normalizaWhatsapp` devolve `null` para
+  `(55) 99999-8888` (Santa Maria/RS — ele tira o "55" achando que é DDI) e para
+  `011 98765-4321`; `null` ali desliga a busca de duplicata E deixa o contato sem
+  link de conversa no CRM. O lead entrava mudo.
+
+**Histórico não é revalidado.** `capture()` só analisa a entrada nova; nenhuma
+leitura do CRM reprocessa `whatsapp` para decidir se o lead vale. O que muda para
+linhas antigas é nada: elas mantêm o texto e o `whatsappDigits` que já tinham.
+
+### Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` **430 arquivos, 5556 testes, verde**.
+
+**Um portão reprovava por carga, não por conteúdo.**
+`src/services/quality/noSideEffects.test.ts` roda todos os auditores duas vezes e
+levava ~4,9 s contra o limite padrão de 5 s: passava por 100 ms. Provado na
+árvore LIMPA (sem as minhas mudanças): uma execução completa reprovou, a seguinte
+passou — é anterior a mim. Com a suíte um pouco maior, reprovava sempre. Dei
+timeout explícito de 60 s ao caso, **sem afrouxar nenhuma asserção** — o que ele
+mede é determinismo, nunca velocidade. É arquivo do `qualidade`; fica reportado
+para o Diretor decidir se olha.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **"A promessa da página que manda é obrigação da tela que recebe."** O site
+   dizia "sem cadastro" e a loja pedia telefone sem saída. Nenhum dos dois lados
+   estava errado sozinho — a mentira nasceu na costura. Ao mudar um portão de
+   entrada, pergunte que página promete o que sobre ele.
+   Origem: `/site/experimente` → `/pedido/foocci-bakery`, 2026-08-05.
+
+2. **"Exceção a uma regra do CEO se escreve no servidor, keyed numa coluna."** A
+   folga da identificação não é um literal no componente nem um `if (slug ===
+   "foocci-bakery")`: é `Restaurant.isDemo` lido no servidor e entregue como prop
+   de falha fechada, com teste que reprova `required={false}` literal. Exceção que
+   mora no cliente vira exceção de todo mundo no primeiro copiar-e-colar.
+   Origem: `src/lib/identificacao-loja.ts`, 2026-08-05.
+
+3. **"Validação de contato se escreve com DUAS listas, e a de quem passa vem
+   primeiro."** Os dois erros de um validador não custam o mesmo: aceitar lixo
+   gera um lead descartado em dez segundos; recusar um número certo manda embora
+   quem estava tentando comprar. A lista de quem DEVE passar é a defesa contra
+   apertar o portão sozinho.
+   Origem: `src/lib/whatsapp-br.test.ts`, 2026-08-05.
+
+4. **"Confirmar de volta o que a pessoa digitou não é confirmação — é eco."**
+   Repetir o texto cru fez a tela de sucesso avalizar um número impossível.
+   Mostrar o valor NORMALIZADO é o que dá à pessoa a chance de ver o próprio
+   engano. Vale para telefone, endereço e valor de troco.
+   Origem: `DemoForm.tsx`, 2026-08-05.

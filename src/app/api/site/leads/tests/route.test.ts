@@ -69,6 +69,46 @@ describe("POST /api/site/leads", () => {
     expect(capture).not.toHaveBeenCalled();
   });
 
+  /*
+    O WhatsApp impossível é o caso que mais custou: a regra antiga (`min(8)`)
+    aceitava OITO CARACTERES QUAISQUER, o lead entrava e a tela confirmava
+    "vamos chamar você no WhatsApp não tenho". Ninguém conseguia chamar, e a
+    pessoa ficava esperando. A trava é aqui, no servidor — a checagem do
+    formulário é conveniência e não vale para quem posta direto na API.
+  */
+  it.each([
+    ["não tenho",  "texto no lugar do número"],
+    ["1199999",    "número cortado no meio"],
+    ["999998888",  "celular sem o DDD"],
+    ["(00) 98765-4321", "DDD que não existe"],
+  ])("WhatsApp impossível (%s) não vira lead: 400 e nada gravado", async (whatsapp) => {
+    const res = await POST(req({ ...CORPO, whatsapp }));
+    const body = (await res.json()) as { error?: string };
+
+    expect(res.status).toBe(400);
+    expect(capture).not.toHaveBeenCalled();
+    // A recusa ensina o que fazer — mensagem sem exemplo devolve a pessoa ao
+    // mesmo erro.
+    expect(body.error).toContain("(11) 98765-4321");
+  });
+
+  it("os formatos que gente de verdade digita CONTINUAM entrando", async () => {
+    capture.mockResolvedValue({ id: "lead1", codigo: "A7K2M", notified: true, notifyError: null });
+
+    for (const whatsapp of [
+      "(11) 98765-4321",   // com máscara
+      "+55 11 98765-4321", // com DDI
+      "11 8765-4321",      // sem o nono dígito
+      "(11) 3333-4444",    // fixo — WhatsApp Business roda em fixo
+      "(55) 99999-8888",   // DDD 55, o que parece DDI
+    ]) {
+      capture.mockClear();
+      const res = await POST(req({ ...CORPO, whatsapp }));
+      expect(res.status, `"${whatsapp}" foi recusado e não deveria`).toBe(200);
+      expect(capture).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("lead salvo sem código continua sendo sucesso — o contato é o que importa", async () => {
     capture.mockResolvedValue({ id: "lead1", codigo: null, notified: false, notifyError: "x" });
 
