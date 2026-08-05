@@ -4526,6 +4526,15 @@ model BrainShadowLog {
   // preservando a semântica das linhas antigas antes da escada por-agente.
   agentId String?
 
+  // DE ONDE a amostra veio. PRODUCTION = houve atendimento/disparo real do outro
+  // lado; REPLAY = conversa real reprocessada depois; TRAINING = caso de esteira,
+  // destinatário sintético, ninguém do lado de lá.
+  //
+  // NULO = DESCONHECIDO, de propósito: as linhas gravadas antes deste campo
+  // misturam produção e replay e não há como separá-las depois. Nulo nunca é
+  // contado como produção — ausência de informação não é informação.
+  sampleOrigin String?
+
   intent        String
   reasoningMode String // LLM | FALLBACK
   engine        String // "OPENAI:gpt-4o-mini" etc. (sem segredos)
@@ -4540,6 +4549,7 @@ model BrainShadowLog {
 
   @@index([restaurantId, createdAt])
   @@index([restaurantId, agentId, createdAt])
+  @@index([restaurantId, agentId, sampleOrigin, createdAt])
   @@map("brain_shadow_logs")
 }
 

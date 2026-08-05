@@ -1,0 +1,84 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Shadow Training — a esteira de treino do agente de CRM (cron-safe)
+#
+# O equivalente, para o CRM, do que o `brain-shadow-replay` é para o
+# recepcionista. Monta casos a partir de comportamento REAL de clientes com
+# DESTINATÁRIO SINTÉTICO (mais um catálogo adversarial fixo), pede ao agente que
+# componha, julga com portão determinístico e grava a evidência com origem
+# TRAINING — separada da contagem de produção.
+#
+# Substitui, por decisão do CEO de 05/08/2026, o degrau "primeira mensagem real
+# para o próprio time": feedback humano artesanal não escala e não chega.
+#
+# NUNCA envia mensagem · nenhum telefone real entra no caso · read-only sobre o
+# cadastro · runtimeTouched:false e messagesSent:0 são conferidos aqui embaixo e
+# reprovam a rodada se mudarem.
+#
+# Diário às 06:50 UTC (≈ 03:50 BRT) — depois do replay do recepcionista, para os
+# dois não disputarem o mesmo minuto de banco. Usa CRON_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Shadow Training
+
+on:
+  schedule:
+    - cron: "50 6 * * *" # 06:50 UTC ≈ 03:50 BRT
+  workflow_dispatch:
+    inputs:
+      restaurantId:
+        description: "Restringir a um restaurante (vazio = os de maior base)"
+        required: false
+        default: ""
+      dryRun:
+        description: "true = só monta o lote, não chama IA nem grava"
+        required: false
+        default: "false"
+
+jobs:
+  train:
+    name: "Esteira de treino do agente de CRM"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/crm/shadow-training" >> "$GITHUB_OUTPUT"
+
+      - name: "Rodar a esteira e conferir as invariantes"
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RESTAURANT_ID: ${{ github.event.inputs.restaurantId }}
+          DRY_RUN: ${{ github.event.inputs.dryRun }}
+        run: |
+          BODY='{}'
+          if [[ -n "$RESTAURANT_ID" ]]; then BODY=$(jq -nc --arg r "$RESTAURANT_ID" '{restaurantId:$r}'); fi
+          if [[ "$DRY_RUN" == "true" ]]; then BODY=$(echo "$BODY" | jq -c '. + {dryRun:true}'); fi
+          echo "→ POST $URL  body=$BODY"
+          set +e
+          curl --connect-timeout 20 --max-time 280 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "$BODY" \
+            -o /tmp/train.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          OK=$(jq -r '.ok' /tmp/train.json 2>/dev/null)
+          RUNTIME_TOUCHED=$(jq -r '.result.runtimeTouched' /tmp/train.json 2>/dev/null)
+          SENT=$(jq -r '.result.messagesSent' /tmp/train.json 2>/dev/null)
+          echo "← HTTP           : $HTTP"
+          echo "← ok             : $OK"
+          echo "← casos montados : $(jq -r '.result.totalCases // 0' /tmp/train.json 2>/dev/null)"
+          echo "← amostras       : $(jq -r '.result.totalRecorded // 0' /tmp/train.json 2>/dev/null)"
+          echo "← PASS/FAIL/REV  : $(jq -r '[.result.byVerdict.PASS, .result.byVerdict.FAIL, .result.byVerdict.NEEDS_REVIEW] | @csv' /tmp/train.json 2>/dev/null)"
+          echo "← por restaurante:"
+          jq -r '.result.restaurants[]? | "   \(.restaurantId): \(.recorded) amostra(s), \(.errors) erro(s) \(.note // "")"' /tmp/train.json 2>/dev/null || true
+          echo "← runtimeTouched : $RUNTIME_TOUCHED"
+          echo "← messagesSent   : $SENT"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::shadow-training non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$OK" != "true" ]]; then echo "::error::shadow-training ok=$OK"; exit 1; fi
+          if [[ "$RUNTIME_TOUCHED" != "false" ]]; then echo "::error::runtimeTouched precisa ser false"; exit 1; fi
+          if [[ "$SENT" != "0" ]]; then echo "::error::messagesSent precisa ser 0 — a esteira NUNCA envia"; exit 1; fi
+          echo "✅ Esteira concluída — evidência de origem TRAINING gravada, ninguém recebeu nada."

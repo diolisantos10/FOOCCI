@@ -162,6 +162,9 @@ export async function replayShadowFromHistory(opts: ShadowReplayOptions = {}): P
       await recordShadowOutcome({
         restaurantId: conv.restaurantId,
         conversationId: conv.id,
+        // Pergunta de gente de verdade, reprocessada depois: ninguém recebeu a
+        // resposta. Não é produção — e agora o boletim consegue dizer isso.
+        sampleOrigin: "REPLAY",
         intent: outcome.result.primaryIntent,
         reasoningMode: outcome.reasoningMode,
         engine: `${outcome.engine.provider}:${outcome.engine.model}`,

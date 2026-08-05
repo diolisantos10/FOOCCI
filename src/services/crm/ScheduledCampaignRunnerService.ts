@@ -2015,6 +2015,8 @@ export class ScheduledCampaignRunnerService {
           restaurantId,
           conversationId: `crm:${customerId}`,
           agentId: "crm",
+          // Este cliente RECEBEU o disparo por sorteio antes desta amostra existir.
+          sampleOrigin: "PRODUCTION",
           intent: r.objective ?? r.nbaAction ?? "crm-outbound",
           reasoningMode: r.reasoningMode ?? "FALLBACK",
           engine: "crm-agent",
@@ -2086,6 +2088,7 @@ export class ScheduledCampaignRunnerService {
         restaurantId,
         conversationId: `crm:${customerId}`,
         agentId:        rotulo,
+        sampleOrigin:   "PRODUCTION", // julga a peça de um disparo que saiu de verdade
         intent:         auditoria.nota.aprovado ? "aprovada" : (auditoria.nota.motivos[0] ?? "reprovada"),
         reasoningMode:  "DETERMINISTIC",
         engine:         "oficina-critic",

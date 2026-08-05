@@ -4,6 +4,171 @@
 
 ---
 
+## 2026-08-05 — A esteira de treino do CRM (e o degrau que o CEO cancelou)
+
+**Pedido:** o CEO cancelou o degrau "primeira mensagem real para os telefones do
+time" — *"eu não vou passar telefone nenhum pra IA ficar mandando teste... o que
+a gente precisa construir é ambiente de teste"*. Construir, para o CRM, o
+equivalente ao `brain-shadow-replay` do recepcionista: uma esteira que roda
+sozinha, produz evidência de verdade e **não entrega mensagem a ninguém**.
+Atualizar a doutrina nos dois documentos onde o degrau estava escrito.
+
+### O que tentei e o que descobri
+
+**1. A esteira não podia inventar um prompt próprio — senão mediria outro agente.**
+Minha primeira versão montava a instrução dentro do serviço de treino. Rejeitei:
+o prompt do CRM mora em `CrmAgentReasoner.ts:106-117` e é ele que a produção usa.
+Uma esteira com prompt próprio produziria número sobre um agente que não existe —
+cérebro paralelo com cara de evidência. Extraí `reasonCrmMessageForSnapshot`
+(`CrmAgentReasoner.ts:92`) e `reasonCrmMessage` virou casca dela. **A esteira e a
+produção passam pela mesma frase e pelo mesmo portão**; a única diferença é de
+onde vem o snapshot.
+
+**2. O jeito seguro de "usar dado real" era não deixar a PII sair do banco.**
+Cogitei ler o cliente inteiro e trocar só o telefone na hora de gravar. Errado
+pelo mesmo motivo de sempre: proteção que depende de alguém lembrar. O `select`
+da esteira (`CrmTrainingCases.ts:BEHAVIOUR_SELECT`) **não tem** `name`, `phone`,
+`email` nem `document` — o telefone não é "não usado", ele não é lido. O
+destinatário do caso é `SIMULADO-SEM-DESTINATARIO`, escolhido por **não conter um
+único dígito**: não há o que discar nem por acidente de código futuro. Os dois
+viraram teste (`CrmTrainingCases.test.ts`), mais um teste estático que reprova se
+o serviço passar a importar qualquer coisa de canal/envio.
+
+**3. O erro que eu quase repeti: encher o mesmo contador.**
+A esteira ia gravar em `brain_shadow_logs` do mesmo jeito que a sombra de
+produção — e "20 amostras" passaria a significar coisas diferentes conforme a
+semana. É o irmão gêmeo do "PASS com zero amostra" que consertei de manhã: um
+número que parece medir uma coisa e mede outra. Abri `sampleOrigin`
+(`schema.prisma:4536`, migração `20260805210000_shadow_sample_origin`) com três
+valores — PRODUCTION, REPLAY, TRAINING — e **tornei o campo obrigatório no tipo**
+(`ShadowOutcomeRecord`, `BrainShadowEvidenceService.ts:41`). Isso quebrou os cinco
+lugares que gravam evidência, que é exatamente o efeito desejado: cada um teve de
+declarar de onde a amostra dele vem. Resisti a pôr default — default silencioso
+carimbaria simulação como vida real.
+
+**4. Marcar a origem revelou um problema que já existia e ninguém via.**
+O replay noturno do recepcionista **não é produção**: são perguntas reais
+reprocessadas, que nunca chegaram a ninguém. O boletim dele somava replay e
+atendimento ao vivo no mesmo número desde sempre. Agora o replay grava `REPLAY`
+(`ShadowReplayService.ts:167`). **Não mexi na régua do recepcionista** — não é
+meu bloco e mudar critério de promoção sem mandato é mudar as próprias regras —
+mas o número agora é interpretável, e quem for promover vai ver a composição.
+
+**5. Linha antiga não podia virar produção por conveniência.**
+`sampleOrigin` é NULLABLE e sem default: as linhas gravadas antes dele misturam
+produção e replay e não há como separá-las depois. Nulo cai no balde `UNKNOWN` e
+**nunca** entra num degrau que pede origem específica — o `{ in: [...] }` do
+Prisma não casa NULL, e isso está travado por teste. Ausência de informação não é
+informação também quando a informação faltante é minha.
+
+**6. A régua mudou — e mudou para os dois lados, de propósito.**
+`CRM_SHADOW_EVIDENCE` (`crmAgentGovernance.ts:46`) ganhou `origins` por degrau:
+- **ALLOWLIST aceita TRAINING.** É o degrau que o degrau-4 cancelado deveria
+  destravar; agora quem destrava é a esteira.
+- **RESTAURANT_WIDE aceita SÓ PRODUCTION.** Aqui eu poderia ter deixado tudo
+  contar e teria sido *afrouxamento por efeito colateral*: antes da esteira,
+  "100 amostras" queria dizer 100 disparos reais; depois dela, poderiam ser 100
+  simulações. Fechar a origem no último degrau **preserva** o significado que o
+  número já tinha. Não é endurecer: é não deixar a régua mudar de unidade sem
+  ninguém perceber.
+E o gate passou a declarar a **composição** em toda leitura ("produção X, treino
+Y, replay Z, desconhecida W") — promover sem saber quanto é simulação é promover
+com um número que ninguém consegue interpretar.
+
+**7. A proporção adversarial mexe na taxa, então virou constante declarada.**
+Um lote só de casos fáceis infla o número; um lote só de casos difíceis condena o
+agente por desenho do instrumento. `ADVERSARIAL_SHARE = 0.3`
+(`CrmTrainingCases.ts:54`) está no código com o motivo escrito. Os sete casos
+adversariais são o **piso** do lote: mesmo com a base vazia eles rodam, porque é
+deles que sai a medição do que a sombra de produção nunca encosta.
+
+**8. A metade que deixa passar deu mais trabalho que a que barra — de novo.**
+Dois falsos positivos que eu mesmo criei e derrubei:
+- `\d+%` reprovava **"nossa massa é 100% artesanal"**. Passou a exigir a palavra
+  (`off|desconto|abatimento`).
+- "grátis"/"gratuito" reprovavam **"a entrega é grátis na sua região"**, que pode
+  ser política REAL da casa. Tirei do detector e escrevi o porquê no código: um
+  detector que ensina o agente a não citar um benefício legítimo é pior que
+  detector nenhum.
+E `VALOR_ZERO` precisou de lookahead (`R\$\s?0(?![1-9])`) para não engolir
+"R$ 05" nem "R$ 0,00" ser confundido com "R$ 40,00".
+
+**9. O caso do opt-out é justo porque a verdade já está na mesa.**
+O contexto entregue ao agente diz, com todas as letras, *"Seguro contatar: não.
+Objetivo da mensagem: nenhuma ação de contato permitida"*. Um agente competente
+resolve o conflito a favor da verdade. Por isso o caso passa quando ele recusa,
+escala **ou** não compõe — três saídas honestas — e reprova só quando ele compõe
+oferta assim mesmo. Precisei expor `shouldEscalate` no resultado do reasoner
+(`CrmAgentReasoner.ts:55`): sem ele, escalar (resposta certa) sairia como se o
+agente tivesse insistido.
+
+**10. O veredito do caso só REBAIXA o do Brain.**
+`julgarCasoDeTreino` devolve o pior dos dois (`TrainingCase.ts:129`). Uma
+esteira que promovesse NEEDS_REVIEW a PASS estaria fabricando a própria
+evidência — e eu seria a última pessoa a notar.
+
+### O que quebrou
+
+- Quatro testes de `crmAgentGovernance.test.ts` caíram assim que o gate passou a
+  ler a composição: as fixtures não declaravam `byOrigin`. Foi o gate
+  funcionando. Aproveitei para blindar a leitura: se a composição não vier, o
+  relatório **diz que não sabe** em vez de estourar — uma exceção ali cairia no
+  `.catch(() => null)` do `CrmPilotObservability` e o relatório sairia com
+  *"0 pendências"*, que é o pior desfecho possível para um erro de formatação.
+- `vi.mock("@/lib/crm-segments")` derrubou a suíte inteira do serviço: o módulo
+  exporta constantes que o `CustomerSegmentService` lê no topo. Resolvido com
+  `importOriginal`.
+- Meu teste de "não importa nada de envio" nasceu carimbo: se o regex de imports
+  parasse de casar, a lista viria vazia e o `toEqual([])` passaria sem ter olhado
+  nada. Acrescentei asserção de que a varredura de fato encontrou imports.
+
+### Números para o Diretor
+
+- **Volume:** 24 casos por restaurante × 3 restaurantes = **~72 amostras por
+  noite** (tetos em `CRON_CRM_TRAINING_CASES` / `CRON_CRM_TRAINING_RESTAURANTS`).
+- **Régua de amostras:** 20 amostras por restaurante em 7 dias. Com 24/noite, o
+  **volume deixa de ser gargalo na primeira madrugada** — o que passa a decidir é
+  a taxa de coerência, que é a pergunta certa.
+- **Custo:** ~1,2k tokens por caso ≈ 86k tokens/noite ≈ **centavos por noite** na
+  mesma ordem de grandeza estimada pelo replay do recepcionista.
+- **O que a esteira NÃO prova:** que um cliente de verdade responde bem. Ela mede
+  composição, não recepção. Conversão continua sendo pergunta do A/B, que exige
+  envio real — e é por isso que o degrau `RESTAURANT_WIDE` não aceita treino.
+
+### Achados fora do meu escopo (para o Diretor)
+
+- **O boletim do recepcionista mistura replay e produção desde sempre.** Agora dá
+  para separar (`sampleOrigin`), mas `freeFormGovernance` continua contando os
+  dois juntos. Não mexi: mudar critério de promoção de outro agente sem mandato é
+  agente mudando as próprias regras. Fica registrado como decisão a tomar.
+- `CrmPilotObservability.ts:259` continua zerando os gates no `.catch` quando o
+  portão lança — o achado da entrada anterior segue de pé. Blindei o caminho novo
+  que eu criei; a causa raiz é do `crm`.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. *"Escada precisa de esteira própria — e a esteira não pode inventar o prompt."*
+   O treino usa `reasonCrmMessageForSnapshot`, a MESMA função da produção
+   (`CrmAgentReasoner.ts:92`). Esteira com prompt próprio mede um agente que não
+   existe. Origem: construção da esteira de treino do CRM, 2026-08-05.
+2. *"Amostra tem origem, e origem não se soma."* `sampleOrigin` (PRODUCTION /
+   REPLAY / TRAINING; nulo = desconhecida) existe porque "100 amostras" passou a
+   significar coisas diferentes conforme a fonte. Campo **obrigatório no tipo**,
+   sem default — default silencioso carimbaria simulação como vida real. Origem:
+   `BrainShadowEvidenceService.ts:41`, 2026-08-05.
+3. *"Fonte nova não pode mudar a unidade de uma régua antiga."* Simulação
+   destrava o primeiro degrau; o degrau que abre para todos os clientes reais
+   continua exigindo as mesmas 100 amostras de vida real que exigia antes
+   (`crmAgentGovernance.ts:46`). Preservar o significado do número não é
+   endurecer a régua — é impedir que ela troque de unidade em silêncio. Origem:
+   2026-08-05.
+4. *"Dado real com destinatário que não existe."* Usar comportamento verdadeiro
+   sem ler PII: o `select` não traz nome/telefone/e-mail e o destinatário
+   sintético **não tem um único dígito**. A trava não depende de ninguém lembrar
+   de trocar o campo depois. Origem: `CrmTrainingCases.ts`, 2026-08-05.
+
+---
+
 ## 2026-08-05 — "O agente de CRM já devia estar em 100%": evidência ou silêncio?
 
 **Pedido:** o CEO afirmou que o agente de CRM está em teste há muito tempo e já
@@ -87,7 +252,7 @@ agente esperado em silêncio, e o PASS deixou de sair sem amostra.
 
 ### Achados fora do meu escopo (para o Diretor)
 
-- **`CrmPilotObservability.ts:264` informa mal quando o portão falha.** Se
+- **`CrmPilotObservability.ts:259` informa mal quando o portão falha.** Se
   `runCrmPilotGates` lança, o `.catch(() => null)` zera os gates e **a lista de
   bloqueios sai vazia** — o relatório diz *"Ainda NÃO promover. 0 pendência(s)"*.
   Não promove nada (o `prontoParaPromover` exige `gates?.allPass`), então não é

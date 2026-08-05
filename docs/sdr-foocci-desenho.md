@@ -87,7 +87,27 @@ finalidade (`politica-de-privacidade/page.tsx:83`). O que falta é **prova e fre
   consentimento), cada trava com as **duas metades** de teste.
 - **Degrau 3 (dias):** sombra com leads reais, 20 mensagens / 70% coerência. O
   CEO lê uma amostra e responde: *"você mandaria essa mensagem com seu nome?"*
-- **Degrau 4:** primeira mensagem real — para o próprio time.
+- **Degrau 4 — ❌ CANCELADO em 05/08/2026 por decisão do CEO.** Era *"primeira
+  mensagem real — para o próprio time"*. **Substituído por esteira de treino.**
+  Motivo, textual: *"eu não vou passar telefone nenhum pra IA ficar mandando
+  teste; ele precisa adquirir conhecimento pra trabalhar — o que a gente precisa
+  construir é ambiente de teste"*. Feedback humano artesanal **não escala e não
+  chega**: o degrau ficou parado desde 03/08 esperando uma lista de telefones que
+  nunca veio, e ninguém tem tempo de ler mensagem de IA no celular e dar nota.
+  - **O que entra no lugar:** uma esteira que roda sozinha de madrugada, monta
+    casos a partir de dado REAL com **destinatário sintético** (nunca um
+    telefone), pede ao agente que componha, julga com portão determinístico e
+    grava a amostra com origem `TRAINING`. A referência construída é a do CRM:
+    `src/services/crm/training/CrmShadowTrainingService.ts` +
+    `.github/workflows/crm-shadow-training.yml`.
+  - **A troca vale igual para o SDR quando ele existir.** Nada de "manda pro meu
+    celular pra eu ver": o SDR nasce com esteira, no mesmo molde.
+  - **O que NÃO muda:** o agente continua sem falar com lead real enquanto não
+    houver evidência suficiente. Mudou de onde a evidência vem, não a régua.
+  - **A trava contra afrouxar:** amostra de esteira é contada **separada** da de
+    produção (`sampleOrigin` em `brain_shadow_logs`). Simulação destrava o
+    primeiro degrau; o degrau que abre para todo mundo continua exigindo vida
+    real (`crmAgentGovernance.ts`, `CRM_SHADOW_EVIDENCE`).
 - **Degrau 5:** leads reais, com o botão de desligar testado.
 
 ## Pergunta de doutrina para o Diretor Geral

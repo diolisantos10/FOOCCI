@@ -266,9 +266,16 @@ export async function observarPiloto(restaurantId: string, desde?: Date): Promis
   if (config.paused) bloqueios.push("O piloto está PAUSADO (rollback ativo). Nada do agente sai enquanto isso.");
   if (gates && !gates.gatePass)      bloqueios.push(`Portão de qualidade reprovado: ${gates.gateReason}`);
   if (gates && !gates.shadowEvidence) {
+    // O texto diz DE ONDE a amostra pode vir neste degrau. Antes dizia sempre
+    // "deixe o shadow colher mais disparos reais", o que virou mentira quando o
+    // primeiro degrau passou a ser alimentado pela esteira de treino (05/08).
+    const contando = gates.shadowOriginsCounted.join("+");
+    const comoDestravar = gates.shadowOriginsCounted.includes("TRAINING")
+      ? "A esteira de treino noturna alimenta este degrau — ela roda sozinha."
+      : "Este degrau só conta amostra de disparo REAL: treino não vale aqui.";
     bloqueios.push(
-      `Evidência de sombra insuficiente: ${gates.shadowSamples} amostra(s), ` +
-      `${(gates.shadowPassRate * 100).toFixed(0)}% de coerência. Deixe o shadow colher mais disparos reais.`,
+      `Evidência de sombra insuficiente: ${gates.shadowSamples} amostra(s) de origem ${contando}, ` +
+      `${(gates.shadowPassRate * 100).toFixed(0)}% de coerência. ${comoDestravar}`,
     );
   }
 

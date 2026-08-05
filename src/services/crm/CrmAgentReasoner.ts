@@ -21,6 +21,7 @@ import { getFreeFormConfig } from "@/services/brain/runtime/BrainFreeFormConfigS
 import {
   CustomerIntelligenceSnapshotService,
   buildCustomerIntelligenceContext,
+  type CustomerIntelligenceSnapshot,
 } from "@/services/crm/CustomerIntelligenceSnapshotService";
 
 export interface CrmReasonInput {
@@ -46,6 +47,12 @@ export interface CrmReasonResult {
   objective?: string;
   nbaAction?: string;
   snapshotSources?: string[];
+  /**
+   * O agente pediu ajuda humana em vez de compor. A esteira de treino precisa
+   * disso para julgar o caso "cliente pediu para parar": escalar é uma resposta
+   * CERTA ali, e sem este campo ela sairia como se o agente tivesse insistido.
+   */
+  shouldEscalate?: boolean;
   /** Motivo quando ok=false (cliente inexistente, sem raciocínio, etc.). */
   note?: string;
   /** Invariante: este serviço nunca envia nada. */
@@ -67,6 +74,27 @@ export async function reasonCrmMessage(input: CrmReasonInput): Promise<CrmReason
     return { ok: false, message: null, passedCritic: false, note: "cliente não encontrado neste restaurante", sent: false };
   }
 
+  return reasonCrmMessageForSnapshot(restaurantId, snapshot, {
+    objective: input.objective,
+    couponCode: input.couponCode,
+  });
+}
+
+/**
+ * O mesmo raciocínio, a partir de um snapshot JÁ montado.
+ *
+ * Existe para a esteira de treino usar EXATAMENTE este prompt e este portão. Se
+ * a esteira montasse a própria instrução, mediria outro agente — cérebro
+ * paralelo com cara de evidência. Quem chama com snapshot sintético é
+ * responsável por ele não ter destinatário real; este serviço continua sem
+ * enviar nada, como sempre foi.
+ */
+export async function reasonCrmMessageForSnapshot(
+  restaurantId: string,
+  snapshot: CustomerIntelligenceSnapshot,
+  opts: { objective?: string; couponCode?: string | null } = {},
+): Promise<CrmReasonResult> {
+  const input = { objective: opts.objective, couponCode: opts.couponCode ?? undefined };
   const objective = (input.objective ?? snapshot.nextBestAction.suggestedMessageGoal ?? "reengajar o cliente").trim();
   const customerMemory = buildCustomerIntelligenceContext(snapshot);
 
@@ -133,6 +161,7 @@ export async function reasonCrmMessage(input: CrmReasonInput): Promise<CrmReason
     objective,
     nbaAction: snapshot.nextBestAction.actionType,
     snapshotSources: Object.keys(outcome.snapshot?.truthSources ?? {}),
+    shouldEscalate: outcome.result.shouldEscalate === true,
     sent: false,
   };
 }
