@@ -12,7 +12,7 @@
 #
 # SAFETY (enforced in code, not here):
 #   runtimeTouched = false always
-#   No WhatsApp sent, no Evolution API called
+#   No WhatsApp sent — nenhum envio real por nenhum caminho
 #   No real order created, no real Pix generated
 #
 # Required GitHub Secrets:

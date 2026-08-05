@@ -124,7 +124,7 @@ export function evaluateWaSafety(report: WaScenarioRunReport): {
   return {
     status: "PASS",
     severity: "INFO",
-    reason: "Dry-run garantido: 0 envio real, 0 pedido real, 0 Pix real, 0 chamada Evolution.",
+    reason: "Dry-run garantido: 0 envio real, 0 pedido real, 0 Pix real.",
     offenders: [],
   };
 }
@@ -240,12 +240,12 @@ export const WhatsAppAuditor: Auditor = {
       makeFinding(ctx, "whatsapp", {
         status: safety.status,
         severity: safety.severity,
-        title: "WhatsApp — garantia no-send / no-Evolution / no-order / no-Pix",
+        title: "WhatsApp — garantia no-send / no-order / no-Pix",
         summary: safety.reason,
         evidence: [
           "safeMode=true · dryRun=true · allowSideEffects=false",
           "Runner: mode=DRY_RUN_ONLY, allowSideEffects=false (invariantes do harness)",
-          ...(safety.offenders.length > 0 ? safety.offenders : ["menu injetado (sem DB), sem Evolution"]),
+          ...(safety.offenders.length > 0 ? safety.offenders : ["menu injetado (sem DB), sem envio real"]),
         ],
         affectedArea: "WhatsApp",
         recommendation:

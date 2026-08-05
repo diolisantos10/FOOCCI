@@ -2,7 +2,7 @@
 # WhatsApp Text Order — SIMULATOR (hermetic full-journey proof, manual)
 #
 # Runs the self-contained simulator (synthetic catalog/payment/address) over the
-# canonical scenarios and proves PASS/p0=0 with no Evolution / no real order /
+# canonical scenarios and proves PASS/p0=0 with no WhatsApp send / no real order /
 # no real Pix / runtimeTouched=false. Lets the team prove the architecture in
 # production WITHOUT a phone. Manual only. Uses CRON_SECRET — NOT ADMIN_SECRET.
 # ─────────────────────────────────────────────────────────────────────────────

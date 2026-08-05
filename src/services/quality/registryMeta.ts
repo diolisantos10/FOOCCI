@@ -62,7 +62,7 @@ export const AUDITOR_META = {
     area: "WhatsApp",
     group: "WhatsApp",
     mission:
-      "Auditar com checks reais (DRY_RUN_ONLY): roteamento, parsing de pedido por texto, multi-turn, handoff, pix_safety e prevenção de vazamento de comando interno/Build OS — nunca envia WhatsApp nem chama Evolution real.",
+      "Auditar com checks reais (DRY_RUN_ONLY): roteamento, parsing de pedido por texto, multi-turn, handoff, pix_safety e prevenção de vazamento de comando interno/Build OS — nunca envia WhatsApp real por nenhum caminho.",
     connection: "ACTIVE",
     linkedLabs: [
       { label: "WhatsApp Routing Lab", href: "/admin/diagnostics/whatsapp-routing-test", exists: true },

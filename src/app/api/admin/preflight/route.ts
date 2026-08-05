@@ -108,15 +108,18 @@ function checkEnv(): CheckResult[] {
     "Configurado", "ENCRYPTION_KEY ausente — credenciais de integração não podem ser criptografadas"
   ));
 
-  // Evolution (optional — only warn if absent)
-  const evoPresent = !!(process.env.EVOLUTION_DEFAULT_URL || process.env.EVOLUTION_BASE_URL);
+  // Credenciais do aplicativo Meta — é por ele que TODO WhatsApp sai desde
+  // 04/08/2026. Substituiu a checagem de EVOLUTION_DEFAULT_URL/EVOLUTION_BASE_URL,
+  // que continuava lendo variáveis de um provedor que não existe mais: o
+  // preflight dizia "PASS" por achar uma URL órfã no ambiente.
+  const metaAppPresent = !!(process.env.META_APP_ID && process.env.META_APP_SECRET);
   checks.push({
-    key:      "env_evolution",
-    label:    "Evolution API (env base URL)",
-    status:   evoPresent ? "PASS" : "WARNING",
-    message:  evoPresent
-      ? "URL base configurada"
-      : "Nenhuma URL base do Evolution configurada — WhatsApp depende de config por restaurante",
+    key:      "env_meta_app",
+    label:    "Aplicativo Meta (App ID + Secret)",
+    status:   metaAppPresent ? "PASS" : "WARNING",
+    message:  metaAppPresent
+      ? "Credenciais do aplicativo configuradas"
+      : "META_APP_ID/META_APP_SECRET ausentes no ambiente — podem estar no banco (MetaAppCredentialsService); confira antes de concluir que falta",
     critical: false,
   });
 
