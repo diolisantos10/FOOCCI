@@ -124,7 +124,7 @@ describe("(5–9) segurança do diagnóstico", () => {
     expect(db.order.create).not.toHaveBeenCalled();
     expect(db.payment.create).not.toHaveBeenCalled();
     expect(r.runtimeTouched).toBe(false);
-    expect(r.noEvolution).toBe(true);
+    expect(r.noWhatsAppSend).toBe(true);
     expect(r.noRealOrder).toBe(true);
     expect(r.noRealPix).toBe(true);
   });

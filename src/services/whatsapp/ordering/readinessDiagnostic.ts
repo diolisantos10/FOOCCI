@@ -38,7 +38,7 @@ export interface ReadinessResult {
     total: number;
     p0: number;
     noSend: boolean;
-    noEvolution: boolean;
+    noWhatsAppSend: boolean;
     noOrder: boolean;
     noPix: boolean;
   };
@@ -49,7 +49,7 @@ export interface ReadinessResult {
 function summariseFlow(flow: TextOrderDiagnosticResult): ReadinessResult["flowDiagnostic"] {
   return {
     status: flow.status, passed: flow.passed, total: flow.total, p0: flow.p0,
-    noSend: flow.noSend, noEvolution: flow.noEvolution, noOrder: flow.noOrder, noPix: flow.noPix,
+    noSend: flow.noSend, noWhatsAppSend: flow.noWhatsAppSend, noOrder: flow.noOrder, noPix: flow.noPix,
   };
 }
 

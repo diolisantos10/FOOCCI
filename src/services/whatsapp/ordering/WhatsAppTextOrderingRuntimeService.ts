@@ -238,7 +238,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
       const { sendWhatsAppText } = await import("@/services/whatsapp/activeProvider");
       const { prisma } = await import("@/lib/prisma");
 
-      // Route through the restaurant's ACTIVE provider (Meta official or Evolution).
+      // Canal único: a Meta homologada. Não existe caminho alternativo em erro.
       const sendResult = await sendWhatsAppText(input.restaurantId, input.phone, result.suggestedReply);
       if (sendResult.ok) {
         const now = new Date();

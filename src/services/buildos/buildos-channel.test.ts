@@ -1,21 +1,26 @@
 /**
  * Build OS WhatsApp Master channel routing — pure decision logic.
  *
- * Guarantees a restaurant Evolution instance never acts as the Build OS command
- * channel unless an explicit legacy fallback is enabled, and that the configured
- * Master instance is the only one that routes Build OS by default.
+ * Garante que o número de um RESTAURANTE nunca age como canal de comando do Build
+ * OS — salvo fallback legado explicitamente ligado — e que o canal Master
+ * configurado é o único que roteia Build OS por padrão.
+ *
+ * A identidade do canal é o `phone_number_id` da Meta desde 04/08/2026 (antes era
+ * o nome de uma instância Evolution). A decisão é a mesma; o que mudou é a chave.
  */
 
 import { describe, it, expect } from "vitest";
 import { decideBuildOsChannel, type BuildOsChannelConfig } from "./BuildOSConfigService";
 
-const MASTER = "futi-admin";
-const RESTAURANT = "sushicazza";
+/** phone_number_id do número Master (dedicado à equipe). */
+const MASTER = "555000111222333";
+/** phone_number_id de um restaurante. */
+const RESTAURANT = "999888777666555";
 
 function cfg(over: Partial<BuildOsChannelConfig> = {}): BuildOsChannelConfig {
   return {
     configured: true,
-    instanceName: MASTER,
+    channelId: MASTER,
     enabled: true,
     legacyFallbackEnabled: false,
     ...over,
@@ -23,28 +28,28 @@ function cfg(over: Partial<BuildOsChannelConfig> = {}): BuildOsChannelConfig {
 }
 
 describe("decideBuildOsChannel", () => {
-  it("routes Build OS for the configured Master instance", () => {
+  it("routes Build OS for the configured Master channel", () => {
     const d = decideBuildOsChannel(cfg(), MASTER);
     expect(d.isBuildOsChannel).toBe(true);
     expect(d.viaLegacyFallback).toBe(false);
     expect(d.masterConfigured).toBe(true);
   });
 
-  it("does NOT route Build OS for a restaurant instance when a Master is configured", () => {
+  it("does NOT route Build OS for a restaurant number when a Master is configured", () => {
     const d = decideBuildOsChannel(cfg(), RESTAURANT);
     expect(d.isBuildOsChannel).toBe(false);
     expect(d.masterConfigured).toBe(true);
   });
 
-  it("does NOT route Build OS for any instance when no Master configured and no legacy fallback", () => {
-    const d = decideBuildOsChannel(cfg({ configured: false, instanceName: null, enabled: false }), RESTAURANT);
+  it("does NOT route Build OS for any number when no Master configured and no legacy fallback", () => {
+    const d = decideBuildOsChannel(cfg({ configured: false, channelId: null, enabled: false }), RESTAURANT);
     expect(d.isBuildOsChannel).toBe(false);
     expect(d.masterConfigured).toBe(false);
   });
 
   it("routes via legacy fallback ONLY when no Master configured AND fallback explicitly on", () => {
     const d = decideBuildOsChannel(
-      cfg({ configured: false, instanceName: null, enabled: false, legacyFallbackEnabled: true }),
+      cfg({ configured: false, channelId: null, enabled: false, legacyFallbackEnabled: true }),
       RESTAURANT,
     );
     expect(d.isBuildOsChannel).toBe(true);
@@ -57,27 +62,27 @@ describe("decideBuildOsChannel", () => {
     expect(d.viaLegacyFallback).toBe(false);
   });
 
-  it("does NOT route when the Master instance is configured but disabled", () => {
+  it("does NOT route when the Master channel is configured but disabled", () => {
     const d = decideBuildOsChannel(cfg({ configured: false, enabled: false }), MASTER);
     expect(d.isBuildOsChannel).toBe(false);
   });
 
-  it("ignores empty/unknown instance names", () => {
+  it("ignores empty/unknown channel ids", () => {
     expect(decideBuildOsChannel(cfg(), null).isBuildOsChannel).toBe(false);
     expect(decideBuildOsChannel(cfg(), "").isBuildOsChannel).toBe(false);
-    expect(decideBuildOsChannel(cfg(), "some-other").isBuildOsChannel).toBe(false);
+    expect(decideBuildOsChannel(cfg(), "111222333444555").isBuildOsChannel).toBe(false);
   });
 
   // isAdminInstance drives the processor's "Build OS only, no restaurant flow" path.
-  it("flags the Admin instance (system channel), NOT restaurant or legacy fallback", () => {
-    // Admin/system instance → isAdminInstance true (routes Build OS, no restaurant)
+  it("flags the Admin channel (system), NOT restaurant or legacy fallback", () => {
+    // Canal Master do sistema → isAdminInstance true (roteia Build OS, sem restaurante)
     expect(decideBuildOsChannel(cfg(), MASTER).isAdminInstance).toBe(true);
-    // Restaurant instance with Master configured → not admin, not Build OS
+    // Número de restaurante com Master configurado → nem admin, nem Build OS
     expect(decideBuildOsChannel(cfg(), RESTAURANT).isAdminInstance).toBe(false);
     expect(decideBuildOsChannel(cfg(), RESTAURANT).isBuildOsChannel).toBe(false);
     // Legacy fallback routes Build OS but is NOT the admin instance
     const legacy = decideBuildOsChannel(
-      cfg({ configured: false, instanceName: null, enabled: false, legacyFallbackEnabled: true }),
+      cfg({ configured: false, channelId: null, enabled: false, legacyFallbackEnabled: true }),
       RESTAURANT,
     );
     expect(legacy.isBuildOsChannel).toBe(true);
@@ -85,23 +90,7 @@ describe("decideBuildOsChannel", () => {
   });
 });
 
-import { normalizeBaseUrl } from "./AdminWhatsAppConfigService";
-
-describe("normalizeBaseUrl", () => {
-  it("prefixes https:// when the protocol is missing (the paste error)", () => {
-    expect(normalizeBaseUrl("evolution-api-production-636c.up.railway.app"))
-      .toBe("https://evolution-api-production-636c.up.railway.app");
-  });
-  it("keeps an existing http/https protocol", () => {
-    expect(normalizeBaseUrl("http://evo.example.com")).toBe("http://evo.example.com");
-    expect(normalizeBaseUrl("https://evo.example.com")).toBe("https://evo.example.com");
-  });
-  it("strips trailing slashes", () => {
-    expect(normalizeBaseUrl("https://evo.example.com/")).toBe("https://evo.example.com");
-  });
-  it("returns null for empty/invalid", () => {
-    expect(normalizeBaseUrl("")).toBeNull();
-    expect(normalizeBaseUrl("   ")).toBeNull();
-    expect(normalizeBaseUrl("not a url")).toBeNull();
-  });
-});
+// A suíte `normalizeBaseUrl` que existia aqui testava a normalização da baseUrl
+// do servidor Evolution (o erro clássico de colar a URL sem o protocolo). Saiu
+// junto com o provisionamento de instância: a Meta não tem servidor próprio nem
+// baseUrl para o lojista digitar.

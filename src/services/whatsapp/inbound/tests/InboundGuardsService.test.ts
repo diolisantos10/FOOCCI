@@ -107,10 +107,19 @@ describe("InboundGuardsService — paridade que faltava no webhook da Meta", () 
     expect(svc.applyInboundOptOut).not.toHaveBeenCalled();
   });
 
-  it("conversa sem cliente de CRM não quebra o opt-out", async () => {
+  // Este caso já certificou um furo de LGPD como se fosse comportamento correto:
+  // ele provava que sem `customerId` o opt-out é pulado — e era exatamente isso
+  // que fazia "PARAR" não funcionar para quem tinha conversa antiga sem cliente
+  // vinculado. O buraco foi fechado na origem (o webhook agora cura a conversa
+  // antes de chamar as guardas), então aqui o que se trava é o contrato honesto:
+  // sem cliente, o turno NÃO pode ser tratado como "opt-out verificado".
+  it("conversa sem cliente de CRM não quebra a guarda — mas registra que não deu para aplicar opt-out", async () => {
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {});
     const r = await InboundGuardsService.apply({ ...ENTRADA, customerId: null });
     expect(svc.applyInboundOptOut).not.toHaveBeenCalled();
     expect(r.aiMayRespond).toBe(true);
+    expect(erro).toHaveBeenCalled();
+    erro.mockRestore();
   });
 
   it("conversa inexistente → nega", async () => {

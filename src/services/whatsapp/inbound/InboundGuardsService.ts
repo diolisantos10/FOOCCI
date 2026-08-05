@@ -110,6 +110,16 @@ export const InboundGuardsService = {
           input.customerId,
           input.messageText,
         ).catch(() => false);
+      } else if (input.isTextMessage && !input.customerId) {
+        // Texto sem cliente vinculado: não dá para marcar quem pediu para sair.
+        // Isso já foi um furo silencioso de LGPD — o webhook agora cura a
+        // conversa antes de chegar aqui, então este ramo é a última rede. Ele
+        // GRITA em vez de passar batido: alerta que não carrega o caso concreto
+        // é ruído que ninguém investiga (guardrail 6).
+        console.error("[InboundGuards] mensagem de texto sem customerId — opt-out NÃO pôde ser aplicado neste turno", {
+          conversationId: input.conversationId,
+          restaurantId:   input.restaurantId,
+        });
       }
 
       // 3 · Resgate de carrinho — quem responde a essa mensagem quer gente, não IA.

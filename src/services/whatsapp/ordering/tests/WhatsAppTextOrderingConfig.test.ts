@@ -57,7 +57,7 @@ function setEnv(vars: Record<string, string | undefined>) {
 }
 
 const REST = "rest-sushi-cazza";
-const EVOLUTION_PHONE = "+5511999990000";
+const WEBHOOK_PHONE = "+5511999990000";
 
 /** Builds a fake DB row as Prisma would return it. */
 function dbRow(over: Partial<{
@@ -89,9 +89,9 @@ afterEach(() => clearEnv());
 describe("A — restaurant config disabled falls back to old WhatsApp Agent", () => {
   it("enabled=false → shouldUseTextOrdering=false", async () => {
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(
-      dbRow({ enabled: false, mode: "ALLOWLIST_REPLY_ONLY", allowlistedPhones: [EVOLUTION_PHONE] }),
+      dbRow({ enabled: false, mode: "ALLOWLIST_REPLY_ONLY", allowlistedPhones: [WEBHOOK_PHONE] }),
     );
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.shouldUseTextOrdering).toBe(false);
     expect(d.source).toBe("db");
     expect(d.declineReason).toContain("desativado");
@@ -106,7 +106,7 @@ describe("B — global env kill switch (ENABLED=false) overrides DB enabled=true
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(
       dbRow({ enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE" }),
     );
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.shouldUseTextOrdering).toBe(false);
     expect(d.globalKillSwitch).toBe(true);
     expect(d.declineReason).toContain("kill switch global");
@@ -120,7 +120,7 @@ describe("C — DB PHONE_ALLOWLIST routes an allowed phone", () => {
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(
       dbRow({ enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "PHONE_ALLOWLIST", allowlistedPhones: ["11999990000"] }),
     );
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.shouldUseTextOrdering).toBe(true);
     expect(d.declineReason).toBeNull();
     expect(d.phoneAllowlisted).toBe(true);
@@ -161,7 +161,7 @@ describe("F — paused config disables Text Ordering", () => {
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(
       dbRow({ enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE", paused: true }),
     );
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.shouldUseTextOrdering).toBe(false);
     expect(d.paused).toBe(true);
     expect(d.declineReason).toContain("Pausado");
@@ -172,7 +172,7 @@ describe("F — paused config disables Text Ordering", () => {
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(
       dbRow({ enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE" }),
     );
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.shouldUseTextOrdering).toBe(false);
     expect(d.declineReason).toContain("globalmente");
   });
@@ -237,13 +237,13 @@ describe("I — preset 'meu telefone reply only' produces a safe config", () => 
     // This is exactly what the UI preset sends.
     const c = await upsertRestaurantConfig(REST, {
       enabled: true, paused: false, mode: "ALLOWLIST_REPLY_ONLY", scope: "PHONE_ALLOWLIST",
-      allowlistedPhones: [EVOLUTION_PHONE],
+      allowlistedPhones: [WEBHOOK_PHONE],
     });
     expect(c.enabled).toBe(true);
     expect(c.paused).toBe(false);
     expect(c.mode).toBe("ALLOWLIST_REPLY_ONLY"); // never FULL_TEST
     expect(c.scope).toBe("PHONE_ALLOWLIST");     // never restaurant-wide
-    expect(c.allowlistedPhones).toEqual([EVOLUTION_PHONE]);
+    expect(c.allowlistedPhones).toEqual([WEBHOOK_PHONE]);
   });
 });
 
@@ -270,7 +270,7 @@ describe("L — env fallback when no DB config", () => {
       WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: REST,
       WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES:      "11999990000",
     });
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.source).toBe("env");
     expect(d.dbConfigPresent).toBe(false);
     expect(d.shouldUseTextOrdering).toBe(true);
@@ -279,7 +279,7 @@ describe("L — env fallback when no DB config", () => {
   it("env-only with nothing set → old agent", async () => {
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(null);
     setEnv({});
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.source).toBe("env");
     expect(d.shouldUseTextOrdering).toBe(false);
   });
@@ -303,7 +303,7 @@ describe("Precedence — DB config wins over env when both present", () => {
     prismaMock.whatsAppTextOrderingConfig.findUnique.mockResolvedValue(
       dbRow({ enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE" }),
     );
-    const d = await getRoutingDecisionForRestaurant(REST, EVOLUTION_PHONE);
+    const d = await getRoutingDecisionForRestaurant(REST, WEBHOOK_PHONE);
     expect(d.source).toBe("db");
     expect(d.shouldUseTextOrdering).toBe(true);
   });

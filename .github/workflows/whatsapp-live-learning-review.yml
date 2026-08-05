@@ -62,13 +62,13 @@ jobs:
           echo "← dryRun                : $(jq -r '.dryRun' /tmp/r.json)"
           echo "← conversationsReviewed : $(jq -r '.conversationsReviewed' /tmp/r.json)"
           echo "← created/updated/skip  : $(jq -r '.created' /tmp/r.json)/$(jq -r '.updated' /tmp/r.json)/$(jq -r '.skippedAlreadyDecided' /tmp/r.json)"
-          echo "← safety                : noEvolution=$(jq -r '.safety.noEvolution' /tmp/r.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/r.json) noMessageSent=$(jq -r '.safety.noMessageSent' /tmp/r.json)"
+          echo "← safety                : noWhatsAppSend=$(jq -r '.safety.noWhatsAppSend' /tmp/r.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/r.json) noMessageSent=$(jq -r '.safety.noMessageSent' /tmp/r.json)"
           echo "── aprendizados ──"
           jq -r '.learnings[]? | "  [\(.card.severity)] \(.card.title) — \(.occurrences) conversa(s)"' /tmp/r.json
           echo "── notes ──"; jq -r '.notes[]?' /tmp/r.json
 
           if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::non-2xx ($HTTP)"; exit 1; fi
-          NE=$(jq -r '.safety.noEvolution' /tmp/r.json); NO=$(jq -r '.safety.noRealOrder' /tmp/r.json)
+          NE=$(jq -r '.safety.noWhatsAppSend' /tmp/r.json); NO=$(jq -r '.safety.noRealOrder' /tmp/r.json)
           NP=$(jq -r '.safety.noRealPix' /tmp/r.json);   NM=$(jq -r '.safety.noMessageSent' /tmp/r.json)
           if [[ "$NE" != "true" || "$NO" != "true" || "$NP" != "true" || "$NM" != "true" ]]; then echo "::error::safety violada"; exit 1; fi
           echo "✅ Live Learning Review concluído — read-only para produção, aprendizados na fila."

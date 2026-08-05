@@ -22,6 +22,20 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/business-hours", () => ({ isRestaurantOpenNow: vi.fn(async () => true) }));
 
+// Canal único (Meta). Nenhum envio acontece — só o ESTADO da conexão é consultado.
+const channel = vi.hoisted(() => ({ getConnectionStatus: vi.fn() }));
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({ WhatsAppMessagingService: channel }));
+
+// buildGlobalContext lê config + contagem do dia; aqui elas são determinísticas.
+vi.mock("@/lib/crm-safety", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/crm-safety")>();
+  return {
+    ...actual,
+    getSafetyConfig:         vi.fn(async () => ({ ...actual.DEFAULT_SAFETY_CONFIG })),
+    getTodayGlobalSendCount: vi.fn(async () => 0),
+  };
+});
+
 import {
   evaluateContactSafety,
   detectOptOutIntent,
@@ -44,7 +58,7 @@ function evalInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafe
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
     safety: { ...DEFAULT_SAFETY_CONFIG },
-    evolutionAvailable: true,
+    whatsappAvailable: true,
     globalSentToday: 0,
     restaurantOpen: true,
     isBirthday: false,
@@ -88,8 +102,8 @@ describe("evaluateContactSafety — block reasons", () => {
     expect(evaluateContactSafety(evalInput({ phone: "abc" })).reason).toBe("INVALID_PHONE_FORMAT");
   });
 
-  it("blocks when Evolution is not configured", () => {
-    expect(evaluateContactSafety(evalInput({ evolutionAvailable: false })).reason).toBe("NO_EVOLUTION_CONFIG");
+  it("blocks when the official WhatsApp channel is not connected", () => {
+    expect(evaluateContactSafety(evalInput({ whatsappAvailable: false })).reason).toBe("NO_WHATSAPP_CONFIG");
   });
 
   it("blocks when the daily global cap is reached", () => {
@@ -174,7 +188,7 @@ describe("evaluateContactSafety — block reasons", () => {
     const d = evaluateContactSafety(evalInput({
       hasOptedOut: true,
       phone: null,
-      evolutionAvailable: false,
+      whatsappAvailable: false,
       sendsWithinCooldown: 5,
     }));
     expect(d.reason).toBe("CUSTOMER_OPTED_OUT");
@@ -236,6 +250,35 @@ describe("isOutsideSendingWindow", () => {
   });
 });
 
+// ── 3b. buildGlobalContext — o canal não tem mais default otimista ─────────────
+
+describe("ContactSafetyService.buildGlobalContext — canal falha fechado", () => {
+  beforeEach(() => channel.getConnectionStatus.mockReset());
+
+  it("usa o valor informado pelo chamador sem consultar o canal", async () => {
+    const ctx = await ContactSafetyService.buildGlobalContext("r1", { whatsappAvailable: true });
+    expect(ctx.whatsappAvailable).toBe(true);
+    expect(channel.getConnectionStatus).not.toHaveBeenCalled();
+  });
+
+  it("sem informação do chamador, PERGUNTA ao canal e respeita a resposta", async () => {
+    channel.getConnectionStatus.mockResolvedValue({ provider: "META_CLOUD_API", connected: true });
+    expect((await ContactSafetyService.buildGlobalContext("r1")).whatsappAvailable).toBe(true);
+
+    channel.getConnectionStatus.mockResolvedValue({ provider: "META_CLOUD_API", connected: false });
+    expect((await ContactSafetyService.buildGlobalContext("r1")).whatsappAvailable).toBe(false);
+  });
+
+  // O caso "consulta falhou ⇒ false" é travado em CrmWhatsAppChannel.test.ts, onde
+  // mora a regra (o helper é o único ponto que decide isso).
+
+  it("o apelido legado evolutionAvailable ainda alimenta o MESMO portão de canal único", async () => {
+    const ctx = await ContactSafetyService.buildGlobalContext("r1", { evolutionAvailable: false });
+    expect(ctx.whatsappAvailable).toBe(false);
+    expect(channel.getConnectionStatus).not.toHaveBeenCalled();
+  });
+});
+
 // ── 4. DB-backed assertSendable + applyInboundOptOut ────────────────────────────
 
 describe("ContactSafetyService.assertSendable (mocked prisma)", () => {
@@ -247,7 +290,7 @@ describe("ContactSafetyService.assertSendable (mocked prisma)", () => {
 
   const ctx = {
     safety: { ...DEFAULT_SAFETY_CONFIG },
-    evolutionAvailable: true,
+    whatsappAvailable: true,
     globalSentToday: 0,
     restaurantOpen: true,
   };

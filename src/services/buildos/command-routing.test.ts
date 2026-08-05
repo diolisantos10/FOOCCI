@@ -2,9 +2,9 @@
  * Build OS — internal command routing security tests (A–F).
  *
  * Verifies that /build, /cmd, /prompt messages are NEVER echoed to customers,
- * never passed to the AI, and never forwarded via Evolution — regardless of
+ * never passed to the AI, and never forwarded to the customer — regardless of
  * whether Build OS is enabled or disabled. Pure-logic tests: no DB, no LLM,
- * no Evolution sends.
+ * no WhatsApp sends.
  *
  *   A — /build with Build OS DISABLED → isBuildCommand:true (suppressed, not echoed)
  *   B — /build with Build OS DISABLED → returns early before message persistence

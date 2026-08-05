@@ -2,7 +2,7 @@
  * MetaConfigService — secure storage/lookup for per-restaurant Meta WhatsApp
  * credentials. accessToken + webhookVerifyToken are AES-256-GCM encrypted at rest
  * (lib/crypto). The raw token is NEVER returned to the client — only masked
- * previews via getPublic(). Evolution config is untouched.
+ * previews via getPublic().
  */
 
 import { randomBytes } from "crypto";

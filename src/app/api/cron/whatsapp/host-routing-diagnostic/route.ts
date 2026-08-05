@@ -5,7 +5,7 @@
  * Order / Receptionist / human-blocked / ignored), WHY, and — when the
  * Receptionist is the host — previews and classifies the reply
  * (SAFE_MENU / LINK_CARDAPIO / HANDOFF / LOCATION / UNKNOWN). Phone is always
- * masked. Never sends WhatsApp/Evolution, never creates an order/Pix, never
+ * masked. Never sends WhatsApp, never creates an order/Pix, never
  * changes config. Auth: Authorization: Bearer {CRON_SECRET}. POST only.
  */
 

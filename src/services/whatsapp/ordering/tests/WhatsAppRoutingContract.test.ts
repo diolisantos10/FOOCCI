@@ -44,7 +44,7 @@ import { advanceSession } from "../WhatsAppOrderStateMachine";
 import type { WaMenuItem, WaPersistedSession } from "../types";
 
 const REST = "rest-sushi-cazza";
-const EVOLUTION_PHONE = "+5511999990000";
+const WEBHOOK_PHONE = "+5511999990000";
 
 const ENV_KEYS = [
   "WHATSAPP_TEXT_ORDERING_ENABLED",
@@ -77,7 +77,7 @@ function noSession() { prismaMock.whatsAppOrderingSession.findFirst.mockResolved
 /** An active ordering session exists for this phone. */
 function activeSession() {
   prismaMock.whatsAppOrderingSession.findFirst.mockResolvedValue({
-    id: "sess-1", restaurantId: REST, phone: EVOLUTION_PHONE, status: "AWAITING_CUSTOMER",
+    id: "sess-1", restaurantId: REST, phone: WEBHOOK_PHONE, status: "AWAITING_CUSTOMER",
     stage: "COLLECTING_REQUIRED_OPTIONS", selectedItems: [], unresolvedItems: [], missingQuestions: [],
     deliveryType: null, address: null, deliveryQuote: null, paymentMethod: null, paymentStatus: null,
     orderDraftId: null, orderId: null, pixPaymentId: null, mode: "ALLOWLIST_REPLY_ONLY", source: "webhook",
@@ -94,7 +94,7 @@ beforeEach(() => {
 afterEach(() => clearEnv());
 
 const route = (messageText: string) =>
-  getMessageAwareRoutingDecision({ restaurantId: REST, phone: EVOLUTION_PHONE, messageText, conversationId: "c1" });
+  getMessageAwareRoutingDecision({ restaurantId: REST, phone: WEBHOOK_PHONE, messageText, conversationId: "c1" });
 
 // ── A/B/C — greetings & questions stay with the old agent ─────────────────────
 
@@ -273,7 +273,7 @@ const MENU: WaMenuItem[] = [
 function freshSession(over: Partial<WaPersistedSession> = {}): WaPersistedSession {
   const now = new Date();
   return {
-    id: "s1", restaurantId: "r1", customerId: null, conversationId: null, phone: EVOLUTION_PHONE,
+    id: "s1", restaurantId: "r1", customerId: null, conversationId: null, phone: WEBHOOK_PHONE,
     status: "ACTIVE", stage: "IDLE", selectedItems: [], unresolvedItems: [], missingQuestions: [],
     deliveryType: null, address: null, deliveryQuote: null, paymentMethod: null, paymentStatus: null,
     orderDraftId: null, orderId: null, pixPaymentId: null, mode: "DRY_RUN_ONLY", source: "admin_test",

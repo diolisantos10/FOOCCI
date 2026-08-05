@@ -9,7 +9,7 @@
  *
  * SAFE BY DEFAULT: only engages when Text Ordering is live AND reply-capable for
  * this restaurant+phone (ALLOWLIST_REPLY_ONLY / ALLOWLIST_FULL_TEST), using the
- * same authoritative routing decision the Evolution webhook applies. When the
+ * same authoritative routing decision the live webhook applies. When the
  * engine is off (the default), it returns null and the caller keeps its current
  * behaviour. This helper NEVER creates an order or a Pix — only an empty session.
  */

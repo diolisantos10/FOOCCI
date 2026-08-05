@@ -12,9 +12,8 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { buildReprocessPlan } from "@/services/crm/crmReprocessPlanner";
-import { EVOLUTION_WEB_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { META_CLOUD_MAX_PER_RUN } from "@/services/crm/ScheduledCampaignRunnerService";
+import { isWhatsAppChannelConnected } from "@/services/crm/crmWhatsAppChannel";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const ctx = getTenantContext(req);
@@ -32,24 +31,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
     if (!campaign || campaign.restaurantId !== ctx.restaurantId) return notFound("Campaign not found");
 
-    // Instance health gate (read-only). No secret exposed.
-    const cfg = await EvolutionConfigService.getSnapshot(ctx.restaurantId).catch(() => null);
-    const instanceName = cfg?.ok ? cfg.data.instanceName : "unknown";
-    let state = "unknown";
-    let connected = false;
-    if (cfg?.ok) {
-      try {
-        const st = await EvolutionClient.getInstanceStatus(cfg.data);
-        state = st.state;
-        connected = st.state === "open";
-      } catch {
-        state = "unreachable";
-        connected = false;
-      }
-    }
+    // Portão de saúde do canal (somente leitura). Nenhum segredo exposto.
+    // Falha ao apurar conta como NÃO conectado — ausência de informação não é
+    // informação, e liberar o reprocessamento no escuro dispara contra um canal
+    // possivelmente fora do ar.
+    const connected = await isWhatsAppChannelConnected(ctx.restaurantId);
 
-    const plan = buildReprocessPlan(campaign.executions, { batchLimit: EVOLUTION_WEB_MAX_PER_RUN });
-    const nextBatchSize = Math.min(plan.nextBatch.length, EVOLUTION_WEB_MAX_PER_RUN);
+    const plan = buildReprocessPlan(campaign.executions, { batchLimit: META_CLOUD_MAX_PER_RUN });
+    const nextBatchSize = Math.min(plan.nextBatch.length, META_CLOUD_MAX_PER_RUN);
 
     // Instance must be connected to safely reprocess.
     const safeToSend = connected && plan.eligibleToReprocess > 0;
@@ -62,7 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return ok({
       campaignId:   campaign.id,
       campaignName: campaign.name,
-      instance:     { name: instanceName, state, connected },
+      instance:     { connected },
       recoverableExecutions: plan.recoverableExecutions,
       distinctRecipients:    plan.distinctRecipients,
       duplicatesRemoved:     plan.duplicatesRemoved,

@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     configEligible: decision.shouldUseTextOrdering,
     declineReason:  decision.declineReason,
     // Full message-aware contract result. When present, this is the authoritative
-    // live verdict; identical logic to the Evolution webhook gate.
+    // live verdict; mesma lógica do portão do webhook ao vivo.
     messageAware: messageAware
       ? {
           routingEligible:          messageAware.routingEligible,

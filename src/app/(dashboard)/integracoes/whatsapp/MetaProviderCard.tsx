@@ -34,6 +34,7 @@ interface MetaPublic {
 }
 interface StatusResp {
   featureEnabled: boolean;
+  /** Sempre "META_CLOUD_API" desde 04/08/2026 — canal único. */
   activeProvider: string;
   meta: MetaPublic | null;
 }
@@ -69,7 +70,6 @@ export function MetaProviderCard() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [copied, setCopied]   = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [confirmDisconnectEvo, setConfirmDisconnectEvo] = useState(false);
 
   // Support-only manual connect (gate ?suporte=1). Lets the Foocci team paste
   // credentials obtained via Meta's "Integrar com API" path before the 1-click
@@ -251,24 +251,6 @@ export function MetaProviderCard() {
     finally { setBusy(null); }
   }
 
-  // Disconnect the current (Evolution) connection AND log the number out of WhatsApp.
-  // This is what frees the phone number so the Meta Cloud API can register it — Meta
-  // blocks verification while the number is still active in another WhatsApp account.
-  // Destructive: the running bot/orders on this number stop until it is reconnected.
-  async function disconnectEvolution() {
-    setBusy("disconnect-evo");
-    try {
-      const res = await fetch("/api/integrations/whatsapp", { method: "DELETE" });
-      const j = await res.json().catch(() => null);
-      if (res.ok) {
-        flash(true, "Número desconectado da conexão anterior. Aguarde ~3 minutos e volte à tela da Meta para verificar o número.");
-        setConfirmDisconnectEvo(false);
-        load(); loadDiag();
-      } else flash(false, j?.error ?? "Falha ao desconectar. Tente novamente.");
-    } catch { flash(false, "Sem conexão."); }
-    finally { setBusy(null); }
-  }
-
   // Remove the Meta connection entirely so the owner can re-run Embedded Signup and
   // pick the correct number (e.g. Meta's +1 test number was connected by mistake).
   async function disconnectMeta() {
@@ -318,7 +300,6 @@ export function MetaProviderCard() {
   if (!status) return null;
 
   const meta = status.meta;
-  const isMeta = status.activeProvider === "META_CLOUD_API";
   const metaConnected = meta?.connected ?? false;
   const env = diag?.env;
 
@@ -326,8 +307,9 @@ export function MetaProviderCard() {
     <div className="mb-5 rounded-2xl border border-line2 bg-paper p-5">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-ink">Conexão de WhatsApp</h2>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isMeta ? "bg-blue-50 text-blue-700" : "bg-green-50 text-green-700"}`}>
-          Em uso: {isMeta ? "WhatsApp oficial da Meta" : "WhatsApp atual"}
+        {/* Canal único: não há mais "qual provedor está em uso" para decidir. */}
+        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+          Em uso: WhatsApp oficial da Meta
         </span>
       </div>
 
@@ -335,55 +317,16 @@ export function MetaProviderCard() {
         <div className={`mt-3 rounded-lg px-3 py-2 text-xs ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{msg.text}</div>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {/* Current connection */}
-        <div className={`rounded-xl border p-4 ${!isMeta ? "border-green-300 bg-green-50/40" : "border-line2"}`}>
-          <p className="text-sm font-semibold text-ink">WhatsApp atual</p>
-          <p className="mt-1 text-xs text-muted">Sua conexão de WhatsApp atual. Continua funcionando normalmente.</p>
-          {isMeta && (
-            <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "EVOLUTION" }, "Pronto — voltou para a conexão anterior.")}
-              className="mt-3 rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
-              Voltar para a conexão anterior
-            </button>
-          )}
-
-          {/* Disconnect + log out of WhatsApp — frees the number so it can be
-              registered on the Meta official connection. Destructive, two-click. */}
-          <div className="mt-3 border-t border-line2 pt-3">
-            {!confirmDisconnectEvo ? (
-              <>
-                <button type="button" disabled={!!busy} onClick={() => setConfirmDisconnectEvo(true)}
-                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
-                  Desconectar e liberar número
-                </button>
-                <p className="mt-1.5 text-[11px] text-muted">
-                  Use quando for migrar o número para a Meta oficial. Desconecta o WhatsApp
-                  deste número para liberá-lo — os envios por esta conexão param até reconectar.
-                </p>
-              </>
-            ) : (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
-                <p className="text-[11px] font-semibold text-red-700">
-                  Tem certeza? O número será desconectado do WhatsApp e o bot/pedidos por esta
-                  conexão param até você reconectar (aqui ou na Meta).
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button type="button" disabled={busy === "disconnect-evo"} onClick={disconnectEvolution}
-                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
-                    {busy === "disconnect-evo" ? "Desconectando…" : "Confirmar e liberar número"}
-                  </button>
-                  <button type="button" disabled={!!busy} onClick={() => setConfirmDisconnectEvo(false)}
-                    className="rounded-lg border border-line2 bg-paper px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Uma coluna só: com um provedor não há mais dois cards lado a lado. */}
+      <div className="mt-4 grid gap-3">
+        {/* O card "WhatsApp atual" (Evolution) vivia aqui, ao lado do card da Meta,
+            com "Voltar para a conexão anterior" e "Desconectar e liberar número".
+            Saiu em 04/08/2026: com um provedor só, um botão de "voltar" deixaria o
+            restaurante MUDO — nenhum canal de saída, sem erro visível. E não há mais
+            número para "liberar": ele já está registrado na Meta. */}
 
         {/* Meta */}
-        <div className={`rounded-xl border p-4 ${isMeta ? "border-blue-300 bg-blue-50/40" : "border-line2"}`}>
+        <div className="rounded-xl border border-blue-300 bg-blue-50/40 p-4">
           <p className="text-sm font-semibold text-ink">WhatsApp oficial da Meta</p>
           {!status.featureEnabled ? (
             <p className="mt-1 text-xs text-muted">Em breve — disponível quando ativado pela Foocci.</p>
@@ -409,12 +352,6 @@ export function MetaProviderCard() {
                   className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-[#FAFAF8] disabled:opacity-50">
                   {busy === "repair-inbound" ? "Reparando…" : "Reparar recebimento"}
                 </button>
-                {!isMeta && (
-                  <button type="button" disabled={!!busy} onClick={() => action("provider", { provider: "META_CLOUD_API", confirm: true }, "Pronto — WhatsApp oficial da Meta agora é o principal.")}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                    Usar como principal
-                  </button>
-                )}
               </div>
               {/* CRM via Meta toggle */}
               <div className="mt-3 flex items-center justify-between rounded-lg border border-line2 bg-[#FAFAF8] px-3 py-2.5">

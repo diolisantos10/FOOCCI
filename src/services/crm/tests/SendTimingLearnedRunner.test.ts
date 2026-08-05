@@ -28,8 +28,12 @@ const ledger = vi.hoisted(() => ({
   getImpactedByMessage: vi.fn(async () => new Set<string>()),
   recordLedger: vi.fn(async () => {}),
 }));
-const evoCfg = vi.hoisted(() => ({ getSnapshot: vi.fn() }));
-const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn() }));
+// Canal único (Meta) — nada é enviado nesta suíte (só dry-run / agendamento).
+const channel = vi.hoisted(() => ({
+  getConnectionStatus: vi.fn(async () => ({ provider: "META_CLOUD_API", connected: true, detail: null })),
+  sendText:            vi.fn(),
+  sendTemplate:        vi.fn(),
+}));
 const svc = vi.hoisted(() => ({ resolveAudience: vi.fn(), personalizeMessage: vi.fn(() => "oi") }));
 const safety = vi.hoisted(() => ({
   getSafetyConfig: vi.fn(), getTodayGlobalSendCount: vi.fn(() => 0), getWeekGlobalSendCount: vi.fn(() => 0),
@@ -42,8 +46,7 @@ const contact = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/services/evolution/EvolutionConfigService", () => ({ EvolutionConfigService: evoCfg }));
-vi.mock("@/lib/evolution/EvolutionClient", () => ({ EvolutionClient: evoClient }));
+vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({ WhatsAppMessagingService: channel }));
 vi.mock("../CrmCampaignService", () => svc);
 vi.mock("@/lib/crm-safety", () => safety);
 vi.mock("@/services/crm/ContactSafetyService", () => contact);

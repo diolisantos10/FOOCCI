@@ -4,7 +4,8 @@
  * Unified service for all external integrations in Foocci.
  *
  * Providers:
- *   - "whatsapp"    → bridges to existing EvolutionConfigService
+ *   - "whatsapp"    → Meta WhatsApp Cloud API (MetaConfigService). A Evolution saiu
+ *                     do Foocci em 04/08/2026; não há mais provedor alternativo.
  *   - "stone"       → IntegrationConfig row (configBlob encrypted JSON)
  *   - "mercadopago" → IntegrationConfig row
  *
@@ -16,9 +17,10 @@
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt, maskSecret } from "@/lib/crypto";
 import { validateSumUpCredentials } from "@/lib/sumup";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
-import { serviceOk, serviceFail, ServiceResult } from "@/types";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
+import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
+import { serviceOk, ServiceResult } from "@/types";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import type {
   IntegrationProvider,
@@ -80,7 +82,7 @@ function decodeConfig<T>(blob: string): T {
   return JSON.parse(decrypt(blob)) as T;
 }
 
-/** Race a promise against a timeout so a hung Evolution never stalls the page. */
+/** Race a promise against a timeout so a hung Graph call never stalls the page. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     p,
@@ -171,7 +173,7 @@ export class IntegrationService {
   // ── list all integration views for a restaurant ─────────────────────────────
 
   static async listViews(restaurantId: string): Promise<IntegrationView[]> {
-    // WhatsApp (EvolutionConfig)
+    // WhatsApp (Meta Cloud API)
     const waView = await IntegrationService.getView("whatsapp", restaurantId);
 
     // Other providers from IntegrationConfig
@@ -208,43 +210,40 @@ export class IntegrationService {
     restaurantId: string
   ): Promise<ServiceResult<IntegrationView>> {
     if (provider === "whatsapp") {
-      const result = await EvolutionConfigService.getView(restaurantId);
-      if (!result.ok) {
-        if (result.status === 404) return serviceOk(waUnconfigured());
-        return serviceFail(result.error, result.status);
-      }
-      const v = result.data;
-      const hasMinimalConfig = !!v.instanceName && !!v.baseUrl;
+      // Sem linha de config Meta não há o que reportar — e AUSÊNCIA NÃO É
+      // "configurado". Cai em "unconfigured", nunca em "active".
+      const cfg = await MetaConfigService.getPublic(restaurantId);
+      if (!cfg) return serviceOk(waUnconfigured());
+
+      const hasMinimalConfig = !!cfg.wabaId && !!cfg.phoneNumberId;
       const fields = {
-        instanceName:         v.instanceName,
-        baseUrl:              v.baseUrl,
-        apiKeyPreview:        v.apiKeyPreview,
-        webhookSecretPreview: v.webhookSecretPreview,
+        displayPhoneNumber: cfg.displayPhoneNumber,
+        wabaId:             cfg.wabaId,
+        phoneNumberId:      cfg.phoneNumberId,
+        tokenPreview:       cfg.tokenPreview,
+        tokenExpiresAt:     cfg.tokenExpiresAt,
+        tokenExpiringSoon:  String(cfg.tokenExpiringSoon),
+        qualityRating:      cfg.qualityRating,
+        messagingLimit:     cfg.messagingLimit,
       };
 
-      // Not active / not minimally configured → no need to reach Evolution.
-      if (!v.isActive || !hasMinimalConfig) {
+      if (!hasMinimalConfig) {
         return serviceOk({
           provider:     "whatsapp",
-          status:       hasMinimalConfig ? "configured" : "unconfigured",
-          isActive:     v.isActive,
-          lastTestedAt: null,
-          lastError:    null,
+          status:       "unconfigured",
+          isActive:     false,
+          lastTestedAt: cfg.lastHealthCheckAt,
+          lastError:    cfg.lastError,
           fields,
         });
       }
 
-      // Active config: NEVER trust isActive alone. isActive only means "a config
-      // row exists and was activated" — it stays true after the WhatsApp session
-      // drops. Query the LIVE connection state so the badge can't claim
-      // "Conectado" while the instance is actually "close" (the reported bug:
-      // status shows connected but messages get no reply).
-      const live = await IntegrationService._liveWhatsAppStatus(restaurantId);
+      const live = await IntegrationService._liveWhatsAppStatus(restaurantId, cfg);
       return serviceOk({
         provider:     "whatsapp",
         status:       live.status,
-        isActive:     v.isActive,
-        lastTestedAt: null,
+        isActive:     live.status === "active",
+        lastTestedAt: cfg.lastHealthCheckAt,
         lastError:    live.lastError,
         fields,
       });
@@ -419,51 +418,69 @@ export class IntegrationService {
   // ── private test helpers ─────────────────────────────────────────────────────
 
   /**
-   * Live WhatsApp connection status — the SOURCE OF TRUTH for the badge.
-   * Only reports "active" (→ "Conectado") when the Evolution instance is
-   * genuinely "open". A dropped/closed session maps to "error", and an
-   * in-progress link to "pending_validation" (→ "Aguardando conexão"). A
-   * verification failure never claims connected.
+   * Estado da conexão WhatsApp para o SELO da tela.
+   *
+   * A lição que criou este método continua valendo: **"tem linha no banco" nunca
+   * pode virar "Conectado"**. O que mudou é onde a verdade mora. Com a Evolution,
+   * a sessão caía sozinha e só um poll ao vivo dizia a verdade. Com a Meta não
+   * existe sessão que cai: o que quebra é credencial (token expirado, número
+   * desabilitado, permissão revogada) — e isso é gravado em `connectionStatus` /
+   * `lastError` pelo healthCheck e por TODA falha de envio real.
+   *
+   * Por isso o selo lê o estado conhecido (barato, e atualizado pelo tráfego de
+   * verdade) e o botão "Testar" faz a chamada AO VIVO ao Graph. O selo nunca
+   * afirma "Conectado" sem que algo tenha de fato verificado antes.
    */
   private static async _liveWhatsAppStatus(
     restaurantId: string,
+    cfg: { connectionStatus: string; lastError: string | null; tokenExpiringSoon: boolean },
   ): Promise<{ status: IntegrationView["status"]; lastError: string | null }> {
-    const snap = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!snap.ok) return { status: "error", lastError: "WhatsApp não configurado." };
+    let connected: boolean;
     try {
-      const status = await withTimeout(EvolutionClient.getInstanceStatus(snap.data), 6000);
-      if (status.state === "open") return { status: "active", lastError: null };
-      if (status.state === "connecting") {
-        return { status: "pending_validation", lastError: "Conectando — escaneie o QR code para finalizar." };
-      }
-      return { status: "error", lastError: "WhatsApp desconectado. Reconecte escaneando o QR code." };
+      connected = (await withTimeout(WhatsAppMessagingService.getConnectionStatus(restaurantId), 6000)).connected;
     } catch {
+      // Falha ao apurar não é permissão para dizer "Conectado". Falha fechada.
       return { status: "error", lastError: "Não foi possível verificar a conexão com o WhatsApp no momento." };
     }
+
+    if (connected) {
+      return {
+        status:    "active",
+        lastError: cfg.tokenExpiringSoon
+          ? "O token da Meta expira em menos de 30 dias. Reconecte para não interromper os envios."
+          : null,
+      };
+    }
+    if (cfg.connectionStatus === "PENDING") {
+      return { status: "pending_validation", lastError: cfg.lastError ?? "Conexão com a Meta ainda não concluída." };
+    }
+    return {
+      status:    "error",
+      lastError: cfg.lastError ?? "WhatsApp desconectado da Meta. Reconecte a conta pelo painel.",
+    };
   }
 
+  /**
+   * Teste AO VIVO: lê o nó do número no Graph com o token do lojista. Não envia
+   * mensagem e não devolve credencial — só diz se a credencial ainda funciona.
+   * O próprio healthCheck grava o resultado em `connectionStatus`/`lastError`,
+   * então o selo da tela passa a refletir este teste.
+   */
   private static async _testWhatsApp(restaurantId: string): Promise<ServiceResult<TestResult>> {
-    const snap = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!snap.ok) {
-      if (snap.status === 404)
-        return serviceOk({ success: false, message: "WhatsApp não configurado." });
-      return serviceOk({ success: false, message: snap.error });
+    const cfg = await MetaConfigService.getPublic(restaurantId);
+    if (!cfg || !cfg.phoneNumberId) {
+      return serviceOk({ success: false, message: "WhatsApp não conectado à Meta. Conecte a conta no painel." });
     }
     try {
-      const status = await EvolutionClient.getInstanceStatus(snap.data);
-      const connected = status.state === "open";
+      const health = await withTimeout(new MetaWhatsAppCloudProvider().healthCheck(restaurantId), 8000);
       return serviceOk({
-        success: connected,
-        message: connected ? "Instância conectada com sucesso." : "Instância não conectada (verifique o QR code).",
+        success: health.connected,
+        message: health.connected
+          ? `Conectado à Meta${health.detail ? ` (${health.detail})` : ""}.`
+          : `Não foi possível validar a conexão com a Meta${health.detail ? `: ${health.detail}` : "."}`,
       });
-    } catch (err) {
-      if (err instanceof EvolutionApiError && err.status === 404) {
-        return serviceOk({
-          success: false,
-          message: "Instância não encontrada no servidor Evolution. Verifique o campo 'Nome da instância' nas configurações avançadas.",
-        });
-      }
-      return serviceOk({ success: false, message: "Não foi possível alcançar o servidor Evolution. Verifique a URL e a API Key." });
+    } catch {
+      return serviceOk({ success: false, message: "Não foi possível alcançar a Meta. Tente novamente em instantes." });
     }
   }
 

@@ -3,7 +3,7 @@
  * CampaignExecution SENT rows, so the CRM remembers who was already impacted
  * before the ledger existed.
  *
- * Safe: read-only on campaigns, never sends, never calls Evolution, never deletes
+ * Safe: read-only on campaigns, never sends, never calls the WhatsApp channel, never deletes
  * history. Idempotent (deduped by sourceExecutionId). Preserves the original
  * sentAt so dedupe windows stay correct.
  */

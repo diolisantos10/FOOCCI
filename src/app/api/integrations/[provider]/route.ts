@@ -3,8 +3,11 @@
  * PUT    /api/integrations/[provider]  — upsert credentials
  * DELETE /api/integrations/[provider]  — disconnect integration
  *
- * WhatsApp uses "whatsapp" as the provider key and delegates to
- * the existing EvolutionConfigService.
+ * WhatsApp ("whatsapp") é SOMENTE LEITURA aqui. Conectar e desconectar o WhatsApp
+ * vive em `/api/integracoes/whatsapp/meta/*` — desde 04/08/2026 o canal é o
+ * aplicativo homologado da Meta, cuja credencial não é digitada num formulário
+ * genérico (é OAuth + phone_number_id). Até então esta rota gravava e apagava
+ * credencial da Evolution; a Evolution saiu do Foocci por ordem do CEO.
  *
  * Stone, Mercado Pago, and Tipos use the generic IntegrationConfig table.
  *
@@ -30,9 +33,6 @@ import {
   parseProviderConfig,
 } from "@/validators/integrations";
 import { IntegrationService } from "@/services/integrations/IntegrationService";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
-import { upsertEvolutionConfigSchema } from "@/validators/evolution";
 import { auditLog } from "@/lib/audit";
 
 type Params = { params: { provider: string } };
@@ -74,16 +74,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json().catch(() => null);
     if (!body) return badRequest("Corpo da requisição inválido.");
 
-    // WhatsApp delegates to EvolutionConfigService
+    // WhatsApp não se configura por aqui: recusa DECLARADA apontando o caminho
+    // certo. Silêncio ou 404 genérico faria o lojista achar que salvou algo.
     if (provider === "whatsapp") {
-      const parsed = upsertEvolutionConfigSchema.safeParse(body);
-      if (!parsed.success) return badRequest("Validação falhou.", parsed.error.flatten());
-
-      const result = await EvolutionConfigService.upsert(ctx.restaurantId, parsed.data);
-      if (!result.ok) return serverError(result.error);
-
-      auditLog({ action: "integration.update", restaurantId: ctx.restaurantId, userId: ctx.userId, meta: { integration: "whatsapp" } });
-      return ok(result.data);
+      return badRequest(
+        "O WhatsApp é configurado em Integrações → WhatsApp (conta oficial da Meta), não por esta rota.",
+      );
     }
 
     if (!isValidProvider(provider)) return notFound(`Unknown provider: ${provider}`);
@@ -112,23 +108,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     const { provider } = params;
 
+    // Desconectar o WhatsApp é ato da Meta (revoga token + limpa a conta) e vive
+    // em POST /api/integracoes/whatsapp/meta/disconnect.
     if (provider === "whatsapp") {
-      // Best-effort logout from Evolution so the phone number is freed and a
-      // fresh QR scan is possible. Failure is non-fatal — we still deactivate
-      // the config in the DB so the UI reflects "not connected".
-      const snapResult = await EvolutionConfigService.getSnapshot(ctx.restaurantId);
-      if (snapResult.ok) {
-        try {
-          await EvolutionClient.logoutInstance(snapResult.data);
-        } catch (logoutErr) {
-          console.warn("[DELETE /api/integrations/whatsapp] Evolution logout failed (non-fatal):", logoutErr instanceof Error ? logoutErr.message : logoutErr);
-        }
-      }
-
-      const result = await EvolutionConfigService.deactivate(ctx.restaurantId);
-      if (!result.ok) return serverError(result.error);
-      auditLog({ action: "integration.update", restaurantId: ctx.restaurantId, userId: ctx.userId, meta: { integration: "whatsapp", action: "disconnect" } });
-      return ok({ disconnected: true });
+      return badRequest(
+        "Para desconectar o WhatsApp use Integrações → WhatsApp → Desconectar (conta oficial da Meta).",
+      );
     }
 
     if (!isValidProvider(provider)) return notFound(`Unknown provider: ${provider}`);

@@ -92,7 +92,7 @@ export const CRM_CANNOT_DO: readonly string[] = [
   "Usar linguagem corporativa fria ('Detectamos inatividade no seu perfil')",
   "Prometer desconto ou frete que não está configurado",
   "Enviar cupom de campanha diferente de um registrado no sistema",
-  "Operar sem configuração Evolution API disponível",
+  "Operar com o canal WhatsApp oficial (Meta) desconectado",
   "Ignorar status operacional do restaurante (fechado = sem envio)",
   "Processar ou armazenar dados sensíveis fora do escopo LGPD",
   "Enviar mensagem não solicitada após opt-out ou STOP",
@@ -131,7 +131,7 @@ export const CRM_WHATSAPP_SAFETY_RULES: readonly string[] = [
   "Respeitar maxPerWeekPerCustomer — sem exceções.",
   "Verificar quietHoursEnabled + quietHoursStart/End (timezone correto).",
   "Verificar sendOnWeekends — bloquear em fins de semana se false.",
-  "Verificar Evolution API disponível ANTES de tentar envio.",
+  "Verificar que o canal WhatsApp oficial está CONECTADO ANTES de tentar envio.",
   "Verificar status operacional do restaurante (restaurante fechado = bloquear).",
   "Aplicar randomDelayEnabled entre mensagens quando configurado.",
 ];
@@ -175,7 +175,7 @@ export const CRM_METRICS_AND_ATTRIBUTION_RULES: readonly string[] = [
   "Atribuição de receita usa heurística de 7 dias (CRMAttributionService) — é estimativa, não causal.",
   "Atribuição por cupom (CampaignCouponMetricsService) é mais confiável — use quando disponível.",
   "Nunca apresente receita atribuída como 'receita gerada pela campanha' sem ressalva.",
-  "deliveryRate, openRate e clickRate requerem integração Evolution — registre se indisponível.",
+  "deliveryRate, openRate e clickRate dependem do retorno do canal — registre se indisponível.",
   "Skips (skippedNoPhone, skippedCooldown, skippedCap) são sinais de saúde — monitore.",
 ];
 
@@ -192,7 +192,7 @@ export const CRM_MESSAGE_TONE_RULES: readonly string[] = [
 ];
 
 export const CRM_FAILURE_HANDLING: readonly string[] = [
-  "Envio falhou (Evolution error): registrar falha, não retentar imediatamente, aguardar próximo ciclo.",
+  "Envio falhou (erro do canal): registrar falha, não retentar imediatamente, aguardar próximo ciclo.",
   "Cliente respondeu com reclamação: escalar para atendimento humano imediatamente.",
   "Cliente respondeu com STOP/SAIR/PARAR: registrar opt-out, não responder com marketing.",
   "Cupom inválido/expirado: não enviar mensagem — logar e notificar operador.",

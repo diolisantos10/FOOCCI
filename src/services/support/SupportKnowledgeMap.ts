@@ -79,9 +79,9 @@ export const SUBSYSTEMS: readonly SubsystemInfo[] = [
   },
   {
     key: "whatsapp_evolution",
-    name: "WhatsApp não-oficial (Evolution)",
-    impact: "Se cai, a instância desconecta e as campanhas/atendimento por Evolution param.",
-    signals: ["/api/evolution/status → open|close|connecting"],
+    name: "WhatsApp não-oficial (WhatsApp (Meta))",
+    impact: "Se cai, a instância desconecta e as campanhas/atendimento por WhatsApp (Meta) param.",
+    signals: ["/api/integracoes/whatsapp/meta/status → open|close|connecting"],
   },
   {
     key: "payments",
@@ -176,27 +176,32 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     severity: "HIGH",
   },
   {
-    key: "evolution_disconnected",
-    subsystem: "whatsapp_evolution",
-    symptom: "O WhatsApp (não-oficial) caiu / apareceu como desconectado.",
+    key: "whatsapp_disconnected",
+    subsystem: "whatsapp_meta",
+    symptom: "O WhatsApp caiu / apareceu como desconectado.",
+    // Resolução de conflito 04/08: a padrão melhorou a pescaria (triggers ricos +
+    // scope + excludes, porque "desconectou" sozinho pescava "o google
+    // desconectou"); esta branch tinha trocado a Evolution pela Meta. Fica o
+    // melhor dos dois — o matcher preciso, apontando para o canal que existe.
     triggers: [
       "desconectou", "desconectado", "desconectada", "caiu o whatsapp",
       "whatsapp caiu", "zap caiu", "pedindo qr", "pedindo o qr", "pedindo qrcode",
       "ler o qr de novo", "reconectar", "aparelho desconectou", "sessão caiu",
-      "instância caiu", "instancia caiu", "perdeu a conexão",
+      "perdeu a conexão",
     ],
-    // "desconectou" sozinho pesca qualquer coisa — "o google desconectou de
-    // novo" virava WhatsApp Evolution caído. O escopo é o que amarra ao canal.
-    scope: ["whatsapp", "zap", "wpp", "instancia", "evolution", "qr", "aparelho", "celular", "numero"],
+    scope: ["whatsapp", "zap", "wpp", "qr", "aparelho", "celular", "numero", "meta"],
     excludes: ["google", "instagram", "insta", "mercado pago", "impressora"],
-    likelyCause: "Instância Evolution em estado 'close' — sessão caiu.",
-    confirmingSignals: ["/api/evolution/status = close"],
+    likelyCause: "Conexão do número na Meta fora do ar (connectionStatus != CONNECTED).",
+    confirmingSignals: ["/api/integracoes/whatsapp/meta/status != CONNECTED"],
     runbook: [
-      "Conferir /api/evolution/status.",
-      "Se 'close': disparar reconexão da instância (ação de integração).",
-      "Se pedir QR novamente: escalar — precisa do humano reparear o aparelho.",
+      "Conferir /api/integracoes/whatsapp/meta/status.",
+      "Se != CONNECTED: conferir se o token do aplicativo expirou (o erro aparece em lastError).",
+      "Reconectar exige login do DONO pela Meta — não há ação automática. Escalar.",
     ],
-    remediationAction: "reconnect_evolution",
+    // Sem ação automática de propósito: a ação "reconectar instância" saiu com a
+    // Evolution e não foi substituída, porque reconectar a Meta depende de OAuth
+    // do dono. Ação que finge é pior que ação ausente.
+    remediationAction: null,
     severity: "HIGH",
   },
   {

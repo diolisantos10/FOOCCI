@@ -163,11 +163,11 @@ function runChecks(scenario: CrmScenario): { checks: CrmCheckResult[]; actual: s
           !!a && a.safetyStatus === scenario.expect.readySafety.status,
           a ? `safetyStatus=${a.safetyStatus}` : "ação não encontrada"));
       }
-      // Safety invariant: a missing-Evolution base must always raise the operator-facing
-      // SAFETY_ISSUE_ALERT (the per-send Evolution gate itself lives in ContactSafetyService).
-      if (!scenario.input.hasEvolutionConfig) {
-        checks.push(check("missing Evolution raises SAFETY_ISSUE_ALERT", "critical", present.has("SAFETY_ISSUE_ALERT"),
-          present.has("SAFETY_ISSUE_ALERT") ? "alerta de segurança presente" : "SAFETY_ISSUE_ALERT ausente sem Evolution"));
+      // Safety invariant: canal WhatsApp fora do ar tem que levantar o
+      // SAFETY_ISSUE_ALERT para o lojista (o portão por envio mora no ContactSafetyService).
+      if (!scenario.input.hasWhatsAppChannel) {
+        checks.push(check("canal ausente levanta SAFETY_ISSUE_ALERT", "critical", present.has("SAFETY_ISSUE_ALERT"),
+          present.has("SAFETY_ISSUE_ALERT") ? "alerta de segurança presente" : "SAFETY_ISSUE_ALERT ausente sem canal"));
       }
       return { checks, actual: `actions=[${[...present].join(", ") || "nenhuma"}]` };
     }

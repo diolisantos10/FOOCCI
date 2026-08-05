@@ -1,21 +1,28 @@
 /**
- * Phone number normalization for CRM WhatsApp sends.
+ * Normalização de telefone brasileiro para envio de WhatsApp.
  *
- * Evolution API expects `number` in E.164 format WITHOUT the leading `+`:
- *   e.g. "5511999990000" (Brazil country code 55 + DDD + local number)
+ * O formato é E.164 SEM o `+`: "5511999990000" (55 + DDD + número). É o que a
+ * Meta Cloud API espera, e era também o que o provedor anterior esperava — por
+ * isso estas funções se chamavam `normalizePhoneForEvolution` /
+ * `isValidEvolutionPhone` até 04/08/2026.
  *
- * Customers may have phones stored in many formats:
+ * **Renomeadas de propósito, e vale saber por quê:** o nome dizia "Evolution",
+ * mas isto nunca foi tecnologia de provedor nenhum — é o normalizador de
+ * telefone BR do projeto inteiro, e hoje está no caminho de envio da Meta
+ * (`toMetaRecipient` depende dele). Na remoção da Evolution, uma varredura por
+ * "evolution" apagaria isto e derrubaria a validação de telefone de TODO envio.
+ * O nome certo é a proteção.
+ *
+ * Clientes têm telefone gravado em muitos formatos:
  *   "+55 (11) 99999-0000", "11999990000", "5511999990000", "(11) 9 9999-0000"
- *
- * This module normalizes all of them to the bare digit string expected by Evolution.
  */
 
 /**
- * Normalize a raw phone string to E.164 digits (no `+`) for Evolution.
- * Returns `null` if the number cannot be reliably normalized to a valid
- * Brazilian WhatsApp-capable number.
+ * Normaliza um telefone cru para dígitos E.164 (sem `+`).
+ * Devolve `null` quando não dá para normalizar com segurança para um número
+ * brasileiro capaz de receber WhatsApp — nunca adivinha.
  */
-export function normalizePhoneForEvolution(raw: string | null | undefined): string | null {
+export function normalizePhoneBR(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const digits = raw.replace(/\D/g, "");
   if (!digits) return null;
@@ -35,8 +42,8 @@ export function normalizePhoneForEvolution(raw: string | null | undefined): stri
   return null;
 }
 
-/** Returns true when `phone` is a valid E.164 digit string for Brazil. */
-export function isValidEvolutionPhone(phone: string | null | undefined): phone is string {
+/** Verdadeiro quando `phone` é E.164 válido para o Brasil. */
+export function isValidPhoneBR(phone: string | null | undefined): phone is string {
   if (!phone) return false;
   const digits = phone.replace(/\D/g, "");
   return (

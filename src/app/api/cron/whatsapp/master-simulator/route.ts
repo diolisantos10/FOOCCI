@@ -6,7 +6,7 @@
  * ordering flow, Pix safety, delivery, handoff, and known-regression cases.
  *
  * Auth: Authorization: Bearer {CRON_SECRET}. POST only, never public.
- * Zero side effects: no Evolution, no real order, no real Pix.
+ * Zero side effects: no WhatsApp send, no real order, no real Pix.
  */
 
 import { NextRequest, NextResponse } from "next/server";

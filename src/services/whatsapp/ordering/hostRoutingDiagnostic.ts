@@ -6,7 +6,7 @@
  *
  * This closes the observability gap from docs/whatsapp-routing-raiox.md: the
  * existing routing diagnostic only covered the Text Order side. Pure read:
- * never sends WhatsApp, never calls Evolution, never creates an order or Pix,
+ * never sends WhatsApp, never creates an order or Pix,
  * never changes config. The phone is always MASKED in output.
  */
 
@@ -56,7 +56,7 @@ export interface HostRoutingResult {
     messageHasOrderIntent: boolean;
   };
   receptionistPreview?: ReceptionistPreview;
-  safety: { noEvolution: true; noRealOrder: true; noRealPix: true; runtimeTouched: false };
+  safety: { noWhatsAppSend: true; noRealOrder: true; noRealPix: true; runtimeTouched: false };
 }
 
 interface HumanBlock {
@@ -207,7 +207,7 @@ export async function runHostRoutingDiagnostic(input: HostRoutingInput): Promise
     phoneMasked: input.phone ? maskPhone(input.phone) : null,
     config: { mode: "?", scope: "?", enabled: false, paused: false, phoneInAllowlist: false },
     decision: { host: "IGNORED", reason: "", wouldEnterTextOrder: false, wouldFallbackToReceptionist: true, hasActiveSession: false, messageHasOrderIntent: false },
-    safety: { noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false },
+    safety: { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, runtimeTouched: false },
   };
 
   // Resolve restaurant.

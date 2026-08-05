@@ -25,10 +25,8 @@ export async function GET(req: NextRequest) {
     // can set them without a deploy, so reading process.env here would under-report.
     const appCreds = await MetaAppCredentialsService.getResolved();
 
-    const [restaurant, metaPublic, evoStatus, lastInbound, lastOutbound, templateRequiredFailures, approvedTemplates] = await Promise.all([
-      prisma.restaurant.findUnique({ where: { id: rid }, select: { whatsappProvider: true, allowWhatsAppProviderFallback: true, fallbackProvider: true } }),
+    const [metaPublic, lastInbound, lastOutbound, templateRequiredFailures, approvedTemplates] = await Promise.all([
       MetaConfigService.getPublic(rid),
-      WhatsAppMessagingService.providers.evolution.getConnectionStatus(rid),
       prisma.message.findFirst({ where: { direction: "INBOUND",  conversation: waConv }, orderBy: { sentAt: "desc" }, select: { sentAt: true } }),
       prisma.message.findFirst({ where: { direction: "OUTBOUND", conversation: waConv }, orderBy: { sentAt: "desc" }, select: { sentAt: true, externalStatus: true } }),
       prisma.message.count({ where: { conversation: waConv, providerError: { contains: "TEMPLATE_REQUIRED" } } }),
@@ -36,10 +34,12 @@ export async function GET(req: NextRequest) {
     ]);
 
     return ok({
-      activeProvider:    restaurant?.whatsappProvider ?? "EVOLUTION",
+      // Provedor único desde 04/08: a Evolution saiu do sistema. Os campos
+      // `fallback` e `evolution` foram removidos desta resposta junto com ela —
+      // manter um campo que sempre diz a mesma coisa é ruído que engana quem
+      // diagnostica.
+      activeProvider:    "META_CLOUD_API",
       featureEnabled:    isMetaWhatsAppEnabled(),
-      fallback:          { enabled: !!restaurant?.allowWhatsAppProviderFallback, provider: restaurant?.fallbackProvider ?? "EVOLUTION" },
-      evolution:         { connected: evoStatus.connected, detail: evoStatus.detail },
       meta: {
         connected:         metaPublic?.connected ?? false,
         connectionStatus:  metaPublic?.connectionStatus ?? "NOT_CONNECTED",

@@ -454,6 +454,86 @@ Origem: este bloco, E2E real na pizzaria-demo, branch
 
 ---
 
+## 2026-08-04 · Evolution sai do pedido: o portão de config e a recusa da Meta
+
+**Ordem do CEO, executada, não discutida.** Escopo: `src/services/order/**` +
+`src/services/integrations/IntegrationService.ts`. Rodou em paralelo com outros
+dois especialistas (envio/Meta e CRM), então programei contra as assinaturas
+`sendText/sendTemplate/sendConversationReply/getConnectionStatus` do
+`WhatsAppMessagingService`, sem depender da forma interna dele.
+
+**O que mudou**
+
+1. `OrderDraftRecoverySendService.ts` — saíram `EvolutionApiError`,
+   `EvolutionConfigService` e `sendWhatsAppText`; entrou
+   `WhatsAppMessagingService.sendText`. O portão `canSendWhatsApp` deixou de ler
+   `Restaurant.whatsappProvider` para escolher entre dois provedores: agora só
+   pergunta `MetaConfigService.getResolved(rid) != null`.
+2. `OrderNotificationService.ts` — só comentários e log (já saía pela Meta via
+   `activeProvider`, que o outro especialista deixou Meta-only antes).
+3. `IntegrationService.ts` — a aba "whatsapp" passou de `EvolutionConfigService`
+   para `MetaConfigService.getPublic`; selo por `getConnectionStatus`, botão
+   Testar por `MetaWhatsAppCloudProvider.healthCheck` (chamada viva ao Graph).
+
+**Os três aprendizados que valem mais que o porte**
+
+1. **O buraco novo não era a Evolution: era o BLOCKED.** Trocar o provedor sem
+   mais nada teria criado uma falha silenciosa perfeita. A recuperação de
+   carrinho é envio ATIVO para quem montou carrinho no site — essa pessoa
+   quase nunca tem janela de 24h aberta, e fora da janela a Meta recusa texto
+   livre. O resultado do cron ficaria `checked>0, failed=0, sent=0`, que lê como
+   "rodou e não tinha nada", quando na verdade é "a política me barrou em todo
+   mundo". Virou contador próprio `skippedTemplateRequired` + `console.warn` com
+   draftId/restaurantId/blockReason/ação a tomar. **Falha por política e falha
+   por erro são coisas diferentes e não podem cair no mesmo balde.**
+2. **Ao trocar um portão de "existe config de X?" por "existe config de Y?",
+   o caminho de exceção é o que engana.** O código antigo tinha `catch { ok =
+   false }` mudo. Mantive o fecha-fechado e ACRESCENTEI log: sem config e erro
+   ao ler config são estados diferentes, e nenhum dos dois pode virar "pode
+   enviar" nem sumir. Mesmo tratamento na leitura em lote das configs Meta, que
+   tinha `.catch(() => [])` — se ela falha, todo restaurante cai no freeform e
+   isso precisa aparecer, não parecer "ninguém tem CRM Meta ligado".
+3. **A lição do selo "Conectado" sobreviveu à troca, mas mudou de lugar.** Com a
+   Evolution a sessão caía sozinha e só o poll ao vivo dizia a verdade. Com a
+   Meta não existe sessão que cai — o que quebra é credencial, e isso fica
+   gravado em `connectionStatus`/`lastError` pelo healthCheck e por toda falha
+   real de envio. Então o selo lê o estado conhecido e o botão Testar faz a
+   chamada viva. O que NÃO pode mudar nunca: falha ao apurar não é permissão
+   para dizer "Conectado" — segue erro.
+
+**Sobre o estado preso:** bloqueado NÃO carimba o rascunho, então ele volta no
+próximo tick. Isso só é aceitável porque o carrinho já tem prazo de validade
+(`MAX_AGE_HOURS = 6`) — a retentativa é limitada pelo vencimento, não é loop
+infinito. Se algum dia o teto sair, esse caminho vira vazamento.
+
+**Verificação:** `npx vitest run src/services/order/` — 8 arquivos, 97 testes,
+verde. `npx tsc --noEmit` — 22 erros, ZERO no meu escopo (todos em
+`services/crm/*`, `services/whatsapp/brain/*` e duas rotas de diagnóstico da
+Meta, dos outros dois especialistas). Testes reescritos em
+`src/services/order/tests/CartRecoveryValidade.test.ts`: o mock morto de
+`EvolutionClient` virou 9 casos reais de Meta (portão com/sem config, config que
+explode, BLOCKED contado, BLOCKED ≠ failed, log com evidência, bloqueado não
+carimba, erro real ainda cai em failed).
+
+**Risco que NÃO pude resolver — precisa do Diretor.** O
+`OrderNotificationService` avisa o cliente a cada mudança de status do pedido
+("pedido aceito", "saiu para entrega"). Isso é texto livre para quem pediu pelo
+site, ou seja, fora da janela de 24h na maioria dos casos — a Meta recusa. Isso
+é **anterior** a este bloco (o `activeProvider` já era Meta-only quando cheguei)
+e o conserto é de produto, não de porte: exige modelo aprovado por status. Não
+mexi porque trocar o `activeProvider` pelo `WhatsAppMessagingService` ali só
+moveria a recusa da Meta para um bloqueio local, sem fazer a mensagem chegar.
+Deixei o log distinguindo BLOCKED de FAILED para o tamanho do problema aparecer.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Envio ATIVO pela Meta tem três
+resultados, não dois: enviado, falhou e BLOQUEADO POR POLÍTICA. Fora da janela de
+24h só passa modelo aprovado, e o bloqueio precisa de contador próprio e log com
+o caso concreto — senão o job parece rodar (`checked>0, failed=0`) sem nada
+chegar a ninguém. E ao trocar um portão de 'existe config de X?' por 'existe
+config de Y?', o caminho de exceção é o que engana: erro ao LER a config nunca
+pode virar 'pode enviar' nem sumir como 'não havia nada a enviar'."* Origem:
+este bloco, saída da Evolution do domínio de pedido, branch
+`claude/foocci-director-onboarding-lhindy`, commits f27b255→5b74a39.
 ## 04/08 — Checkout self-service: do card de preço à conta rodando (Frente 1)
 
 **Branch:** `claude/foocci-brain-vaamrx` · **Verificação:** `npx tsc --noEmit` limpo ·

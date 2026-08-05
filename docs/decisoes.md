@@ -11,6 +11,36 @@
 
 ---
 
+## Identificação por telefone: obrigatória onde nasce pedido, pulável só na mesa
+
+**Decidido em** 2026-08-04 · **por** CEO · **origem:** conferência da Loja do
+sushi-cazza em produção (a Loja oferecia "Identificar-se" como convite opcional)
+
+O cliente **precisa** informar o WhatsApp para usar a **Loja** e o **chat com
+IA**. No **QR da mesa**, continua podendo pular.
+
+**Por que a linha passa aí:** a mesa é consumo presencial — o cliente já está
+sentado, o pedido é do garçom, e barrar quem quer só ver o cardápio é atrito puro.
+Loja e chat são o oposto: ali nasce pedido, cupom, endereço e histórico. Cliente
+anônimo nesses dois quebra a atribuição de receita do CRM, impede recuperação de
+carrinho e deixa o pedido sem dono verificável.
+
+**O que muda para todos:**
+
+1. A pergunta que decide se uma superfície nova exige identificação é **"aqui
+   nasce pedido?"** — não "aqui tem checkout?" nem "aqui tem IA?".
+2. **A marca de "já perguntei" não pode ser compartilhada entre superfícies de
+   regras diferentes.** O `sessionStorage` `qr-welcome-seen-<slug>` é gravado
+   pelo QR da mesa, onde pular vale; se a Loja consultar essa marca para decidir
+   se pede identificação, quem pulou no salão entra na Loja anônimo. Portão que
+   uma tela anterior desliga não é portão. Travado em
+   `src/components/menu/identificacaoObrigatoria.test.ts`.
+3. Tela sem saída **diz o porquê** e some com o que promete saída (o rótulo
+   "pular", a alcinha de arrastar). Obrigatoriedade sem explicação lê como
+   cobrança de dado.
+
+---
+
 ## Toda proteção decide pelo estado, não por reflexo
 
 **Decidido em** 2026-07-31 · **por** CEO + Diretor · **origem:** incidente da Nicole
@@ -431,8 +461,31 @@ Evolution carrega todo o resto.
    é transitório e morre no fim da migração — corrigi a mentira dele em 02/08 para
    que ninguém se perca durante a transição, não para investir nele.
 
-**Ainda travado, e é do CEO:** a Meta está ativa para **todos** os restaurantes ou
-só alguns? Sem esse dado a etapa (b) não começa.
+**RESPONDIDO pelo CEO em 04/08:** perguntado quantos restaurantes ainda dependiam
+da Evolution, respondeu **"NENHUM"**. Some a etapa (b) — não há migração a fazer,
+só remoção. E veio a ordem, repetida três vezes: *"EXTRAÇÃO TOTAL, NÃO QUERO UM
+CÓDIGO DESSA EVOLUTION DENTRO DO FOOCCI"*.
+
+**Executado em 04/08** por quatro frentes em paralelo (meta, crm, operação,
+canais), com o Diretor consolidando:
+
+- O roteamento virou Meta e só Meta. O buraco mais grave estava aqui: em falha de
+  banco o código **caía na Evolution como reserva** — uma falha momentânea mandava
+  mensagem pelo canal não homologado, exatamente o risco que a homologação existe
+  para eliminar. Não há mais caminho alternativo, nem em erro.
+- `WhatsAppProviderId` e `CRMProviderMode` viraram tipos de **um valor só**:
+  reintroduzir um segundo canal é erro de compilação, não decisão de configuração.
+  É o guardrail 4 aplicado — prompt é aviso, código é trava.
+- A **rampa de aquecimento** (20→250 msgs/dia por idade do número) saiu junto: ela
+  protegia uma sessão Web não oficial de banimento e, no aplicativo homologado, só
+  segurava venda sem reduzir risco.
+
+**A armadilha desta remoção, registrada para quem vier depois:** o normalizador e
+o validador de telefone do projeto inteiro se chamam `normalizePhoneForEvolution`
+e `isValidEvolutionPhone` (`src/lib/crm/normalizePhone.ts`) — e hoje estão no
+caminho de envio da **Meta**. Quem varrer o repositório por "evolution" e apagar
+sem ler derruba a validação de telefone de **todo** envio. Renomear é passo
+separado, depois da extração, exatamente para não virar incidente.
 
 ## Cards do Garçom: categoria mostra tudo; fim de funil mostra 100% da categoria
 

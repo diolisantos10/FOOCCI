@@ -10,7 +10,7 @@
  *     Brain Director Change Request (PENDING_APPROVAL, runtimeImpact=PRODUCTION ⇒
  *     CRITICAL + quality gate). Opening wide stays a separate human decision.
  *
- * Every function here only changes CONFIG: no WhatsApp send, no Evolution, no
+ * Every function here only changes CONFIG: no WhatsApp send, no
  * order, no Pix — runtimeTouched is false by construction.
  */
 

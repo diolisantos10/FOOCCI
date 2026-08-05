@@ -1,9 +1,20 @@
 /**
- * Meta WhatsApp feature flag + app-level config (env). Disabled by default so the
- * integration ships dark; restaurants stay on Evolution until explicitly switched.
+ * Meta WhatsApp feature flag + app-level config (env).
+ *
+ * ⚠️ O QUE ESTA FLAG **NÃO** FAZ, desde 04/08/2026: ela não governa mais o ENVIO.
+ * Quando existiam dois provedores, `META_WHATSAPP_ENABLED=false` mandava tudo
+ * para a Evolution. Com a Evolution eliminada e a Meta como canal único, deixá-la
+ * governar o envio significaria "flag desligada = sistema mudo, sem erro e sem
+ * log" — um perigo maior que o que ela evitava. `WhatsAppMessagingService` e
+ * `activeProvider` não a consultam.
+ *
+ * O que ela ainda faz: é portão de ONBOARDING/UI nas rotas
+ * `integracoes/whatsapp/meta/*` (connect, templates, test, simulate, provider) —
+ * desligá-la impede CONFIGURAR algo novo, não impede o restaurante já conectado
+ * de responder ao cliente.
  *
  * App-level (one Foocci Meta app, Embedded Signup):
- *   META_WHATSAPP_ENABLED       — "true" to enable the Meta provider/UI
+ *   META_WHATSAPP_ENABLED       — "true" to enable the Meta onboarding/UI
  *   META_APP_ID                 — Meta app id (Embedded Signup)
  *   META_APP_SECRET             — app secret (webhook signature + token exchange)
  *   META_CONFIG_ID              — Embedded Signup configuration id

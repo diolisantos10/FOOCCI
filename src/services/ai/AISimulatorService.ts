@@ -11,7 +11,7 @@
  *   4. Evaluate the full conversation against scenario-specific checks.
  *   5. Delete all temp records regardless of outcome.
  *
- * Nothing is sent to WhatsApp — Evolution API is not called.
+ * Nothing is sent to WhatsApp — no provider call is ever made.
  * No AIInteractionLog is written (minor deviation from production noted in report).
  */
 

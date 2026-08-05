@@ -3,7 +3,7 @@
 /**
  * WhatsApp Routing Test Lab — admin UI.
  *
- * Simulates WhatsApp/Evolution events and conversation routing WITHOUT sending
+ * Simulates WhatsApp events and conversation routing WITHOUT sending
  * any real WhatsApp message. Replaces manual testing: define a scenario, read
  * the verdict (would it send externally? show in Atendimento? render as a
  * customer bubble? reach an agent?).
@@ -26,7 +26,7 @@ interface RoutingDecision {
   shouldRenderAsCustomerBubble: boolean;
   shouldCallWhatsAppAgent: boolean;
   shouldCallWaiter: boolean;
-  shouldCallEvolutionSend: boolean;
+  shouldCallProviderSend: boolean;
   blockReason: string | null;
   safetyNotes: string[];
   expectedLabel: string;
@@ -42,7 +42,7 @@ interface ScenarioResult {
   failedChecks: string[];
   redFlags: string[];
   explanation: string;
-  wouldCallEvolutionSend: boolean;
+  wouldCallProviderSend: boolean;
   wouldShowInAtendimento: boolean;
   wouldRenderAsCustomerBubble: boolean;
   wouldCallWhatsAppAgent: boolean;
@@ -156,8 +156,8 @@ export default function WhatsAppRoutingTestPage() {
       <CentralWhatsAppTabs />
       <h1 className="text-xl font-bold text-white">WhatsApp Routing Test Lab</h1>
       <p className="mt-1 text-sm text-gray-400">
-        Simule eventos WhatsApp/Evolution sem enviar mensagens reais. Nenhuma chamada
-        ao Evolution, nenhuma gravação no banco, nenhuma campanha.
+        Simule eventos de WhatsApp sem enviar mensagens reais. Nenhum envio,
+        nenhuma gravação no banco, nenhuma campanha.
       </p>
 
       {/* Suite buttons */}
@@ -309,7 +309,7 @@ function ResultCard({ r }: { r: ScenarioResult }) {
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {flag("evolutionSend", r.wouldCallEvolutionSend, r.actual.isInternalCommand)}
+        {flag("envio", r.wouldCallProviderSend, r.actual.isInternalCommand)}
         {flag("customerBubble", r.wouldRenderAsCustomerBubble, r.actual.isInternalCommand)}
         {flag("whatsAppAgent", r.wouldCallWhatsAppAgent, r.actual.isInternalCommand)}
         {flag("waiter", r.wouldCallWaiter, r.actual.isInternalCommand)}
@@ -342,7 +342,7 @@ function line(r: ScenarioResult): string {
   return [
     `${icon} [${r.scenarioId}] ${r.name}`,
     `   actor=${r.actual.actor} source=${r.actual.source} dir=${r.actual.direction} vis=${r.actual.visibility}`,
-    `   evolutionSend=${r.wouldCallEvolutionSend} bubble=${r.wouldRenderAsCustomerBubble} agent=${r.wouldCallWhatsAppAgent} waiter=${r.wouldCallWaiter} persist=${r.wouldPersistMessage}`,
+    `   providerSend=${r.wouldCallProviderSend} bubble=${r.wouldRenderAsCustomerBubble} agent=${r.wouldCallWhatsAppAgent} waiter=${r.wouldCallWaiter} persist=${r.wouldPersistMessage}`,
     r.redFlags.length ? `   RED: ${r.redFlags.join("; ")}` : "",
     r.failedChecks.length ? `   FAIL: ${r.failedChecks.join("; ")}` : "",
     `   why: ${r.explanation}`,

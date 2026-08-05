@@ -128,7 +128,13 @@ erro fácil de repetir, e vale avisar antes.
 
 ---
 
-## A rota de QR tem OITO formatos de resposta — e o `else` já mentiu por causa disso
+## ~~A rota de QR tem OITO formatos de resposta~~ — rota apagada em 04/08/2026
+
+> **Caducou.** A rota de QR e o pareamento saíram junto com a Evolution: a Meta
+> não usa QR. A entrada fica como lição de forma — *uma rota com muitos formatos
+> de resposta faz o `else` mentir* —, mas o caso concreto não existe mais.
+
+### O caso original
 
 > ✅ Os dois painéis foram alinhados em 02/08. A regra abaixo é o que fica.
 

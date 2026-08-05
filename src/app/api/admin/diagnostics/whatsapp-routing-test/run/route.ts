@@ -1,7 +1,7 @@
 /**
  * POST /api/admin/diagnostics/whatsapp-routing-test/run
  *
- * Runs the WhatsApp Routing Test Lab. Pure simulation — NO Evolution sends,
+ * Runs the WhatsApp Routing Test Lab. Pure simulation — NO WhatsApp sends,
  * NO DB mutation, NO LLM, NO campaigns. Admin-only (ADMIN_SECRET).
  *
  * Body:

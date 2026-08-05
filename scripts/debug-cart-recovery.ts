@@ -88,11 +88,14 @@ async function main() {
   });
   const pendingSet = new Set(pendingPaymentOrders.map((o: { restaurantId: string; customerId: string }) => `${o.restaurantId}:${o.customerId}`));
 
-  const evolutionConfigs = await prisma.evolutionConfig.findMany({
+  // Canal de WhatsApp = Meta Cloud API (único desde 04/08/2026; a Evolution e a
+  // tabela EvolutionConfig foram removidas). O que importa aqui continua sendo o
+  // mesmo: este restaurante consegue mandar mensagem?
+  const metaConfigs = await prisma.metaWhatsAppConfig.findMany({
     where: { restaurantId: { in: uniqueRestaurantIds } },
-    select: { restaurantId: true, instanceName: true, isActive: true },
+    select: { restaurantId: true, connectionStatus: true, displayPhoneNumber: true },
   });
-  const evolutionMap = new Map(evolutionConfigs.map((e: { restaurantId: string; instanceName: string; isActive: boolean }) => [e.restaurantId, e]));
+  const whatsappMap = new Map(metaConfigs.map((c: { restaurantId: string; connectionStatus: string | null; displayPhoneNumber: string | null }) => [c.restaurantId, c]));
 
   console.log("\n──────────────────────────────────────────────────────");
   console.log(" Draft Eligibility Report");
@@ -185,13 +188,13 @@ async function main() {
         : "no order after draft",
     });
 
-    const evo = evolutionMap.get(draft.restaurantId);
+    const wa = whatsappMap.get(draft.restaurantId);
     rules.push({
-      rule: "Evolution config exists",
-      pass: !!evo,
-      note: evo
-        ? `instance: ${evo.instanceName}, active: ${evo.isActive}`
-        : "NO EVOLUTION CONFIG — send will fail with failed++",
+      rule: "WhatsApp (Meta) conectado",
+      pass: wa?.connectionStatus === "CONNECTED",
+      note: wa
+        ? `número: ${wa.displayPhoneNumber ?? "—"}, conexão: ${wa.connectionStatus}`
+        : "SEM CONFIG DA META — o envio não sai; conta em skippedNoConfig",
     });
 
     const allPass = rules.every((r) => r.pass);

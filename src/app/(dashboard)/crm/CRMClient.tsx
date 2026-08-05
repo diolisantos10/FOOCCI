@@ -245,7 +245,7 @@ type CampaignDetail = {
 
 type CampaignBudgetSnapshot = {
   enabled: boolean;
-  providerMode: "EVOLUTION_WEB" | "META_CLOUD";
+  providerMode: "META_CLOUD";
   distributionMode: "EQUAL" | "PRIORITY" | "MANUAL" | "AUDIENCE";
   globalDailyUsed?: number;
   globalDailyLimit?: number;
@@ -1812,6 +1812,10 @@ const FAILURE_REASON_LABELS: Record<string, string> = {
   CUSTOMER_NOT_CONTACTABLE:    "Não contactável",
   MISSING_PHONE:               "Sem telefone",
   INVALID_PHONE_FORMAT:        "Telefone inválido",
+  NO_WHATSAPP_CONFIG:          "WhatsApp desconectado",
+  // Código aposentado em 04/08 junto com a Evolution. Continua no mapa porque
+  // execuções antigas no banco ainda carregam esse motivo — sem a linha, a tela
+  // mostraria o código cru para o lojista.
   NO_EVOLUTION_CONFIG:         "WhatsApp desconectado",
   QUIET_HOURS:                 "Horário silencioso",
   WEEKEND_BLOCKED:             "Bloqueio fim de semana",
@@ -1882,9 +1886,9 @@ function CampaignFailureDiagnosis({ detail, isRecurring }: { detail: CampaignDet
   const entries = Object.entries(map).sort(([, a], [, b]) => b - a);
   const numberProblems = (catCount["EVOLUTION_BAD_REQUEST"] ?? 0) + (catCount["BLOCKED_INVALID_PHONE"] ?? 0);
   const infraProblems  = (catCount["EVOLUTION_INSTANCE_DISCONNECTED"] ?? 0) + (catCount["FAILED_PROVIDER"] ?? 0) + (catCount["FAILED_TIMEOUT"] ?? 0);
-  const authProblems   = catCount["EVOLUTION_AUTH_ERROR"] ?? 0;
+  const authProblems   = catCount["WHATSAPP_AUTH_ERROR"] ?? 0;
   const verdict = authProblems > numberProblems && authProblems > infraProblems
-    ? "🔑 Erro de autenticação da Evolution — verifique a chave/API da integração."
+    ? "🔑 Erro de autenticação do WhatsApp (Meta) — o token expirou; reconecte a integração."
     : numberProblems >= infraProblems
     ? "📵 A maioria são números que não existem no WhatsApp (base antiga). Não há o que corrigir — são inalcançáveis e já saem do CRM automaticamente; os válidos recebem normalmente."
     : "⚠️ A maioria são erros temporários da Evolution/conexão. O robô para o lote quando isso acontece e tenta de novo no próximo ciclo.";
@@ -3350,7 +3354,7 @@ function CampaignManageModal({
                                 <strong>{detail.performance.recoverableLater ?? 0}</strong> falha(s) temporária(s) podem ser reenviadas depois ·
                                 <strong> {detail.performance.skipped ?? 0}</strong> ignorada(s) (telefone inválido / não elegível — não reenviar).
                               </p>
-                              <p className="mt-1 text-brand-500">Modo seguro WhatsApp Web: até 5 envios por ciclo. Falhas temporárias (Evolution 5xx, timeout) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e 400 não são reenviados automaticamente.</p>
+                              <p className="mt-1 text-brand-500">Modo seguro: até 40 envios por ciclo. Falhas temporárias (Evolution 5xx, timeout) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e 400 não são reenviados automaticamente.</p>
                             </div>
                             {detail.performance.reasonGroups.some((g) => g.category === "BLOCKED_WEEKLY_LIMIT") && (
                               <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800">

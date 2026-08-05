@@ -22,7 +22,7 @@ import { prisma } from "@/lib/prisma";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { getSafetyConfig } from "@/lib/crm-safety";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 
 export async function GET(req: NextRequest) {
   if (!process.env.ADMIN_SECRET) {
@@ -42,12 +42,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const evoResult         = await EvolutionConfigService.getSnapshot(restaurantId);
-    const evolutionAvailable = evoResult.ok;
-    const safety            = await getSafetyConfig(restaurantId);
+    // "Dá para enviar?" agora é sobre a config da Meta — o canal único desde
+    // 04/08/2026. `null` cobre não-configurado E falha de banco: nos dois casos a
+    // resposta honesta é "não disponível" (guardrail 1).
+    const metaConfig         = await MetaConfigService.getResolved(restaurantId).catch(() => null);
+    const whatsappAvailable  = metaConfig !== null;
+    const safety             = await getSafetyConfig(restaurantId);
 
     const context = await ContactSafetyService.buildGlobalContext(restaurantId, {
-      evolutionAvailable,
+      whatsappAvailable,
       checkRestaurantOpen: true,
     });
 
@@ -94,7 +97,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       restaurantId,
-      evolutionAvailable,
+      whatsappAvailable,
       restaurantOpen: context.restaurantOpen,
       globalSentToday: context.globalSentToday,
       safety: {

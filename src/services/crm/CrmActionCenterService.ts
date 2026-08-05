@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { getSegmentConfig, DEFAULT_SEGMENT_CONFIG, type SegmentConfig } from "@/lib/crm-segments";
 import { resolveCustomerSegment } from "@/services/crm/CustomerSegmentService";
 import type { CustomerSegmentValue } from "@/services/crm/crm-helpers";
+import { isWhatsAppChannelConnected } from "./crmWhatsAppChannel";
 
 // ─── Public types ──────────────────────────────────────────────────────────────
 
@@ -96,7 +97,8 @@ export interface CustomerComputeRow {
 export interface ComputeActionsInput {
   customers: CustomerComputeRow[];
   now: Date;
-  hasEvolutionConfig: boolean;
+  /** Canal WhatsApp oficial conectado. Sem ele, nenhuma campanha sai. */
+  hasWhatsAppChannel: boolean;
   couponUserIds: Set<string>;
   segmentConfig: SegmentConfig;
   recentCampaignStats: { sentCount: number; convertedCount: number } | null;
@@ -183,7 +185,7 @@ export function computeActions(input: ComputeActionsInput): CrmAction[] {
   const {
     customers,
     now,
-    hasEvolutionConfig,
+    hasWhatsAppChannel,
     couponUserIds,
     segmentConfig,
     recentCampaignStats,
@@ -243,26 +245,26 @@ export function computeActions(input: ComputeActionsInput): CrmAction[] {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 1. SAFETY_ISSUE_ALERT — no Evolution integration
+  // 1. SAFETY_ISSUE_ALERT — canal WhatsApp fora do ar
   // ─────────────────────────────────────────────────────────────────────────
-  if (!hasEvolutionConfig) {
+  if (!hasWhatsAppChannel) {
     actions.push({
       id: `safety-issue-alert-${nowMs}`,
       type: "SAFETY_ISSUE_ALERT",
-      title: "WhatsApp não configurado",
+      title: "WhatsApp não conectado",
       description:
-        "A integração com WhatsApp (Evolution) não está ativa. Nenhuma campanha pode ser enviada.",
+        "O WhatsApp oficial (Meta) não está conectado. Nenhuma campanha pode ser enviada.",
       priority: "HIGH",
       estimatedAudienceCount: customers.length,
       estimatedRevenueOpportunity: 0,
       safetyStatus: "BLOCKED",
       eligibleCount: 0,
       blockedCount: customers.length,
-      blockerReasons: ["sem-evolução"],
-      suggestedNextStep: "Configurar a integração WhatsApp nas configurações do restaurante.",
+      blockerReasons: ["sem-whatsapp"],
+      suggestedNextStep: "Conectar o WhatsApp oficial em Integrações → WhatsApp.",
       recommendedCampaignType: null,
       linkedCustomerSample: [],
-      reason: "Sem integração Evolution ativa, nenhum envio CRM é possível.",
+      reason: "Sem canal WhatsApp conectado, nenhum envio CRM é possível.",
       computedAt: now.toISOString(),
     });
   }
@@ -534,7 +536,7 @@ export class CrmActionCenterService {
   ): Promise<ActionCenterResult> {
     const now = opts?.now ?? new Date();
 
-    const [customers, hasEvolution, couponRows, segmentConfig, campaignStats, brandConfig] =
+    const [customers, hasWhatsAppChannel, couponRows, segmentConfig, campaignStats, brandConfig] =
       await Promise.all([
         prisma.customer.findMany({
           where: { restaurantId, isActive: true, isGuest: false },
@@ -556,9 +558,10 @@ export class CrmActionCenterService {
           },
         }),
 
-        prisma.evolutionConfig
-          .count({ where: { restaurantId } })
-          .then((n) => n > 0),
+        // A pergunta deixou de ser "existe config da Evolution?" e passou a ser
+        // "o canal oficial está conectado?". O helper falha fechado: erro = false,
+        // que aqui vira o alerta de segurança em vez de um painel otimista.
+        isWhatsAppChannelConnected(restaurantId),
 
         prisma.order
           .groupBy({
@@ -630,7 +633,7 @@ export class CrmActionCenterService {
     const actions = computeActions({
       customers: customerRows,
       now,
-      hasEvolutionConfig: hasEvolution,
+      hasWhatsAppChannel,
       couponUserIds,
       segmentConfig,
       recentCampaignStats: campaignStats,
@@ -639,8 +642,8 @@ export class CrmActionCenterService {
     });
 
     const warnings: string[] = [];
-    if (!hasEvolution) {
-      warnings.push("Integração WhatsApp (Evolution) não configurada — campanhas bloqueadas.");
+    if (!hasWhatsAppChannel) {
+      warnings.push("WhatsApp oficial (Meta) não conectado — campanhas bloqueadas.");
     }
     if (!hasReviewLink) {
       warnings.push("Nenhum link de avaliação (Google/iFood) configurado — pedidos de avaliação bloqueados. Configure em Marca.");

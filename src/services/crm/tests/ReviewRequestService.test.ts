@@ -287,7 +287,7 @@ describe("L — Action Center REVIEW_REQUEST action", () => {
         customer({ id: "b", lastOrderAt: daysAgo(3), hasOptedOut: true }),
       ],
       now: NOW,
-      hasEvolutionConfig: true,
+      hasWhatsAppChannel: true,
       couponUserIds: new Set(),
       segmentConfig: DEFAULT_SEGMENT_CONFIG,
       recentCampaignStats: null,
@@ -329,8 +329,8 @@ describe("M — ReviewRequestService never sends live messages", () => {
     "utf-8",
   );
 
-  it("does not import EvolutionClient", () => {
-    expect(src).not.toMatch(/EvolutionClient/);
+  it("não importa nenhum caminho de envio (nem o canal oficial)", () => {
+    expect(src).not.toMatch(/EvolutionClient|WhatsAppMessagingService/);
   });
 
   it("does not call any send path", () => {
@@ -353,6 +353,6 @@ describe("M — ReviewRequestService never sends live messages", () => {
     );
     expect(ep).toMatch(/getTenantContext/);
     expect(ep).toMatch(/ReviewRequestService/);
-    expect(ep).not.toMatch(/EvolutionClient|sendText/);
+    expect(ep).not.toMatch(/EvolutionClient|WhatsAppMessagingService|sendText/);
   });
 });

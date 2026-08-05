@@ -23,7 +23,8 @@ interface EffectiveStatus {
   updatedAt: string | null;
   whatsappChannel: {
     configured: boolean;
-    instanceName: string | null;
+    /** phone_number_id do número Master na Meta (antes: nome de instância). */
+    channelId: string | null;
     enabled: boolean;
     legacyFallbackEnabled: boolean;
   };
@@ -595,47 +596,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-interface MasterStatus {
-  configured: boolean;
-  enabled: boolean;
-  instanceName: string | null;
-  baseUrl: string | null;
-  apiKeyMasked: string | null;
-  hasApiKey: boolean;
-  apiKeySource: "saved" | "env" | "none";
-  baseUrlSource: "saved" | "env" | "none";
-  envApiKeyAvailable: boolean;
-  hasWebhookSecret: boolean;
-  envBaseUrl: string | null;
-  connectionState: string | null;
-  connectedNumberMasked: string | null;
-  webhookUrl: string | null;
-  webhookEnabled: boolean | null;
-  hasMessagesUpsert: boolean;
-  urlMatchesExpected: boolean;
-  lastEventAt: string | null;
-  lastEventAgeMinutes: number | null;
-  operatorMasked: string | null;
-  expectedWebhookUrl: string;
-  readiness: {
-    baseUrlAvailable: boolean;
-    apiKeyAvailable: boolean;
-    instanceNameSaved: boolean;
-    channelEnabled: boolean;
-    connectionOpen: boolean;
-    webhookOk: boolean;
-    messagesUpsert: boolean;
-    operatorActive: boolean;
-    lastEventReceived: boolean;
-    allReady: boolean;
-  };
+/** Presença das credenciais do canal Master — nunca o valor delas. */
+interface MetaChannelStatus {
+  configured:          boolean;
+  phoneNumberIdSet:    boolean;
+  accessTokenSet:      boolean;
+  phoneNumberIdMasked: string | null;
 }
-
-const SOURCE_LABEL: Record<"saved" | "env" | "none", string> = {
-  saved: "configuração salva",
-  env: "variável de ambiente",
-  none: "ausente",
-};
 
 function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
   return (
@@ -650,304 +617,96 @@ function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: 
 }
 
 /**
- * Canal WhatsApp Master/Admin do Foocci — SYSTEM-level WhatsApp config. Self-
- * contained: talks only to /api/admin/build-os/master-channel (admin config),
- * never to restaurant integration. No restaurant instances, no sushicazza.
+ * Canal WhatsApp Master/Admin do Foocci — nível de SISTEMA, não pertence a
+ * restaurante nenhum.
+ *
+ * ⚠️ MUDOU EM 04/08/2026. Este card era um provisionador: digitava-se baseUrl e
+ * apiKey de um servidor Evolution, criava-se uma instância e pareava-se por
+ * **QR code**. A Evolution saiu do Foocci por ordem do CEO e **a Meta não tem
+ * QR nem pareamento** — um número é registrado dentro do aplicativo da Meta,
+ * pelo especialista `meta`, e vira um `phone_number_id`.
+ *
+ * O card virou SÓ LEITURA de propósito: não há nada para o admin digitar aqui.
+ * As duas variáveis ficam no Railway; a tela apenas diz se elas existem, e
+ * `configured` responde a única pergunta que importa — "dá para mandar /build
+ * pelo WhatsApp agora?".
+ *
+ * Nenhum segredo é exibido: só presença (sim/não) e os 4 últimos dígitos do
+ * phone_number_id, que não é segredo.
  */
 function MasterChannelCard() {
-  const [status, setStatus] = useState<MasterStatus | null>(null);
-  const [instanceName, setInstanceName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [saveBusy, setSaveBusy] = useState(false);
-  const [checkBusy, setCheckBusy] = useState(false);
-  const [syncBusy, setSyncBusy] = useState(false);
-  const [qrBusy, setQrBusy] = useState(false);
-  const [resetBusy, setResetBusy] = useState(false);
-  const [qr, setQr] = useState<{ connected?: boolean; restarting?: boolean; base64?: string | null; pairingCode?: string | null; state?: string | null; generatedAt?: string; note?: string } | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [status, setStatus] = useState<MetaChannelStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  function applyStatus(s: MasterStatus) {
-    setStatus(s);
-    setInstanceName(s.instanceName ?? "");
-    setBaseUrl(s.baseUrl ?? s.envBaseUrl ?? "");
-  }
-
-  async function load() {
+  const load = useCallback(async () => {
+    setErr(null);
     try {
-      const res = await fetch("/api/admin/build-os/master-channel");
-      const d = await res.json().catch(() => ({}));
-      if (res.ok && d.ok) applyStatus(d.status as MasterStatus);
-    } catch { /* ignore */ }
-  }
-  useEffect(() => { load(); }, []);
+      const res = await fetch("/api/admin/build-os/master-channel", { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao ler o canal Master."); return; }
+      setStatus(d.status as MetaChannelStatus);
+    } catch {
+      // Falha de rede NÃO pode virar "não configurado" na tela: seria concluir
+      // uma negação do silêncio (guardrail 1). Mostra erro explícito.
+      setErr("Não foi possível consultar o canal Master agora.");
+    }
+  }, []);
 
-  async function save() {
-    setSaveBusy(true); setErr(null); setMsg(null);
-    try {
-      const body: Record<string, unknown> = {
-        instanceName: instanceName.trim(),
-        baseUrl: baseUrl.trim(),
-      };
-      if (apiKey.trim()) body.apiKey = apiKey.trim();
-      const res = await fetch("/api/admin/build-os/master-channel", {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao salvar."); return; }
-      setApiKey(""); // never keep the plaintext key in state after saving
-      setMsg("Configuração salva.");
-      applyStatus(d.status as MasterStatus);
-    } finally { setSaveBusy(false); }
-  }
+  useEffect(() => { void load(); }, [load]);
 
-  async function clearSavedKey() {
-    setSaveBusy(true); setErr(null); setMsg(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel", {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clearApiKey: true }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao remover a apiKey salva."); return; }
-      setApiKey("");
-      setMsg("apiKey salva removida. Usando a variável de ambiente (EVOLUTION_DEFAULT_API_KEY).");
-      applyStatus(d.status as MasterStatus);
-    } finally { setSaveBusy(false); }
-  }
-
-  async function setEnabled(enabled: boolean) {
-    setSaveBusy(true); setErr(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel", {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isEnabled: enabled }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao atualizar."); return; }
-      applyStatus(d.status as MasterStatus);
-    } finally { setSaveBusy(false); }
-  }
-
-  async function verify() {
-    setCheckBusy(true); setErr(null); setMsg(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel");
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao verificar."); return; }
-      applyStatus(d.status as MasterStatus);
-    } finally { setCheckBusy(false); }
-  }
-
-  async function sync() {
-    setSyncBusy(true); setErr(null); setMsg(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel/sync", { method: "POST" });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao sincronizar webhook."); return; }
-      setMsg(d.result?.note ?? "Webhook sincronizado no Canal Admin.");
-      await verify();
-    } finally { setSyncBusy(false); }
-  }
-
-  async function loadQr() {
-    setQrBusy(true); setErr(null); setMsg(null); setQr(null);
-    try {
-      // no-store + cache-buster: the QR expires fast and must never be cached.
-      const res = await fetch(`/api/admin/build-os/master-channel/qr?ts=${Date.now()}`, { cache: "no-store" });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao gerar QR."); return; }
-      setQr(d.result);
-    } finally { setQrBusy(false); }
-  }
-
-  async function resetInstance() {
-    if (!window.confirm("Resetar a instância futi-admin (logout + delete + recriar) e gerar um QR novo? Isso desconecta qualquer sessão atual do número do Admin.")) return;
-    setResetBusy(true); setErr(null); setMsg(null); setQr(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel/reset", { method: "POST", cache: "no-store" });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao resetar a instância."); return; }
-      setQr(d.result);
-      setMsg("Instância resetada. Escaneie o QR novo agora.");
-    } finally { setResetBusy(false); }
-  }
-
-  const configured = !!status?.configured;
-  const credsMissing = !!status && !status.hasApiKey;
-  const apiKeyLabel = status
-    ? status.apiKeySource === "saved"
-      ? `apiKey/token (origem: configuração salva — ${status.apiKeyMasked ?? "••••"})`
-      : status.apiKeySource === "env"
-        ? "apiKey/token (origem: variável de ambiente) — opcional"
-        : "apiKey/token da Evolution"
-    : "apiKey/token da Evolution";
   return (
-    <div className={`rounded-xl border p-5 ${configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Canal WhatsApp Master/Admin do Foocci</h3>
-      <p className="mt-1 text-xs text-gray-600">
-        Este canal pertence ao <strong>centro administrativo do Foocci</strong>. Ele recebe comandos do Diego/CEO e
-        <strong> não pertence a nenhum restaurante</strong>. Configure aqui a instância Evolution dedicada do Admin
-        (ex.: <code>futi-admin</code>) — independente das integrações de restaurante.
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <h3 className="text-sm font-semibold text-gray-900">Canal WhatsApp Master/Admin</h3>
+      <p className="mt-1 text-xs text-gray-500">
+        Número <strong>dedicado da equipe</strong> na conta oficial da Meta — <strong>não pertence a nenhum
+        restaurante</strong>. É por ele que os comandos <code>/build</code> entram e as confirmações saem.
+      </p>
+      <p className="mt-2 text-xs text-gray-500">
+        Configurado por variável de ambiente (Railway): <code>BUILDOS_META_PHONE_NUMBER_ID</code> e{" "}
+        <code>BUILDOS_META_ACCESS_TOKEN</code>. Não há QR nem pareamento — na Meta o número é
+        registrado dentro do aplicativo, não escaneado.
       </p>
 
-      {status && (
-        <p className="mt-2 text-[11px] text-gray-500">
-          Origem das credenciais — baseUrl: <strong>{SOURCE_LABEL[status.baseUrlSource]}</strong> · apiKey:{" "}
-          <strong>{SOURCE_LABEL[status.apiKeySource]}</strong>
-          {status.envApiKeyAvailable ? " (EVOLUTION_DEFAULT_API_KEY disponível)" : ""}
-        </p>
-      )}
-
-      {/* Saved key is overriding env — offer to remove it */}
-      {status && status.apiKeySource === "saved" && status.envApiKeyAvailable && (
-        <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800">
-          <p className="font-medium">
-            ⚠️ Existe uma apiKey salva manualmente. Ela está sobrescrevendo a variável de ambiente
-            (<code>EVOLUTION_DEFAULT_API_KEY</code>). Se a conexão dá 401/403, a chave salva provavelmente está incorreta.
-          </p>
-          <button
-            type="button"
-            disabled={saveBusy}
-            onClick={clearSavedKey}
-            className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-40"
-          >
-            {saveBusy ? "Removendo…" : "Usar chave do ambiente (remover apiKey salva)"}
-          </button>
-        </div>
-      )}
-
-      {credsMissing && (
-        <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
-          ⚠️ Credenciais Evolution globais do Admin não configuradas. Defina <code>EVOLUTION_DEFAULT_API_KEY</code> no
-          ambiente ou informe uma apiKey manual no card. {status?.envBaseUrl ? `(baseUrl env: ${status.envBaseUrl})` : ""}
-        </p>
-      )}
-
-      {/* Config form */}
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label="instanceName do Admin">
-          <input className={INPUT} value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="ex.: futi-admin" />
-        </Field>
-        <Field label={status?.baseUrlSource === "env" ? "baseUrl da Evolution (origem: env)" : "baseUrl da Evolution"}>
-          <input className={INPUT} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evolution-api-production-xxx.up.railway.app" />
-          <span className="mt-1 block text-[11px] text-gray-400">ex: https://evolution-api-production-xxx.up.railway.app (o https:// é adicionado automaticamente se faltar)</span>
-        </Field>
-        <Field label={apiKeyLabel}>
-          <input
-            className={INPUT}
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={status?.apiKeySource === "env" ? "usando env — preencha só p/ sobrepor" : status?.hasApiKey ? "deixe vazio para manter" : "token do servidor (ou use env)"}
-          />
-        </Field>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={saveBusy} onClick={save} className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40">
-          {saveBusy ? "Salvando…" : "Salvar configuração"}
-        </button>
-        <label className="flex items-center gap-2 text-xs text-gray-700">
-          <input type="checkbox" disabled={saveBusy || !status?.hasApiKey} checked={!!status?.enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          Canal Admin ativo (processa comandos Build OS desta instância)
-        </label>
-      </div>
-
-      {/* Actions */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" onClick={verify} disabled={checkBusy || syncBusy} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-40">
-          {checkBusy ? "Verificando…" : "Verificar conexão"}
-        </button>
-        <button type="button" onClick={sync} disabled={checkBusy || syncBusy || credsMissing} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40">
-          {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
-        </button>
-        <button type="button" onClick={loadQr} disabled={checkBusy || syncBusy || qrBusy || resetBusy || credsMissing} className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40">
-          {qrBusy ? "Preparando…" : "Preparar/Conectar Canal Admin"}
-        </button>
-        {qr && !qr.connected && (
-          <button type="button" onClick={loadQr} disabled={qrBusy || resetBusy} className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-50 disabled:opacity-40">
-            {qrBusy ? "Atualizando…" : "Atualizar QR"}
-          </button>
-        )}
-        <button type="button" onClick={resetInstance} disabled={qrBusy || resetBusy || credsMissing} className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40">
-          {resetBusy ? "Resetando…" : "Resetar instância futi-admin e gerar QR novo"}
-        </button>
-      </div>
-
-      {/* QR */}
-      {qr && (
-        <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 p-3 text-xs">
-          {qr.connected ? (
-            <p className="font-semibold text-green-700">✅ Canal Admin já conectado.</p>
-          ) : qr.base64 ? (
-            <div className="flex flex-col items-start gap-2">
-              <p className="text-gray-700">
-                {qr.note ?? "Escaneie com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados → Conectar aparelho)."}{" "}
-                É um número interno do Admin — <strong>não</strong> é WhatsApp de restaurante.
-              </p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr.base64} alt="QR Code do Canal Admin" className="h-56 w-56 rounded bg-white p-2" />
-              {qr.pairingCode && <p className="font-mono text-sm">Código: {qr.pairingCode}</p>}
-              {qr.generatedAt && (
-                <p className="text-[11px] text-gray-500">
-                  QR gerado em {new Date(qr.generatedAt).toLocaleTimeString("pt-BR")} — expira em segundos. Se o WhatsApp
-                  disser &quot;não é possível conectar novos dispositivos&quot;, é QR expirado/instância inconsistente:
-                  clique <strong>Atualizar QR</strong>; se persistir, <strong>Resetar instância</strong>.
-                </p>
-              )}
-            </div>
-          ) : qr.pairingCode ? (
-            <p>Código de pareamento: <span className="font-mono text-sm font-semibold">{qr.pairingCode}</span></p>
-          ) : (
-            <p className="text-gray-600">{qr.note ?? "QR indisponível."}{qr.restarting ? " (instância reiniciando)" : ""}</p>
-          )}
-        </div>
-      )}
-
       {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
-      {msg && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">{msg}</p>}
 
-      {/* Live status */}
       {status && (
-        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 sm:grid-cols-2">
-          <span>Conexão: <strong className={status.connectionState === "open" ? "text-green-700" : "text-red-700"}>{status.connectionState?.toUpperCase() ?? "DESCONHECIDA"}</strong></span>
-          <span>Canal Admin conectado (RECEBE): <span className="font-mono">{status.connectedNumberMasked ?? "—"}</span></span>
-          <span>Operador autorizado (ENVIA): <span className="font-mono">{status.operatorMasked ?? "—"}</span></span>
-          <span>Webhook habilitado: {status.webhookEnabled === null ? "—" : String(status.webhookEnabled)}</span>
-          <span>URL bate com a esperada: {String(status.urlMatchesExpected)}</span>
-          <span>MESSAGES_UPSERT: {status.hasMessagesUpsert ? "sim" : "não"}</span>
-          <span className="sm:col-span-2">Último evento: {status.lastEventAt ? `${new Date(status.lastEventAt).toLocaleString("pt-BR")} (há ${status.lastEventAgeMinutes} min)` : "nunca"}</span>
-        </div>
-      )}
+        <>
+          <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700">
+            <p>
+              Estado:{" "}
+              <strong className={status.configured ? "text-green-700" : "text-amber-700"}>
+                {status.configured ? "PRONTO" : "NÃO CONFIGURADO"}
+              </strong>
+            </p>
+            <p className="mt-1">
+              phone_number_id: <span className="font-mono">{status.phoneNumberIdMasked ?? "—"}</span>
+            </p>
+          </div>
 
-      {/* Readiness checklist */}
-      {status && (
-        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prontidão para testar /build</p>
-          <ul className="mt-2 space-y-1">
-            <ChecklistRow ok={status.readiness.baseUrlAvailable} label="baseUrl Evolution disponível" hint="env EVOLUTION_DEFAULT_URL ou campo acima" />
-            <ChecklistRow ok={status.readiness.apiKeyAvailable} label={`apiKey Evolution disponível (origem: ${SOURCE_LABEL[status.apiKeySource]})`} hint="env EVOLUTION_DEFAULT_API_KEY ou campo acima" />
-            <ChecklistRow ok={status.readiness.instanceNameSaved} label="instanceName salvo" hint="ex.: futi-admin" />
-            <ChecklistRow ok={status.readiness.channelEnabled} label="Canal Admin ativo" hint="marque a caixa acima" />
-            <ChecklistRow ok={status.readiness.connectionOpen} label="conexão OPEN" hint="conecte via QR" />
-            <ChecklistRow ok={status.readiness.webhookOk} label="webhook correto (habilitado + URL esperada)" hint="clique em Sincronizar webhook" />
-            <ChecklistRow ok={status.readiness.messagesUpsert} label="MESSAGES_UPSERT ativo" hint="clique em Sincronizar webhook" />
-            <ChecklistRow ok={status.readiness.operatorActive} label={`operador autorizado ativo${status.operatorMasked ? ` (${status.operatorMasked})` : " (+55***5223)"}`} hint="cadastre o operador Diego" />
-            <ChecklistRow ok={status.readiness.lastEventReceived} label="último evento recebido no Canal Admin" hint="envie uma mensagem de teste" />
-          </ul>
-          {status.readiness.allReady ? (
-            <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-sm font-semibold text-green-800">
-              ✅ Pronto para testar /build — envie &quot;/build teste&quot; do número {status.operatorMasked ?? "+55***5223"} para o número conectado no Canal Admin.
-            </p>
-          ) : (
-            <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
-              ⏳ Ainda não está pronto. Resolva os itens pendentes — o /build NÃO vai funcionar até todos estarem OK.
-            </p>
-          )}
-        </div>
+          <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prontidão para testar /build</p>
+            <ul className="mt-2 space-y-1">
+              <ChecklistRow ok={status.phoneNumberIdSet} label="número Master definido" hint="BUILDOS_META_PHONE_NUMBER_ID no Railway" />
+              <ChecklistRow ok={status.accessTokenSet}   label="token do número Master definido" hint="BUILDOS_META_ACCESS_TOKEN no Railway" />
+              <ChecklistRow ok={status.configured}       label="canal pronto para receber e responder" hint="depende dos dois itens acima" />
+            </ul>
+            {status.configured ? (
+              <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-sm font-semibold text-green-800">
+                ✅ Canal pronto — envie &quot;/build teste&quot; de um número autorizado para o número Master.
+              </p>
+            ) : (
+              <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
+                ⏳ Canal não configurado. Sem as duas variáveis, o <code>/build</code> por WhatsApp não funciona —
+                os comandos por script continuam valendo.
+              </p>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
+
 
 function CopyableCommand({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

@@ -4,7 +4,7 @@
  * Cron-safe, hermetic check of the WhatsApp "anotador de pedido" flow: synthetic
  * catalog + pure state machine + Brain adapter. Proves ORDER_BY_TEXT detection,
  * item extraction, numbered ambiguity options, `0. menu` footer, no invented
- * product/price, and ZERO side effects (no real order, no Evolution, no Pix,
+ * product/price, and ZERO side effects (no real order, no WhatsApp send, no Pix,
  * runtimeTouched=false). Never reads/writes the DB.
  *
  * Auth: Authorization: Bearer {CRON_SECRET}. POST only, never public.

@@ -6,7 +6,9 @@
  * messages MUST use an approved TEMPLATE. Foocci must never silently fail — if a
  * template is required but not configured, we block with META_TEMPLATE_REQUIRED.
  *
- * This applies ONLY to the META_CLOUD_API provider. Evolution behavior is unchanged.
+ * Vale para todo envio do Foocci: desde 04/08/2026 a Meta é o canal único, e um
+ * bloqueio aqui é decisão de política — é reportado ao chamador, nunca contornado
+ * por outro caminho de envio.
  */
 
 export const META_CUSTOMER_WINDOW_MS = 24 * 60 * 60 * 1000;

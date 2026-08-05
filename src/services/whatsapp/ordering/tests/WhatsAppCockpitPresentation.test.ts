@@ -124,9 +124,9 @@ describe("(5) Checklist visual derivado do relatório", () => {
 
 describe("(6) Safety flags continuam visíveis", () => {
   it("agregado e por cenário", () => {
-    expect(report.safety).toEqual({ noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false });
+    expect(report.safety).toEqual({ noWhatsAppSend: true, noRealOrder: true, noRealPix: true, runtimeTouched: false });
     for (const s of report.scenarios) {
-      expect(s.safety.noEvolution).toBe(true);
+      expect(s.safety.noWhatsAppSend).toBe(true);
       expect(s.safety.runtimeTouched).toBe(false);
     }
   });

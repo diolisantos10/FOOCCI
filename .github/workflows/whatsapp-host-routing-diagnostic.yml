@@ -60,7 +60,7 @@ jobs:
             echo "   reason               : $(jq -r '.decision.reason' /tmp/r.json)"
             echo "   responseType         : $(jq -r '.receptionistPreview.responseType // "—"' /tmp/r.json)"
             echo "   rawLink/handoff/loc   : $(jq -r '.receptionistPreview.containsRawLink // "—"' /tmp/r.json) / $(jq -r '.receptionistPreview.containsHandoff // "—"' /tmp/r.json) / $(jq -r '.receptionistPreview.containsRestaurantLocation // "—"' /tmp/r.json)"
-            echo "   safety               : noEvolution=$(jq -r '.safety.noEvolution' /tmp/r.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/r.json) runtimeTouched=$(jq -r '.safety.runtimeTouched' /tmp/r.json)"
+            echo "   safety               : noWhatsAppSend=$(jq -r '.safety.noWhatsAppSend' /tmp/r.json) noRealOrder=$(jq -r '.safety.noRealOrder' /tmp/r.json) noRealPix=$(jq -r '.safety.noRealPix' /tmp/r.json) runtimeTouched=$(jq -r '.safety.runtimeTouched' /tmp/r.json)"
             if [[ "$http" -lt 200 || "$http" -ge 300 ]]; then echo "::error::$label non-2xx ($http)"; fail=1; fi
             if [[ "$(jq -r '.ok' /tmp/r.json)" != "true" ]]; then echo "::error::$label ok != true"; fail=1; fi
           }

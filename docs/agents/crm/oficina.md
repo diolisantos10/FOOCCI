@@ -180,3 +180,126 @@ preservadas; buckets A/B intactos). Quebra-vidro (se nada de Node estiver à mã
    banco; o ciclo real promover→rollback contra Postgres foi provado à mão em
    2026-08-03 (este registro). Quem mexer no `writeCrmPilotConfig` (upsert, JSON,
    merge de notas com teto de 2000 chars) não tem rede automática de banco real.
+
+---
+
+## 2026-08-04 — A Evolution sai do CRM: um canal só, e ele tem que responder
+
+**Ordem do CEO** (via Diretor): a Evolution sai do Foocci por completo — era muleta
+enquanto a homologação da Meta não saía; a homologação saiu e nenhum restaurante
+depende mais dela. Escopo desta oficina: `src/services/crm/**` (inclusive testes).
+**Não questionei a decisão; executei.**
+
+### a) A tradução que importa: de "qual provedor?" para "o canal está de pé?"
+
+Todo caminho de envio do CRM fazia a própria pergunta, e a pergunta era sobre a
+Evolution (`EvolutionConfigService.getSnapshot` + `EvolutionClient.getInstanceStatus`,
+`state === "open"`). Com provedor único a pergunta vira uma só e mora em um lugar:
+`src/services/crm/crmWhatsAppChannel.ts` → `isWhatsAppChannelConnected()`, que
+pergunta ao `WhatsAppMessagingService.getConnectionStatus` e **falha fechado**:
+erro de consulta = `false` + log com o restaurante concreto.
+
+Por que um arquivo novo em vez de `catch(() => false)` em quatro lugares: a regra
+"ausência de informação não é permissão de disparo" precisa de UM dono. Quatro
+cópias viram três cópias na primeira refatoração distraída.
+
+**O que NÃO fiz de propósito:** manter `metaCrmEnabled` como trava de envio. Aquele
+campo existia para ESCOLHER provedor; mantê-lo como portão desligaria o CRM de todo
+restaurante que nunca precisou ligar o interruptor — quebra silenciosa, o oposto do
+pedido. A checagem de CONEXÃO ficou (era o pedido explícito do Diretor).
+
+### b) Desconectado tem que APARECER — o pior resultado seria o lote sumir
+
+`_sendBatch` antes devolvia `failed: customers.length` **sem gravar uma linha
+sequer** quando não havia config. O lojista via "0 enviados" e nenhuma explicação.
+Agora: `createMany` de uma linha **BLOCKED** por destinatário com
+`errorMessage="NO_WHATSAPP_CONFIG"`, e o lote devolve `blocked`, não `failed` —
+canal fora do ar não é culpa do destinatário. A janela de 24h de reattempt
+(`BLOCK_RETRY_WINDOW_HOURS`) já existente impede que isso vire enxurrada a cada tick.
+Travado em `tests/ScheduledCampaignRunnerBlocks.test.ts` (dois casos: desconectado
+e "não deu para saber").
+
+### c) Bloqueio de política ≠ falha de entrega
+
+O `SendResult` da Meta tem três estados e eu passei a respeitar os três. `BLOCKED`
+(fora da janela de 24h sem modelo aprovado → `META_TEMPLATE_REQUIRED`) vira linha
+**BLOCKED** com o motivo, **não** alimenta o disjuntor e **não** manda ninguém para
+a limpeza automática de números. Só `FAILED` conta como falha. Se eu tivesse
+tratado bloqueio como falha, cinco recusas de política em sequência abortariam o
+lote inteiro por "colapso de canal" que não existiu.
+
+Para o `catch` continuar vendo código de máquina (`META_190`, `INVALID_PHONE`,
+`HTTP_500`) criei `SendFailure extends Error` com `errorCode` — sem isso o código
+virava texto livre e a classificação, que decide retentativa **e exclusão de
+cliente**, perdia o pé.
+
+### d) O que eu me RECUSEI a inferir
+
+Códigos de erro da Meta que eu não conheço um a um caem em `FAILED_PROVIDER`
+(retentar depois), **nunca** em `EVOLUTION_BAD_REQUEST`. Motivo: essa categoria
+alimenta a limpeza automática que **APAGA lead sem histórico**. Mapear um código
+desconhecido para "número morto" seria apagar cliente com base em palpite. Quando
+um código merecer tratamento próprio, ele entra nomeado.
+
+Pelo mesmo motivo mantive `NO_EVOLUTION_CONFIG` sendo LIDO na classificação: o
+código saiu de circulação, mas as linhas antigas continuam no banco, e apagar o
+`case` transformaria bloqueio explicado em "erro desconhecido" retroativo.
+
+### e) O efeito colateral que quase passou batido: o agente e o rodízio de frases
+
+`crmPilotActive` tinha `&& !metaProvider` — o agente de CRM só compunha no caminho
+Evolution. Com Meta-only isso viraria `false` para sempre e **mataria o agente em
+WIDE em silêncio**. E `selectorPool = metaProvider ? metaPhrases : activePhrases`
+mataria junto o rodízio de frases e o bandit de quem não tem modelo por frase.
+
+Troquei a pergunta certa: **`templateMode`** = existe modelo aprovado (por frase ou
+da campanha)? Se sim, rodízio só sobre os aprovados e agente parado — porque com
+modelo quem chega ao cliente é o TEXTO DO MODELO, e gravar `variantKey="agent:crm"`
+numa mensagem que ninguém leu é número de conversão inventado. Se não há modelo, a
+campanha sai em texto livre e tudo volta a valer como valia.
+
+### f) Mudança de comportamento que o CEO precisa saber (não é minha para decidir)
+
+O teto **por rodada** era `metaCrmEnabled ? 40 : 5`. Com canal único virou sempre
+`META_CLOUD_MAX_PER_RUN = 40`. Para restaurante que já era Meta, nada muda; para
+quem nunca ligou o interruptor, o lote por ciclo vai de 5 para 40. **Teto diário da
+campanha e orçamento global continuam intactos** — mudou o ritmo, não o volume do
+dia. Registro aqui porque teto e limite diário são coisas diferentes e já foram
+confundidos nesta casa.
+
+### g) Armadilha de teste que custou tempo (vitest 2.1.9)
+
+Espião que já recebeu `mockResolvedValue` e depois passa a lançar faz o vitest
+contabilizar o erro como **falha do arquivo**, mesmo com o `catch` funcionando e o
+teste terminando (dá para ver o `console.error` do catch no stderr e a asserção
+passar). Solução: atribuir um `vi.fn()` NOVO no teste que lança. Está comentado nos
+dois lugares onde uso isso — quem "arrumar" de volta reintroduz o vermelho.
+
+### h) Sujeira que não é minha, mas passou pelas minhas mãos
+
+O commit `8a462b3` (consolidação do Diretor, `git add -A` durante meu trabalho)
+levou junto um arquivo de depuração meu, `src/services/crm/tests/__dbg7.test.ts`.
+Ele está **deletado na árvore de trabalho** e a deleção está por commitar. Não
+commitei nada, conforme a ordem.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. *"A pergunta do canal tem UM dono e ele falha fechado"* —
+   `crmWhatsAppChannel.isWhatsAppChannelConnected` é o único lugar que decide se o
+   CRM pode falar. Erro de consulta = não pode. Travado em
+   `tests/CrmWhatsAppChannel.test.ts`. Origem: extração da Evolution, 2026-08-04.
+2. *"Desconectado grava BLOCKED por destinatário, não some"* — o pior modo de
+   falha do CRM sempre foi o silêncio; `_sendBatch` agora deixa rastro por pessoa.
+   Travado em `tests/ScheduledCampaignRunnerBlocks.test.ts`. Origem: idem.
+3. *"Bloqueio de política não é falha, e por isso não aciona disjuntor nem
+   exclusão de cliente"* — `SendResult.status === "BLOCKED"` tem caminho próprio
+   nos dois envios. Origem: idem.
+4. **Corrige a entrada de vitrine de 2026-08-03 (item 1 da oficina anterior):**
+   *"O agente de CRM não compõe no caminho Meta"* **caducou**. O gate não é mais o
+   provedor (não há escolha), é `templateMode` — com modelo aprovado o agente fica
+   parado; sem modelo, ele compõe. Promover a ALLOWLIST num restaurante que tem
+   modelo aprovado para a campanha continua ligando um modo que não envia.
+5. *"Categoria de execução com prefixo EVOLUTION_ é NOME, não provedor"* —
+   `EVOLUTION_BAD_REQUEST` e irmãs são contadas por chave no `CRMClient.tsx`.
+   Renomear zera os contadores da tela sem ninguém perceber. Mudou o que ENTRA em
+   cada uma, não o nome. Origem: idem.

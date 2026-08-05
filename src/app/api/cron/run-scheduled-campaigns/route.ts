@@ -84,8 +84,14 @@ export async function POST(req: NextRequest) {
     // handful of DB reads per restaurant (skip-guard) — no Graph traffic.
     if (!dryRun) {
       try {
+        // `metaCrmEnabled` saiu deste filtro em 04/08. Ele era o interruptor
+        // "usar a Meta no CRM" de quando havia dois provedores; com a Meta como
+        // canal ÚNICO, mantê-lo aqui produzia o pior dos mundos: a loja envia
+        // (o envio não olha mais esse campo) mas nunca ganha modelo aprovado —
+        // e aí toda audiência fora da janela de 24h volta BLOCKED para sempre.
+        // O que gateia de verdade é a conexão.
         const metaRestaurants = await prisma.metaWhatsAppConfig.findMany({
-          where:  { metaCrmEnabled: true, connectionStatus: "CONNECTED", ...(restaurantId ? { restaurantId } : {}) },
+          where:  { connectionStatus: "CONNECTED", ...(restaurantId ? { restaurantId } : {}) },
           select: { restaurantId: true },
         });
         for (const r of metaRestaurants) {

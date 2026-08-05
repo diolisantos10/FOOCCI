@@ -59,9 +59,10 @@ export interface OnboardingStatusData {
     hasOnlineProvider: boolean;
   };
   whatsapp: {
-    hasPhone:     boolean;
-    hasEvolution: boolean;
-    agentMode:    string;
+    hasPhone:      boolean;
+    /** WhatsApp oficial da Meta conectado (o único canal desde 04/08/2026). */
+    hasWhatsApp:   boolean;
+    agentMode:     string;
   };
   finalTestCompletedAt: string | null;
 }
@@ -88,7 +89,7 @@ async function computeStatus(restaurantId: string): Promise<OnboardingStatusData
     activeProductCount,
     totalProductCount,
     productsWithImageCount,
-    evolutionConfig,
+    metaConfig,
     agentConfig,
     onboardingStatus,
   ] = await Promise.all([
@@ -116,9 +117,9 @@ async function computeStatus(restaurantId: string): Promise<OnboardingStatusData
     prisma.menuItem.count({ where: { category: { restaurantId }, isActive: true } }),
     prisma.menuItem.count({ where: { category: { restaurantId } } }),
     prisma.menuItem.count({ where: { category: { restaurantId }, isActive: true, imageUrl: { not: null } } }),
-    prisma.evolutionConfig.findUnique({
+    prisma.metaWhatsAppConfig.findUnique({
       where: { restaurantId },
-      select: { isActive: true },
+      select: { connectionStatus: true },
     }),
     prisma.whatsAppAgentConfig.findUnique({
       where: { restaurantId },
@@ -201,10 +202,12 @@ async function computeStatus(restaurantId: string): Promise<OnboardingStatusData
   }
 
   // ── Step: Canais ─────────────────────────────────────────────────────────────
-  const hasEvolution = !!(evolutionConfig?.isActive);
-  const canaisStep: StepResult = hasEvolution
+  // Só "CONNECTED" prova conexão. PENDING/ERROR/DISCONNECTED e ausência de linha
+  // NÃO viram "configurado" — o lojista não pode ver ✓ num canal que não envia.
+  const hasWhatsApp = metaConfig?.connectionStatus === "CONNECTED";
+  const canaisStep: StepResult = hasWhatsApp
     ? stepComplete("Links públicos e WhatsApp configurados")
-    : stepWarning("Links públicos OK — WhatsApp não integrado (Evolution API não configurada)");
+    : stepWarning("Links públicos OK — WhatsApp da Meta ainda não conectado");
 
   // ── Step: Teste final ────────────────────────────────────────────────────────
   const testeStep: StepResult = onboardingStatus?.finalTestCompletedAt
@@ -256,9 +259,9 @@ async function computeStatus(restaurantId: string): Promise<OnboardingStatusData
       hasOnlineProvider,
     },
     whatsapp: {
-      hasPhone:     hasPhone,
-      hasEvolution: hasEvolution,
-      agentMode:    agentConfig?.agentMode ?? "RECEPTIONIST_ONLY",
+      hasPhone:    hasPhone,
+      hasWhatsApp: hasWhatsApp,
+      agentMode:   agentConfig?.agentMode ?? "RECEPTIONIST_ONLY",
     },
     finalTestCompletedAt: onboardingStatus?.finalTestCompletedAt?.toISOString() ?? null,
   };

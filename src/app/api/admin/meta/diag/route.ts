@@ -40,13 +40,9 @@ export async function GET(req: NextRequest) {
       const cfg = await MetaConfigService.getResolved(row.restaurantId);
       if (!cfg) continue;
 
-      // Runtime routing flags: which provider actually sends (bot replies + manual) and
-      // whether CRM campaigns route through Meta. A CONNECTED Meta number still won't
-      // reply if the restaurant's provider is EVOLUTION.
-      const rest = await prisma.restaurant.findUnique({
-        where:  { id: row.restaurantId },
-        select: { whatsappProvider: true },
-      });
+      // Sinalizador de runtime que ainda importa: se as campanhas de CRM estão
+      // ligadas. O antigo "qual provedor envia?" morreu com a Evolution — a Meta
+      // é o canal único desde 04/08.
       const cfgRow = await prisma.metaWhatsAppConfig.findUnique({
         where:  { restaurantId: row.restaurantId },
         select: { metaCrmEnabled: true, coexistence: true },
@@ -72,7 +68,6 @@ export async function GET(req: NextRequest) {
       out.push({
         restaurantId:      row.restaurantId,
         connectionStatus:  cfg.connectionStatus,
-        whatsappProvider:  rest?.whatsappProvider ?? null,
         metaCrmEnabled:    cfgRow?.metaCrmEnabled ?? false,
         coexistence:       cfgRow?.coexistence ?? false,
         wabaId_masked:     mask(cfg.wabaId),

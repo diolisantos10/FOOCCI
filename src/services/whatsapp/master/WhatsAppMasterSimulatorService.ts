@@ -1,7 +1,7 @@
 /**
  * WhatsAppMasterSimulatorService — hermetic umbrella over all WhatsApp testing
  * infrastructure. Runs a full battery covering MENU, RECEPTIONIST guard rules,
- * TEXT_ORDER, PIX, DELIVERY, HANDOFF, and REAL_CASES without touching Evolution,
+ * TEXT_ORDER, PIX, DELIVERY, HANDOFF, and REAL_CASES without sending WhatsApp,
  * the DB, or any real side effect.
  *
  * Design: wraps `runTextOrderSimulator("REPLY_ONLY")` for flow coverage, then
@@ -9,7 +9,7 @@
  * (`advanceSession` on IDLE session). `MEDIA_MESSAGE_REPLY` contract is verified
  * as a constant-level check.
  *
- * HARD INVARIANTS: runtimeTouched=false, noEvolution=true, noRealOrder=true,
+ * HARD INVARIANTS: runtimeTouched=false, noWhatsAppSend=true, noRealOrder=true,
  * noRealPix=true. Runs in < 5 seconds.
  */
 
@@ -69,7 +69,7 @@ export interface MasterAreaSummary {
 }
 
 export interface MasterSafety {
-  noEvolution: boolean;
+  noWhatsAppSend: boolean;
   noRealOrder: boolean;
   noRealPix: boolean;
   runtimeTouched: false;
@@ -506,7 +506,7 @@ export async function runMasterSimulator(): Promise<MasterReport> {
   const status: MasterStatus = failed > 0 ? "FAIL" : warned > 0 ? "WARNING" : "PASS";
 
   const safety: MasterSafety = {
-    noEvolution: true,
+    noWhatsAppSend: true,
     noRealOrder: simReport.safety.noRealOrder,
     noRealPix: simReport.safety.noRealPix,
     runtimeTouched: false,

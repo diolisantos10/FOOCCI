@@ -78,9 +78,9 @@ describe("falsos positivos medidos — pergunta inocente NÃO vira incidente", (
     },
     {
       pergunta: "o google desconectou de novo",
-      virava: "whatsapp_evolution — pelo gatilho solto 'desconectou'",
+      virava: "whatsapp_meta — pelo gatilho solto 'desconectou'",
       falhaDeVerdade: "o whatsapp desconectou de novo, tá pedindo qr",
-      subsistema: "whatsapp_evolution",
+      subsistema: "whatsapp_meta",
     },
     {
       pergunta: "as DMs do instagram pararam de chegar",

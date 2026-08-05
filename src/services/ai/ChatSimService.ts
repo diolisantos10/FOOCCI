@@ -3,7 +3,7 @@
  *
  * Runs a sandboxed interactive chat session against the real AI ordering
  * pipeline (PromptBuilderService, UpsellEngine, OpenAI, AI_TOOL_DEFINITIONS).
- * Nothing is sent to WhatsApp — Evolution API is never called.
+ * Nothing is sent to WhatsApp — no provider call is ever made.
  *
  * Session lifecycle:
  *   1. createSession()   — creates temp Customer + Conversation in DB

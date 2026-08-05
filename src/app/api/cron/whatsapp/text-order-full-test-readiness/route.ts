@@ -3,7 +3,7 @@
  *
  * Hermetic FULL_TEST readiness: proves order/Pix only after final confirmation,
  * REPLY_ONLY never creates, FULL_TEST stays allowlist-bound, `0. menu` + handoff
- * intact and rollback documented — with noRealOrder/noRealPix/noEvolution=true
+ * intact and rollback documented — with noRealOrder/noRealPix/noWhatsAppSend=true
  * and runtimeTouched=false. Auth: Bearer {CRON_SECRET}. POST only.
  */
 

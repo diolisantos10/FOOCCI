@@ -6,7 +6,7 @@
  * Business-initiated WhatsApp sends OUTSIDE the 24h customer-service window must use an
  * APPROVED template; CRM/automation resolves one from here via findApproved().
  *
- * Meta-scoped and additive. Evolution restaurants never touch it. The local row mirrors
+ * Meta-scoped. The local row mirrors
  * Meta's name/language/status/variable-count; `mappedCampaignType` is a Foocci-side link
  * (template → CRM objective) that sync preserves (never clobbers).
  */

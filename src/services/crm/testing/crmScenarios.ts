@@ -129,7 +129,7 @@ function safetyInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSa
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends:           0,
     safety:                      { ...DEFAULT_SAFETY_CONFIG },
-    evolutionAvailable:          true,
+    whatsappAvailable:           true,
     globalSentToday:             0,
     restaurantOpen:              true,
     isBirthday:                  false,
@@ -219,7 +219,7 @@ function actionInput(overrides: Partial<ComputeActionsInput> = {}): ComputeActio
   return {
     customers:           [],
     now:                 SCENARIO_NOW,
-    hasEvolutionConfig:  true,
+    hasWhatsAppChannel:  true,
     couponUserIds:       new Set(),
     segmentConfig:       DEFAULT_SEGMENT_CONFIG,
     recentCampaignStats: null,
@@ -361,10 +361,10 @@ const CONTACT_SAFETY: CrmScenario[] = [
   },
   {
     id: "cs-09", group: "contact_safety", groupLabel: GROUP_LABELS.contact_safety, severity: "P1",
-    name: "Evolution não configurado",
-    description: "Sem Evolution disponível → NO_EVOLUTION_CONFIG",
-    input: safetyInput({ evolutionAvailable: false }),
-    expect: { sendable: false, reason: "NO_EVOLUTION_CONFIG" },
+    name: "WhatsApp não conectado",
+    description: "Canal oficial fora do ar → NO_WHATSAPP_CONFIG",
+    input: safetyInput({ whatsappAvailable: false }),
+    expect: { sendable: false, reason: "NO_WHATSAPP_CONFIG" },
   },
 ];
 
@@ -492,10 +492,10 @@ const ACTION_CENTER: CrmScenario[] = [
   },
   {
     id: "ac-03", group: "action_center", groupLabel: GROUP_LABELS.action_center, severity: "P0",
-    name: "Evolution ausente → alerta de segurança",
-    description: "hasEvolutionConfig=false → SAFETY_ISSUE_ALERT e nenhuma ação 'pronta' para envio",
+    name: "Canal WhatsApp ausente → alerta de segurança",
+    description: "hasWhatsAppChannel=false → SAFETY_ISSUE_ALERT e nenhuma ação 'pronta' para envio",
     input: actionInput({
-      hasEvolutionConfig: false,
+      hasWhatsAppChannel: false,
       customers: Array.from({ length: 6 }, (_, i) => makeCustomer({ id: `c-${i}`, lastOrderAt: daysAgo(80) })),
     }),
     expect: { mustInclude: ["SAFETY_ISSUE_ALERT"] },

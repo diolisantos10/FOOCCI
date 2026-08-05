@@ -30,6 +30,7 @@ import { classifyBuildCommandText } from "./BuildCommandClassifier";
 import { generateTechnicalPromptDraft, buildPromptPreview, type PromptSourceCommand } from "./BuildPromptDraftService";
 import { resolveBuildProjectFromMessage } from "./BuildProjectService";
 import { getRecentWebhookTraces } from "./BuildWebhookTrace";
+import { describeBuildOsMetaChannel, isBuildOsMetaChannelEnabled } from "./BuildOsMetaChannel";
 
 // Last-resort fallback ONLY when there is no active operator in the DB. The real
 // default is resolved at runtime from the active BuildAuthorizedSender so the
@@ -204,133 +205,72 @@ export async function runBuildOsDiagnostics(opts?: {
 
   // ── webhookIntegrationCheck (static facts about the wired path) ──
   const webhookIntegrationCheck = {
-    webhookRoute: "POST /api/webhooks/evolution",
-    handlerEntry: "WebhookProcessorService.handleInboundMessage",
-    buildOsBranchBeforeCustomerFlow: true, // lines ~84-106, before customer/conversation/message creation
-    shortCircuitsOnHandled: true,          // returns { handled:true, action:"buildos_command" }
-    outboundSendService: "BuildNotifier.sendBuildConfirmation → EvolutionClient.sendTextMessage",
-    note: "TEXT messages only; fromMe handled in external_outbound branch too.",
+    webhookRoute: "POST /api/webhooks/meta/whatsapp",
+    handlerEntry: "InboundAgentDispatch.interceptBuildOsCommand",
+    buildOsBranchBeforeCustomerFlow: true, // roda antes de criar Customer/Conversation/Message
+    shortCircuitsOnHandled: true,          // devolve { intercepted: true } e o webhook segue para a próxima mensagem
+    outboundSendService: "BuildNotifier.sendBuildConfirmation → BuildOsMetaChannel (número Master) ou WhatsAppMessagingService",
+    note: "Somente TEXTO. O canal Master é o phone_number_id em BUILDOS_META_PHONE_NUMBER_ID.",
   };
 
-  // ── evolutionInstanceCheck: did ANY webhook event arrive, and with what event
-  //    name? This is the decisive real-path evidence. Reads the raw webhook event
-  //    log (every inbound event is recorded there). All values privacy-safe.
-  let evolutionInstanceCheck: Record<string, unknown> = { available: false };
-  try {
-    const [configs, recentEvents] = await Promise.all([
-      prisma.evolutionConfig.findMany({
-        select: { instanceName: true, isActive: true, restaurant: { select: { slug: true, name: true } } },
-      }),
-      prisma.evolutionWebhookEventLog.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        select: {
-          instanceName: true, eventName: true, normalizedEventName: true,
-          accepted: true, ignored: true, direction: true, remoteJidMasked: true,
-          messageId: true, error: true, createdAt: true,
-        },
-      }),
-    ]);
-    const lastEvent = recentEvents[0] ?? null;
-    const lastInbound = recentEvents.find((e) => e.direction === "INBOUND") ?? null;
-    evolutionInstanceCheck = {
-      available: true,
-      instances: configs.map((c) => ({
-        instanceName: c.instanceName,
-        isActive: c.isActive,
-        restaurant: c.restaurant?.slug ?? c.restaurant?.name ?? null,
-      })),
-      anyEventReceived: recentEvents.length > 0,
-      lastEventAt: lastEvent?.createdAt.toISOString() ?? null,
-      lastEventName: lastEvent?.eventName ?? null,
-      lastEventNormalized: lastEvent?.normalizedEventName ?? null,
-      lastInboundAt: lastInbound?.createdAt.toISOString() ?? null,
-      lastInboundEventName: lastInbound?.eventName ?? null,
-      recentEvents: recentEvents.map((e) => ({
-        instanceName: e.instanceName,
-        eventName: e.eventName,
-        normalized: e.normalizedEventName,
-        accepted: e.accepted,
-        ignored: e.ignored,
-        direction: e.direction,
-        remoteJid: e.remoteJidMasked,
-        error: e.error,
-        createdAt: e.createdAt.toISOString(),
-      })),
-    };
-  } catch {
-    evolutionInstanceCheck = { available: false };
-  }
+  // ── channelCheck: o canal Master do Build OS está pronto para receber comando?
+  //
+  // ⚠️ MUDOU EM 04/08/2026. Antes daqui saía `evolutionInstanceCheck`, que lia o
+  // log bruto de eventos do webhook da Evolution (`EvolutionWebhookEventLog`) e
+  // respondia "chegou ALGUM evento?". A Evolution foi eliminada e a Meta **não
+  // grava log bruto de evento** — não existe tabela equivalente.
+  //
+  // Guardrail 1 aplicado aqui: a ausência dessa fonte NÃO vira "nada chegou".
+  // O campo diz explicitamente que a evidência de tráfego bruto não existe mais,
+  // e aponta para a que existe (`recentWebhookTraces`, escrita pelo próprio
+  // caminho do Build OS). Quem ler isso não pode concluir uma negação do silêncio.
+  const channelCheck: Record<string, unknown> = {
+    available: isBuildOsMetaChannelEnabled(),
+    ...describeBuildOsMetaChannel(),
+    rawEventLogAvailable: false,
+    rawEventLogNote:
+      "A Meta não grava log bruto de evento; a evidência de chegada é o rastro do Build OS " +
+      "(recentWebhookTraces). Rastro vazio significa 'nenhum comando chegou ao handler' — " +
+      "NÃO prova que a Meta parou de entregar mensagens.",
+  };
 
-  // ── recentMessages: "Últimas mensagens reais recebidas da Evolution".
-  //    Correlates the raw webhook event log (EVERY event, incl. ignored) with the
-  //    Build OS trace (the decision for messages that reached the handler), by
-  //    nearest timestamp. Everything is masked/sanitized — no full phone, no text
-  //    body, no tokens. We surface only: prefix detected, build-command candidate,
-  //    authorized, and the failureReason when it did not become a Build OS command.
+  // ── recentMessages: os últimos comandos que CHEGARAM ao handler do Build OS.
+  //
+  // ⚠️ Antes isto correlacionava o log bruto de eventos da Evolution com o rastro
+  // do Build OS por proximidade de horário. O log bruto não existe mais (ver
+  // `channelCheck`), então a fonte passa a ser SÓ o rastro — que é escrito pelo
+  // próprio caminho e continua mascarado: sem telefone completo, sem texto da
+  // mensagem, sem token.
   let recentMessages: Array<Record<string, unknown>> = [];
   try {
-    const [events, traces] = await Promise.all([
-      prisma.evolutionWebhookEventLog.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 15,
-        select: {
-          instanceName: true, eventName: true, normalizedEventName: true,
-          accepted: true, ignored: true, direction: true, remoteJidMasked: true,
-          messageId: true, error: true, createdAt: true,
-        },
-      }),
-      prisma.buildWebhookTrace.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 30,
-        select: {
-          maskedPhone: true, prefixDetected: true, authorized: true, fromMe: true,
-          commandCreated: true, shortCircuited: true, failureReason: true, createdAt: true,
-        },
-      }),
-    ]);
-
-    // Match each event to the Build OS trace closest in time (±15s window).
-    const MATCH_WINDOW_MS = 15_000;
-    recentMessages = events.map((e) => {
-      const eTime = e.createdAt.getTime();
-      let best: (typeof traces)[number] | null = null;
-      let bestDelta = MATCH_WINDOW_MS;
-      for (const t of traces) {
-        const delta = Math.abs(t.createdAt.getTime() - eTime);
-        if (delta <= bestDelta) { best = t; bestDelta = delta; }
-      }
-      const prefixDetected = best?.prefixDetected ?? null;
-      const isFromMe = best?.fromMe ?? (e.direction === "OUTBOUND" ? true : e.direction === "INBOUND" ? false : null);
-      // When a /build is sent FROM the connected instance itself, remoteJid is the
-      // RECIPIENT, not the operator. Make this explicit so a fromMe trace is never
-      // misread as "the customer 5223 tried /build".
-      const fromMeNote = isFromMe
-        ? "Enviada pela própria instância (fromMe=true) — remoteJid é o destinatário, não o operador. O operador é o número conectado da instância."
-        : null;
-      return {
-        createdAt: e.createdAt.toISOString(),
-        instanceName: e.instanceName,
-        eventNameRaw: e.eventName,
-        eventNameNormalized: e.normalizedEventName,
-        accepted: e.accepted,
-        ignored: e.ignored,
-        direction: e.direction,                 // INBOUND | OUTBOUND
-        fromMe: isFromMe,
-        fromMeNote,
-        remoteJidMasked: e.remoteJidMasked,      // already masked (recipient when fromMe)
-        senderMasked: best?.maskedPhone ?? null, // masked OPERATOR phone the Build OS path saw
-        extractedPhoneMasked: best?.maskedPhone ?? null,
-        prefixDetected,                          // "/build" | "/cmd" | "/prompt" | null
-        buildCommandCandidate: !!prefixDetected, // a Build OS command was recognized
-        authorized: best?.authorized ?? null,
-        commandCreated: best?.commandCreated ?? false,
-        shortCircuited: best?.shortCircuited ?? false,
-        // Why it did NOT become a Build OS command (when applicable).
-        failureReason: best?.failureReason ?? (e.ignored ? `event_ignored` : (e.error ? "processing_error" : null)),
-        hasBuildTrace: !!best,
-      };
+    const traces = await prisma.buildWebhookTrace.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 15,
+      select: {
+        maskedPhone: true, prefixDetected: true, authorized: true, fromMe: true,
+        commandCreated: true, shortCircuited: true, failureReason: true,
+        instanceName: true, createdAt: true,
+      },
     });
+    recentMessages = traces.map((t) => ({
+      createdAt: t.createdAt.toISOString(),
+      // Coluna com nome legado: hoje guarda o phone_number_id da Meta.
+      channelId: t.instanceName,
+      fromMe: t.fromMe,
+      // Quando o comando sai do próprio número conectado, o telefone do rastro é o
+      // OPERADOR — nunca o destinatário. Explicitado para ninguém ler ao contrário.
+      fromMeNote: t.fromMe
+        ? "Enviada pelo próprio número do canal (fromMe=true) — o telefone abaixo é o operador."
+        : null,
+      senderMasked: t.maskedPhone,
+      prefixDetected: t.prefixDetected,          // "/build" | "/cmd" | "/prompt" | null
+      buildCommandCandidate: !!t.prefixDetected,
+      authorized: t.authorized,
+      commandCreated: t.commandCreated,
+      shortCircuited: t.shortCircuited,
+      failureReason: t.failureReason,
+      hasBuildTrace: true,
+    }));
   } catch {
     recentMessages = [];
   }
@@ -452,28 +392,30 @@ export async function runBuildOsDiagnostics(opts?: {
   const lastWebhookAt = recentWebhookTraces[0]?.createdAt ?? null;
 
   // ── eventFreshness + buildArrivalCheck ──────────────────────────────────────
-  //  Answers the "I resent /build but nothing shows" case WITHOUT telling the user
-  //  to resend again. If no Evolution event of ANY kind arrived after time X, then
-  //  a /build sent after X did not reach THIS app/instance — a delivery problem,
-  //  not a Build OS logic problem. All cross-instance (no filter) so a command that
-  //  landed on a different instance is still visible.
+  //  Responde ao caso "reenviei /build e não aparece nada" SEM mandar reenviar de
+  //  novo.
+  //
+  //  ⚠️ MUDOU EM 04/08/2026. Antes a resposta vinha do log bruto de eventos da
+  //  Evolution ("chegou ALGUM evento depois da hora X?"). Esse log não existe mais:
+  //  a Meta não grava evento bruto. O que sobrou é o rastro do próprio Build OS.
+  //
+  //  Guardrail 1, e este é o ponto que mais engana: rastro vazio prova que
+  //  **nenhum comando chegou ao handler**, e NÃO prova que a Meta parou de
+  //  entregar. As duas causas ficam listadas, sem escolher uma pelo silêncio.
   const STALE_MINUTES = 5;
   const nowMs = generatedAt.getTime();
   const ageMin = (d: Date | null | undefined) =>
     d ? Math.max(0, Math.round((nowMs - d.getTime()) / 60000)) : null;
 
+  const masterChannel = await getBuildOsChannel();
+
   let eventFreshness: Record<string, unknown> = { available: false };
   let buildArrivalCheck: Record<string, unknown> = { available: false };
   try {
-    const [latestEvent, perInstance, lastBuildTrace, lastBuildMessage] = await Promise.all([
-      prisma.evolutionWebhookEventLog.findFirst({
+    const [lastAnyTrace, lastBuildTrace, lastBuildMessage] = await Promise.all([
+      prisma.buildWebhookTrace.findFirst({
         orderBy: { createdAt: "desc" },
-        select: { createdAt: true, instanceName: true, eventName: true, direction: true },
-      }),
-      prisma.evolutionWebhookEventLog.groupBy({
-        by: ["instanceName"],
-        _max: { createdAt: true },
-        _count: { _all: true },
+        select: { createdAt: true, instanceName: true, prefixDetected: true },
       }),
       prisma.buildWebhookTrace.findFirst({
         where: { prefixDetected: { in: BUILD_PREFIXES } },
@@ -490,38 +432,29 @@ export async function runBuildOsDiagnostics(opts?: {
       }),
     ]);
 
-    const lastEventAt = latestEvent?.createdAt ?? null;
-    const lastEventAgeMinutes = ageMin(lastEventAt);
-    const stale = lastEventAgeMinutes === null || lastEventAgeMinutes > STALE_MINUTES;
-    // EXPECTED instance is the Build OS MASTER channel — NEVER a restaurant instance.
-    // null when the Master channel is not configured (the UI shows "não configurado").
-    const masterChannel = await getBuildOsChannel();
-    const expectedInstance = masterChannel.instanceName;
+    const lastTraceAt = lastAnyTrace?.createdAt ?? null;
+    const lastTraceAgeMinutes = ageMin(lastTraceAt);
+    const stale = lastTraceAgeMinutes === null || lastTraceAgeMinutes > STALE_MINUTES;
+    const expectedChannelId = masterChannel.channelId;
 
     eventFreshness = {
       available: true,
       generatedAt: generatedAt.toISOString(),
-      lastEventAt: lastEventAt?.toISOString() ?? null,
-      lastEventAgeMinutes,
-      lastEventInstance: latestEvent?.instanceName ?? null,
+      // Fonte declarada — para ninguém achar que ainda existe log bruto de evento.
+      source: "BuildWebhookTrace (a Meta não grava log bruto de evento)",
+      rawEventLogAvailable: false,
+      lastTraceAt: lastTraceAt?.toISOString() ?? null,
+      lastTraceAgeMinutes: lastTraceAgeMinutes,
+      lastTraceChannelId: lastAnyTrace?.instanceName ?? null,
       staleThresholdMinutes: STALE_MINUTES,
       stale,
-      expectedInstance,                       // Master instance (or null)
+      expectedChannelId,                       // phone_number_id do Master (ou null)
       masterChannelConfigured: masterChannel.configured,
-      perInstance: perInstance
-        .map((g) => ({
-          instanceName: g.instanceName,
-          lastEventAt: g._max.createdAt?.toISOString() ?? null,
-          ageMinutes: ageMin(g._max.createdAt),
-          eventCount: g._count._all,
-          isBuildOsMaster: !!expectedInstance && g.instanceName === expectedInstance,
-        }))
-        .sort((a, b) => (b.lastEventAt ?? "").localeCompare(a.lastEventAt ?? "")),
       orientation: !masterChannel.configured
-        ? "Canal Build OS Master não configurado. Comandos internos NÃO devem usar instâncias de restaurante. Configure o Canal WhatsApp Master/Admin em /admin/build-os → Configuração."
+        ? "Canal Master do Build OS não configurado. Defina BUILDOS_META_PHONE_NUMBER_ID e BUILDOS_META_ACCESS_TOKEN (número dedicado da Meta). Número de restaurante NÃO deve ser usado como canal interno."
         : stale
-          ? `Nenhum evento Evolution chegou nos últimos ${lastEventAgeMinutes ?? "?"} min (último: ${lastEventAt?.toISOString() ?? "nunca"}). Se você enviou /build depois desse horário, ele NÃO chegou no Canal Master (${expectedInstance}). Verifique: (1) você enviou para o número conectado no Canal Master? (2) o webhook aponta para este app? (3) a instância Master continua conectada?`
-          : "Eventos Evolution estão chegando normalmente.",
+          ? `Nenhum comando chegou ao handler nos últimos ${lastTraceAgeMinutes ?? "?"} min (último: ${lastTraceAt?.toISOString() ?? "nunca"}). Duas causas possíveis, e este diagnóstico NÃO distingue entre elas: (1) a mensagem não foi entregue ao app — confira a inscrição do webhook na Meta e se você mandou para o número Master (${expectedChannelId}); (2) a mensagem chegou mas não tinha prefixo de comando. Nenhuma das duas se conclui do silêncio da outra.`
+          : "Comandos estão chegando ao handler normalmente.",
     };
 
     const lastBuildTraceAt = lastBuildTrace?.createdAt ?? null;
@@ -538,22 +471,19 @@ export async function runBuildOsDiagnostics(opts?: {
       lastBuildTraceAuthorized: lastBuildTrace?.authorized ?? null,
       lastBuildTraceFailureReason: lastBuildTrace?.failureReason ?? null,
       lastBuildTraceFromMe: lastBuildTrace?.fromMe ?? null,
-      lastBuildTraceInstance: lastBuildTrace?.instanceName ?? null,
+      lastBuildTraceChannelId: lastBuildTrace?.instanceName ?? null,
       lastBuildTraceFromMasterChannel:
-        !!lastBuildTrace?.instanceName && !!masterChannel.instanceName && lastBuildTrace.instanceName === masterChannel.instanceName,
+        !!lastBuildTrace?.instanceName && !!masterChannel.channelId && lastBuildTrace.instanceName === masterChannel.channelId,
       lastBuildTraceCanAuthorize: !!lastBuildTrace?.rawPhone,
       lastBuildMessageAt: lastBuildMessageAt?.toISOString() ?? null,
       lastBuildAnyAt: lastBuildAnyAt?.toISOString() ?? null,
       lastBuildAgeMinutes,
-      // A /build is "recent" only if it arrived at/after the last Evolution event.
-      // If the last /build predates the last event, the recent traffic carried no
-      // /build → the user's new /build was NOT registered by this app.
       newBuildSinceLastTrace:
-        !!lastEventAt && !!lastBuildAnyAt && lastBuildAnyAt.getTime() >= lastEventAt.getTime() - 1000,
+        !!lastTraceAt && !!lastBuildAnyAt && lastBuildAnyAt.getTime() >= lastTraceAt.getTime() - 1000,
       note: !lastBuildAnyAt
-        ? "Nenhum /build encontrado (nem trace, nem mensagem). Este app nunca registrou um /build."
+        ? "Nenhum /build encontrado (nem rastro, nem mensagem). Este app nunca registrou um /build."
         : lastBuildAgeMinutes !== null && lastBuildAgeMinutes > STALE_MINUTES
-          ? `O /build mais recente registrado foi há ${lastBuildAgeMinutes} min. Um /build enviado depois disso NÃO foi registrado por este app.`
+          ? `O /build mais recente registrado foi há ${lastBuildAgeMinutes} min. Um /build enviado depois disso não foi registrado por este app.`
           : "Há um /build recente registrado.",
     };
   } catch {
@@ -564,12 +494,13 @@ export async function runBuildOsDiagnostics(opts?: {
   // ── buildOsChannel: the dedicated Build OS WhatsApp Master/Admin channel status.
   //    Restaurant instances are NEVER the Build OS channel unless explicit legacy
   //    fallback is on. When not configured, the UI must say "não configurado".
-  const channel = await getBuildOsChannel();
   const buildOsChannel = {
-    configured: channel.configured,
-    instanceName: channel.instanceName,
-    enabled: channel.enabled,
-    legacyFallbackEnabled: channel.legacyFallbackEnabled,
+    configured: masterChannel.configured,
+    // `phone_number_id` da Meta. O nome `instanceName` (instância Evolution) morreu
+    // com a Evolution; a tela lê `channelId`.
+    channelId: masterChannel.channelId,
+    enabled: masterChannel.enabled,
+    legacyFallbackEnabled: masterChannel.legacyFallbackEnabled,
   };
 
   // ── deployInfo: lets the admin confirm production runs the trace-capable build.
@@ -581,8 +512,8 @@ export async function runBuildOsDiagnostics(opts?: {
     appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? "dev",
     nodeEnv: process.env.NODE_ENV ?? "unknown",
     // Bump this when the Build OS webhook trace/interception path changes.
-    buildMarker: "buildos-webhook-trace-v1",
-    webhookRouteExpected: "POST /api/webhooks/evolution",
+    buildMarker: "buildos-meta-channel-v1",
+    webhookRouteExpected: "POST /api/webhooks/meta/whatsapp",
     healthEndpoint: "/api/health",
   };
 
@@ -599,7 +530,7 @@ export async function runBuildOsDiagnostics(opts?: {
     classificationCheck,
     promptDraftCheck,
     webhookIntegrationCheck,
-    evolutionInstanceCheck,
+    channelCheck,
     recentMessages,
     buildTextSearch,
     webhookReceivedRealBuild: recentWebhookTraces.length > 0,

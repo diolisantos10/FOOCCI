@@ -26,9 +26,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { openai } from "@/lib/openai";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
-import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
+import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { ConversationStatus } from "@prisma/client";
 import { detectBuildCommand } from "@/services/buildos/BuildCommandRouter";
 import type { MenuOption } from "@/validators/whatsapp-agent";
@@ -625,7 +624,7 @@ export interface ReceptionistPreview {
  * DETERMINISTIC branch order of run() (back-to-menu, selected option, loose
  * address, explicit order, handoff, template). The knowledge-base and GPT
  * branches are non-deterministic → flagged deterministic=false with a marker.
- * Pure: no DB, no Evolution, no GPT, no order/Pix.
+ * Pure: no DB, no WhatsApp send, no GPT, no order/Pix.
  */
 export function previewReceptionistResponse(message: string, ctx: ReplyContext): ReceptionistPreview {
   const raw = (message ?? "").trim();
@@ -850,7 +849,7 @@ async function run(conversationId: string): Promise<void> {
   if (!lastMessage) return;
 
   // Idempotency guard: skip if bot already replied after this inbound message.
-  // Prevents duplicate replies when Evolution retries webhooks or the service
+  // Prevents duplicate replies when the provider retries webhooks or the service
   // is triggered concurrently for the same conversation.
   const alreadyReplied = await prisma.message.findFirst({
     where: {
@@ -869,10 +868,10 @@ async function run(conversationId: string): Promise<void> {
   const { restaurantId } = conversation;
 
   // Load all config in parallel
-  const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, lastOutbound, menuCatalogRaw] = await Promise.all([
+  const [restaurant, storeProfile, agentCfg, brandConfig, metaConfig, businessHoursRows, lastOutbound, menuCatalogRaw] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
-      select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true, whatsappProvider: true },
+      select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
     }),
     prisma.storeProfile.findUnique({
       where:  { restaurantId },
@@ -894,7 +893,13 @@ async function run(conversationId: string): Promise<void> {
       where:  { restaurantId },
       select: { instagramUrl: true, tiktokUrl: true },
     }).catch(() => null),
-    EvolutionConfigService.getSnapshot(restaurantId),
+    // A pergunta "dá para responder por este canal?" agora é sobre a Meta.
+    // `null` aqui pode ser "não configurado" OU "banco tossiu" — em ambos os
+    // casos o certo é NÃO responder e registrar (guardrail 1).
+    MetaConfigService.getResolved(restaurantId).catch((err) => {
+      console.error(`[WhatsAppReceptionistService] leitura da config Meta falhou p/ ${restaurantId}`, err);
+      return null;
+    }),
     prisma.businessHours.findMany({
       where:   { restaurantId },
       select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true, periodsJson: true },
@@ -922,16 +927,13 @@ async function run(conversationId: string): Promise<void> {
     }).catch(() => [] as { name: string; items: { name: string }[] }[]),
   ]);
 
-  // Which channel does the AI reply THROUGH? Follows the restaurant's active provider
-  // so a number migrated to Meta official replies via Meta (not the dead Evolution).
-  const activeProvider: "EVOLUTION" | "META_CLOUD_API" =
-    restaurant?.whatsappProvider === "META_CLOUD_API" ? "META_CLOUD_API" : "EVOLUTION";
-  const evoConfig = evolutionResult.ok ? evolutionResult.data : null;
-
-  // Only Evolution needs a local config to send; Meta sends via the stored Cloud API
-  // credentials. Bail early only when the active channel has nothing to send with.
-  if (activeProvider === "EVOLUTION" && !evoConfig) {
-    console.warn(`[WhatsAppReceptionistService] No active Evolution config for restaurant ${restaurantId}`);
+  // Canal único: a Meta homologada. Sem credencial gravada não há por onde
+  // responder — e "sem config" NUNCA pode virar "siga em frente" (guardrail 1).
+  // Falha fechado, com o restaurante concreto no log (guardrail 6).
+  if (!metaConfig) {
+    console.warn(
+      `[WhatsAppReceptionistService] sem config Meta para o restaurante ${restaurantId} — resposta não enviada (conv ${conversationId})`,
+    );
     return;
   }
 
@@ -1112,7 +1114,7 @@ async function run(conversationId: string): Promise<void> {
   };
 
   // Reply TARGET: prefer the conversation's channel phone — it comes straight from
-  // the WhatsApp webhook (Meta/Evolution) and is always the real, deliverable wa
+  // the WhatsApp webhook (Meta) and is always the real, deliverable wa
   // number (e.g. "5511…"). Customer.phone is CRM data (imported/typed) and can be in
   // a format providers reject — seen live: a 12-digit local number without the 55
   // country code, which Meta refuses with INVALID_PHONE. resolvedPhone is still used
@@ -1122,14 +1124,14 @@ async function run(conversationId: string): Promise<void> {
 
   // Handle media messages — we cannot process images, audio, or documents.
   if (lastMessage.type !== "TEXT") {
-    await sendReply(evoConfig, toPhone, MEDIA_MESSAGE_REPLY, conversationId, restaurantId, activeProvider);
+    await sendReply(toPhone, MEDIA_MESSAGE_REPLY, conversationId, restaurantId);
     return;
   }
 
   // ── Defense-in-depth: internal command suppression ───────────────────────
   // /build, /cmd, /prompt prefixes must be intercepted before WebhookProcessorService
   // calls this function. If one reaches here anyway (deploy gap, test bypass,
-  // etc.), drop it silently — no AI call, no Evolution send, no echo to customer.
+  // etc.), drop it silently — no AI call, no WhatsApp send, no echo to customer.
   if (detectBuildCommand(lastMessage.content)) {
     console.warn("[WhatsAppReceptionistService] internal command reached receptionist — suppressed", { conversationId });
     return;
@@ -1147,7 +1149,7 @@ async function run(conversationId: string): Promise<void> {
     // Use full (unfiltered) options if effectiveMenuOptions is empty — the
     // "0. menu" shortcut must always render something, even when closed.
     const backMenuOptions = effectiveMenuOptions.length > 0 ? effectiveMenuOptions : menuOptions;
-    await sendReply(evoConfig, toPhone, renderMainMenu(ctx, backMenuOptions), conversationId, restaurantId, activeProvider);
+    await sendReply(toPhone, renderMainMenu(ctx, backMenuOptions), conversationId, restaurantId);
     return;
   }
 
@@ -1575,61 +1577,37 @@ async function run(conversationId: string): Promise<void> {
       "intent-or-gpt",
   });
 
-  await sendReply(evoConfig, toPhone, replyText, conversationId, restaurantId, activeProvider, replyMetadata);
+  await sendReply(toPhone, replyText, conversationId, restaurantId, replyMetadata);
 }
 
 // ─── outbound helper ──────────────────────────────────────────
 
+/**
+ * Envia pela porta única (`WhatsAppMessagingService`), que já aplica a janela de
+ * 24h da Meta e persiste a mensagem OUTBOUND. Bloqueio e falha são REGISTRADOS,
+ * nunca contornados por outro caminho.
+ */
 async function sendReply(
-  config: { instanceName: string; baseUrl: string; apiKey: string } | null,
   toPhone: string,
   text: string,
   conversationId: string,
   restaurantId: string,
-  provider: "EVOLUTION" | "META_CLOUD_API",
   metadata?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    let externalMessageId: string | null = null;
-
-    if (provider === "META_CLOUD_API") {
-      // Reply through the official Meta Cloud API (uses stored, encrypted credentials).
-      const res = await new MetaWhatsAppCloudProvider().sendText({ restaurantId, to: toPhone, text });
-      if (!res.ok) {
-        console.error(`[WhatsAppReceptionistService] Meta send failed: ${res.errorCode} ${res.error}`);
-        return;
-      }
-      externalMessageId = res.providerMessageId;
-    } else {
-      if (!config) {
-        console.warn("[WhatsAppReceptionistService] No Evolution config to send reply");
-        return;
-      }
-      const result = await EvolutionClient.sendTextMessage(config, toPhone, text);
-      externalMessageId = result.key.id;
+    const res = await WhatsAppMessagingService.sendConversationReply({
+      restaurantId,
+      conversationId,
+      toPhone,
+      text,
+      senderType: "AI",
+      metadata,
+    });
+    if (!res.ok) {
+      console.error(
+        `[WhatsAppReceptionistService] envio recusado (conv ${conversationId}): status=${res.status} ${res.blockReason ?? res.errorCode ?? ""} ${res.error ?? ""}`,
+      );
     }
-
-    const now = new Date();
-    await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          conversationId,
-          direction:         "OUTBOUND",
-          senderType:        "AI",
-          content:           text,
-          type:              "TEXT",
-          sentAt:            now,
-          externalStatus:    "sent",
-          provider,
-          ...(externalMessageId ? { externalMessageId, providerMessageId: externalMessageId } : {}),
-          ...(metadata ? { metadata: metadata as object } : {}),
-        },
-      }),
-      prisma.conversation.update({
-        where: { id: conversationId },
-        data:  { lastMessageAt: now },
-      }),
-    ]);
   } catch (err) {
     console.error("[WhatsAppReceptionistService] Failed to send reply:", err);
   }

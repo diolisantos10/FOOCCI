@@ -42,24 +42,28 @@ import { recordWebhookTrace } from "./BuildWebhookTrace";
 
 export interface BuildCommandHandlingInput {
   /**
-   * Evolution instance owner used only to send the reply. NULL for the
-   * ADMIN/SYSTEM Build OS channel (reply goes via the admin WhatsApp instance,
-   * never a restaurant).
+   * Dono do número usado só para responder. NULL no canal Master do Build OS
+   * (ADMIN/SISTEMA) — a resposta sai pelo número dedicado, nunca por um
+   * restaurante.
    */
   restaurantId: string | null;
   phone: string;        // normalized E.164 sender
   senderName?: string;
   content: string;      // raw inbound text
-  /** True when Evolution flagged the message as sent by the connected number. */
+  /** True quando o provedor marcou a mensagem como enviada pelo próprio número. */
   fromMe?: boolean;
-  /** Evolution instance the event arrived on (for tracing + channel gating). */
-  instanceName?: string;
   /**
-   * True when this instance is the configured Build OS Master channel (or an
-   * explicit legacy fallback). When false, internal commands are SUPPRESSED but
-   * never executed — restaurant instances must not act as the Build OS channel.
-   * Defaults to true ONLY for callers that don't pass it (back-compat: internal
-   * simulators/tests), so the webhook MUST always pass an explicit value.
+   * Identidade do canal onde o evento chegou — o `phone_number_id` da Meta. Usado
+   * para rastro e para o portão de canal. (Antes de 04/08/2026 era o nome da
+   * instância Evolution.)
+   */
+  channelId?: string;
+  /**
+   * True quando este canal é o Master do Build OS (ou um fallback legado
+   * explícito). Quando false, comandos internos são SUPRIMIDOS mas nunca
+   * executados — número de restaurante não age como canal do Build OS.
+   * Padrão true SÓ para chamadores que omitem (compat: simuladores/testes); o
+   * webhook sempre passa um valor explícito.
    */
   isBuildOsChannel?: boolean;
   /** Whether a Build OS Master channel is configured at all (for the trace reason). */
@@ -82,7 +86,7 @@ export async function handleBuildCommand(
     received: true,
     prefixDetected: null as string | null,
     normalizedPhone: maskPhone(input.phone),
-    instanceName: input.instanceName ?? null,
+    channelId: input.channelId ?? null,
     fromMe: input.fromMe ?? null,
     configEnabled: null as boolean | null,
     configSource: null as string | null,
@@ -129,7 +133,7 @@ export async function handleBuildCommand(
     if (detected) {
       // Build OS is disabled, but this message is a /build command. Suppress it:
       // return isBuildCommand:true so WebhookProcessorService stops processing
-      // BEFORE the message is persisted to DB or passed to the AI / Evolution.
+      // BEFORE the message is persisted to DB or passed to the AI / WhatsApp.
       // "Disabled" means "don't execute commands," NOT "treat /build as a normal
       // customer message." The customer must never receive an AI echo of an
       // internal command prefix.
@@ -227,7 +231,7 @@ function logDiag(diag: Record<string, unknown>, rawPhone?: string | null): void 
   recordWebhookTrace({
     maskedPhone: diag.normalizedPhone as string | null,
     rawPhone: rawPhone ?? null,
-    instanceName: diag.instanceName as string | null,
+    instanceName: diag.channelId as string | null, // coluna legada do rastro
     prefixDetected: diag.prefixDetected as string | null,
     configEnabled: diag.configEnabled as boolean | null,
     configSource: diag.configSource as string | null,

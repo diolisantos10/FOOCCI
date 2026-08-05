@@ -7,7 +7,7 @@
  * ROLLBACK_OR_PAUSE).
  *
  * Builds on the host-routing diagnostic (does NOT reimplement it). Pure read:
- * never sends WhatsApp, never calls Evolution, never creates an order or Pix,
+ * never sends WhatsApp, never creates an order or Pix,
  * never changes config. Phones are always masked.
  *
  * Scope note: this is a ROUTING/HOST-level battery. The deep Text Order runtime
@@ -59,7 +59,7 @@ export interface ScenarioResult {
 }
 
 export interface FullAgentSafety {
-  noEvolution: boolean;
+  noWhatsAppSend: boolean;
   noRealOrder: boolean;
   noRealPix: boolean;
   runtimeTouched: boolean;
@@ -241,7 +241,7 @@ export function computeSummary(
   const p2 = scenarios.filter(s => s.severity === "P2").length;
 
   const safetyViolation =
-    !safety.noEvolution || !safety.noRealOrder || !safety.noRealPix || safety.runtimeTouched;
+    !safety.noWhatsAppSend || !safety.noRealOrder || !safety.noRealPix || safety.runtimeTouched;
 
   let status: FullAgentSummary["status"];
   let recommendation: Recommendation;
@@ -280,7 +280,7 @@ const DEFAULT_SYNTHETIC_PHONE = "+5511900000000";
 
 export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<FullAgentResult> {
   const notes: string[] = [];
-  const safety: FullAgentSafety = { noEvolution: true, noRealOrder: true, noRealPix: true, runtimeTouched: false };
+  const safety: FullAgentSafety = { noWhatsAppSend: true, noRealOrder: true, noRealPix: true, runtimeTouched: false };
   const synthetic = (input.nonAllowlistedPhone ?? "").trim() || DEFAULT_SYNTHETIC_PHONE;
 
   const scenarios: ScenarioResult[] = [];
@@ -303,7 +303,7 @@ export async function runFullAgentDiagnostic(input: FullAgentInput): Promise<Ful
     }
 
     // Fold each result's safety into the global safety (any false fails the run).
-    safety.noEvolution    &&= host.safety.noEvolution;
+    safety.noWhatsAppSend    &&= host.safety.noWhatsAppSend;
     safety.noRealOrder    &&= host.safety.noRealOrder;
     safety.noRealPix      &&= host.safety.noRealPix;
     safety.runtimeTouched ||= host.safety.runtimeTouched;
