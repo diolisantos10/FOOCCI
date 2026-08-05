@@ -8,6 +8,8 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { VisualStoryBlock } from "@/components/marketing/VisualStoryBlock";
 import { MascotHostScene } from "@/components/marketing/MascotHostScene";
@@ -61,6 +63,17 @@ export default function SobrePage() {
         primaryLabel="Ver como o Foocci funciona"
         primaryHref={COMO_FUNCIONA_URL}
         note={PRELAUNCH_NOTE}
+        /* A única página institucional do site: a abertura é gente, não tela.
+           A tese é "hospitalidade digital" — cliente no salão, com o celular na
+           mão. Não há candidato de produto aqui de propósito. */
+        visual={heroShot([
+          {
+            kind: "photo",
+            src: SITE_ASSETS.journey[0]!,
+            focus: "50% 32%",
+            alt: "Cliente sentada à mesa de um restaurante aconchegante, sorrindo enquanto usa o celular.",
+          },
+        ])}
       />
 
       {/* 1. What we believe — premium visual story block (mascot host) */}
@@ -76,7 +89,7 @@ export default function SobrePage() {
           que o Foocci conecta venda, atendimento e relacionamento — para o cliente
           voltar, não desaparecer.
         </p>
-        <p className="text-base text-gray-500">
+        <p className="text-base text-muted">
           Tecnologia no bastidor, relacionamento no palco. O restaurante é o
           protagonista — o Foocci é o anfitrião invisível que faz a experiência
           acontecer.
@@ -84,7 +97,7 @@ export default function SobrePage() {
       </VisualStoryBlock>
 
       {/* 2. Manifesto — dark editorial band */}
-      <section aria-labelledby="manifesto-title" className="relative overflow-hidden bg-[#0B0B0B] py-20 lg:py-24">
+      <section aria-labelledby="manifesto-title" className="relative overflow-hidden bg-ink py-20 lg:py-24">
         <div
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-0 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.18),transparent)]"
@@ -104,18 +117,18 @@ export default function SobrePage() {
       </section>
 
       {/* 3. What Foocci represents */}
-      <section aria-labelledby="representa-title" className="bg-white py-20">
+      <section aria-labelledby="representa-title" className="bg-paper py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <h2 id="representa-title" className="text-center text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="representa-title" className="text-center text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
             O que o Foocci representa
           </h2>
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {REPRESENTS.map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 ring-1 ring-gray-900/[0.02]">
+              <div key={label} className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-5 ring-1 ring-ink/[0.02]">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="text-base font-semibold text-[#0B0B0B]">{label}</span>
+                <span className="text-base font-semibold text-ink">{label}</span>
               </div>
             ))}
           </div>
@@ -123,11 +136,11 @@ export default function SobrePage() {
       </section>
 
       {/* 4. Relationship → revenue thesis */}
-      <section aria-labelledby="tese-title" className="bg-gray-50 py-20">
+      <section aria-labelledby="tese-title" className="bg-canvas py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>A tese</Eyebrow>
-            <h2 id="tese-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            <h2 id="tese-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
               Relacionamento que vira resultado.
             </h2>
           </div>
@@ -138,16 +151,16 @@ export default function SobrePage() {
       </section>
 
       {/* 5. What Foocci is not */}
-      <section aria-labelledby="naoe-title" className="bg-white py-20">
+      <section aria-labelledby="naoe-title" className="bg-paper py-20">
         <div className="mx-auto max-w-3xl px-5 lg:px-8">
-          <h2 id="naoe-title" className="text-center text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="naoe-title" className="text-center text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
             O que o Foocci não é
           </h2>
           <ul className="mx-auto mt-10 max-w-xl space-y-3">
             {IS_NOT.map((item) => (
-              <li key={item} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4">
-                <MinusIcon className="h-5 w-5 shrink-0 text-gray-400" />
-                <span className="text-base font-medium text-gray-700">{item}</span>
+              <li key={item} className="flex items-center gap-3 rounded-xl border border-line bg-paper px-5 py-4">
+                <MinusIcon className="h-5 w-5 shrink-0 text-muted" />
+                <span className="text-base font-normal text-ink2">{item}</span>
               </li>
             ))}
           </ul>

@@ -62,6 +62,8 @@
 import type { Metadata } from "next";
 import QRCode from "qrcode";
 import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS } from "@/components/marketing/siteAssets";
 import { PrimaryCta, SecondaryCta } from "@/components/marketing/Cta";
 import { Eyebrow, DotGrid, Halo } from "@/components/marketing/premium";
 import {
@@ -361,6 +363,21 @@ export default async function ExperimentePage() {
         badge="Degustação"
         title="Experimente o Foocci antes de contratar."
         subtitle="Abrimos uma padaria de demonstração no ar. Você entra como se fosse o cliente do restaurante e testa as três formas de pedir — inclusive a MESMA loja com e sem o Garçom de IA, para comparar."
+        /* A abertura mostra EXATAMENTE a tela que o botão abre — a promessa e o
+           destino são a mesma imagem. Preferimos a captura da própria padaria;
+           sem ela, a tela de abertura já capturada de um restaurante real. */
+        visual={heroShot([
+          {
+            kind: "phone",
+            src: PRODUCT_SHOTS.lojaCelular,
+            alt: "Tela de celular: o cardápio da padaria de demonstração aberto, com os pratos, os preços e o botão de pedir.",
+          },
+          {
+            kind: "phone",
+            src: "/site/waiter/passo-1-abertura.png",
+            alt: "Tela de celular: a loja do restaurante abre no navegador, cumprimenta o cliente pelo nome e já mostra os cupons disponíveis.",
+          },
+        ])}
       />
 
       {/* 1 · A vitrine, declarada — e o estado dela agora */}

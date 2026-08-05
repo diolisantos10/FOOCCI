@@ -807,3 +807,134 @@ Screenshots 375/768/1280 do formulário e da tela pós-envio nos **dois cenário
 Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
 
 — interface, worktree `agent-a6275215662ae39c4` a partir de `claude/foocci-brain-vaamrx`
+
+---
+
+## 2026-08-05 · Toda página de `/site` passou a abrir com imagem própria
+
+**O pedido, do CEO:** *"o site está só com texto, botão e detalhes gráficos. A
+gente só tem uma imagem do Foocci, na primeira página."* Ele estava certo: seis
+das oito páginas abriam com `PageHero`, que é texto centralizado sobre uma cena
+de restaurante a 30% de opacidade sob um véu branco — ou seja, **nenhuma imagem
+própria**. Só `/como-funciona` e `/demonstracao` tinham visual, e ainda assim um
+mockup desenhado em CSS, não uma imagem.
+
+### A decisão: um cartão, três conteúdos
+
+Oito aberturas diferentes seriam oito soluções, não um sistema. O novo
+`components/marketing/HeroShot.tsx` define **um** cartão — mesmo raio, mesmo
+anel, mesma sombra quente e o mesmo halo âmbar que a home já usa atrás da cena do
+mascote — e três conteúdos que vivem dentro dele:
+
+| peça | o que é | onde |
+|---|---|---|
+| `phone` | captura real de celular, dentro do aparelho, com a base cortada pela borda do cartão | atendimento-com-ia, experimente, como-funciona, demonstração |
+| `browser` | captura real do painel, numa janela de navegador (aqui a janela **é** o cartão — moldura dentro de moldura é ruído) | crm, soluções, preços, demonstração |
+| `photo` | fotografia da cena, cheia ou em medalhão | sobre, e o degrau de baixo de crm/soluções/preços |
+
+A prova de que virou sistema é numérica: no desktop **os oito heros medem
+exatamente 609px de altura**. Não foi ajustado à mão — caiu igual porque a peça é
+a mesma.
+
+### `pickShot`: a cadeia de degradação é o produto, não o remendo
+
+As capturas do produto (`PRODUCT_SHOTS`) estavam sendo geradas por outra frente e
+**não existiam** na minha árvore. Em vez de esperar, cada página declara uma
+**cadeia de candidatos**, do melhor para o mais garantido, e `heroShot()` entrega
+o primeiro arquivo que existir. Duas regras que valem para a próxima vez:
+
+1. **O último candidato da cadeia é sempre um arquivo versionado.** Assim a
+   ausência de asset nunca vira buraco de layout. As cinco capturas do Garçom
+   (`public/site/waiter/passo-*.png`) e as cinco fotos de `SITE_ASSETS.journey`
+   deram degrau para todas as oito páginas — nenhuma depende da outra frente.
+2. **`heroShot` é FUNÇÃO, não componente.** Quem chama precisa saber se sobrou
+   algo para desenhar, porque `PageHero` troca de layout (duas colunas ×
+   centralizado) conforme exista visual. Um componente que retorna `null`
+   deixaria uma coluna vazia no grid — exatamente o buraco que o arquivo existe
+   para evitar.
+
+### Dois heros viraram um (drift #8 pago, não ampliado)
+
+`PageHero` e `InternalVisualHero` faziam quase a mesma coisa, com a cena de fundo
+copiada nos dois arquivos. Quando o pedido chegou, havia **dois lugares para
+consertar e duas chances de ficarem diferentes**. `PageHero` ganhou `visual?` e
+`InternalVisualHero` foi apagado. Nenhuma página perdeu comportamento.
+
+### O que os screenshots decidiram (de novo: eles são instrumento, não conferência)
+
+- **Ordem no celular.** Com a imagem depois dos botões ela começava a ~630px em
+  375px — fora da primeira tela de um iPhone SE. Movida para entre o subtítulo e
+  os botões, entra a ~470px. E os botões passaram a vir DEPOIS da prova, que é a
+  ordem que converte. Feito com `row-start`/`col-start` explícitos e **sem
+  duplicar os CTAs em dois blocos com `hidden`**: dois links de mesmo nome
+  acessível é ruído para leitor de tela e mentira para quem mede clique.
+- **Captura de celular em retrato não cabe num hero de celular.** Um telefone
+  inteiro tem ~450px de altura a 375px de largura. A saída foi o cartão 4:3 com
+  `overflow-hidden`: o aparelho entra por cima e a base é cortada pela borda. O
+  corte lê como intenção, e a altura fica sob controle.
+- **Foto quadrada em cartão 4:3 corta cabeça.** As fotos do repositório são
+  quadradas; `object-cover` centralizado decapitava quem está sentado à mesa. Daí
+  a prop `focus` (um `object-position`): quem **escolhe** a foto é quem conhece o
+  enquadramento, não o componente.
+- **`journey-4` e `journey-5` são recortes REDONDOS com cantos brancos.** Em
+  retângulo aparecia o branco. Viraram medalhão sobre o fundo quente — mesmo
+  cartão, conteúdo diferente. Quem for reusar essas duas: nunca em `object-cover`
+  retangular.
+- **Título de 2.9rem numa coluna de 560px vira parede.** O h1 de `/sobre` (16
+  palavras) virava cinco linhas coladas. `2.7rem` + `leading-[1.13]` resolveu sem
+  tocar na copy — que não é minha.
+
+### Um defeito real encontrado de raspão
+
+`/site/sobre` tinha **22px de rolagem horizontal a 768px**. A causa não estava no
+hero: `RelationshipRevenuePanel` virava linha no `sm:`, e quatro cartões de 168px
++ setas + respiro somam ~832px num contêiner de 728. Virou `lg:`. Vale a regra:
+*a linha horizontal é o luxo de quem tem largura; empilhado é a forma segura.*
+E a nota da vitrine se confirmou de novo — o sinal que vale é
+`document.documentElement.scrollWidth`, e um detector de elemento isolado não
+achava nada, porque o estouro nascia do somatório de irmãos, não de uma peça.
+
+### Peso da página
+
+O véu de restaurante do hero **perdeu o `priority`** e ganhou `quality={45}`: é um
+PNG de 1,35 MB desfocado a 25% de opacidade sob um gradiente branco. Quem carrega
+significado é a abertura visual, e num 4G a fila importa. `sizes` de cada peça é
+a largura real que ela ocupa em cada breakpoint, não `100vw` preguiçoso.
+
+### Fronteira respeitada, e como testei mesmo assim
+
+`public/brand/foocci/produto/` e `scripts/site/` são da outra frente e **não
+foram tocados** — o diretório não existe no commit. Para conferir a moldura de
+navegador (o único formato sem asset disponível) gerei três capturas falsas
+naquele caminho, tirei os screenshots de layout nos três tamanhos e **apaguei o
+diretório antes de commitar**, com `git status public/` limpo como prova. Os
+screenshots que subiram para o CEO são do estado real (degradado), não do
+simulado — mostrar a foto de mentira como se fosse entrega seria vender piloto
+como pronto.
+
+### Páginas legais
+
+`/termos-de-uso` e `/politica-de-privacidade` **não** ganharam imagem, por
+decisão: são documento, e foto ali é peso sem argumento. Ganharam só os tokens
+(`LegalShell` estava em `gray-*` e `#0B0B0B` literais).
+
+### Provas
+
+`npx tsc --noEmit` limpo. `npx vitest run`: 5.209 de 5.210 verdes — a única falha
+é o timeout ambiental conhecido de `noSideEffects.test.ts`, que passa isolado com
+`--testTimeout=60000` (confirmado). O portão `brandName.test.ts` está verde,
+inclusive com os três deslizes de "a Foocci" corrigidos em `HeroSection` e
+`CommissionCalculator`.
+
+Screenshots das **oito** páginas em 375/768/1280 (24 capturas), mais a rodada com
+capturas simuladas para validar a janela de navegador. Zero rolagem horizontal nos
+três tamanhos, zero imagem sem `alt`.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+**Proposta de vitrine** (quem promove é o Diretor): *"Asset que ainda não existe
+não é motivo para adiar tela — é motivo para declarar a cadeia de degradação. O
+último degrau tem de ser um arquivo versionado, e a escolha tem de ser função e
+não componente, para quem chama saber se sobrou algo para desenhar."*
+
+— interface, worktree `agent-a938cdf774d29b496`

@@ -14,6 +14,8 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { CrmRealShowcase } from "@/components/marketing/CrmRealShowcase";
 import { Eyebrow } from "@/components/marketing/premium";
@@ -63,6 +65,24 @@ export default function CrmPage() {
         primaryHref={DEMO_URL}
         secondaryLabel="Ver as outras soluções"
         secondaryHref={SOLUCOES_URL}
+        /* O CRM é tela de PAINEL, não de celular: quem lê esta página é o dono,
+           e o que ele quer ver é o próprio painel. Sem a captura, entra a foto do
+           dono conferindo o movimento no salão — a mesma cena, sem prometer tela
+           que não está fotografada. */
+        visual={heroShot([
+          {
+            kind: "browser",
+            src: PRODUCT_SHOTS.painelCrm,
+            alt: "Painel do Foocci na tela do computador: as campanhas de CRM e o retorno que cada uma trouxe.",
+            address: "foocci.com.br/crm",
+          },
+          {
+            kind: "photo",
+            src: SITE_ASSETS.journey[2]!,
+            focus: "50% 38%",
+            alt: "Dono de restaurante, de avental, sorrindo enquanto confere o tablet no salão iluminado.",
+          },
+        ])}
       />
 
       {/* O que o CRM faz pelo lojista — antes da prova em números */}
