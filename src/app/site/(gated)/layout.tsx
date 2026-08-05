@@ -15,10 +15,15 @@
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { StickyMobileCta } from "@/components/marketing/StickyMobileCta";
+import { LeadOriginTracker } from "@/components/marketing/LeadOriginTracker";
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      {/* Guarda o primeiro toque (utm/fbclid/referrer) da visita para o formulário
+          mandar junto. NÃO é tag de analytics — nenhum terceiro, nenhuma
+          requisição; a medição do site continua em SiteAnalytics. */}
+      <LeadOriginTracker />
       <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />

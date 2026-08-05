@@ -65,6 +65,15 @@ export async function GET() {
         openaiKey:        !!process.env.OPENAI_API_KEY,
         databaseUrl:      !!process.env.DATABASE_URL,
         mpWebhookSecret:  !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+        /**
+         * A chave que decide se o checkout COBRA. Sem ela o cliente assina, o
+         * contrato é registrado, o aceite é gravado — e o link de pagamento volta
+         * `null`. Ou seja: falha em silêncio, do lado do dinheiro. Faltava aqui
+         * justamente o único item que ninguém consegue conferir de fora, então
+         * "será que a variável entrou?" só se respondia entrando no Railway.
+         * Presença apenas — o valor nunca sai daqui.
+         */
+        mpPlatformToken:  !!process.env.MP_PLATFORM_ACCESS_TOKEN,
       },
       tables: {
         soundSettings: soundSettingsTableOk,

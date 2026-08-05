@@ -707,3 +707,103 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, refação da barra do assistente (reprovada pelo CEO em 04/08),
 worktree `agent-ab1c4bec24dce0fe6` a partir de `claude/foocci-brain-vaamrx`
+
+---
+
+## 2026-08-05 — O formulário passa a ter dois destinos: salvar o lead e mandar o "oi"
+
+Ideia do CEO. Quem aborda estranho no WhatsApp queima número e, no oficial, precisa
+de modelo aprovado pela Meta. **Se quem manda o "oi" é o cliente**, abre a janela de
+24h de texto livre e o consentimento fica evidente. O formulário de
+`/site/demonstracao` continua salvando o lead — isso é inegociável — e, depois,
+entrega a pessoa no WhatsApp com a mensagem já escrita.
+
+### A trava de ordem não está no cliente, está no que a rota devolve
+
+Escrever "salva primeiro, redireciona depois" no componente seria prompt, não trava.
+O que impede o pulo é que a mensagem carrega um `#código` **que só existe na resposta
+do servidor**: `POST /api/site/leads` devolve `{ ok, codigo }` e o `codigo` nasce
+dentro do `create`. Sem gravação não há código; sem código não há tela de WhatsApp.
+O teste da rota prova os dois lados — 200 com código depois de gravar, 500 sem
+código nenhum quando a gravação falha.
+
+### Não redirecionamos sozinhos, e isso foi decisão, não preguiça
+
+Abrir o WhatsApp depois de um `fetch` exige `window.open` fora do gesto do usuário
+(bloqueado por padrão no celular) ou uma navegação de topo que leva a pessoa embora
+da página — e junto vai o plano B, que existe justamente para quando o WhatsApp
+**não** abre. Ficou um botão grande, explícito, com a mensagem à vista antes de
+enviar. Funciona em todo navegador e respeita quem vai assinar aquele texto.
+
+### Duas armadilhas de gênero na frase que a pessoa assina
+
+1. `Sou o João` exigiria saber o gênero de quem preencheu — erra com Andrea, Darci
+   e nome estrangeiro. Virou `Sou João`.
+2. `do Pizzaria Nonna` estava errado no primeiro screenshot. O nome do
+   estabelecimento também tem gênero imprevisível (`a Pizzaria`, `o Bar do Zé`).
+   Solução: `do restaurante Pizzaria Nonna` — a preposição concorda com
+   "restaurante", que é sempre masculino. Foi **o screenshot que pegou**, não a
+   leitura do código.
+
+### O código curto é lido por gente, e isso muda o alfabeto
+
+Nem `generateWaMenuCode` (7 chars misturando caixa) nem `generateUniqueShortCode`
+(preso ao `trackingLink`) serviam: os dois nasceram para caber em URL, onde ninguém
+lê o código. Aqui são 5 MAIÚSCULAS sem `O 0 I 1 L S 5`, com amostragem por rejeição
+(módulo cru sobre um byte faria as 8 primeiras letras saírem ~14% mais).
+`extractLeadCode` **exige o `#`**: sem ele, `TARDE` casa com o alfabeto e o
+atendimento gruda no lead errado — pior que não achar.
+
+O teste "2.000 códigos, zero colisão" **piscou de primeira** (29⁵ ≈ 20,5 milhões dá
+~9% de chance de uma colisão nesse volume). Virou `> 1995` com o motivo escrito: a
+garantia de verdade é o UNIQUE do banco + o retry, não a sorte. Cravar um número que
+falha 9% das vezes ensina o time a ignorar teste vermelho.
+
+### O que aconteceu com os outros CTAs — nada, e por escolha
+
+Todo CTA comercial do site já leva ao formulário (decisão do CEO de 04/08). Como o
+formulário agora termina no WhatsApp, **todos herdaram o caminho novo sem tocar em
+nenhum**. Pendurar `wa.me` direto num CTA produziria um "oi" sem lead e sem código —
+exatamente o problema que este bloco resolve. O `WhatsAppCta` continua reservado e
+não importado.
+
+### Dois defeitos achados de raspão, corrigidos porque a tela foi tocada
+
+- **A barra fixa do celular competia com o formulário.** Dois botões laranja de
+  largura cheia na mesma dobra, e o da barra levava a pessoa PARA LONGE da conversão
+  que ela já tinha começado. Agora a `StickyMobileCta` se cala quando
+  `[data-demo-form]` está na dobra — marca posta pelo próprio formulário, então vale
+  para qualquer página que o carregue, sem a barra conhecer rota nenhuma.
+- **O título de `/admin/leads` era invisível.** `text-gray-900` sobre o shell
+  `bg-gray-950`: preto sobre quase-preto desde que a página nasceu. Só se enxergou
+  no screenshot. Virou `text-paper`.
+
+### Drift do DESIGN.md corrigido nos arquivos tocados
+
+`gray-*` → `ink/ink2/muted/line/line2`; `bg-white` → `bg-paper`; `#0B0B0B` →
+`text-ink`; `font-medium` → `font-semibold`; input `rounded-lg` → `rounded-xl`;
+`text-orange-600` → `text-brand-600`.
+
+**Não** mexi no `rounded-full` dos botões do site comercial: é a linguagem de CTA de
+todas as páginas, e trocar só neste formulário criaria uma inconsistência nova
+dentro do mesmo cartão. Fica anotado como decisão, não esquecimento.
+
+**A cor do botão do WhatsApp é laranja, não verde.** Verde é cor de status no
+`DESIGN.md`; usá-la como cor de ação abriria drift novo. O reconhecimento fica por
+conta do glifo do WhatsApp em branco sobre o `brand-500`.
+
+### Provas
+
+`npx tsc --noEmit` limpo. Testes novos: `leadCode.test.ts` (9), `config.test.ts`
+(13), rota `/api/site/leads` (5) e 5 casos novos no `SiteLeadService` — incluindo
+"colidiu 4 vezes: grava o lead SEM código" e "erro que não é colisão sobe na hora"
+(insistir num banco caído atrasa o erro e arrisca duplicata).
+
+Screenshots 375/768/1280 do formulário e da tela pós-envio nos **dois cenários**
+(sem número — o de hoje — e com número simulado via
+`NEXT_PUBLIC_WHATSAPP_SALES_NUMBER`), mais carregando e erro a 375, mais
+`/admin/leads` nos três tamanhos com a coluna Código.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
+
+— interface, worktree `agent-a6275215662ae39c4` a partir de `claude/foocci-brain-vaamrx`

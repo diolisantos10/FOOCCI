@@ -1351,3 +1351,43 @@ já existe. `SUPPORT_FROM_EMAIL` é opcional.
 **Dívidas técnicas nomeadas:** webhook de billing ainda sem verificação HMAC
 (agora que ele cria contas, a assinatura de origem vale mais); `noSideEffects.test.ts`
 estoura tempo por falta de Postgres no sandbox (ambiental, domínio da `qualidade`).
+
+---
+
+# Fechamento 05/08 — cinco frentes no ar + DOIS BLOQUEIOS DE RECEITA
+
+**No ar** (commit `9456c4ca`): barra única do assistente (dentro do TopBar, sem
+segunda régua); upsell configurável pelo lojista (categorias do cardápio dele, em
+ordem — a Foocci Bakery nasce com Bebidas → Confeitaria); o agente de suporte
+passou a **admitir que não sabe** (pisos de retrieval calibrados em corpus real);
+QR nas três experiências (desktop) com link direto no celular; cofre de
+credenciais em `/admin/credenciais`.
+
+**Bug que estava escondido em produção:** o botão "Pausar pedidos" ficava POR
+BAIXO da pílula do assistente — o conteúdo do cluster de conta vazava ~71px para
+a ESQUERDA, e `scrollWidth` é cego para isso. Se o gás acabasse, o lojista não
+conseguia pausar a loja. Corrigido.
+
+## 🔴 DOIS BLOQUEIOS QUE SÓ O CEO RESOLVE (conferidos variável a variável no Railway)
+
+1. **`MP_PLATFORM_ACCESS_TOKEN` NÃO EXISTE no Railway.** É o token da conta DA
+   FOOCCI (diferente do token de cada restaurante, que está no app). Sem ele,
+   `isPlatformBillingConfigured()` é falso e o checkout registra a contratação
+   com aceite mas **devolve `paymentUrl: null`** — o cliente não recebe link de
+   pagamento. O checkout self-service está no ar e **não consegue cobrar**.
+2. **`RESEND_API_KEY` e `LEADS_NOTIFY_EMAIL` NÃO EXISTEM no Railway.** Não há
+   serviço de e-mail configurado. Os leads do formulário do site **estão salvos**
+   no banco, mas **nenhum aviso foi enviado desde o lançamento** — com campanhas
+   de Facebook rodando. Vale checar a lista de leads no admin AGORA.
+   O mesmo vale para o chamado do agente de suporte: o ticket persiste, o e-mail
+   não sai. `SUPPORT_NOTIFY_EMAIL` idem.
+
+## Outras pendências
+- Especificidade do seletor global `input:focus` em `globals.css` (anel duplo
+  neutralizado pontualmente; o conserto definitivo é baixar a especificidade).
+- `RestaurantKnowledgeAdapter` tem o MESMO defeito de "ordena e não corta" que
+  acabamos de consertar no suporte — mas ali o interlocutor é o cliente final.
+  Não mexido de propósito: exige corpus de calibração por restaurante.
+- Auditoria de cobertura do agente de suporte: ensinar 75% · diagnosticar ~30% ·
+  agir 0%. O probe não recebe `restaurantId` — se o WhatsApp de UM restaurante
+  cair, ele responde "tudo saudável". É a obra que leva o suporte de 75% a 85%.

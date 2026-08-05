@@ -17,11 +17,35 @@
 export const LOGIN_URL = "/login";
 
 /**
- * Sales WhatsApp. Still null: the launch conversion path is the demo form, which
- * persists every lead. Setting a number here lights up `whatsappUrl()` and the
- * WhatsApp CTAs without any other change.
+ * WhatsApp de VENDAS do Foocci — a chave única que acende todo o caminho novo.
+ *
+ * Enquanto for `null`, nada muda: o formulário salva o lead e mostra "recebemos,
+ * entramos em contato", exatamente como antes. No instante em que existir número,
+ * o mesmo formulário passa a levar a pessoa para o WhatsApp com a mensagem já
+ * escrita — sem tocar em mais nenhum arquivo.
+ *
+ * POR QUE O CLIENTE É QUEM MANDA O "OI": abordar quem nunca falou com a gente é o
+ * que queima número e, no WhatsApp oficial, exige modelo aprovado pela Meta. Se a
+ * conversa nasce do lado dele, abre a janela de 24h de texto livre, o
+ * consentimento fica evidente e o risco de banimento cai a quase zero
+ * (`docs/sdr-foocci-desenho.md`).
+ *
+ * Duas formas de acender, nesta ordem de precedência:
+ *   1. `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` no Railway — não exige deploy de código.
+ *   2. `HARDCODED_SALES_NUMBER` abaixo — para quem preferir fixar no repositório.
+ *
+ * Formato: só dígitos, com DDI. Ex.: `5511999998888`.
  */
-export const WHATSAPP_SALES_NUMBER: string | null = null;
+const HARDCODED_SALES_NUMBER: string | null = null;
+
+/** Tira tudo que não é dígito; devolve null se não sobrar número de verdade. */
+function onlyDigits(v: string | null | undefined): string | null {
+  const d = (v ?? "").replace(/\D/g, "");
+  return d.length >= 10 ? d : null;
+}
+
+export const WHATSAPP_SALES_NUMBER: string | null =
+  onlyDigits(process.env.NEXT_PUBLIC_WHATSAPP_SALES_NUMBER) ?? onlyDigits(HARDCODED_SALES_NUMBER);
 
 /** Internal destinations used by the CTAs. */
 export const COMO_FUNCIONA_URL = "/site/como-funciona";
@@ -72,10 +96,75 @@ export const PRELAUNCH_NOTE = "Fale com a gente e veja o Foocci no seu restauran
 
 const DEFAULT_WA_MESSAGE = "Olá! Quero saber mais sobre o Foocci.";
 
-/** Returns a wa.me URL when a sales number is configured. */
-export function whatsappUrl(message: string = DEFAULT_WA_MESSAGE): string | null {
-  if (!WHATSAPP_SALES_NUMBER) return null;
-  return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(message)}`;
+/**
+ * Monta a URL `wa.me` quando existe número de vendas; `null` quando não existe.
+ *
+ * O segundo parâmetro existe só para o teste conseguir provar os DOIS cenários
+ * (com e sem número) sem depender de variável de ambiente de build — em produção
+ * ninguém passa esse argumento.
+ */
+export function whatsappUrl(
+  message: string = DEFAULT_WA_MESSAGE,
+  numero: string | null = WHATSAPP_SALES_NUMBER,
+): string | null {
+  if (!numero) return null;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * A mensagem que a pessoa vai só apertar enviar.
+ *
+ * Escrita na PRIMEIRA PESSOA e com o que ela acabou de digitar, porque quem manda
+ * é ela: "Oi! Sou João, do restaurante Pizzaria Nonna, e quero conhecer o Foocci.
+ * #A7K2M".
+ *
+ * DUAS ARMADILHAS DE GÊNERO, e as duas estão resolvidas aqui porque a mensagem é
+ * assinada por quem a envia — sair errada é constrangimento dela, não nosso:
+ *
+ *  1. **"Sou João", não "Sou o João".** O artigo exigiria saber o gênero de quem
+ *     preencheu, e o formulário não pergunta. Adivinhar pelo nome erra com Andrea,
+ *     Darci e todo nome estrangeiro. Sem artigo, vale para qualquer nome.
+ *  2. **"do restaurante Pizzaria Nonna", não "do Pizzaria Nonna".** O nome do
+ *     estabelecimento também tem gênero imprevisível ("a Pizzaria Nonna", "o Bar
+ *     do Zé"). Pôr o substantivo masculino "restaurante" antes do nome faz a
+ *     preposição concordar com ELE e não com o nome — fica certo sempre.
+ *
+ * Sem o nome do restaurante (campo opcional), a frase perde o trecho INTEIRO,
+ * vírgulas incluídas: "Oi! Sou Ana e quero conhecer o Foocci."
+ *
+ * O `#código` no fim é o que liga esse "oi" ao lead que acabou de ser salvo. Sem
+ * ele chega uma mensagem sem contexto e o atendimento pede de novo tudo que a
+ * pessoa já preencheu. Sem código (falha na geração), a mensagem sai sem a marca:
+ * é pior para o atendimento, mas nunca impede a conversa.
+ */
+export function buildLeadWhatsAppMessage(lead: {
+  nome: string;
+  restaurante?: string | null;
+  codigo?: string | null;
+}): string {
+  const nome = lead.nome.trim();
+  const restaurante = (lead.restaurante ?? "").trim();
+  const codigo = (lead.codigo ?? "").trim();
+
+  const quem = restaurante
+    ? `Sou ${nome}, do restaurante ${restaurante}, e`
+    : `Sou ${nome} e`;
+  const marca = codigo ? ` #${codigo}` : "";
+  return `Oi! ${quem} quero conhecer o Foocci.${marca}`;
+}
+
+/**
+ * Número de vendas em formato legível — `+55 (11) 99999-8888`.
+ *
+ * É o plano B da tela: se o WhatsApp não abrir, a pessoa precisa conseguir LER e
+ * copiar o número. Formata o padrão brasileiro (DDI 55 + DDU + 8 ou 9 dígitos) e,
+ * para qualquer outro formato, devolve o número com `+` na frente em vez de
+ * inventar uma máscara errada.
+ */
+export function formatSalesNumber(numero: string | null = WHATSAPP_SALES_NUMBER): string | null {
+  if (!numero) return null;
+  const br = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(numero);
+  return br ? `+55 (${br[1]}) ${br[2]}-${br[3]}` : `+${numero}`;
 }
 
 /** Props for a link that is external when configured, else internal. */

@@ -21,25 +21,25 @@ generator client {
 // ═══════════════════════════════════════════
 
 model Restaurant {
-  id              String   @id @default(cuid())
+  id              String  @id @default(cuid())
   name            String
-  slug            String   @unique
+  slug            String  @unique
   phone           String?
   email           String?
   logoUrl         String?
   address         String?
   description     String?
-  timezone        String   @default("America/Sao_Paulo")
-  isActive        Boolean  @default(true)
+  timezone        String  @default("America/Sao_Paulo")
+  isActive        Boolean @default(true)
   // Restaurante de DEMONSTRAÇÃO — vitrine do site de vendas, sandbox de treino.
   // NÃO é cliente: não entra em cobrança, relatório comercial nem métrica de base.
   // É coluna e não convenção de slug de propósito (guardrail 4: código é a trava) —
   // uma regra escrita só no nome do slug some na primeira renomeação.
   // Filtro canônico e a trava de cobrança vivem em src/lib/demo-restaurant.ts.
-  isDemo          Boolean  @default(false)
+  isDemo          Boolean @default(false)
   // Master switch do Agente de CRM. false = CRM roda 100% na mão (sem IA).
-  crmAgentEnabled Boolean  @default(true)
-  plan            Plan     @default(STARTER)
+  crmAgentEnabled Boolean @default(true)
+  plan            Plan    @default(STARTER)
 
   /// A CHAVE DE IDEMPOTÊNCIA do checkout self-service. Preenchida quando este
   /// restaurante nasceu do pagamento de uma PlanSubscription. É UNIQUE de
@@ -48,15 +48,15 @@ model Restaurant {
   /// criem dois restaurantes para a mesma assinatura. O segundo INSERT viola a
   /// restrição e a transação inteira volta atrás, sem deixar nada pela metade.
   /// Não é FK: a direção da posse é PlanSubscription.restaurantId.
-  originSubscriptionId String? @unique
+  originSubscriptionId String?  @unique
   // Whether the AI Waiter is available on this restaurant's public store.
   // NULL = derive from plan (STARTER → no, GROWTH/PRO → yes). The migration
   // grandfathers every restaurant existing at rollout to TRUE: Sushi Cazza — the
   // live customer — is on STARTER *with* the Waiter running, and a naive
   // plan-only gate would have shut down its AI in production (guardrail 5).
-  aiWaiterEnabled Boolean?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  aiWaiterEnabled      Boolean?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   // Emergency store pause — overrides business hours
   isOrderingPaused     Boolean   @default(false)
@@ -4776,16 +4776,28 @@ enum FiscalDocumentStatus {
 }
 
 // ═══════════════════════════════════════════
-// SITE LEAD — captação do site comercial (/site/demonstracao)
+// CRM DA FOOCCI — a base de prospects da própria Foocci
 // ═══════════════════════════════════════════
+//
+// ⚠️ NÃO CONFUNDA COM O CRM DO PRODUTO.
+//
+//   • `Customer` + `CRMCampaign` + `CRMContactLedger` = o CRM DO RESTAURANTE,
+//     multi-tenant, sobre os clientes que comem no restaurante do lojista.
+//   • `SiteLead` + `SiteLeadInteraction` (aqui) = o CRM DA FOOCCI, sem tenant,
+//     sobre os DONOS DE RESTAURANTE que a Foocci quer transformar em clientes.
+//
+// São bases diferentes, com donos diferentes e leis diferentes. Nada aqui pode
+// ser cruzado com dado de tenant, e nada de tenant entra aqui.
 
-/// Um pedido de demonstração vindo do site público.
+/// Um contato capturado pela Foocci — hoje pelo formulário do site, amanhã por
+/// outras portas de entrada (ver `SiteLeadSource`).
 ///
-/// NÃO é multi-tenant: o lead chega antes de existir restaurante. É a única
-/// tabela do schema sem `restaurantId`, e isso é proposital.
+/// NÃO é multi-tenant: o contato chega antes de existir restaurante. É a única
+/// família de tabelas do schema sem `restaurantId`, e isso é proposital.
 ///
 /// A rota de captura grava AQUI antes de tentar qualquer notificação. Se o
-/// e-mail falhar, o lead continua existindo — a notificação é aviso, não cofre.
+/// e-mail falhar, o contato continua existindo — a notificação é aviso, não
+/// cofre. **O admin é o destino; o e-mail é conveniência.**
 model SiteLead {
   id          String    @id @default(cuid())
   nome        String
@@ -4795,15 +4807,143 @@ model SiteLead {
   tipo        String?
   desafio     String?
   /// Página de onde o formulário foi enviado (ex.: "/site/demonstracao").
+  /// LEGADO: era a ÚNICA pista de origem. Continua gravado, mas quem responde
+  /// "qual anúncio funciona" são os campos utm* abaixo.
   origem      String?
+  /// Código curto (ex.: "A7K2M") que vai DENTRO da mensagem que o lead manda no
+  /// WhatsApp. É o que liga um "oi" que chega no número de vendas ao formulário
+  /// que a pessoa acabou de preencher — sem ele, chega um "oi" sem contexto.
+  ///
+  /// Opcional de propósito: se a geração falhar, o lead é gravado assim mesmo.
+  /// Perder o código é aceitável; perder o lead nunca é.
+  codigo      String?   @unique
   /// null = ainda não notificado; data = quando o aviso saiu.
   notifiedAt  DateTime?
   /// Última falha de notificação, para o alerta carregar a própria evidência.
   notifyError String?
   createdAt   DateTime  @default(now())
 
+  // ── ORIGEM DE VERDADE (primeiro toque) ─────────────────────────────────────
+  // Capturados na PRIMEIRA página que o visitante abriu no /site e carregados
+  // até o envio do formulário (sessionStorage). Primeiro toque, não último:
+  // quem paga o anúncio é quem trouxe a pessoa, mesmo que ela navegue depois.
+  /// utm_source normalizado (facebook, instagram, google, direct…).
+  utmSource   String?
+  /// utm_medium (cpc, social, organic…).
+  utmMedium   String?
+  /// utm_campaign — o nome da campanha no Gerenciador de Anúncios.
+  utmCampaign String?
+  /// utm_content — normalmente o anúncio/criativo específico.
+  utmContent  String?
+  /// utm_term — palavra-chave, quando houver.
+  utmTerm     String?
+  /// fbclid / gclid — o clique identificado do anunciante, quando presente.
+  clickId     String?
+  /// Página de ENTRADA no site (com query), que pode não ser a do formulário.
+  landingPath String?
+  /// document.referrer do primeiro toque (host + caminho, sem query).
+  referrer    String?
+
+  // ── PORTA DE ENTRADA ───────────────────────────────────────────────────────
+  /// Por onde este contato entrou na base. Hoje só existe o formulário do site;
+  /// o campo existe para a base receber outras portas SEM virar remendo.
+  fonte          SiteLeadSource @default(FORMULARIO_DEMONSTRACAO)
+  /// Só dígitos, com DDI 55 — a chave humana do contato. Índice (não único) de
+  /// propósito: uma restrição de unicidade poderia FAZER UM LEAD SE PERDER numa
+  /// corrida de dois envios simultâneos, e perder lead é pior que duplicar.
+  whatsappDigits String?
+  /// Quantas vezes esta mesma pessoa preencheu um formulário. Reenvio não cria
+  /// contato novo — vira interação REENVIO_FORMULARIO no histórico.
+  submissions    Int            @default(1)
+
+  // ── FUNIL COMERCIAL ────────────────────────────────────────────────────────
+  // Estado é DADO (enum), nunca texto livre: é o que o funil conta e o que o
+  // agente SDR vai ler. Toda mudança gera uma SiteLeadInteraction — a etapa
+  // atual é cache do último evento, e o histórico é a fonte da verdade.
+  stage          SiteLeadStage @default(NOVO)
+  /// Quando a etapa atual passou a valer.
+  stageChangedAt DateTime      @default(now())
+  /// Quem mudou por último ("admin", "sdr-agent", …). Espelha o último evento.
+  stageChangedBy String?
+
+  /// Última vez que a FOOCCI falou com esta pessoa (interação de saída).
+  /// null = ninguém abordou ainda. É o filtro "quem falta abordar" do SDR.
+  lastContactedAt   DateTime?
+  /// Última interação de qualquer tipo — para ordenar a base por movimento.
+  lastInteractionAt DateTime?
+
+  interactions SiteLeadInteraction[]
+
   @@index([createdAt])
   @@index([notifiedAt])
+  @@index([stage, createdAt])
+  @@index([utmCampaign])
+  @@index([whatsappDigits])
+  @@index([lastContactedAt])
+}
+
+/// As etapas do funil comercial da Foocci. ORDEM IMPORTA: a taxa de conversão
+/// entre etapas é calculada na sequência declarada aqui.
+///
+/// PERDIDO é terminal e fica FORA da sequência — um contato perdido SAIU do
+/// funil, não avançou nele. Contá-lo como etapa faria a conversão mentir.
+enum SiteLeadStage {
+  NOVO // chegou, ninguém falou com ele ainda
+  CONTATADO // alguém (ou o SDR) mandou a primeira mensagem
+  QUALIFICADO // respondeu e tem perfil: é restaurante, tem dor, tem interesse
+  PROPOSTA // recebeu preço/proposta ou agendou a demonstração
+  FECHADO // virou cliente
+  PERDIDO // terminal — não virou cliente (motivo na nota da interação)
+}
+
+/// Por onde o contato entrou na base da Foocci.
+enum SiteLeadSource {
+  FORMULARIO_DEMONSTRACAO // /site/demonstracao e variantes do formulário
+  AGENDAMENTO // marcou horário em /site/agendar
+  WHATSAPP_DIRETO // chamou no WhatsApp comercial
+  INDICACAO // veio por indicação de alguém
+  MANUAL // cadastrado à mão no admin
+  OUTRO
+}
+
+/// O que aconteceu com um contato. Append-only.
+///
+/// É o espelho comercial do `CRMContactLedger`: quem tocou, quando, em que
+/// direção e com que resultado. **Mudança de etapa é UM tipo de interação**, não
+/// uma tabela separada — assim o SDR lê UMA linha do tempo, não duas.
+///
+/// Nada no código atualiza nem apaga uma interação. O único apagamento possível
+/// é em cascata, quando o contato inteiro é excluído (direito de eliminação).
+model SiteLeadInteraction {
+  id        String                  @id @default(cuid())
+  leadId    String
+  lead      SiteLead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tipo      SiteLeadInteractionType
+  /// Preenchidos só em MUDANCA_ETAPA. `fromStage` null = evento de criação.
+  fromStage SiteLeadStage?
+  toStage   SiteLeadStage?
+  /// Quem fez. "admin" (tela), "sistema" (captura), "sdr-agent" (futuro).
+  actor     String
+  /// Texto curto: motivo da perda, resumo da conversa, o que foi dito.
+  nota      String?
+  createdAt DateTime                @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([createdAt])
+  @@index([tipo, createdAt])
+}
+
+/// Tipos de interação. `direcaoDeSaida` em `foocciCrmFunnel.ts` diz quais contam
+/// como "a Foocci falou com a pessoa" (e portanto mexem em `lastContactedAt`).
+enum SiteLeadInteractionType {
+  CAPTURA // entrou na base
+  REENVIO_FORMULARIO // a mesma pessoa preencheu de novo
+  MUDANCA_ETAPA // andou (ou voltou) no funil
+  MENSAGEM_ENVIADA // saída: WhatsApp/e-mail que a Foocci mandou
+  RESPOSTA_RECEBIDA // entrada: a pessoa respondeu
+  LIGACAO // saída: telefonema
+  REUNIAO // saída: demonstração/reunião realizada
+  NOTA // observação livre, sem contato
 }
 
 // ═══════════════════════════════════════════
@@ -4816,10 +4956,10 @@ model SiteLead {
 /// Slot livre = `bookedAt` null. A reserva é transacional (updateMany condicional)
 /// para dois visitantes nunca levarem o mesmo horário.
 model MeetingSlot {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   /// Início da chamada (UTC no banco; exibido em America/Sao_Paulo).
   startsAt    DateTime
-  durationMin Int       @default(20)
+  durationMin Int      @default(20)
 
   // ── Reserva (null = livre) ──
   bookedAt    DateTime?
