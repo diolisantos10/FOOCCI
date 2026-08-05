@@ -1,0 +1,27 @@
+name: Railway — remover sobras da Evolution
+
+# Último passo da extração: tira do Railway as duas variáveis órfãs com
+# credencial da Evolution e o serviço ocioso. Ordem do CEO, repetida.
+# Protege FOOCCI, Postgres e Postgres-76OG por construção.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/railway-remove-evolution.mjs'
+      - '.github/workflows/railway-remove-evolution.yml'
+
+jobs:
+  remover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Remover sobras
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/railway-remove-evolution.mjs
