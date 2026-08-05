@@ -4,6 +4,115 @@
 
 ---
 
+## 2026-08-05 — Raio-X noturno: a metade determinística da coleta
+
+**Pedido:** construir a coleta que roda toda madrugada e produz evidência para
+uma sessão de leitura escrever o relatório ao CEO. Só a coleta — sem IA, barata,
+reproduzível. No meio do bloco chegou complemento do campo: adotar **cinco
+padrões nomeados** que pescaram desperdício real em outro projeto da casa.
+
+### O que tentei e o que descobri
+
+**1. O pedido genérico e o pedido com padrão nomeado produzem coletas diferentes.**
+Meu desenho inicial era todo de runtime: custo de IA, mensagens presas, fila de
+impressão, assinaturas. Boa metade do valor, mas cega para o tipo de sangria que
+o complemento descreveu — *aquilo que nunca falha em voz alta*. Os cinco padrões
+me empurraram para uma segunda coleta, **estática, sobre o código-fonte**. E aí
+veio o efeito colateral bom: essa metade eu consegui **rodar de verdade neste
+ambiente**, porque não precisa de Postgres (que não existe aqui — `localhost:5432`
+não responde). A metade de runtime foi entregue testada contra amostra, não
+contra banco. Está dito no relatório; não vendi como medido o que não medi.
+
+**2. A separação amostra ↔ julgamento foi o que tornou tudo testável.**
+`collect/` produz um `RaioXSample` JSON-serializável; as sondas são funções puras
+sobre ele. Sem banco, consigo as duas metades de teste de cada sonda. O custo é
+um tipo a mais; o ganho é que o raio-x inteiro roda em 1,3 s num teste.
+
+**3. Onde os guardrails viraram tipo, e não comentário.**
+`Block<T> = {ok:true,data} | {ok:false,reason}` (`types.ts:56`) e `requireBlock`
+(`types.ts:84`): a sonda **não consegue** ver zero no lugar de "não consegui
+ler" — ela nem roda, o orquestrador emite UNKNOWN no lugar dela
+(`RaioXService.ts:139-160`). E sonda que devolve lista vazia também vira UNKNOWN
+(`RaioXService.ts:162-171`), com `computeGlobalStatus` recusando PASS na presença
+de qualquer UNKNOWN. Teste que trava isso: "com o banco todo indisponível,
+NENHUMA sonda devolve PASS".
+
+**4. A calibração foi o trabalho de verdade — e cada falso positivo virou teste.**
+Quatro rodadas contra o repositório inteiro (1.462 arquivos):
+- **`parsePublicPaths` devolveu ZERO** na primeira rodada: o corpo dos literais
+  (`/^\/api\/qr(\/.*)?$/`) tem `\/`, e minha classe `[^/\n]` cortava no primeiro.
+  Zero rota pública teria sido uma **mentira tranquila** — nenhum achado
+  apareceria e o relatório diria "tudo bem". Foi o que me fez transformar o
+  "não consegui parsear" em bloco indisponível, em vez de lista vazia.
+- **79 rotas "abertas com custo pago"**, quase todas `/api/admin/*` e
+  `/api/cron/*` — que estão em `PUBLIC_PATHS` mas autenticam por-rota. A prova
+  morava num helper importado (`_guard.ts`, `getTenantContext`). Passei a olhar
+  também os imports diretos da rota: 79 candidatos viraram **0 sem nenhuma prova**.
+- **`coherence: true` dentro de `select` do Prisma** entrava como "veredito
+  escrito à mão". Três dos nove candidatos eram isso.
+- **`AIInteractionLog.totalTokens` "escrito" no MEU arquivo de tipos**: declaração
+  de interface parece atribuição. Resolvido classificando pelo bloco Prisma mais
+  próximo acima (`data:` = escrita, `where:`/`select:` = leitura). Junto caiu
+  outro erro grosseiro: campo lido num `where` estava contando como morto — a
+  fila de impressão inteira aparecia como estado morto.
+- **`while (true)` do simulador** reprovava mesmo tendo `callAttempt <=
+  MAX_SCENARIO_RETRIES`: meu `\battempt` não casa dentro de `callAttempt`.
+  *Alarme falso por acidente de regex* — primo do `\b` ASCII que me mordeu no
+  bloco do verificador de capacidade. Escrevi no código.
+- **O scanner se autodenunciou**: um comentário meu que fala de `while (true)`
+  virou achado. Detector precisa distinguir código de prosa sobre código.
+
+**5. A metade que deixa passar continua sendo a mais cara.** Todo detector
+estático nasceu com o "não acusa" ao lado, e cada um desses testes cita o falso
+positivo real que o gerou (`SourceScanner.test.ts`). Sem isso, um detector com
+31 achados de estado morto vira carimbo em duas semanas.
+
+**6. Recusei fabricar precisão onde não tinha.** Nomes de campo repetidos entre
+modelos (`activatedAt` em dois modelos) faziam a escrita de um contar como
+leitura do outro. Sem AST, o honesto era **não julgar** esses campos: 1.245 →
+786 avaliados, com o número exposto na própria sonda. Perder cobertura declarada
+é melhor que apontar o arquivo errado.
+
+**7. O que a coleta achou de verdade (varredura estática, agora):**
+- `/api/pedido/pix-payment` e `/api/pedido/payment-status` recebem `orderId` de
+  qualquer um e devolvem dado de pagamento — **sem a decisão escrita**. O irmão
+  `/api/pedido/order-status:6-10` tem a justificativa ("o cuid age como bearer
+  token"); os dois que devolvem **chave Pix** não têm. Não é catástrofe (cuid é
+  imprevisível), mas é o padrão 2 com o dado mais sensível dos três.
+  **Achado lateral, fora do meu escopo:** `pix-payment/route.ts:41` faz
+  `prisma.payment.update` — é rota pública que **escreve**.
+- `Payment.cardLast4` é gravado em dois lugares
+  (`card/charge/route.ts:80`, `confirmCardPayment.ts:90`) e **nenhum leitor
+  consome**. Dado de cartão guardado sem uso é risco puro.
+- `Conversation.aiLockedAt` / `aiLockedByUserId`: a trilha de quem travou a IA é
+  gravada e ninguém lê.
+- `BrainCoherenceCritic.ts:98` foi listado como "veredito literal" — **e a
+  leitura humana absolveu**: é o SEGUNDO crítico, fail-open declarado, com o
+  piso determinístico já aplicado antes (`WhatsAppBrainRuntimeService.ts:313`).
+  Registro porque é o comportamento correto do instrumento: ele lista candidato,
+  gente confirma. Se eu tivesse deixado a sonda dar veredito, teria criado um
+  P0 falso na primeira noite.
+
+### O que quebrou
+
+- 34 erros de `tsc` de uma vez por `noUncheckedIndexedAccess`: o scanner é feito
+  de acesso por índice. Corrigi um a um em vez de afrouxar o tipo.
+- Primeira versão do detector de laço tinha teto próprio de visitados no BFS mas
+  não reconhecia teto alheio — a ironia está anotada no código.
+
+### Achados fora do meu escopo (para o Diretor)
+
+- A rota pública `/api/pedido/pix-payment` escreve no banco (auto-expira o
+  pagamento). É do `operacao`.
+- `src/services/quality/noSideEffects.test.ts` passou nesta rodada; a suíte
+  inteira ficou verde (417 arquivos, 5.349 testes).
+- A metade de runtime do raio-x **nunca rodou contra um banco real** — não há
+  Postgres neste ambiente. A primeira execução em produção é também a primeira
+  medição das consultas; o teto de tempo por bloco (20 s) existe para que uma
+  consulta lenta vire "não sei" em vez de derrubar a noite.
+
+---
+
 ## 2026-08-04 — Fusão dos dois cérebros da Ajuda + chamado com e-mail
 
 **Pedido:** passos 1 e 2 de 4 da Frente 2 (agente de suporte). Fundir a aba

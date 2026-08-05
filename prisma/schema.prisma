@@ -5200,3 +5200,74 @@ model InfraCredentialAccess {
   @@index([service, createdAt])
   @@map("infra_credential_accesses")
 }
+
+// ═══════════════════════════════════════════
+//  RAIO-X NOTURNO — a coleta determinística
+// ═══════════════════════════════════════════
+//
+// Uma linha por madrugada. Guardar cada execução é metade do valor do raio-x:
+// "37 mensagens presas" não diz nada; "37, contra 4 ontem" diz tudo. Os deltas
+// vivem no achado justamente para que a comparação sobreviva a mudanças no
+// conjunto de sondas.
+//
+// Tabelas isoladas, como as da auditoria de qualidade: o raio-x nunca escreve
+// em dado de negócio, e a única camada que escreve aqui é
+// src/services/raiox/persistence.
+
+/// Uma execução do raio-x.
+model RaioXRun {
+  id           String   @id @default(cuid())
+  source       String   @default("CRON") // CRON | MANUAL
+  /// PASS | WARNING | FAIL | UNKNOWN. Só é PASS quando TODA sonda registrou
+  /// resultado — ausência de dado nunca vira "está tudo bem".
+  globalStatus String
+  startedAt    DateTime
+  finishedAt   DateTime
+  durationMs   Int
+  triggeredBy  String?
+
+  countsByStatus   Json // { PASS, WARNING, FAIL, UNKNOWN }
+  countsBySeverity Json // { P0, P1, P2, INFO }
+
+  /// Execução usada como base de comparação. Nulo = primeira noite, e o
+  /// relatório precisa dizer "sem base" em vez de mostrar zero.
+  comparedToRunId   String?
+  /// Blocos da coleta que não vieram, com o motivo. Vai inteiro para o relatório.
+  unavailableBlocks Json?
+
+  createdAt DateTime @default(now())
+
+  findings RaioXFinding[]
+
+  @@index([createdAt])
+  @@index([globalStatus])
+  @@map("raiox_runs")
+}
+
+/// Um achado de uma sonda. Carrega a própria evidência e os próprios números.
+model RaioXFinding {
+  id       String @id @default(cuid())
+  runId    String
+  probeId  String
+  area     String
+  status   String // PASS | WARNING | FAIL | UNKNOWN
+  severity String // P0 | P1 | P2 | INFO
+  title    String
+  summary  String
+  /// string[] — casos concretos, já sanitizados (sem telefone, e-mail ou token).
+  evidence Json
+  /// Números comparáveis entre execuções.
+  metrics  Json
+  /// Variação contra a execução anterior. null numa chave = sem base de comparação.
+  deltas   Json
+
+  recommendation String
+
+  createdAt DateTime @default(now())
+
+  run RaioXRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([probeId, severity])
+  @@map("raiox_findings")
+}
