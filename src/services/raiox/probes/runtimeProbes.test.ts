@@ -47,6 +47,12 @@ const GATES_OK: GatesSample = {
 const BRAIN_OK: BrainSample = {
   windowHours: 24, shadowSamples: 40, coherencePass: 35, coherenceFail: 3, coherenceNeedsReview: 2,
   fallbackModes: 4, liveConfigs: [], promotionThresholds: { minSamples: 20, minCoherencePassPct: 70 },
+  porAgente: [
+    { agentId: "crm", amostras: 12, coherencePass: 11, coherenceFail: 1, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 3 },
+    { agentId: "whatsapp", amostras: 28, coherencePass: 24, coherenceFail: 2, coherenceNeedsReview: 2, ultimaAmostraHorasAtras: 1 },
+  ],
+  agentesEsperados: ["whatsapp", "crm"],
+  silencioAlarmaAposHoras: 7 * 24,
 };
 const JOBS_OK: JobsSample = { stuckAfterHours: 2, stuck: [], pendingCampaignSends: 0, stuckFiscalDocs: 0 };
 const DATA_OK: DataSample = {
@@ -266,6 +272,95 @@ describe("cerebro-sombra", () => {
     expect(info.recommendation).toContain("decisão humana");
     // e o veredito continua PASS: preparar evidência não é acender alarme
     expect(out.every((f) => f.status === "PASS")).toBe(true);
+  });
+
+  // ── sombra parada ─────────────────────────────────────────────────────────
+  // O defeito que estes testes travam: antes deles, `shadowSamples: 0` saía como
+  // PASS com o título "Evidência de sombra acumulada" — uma máquina que não
+  // registrou resultado nenhum se apresentando como saudável.
+
+  it("ACHA: agente esperado que NUNCA gravou amostra vira P1, com o nome dele", () => {
+    const b: BrainSample = {
+      ...BRAIN_OK,
+      // O recepcionista trabalha; o CRM nunca gravou. O total agregado esconderia isso.
+      shadowSamples: 28,
+      porAgente: [
+        { agentId: "whatsapp", amostras: 28, coherencePass: 24, coherenceFail: 2, coherenceNeedsReview: 2, ultimaAmostraHorasAtras: 1 },
+      ],
+    };
+    const out = cerebroSombraProbe.run(sample({ brain: available(b) }), ctx);
+    const f = out.find((x) => x.title.includes("Sombra parada"))!;
+    expect(f.severity).toBe("P1");
+    expect(f.status).toBe("FAIL");
+    expect(f.evidence.join(" ")).toContain("crm");
+    expect(f.evidence.join(" ")).toContain("NUNCA");
+  });
+
+  it("ACHA: agente que gravou, mas há mais tempo que a janela dos gates, entra com a idade", () => {
+    const b: BrainSample = {
+      ...BRAIN_OK,
+      porAgente: [
+        { agentId: "crm", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 40 * 24 },
+        { agentId: "whatsapp", amostras: 40, coherencePass: 35, coherenceFail: 3, coherenceNeedsReview: 2, ultimaAmostraHorasAtras: 1 },
+      ],
+    };
+    const out = cerebroSombraProbe.run(sample({ brain: available(b) }), ctx);
+    const f = out.find((x) => x.title.includes("Sombra parada"))!;
+    expect(f.severity).toBe("P1");
+    expect(f.evidence.join(" ")).toContain("40 dia(s)");
+  });
+
+  it("NÃO ACUSA: agente com amostra recente não vira alarme só porque hoje ficou quieto", () => {
+    // A janela de coleta é de 24h; a régua do silêncio é de 7 dias. Uma campanha
+    // que não rodou ontem é normal — barrar isso transformaria o detector em
+    // ruído diário e ele pararia de ser lido.
+    const b: BrainSample = {
+      ...BRAIN_OK,
+      shadowSamples: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, fallbackModes: 0,
+      porAgente: [
+        { agentId: "crm", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 50 },
+        { agentId: "whatsapp", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 30 },
+      ],
+    };
+    const out = cerebroSombraProbe.run(sample({ brain: available(b) }), ctx);
+    expect(out.some((f) => f.title.includes("Sombra parada"))).toBe(false);
+    expect(out.some((f) => f.severity === "P1")).toBe(false);
+  });
+
+  it("NÃO APROVA POR OMISSÃO: zero amostra nunca sai como 'evidência acumulada'", () => {
+    const b: BrainSample = {
+      ...BRAIN_OK,
+      shadowSamples: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, fallbackModes: 0,
+      porAgente: [
+        { agentId: "crm", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 10 },
+        { agentId: "whatsapp", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 10 },
+      ],
+    };
+    const out = cerebroSombraProbe.run(sample({ brain: available(b) }), ctx);
+    expect(out.some((f) => f.title.includes("Evidência de sombra acumulada"))).toBe(false);
+    expect(out.some((f) => f.status === "PASS")).toBe(false);
+    expect(out.some((f) => f.title.includes("Nenhuma amostra de sombra na janela"))).toBe(true);
+  });
+
+  it("NÃO REPETE: quando o silêncio já passou de 7 dias, sai o P1 e não o aviso de janela vazia", () => {
+    const b: BrainSample = {
+      ...BRAIN_OK,
+      shadowSamples: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, fallbackModes: 0,
+      porAgente: [
+        { agentId: "crm", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 30 * 24 },
+        { agentId: "whatsapp", amostras: 0, coherencePass: 0, coherenceFail: 0, coherenceNeedsReview: 0, ultimaAmostraHorasAtras: 30 * 24 },
+      ],
+    };
+    const out = cerebroSombraProbe.run(sample({ brain: available(b) }), ctx);
+    expect(out.filter((f) => f.probeId === "cerebro-sombra" && f.status !== "PASS")).toHaveLength(1);
+    expect(out[0].title).toContain("Sombra parada");
+  });
+
+  it("SEPARA POR AGENTE: a linha informativa mostra cada agente, não só o total", () => {
+    const out = cerebroSombraProbe.run(sample(), ctx);
+    const info = out.find((f) => f.severity === "INFO")!;
+    expect(info.evidence.join(" ")).toContain('agente "crm"');
+    expect(info.evidence.join(" ")).toContain('agente "whatsapp"');
   });
 });
 

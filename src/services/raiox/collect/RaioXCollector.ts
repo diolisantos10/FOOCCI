@@ -45,6 +45,34 @@ export const AUDIT_EXPECTED_WITHIN_HOURS = 30;
 /** Limiares da escada de liberação do Cérebro (docs/brain-universal-roadmap.md). */
 export const PROMOTION_THRESHOLDS = { minSamples: 20, minCoherencePassPct: 70 };
 
+/**
+ * Os agentes de quem se ESPERA evidência de sombra continuamente.
+ *
+ * É uma declaração humana, de propósito. Derivar a lista do que a tabela já
+ * contém faria o silêncio se autoabsolver: um agente que nunca gravou nada
+ * nunca seria cobrado, que é exatamente o defeito que este item veio pegar.
+ *
+ * Quem grava cada um:
+ *  • "whatsapp" — WhatsAppBrainRuntimeService.ts:115, a cada conversa em sombra;
+ *  • "crm"      — ScheduledCampaignRunnerService.ts:2014, ao fim de cada disparo
+ *                 de campanha COM envio real, e só se CRM_BRAIN_SHADOW_ENABLED
+ *                 for a string "true" (linha 1518).
+ *
+ * Agente novo entra aqui de propósito, junto com a linha que o grava.
+ */
+export const AGENTES_COM_SOMBRA_ESPERADA = ["whatsapp", "crm"] as const;
+
+/**
+ * Quantas horas sem gravar até a sombra de um agente esperado virar alarme.
+ *
+ * 7 dias não é número escolhido a dedo: é a janela que `getShadowStats` usa por
+ * padrão (BrainShadowEvidenceService.ts:57) e que os gates de promoção leem
+ * (crmAgentGovernance.ts:59). Passado esse prazo sem uma amostra, o gate de
+ * promoção está lendo ZERO por construção — o alarme dispara exatamente no
+ * momento em que o tempo em sombra deixa de valer alguma coisa.
+ */
+export const SHADOW_SILENT_AFTER_HOURS = 7 * 24;
+
 const BLOCK_TIMEOUT_MS = 20_000;
 const SAMPLE_LIMIT = 25;
 
@@ -377,10 +405,11 @@ async function collectGates(now: Date): Promise<GatesSample> {
 
 async function collectBrain(now: Date): Promise<BrainSample> {
   const since = hoursAgo(now, WINDOW_HOURS);
-  const [logs, configs] = await Promise.all([
+  const [logs, configs, ultimas] = await Promise.all([
     prisma.brainShadowLog.findMany({
       where: { createdAt: { gte: since } },
-      select: { coherence: true, reasoningMode: true },
+      // agentId entra aqui porque o total agregado esconde o agente parado.
+      select: { coherence: true, reasoningMode: true, agentId: true },
       take: 5000,
     }),
     prisma.brainFreeFormConfig.findMany({
@@ -388,7 +417,35 @@ async function collectBrain(now: Date): Promise<BrainSample> {
       select: { restaurantId: true, mode: true, paused: true },
       take: SAMPLE_LIMIT,
     }),
+    // Sem recorte de janela DE PROPÓSITO: a pergunta é "faz quanto tempo que
+    // este agente não grava", e ela não tem resposta dentro de uma janela que
+    // já está vazia.
+    prisma.brainShadowLog.groupBy({
+      by: ["agentId"],
+      _max: { createdAt: true },
+    }),
   ]);
+
+  // agentId nulo = recepcionista, pela semântica das linhas antigas
+  // (BrainShadowEvidenceService.ts:65).
+  const nome = (id: string | null) => id ?? "whatsapp";
+
+  const ultimaPorAgente = new Map<string, Date | null>();
+  for (const u of ultimas) ultimaPorAgente.set(nome(u.agentId), u._max.createdAt ?? null);
+
+  const agentes = new Set<string>([...ultimaPorAgente.keys(), ...logs.map((l) => nome(l.agentId))]);
+  const porAgente = [...agentes].sort().map((agentId) => {
+    const doAgente = logs.filter((l) => nome(l.agentId) === agentId);
+    const ultima = ultimaPorAgente.get(agentId) ?? null;
+    return {
+      agentId,
+      amostras: doAgente.length,
+      coherencePass: doAgente.filter((l) => l.coherence === "PASS").length,
+      coherenceFail: doAgente.filter((l) => l.coherence === "FAIL").length,
+      coherenceNeedsReview: doAgente.filter((l) => l.coherence === "NEEDS_REVIEW").length,
+      ultimaAmostraHorasAtras: ultima ? hoursBetween(now, ultima) : null,
+    };
+  });
 
   return {
     windowHours: WINDOW_HOURS,
@@ -399,6 +456,9 @@ async function collectBrain(now: Date): Promise<BrainSample> {
     fallbackModes: logs.filter((l) => l.reasoningMode === "FALLBACK").length,
     liveConfigs: configs,
     promotionThresholds: PROMOTION_THRESHOLDS,
+    porAgente,
+    agentesEsperados: [...AGENTES_COM_SOMBRA_ESPERADA],
+    silencioAlarmaAposHoras: SHADOW_SILENT_AFTER_HOURS,
   };
 }
 
