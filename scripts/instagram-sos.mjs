@@ -18,14 +18,11 @@
  * ⚠️ O log do Actions deste repositório é PÚBLICO. Só campos escolhidos a dedo.
  *
  * MODO PADRÃO: somente leitura. Nada é enviado, criado ou alterado.
- * MODO ESCRITA (APLICAR=1): apenas duas ações, ambas restritas ao Instagram —
- *   1. garante INSTAGRAM_WEBHOOK_VERIFY_TOKEN nas variáveis do Railway (se ausente);
- *   2. (re)assina `object=instagram` no app.
- * A assinatura de `whatsapp_business_account` NUNCA é tocada: cada `object` é uma
- * entrada independente em /subscriptions, e o WhatsApp é o produto no ar.
+ * MODO ESCRITA (APLICAR=1): UMA ação só — inscrever a CONTA do restaurante no campo
+ * `messages`, e apenas quando o token está vivo. A assinatura do APLICATIVO
+ * (/{app-id}/subscriptions) nunca é tocada: é a camada comum com o WhatsApp, que é o
+ * produto no ar, e a leitura já provou que ela está correta.
  */
-
-import { randomBytes } from "crypto";
 
 const TOKEN = process.env.RAILWAY_TOKEN;
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
@@ -210,57 +207,39 @@ const main = async () => {
     return;
   }
 
-  p("\n═══ 5. CORREÇÃO (APLICAR=1) — escopo Instagram apenas ═══");
+  p("\n═══ 5. APLICAR=1 — inscrever a CONTA no webhook, e nada além disso ═══");
 
-  // 5a. verify token no Railway: sem ele o handshake GET do webhook devolve 403 e
-  // ninguém — nem o CEO no painel da Meta — consegue (re)assinar o webhook.
-  let verify = V.INSTAGRAM_WEBHOOK_VERIFY_TOKEN;
-  if (verify) {
-    p("   · INSTAGRAM_WEBHOOK_VERIFY_TOKEN já existe — mantido como está.");
-  } else {
-    verify = `foocci-ig-${randomBytes(12).toString("hex")}`;
-    guardar(verify);
-    const r = await gql(
-      `mutation U($input: VariableUpsertInput!) { variableUpsert(input: $input) }`,
-      { input: { projectId: amb.projectId, environmentId: amb.environmentId, serviceId: amb.serviceId,
-                 name: "INSTAGRAM_WEBHOOK_VERIFY_TOKEN", value: verify } },
-    );
-    p(r.ok ? "   ✅ INSTAGRAM_WEBHOOK_VERIFY_TOKEN criado (valor não impresso)."
-           : `   ❌ não consegui criar: ${r.erro}`);
-    if (r.ok) {
-      p("   ⚠️ O app só passa a enxergar a variável no PRÓXIMO deploy do Railway.");
-      p("      Até lá, (re)assinar o webhook falha no handshake — é esperado.");
-    }
+  // O que este modo NÃO faz, de propósito: mexer em `/{app-id}/subscriptions`.
+  // Essa é a camada COMUM com o WhatsApp — o mesmo aplicativo assina os dois objetos,
+  // e o WhatsApp é o produto que está no ar atendendo os restaurantes agora. A leitura
+  // acima já provou que object=instagram está assinado, ativo, com o campo `messages` e
+  // com o callback certo: não há o que corrigir ali, e reescrever por reescrever é
+  // arriscar o canal que funciona para consertar o que não está quebrado.
+  //
+  // O que falta é sempre no nível da CONTA — e isso passa pelo graph-check, a rota que
+  // a casa já tem, com o token do restaurante descriptografado no servidor.
+  if (!restaurantId) { p("   (sem restaurantId — nada a fazer)"); return; }
+
+  const gc = await get(`/api/admin/settings/integrations/instagram/graph-check?restaurantId=${restaurantId}`, secret);
+  if (gc.json?.tokenValid !== true) {
+    p("   ⛔ O token do cliente está MORTO — inscrever a conta é impossível agora.");
+    p("      A ordem obrigatória é: o dono reconecta pela tela → só então a inscrição.");
+    p(`      Motivo ao vivo: ${JSON.stringify(gc.json?.me?.error?.message ?? "—")}`);
+    return;
   }
 
-  // 5b. (re)assinar object=instagram. NUNCA whatsapp_business_account.
-  const alvo = apps.find(([r]) => r === "INSTAGRAM") ?? apps[0];
-  if (!alvo) { p("   (sem credencial de app — não dá para assinar)"); return; }
-  const [rotulo, appId, appSecret] = alvo;
-  const appToken = `${appId}|${appSecret}`;
-  const callback = `${BASE}/api/webhooks/instagram`;
-  const corpo = new URLSearchParams({
-    object: "instagram",
-    callback_url: callback,
-    fields: "messages,messaging_seen,comments",
-    verify_token: verify,
-    include_values: "true",
-    access_token: appToken,
-  });
-  const res = await fetch(`${GRAPH}/${appId}/subscriptions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: corpo.toString(),
-  });
-  const jr = await res.json().catch(() => ({}));
-  p(`   · POST subscriptions object=instagram no app ${rotulo}: HTTP ${res.status} — ${limpar(JSON.stringify(jr)).slice(0, 400)}`);
-
-  const depois = await graph(`${appId}/subscriptions`, appToken);
-  const linhas = Array.isArray(depois.json?.data) ? depois.json.data : [];
-  p("   · estado depois:");
-  for (const s of linhas) {
-    p(`       object=${s.object} · active=${s.active} · fields: ${(s.fields || []).map((f) => f.name).join(", ")}`);
+  p(`   · token vivo · expira em ${gc.json.expiresInDays ?? "?"} dias`
+    + ` · curto? ${gc.json.tokenLooksShortLived}`);
+  if (gc.json.tokenLooksShortLived === true) {
+    p("   ⚠️ Token de curta duração: a conexão vai morrer em cerca de uma hora.");
+    p("      Inscrever adianta pouco — reconecte de novo e confira de novo.");
   }
+  const sub = await get(
+    `/api/admin/settings/integrations/instagram/graph-check?restaurantId=${restaurantId}&subscribe=true`,
+    secret,
+  );
+  p(`   · inscrição da conta em "messages": ${limpar(JSON.stringify(sub.json?.subscribeResult ?? sub.json)).slice(0, 300)}`);
+  p(`   · assinaturas da conta agora: ${limpar(JSON.stringify(sub.json?.subscribedApps)).slice(0, 300)}`);
 };
 
 main().catch((e) => fail(limpar(e?.stack || e?.message || e)));
