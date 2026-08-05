@@ -890,3 +890,115 @@ manual faria com um humano olhando."* Origem: este bloco; arquivos
 `src/services/demo/bakerySelfSeed.ts`,
 `src/app/api/admin/demo-bakery/self-seed/route.ts`,
 `scripts/start-production.sh:33-56`.
+
+---
+
+## 2026-08-05 · Painel de pedidos: o "Total hoje" contava a página, e o "Filtrar" não filtrava
+
+**Contexto:** dois defeitos anotados por quem foi fotografar as telas para o site
+(`docs/pendencias.md`, seção dos dois defeitos de 05/08). Relato de terceiro —
+conferi os dois no código antes de mexer. Worktree
+`agent-a05af0aeecb96a83c`.
+
+**Os dois se confirmaram, e o primeiro era pior do que o relato dizia.**
+
+1. `PerformanceBar` recebia a lista carregada e exibia `orders.length` como
+   "Total hoje" (era `OrdersClient.tsx:650`). A lista vem de
+   `/api/orders?limit=100` **sem recorte de data**: o número não era o total do
+   dia nem o total da página — era "quantos pedidos recentes couberam na
+   página", misturando dias. Em loja de 30 pedidos/dia o KPI mostraria 100
+   (pedidos de vários dias somados); em loja de 300 mostraria 100 também. Só
+   coincidia com a verdade em loja pequena e no dia cheio.
+2. `<button className={ghostBtn}>Filtrar</button>` — sem `onClick`. Os estados
+   `dateFrom`/`dateTo` existiam, alimentavam os `value` dos inputs e o "Limpar",
+   e **nunca entravam em nenhum filtro**: nem na consulta ao servidor
+   (`fetchOrders` era literal, `"/api/orders?limit=100"`) nem no `useMemo` do
+   `displayed`, que só olhava status e busca de texto.
+
+**A decisão sobre o botão: fazer funcionar, não remover.** O critério foi o dono
+procurando o faturamento de ontem. A tela de Pedidos é onde ele olha pedido; sem
+filtro de data, o único caminho para "ontem" seria o Analytics, que responde
+outra pergunta (agregado, não a lista de comandas). Remover o controle deixaria
+o painel sem resposta para uma pergunta legítima e diária. E fazer funcionar era
+barato: a API **já** aceitava `from`/`to` (`orderListQuerySchema`) e **já**
+devolvia `total` contado no banco (`OrderService.list`) — o cliente jogava esse
+`total` fora.
+
+**A trava, porque comentário não segura número (guardrail 4).** O filtro foi para
+o **servidor**, não para o array do cliente: com período aplicado, a lista e o
+KPI saem da MESMA resposta (mesmo `where`, mesmo `count`), então não existe
+estado em que o filtro esteja ligado e o número não obedeça. Sem período
+aplicado, a lista continua sendo o fluxo operacional recente e o KPI do dia vem
+de uma contagem própria (`limit=1`, só o `total`) — porque "hoje" e "os últimos
+100" são perguntas diferentes, e foi confundi-las que gerou o número errado.
+`PerformanceBar` deixou de receber qualquer caminho para derivar o total da
+lista: ele entra por prop e só pode ter vindo de `periodTotalFromResponse()`.
+
+**Arquivos:** `src/lib/orders-panel-period.ts` (novo, puro),
+`src/lib/orders-panel-period.test.ts` (19 testes),
+`src/app/(dashboard)/orders/OrdersClient.tsx` (KPI em `PerformanceBar`, filtro em
+`SearchBar`/`handleApplyPeriod`, fetch em `fetchOrders`).
+
+**Efeitos colaterais que precisaram de decisão:**
+- **Modal de novo pedido só sem filtro ativo.** Com a lista recortada por data,
+  "não estava na lista antes" deixa de significar "acabou de chegar" — enfileirar
+  ali abriria enxurrada de modais de pedido antigo. Confirmei que o alarme sonoro
+  **não** depende desta tela (`GlobalAlertEngine` tem poll próprio de 8s,
+  `/api/orders?limit=50`), então filtrar por data não faz ninguém perder pedido.
+  Guardrail 5: a proteção não podia ser pior que o problema.
+- **Faixa avisando que o filtro está ativo**, com "Ver pedidos de hoje" a um
+  clique. Lista recortada sem aviso é o mesmo pecado do KPI.
+- **Período inválido é erro visível, nunca lista vazia.** Lista vazia lê-se como
+  "não teve pedido nesse dia" — trocaria um engano por outro.
+- **Rodapé "Mostrando os 100 pedidos mais recentes".** Com o KPI dizendo 104 e o
+  chip "Todos" dizendo 100 na mesma tela, faltava dizer que a lista é uma página.
+  `ORDERS_PAGE_LIMIT` é a fonte única do número que a busca pede e que o aviso
+  anuncia.
+- **O total passou a aparecer no celular** (`sm:hidden`, compacto). A barra de
+  KPIs era `hidden sm:flex`: o número corrigido ficaria invisível justamente no
+  aparelho em que o dono mais olha.
+
+**As duas metades de teste, em cada correção:**
+- KPI: com `data.length = 100` e `total = 137`, o exibido é 137 **e**
+  `expect(...).not.toBe(res.data.length)` — o cálculo antigo era exatamente
+  `data.length`. Mais: sem resposta o KPI é "—" e nunca 0 (0 afirma "nenhum
+  pedido hoje").
+- Filtro: a URL com período **difere** da URL sem período (antes o clique não
+  mudava consulta nenhuma, então as duas eram idênticas), o dia final é
+  inclusivo (com `to` na meia-noite do dia, o jantar inteiro sumiria do
+  faturamento), e o que a tela emite passa no `orderListQuerySchema` da API —
+  contrato, não torcida.
+- Corte de dia: às 23:50 BRT o "hoje" ainda é o dia anterior; o teste mostra que
+  o corte UTC ingênuo diria o dia seguinte.
+
+**Prova no produto rodando** (padaria de demonstração, banco local, 1679 pedidos,
+104 hoje / 95 ontem — Playwright em 3200):
+- sem filtro: KPI "Total hoje **104**" com **100** cards na lista (antes: 100);
+- filtro 04/08: KPI "Total · 04/08 **95**", e a única consulta disparada foi
+  `/api/orders?limit=100&from=2026-08-04T03:00:00.000Z&to=2026-08-05T02:59:59.999Z`
+  — bate com o `count` do SQL;
+- 10/08→01/08: "A data final é anterior à inicial.";
+- 01/01/2020–02/01/2020: vazio nomeado ("Nenhum pedido em 01/01 – 02/01") com KPI 0;
+- "Ver pedidos de hoje" devolve o 104.
+Telas em 375/768/1280 conferidas; autoavaliação 8/8/8/8 (hierarquia, tipografia,
+espaçamento, consistência). Corrigi o drift da barra de filtros no celular (a
+busca disputava a linha com as duas datas e os três viravam tocos) e o skeleton
+usa `bg-canvas` em vez de hex novo.
+
+`npx tsc --noEmit` limpo · `npx vitest run` 5236/5236.
+
+**O que NÃO está provado:** nada disso rodou em loja de verdade — a conferência
+foi na padaria de demonstração, em banco local. E o fuso é o de Brasília fixo
+(mesmo corte de `dashboard-periods.ts`), não o `timezone` do restaurante: para
+loja fora de BRT o "hoje" do painel vai divergir do dia civil dela. Registrado
+como dívida conhecida, não corrigido aqui — mexer nisso mexe também no dashboard
+e no CRM, que usam o mesmo corte.
+
+**Proposta de vitrine (promoção é do Diretor):** *"Todo número que a tela
+apresenta como um PERÍODO ('hoje', 'no mês') tem que vir da contagem do servidor
+com o mesmo `where` da lista — nunca do `length` do que foi carregado. Página é
+página; período é período, e confundir os dois produz um número que parece certo.
+Quando existir filtro, lista e número saem da MESMA resposta, senão o filtro
+mente. E controle que não faz nada é pior que controle ausente: ou ele manda de
+verdade no que a tela mostra, ou ele sai da tela."* Origem: este bloco; arquivos
+`src/lib/orders-panel-period.ts`, `src/app/(dashboard)/orders/OrdersClient.tsx`.
