@@ -296,6 +296,40 @@ const main = async () => {
       p(`   ${" ".repeat(26)}pessoas distintas contatadas: ${DIAS_CURTO}d ${n(tocados30.length, 5)} (${cobertura}% dos contactáveis) · ${DIAS_LONGO}d ${n(tocados90.length, 5)}`);
     }
 
+    /* A pergunta que separa "não teve o que enviar" de "tinha e não enviou".
+     *
+     * `resolveAudience` resolve no máximo MAX_AUDIENCE = 500 por segmento
+     * (CrmCampaignService.ts:110) e ordena por `lastOrderAt` ASC — sempre os
+     * mesmos primeiros. Se a prateleira real for muito maior que 500, uma
+     * campanha pode reportar "sem novos elegíveis" com milhares de pessoas na
+     * fila atrás. Este bloco mede a prateleira SEM o teto; a comparação com o
+     * `newEligible` da seção F é que responde. Contagem, não conclusão. */
+    p("\n" + "═".repeat(78));
+    p("D2. A PRATELEIRA REAL — contactáveis por tempo desde o último pedido");
+    p("═".repeat(78));
+    p(`   Compare cada faixa com o teto de resolução (${500}). Faixa >> 500 significa`);
+    p("   que a campanha daquele segmento enxerga só uma fatia da fila.");
+    for (const r of restaurantes) {
+      const faixas = await prisma.$queryRawUnsafe(
+        `SELECT CASE
+                  WHEN u IS NULL THEN 'sem pedido'
+                  WHEN u > now() - interval  '30 days' THEN '0-30 dias'
+                  WHEN u > now() - interval  '60 days' THEN '31-60 dias'
+                  WHEN u > now() - interval '120 days' THEN '61-120 dias'
+                  ELSE '120+ dias' END AS faixa,
+                COUNT(*)::int AS n
+           FROM (SELECT COALESCE("lastOrderAt", "importedLastOrderAt") AS u
+                   FROM customers
+                  WHERE "restaurantId" = $1 AND "isGuest" = false AND "isActive" = true
+                    AND "hasOptedOut" = false AND "crmContactable" = true AND phone IS NOT NULL) t
+          GROUP BY 1 ORDER BY 1`,
+        r.id,
+      ).catch(() => []);
+      if (!faixas.length) continue;
+      p(`   ${String(r.slug ?? r.id.slice(0, 8)).padEnd(20)} ` +
+        faixas.map((f) => `${f.faixa}: ${f.n}`).join(" · "));
+    }
+
     /* Pedidos: separar "não teve o que enviar" de "tinha e não enviou". */
     p("\n" + "═".repeat(78));
     p(`E. VOLUME REAL DA CASA — pedidos em ${DIAS_CURTO}d (um restaurante sem movimento`);
