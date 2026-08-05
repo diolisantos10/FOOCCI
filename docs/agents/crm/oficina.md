@@ -400,3 +400,226 @@ commitei nada, conforme a ordem.
    `EVOLUTION_BAD_REQUEST` e irmãs são contadas por chave no `CRMClient.tsx`.
    Renomear zera os contadores da tela sem ninguém perceber. Mudou o que ENTRA em
    cada uma, não o nome. Origem: idem.
+
+---
+
+## 2026-08-05 — Carrinho abandonado: a campanha "Ativa" que enviou 4 mensagens em 2,5 meses
+
+**Pedido do CEO** (via Diretor): a linha "🛒 Carrinho abandonado (FIXA)" aparece
+**Ativa**, com botão *Pausar*, e **todos** os números em traço. "Essa campanha não
+funciona há meses."
+
+A ordem era explícita: **não concluir por leitura de código; provar com dado de
+produção.** As três hipóteses (não dispara / dispara e não acha ninguém / envia e
+não registra) levam a consertos opostos.
+
+### a) Onde estava a evidência — e por que ela não custou nada
+
+O job **Cart Recovery** do `crm-cron.yml` imprime, a cada execução, a resposta
+crua de `POST /api/cron/send-cart-recovery`. Ou seja: **o histórico do motor já
+estava gravado, datado e público** nos logs do GitHub Actions. Não precisei de
+credencial de banco, nem de rota nova, nem de clique do CEO.
+
+Varri **1.028 execuções do workflow (19/05 → 05/08)** e extraí **792 respostas do
+motor**. Ferramenta preservada em `scripts/historico-cron-carrinho.mjs`.
+
+**O veredito, com os números:**
+
+| Janela | Ticks lidos | `checked` | `eligible` | `sent` | `failed` |
+|---|---|---|---|---|---|
+| 19/05 → 24/06 | 252 | 2.541 | 658 | **9** (6 em `dryRun`) | 21 |
+| 24/06 → 25/07 | 393 | 12.547 | 580 | **1** | 17 |
+| 25/07 → 05/08 | 147 | 2.868 | 10 | **0** | 10 |
+
+**Mensagens reais entregues em 2,5 meses: 4.** Três em 28/05 (dia da estreia) e
+**uma em 12/07 23:03 UTC** — a última. Nesse mesmo período o motor declarou
+**1.248 vezes** que havia carrinho cobrável.
+
+### b) Qual das três hipóteses — e por que as outras duas caem
+
+1. **"Nunca dispara" — FALSO.** 792 ticks com HTTP 200 e corpo completo. O cron
+   roda (com ressalva: o GitHub entrega ~1 execução/hora, não os `*/5` do
+   arquivo — throttling de repositório com 45 workflows).
+2. **"Envia e não registra" — DESCARTADA COM PROVA, e é a que eu mais queria
+   descartar.** `sent` somou 4 em 792 ticks. Além disso, `skippedTooOld` (que só
+   conta rascunho com `recoveryAttempts=0`) subiu de 47 → 51 entre 30/07 e 05/08:
+   são carrinhos que venceram **sem nunca terem sido carimbados**. Se o
+   `CartRecoveryScheduler` in-process estivesse enviando por fora do cron, esses
+   carimbos existiriam. **Não há enxurrada silenciosa acontecendo.**
+3. **"Dispara e não acha ninguém" — VERDADEIRA**, mas por motivos que MUDARAM ao
+   longo do período. É aqui que a leitura ingênua erra:
+
+   - **até 17/07** — o portão de config ficava **depois** do `eligible++`
+     (`git show 68ee165c`). Os "elegíveis" eram sempre os mesmos restaurantes
+     **sem WhatsApp configurado**: contados como oportunidade, nunca tentados. Um
+     mesmo punhado de rascunhos era recontado a cada tick por dias a fio, o que
+     inflou `eligible` para 658/580 sem significar quase nada;
+   - **de 17/07 em diante** — o portão subiu para antes do `eligible++` (correto).
+     `eligible` despencou para ~0–1 e as poucas tentativas **falharam** (17 e 10);
+   - **30/07 11:33** — a trava de validade de 6h entrou (commit `7e4d63f4`) e o
+     estoque inteiro — 47 carrinhos — virou "vencido" **no mesmo tick**. Correto e
+     desejável: eram carrinhos de semanas atrás;
+   - **de 30/07 até hoje** — o volume real é de **~0,7 carrinho abandonado por
+     dia**. Dos 4 que apareceram: 3 foram pulados porque **o cliente já tinha
+     pedido** (pulo certo, não é bug) e **1 foi perdido por loja fechada**.
+
+### c) O achado que ninguém tinha visto: a validade corre com a loja fechada
+
+05/08, dois ticks seguidos (03:57 e 06:36): `checked=1`, `skippedRestaurantClosed=1`
+— o motor adia porque a loja está fechada e, corretamente, **não carimba**. Às
+09:23 o mesmo carrinho já aparece em `skippedTooOld=51`.
+
+**O carrinho abandonado de madrugada vence antes de a loja abrir.** O adiamento
+por horário promete uma segunda chance que o prazo de 6h nunca deixa acontecer.
+
+**NÃO CONSERTEI ISSO, DE PROPÓSITO** — ver o aviso em (f).
+
+### d) O que a tela faz, e que torna tudo pior
+
+`CRMClient.tsx:3646-3697`: a linha do carrinho é **sintética e cega por
+construção**. Os traços não são "zero": são **`<td>—</td>` literais no JSX**,
+sete deles, com o comentário *"cart recovery grants without a Campaign row, so
+these aren't attributable"*. Aconteça o que acontecer, aquela linha nunca mostra
+número.
+
+E o selo: `cartRecoveryActive` vem de `readyMadeConfig.cartRecoveryEnabled`
+(`ReadyMadeCampaignService.ts:194`), que é **ligado por omissão**. Ou seja:
+**"Ativa" significa "ninguém desligou"**, não "está funcionando".
+
+Pior ainda: o motor **nunca gravava `campaign_executions`**. Achei o buraco
+documentado numa linha de comentário em `src/lib/crm-safety.ts:330` — *"cart
+recovery ... never created executions here anyway"* — sem que ninguém tivesse
+notado que aquela frase **era a explicação dos traços**. Consequência tripla:
+a tela não tinha o que somar, a atribuição de receita nunca creditou um centavo
+ao carrinho (ela parte de `campaignExecution`) e envio bem-sucedido ficava
+idêntico a "não aconteceu nada" no banco.
+
+### e) O que consertei
+
+1. **`src/services/order/CartRecoveryHealthService.ts` (novo)** — o alarme.
+   Read-only. Distingue **DESLIGADA · SAUDAVEL · OCIOSA · SILENCIOSA**.
+   A separação que importa: *ociosa* (calada porque não passou carrinho) nunca
+   acusa; *silenciosa* só acusa quando existe a **prova da oportunidade perdida**
+   — carrinho que venceu sem uma tentativa. Guardrail 1 aplicado: não se infere
+   defeito do silêncio. O campo `evidencia` traz desde quando, quantos venceram,
+   quantos esperam agora e qual o prazo — guardrail 6.
+   `estaAtiva()` lê o interruptor com a **mesma regra do motor de envio** (linha
+   de Campanha manda; na falta dela, a bandeira antiga, ligada por omissão) — duas
+   leituras do mesmo interruptor divergem na primeira refatoração distraída.
+2. **A medição** (`OrderDraftRecoverySendService`): envio, falha e bloqueio de
+   política passam a gravar `campaign_executions` **quando existe a linha de
+   Campanha do carrinho**, com `variantKey` da frase sorteada. Best-effort: se a
+   gravação explodir, o envio continua valendo (medir é importante; entregar é
+   mais). BLOCKED não conta como falha nem como envio.
+3. **`carrinho-abandonado` entrou em `BUDGET_EXEMPT_TEMPLATE_IDS`.** Sem isso, o
+   registro novo começaria a **comer a cota diária das outras campanhas** — uma
+   mudança de comportamento que ninguém pediu, disfarçada de melhoria de medição.
+   Conferi que a isenção **não** liga o carrinho no runner recorrente: a campanha
+   dele tem `scheduleConfig.mode = "CART_RECOVERY"` e o runner filtra `RECURRING`
+   (`ScheduledCampaignRunnerService.ts:676`). Não há duplo motor.
+4. **Exposição**: `/api/crm/ready-made` devolve `cartRecoveryHealth` (é lá que a
+   tela decide mostrar "Ativa" — quem exibe o selo precisa do desmentido na mesma
+   resposta), e `/api/admin/diagnostics/recovery-scheduler` ganhou o bloco
+   `health` (com `varredura()` global quando não há slug). Reaproveitei a rota que
+   já existia em vez de criar outra.
+5. **A bomba armada do `mark-abandoned-drafts`.** Rota órfã: a única ocorrência da
+   string no repo é o próprio arquivo. Parece "faltou ligar" — e **ligar seria o
+   erro**: o motor de envio só lê `status: "OPEN"`, e o marcador vira
+   `OPEN → ABANDONED` aos 60 min, dentro da janela cobrável de 2 min a 6 h.
+   Ligá-lo encolheria a janela de 6h para 1h e mandaria o resto para um estado que
+   o motor não enxerga. **Ligar a "Fase 2" desligaria a Fase 3.** Documentado no
+   cabeçalho da rota e travado em teste.
+
+### f) ⚠️ O QUE EU **NÃO** FIZ — E POR QUÊ (decisão do CEO)
+
+> **NÃO MEXI NA REGRA DE ELEGIBILIDADE. NENHUMA MENSAGEM NOVA PASSA A SAIR POR
+> CAUSA DESTE BLOCO.**
+>
+> O conserto óbvio do achado (c) seria **parar o relógio da validade enquanto a
+> loja está fechada**. Ele é defensável — mas é mudança de QUEM RECEBE MENSAGEM,
+> e mora a 51 carrinhos de distância de uma enxurrada. Um erro de sinal no cálculo
+> de "idade em horário útil" e o Foocci dispara, de uma vez, mensagens sobre
+> carrinhos de semanas atrás: queima o número do lojista e assusta o cliente
+> final. A proteção não pode ser pior que o problema (guardrail 5).
+>
+> **Decisão do CEO, não minha.** Se aprovada, deve vir com teto explícito
+> (ex.: no máximo 2h de loja aberta, e nunca sobre carrinho de outro dia) e com
+> o backlog atual **excluído por data de corte**.
+
+Também não toquei em pixel: a linha sintética do `CRMClient.tsx` é do
+`interface`/`experiencia`. Descrevi em (g) o que ela deveria dizer.
+
+### g) A honestidade da tela — proposta, para o Diretor despachar
+
+Enquanto a causa não fechar, "Ativa + tudo em traço" é promessa que o código não
+cumpre. O dado já está pronto em `cartRecoveryHealth`. O que a linha deveria dizer:
+
+| Veredito | Selo | Linha de apoio |
+|---|---|---|
+| `SAUDAVEL` | **Ativa** (verde) | números reais de `campaign_executions` |
+| `OCIOSA` | **Ativa · sem carrinho** (neutro) | "nenhum carrinho abandonado no período" |
+| `SILENCIOSA` | **Ativa, mas sem enviar** (âmbar) | o texto de `evidencia`, inteiro |
+| `DESLIGADA` | **Pausada** | — |
+
+E o traço só pode significar "zero neste período" — nunca "não sabemos".
+
+### h) Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` **421 arquivos / 5.381 testes verdes**.
+Testes novos: 21, em três arquivos, com as duas metades em cada um —
+`CartRecoveryHealth.test.ts` (o `describe("o silêncio de antes")` **recria o
+estado exato da produção em 05/08**: ativa, zero envios, 51 vencidos, e exige
+SILENCIOSA), `CartRecoveryMedicao.test.ts` (`describe("o rastro que não
+existia")`) e `CartRecoveryCronOrfao.test.ts`.
+
+### i) Sobre a honestidade da própria prova
+
+Os logs do Actions provam **o que o cron viu** (~1 tick/hora), não o universo. A
+prova independente de que o `CartRecoveryScheduler` in-process também não enviou
+é o `skippedTooOld` subindo com `recoveryAttempts=0`. Ainda assim, a leitura
+definitiva é `max(lastRecoveryAt)` no banco — que é exatamente o que o
+`CartRecoveryHealthService` passa a expor. **Enquanto ninguém rodar o
+`/api/admin/diagnostics/recovery-scheduler` em produção, o "4 mensagens" é a
+melhor evidência disponível, não a leitura final.**
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **"Ativa" no carrinho abandonado significa "ninguém desligou", não "está
+   funcionando".** O selo vem de `readyMadeConfig.cartRecoveryEnabled`, ligado por
+   omissão, e a linha da tabela tem sete `<td>—</td>` **literais** no JSX
+   (`CRMClient.tsx:3646-3697`). Regra que fica: **antes de ler um traço como
+   "zero", confira se ele não é texto fixo.** Origem: print do CEO conferido
+   contra 792 respostas do cron em produção, 2026-08-05.
+
+2. **O histórico de qualquer cron desta casa já está gravado e é público.** O job
+   do `crm-cron.yml` imprime a resposta crua do endpoint a cada execução — dá para
+   reconstruir meses de comportamento do motor sem tocar no banco e sem pedir
+   clique. Ferramenta: `scripts/historico-cron-carrinho.mjs`. **Antes de pedir
+   credencial de produção, olhe os logs do Actions.** Origem: este diagnóstico.
+
+3. **`eligible` muito maior que `sent`, sem `failed` correspondente, é o pior modo
+   de falha do CRM** — o motor declara que havia quem cobrar e nada sai, nem erro.
+   Aconteceu por 2 meses porque o portão de config ficava **depois** do
+   `eligible++`. Regra: **contador de oportunidade tem que vir DEPOIS de todos os
+   portões**; antes deles, ele mede intenção, não oportunidade. E cuidado com a
+   recontagem: sem carimbo, o mesmo rascunho vira "elegível" a cada tick e infla o
+   total. Origem: `git show 68ee165c` cruzado com a série do cron, 2026-08-05.
+
+4. **Ligar a "Fase 2" do carrinho (`mark-abandoned-drafts`) DESLIGA a Fase 3.**
+   O motor de envio só lê `OPEN`; o marcador vira `ABANDONED` aos 60 min, dentro
+   da janela cobrável de 2 min–6 h. Rota órfã que parece esquecimento e é
+   armadilha. Travado em `CartRecoveryCronOrfao.test.ts`. Origem: idem.
+
+5. **O relógio da validade do carrinho corre com a loja fechada.** Carrinho
+   abandonado de madrugada é adiado por horário comercial e vence pelas 6h antes
+   de a loja abrir — o adiamento promete uma segunda chance que nunca chega.
+   Provado em produção em 05/08 (dois ticks com `skippedRestaurantClosed=1`,
+   seguidos de `skippedTooOld` +1). **Conserto pendente de decisão do CEO por
+   risco de enxurrada.** Origem: idem.
+
+6. **Medir não pode custar envio.** Ao passar a gravar `campaign_executions` no
+   carrinho, ele entraria automaticamente na cota diária global das outras
+   campanhas (`getTodayGlobalSendCount`). Entrou em `BUDGET_EXEMPT_TEMPLATE_IDS`
+   no mesmo commit. Regra: **ao começar a registrar o que antes não se registrava,
+   procure quem CONTA aquele registro.** Origem: `src/lib/crm-safety.ts:333`,
+   2026-08-05.

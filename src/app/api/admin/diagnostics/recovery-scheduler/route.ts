@@ -21,6 +21,7 @@ import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { OrderDraftRecoverySendService } from "@/services/order/OrderDraftRecoverySendService";
 import { CartRecoveryScheduler } from "@/services/order/CartRecoveryScheduler";
+import { CartRecoveryHealthService } from "@/services/order/CartRecoveryHealthService";
 
 export async function GET(req: NextRequest) {
   if (!process.env.ADMIN_SECRET) {
@@ -70,10 +71,22 @@ export async function GET(req: NextRequest) {
     ...(restaurantId ? { restaurantId } : {}),
   });
 
+  // ── 4. Saúde histórica — o que o dry-run de AGORA não consegue contar ──────
+  // O dry-run responde "há carrinho cobrável neste minuto?". Ele não responde
+  // "quando saiu a última mensagem?" nem "quantos venceram sem tentativa?" — e
+  // era exatamente essa a pergunta impossível de responder pela tela.
+  const health = restaurantId
+    ? await CartRecoveryHealthService
+        .get(restaurantId, await CartRecoveryHealthService.estaAtiva(restaurantId))
+        .catch(() => null)
+    : await CartRecoveryHealthService.varredura().catch(() => []);
+
   return NextResponse.json({
     ok:        true,
     queriedAt: new Date().toISOString(),
     scope:     slug ? { slug, restaurantId } : { slug: null, note: "global pool (all restaurants)" },
+
+    health,
 
     schedulerEnv: {
       NODE_ENV:     nodeEnv,

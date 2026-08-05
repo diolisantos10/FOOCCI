@@ -142,6 +142,69 @@ const ACTIVE_CONV_STATUSES = [
 ] as const;
 
 /**
+ * Deixa a linha de execução da recuperação — a MEDIÇÃO que faltava.
+ *
+ * Até 05/08/2026 a recuperação de carrinho enviava (quando enviava) sem gravar
+ * uma única linha em `campaign_executions`. Consequência prática: a tela de
+ * Campanhas não tinha o que somar, a atribuição de receita não tinha o que
+ * cruzar (`RevenueAttributionService` parte de `campaignExecution`) e um envio
+ * bem-sucedido era indistinguível de "não aconteceu nada".
+ *
+ * Só grava quando existe a linha de Campanha do carrinho (templateId
+ * `carrinho-abandonado`) — sem ela não há a que pendurar a execução. Restaurante
+ * nessa situação continua medido pelo carimbo no rascunho, que o
+ * `CartRecoveryHealthService` lê; o que não existe é o número por campanha.
+ *
+ * BEST-EFFORT DE PROPÓSITO: falha aqui NUNCA pode derrubar um envio que já saiu
+ * (nem provocar reenvio). Registrar é importante; entregar é mais.
+ */
+async function registrarExecucao(entrada: {
+  campaignId:    string;
+  restaurantId:  string;
+  customerId:    string;
+  customerName:  string | null;
+  customerPhone: string;
+  messageText:   string;
+  variantKey:    string | null;
+  status:        "SENT" | "FAILED" | "BLOCKED";
+  sentAt?:       Date | null;
+  failedReason?: string | null;
+  errorMessage?: string | null;
+}): Promise<void> {
+  try {
+    await prisma.campaignExecution.create({
+      data: {
+        campaignId:    entrada.campaignId,
+        restaurantId:  entrada.restaurantId,
+        customerId:    entrada.customerId,
+        customerName:  entrada.customerName,
+        customerPhone: entrada.customerPhone,
+        messageText:   entrada.messageText,
+        variantKey:    entrada.variantKey,
+        status:        entrada.status as never,
+        sentAt:        entrada.sentAt ?? null,
+        failedReason:  entrada.failedReason ?? null,
+        errorMessage:  entrada.errorMessage ?? null,
+      },
+    });
+    // O contador denormalizado é o que a tabela "Campanhas ativas" lê direto.
+    if (entrada.status === "SENT" || entrada.status === "FAILED") {
+      await prisma.campaign.update({
+        where: { id: entrada.campaignId },
+        data:  entrada.status === "SENT"
+          ? { totalSent: { increment: 1 }, lastRunAt: entrada.sentAt ?? new Date() }
+          : { totalFailed: { increment: 1 } },
+      });
+    }
+  } catch (e) {
+    console.warn(`[OrderDraftRecoverySendService] não foi possível registrar a execução da recuperação`, {
+      campaignId: entrada.campaignId, draftStatus: entrada.status,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+/**
  * Finds (or creates) the WhatsApp conversation for a customer, logs the
  * recovery message as an outbound AI message, and sets contextType to
  * "CART_RECOVERY" so that the next inbound reply triggers human handoff.
@@ -511,6 +574,12 @@ export class OrderDraftRecoverySendService {
         continue;
       }
 
+      // O que a linha de execução precisa saber, visível também no `catch` —
+      // uma falha sem rastro é a mesma cegueira que este bloco veio corrigir.
+      const cartRow = cartRowByRestaurant.get(draft.restaurantId);
+      let textoEnviado = "";
+      let fraseUsada: string | null = null;
+
       // ── Send ──────────────────────────────────────────────────────────────
       try {
         // A credencial da Meta é revalidada dentro do provedor na hora do envio.
@@ -528,7 +597,6 @@ export class OrderDraftRecoverySendService {
         // manage modal); fall back to the legacy readyMadeConfig. For cart recovery
         // {link_cardapio} resolves to the resume link so the exact cart is restored;
         // {cupom} shows the configured reward.
-        const cartRow    = cartRowByRestaurant.get(draft.restaurantId);
         const cartCfg    = cartCfgByRestaurant.get(draft.restaurantId);
         const rowCoupon  = (cartRow?.scheduleConfig as { coupon?: unknown } | null)?.coupon as
           | { type: "PERCENTAGE" | "FIXED" | "CUSTOM" | "FREE_SHIPPING"; value: number; description?: string | null }
@@ -552,6 +620,8 @@ export class OrderDraftRecoverySendService {
               coupon:         cartCoupon,
             })
           : buildRecoveryMessage(customer.name, shortRecoveryUrl);
+        textoEnviado = message;
+        fraseUsada   = drawn?.key ?? null;
 
         console.info(`[OrderDraftRecoverySendService] sending recovery`, {
           draftId:      draft.id,
@@ -611,6 +681,16 @@ export class OrderDraftRecoverySendService {
               detalhe:      sendRes.error ?? null,
               acao:         "cadastrar e aprovar um modelo de carrinho abandonado na Meta e ligar o CRM Meta desta loja",
             });
+            if (cartRow) {
+              await registrarExecucao({
+                campaignId: cartRow.id, restaurantId: draft.restaurantId,
+                customerId: draft.customerId, customerName: customer.name,
+                customerPhone: customer.phone, messageText: "", variantKey: fraseUsada,
+                status: "BLOCKED",
+                failedReason: "A Meta exige modelo aprovado fora da janela de 24h",
+                errorMessage: sendRes.blockReason ?? "META_TEMPLATE_REQUIRED",
+              });
+            }
             continue; // não carimba o rascunho: ele vence sozinho pelo prazo de 6h
           }
 
@@ -628,6 +708,18 @@ export class OrderDraftRecoverySendService {
         });
 
         dailyLimitSet.add(draft.customerId); // guard remaining iterations
+
+        // O rastro por pessoa. Sem ele, a coluna "Enviados" da tela e a
+        // atribuição de receita não têm de onde tirar número — foi exatamente
+        // por isso que a linha do carrinho ficou em traço mesmo quando enviou.
+        if (cartRow) {
+          await registrarExecucao({
+            campaignId: cartRow.id, restaurantId: draft.restaurantId,
+            customerId: draft.customerId, customerName: customer.name,
+            customerPhone: customer.phone, messageText: textoEnviado,
+            variantKey: fraseUsada, status: "SENT", sentAt: now,
+          });
+        }
 
         // Credit the configured reward to the customer's wallet (best-effort — never
         // blocks the recovery send). Respects the monthly coupon budget.
@@ -670,12 +762,23 @@ export class OrderDraftRecoverySendService {
         });
         sent++;
       } catch (err) {
+        const motivo = err instanceof Error ? err.message : String(err);
         console.error(`[OrderDraftRecoverySendService] send failed`, {
           draftId:      draft.id,
           restaurantId: draft.restaurantId,
           phoneMasked:  maskPhone(customer.phone),
-          errorMessage: err instanceof Error ? err.message : String(err),
+          errorMessage: motivo,
         });
+        if (cartRow) {
+          await registrarExecucao({
+            campaignId: cartRow.id, restaurantId: draft.restaurantId,
+            customerId: draft.customerId, customerName: customer.name,
+            customerPhone: customer.phone, messageText: textoEnviado,
+            variantKey: fraseUsada, status: "FAILED",
+            failedReason: "Falha ao enviar a recuperação de carrinho",
+            errorMessage: motivo,
+          });
+        }
         failed++;
       }
     }
