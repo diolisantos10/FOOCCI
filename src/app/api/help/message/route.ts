@@ -17,12 +17,17 @@ export async function POST(req: NextRequest) {
 
     const raw = await req.json().catch(() => null);
     const parsed = sendHelpMessageSchema.safeParse(raw);
-    if (!parsed.success) return badRequest("content is required");
+    if (!parsed.success) {
+      return badRequest(
+        parsed.error.issues[0]?.message ?? "Escreva sua dúvida ou anexe um arquivo.",
+      );
+    }
 
     const result = await HelpThreadService.sendMessage(
       ctx.restaurantId,
       ctx.userId,
       parsed.data.content,
+      parsed.data.attachmentIds,
     );
     if (!result.ok) return serverError(result.error);
 

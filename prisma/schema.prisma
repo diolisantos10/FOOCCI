@@ -2852,8 +2852,9 @@ model HelpThread {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  restaurant Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  messages   HelpMessage[]
+  restaurant  Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  messages    HelpMessage[]
+  attachments HelpAttachment[]
 
   @@index([restaurantId])
   @@index([status])
@@ -2868,10 +2869,48 @@ model HelpMessage {
   authorName String? // display name for SUPPORT/USER messages
   createdAt  DateTime        @default(now())
 
-  thread HelpThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  thread      HelpThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  attachments HelpAttachment[]
 
   @@index([threadId])
   @@map("help_messages")
+}
+
+/// Anexo do chat de suporte — print, foto ou PDF que o lojista manda junto com
+/// a mensagem ("a tela está assim", "a nota saiu errada").
+///
+/// ⚠️ **O binário mora no Postgres de propósito, não no S3.** O `uploadToS3`
+/// deste projeto grava com `ACL: "public-read"` (src/lib/s3.ts) e o
+/// `/api/media/[id]` que serve aquele acervo é rota PÚBLICA — foi feito para
+/// foto de cardápio, que é para todo mundo ver. Print de painel de suporte é o
+/// oposto: contém nome, telefone e endereço de cliente final. Por isso o byte
+/// fica aqui e sai só por rota autenticada, que confere o tenant.
+///
+/// `messageId` nasce nulo: o arquivo sobe enquanto a pessoa ainda está
+/// escrevendo (para haver pré-visualização) e só é amarrado à mensagem no
+/// envio. Anexo solto é rascunho e pode ser removido por quem subiu.
+///
+model HelpAttachment {
+  id           String  @id @default(cuid())
+  restaurantId String
+  threadId     String
+  messageId    String?
+  /// Quem subiu. Nulo quando veio da equipe Foocci pelo inbox admin.
+  uploadedBy   String?
+  /// Nome saneado — nunca o caminho cru que o navegador mandou.
+  fileName     String
+  mimeType     String
+  bytes        Int
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  thread  HelpThread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  message HelpMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([messageId])
+  @@index([restaurantId])
+  @@map("help_attachments")
 }
 
 enum HelpThreadStatus {
