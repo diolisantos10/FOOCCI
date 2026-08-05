@@ -181,6 +181,8 @@ const main = async () => {
     p(`\n📚 aprendizados pendentes de revisão: ${ou(aprendizados.length ?? aprendizados)}`);
   }
 
+  await olharOPainel(secret);
+
   /*
     Guardrail 1 aplicado ao acompanhamento: silêncio total NÃO é "está tudo bem".
     Se o lojista está testando agora e a janela veio vazia, o canal pode estar
@@ -196,5 +198,51 @@ const main = async () => {
     p(`\n✅ Há movimento: ${conversas} conversa(s) na janela de ${PERIODO}.`);
   }
 };
+
+/**
+ * O ASSISTENTE DENTRO DO PAINEL — outra superfície, outro instrumento.
+ *
+ * Erro de método que este bloco corrige: eu estava medindo o canal de WhatsApp e
+ * reportando como se fosse "o assistente". São coisas diferentes. O lojista que
+ * conversa pela barra do painel não aparece em nada acima — e foi exatamente ali
+ * que o CEO pediu acompanhamento.
+ *
+ * ⚠️ CONTAGEM, NUNCA CONTEÚDO. As perguntas do lojista são dado dele e o log
+ * desta ferramenta é público. O que sai daqui é quantidade: quantas perguntas,
+ * quantas o assistente ADMITIU não saber responder, quantas subiram para humano.
+ * "Quantas ele não soube" é o número que responde 'a solução está certa?' sem
+ * publicar uma linha do que foi conversado.
+ */
+async function olharOPainel(secret) {
+  p("\n═══ ASSISTENTE DO PAINEL (últimos 30 dias) ═══");
+
+  const m = await get(`/api/admin/support/metrics`, secret);
+  if (m.status !== 200 || !m.json) {
+    p(`   · não deu para ler: HTTP ${m.status}`);
+    p("   · (isto é 'não sei', não é 'está tudo bem')");
+  } else {
+    const d = m.json.data ?? m.json;
+    const total = d.total ?? d.totalQuestions ?? null;
+    const gaps = d.gaps ?? d.gapQuestions ?? null;
+    const nGaps = Array.isArray(gaps) ? gaps.length : gaps;
+    p(`   · perguntas do lojista: ${ou(total)}`);
+    p(`   · o assistente ADMITIU não saber: ${ou(nGaps)}`);
+    if (Number(total) > 0 && Number(nGaps) > 0) {
+      p(`   · ou seja: ${Math.round((Number(nGaps) / Number(total)) * 100)}% das perguntas ficaram sem resposta boa`);
+    }
+  }
+
+  const t = await get(`/api/admin/support/threads?status=ESCALATED`, secret);
+  if (t.status !== 200 || !t.json) {
+    p(`   · conversas escaladas: não deu para ler (HTTP ${t.status})`);
+  } else {
+    const lista = t.json.data ?? t.json.threads ?? t.json;
+    const n = Array.isArray(lista) ? lista.length : ou(lista);
+    p(`   · conversas ESPERANDO humano agora: ${n}`);
+    if (Number(n) > 0) {
+      p("   · ⚠️  alguém está esperando resposta da Foocci neste momento.");
+    }
+  }
+}
 
 main().catch((e) => fail(limpar(e?.message ?? e)));
