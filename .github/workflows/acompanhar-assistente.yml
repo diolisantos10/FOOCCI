@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Acompanhar o lojista testando o assistente — ao vivo, em produção.
+#
+# Nasceu de um P0 do CEO em 05/08/2026. Até então só existiam baterias de teste
+# sintético, que provam que o sistema PODE funcionar — não que ele ESTÁ
+# funcionando com gente real do outro lado.
+#
+# Somente leitura: não envia mensagem, não cria pedido, não altera configuração.
+# O ADMIN_SECRET é lido do Railway dentro do runner e nunca aparece no log.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Acompanhar o assistente ao vivo
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Slug do restaurante que está testando"
+        required: true
+        default: "sushi-cazza"
+      periodo:
+        description: "Janela (ex.: 1h, 6h, 24h)"
+        required: false
+        default: "6h"
+  # Disparo automático quando o próprio script muda — é o que permite rodar a
+  # partir de uma branch de trabalho, antes de existir na branch padrão.
+  push:
+    paths:
+      - "scripts/acompanhar-assistente.mjs"
+      - ".github/workflows/acompanhar-assistente.yml"
+
+jobs:
+  acompanhar:
+    name: "Assistente ao vivo (somente leitura)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: "Ler produção e resumir"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          SLUG: ${{ github.event.inputs.slug || 'sushi-cazza' }}
+          PERIODO: ${{ github.event.inputs.periodo || '6h' }}
+        run: node scripts/acompanhar-assistente.mjs
