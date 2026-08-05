@@ -91,6 +91,43 @@ erra diferente toda noite*, e aí "piorou desde ontem" deixa de significar algum
 coisa. Sem comparação com ontem, o raio-x vira paisagem: "37 mensagens presas" não
 diz nada; "37, contra 4 ontem" diz tudo.
 
+### ⭐ O que faz o raio-x funcionar: PADRÃO NOMEADO, não pergunta aberta
+
+Isto veio do campo em 05/08, do Diretor que rodou o raio-x primeiro, e na minha
+leitura é **a regra mais importante desta proposta**:
+
+> *"Eu não pedi 'veja o que dá para melhorar'. Pedi para procurar padrões
+> nomeados. Pedido genérico volta com opinião de estilo; pedido com padrão volta
+> com a rota aberta na internet."*
+
+Os cinco padrões que ele nomeou, e o que cada um pescou de verdade no produto dele:
+
+| Padrão | O que apareceu |
+|---|---|
+| **Trabalho que existe e ninguém vê** | um post com imagem quebrada gerava até **1.728 imagens pagas por dia**, para sempre — ninguém olhava porque nada falhava |
+| **Id aceito sem conferir de quem é** | uma rota gerava o link de acesso do portal de **qualquer** cliente do banco |
+| **Promessa que o código não cumpre** | o relatório dizia "qualidade verificada" com as verificações escritas como `true` fixo — guardrail 2 violado em silêncio |
+| **Estado morto** | o clique de aprovação gravava um estado que o relógio de publicação nunca lia: o cliente aprovava e **nada publicava**, sem erro e sem aviso |
+| **Porta aberta para a internet** | rota de geração de imagem sem login, com a chave paga da casa atrás |
+
+**Recomendo que o protocolo carregue a lista de padrões, não só o ritual.** Um
+projeto que herda "faça um raio-x toda noite" e nada mais volta com opinião de
+estilo. O valor está na lista, e ela cresce a cada achado que se repete.
+
+### As três ferramentas são diferentes, e confundi-las custa
+
+Também dele, e vale escrever antes que alguém ache que uma substitui a outra:
+
+- **Auditoria adversarial** olha o que **acabou de mudar** e tenta quebrar.
+- **Raio-x** olha o que **já estava lá** e ninguém questiona mais.
+- **O especialista esbarrando** — consertando uma coisa e achando outra — foi a
+  terceira fonte, e rendeu bastante. Não se agenda, mas se registra.
+
+Os achados dele **não se sobrepuseram**: o raio-x pescou o que era antigo (a rota
+aberta, a chave-mestra, o beco sem saída); a auditoria pescou o que era do dia (o
+relatório com crescimento inventado, a peça reprovada virando aprovada ao ser
+refeita). Duas listas distintas, duas ferramentas distintas.
+
 **Três regras que eu proporia junto**, porque sem elas o raio-x morre por conta
 própria em duas semanas:
 
