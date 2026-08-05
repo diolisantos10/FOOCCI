@@ -91,6 +91,97 @@ describe("refreshExpiringInstagramTokens — silence is not success", () => {
     expect(r.needsAttention).toBe(false);
   });
 
+  // ── Canal ligado e MUDO ──────────────────────────────────────────────────────
+  // O buraco de 23/07: o token seguia vivo, a varredura seguia verde, e mesmo assim
+  // nenhuma DM chegava. Ninguém olhava o silêncio — quem percebeu, treze dias depois,
+  // foi o CEO. Token vivo não prova canal vivo.
+  const dias = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+
+  it("grita quando um canal ligado não recebe nada há dias, mesmo com o token saudável", async () => {
+    const farAway = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+    findMany.mockResolvedValue([
+      {
+        restaurantId: "sushi-1",
+        metadata: { tokenExpiresAt: farAway },
+        enabled: true,
+        pageAccessTokenEncrypted: "enc:whatever",
+        lastError: null,
+        lastWebhookAt: dias(13), // exatamente a queda de 23/07
+      },
+    ]);
+
+    const r = await refreshExpiringInstagramTokens();
+
+    expect(r.needsAttention).toBe(true);
+    expect(r.silent).toHaveLength(1);
+    expect(r.silent[0]!.days).toBe(13);
+    // Guardrail 6: o alerta carrega a evidência — quem, desde quando, quantos dias.
+    const texto = r.attention.join(" ");
+    expect(texto).toContain("sushi-1");
+    expect(texto).toContain("13 dias");
+    expect(texto).toMatch(/MUDO/);
+  });
+
+  it("não grita por um canal ligado que recebeu ontem", async () => {
+    const farAway = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+    findMany.mockResolvedValue([
+      {
+        restaurantId: "r4",
+        metadata: { tokenExpiresAt: farAway },
+        enabled: true,
+        pageAccessTokenEncrypted: "enc:whatever",
+        lastError: null,
+        lastWebhookAt: dias(1),
+      },
+    ]);
+
+    const r = await refreshExpiringInstagramTokens();
+
+    expect(r.silent).toEqual([]);
+    expect(r.needsAttention).toBe(false);
+  });
+
+  it("fica quieto quando não dá para saber há quanto tempo o canal está mudo", async () => {
+    // Sem lastWebhookAt e sem connectedAt não existe régua. Guardrail 1: ausência de
+    // informação não é informação — não se inventa um alarme a partir do escuro.
+    const farAway = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+    findMany.mockResolvedValue([
+      {
+        restaurantId: "r5",
+        metadata: { tokenExpiresAt: farAway },
+        enabled: true,
+        pageAccessTokenEncrypted: "enc:whatever",
+        lastError: null,
+        lastWebhookAt: null,
+      },
+    ]);
+
+    const r = await refreshExpiringInstagramTokens();
+
+    expect(r.silent).toEqual([]);
+    expect(r.needsAttention).toBe(false);
+  });
+
+  it("conta o silêncio desde a CONEXÃO quando nunca chegou evento nenhum", async () => {
+    const farAway = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+    findMany.mockResolvedValue([
+      {
+        restaurantId: "r6",
+        metadata: { tokenExpiresAt: farAway, connectedAt: dias(9).toISOString() },
+        enabled: true,
+        pageAccessTokenEncrypted: "enc:whatever",
+        lastError: null,
+        lastWebhookAt: null,
+      },
+    ]);
+
+    const r = await refreshExpiringInstagramTokens();
+
+    expect(r.needsAttention).toBe(true);
+    expect(r.silent[0]!.days).toBe(9);
+    expect(r.attention.join(" ")).toMatch(/nunca recebeu nada desde que foi conectado/);
+  });
+
   // Um quinto caso — "banco fora do ar" — foi tentado e removido de propósito.
   // O código trata isso (`.catch()` devolve lista vazia, verificado à mão), mas o
   // vitest contabiliza a rejeição do próprio mock como falha do teste mesmo quando a

@@ -117,6 +117,10 @@ const main = async () => {
   p(`   · INSTAGRAM_APP_ID (valor, público): ${V.INSTAGRAM_APP_ID ?? "—"}`);
   p(`   · mesmo aplicativo? ${V.META_APP_ID && V.INSTAGRAM_APP_ID ? (V.META_APP_ID === V.INSTAGRAM_APP_ID ? "IDs IGUAIS" : "IDs DIFERENTES (normal: o IG tem app id próprio dentro do mesmo app)") : "não dá para dizer"}`);
 
+  // Para onde um aviso poderia ir hoje. NOMES, nunca valores.
+  const nomesTelefone = Object.keys(V).filter((k) => /PHONE|TELEFONE|WHATSAPP|BUILDOS|SUPPORT|ALERT/i.test(k)).sort();
+  p(`   · variáveis que podem endereçar um aviso: ${nomesTelefone.join(", ") || "(nenhuma)"}`);
+
   /* ── 2. Config do restaurante ────────────────────────────────────────────── */
   p("\n═══ 2. CONFIG DO RESTAURANTE ═══");
   const ig = await get(`/api/admin/settings/integrations/instagram?restaurantSlug=${SLUG}`, secret);
