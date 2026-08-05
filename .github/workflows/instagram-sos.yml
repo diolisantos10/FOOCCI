@@ -49,3 +49,9 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: node scripts/instagram-sos-credencial.mjs
+      - name: Prova da troca do token de 60 dias
+        if: ${{ github.event_name == 'push' || github.event.inputs.pericia == '1' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/instagram-sos-troca.mjs
