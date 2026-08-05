@@ -938,3 +938,97 @@ não é motivo para adiar tela — é motivo para declarar a cadeia de degradaç
 não componente, para quem chama saber se sobrou algo para desenhar."*
 
 — interface, worktree `agent-a938cdf774d29b496`
+## 2026-08-05 · Fotografar o produto para o site comercial (5 slots de `PRODUCT_SHOTS`)
+
+O CEO viu o site "só com texto, botão e detalhe gráfico". A resposta acordada não
+foi banco de imagens: foi capturar as telas reais da padaria de demonstração
+(`foocci-bakery`). Entregues os cinco slots de `src/components/marketing/siteAssets.ts`
+e o roteiro que os refaz: `scripts/site/capturar-produto.mjs` (+ `dados-demonstracao.mjs`
+e `fotos-do-cardapio.mjs`). Nada em `src/`.
+
+### O que a noite ensinou
+
+**1. Foto de produto é foto de DADO, e dado velho aparece na imagem.**
+A primeira leva saiu com "Atrasados 50%" em vermelho no painel de pedidos: os
+pedidos ativos tinham sido semeados minutos antes e cruzaram o `DELAY_THRESHOLD`
+de 20 min durante a própria captura (login + compilação em dev custam tempo). A
+fila viva agora cabe em 8 minutos, com folga deliberada. Fila colada no limite
+chega vermelha.
+
+**2. O relógio é o inimigo silencioso.** Três descobertas encadeadas:
+- `DashboardClient.tsx:588` fixa `timeZone: "America/Sao_Paulo"` e **nunca lê**
+  `Restaurant.timezone`. Alinhar a coluna ao fuso da máquina não muda nada —
+  perdi uma volta nisso. Quem se ajusta é o dado.
+- O painel de pedidos formata a hora com `date.getHours()`, ou seja, o fuso do
+  **processo**. Duas telas do mesmo produto, dois fusos.
+- A hora das bolhas de conversa é escrita pelo **navegador**. Sem
+  `context.clock.install()`, a foto do atendimento marcava 04:46 (hora real do
+  runner) enquanto o painel marcava 13:20.
+
+A saída foi ancorar tudo numa hora de parede de São Paulo (10h20, ou o agora se
+já for mais tarde) e dar ao navegador o mesmo relógio. **Regra que fica: numa
+captura, o instante tem que ser o mesmo em todas as telas — e ele não é, por
+padrão.**
+
+**3. Período "hoje" não serve para captura em servidor.** Runner roda de
+madrugada no Brasil; o dia corrente é sempre parcial. Em "7 dias" a última barra
+virava um toco e os comparativos ficavam negativos — a foto diria que a padaria
+despencou. O painel de resultado é fotografado em **"Ontem"**: único recorte
+completo a qualquer hora, e é de fato o que o dono abre de manhã.
+
+**4. Número inflado é tão perigoso quanto número falso.** Com uma só semana de
+histórico o painel comparava semana cheia contra vazio e estampava **"+375%
+acima"**. Duas semanas de histórico e um **ritmo semanal** (mesmo multiplicador
+para o mesmo dia da semana) fazem a comparação medir tendência, não ruído.
+
+**5. A vitrine "Mais vendidos" é montada a partir das vendas reais.** Com sorteio
+uniforme de itens, "Água Mineral" subia a 2º mais vendido e a loja abria com foto
+de garrafa d'água; e o ticket médio dava R$ 70 — número de restaurante, não de
+padaria. Peso por preço **e** por categoria resolveu os dois de uma vez. Ticket
+final R$ 38–40.
+
+**6. Sem `OPENAI_API_KEY` o cardápio local fica com 40 retângulos cinza.** As
+fotos nascem de chamada paga (`npm run bakery:imagens`). Em vez de inventar
+imagem, `fotos-do-cardapio.mjs` **espelha as que a padaria já serve em produção**
+(`/api/media/<id>`, públicas, geradas pelo próprio produto), casando por nome de
+item e reduzindo com `sharp`. Item sem par continua sem foto.
+
+**7. `loading="lazy"` + barra de categorias fixa.** Rolar até o fim para acordar
+as imagens fazia a barra de categorias acompanhar, e a foto saía com "Da Nossa
+Despensa" aceso sobre a seção "Padaria". Duas telas de rolagem bastam.
+
+**8. Peso.** Captura de interface é quase toda cor chapada: `png({ palette: true })`
+corta o arquivo à metade sem borrar texto. Escada de degraus (paleta → escala) com
+teto de 400 KB e saída não-zero se estourar. As cinco ficaram entre 110 e 174 KB.
+
+### Dois defeitos do painel de pedidos, encontrados e NÃO propagados
+
+Estão em `src/`, que eu não podia tocar. Sobem para o Diretor:
+
+1. **`OrdersClient.tsx:649` — "Total hoje" mente.** O KPI mostra `orders.length`,
+   que é o total CARREGADO (`/api/orders?limit=100`, sem filtro de data), não o
+   total do dia. `OrderService.list` só filtra por data se `from`/`to` vierem, e
+   a tela nunca os envia.
+2. **`OrdersClient.tsx:530-533` — o filtro de data é decorativo.** `dateFrom` /
+   `dateTo` existem em estado, são renderizados nos dois `input[type=date]` e
+   **não aparecem em lugar nenhum** da consulta; o botão "Filtrar" não tem
+   `onClick`. Cheguei a usá-lo na captura para tornar o KPI verdadeiro — não
+   funciona, e preencher aquelas datas só encenaria um filtro inexistente.
+
+Como a captura contornou sem maquiar: a padaria de demonstração passou a ter
+movimento de padaria movimentada de verdade (~104 pedidos/dia). Com isso o "Total
+hoje 100" que a tela exibe é verdade sobre o dia — e deixa de brigar com o
+"Pedidos" da foto do resultado.
+
+### Provas
+
+Nenhum arquivo `.ts/.tsx` alterado (`git status` só acusa os dois diretórios
+novos), então não há superfície para `tsc`/`vitest`; os três roteiros passam em
+`node --check`. Execução completa de ponta a ponta (`--dados --fotos --auditoria`)
+refez os cinco slots e a conferência de responsivo do cardápio: **375 / 768 /
+1280 px sem rolagem horizontal** (`scrollWidth` = largura da janela nos três).
+
+Autoavaliação das cinco imagens: hierarquia 9, tipografia 9, espaçamento 9,
+consistência 9.
+
+— interface, worktree `agent-ad7ca2b138d044884`
