@@ -15,6 +15,7 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { isGuestIdentifier } from "@/lib/guest";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -77,6 +78,11 @@ export default function ConversationDetailPage({
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Ditado: a fala cai no campo e o atendente revisa antes de enviar ao cliente.
+  const voice = useVoiceInput((t) => setText((prev) => appendTranscript(prev, t)), {
+    fileName: "resposta.webm",
+  });
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -306,28 +312,34 @@ export default function ConversationDetailPage({
       {!isResolved ? (
         <form
           onSubmit={handleSend}
-          className="flex items-end gap-2 border-t border-line2 bg-paper px-4 py-3"
+          className="border-t border-line2 bg-paper px-4 py-3"
         >
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e as unknown as FormEvent);
-              }
-            }}
-            placeholder="Digite uma mensagem… (Enter para enviar)"
-            rows={1}
-            className="flex-1 resize-none rounded-xl border border-line2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-          <button
-            type="submit"
-            disabled={sending || !text.trim()}
-            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {sending ? "…" : "Enviar"}
-          </button>
+          <div className="flex items-end gap-2">
+            <div className="flex min-w-0 flex-1 items-end gap-1 rounded-xl border border-line2 bg-paper px-1.5 py-1 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend(e as unknown as FormEvent);
+                  }
+                }}
+                placeholder="Digite ou fale…"
+                rows={1}
+                className="min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
+              />
+              <VoiceButton voice={voice} label="Ditar a mensagem por voz" disabled={sending} />
+            </div>
+            <button
+              type="submit"
+              disabled={sending || !text.trim()}
+              className="shrink-0 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {sending ? "…" : "Enviar"}
+            </button>
+          </div>
+          <VoiceStatus voice={voice} />
         </form>
       ) : (
         <div className="border-t border-line2 bg-[#FAFAF8] px-4 py-3 text-center text-sm text-muted">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import type {
   AnalyticsOverview,
   KpiOverview,
@@ -1807,6 +1808,11 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
   const [error,     setError]     = useState("");
   const [showRaw,   setShowRaw]   = useState(false);
 
+  // Ditado: a pergunta falada cai no campo; quem pergunta lê e aperta Perguntar.
+  const voice = useVoiceInput((t) => setQuestion((prev) => appendTranscript(prev, t)), {
+    fileName: "pergunta.webm",
+  });
+
   async function ask(q: string) {
     if (!q.trim() || loading) return;
     setLoading(true);
@@ -1862,25 +1868,31 @@ function TabAnalista({ from, to }: { from: string; to: string }) {
       </div>
 
       {/* ── Input ── */}
-      <div className="flex gap-2">
-        <input
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") void ask(question); }}
-          placeholder="Digite sua pergunta sobre o negócio…"
-          disabled={loading}
-          className="flex-1 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-60"
-        />
-        <button
-          type="button"
-          disabled={loading || !question.trim()}
-          onClick={() => void ask(question)}
-          className="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
-        >
-          {loading ? (
-            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-          ) : "Perguntar"}
-        </button>
+      <div>
+        <div className="flex gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1 rounded-xl border border-line2 bg-paper pl-2.5 pr-1.5 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+            <input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void ask(question); }}
+              placeholder="Digite ou fale sua pergunta"
+              disabled={loading}
+              className="min-w-0 flex-1 border-0 bg-transparent px-1.5 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:!ring-0 disabled:opacity-60"
+            />
+            <VoiceButton voice={voice} label="Ditar a pergunta por voz" disabled={loading} />
+          </div>
+          <button
+            type="button"
+            disabled={loading || !question.trim()}
+            onClick={() => void ask(question)}
+            className="shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+          >
+            {loading ? (
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : "Perguntar"}
+          </button>
+        </div>
+        <VoiceStatus voice={voice} />
       </div>
 
       {/* ── Error ── */}

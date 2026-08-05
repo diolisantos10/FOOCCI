@@ -1123,3 +1123,93 @@ laranja para o formulário **visíveis na dobra é exatamente 1** em todos os ca
 Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, worktree `agent-af6737050c07de929`
+
+---
+
+## 2026-08-05 · Microfone em TODO chat do painel — um gancho só
+
+**Pedido do CEO (P0):** "coloque microfone no chat do suporte. Na verdade isso
+tem que virar padrão: TODO chat tem que ter microfone."
+
+### O achado que mudou o desenho: eram TRÊS implementações, não duas
+
+A varredura por `MediaRecorder`/`getUserMedia` acusou o gancho oficial
+(`components/help/useVoiceInput.ts`) mais **duas** cópias artesanais — e cada
+uma tinha um defeito diferente, o que prova o argumento de "corrigir num lugar
+tem que valer para todos":
+
+| Cópia | Defeito que só ela tinha |
+|---|---|
+| `SupportTechChat.tsx` (Ajuda técnica) | mandava o **áudio direto** para `/api/support/tech`; o relato virava chamado sem o lojista ler o que a máquina entendeu |
+| `crm/CrmCampaignAI.tsx` (Campanha por IA) | desenhava o botão **sempre**, sem checar `supported` — em navegador sem microfone o botão existia e não gravava |
+
+As duas morreram. Hoje existe **uma** porta: `@/components/voice`.
+
+### O que passou a existir
+
+`src/components/voice/` — `useVoiceInput.ts` (movido de `help/`, agora com
+`endpoint` configurável e erros traduzidos por causa: `NotAllowedError` vira
+"toque no cadeado ao lado do endereço e permita o microfone"; 401 vira "sua
+sessão expirou, atualize a página") + `VoiceButton.tsx`, que traz o botão E o
+`VoiceStatus`. Os dois andam **em par**: o botão mostra o estado, o status conta
+o que está acontecendo dentro de `role="status" aria-live="polite"` — quem usa
+leitor de tela não vê a bolinha vermelha piscar.
+
+`appendTranscript(previous, incoming)` é o helper que garante a regra "acrescenta,
+não substitui" em todos os pontos de uma vez.
+
+### Onde o microfone existe agora (9 pontos, 6 telas)
+
+Novos: Atendimento (composer), Central de Conversas (`conversations/[id]`),
+`chat/ChatClient`, Analista de Dados (Analytics), disparo de WhatsApp do CRM.
+Unificados: Ajuda técnica, Campanha por IA. Já existiam e migraram para a peça:
+Assistente (chat) e os três campos da pílula do topo.
+
+### Onde NÃO entrou, e o motivo está escrito no código
+
+- **Loja do cliente final** (`pedido/[slug]/PedidoClient.tsx`): superfície
+  pública. `/api/help/transcribe` custa por chamada e exige contexto de tenant —
+  ligar ali seria abrir rota paga para a internet. Comentário no arquivo.
+- **`/admin/support-inbox`**: a área admin **não** passa pelo middleware que
+  injeta `x-restaurant-id`; o botão apareceria e tomaria 401 em silêncio. Para
+  ligar, criar `/api/admin/transcribe` — o gancho já aceita `endpoint`.
+- **Simuladores** (chat-sim, waiter-lab, aprendizado-whatsapp, diagnostics): ali
+  se digita fingindo ser o cliente, e o valor está em repetir a **mesma** frase
+  palavra por palavra. Transcrição introduz variação e gasta chamada paga por
+  teste.
+
+### A armadilha que quase passou
+
+`microphone=(self)` continua em `next.config.js:82` — conferido, não foi
+revertido. Se alguém voltar para `microphone=()`, os nove botões aparecem e
+**nenhum** grava, em produção, sem erro visível. Vale um teste de configuração.
+
+### Drift do DESIGN.md corrigido de passagem
+
+Botões de envio da pílula `rounded-lg` → `rounded-xl`; foco `ring-brand-500`/
+`ring-1 ring-brand-400` do composer de Conversas e do `chat` → padrão canônico
+`focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100`;
+`font-medium`/`font-bold` dos botões tocados → `font-semibold` (400/600 são os
+únicos pesos embarcados).
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` **418 arquivos / 5.360 testes,
+todos verdes** (desta vez o `noSideEffects.test.ts` passou junto).
+
+Playwright em **375 / 768 / 1280** com `--use-fake-device-for-media-stream`:
+`documentElement.scrollWidth` igual à janela nos três. Os **quatro** estados
+foram capturados clicando no botão de verdade, não simulados: parado, gravando
+("Gravando… fale e toque no microfone para parar"), transcrevendo ("Transcrevendo
+o que você falou…") e erro — que no ambiente local veio do servidor como
+"Falhou ao transcrever. Tente de novo ou digite.", sem código de erro na cara de
+ninguém.
+
+**Ajuste que só o screenshot pegou:** a 375px o placeholder "Digite ou fale sua
+mensagem…" era **cortado no meio** ("Digite ou fale sua") porque o mic e o botão
+Enviar comem a largura. Encurtado para "Digite ou fale…". Conta de cabeça não
+teria pegado — é a mesma lição do `QRCard`: a largura é conhecimento do uso.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, worktree `agent-ae1e1e13fe82206cb`

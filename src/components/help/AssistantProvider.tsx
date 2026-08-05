@@ -39,7 +39,7 @@ import {
 import { HELP_OPEN_EVENT, type HelpOpenDetail } from "./events";
 import { useNotifications, type NotificationItem, type UseNotifications } from "./useNotifications";
 import { useHelpThread, type UseHelpThread } from "./useHelpThread";
-import { useVoiceInput, type UseVoiceInput } from "./useVoiceInput";
+import { appendTranscript, useVoiceInput, type UseVoiceInput } from "@/components/voice";
 import AssistantChat from "./AssistantChat";
 import AssistantNotifications from "./AssistantNotifications";
 import SupportTechChat from "./SupportTechChat";
@@ -120,7 +120,10 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
   const [trailOpen, setTrailOpen] = useState(false);
   const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set());
 
-  const voice = useVoiceInput((text) => setDraft((d) => (d ? `${d} ${text}` : text)));
+  // Transcrição acrescenta ao rascunho e espera a pessoa apertar enviar.
+  const voice = useVoiceInput((text) => setDraft((d) => appendTranscript(d, text)), {
+    fileName: "pergunta.webm",
+  });
 
   const userName = session?.user?.name ?? null;
 

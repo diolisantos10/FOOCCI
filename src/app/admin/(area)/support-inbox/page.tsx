@@ -295,6 +295,13 @@ export default function SupportInboxPage() {
                     className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-200 focus:border-violet-500 focus:outline-none"
                   />
                 </div>
+                {/* SEM MICROFONE, DE PROPÓSITO (05/08/2026).
+                    O ditado por voz do produto vive em @/components/voice e fala com
+                    /api/help/transcribe, que exige contexto de TENANT (x-restaurant-id).
+                    A área /admin não passa por esse middleware: o botão apareceria e
+                    tomaria 401 em silêncio — "botão que não grava é pior que botão
+                    nenhum". Para ligar aqui, primeiro criar /api/admin/transcribe
+                    autenticada como admin; o gancho já aceita `endpoint`. */}
                 <div className="flex items-end gap-2">
                   <textarea
                     value={reply}

@@ -13,6 +13,7 @@ import {
   type CouponType, type ReadyMadeCoupon,
 } from "@/services/crm/readyMadeCampaigns";
 import { parseMessagePool, phraseKey, MAX_CUSTOM_PHRASES } from "@/services/crm/crmMessagePool";
+import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import { TIER_COUPON_CAMPAIGN_IDS } from "@/services/crm/readyMadeCampaigns";
 
 // Ids of the "fixed" ready-made campaigns — used to badge a row as Fixa vs Personalizada.
@@ -4807,6 +4808,11 @@ function WhatsAppSendModal({
     { ok: true; conversationId: string } | { ok: false; error: string } | null
   >(null);
 
+  // Ditado: acrescenta ao texto já sugerido — o lojista lê tudo antes de enviar.
+  const voice = useVoiceInput((t) => setMessage((prev) => appendTranscript(prev, t)), {
+    fileName: "mensagem.webm",
+  });
+
   async function handleSend() {
     const trimmed = message.trim();
     if (!trimmed) return;
@@ -4879,14 +4885,18 @@ function WhatsAppSendModal({
                   {result.error}
                 </div>
               )}
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={5}
-                maxLength={4096}
-                placeholder="Digite a mensagem…"
-                className="w-full rounded-xl border border-line2 bg-paper px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none transition"
-              />
+              <div className="flex items-end gap-1 rounded-xl border border-line2 bg-paper px-1.5 py-1 transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={5}
+                  maxLength={4096}
+                  placeholder="Digite ou fale a mensagem…"
+                  className="min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:!ring-0"
+                />
+                <VoiceButton voice={voice} label="Ditar a mensagem por voz" disabled={sending} />
+              </div>
+              <VoiceStatus voice={voice} />
               <p className="text-right text-xs text-muted">{message.length}/4096</p>
             </>
           )}

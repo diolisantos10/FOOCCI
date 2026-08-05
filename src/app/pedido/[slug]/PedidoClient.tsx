@@ -6126,6 +6126,14 @@ export function PedidoClient({
         )}
 
         {/* Text input */}
+        {/* SEM MICROFONE, DE PROPÓSITO (05/08/2026 — ver docs/agents/interface/oficina.md).
+            Todo chat do PAINEL ganhou ditado por voz via @/components/voice. Aqui não:
+            esta é a superfície PÚBLICA (loja do cliente final) e a rota de transcrição
+            (/api/help/transcribe) é paga por chamada e hoje só autoriza sessão de
+            lojista. Ligar o microfone aqui significaria expor uma rota que custa
+            dinheiro para a internet inteira — decisão de produto e de custo, não de
+            interface. Quando existir uma rota pública com limite por sessão/telefone,
+            o botão entra usando o MESMO gancho, sem implementação nova. */}
         {showInput && (
           <form
             onSubmit={handleSubmit}
