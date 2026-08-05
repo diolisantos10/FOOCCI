@@ -1,0 +1,27 @@
+name: Railway — estado do deploy
+
+# Só leitura. Pergunta ao Railway o que o workflow de deploy NÃO pergunta: se a
+# construção realmente subiu. O deploy usa `--detach` e a verificação seguinte
+# aceita qualquer 200 — inclusive o da versão antiga.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/railway-deploy-status.mjs'
+      - '.github/workflows/railway-deploy-status.yml'
+
+jobs:
+  estado:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Consultar o Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/railway-deploy-status.mjs
