@@ -3,6 +3,7 @@ import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import type { UpsertBrandConfigInput } from "@/validators/brand-config";
 import { DEFAULT_BRAND_CONFIG } from "@/validators/brand-config";
 import type { RestaurantBrandConfig } from "@prisma/client";
+import { sanitizeUpsellCategories } from "@/services/ai/waiter/upsellCategories";
 
 type PartialConfig = Partial<UpsertBrandConfigInput>;
 
@@ -36,6 +37,9 @@ export class BrandConfigService {
       ifoodReviewUrl: input.ifoodReviewUrl ?? null,
       brandPersona: input.brandPersona ?? undefined,
       waiterPrompt: input.waiterPrompt ?? null,
+      // Saneado antes de persistir: sem vazios, sem duplicata, ordem preservada.
+      // A lista é lida pelo Garçom em produção — lixo aqui vira passo morto lá.
+      waiterUpsellCategories: sanitizeUpsellCategories(input.waiterUpsellCategories ?? []),
     };
 
     const config = await prisma.restaurantBrandConfig.upsert({
@@ -78,6 +82,9 @@ export class BrandConfigService {
     if (input.googleReviewUrl   !== undefined) data.googleReviewUrl   = input.googleReviewUrl ?? null;
     if (input.ifoodReviewUrl    !== undefined) data.ifoodReviewUrl    = input.ifoodReviewUrl ?? null;
     if (input.waiterPrompt      !== undefined) data.waiterPrompt      = input.waiterPrompt ?? null;
+    if (input.waiterUpsellCategories !== undefined) {
+      data.waiterUpsellCategories = sanitizeUpsellCategories(input.waiterUpsellCategories);
+    }
     if (input.brandPersona !== undefined) {
       // Merge with existing JSON so a partial PATCH (e.g. logo-only) never
       // wipes out fields set by other parts of the form or the system.
@@ -148,6 +155,9 @@ export class BrandConfigService {
       ga4MeasurementId: null,
       gtmId: null,
       waiterPrompt: null,
+      // Vazio = padrão legado (bebida → sobremesa). Restaurante sem registro de
+      // marca continua com o fechamento de hoje.
+      waiterUpsellCategories: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };

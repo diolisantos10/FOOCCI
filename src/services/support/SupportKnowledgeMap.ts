@@ -26,9 +26,32 @@ export interface FailureMode {
   subsystem: string;
   /** Como o usuário costuma DESCREVER o sintoma (linguagem do lojista). */
   symptom: string;
-  /** Palavras/expressões-gatilho curadas — o casamento primário e mais confiável.
-   *  Uma delas no relato já indica este modo (ver matchFailureModes). */
+  /**
+   * Gatilhos curados — o ÚNICO caminho para este modo casar.
+   *
+   * REGRA (04/08/2026, P0 de confiança): gatilho é EXPRESSÃO DE FALHA, não
+   * palavra de assunto. "papel", "comanda", "deploy" e "desconectou" sozinhos
+   * são assunto — e foi por isso que "como mudo o papel de parede do cardápio?"
+   * virou incidente de impressora e "o google desconectou" virou WhatsApp caído.
+   * Escreva o que o lojista diz quando a coisa QUEBRA: "não imprime",
+   * "impressora não", "pararam de chegar", "não sobe o deploy".
+   */
   triggers: string[];
+  /**
+   * Termos que SITUAM o relato neste subsistema. Se preenchido, pelo menos um
+   * precisa aparecer além do gatilho — é o que impede um gatilho genérico
+   * ("pararam de chegar") de pescar o canal errado. Vazio/ausente = o gatilho
+   * já é específico o bastante sozinho ("too many clients", "carteiro").
+   *
+   * Escreva SEM ACENTO: o casamento normaliza os dois lados (ver `fold`), então
+   * "impressao" cobre "impressão" e listar as duas formas é só ruído.
+   */
+  scope?: string[];
+  /**
+   * Termos que EXCLUEM este modo mesmo com gatilho e escopo. Existe para as
+   * fronteiras que se confundem em produção — Instagram × WhatsApp é a nossa.
+   */
+  excludes?: string[];
   /** A causa provável, em termos técnicos. */
   likelyCause: string;
   /** Sinais que CONFIRMAM esta causa (o agente exige sinal antes de concluir). */
@@ -102,9 +125,16 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     subsystem: "printing",
     symptom: "As comandas não estão saindo na impressora da cozinha/caixa.",
     triggers: [
-      "impressora", "impressão", "imprimir", "imprime", "não imprime", "não sai comanda",
-      "comanda", "comandas", "carteiro", "não sai o pedido na cozinha", "papel",
+      "não imprime", "nao imprime", "não imprimiu", "não está imprimindo",
+      "nao esta imprimindo", "parou de imprimir", "impressora não", "impressora nao",
+      "impressora offline", "impressora desligada", "não sai comanda",
+      "não sai a comanda", "não saem as comandas", "comanda não sai",
+      "comandas não saem", "não sai o pedido na cozinha", "sem papel",
+      "acabou o papel", "carteiro desconectado", "carteiro não conecta",
+      "não imprime nada", "não imprime mais",
     ],
+    // "carteiro" é nome de produto nosso — sozinho já é do assunto impressão.
+    scope: ["impressora", "impressao", "imprim", "comanda", "carteiro", "cozinha"],
     likelyCause: "Carteiro (programa no PC) desconectado, estação sem impressora escolhida, ou a impressora física offline (papel/energia/cabo).",
     confirmingSignals: ["Configurações → Impressoras: 'Carteiro conectado'?", "estação com impressora selecionada?"],
     runbook: [
@@ -123,9 +153,17 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     subsystem: "whatsapp_meta",
     symptom: "Os pedidos/mensagens pararam de chegar no WhatsApp, mas dá pra enviar.",
     triggers: [
-      "não chega", "pararam de chegar", "não recebo", "não estou recebendo",
-      "mensagens não chegam", "pedidos não chegam", "não caem os pedidos", "sumiram as mensagens",
+      "não chega", "nao chega", "pararam de chegar", "parou de chegar",
+      "não recebo", "nao recebo", "não estou recebendo", "nao estou recebendo",
+      "mensagens não chegam", "pedidos não chegam", "não caem os pedidos",
+      "sumiram as mensagens", "não chegam mais",
     ],
+    // Os gatilhos acima são genéricos de propósito (é assim que o lojista fala),
+    // então o ESCOPO é obrigatório: sem WhatsApp no relato, não é este modo.
+    // Sem isso, "as DMs do Instagram pararam de chegar" caía aqui — subsistema
+    // errado, diagnóstico errado, lojista mandado para a tela errada.
+    scope: ["whatsapp", "zap", "wpp", "meta", "numero", "inbound"],
+    excludes: ["instagram", "insta", "direct", " dm", "dms"],
     likelyCause: "Webhook de entrada do Meta dessinscrito ou fila de entrada presa.",
     confirmingSignals: ["/api/admin/meta/diag mostra subscribed_apps vazio ou phone sem inbound"],
     runbook: [
@@ -138,25 +176,44 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     severity: "HIGH",
   },
   {
-    key: "evolution_disconnected",
-    subsystem: "whatsapp_evolution",
-    symptom: "O WhatsApp (não-oficial) caiu / apareceu como desconectado.",
-    triggers: ["desconectou", "desconectado", "caiu o whatsapp", "qr code", "qrcode", "reconectar", "instância", "evolution", "pedindo qr", "aparelho desconectou"],
-    likelyCause: "Instância WhatsApp (Meta) em estado 'close' — sessão caiu.",
-    confirmingSignals: ["/api/integracoes/whatsapp/meta/status = close"],
+    key: "whatsapp_disconnected",
+    subsystem: "whatsapp_meta",
+    symptom: "O WhatsApp caiu / apareceu como desconectado.",
+    // Resolução de conflito 04/08: a padrão melhorou a pescaria (triggers ricos +
+    // scope + excludes, porque "desconectou" sozinho pescava "o google
+    // desconectou"); esta branch tinha trocado a Evolution pela Meta. Fica o
+    // melhor dos dois — o matcher preciso, apontando para o canal que existe.
+    triggers: [
+      "desconectou", "desconectado", "desconectada", "caiu o whatsapp",
+      "whatsapp caiu", "zap caiu", "pedindo qr", "pedindo o qr", "pedindo qrcode",
+      "ler o qr de novo", "reconectar", "aparelho desconectou", "sessão caiu",
+      "perdeu a conexão",
+    ],
+    scope: ["whatsapp", "zap", "wpp", "qr", "aparelho", "celular", "numero", "meta"],
+    excludes: ["google", "instagram", "insta", "mercado pago", "impressora"],
+    likelyCause: "Conexão do número na Meta fora do ar (connectionStatus != CONNECTED).",
+    confirmingSignals: ["/api/integracoes/whatsapp/meta/status != CONNECTED"],
     runbook: [
       "Conferir /api/integracoes/whatsapp/meta/status.",
-      "Se 'close': disparar reconexão da instância (ação de integração).",
-      "Se pedir QR novamente: escalar — precisa do humano reparear o aparelho.",
+      "Se != CONNECTED: conferir se o token do aplicativo expirou (o erro aparece em lastError).",
+      "Reconectar exige login do DONO pela Meta — não há ação automática. Escalar.",
     ],
-    remediationAction: "reconnect_whatsapp_meta",
+    // Sem ação automática de propósito: a ação "reconectar instância" saiu com a
+    // Evolution e não foi substituída, porque reconectar a Meta depende de OAuth
+    // do dono. Ação que finge é pior que ação ausente.
+    remediationAction: null,
     severity: "HIGH",
   },
   {
     key: "db_connection_exhaustion",
     subsystem: "database",
     symptom: "O sistema todo ficou fora do ar / erro ao abrir qualquer tela.",
-    triggers: ["fora do ar", "não abre", "tudo travado", "sistema caiu", "nenhuma tela", "erro em tudo", "too many clients", "site caiu", "não carrega nada"],
+    triggers: [
+      "fora do ar", "não abre nada", "nao abre nada", "não abre nenhuma",
+      "tudo travado", "travou tudo", "sistema caiu", "sistema todo",
+      "nenhuma tela", "erro em tudo", "too many clients", "site caiu",
+      "não carrega nada", "nada funciona", "não consigo abrir nada",
+    ],
     likelyCause: "Exaustão de conexões do Postgres ('too many clients already').",
     confirmingSignals: ["/api/health db = unreachable", "logs com 'too many clients'"],
     runbook: [
@@ -171,7 +228,11 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "migration_stuck_p3009",
     subsystem: "deploy_migrations",
     symptom: "A versão nova não sobe / deploy falhando repetidamente.",
-    triggers: ["deploy", "não sobe", "versão nova", "atualização não", "p3009", "deploy falhando", "build falhou"],
+    triggers: [
+      "p3009", "deploy falhou", "deploy falhando", "deploy travado", "build falhou",
+      "não sobe a versão", "versão nova não", "versao nova nao", "atualização não subiu",
+      "migração travada", "migracao travada", "não subiu o deploy",
+    ],
     likelyCause: "Migração travada (P3009) bloqueando o preDeploy.",
     confirmingSignals: ["deploy FAILED com P3009", "migrate-deploy.sh em retry"],
     runbook: [
@@ -186,7 +247,13 @@ export const FAILURE_MODES: readonly FailureMode[] = [
     key: "ai_key_invalid",
     subsystem: "ai_brain",
     symptom: "As IAs pararam de responder direito / respostas genéricas.",
-    triggers: ["ia parou", "respostas genéricas", "não responde direito", "fallback", "agente bobo", "atendente burro", "ia sem sentido", "respostas ruins"],
+    triggers: [
+      "ia parou", "ia não responde", "ia nao responde", "respostas genéricas",
+      "respostas genericas", "não responde direito", "nao responde direito",
+      "agente bobo", "atendente burro", "ia sem sentido", "respostas ruins",
+      "ia burra", "robô bobo", "robo bobo", "caiu em fallback",
+    ],
+    scope: [" ia ", "agente", "atendente", "robo", "fallback", "assistente", "intelig"],
     likelyCause: "OPENAI_API_KEY ausente ou inválida — Brain em fallback.",
     confirmingSignals: ["/api/health openaiKey = false", "401 Incorrect API key nos logs"],
     runbook: [
@@ -200,17 +267,73 @@ export const FAILURE_MODES: readonly FailureMode[] = [
   {
     key: "campaign_queue_stuck",
     subsystem: "campaign_queue",
-    symptom: "As campanhas não estão saindo / travadas.",
-    triggers: ["campanha não sai", "campanha travada", "não está enviando", "envio parado", "campanha presa", "não disparou a campanha"],
-    likelyCause: "Job de campanha zumbi ou execuções presas em SENDING.",
-    confirmingSignals: ["execuções antigas ainda em PENDING/SENDING"],
+    symptom: "As campanhas não estão saindo / travadas, sem erro nenhum aparecendo.",
+    triggers: [
+      "campanha não sai", "campanha nao sai", "campanha não saiu", "campanha travada",
+      "campanha não está enviando", "envio parado", "campanha presa",
+      "não disparou a campanha", "nao disparou a campanha", "campanha não disparou",
+      "campanha não enviou", "público 0", "publico zero", "audiência 0", "audiencia zero",
+      "não foi para ninguém", "campanha não chegou em ninguém",
+    ],
+    scope: ["campanha", "crm", "promocao", "disparo", "envio"],
+    // CAUSA CORRIGIDA EM 04/08/2026. O runbook antigo mandava "reenfileirar o job
+    // zumbi" — e o job zumbi quase nunca é o problema. A causa real e recorrente,
+    // documentada em docs/pendencias.md (seção "CRM — a campanha 'Almoço' não
+    // dispara, e falta um clique"), é CONTACTABILIDADE: a base importada entra
+    // com crmContactable=false (fila de enriquecimento), a audiência fica 0 e
+    // nada sai, sem erro nenhum. Os clientes TÊM telefone. Resolve-se com um
+    // clique do dono em "Ativar base". Mandar o lojista mexer em fila é mandá-lo
+    // para o lugar errado — e ele não tem como consertar fila nenhuma.
+    likelyCause:
+      "Audiência 0 por contactabilidade: a base entrou com crmContactable=false (fila de enriquecimento) e a campanha não tem para quem enviar. Muito mais raro, e só depois de descartada a audiência: job de campanha zumbi / execuções presas em SENDING.",
+    confirmingSignals: [
+      "Clientes → 'Saúde da base de contatos' mostra base não ativada",
+      "GET /api/admin/diagnostics/audience-breakdown?restaurantId=<id> → notContactable alto e eligible = 0",
+      "campanha sem destinatários registrados, e nenhum erro no histórico",
+      "(hipótese secundária) execuções antigas ainda em PENDING/SENDING",
+    ],
     runbook: [
-      "Conferir se há execuções presas há muito tempo.",
-      "Reenfileirar/limpar o job zumbi (ação segura e reversível).",
-      "Confirmar que a próxima janela de envio processa normalmente.",
+      "Abra Clientes e olhe o cartão 'Saúde da base de contatos'.",
+      "Se aparecer o botão 'Ativar base', clique nele — é o passo que resolve na maioria das vezes: enquanto ninguém clica, a audiência fica 0 e a campanha nunca dispara, sem dar erro.",
+      "Volte na campanha e confira o público: se saiu de 0, é só esperar a próxima janela de envio.",
+      "Se o público continuar 0, confirme que os clientes têm telefone e que o filtro da campanha não está estreito demais.",
+      "Só se o público estiver OK e mesmo assim nada sair: aí sim pode ser job travado — abra chamado, porque reenfileirar é com a equipe.",
     ],
     remediationAction: "requeue_stuck_campaign",
     severity: "MEDIUM",
+  },
+  {
+    // MODO DE FALHA QUE FALTAVA (04/08/2026). O subsistema 'payments' estava
+    // declarado com impacto ("se cai, o cliente não consegue pagar") e ZERO modos
+    // de falha — ou seja, o agente sabia que existia e não sabia reconhecer nada.
+    // Subsistema sem modo de falha é uma promessa que o mapa não cumpre.
+    key: "payment_not_confirmed",
+    subsystem: "payments",
+    symptom: "O cliente pagou o Pix mas o pedido continua em 'Aguardando Pix' / 'Aguardando pagamento'.",
+    triggers: [
+      "pagou e não", "pagou mas não", "pagou mas o pedido", "pix não confirmou",
+      "pix nao confirmou", "pagamento não confirmou", "pagamento nao confirmou",
+      "não confirma o pagamento", "aguardando pagamento", "aguardando pix",
+      "pagamento não entrou", "pagamento não caiu", "não baixou o pagamento",
+      "pix não caiu", "pagamento pendente", "preso em aguardando",
+    ],
+    scope: ["pix", "pagamento", "pagou", "pago", "cartao", "mercado pago", "pedido"],
+    likelyCause:
+      "O aviso de pagamento (webhook do Mercado Pago) não chegou ou foi rejeitado, então o pedido não avançou sozinho de AWAITING_PAYMENT. Também acontece quando o Pix expirou e o cliente pagou depois, ou pagou em outra chave.",
+    confirmingSignals: [
+      "pedido em 'Aguardando Pix' com comprovante do cliente na mão",
+      "MP_WEBHOOK_SECRET presente e ambiente do Mercado Pago em Produção?",
+      "vários pedidos parados no mesmo horário = webhook; um só = caso isolado",
+    ],
+    runbook: [
+      "Em Vendas → Pedidos, abra o pedido: ele está com o selo 'Aguardando Pix'?",
+      "Peça o comprovante ao cliente e confira no seu app do Mercado Pago (ou banco) se o valor caiu MESMO. Nunca confirme só pela palavra do cliente.",
+      "Se caiu: use 'Confirmar pagamento' no próprio cartão do pedido (pede um motivo, e fica registrado quem confirmou). O mesmo botão existe na Central de Conversas, como 'Confirmar pagamento manualmente'.",
+      "Se não caiu: o Pix provavelmente expirou — peça para o cliente refazer o pagamento pelo link do pedido ou escolher outra forma.",
+      "Se estiver acontecendo com VÁRIOS pedidos ao mesmo tempo, não é o cliente: é o aviso do Mercado Pago que não está chegando. Abra chamado — reprocessar é com a equipe.",
+    ],
+    remediationAction: null, // confirmar pagamento é decisão do lojista com dinheiro real na mesa — nunca da IA.
+    severity: "HIGH",
   },
 ];
 
@@ -237,27 +360,64 @@ export function buildKnowledgeMapContext(): string {
   ].join("\n");
 }
 
-/** Pontuação mínima para considerar um modo de falha. Um gatilho curado vale 2
- *  (basta um pra casar); a sobreposição de palavras do sintoma é secundária. */
-const MIN_MATCH_SCORE = 2;
 const TRIGGER_WEIGHT = 2;
 
-/** Acha o(s) modo(s) de falha que casam com o relato.
+/** Minúsculas + sem acento, dos dois lados, para o casamento não depender de
+ *  como o lojista digitou ("instância" × "instancia"). */
+function fold(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/**
+ * Acha o(s) modo(s) de falha que casam com o relato.
  *
- *  Sinal PRIMÁRIO: palavras-gatilho curadas (específicas por falha) — uma já casa.
- *  Sinal secundário: sobreposição de palavras do próprio sintoma (desempate).
- *  Conservador de propósito: sem gatilho e sem sobreposição suficiente, NÃO casa —
- *  o agente prefere pedir detalhe a inventar causa (e nunca troca a pergunta do
- *  usuário por um sinal de sistema sem relação). */
+ * ─── COMO ERA, E POR QUE MUDOU (04/08/2026, P0 de confiança) ───────────────
+ * A regra antiga era `triggerHits*2 + palavrasDoSintoma >= 2`. Ou seja: DUAS
+ * palavras quaisquer do texto do sintoma, sem nenhum gatilho curado, já
+ * classificavam um incidente. Medido no código de produção:
+ *   • "como mudo o PAPEL de parede do cardápio?"   → impressora quebrada (HIGH)
+ *   • "ERRO ao ABRIR a TELA de cardápio"           → banco fora do ar (CRITICAL)
+ *   • "o google DESCONECTOU de novo"               → WhatsApp Evolution caiu
+ *   • "as DMs do instagram PARARAM DE CHEGAR"      → WhatsApp Meta (canal errado)
+ *   • "posso mandar COMANDA por whatsapp?"         → impressora quebrada
+ * Cada um desses vira runbook injetado como VERDADE, sonda do sistema disparada
+ * e lojista mandado para a tela errada — a partir de uma pergunta inocente.
+ *
+ * ─── COMO É AGORA ──────────────────────────────────────────────────────────
+ * Casar exige, nesta ordem:
+ *   1. GATILHO CURADO presente (expressão de falha). Sem gatilho, não casa —
+ *      sobreposição de palavras NUNCA classifica sozinha;
+ *   2. ESCOPO satisfeito, quando o modo declara escopo (gatilho genérico como
+ *      "pararam de chegar" precisa do canal no relato);
+ *   3. Nenhum termo de EXCLUSÃO presente (fronteira Instagram × WhatsApp).
+ * Só então a sobreposição de palavras do sintoma entra — e apenas para ORDENAR
+ * entre modos que já casaram. Ela desempata; ela não decide.
+ *
+ * Conservador de propósito: na dúvida devolve vazio e o agente pede detalhe. Um
+ * "me conta o que aparece na tela?" a mais é barato; um diagnóstico errado
+ * apresentado com confiança, não.
+ */
 export function matchFailureModes(report: string): FailureMode[] {
-  const t = report.toLowerCase();
+  const t = fold(report);
   const hits: Array<{ m: FailureMode; score: number }> = [];
+
   for (const m of FAILURE_MODES) {
-    const triggerHits = m.triggers.filter((g) => t.includes(g.toLowerCase())).length;
-    const words = m.symptom.toLowerCase().match(/[a-zà-ú]{4,}/g) ?? [];
+    // 1. Gatilho curado é obrigatório.
+    const triggerHits = m.triggers.filter((g) => t.includes(fold(g))).length;
+    if (triggerHits === 0) continue;
+
+    // 2. Escopo, quando declarado.
+    const scope = m.scope ?? [];
+    if (scope.length > 0 && !scope.some((s) => t.includes(fold(s)))) continue;
+
+    // 3. Exclusões.
+    if ((m.excludes ?? []).some((x) => t.includes(fold(x)))) continue;
+
+    // Só agora a sobreposição de palavras — para ordenar, não para classificar.
+    const words = fold(m.symptom).match(/[a-z]{4,}/g) ?? [];
     const wordScore = [...new Set(words)].filter((w) => t.includes(w)).length;
-    const score = triggerHits * TRIGGER_WEIGHT + wordScore;
-    if (score >= MIN_MATCH_SCORE) hits.push({ m, score });
+    hits.push({ m, score: triggerHits * TRIGGER_WEIGHT + wordScore });
   }
+
   return hits.sort((a, b) => b.score - a.score).map((h) => h.m);
 }

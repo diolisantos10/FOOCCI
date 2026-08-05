@@ -34,6 +34,7 @@ import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
 import { cartLineBaseIds } from "./cartNormalization";
 import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
+import { upsellCategoryLabels } from "./waiter/upsellCategories";
 import { getExperienceBrief } from "@/services/brain/experience/ExperienceBriefService";
 import { getWaiterRuntimeKnowledge } from "@/services/waiterRuntime/WaiterLibraryRuntimeBridge";
 import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
@@ -69,6 +70,12 @@ export interface AIWebTurnInput {
   suggestedProductIds?: string[];
   /** Client-held WaiterMemory from previous turn — merged server-side for stateful continuity. */
   waiterMemory?: Partial<WaiterBrainV2.WaiterMemory>;
+  /**
+   * Categorias que o lojista escolheu oferecer no fechamento, na ordem dele.
+   * Quando omitido, o serviço lê `RestaurantBrandConfig.waiterUpsellCategories`.
+   * Vazio/ausente → padrão legado (bebida → sobremesa).
+   */
+  upsellCategories?: readonly string[] | null;
 }
 
 export interface AIWebTurnOutput {
@@ -150,6 +157,26 @@ export class AIOrderService {
   }
 }
 
+/**
+ * Lê a lista ordenada de categorias de upsell do fechamento.
+ *
+ * Falha de leitura devolve `null` — que significa "use o padrão legado", não
+ * "não ofereça nada". Um banco indisponível não pode desligar o upsell em
+ * silêncio: isso seria ausência de informação virando informação.
+ */
+async function loadUpsellCategories(restaurantId: string): Promise<readonly string[] | null> {
+  try {
+    const row = await prisma.restaurantBrandConfig.findUnique({
+      where:  { restaurantId },
+      select: { waiterUpsellCategories: true },
+    });
+    return row?.waiterUpsellCategories ?? null;
+  } catch (err) {
+    console.error("[waiter] falha ao ler waiterUpsellCategories — usando padrão legado", { restaurantId, err });
+    return null;
+  }
+}
+
 // ─── web turn (unified pipeline, stateless HTTP) ──────────────
 
 async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutput> {
@@ -199,6 +226,16 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     };
   }
 
+  // ── Categorias de upsell do fechamento (configuração do lojista) ───────────
+  // O chamador (rota /api/pedido) já traz isso junto da busca do restaurante —
+  // custo zero. Quando não vem (simulador, autopilot, chamadas internas), lê do
+  // banco só nos eventos que de fato usam a sequência de fechamento.
+  // `undefined` = não informado (busca); `[]` = informado e vazio (padrão legado).
+  let upsellCategories: readonly string[] | null | undefined = input.upsellCategories;
+  if (upsellCategories === undefined && (event === "ON_CHECKOUT_STARTED" || event === "ON_USER_MESSAGE")) {
+    upsellCategories = await loadUpsellCategories(restaurantId);
+  }
+
   const v2 = WaiterBrainV2.decide({
     event,
     cartItemIds,
@@ -208,6 +245,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     message,
     memory: waiterMemory,
     storeChannels,
+    upsellCategories: upsellCategories ?? null,
   });
 
   if (!v2.requiresAI) {
@@ -296,7 +334,10 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   const experienceBrief = await getExperienceBrief(restaurantId).catch(() => "");
   messages[0] = {
     ...sysMsg,
-    content: `${buildWaiterProfileDirective()}\n\n${sysMsg.content}${experienceBrief ? `\n\n${experienceBrief}` : ""}`,
+    // A constituição do Garçom recebe as categorias de fechamento DESTE
+    // restaurante. Sem isso ela voltaria a falar de "bebida/sobremesa" genéricos
+    // — que é exatamente o que não existe numa padaria.
+    content: `${buildWaiterProfileDirective(upsellCategoryLabels(catalogItems, upsellCategories ?? null))}\n\n${sysMsg.content}${experienceBrief ? `\n\n${experienceBrief}` : ""}`,
   };
   let sysAddendum = v2.aiDirective;
 

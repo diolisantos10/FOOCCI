@@ -26,7 +26,13 @@ import type { BusinessKnowledgeSnapshot } from "../knowledge/BusinessKnowledgeCo
 import { listApprovedLearningsForBrain } from "../training/BrainTrainingContract";
 import { getExperienceBrief } from "../experience/ExperienceBriefService";
 import { verifyAgainstSnapshot } from "./SnapshotCoherenceVerifier";
-import type { BrainReasoningRequest, BrainReasoningResult, BrainCoherenceCheck } from "../core/BrainTypes";
+import { verifyCapabilityClaims } from "./CapabilityCoherenceVerifier";
+import type {
+  BrainReasoningRequest,
+  BrainReasoningResult,
+  BrainCoherenceCheck,
+  BrainProposableAction,
+} from "../core/BrainTypes";
 
 export type ReasoningMode = "LLM" | "FALLBACK";
 
@@ -63,8 +69,32 @@ function buildScopePrompt(profile: AgentProfileDefinition): string {
     "Responda SOMENTE em JSON com as chaves: primaryIntent (string curta em MAIÚSCULAS), " +
       "secondaryIntents (array), confidence (0..1), customerNeed, directAnswerStrategy, " +
       "idealResponse (a resposta real que iria ao cliente), trainingRule, expectedImpact, " +
-      "safetyNotes (array), shouldEscalate (boolean), escalationReason.",
+      "safetyNotes (array), shouldEscalate (boolean), escalationReason, " +
+      "proposedActionKey (string ou null — ver AÇÕES QUE VOCÊ PODE PROPOR; null quando não houver).",
   ].filter(Boolean).join("\n");
+}
+
+// ── Ações propostas: chave de allowlist, NUNCA comando ──────────────────────────
+// O Brain não tem tool-calling e não executa nada. O máximo que o raciocínio
+// devolve é a CHAVE de uma ação pré-declarada. Quem executa é um executor
+// separado, fora do Brain, e a confirmação final é sempre do humano.
+function actionsBlock(actions: readonly BrainProposableAction[] | undefined): string {
+  if (!actions?.length) {
+    return "\n\nAÇÕES QUE VOCÊ PODE PROPOR: NENHUMA neste turno. Devolva proposedActionKey: null.";
+  }
+  const lines = actions.map((a) => `- ${a.key}: ${a.label} — ${a.description}`);
+  return [
+    "",
+    "",
+    "AÇÕES QUE VOCÊ PODE PROPOR (allowlist fechada):",
+    ...lines,
+    "REGRAS DAS AÇÕES (invioláveis):",
+    "• Se — e SÓ se — uma delas resolve o pedido, devolva proposedActionKey com a CHAVE EXATA acima.",
+    "• NUNCA invente chave, comando, endpoint, SQL ou script. Fora desta lista, proposedActionKey é null.",
+    "• Você NÃO executa nada. Quem executa é o sistema, e só DEPOIS que o lojista confirmar na tela.",
+    "• Portanto: OFEREÇA no futuro ('posso preparar a prévia do seu cardápio, quer?'). " +
+      "NUNCA fale no pretérito ('já subi', 'acabei de importar', 'já está no ar') — seria mentira, e a resposta será barrada.",
+  ].join("\n");
 }
 
 // ── Knowledge → truth block ─────────────────────────────────────────────────────
@@ -82,6 +112,8 @@ const TRUTH_LABELS: Record<string, string> = {
   materials: "Materiais",
   conversations: "Conversas (agregado)",
   evidence: "Evidências",
+  manual: "Manual/documentação curada (trechos relevantes)",
+  systemSignals: "Sinais read-only do sistema agora",
 };
 
 function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
@@ -100,10 +132,32 @@ function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
 // knowledge RELEVANT to this exact question (retrieval), not just the top-N.
 async function loadKnowledge(req: BrainReasoningRequest): Promise<BusinessKnowledgeSnapshot> {
   const adapter = resolveKnowledgeAdapter(req.businessType);
-  if (!adapter) return emptySnapshot(req);
-  return adapter
-    .getSnapshot(req.businessId, { agentId: req.agentId, queryHint: req.sanitizedInput })
-    .catch(() => emptySnapshot(req));
+  const base = adapter
+    ? await adapter
+        .getSnapshot(req.businessId, { agentId: req.agentId, queryHint: req.sanitizedInput })
+        .catch(() => emptySnapshot(req))
+    : emptySnapshot(req);
+  return withExtraTruth(base, req.extraTruthSources);
+}
+
+/**
+ * Costura a verdade curada do chamador ao snapshot do adapter. O adapter continua
+ * dono da verdade DO NEGÓCIO; o chamador acrescenta a verdade DO DOMÍNIO que só
+ * ele recuperou (manual, sinais do sistema). Chaves vazias não entram — verdade
+ * vazia não é verdade, e um bloco vazio no prompt só gasta contexto.
+ */
+function withExtraTruth(
+  snap: BusinessKnowledgeSnapshot,
+  extra?: Record<string, unknown>,
+): BusinessKnowledgeSnapshot {
+  if (!extra) return snap;
+  const merged = { ...snap.truthSources };
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    merged[key] = value;
+  }
+  return { ...snap, truthSources: merged };
 }
 
 // ── Approved learnings → the human-approved pool finally feeds reasoning ───────
@@ -145,6 +199,23 @@ interface RawCore {
   safetyNotes?: string[];
   shouldEscalate?: boolean;
   escalationReason?: string;
+  proposedActionKey?: unknown;
+}
+
+/**
+ * A TRAVA da allowlist: a IA escolhe entre chaves pré-declaradas ou nada. Chave
+ * que não está na lista é DESCARTADA — nunca "quase certa", nunca normalizada
+ * até casar. Mesma disciplina do SupportRemediationLadder.
+ */
+function validateProposedAction(
+  raw: unknown,
+  actions: readonly BrainProposableAction[] | undefined,
+): { key: string | null; rejected: string | null } {
+  const candidate = typeof raw === "string" ? raw.trim() : "";
+  if (!candidate || candidate === "null") return { key: null, rejected: null };
+  const allowed = new Set((actions ?? []).map((a) => a.key));
+  if (allowed.has(candidate)) return { key: candidate, rejected: null };
+  return { key: null, rejected: candidate.slice(0, 80) };
 }
 
 /**
@@ -172,7 +243,8 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
     const experienceBrief = await getExperienceBrief(req.businessId).catch(() => "");
     const systemPrompt =
       `${buildScopePrompt(profile)}\n\nBASE DE CONHECIMENTO (verdade):\n${knowledgeBlock(snapshot)}${learningsBlock}` +
-      (experienceBrief ? `\n\n${experienceBrief}` : "");
+      (experienceBrief ? `\n\n${experienceBrief}` : "") +
+      actionsBlock(req.proposableActions);
     const historyBlock = req.sanitizedHistory?.length
       ? `HISTÓRICO RECENTE (sanitizado, do mais antigo ao mais novo):\n${req.sanitizedHistory
           .map((t) => `${t.role === "CUSTOMER" ? "Cliente" : "Agente"}: ${t.content}`)
@@ -190,6 +262,14 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
     const parsed = JSON.parse(raw) as RawCore;
     if (!parsed.primaryIntent || !parsed.idealResponse) throw new Error("Brain JSON incompleto");
 
+    const action = validateProposedAction(parsed.proposedActionKey, req.proposableActions);
+    const safetyNotes = Array.isArray(parsed.safetyNotes) ? [...parsed.safetyNotes] : [];
+    if (action.rejected) {
+      safetyNotes.push(
+        `ação fora da allowlist DESCARTADA: "${action.rejected}" — o agente só escolhe chaves pré-declaradas`,
+      );
+    }
+
     return {
       engine,
       reasoningMode: "LLM",
@@ -206,10 +286,11 @@ export async function reasonAsAgent(req: BrainReasoningRequest): Promise<BrainRe
         idealResponse: parsed.idealResponse,
         trainingRule: parsed.trainingRule ?? "",
         expectedImpact: parsed.expectedImpact ?? "",
-        safetyNotes: Array.isArray(parsed.safetyNotes) ? parsed.safetyNotes : [],
+        safetyNotes,
         shouldEscalate: parsed.shouldEscalate === true,
         escalationReason: parsed.escalationReason,
-        coherenceCheck: coherenceOf(snapshot, parsed),
+        proposedActionKey: action.key,
+        coherenceCheck: coherenceOf(snapshot, parsed, req.executedThisTurn),
         knowledgeAsOf: snapshot.snapshotAsOf,
         knowledgeCompleteness: snapshot.completenessScore,
         runtimeTouched: false,
@@ -241,10 +322,13 @@ function fallback(snap: BusinessKnowledgeSnapshot, reason: string): BrainReasoni
     safetyNotes: [`fallback determinístico: ${reason}`],
     shouldEscalate: true,
     escalationReason: reason,
+    proposedActionKey: null,
     coherenceCheck: {
       answersUserQuestion: false,
       matchesIntent: false,
       doesNotInventFacts: true,
+      // O piso determinístico não promete execução ("deixa eu confirmar…").
+      doesNotClaimUnexecutedAction: true,
       keepsBusinessObjective: true,
       verdict: "NEEDS_REVIEW",
       reason,
@@ -258,10 +342,22 @@ function fallback(snap: BusinessKnowledgeSnapshot, reason: string): BrainReasoni
 // Coherence floor: a non-empty, on-intent answer whose CLAIMS are verified
 // against the knowledge snapshot (invented prices / service denials → review).
 // Per-agent deep guardrails and the LLM critic layer on top in later phases.
-function coherenceOf(snap: BusinessKnowledgeSnapshot, core: RawCore): BrainCoherenceCheck {
+function coherenceOf(
+  snap: BusinessKnowledgeSnapshot,
+  core: RawCore,
+  executedThisTurn?: BrainReasoningRequest["executedThisTurn"],
+): BrainCoherenceCheck {
   const answered = !!core.idealResponse && core.idealResponse.trim().length > 1;
   const hasIntent = !!core.primaryIntent;
   const claims = verifyAgainstSnapshot(core.idealResponse ?? "", snap);
+
+  // A SEGUNDA pergunta: mentiu sobre SI MESMO? O Brain nunca executa
+  // (runtimeTouched: false), então a lista de execuções default é VAZIA — e
+  // vazia é o padrão mais estrito de propósito: sem registro de execução,
+  // pretérito perfeito é promessa vazia.
+  const capability = verifyCapabilityClaims(core.idealResponse ?? "", {
+    executedActions: executedThisTurn,
+  });
 
   // Piso DURO: preço inventado NUNCA passa (risco real de alucinação). Uma negação
   // ("não temos X") sem preço inventado NÃO trava aqui — ela sobe para o juiz LLM,
@@ -269,15 +365,17 @@ function coherenceOf(snap: BusinessKnowledgeSnapshot, core: RawCore): BrainCoher
   // ERRADA (base mostra X → reprova). O verificador determinístico não consegue
   // fazer essa distinção; o juiz consegue. Assim paramos de barrar "não temos
   // veganos" (honesto) sem reabrir o incidente rodízio (o juiz pega a negação errada).
-  const pass = answered && hasIntent && claims.doesNotInventFacts;
+  const pass = answered && hasIntent && claims.doesNotInventFacts && capability.doesNotClaimUnexecutedAction;
   const reasons: string[] = [];
   if (!answered) reasons.push("resposta vazia ou sem intenção");
   if (!claims.doesNotInventFacts) reasons.push(claims.reason);
+  if (!capability.doesNotClaimUnexecutedAction) reasons.push(capability.reason);
 
   return {
     answersUserQuestion: answered,
     matchesIntent: hasIntent,
     doesNotInventFacts: claims.doesNotInventFacts,
+    doesNotClaimUnexecutedAction: capability.doesNotClaimUnexecutedAction,
     keepsBusinessObjective: true,
     verdict: pass ? "PASS" : "NEEDS_REVIEW",
     reason: pass

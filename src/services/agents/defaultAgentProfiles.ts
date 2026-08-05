@@ -370,6 +370,7 @@ const SUPPORT_PROFILE: AgentProfileDefinition = {
   forbiddenActions: [...SUPPORT_AGENT_PROFILE.boundaries.cannotDo],
   tools: ["read_system_signals", "propose_remediation", "escalate_to_human"],
   knowledgeAreas: [
+    "Manual do lojista (guias passo a passo de todas as telas do Foocci)",
     "Mapa do sistema FOOCCI (serviços, integrações, filas, deploy)",
     "Modos de falha conhecidos e seus runbooks",
     "Sinais de saúde read-only (health, status de integração, migrações)",
@@ -380,6 +381,8 @@ const SUPPORT_PROFILE: AgentProfileDefinition = {
     "read-only e propõe correção; a execução é governada pela escada (sombra por padrão). " +
     "Nunca altera dado de negócio nem toca a interface.",
   businessRules: [
+    "Dúvida de uso se responde ENSINANDO pelo manual — passo a passo, nome real de menu e botão.",
+    "Tela, botão ou caminho que não está no manual não existe: diga que não achou e ofereça o chamado.",
     "Toda causa raiz precisa de um sinal real que a sustente — sinal antes de palpite.",
     "Classificação de subsistema e ação candidata saem do mapa curado — nunca inventadas.",
     "Só executa ação da allowlist (reversível/idempotente) e só acima de SOMBRA.",

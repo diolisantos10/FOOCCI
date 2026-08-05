@@ -24,6 +24,12 @@ export interface BusinessKnowledgeSnapshot {
     materials?: unknown[];
     conversations?: unknown[];
     evidence?: unknown[];
+    /** Trechos de manual/documentação curada recuperados para esta pergunta. */
+    manual?: unknown[];
+    /** Sinais read-only do sistema no momento (saúde, integrações). */
+    systemSignals?: unknown;
+    /** Verdade injetada pelo chamador (BrainReasoningRequest.extraTruthSources). */
+    [key: string]: unknown;
   };
   missingContext: string[];
   safetyNotes: string[];

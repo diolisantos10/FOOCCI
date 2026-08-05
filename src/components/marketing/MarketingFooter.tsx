@@ -5,13 +5,26 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import {
+  ATENDIMENTO_IA_URL,
+  CRM_URL,
+  SOLUCOES_URL,
+  EXPERIMENTE_URL,
+  PRECOS_URL,
+  COMO_FUNCIONA_URL,
+  DEMO_URL,
+} from "./config";
 
+// Espelha o menu (config.NAV_LINKS), sem âncoras órfãs. "Como funciona" segue como
+// link extra de descoberta — a página existe, só saiu do menu principal.
 const PRODUTO = [
-  { href: "/site/como-funciona", label: "Como funciona" },
-  { href: "/site#solucoes", label: "Soluções" },
-  { href: "/site#crm", label: "CRM" },
-  { href: "/site/precos", label: "Planos" },
-  { href: "/site/demonstracao", label: "Demonstração" },
+  { href: ATENDIMENTO_IA_URL, label: "Atendimento com IA" },
+  { href: CRM_URL, label: "CRM" },
+  { href: SOLUCOES_URL, label: "Soluções" },
+  { href: EXPERIMENTE_URL, label: "Experimente" },
+  { href: PRECOS_URL, label: "Planos e preços" },
+  { href: COMO_FUNCIONA_URL, label: "Como funciona" },
+  { href: DEMO_URL, label: "Demonstração" },
 ];
 
 const EMPRESA = [

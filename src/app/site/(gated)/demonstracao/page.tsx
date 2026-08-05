@@ -21,7 +21,7 @@ import { FoocciProductShowcase } from "@/components/marketing/FoocciProductShowc
 import { VisualStepCard } from "@/components/marketing/VisualStepCard";
 import { RelationshipRevenuePanel } from "@/components/marketing/RelationshipRevenuePanel";
 import { DotGrid, Halo, Eyebrow } from "@/components/marketing/premium";
-import { AGENDAR_LABEL, AGENDAR_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
+import { PRELAUNCH_NOTE } from "@/components/marketing/config";
 import { DemoForm } from "@/components/marketing/DemoForm";
 
 export const dynamic = "force-dynamic";
@@ -76,14 +76,14 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
         }
         subtitle={
           hasVideos
-            ? "Assista ao Foocci funcionando de verdade nos vídeos abaixo — e, se quiser conversar, agende uma chamada curta com quem faz o produto."
+            ? "Assista ao Foocci funcionando de verdade nos vídeos abaixo — e, se quiser, preencha seus dados que a gente entra em contato."
             : "A gente mostra, com o seu cardápio, como o Foocci transforma atendimento, pedido e relacionamento na prática. Preencha abaixo que entramos em contato."
         }
         visual={<FoocciProductShowcase />}
-        primaryLabel={hasVideos ? "Assistir à demonstração" : "Preencher e pedir demonstração"}
+        primaryLabel={hasVideos ? "Assistir à demonstração" : "Pedir uma demonstração"}
         primaryHref={hasVideos ? "#videos" : "#formulario"}
-        secondaryLabel={AGENDAR_LABEL}
-        secondaryHref={AGENDAR_URL}
+        secondaryLabel={hasVideos ? "Pedir uma demonstração" : undefined}
+        secondaryHref={hasVideos ? "#formulario" : undefined}
         note={PRELAUNCH_NOTE}
       />
 
@@ -97,8 +97,8 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
                 Veja o Foocci funcionando.
               </h2>
               <p className="mt-4 text-lg leading-relaxed text-gray-600">
-                Sem agendar nada: aperte o play e veja o sistema por dentro, do
-                painel do restaurante ao pedido no celular do cliente.
+                É só apertar o play e ver o sistema por dentro, do painel do
+                restaurante ao pedido no celular do cliente.
               </p>
             </div>
 
@@ -151,13 +151,13 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
 
             <div className="mt-12 text-center">
               <a
-                href={AGENDAR_URL}
+                href="#formulario"
                 className="inline-flex items-center justify-center rounded-full bg-brand-500 px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
               >
-                Gostou? {AGENDAR_LABEL.toLowerCase()}
+                Gostou? Pedir uma demonstração
               </a>
               <p className="mt-2 text-sm text-gray-500">
-                Chamada curta, ao vivo, com o fundador — você escolhe o horário.
+                Preencha seus dados que a gente entra em contato pelo WhatsApp.
               </p>
             </div>
           </div>

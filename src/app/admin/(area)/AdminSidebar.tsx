@@ -41,8 +41,8 @@ export function AdminSidebar() {
       title: "Operação",
       items: [
         { href: "/admin/leads",              label: "Contatos do site", icon: "📨" },
-        { href: "/admin/agenda",             label: "Agenda de demos",  icon: "📅" },
         { href: "/admin/demo-videos",        label: "Vídeos do site",   icon: "🎬" },
+        { href: "/admin/padaria-vitrine",    label: "Padaria de vitrine", icon: "🥐" },
         { href: "/admin/restaurants",        label: "Restaurantes", icon: "🏪" },
         { href: "/admin/preflight",          label: "Pré-piloto",   icon: "✅" },
         { href: "/admin/manual-operacional", label: "Manual",       icon: "📖" },
@@ -69,6 +69,7 @@ export function AdminSidebar() {
       title: "Sistema",
       items: [
         { href: "/admin/assinaturas",    label: "Assinaturas",       icon: "💳" },
+        { href: "/admin/credenciais",    label: "Credenciais",       icon: "🔒" },
         { href: "/admin/meta",           label: "Aplicativo Meta",   icon: "🔑" },
         { href: "/admin/site-analytics", label: "Analytics do site", icon: "📈" },
         { href: "/admin/build-os", label: "Build OS",        icon: "🛠️" },

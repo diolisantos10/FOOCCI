@@ -24,15 +24,54 @@ export interface CommissionRate {
 }
 
 /**
+ * O nome do marketplace, EM UM LUGAR SÓ.
+ *
+ * HISTÓRICO, porque as duas decisões são do CEO e se contradizem — quem mexer aqui
+ * precisa saber disso:
+ *   - 2026-08-03: o marketplace NÃO era nomeado em lugar nenhum do site (nomear
+ *     concorrente em comparação numa página comercial pública é exposição jurídica).
+ *   - 2026-08-04: o CEO pediu o nome no gancho da home e no comparativo da
+ *     calculadora — a pergunta "quanto o iFood leva" é o que faz o dono parar.
+ *
+ * A decisão nova venceu por ser posterior e explícita, mas o nome vive nesta
+ * constante: se a exposição jurídica pesar mais que o gancho, some do site inteiro
+ * numa linha. Nunca escreva o nome direto no componente.
+ *
+ * As porcentagens abaixo continuam sendo as tabelas públicas dos principais
+ * marketplaces — a fonte é renderizada na página, com nome ou sem.
+ */
+export const MARKETPLACE_NAME = "iFood";
+
+/**
+ * A TAXA-PREMISSA — o único percentual que o site usa quando não há um informado
+ * pelo próprio dono. Ler antes de mexer:
+ *
+ * Publicidade comparativa é lícita no Brasil desde que o dado seja **verdadeiro,
+ * comprovável e não deprecie** o concorrente. Nós não temos como comprovar a tabela
+ * de ninguém — cada contrato é diferente. Por isso o site NUNCA afirma "o
+ * marketplace X cobra N%". Ele DECLARA uma premissa e faz a conta em cima dela:
+ *
+ *   ✅ "Considerando uma comissão de 23% — ajuste para a sua —, quem fatura
+ *       R$ 20 mil paga R$ 4.600."
+ *   ❌ "Restaurante de R$ 20 mil/mês no iFood paga R$ 3.040 de comissão."
+ *
+ * A calculadora da home deixa o visitante EDITAR esse número (o melhor caso: a conta
+ * fica com os números dele). Onde a página é estática — `/site/precos` — o número
+ * entra rotulado como premissa, com o convite para conferir na calculadora.
+ *
+ * Um lugar só, de propósito: premissa copiada em três arquivos vira três premissas
+ * diferentes, e aí uma delas é mentira.
+ */
+export const ASSUMED_RATE_PERCENT = 23;
+
+/** A premissa como fração, para as contas. */
+export const ASSUMED_RATE = ASSUMED_RATE_PERCENT / 100;
+
+/**
  * Where the percentages came from — rendered on the page, never hidden.
  *
- * The marketplace is NOT named here, by decision of the CEO on 2026-08-03: naming a
- * competitor in a comparison on a public commercial page invites a lawsuit, and the
- * argument does not need the name to work. The owner reading it knows exactly which
- * marketplace charges them.
- *
- * The rates are still the real, published ones — the source stays citable without the
- * brand. If anyone asks in a sales meeting, the number is defensible.
+ * The rates are the real, published ones. If anyone asks in a sales meeting, the
+ * number is defensible.
  */
 export const COMMISSION_SOURCE = {
   label: "Tabelas públicas dos principais marketplaces de delivery, consultadas em 08/2026",

@@ -25,7 +25,6 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
   /^\/api\/restaurants\/register$/,    // self-service registration
   /^\/api\/site\/leads$/,              // public demo-request form (rate-limited per IP)
-  /^\/api\/site\/agenda(\/book)?$/,    // public meeting scheduler: list free slots + book one (rate-limited per IP)
   /^\/robots\.txt$/,                   // crawler rules — must never redirect to /login
   /^\/sitemap\.xml$/,                  // marketing sitemap
   /^\/api\/webhooks\/meta\/whatsapp$/, // Meta WhatsApp Cloud API webhook (GET verify token + POST X-Hub-Signature-256)
@@ -42,6 +41,8 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/payments\/mercadopago\/webhook$/, // Mercado Pago webhook (public — MP servers have no JWT)
   /^\/contratar(\/.*)?$/,                // Public plan-contract acceptance page (token-gated by construction)
   /^\/api\/billing\/accept$/,           // Terms acceptance (rate-limited; requires unguessable token)
+  /^\/api\/billing\/checkout$/,         // Self-service checkout (rate-limited per IP + idempotency key)
+  /^\/api\/billing\/slug-check$/,       // Store-address availability while typing (rate-limited; answers only free/taken)
   /^\/api\/billing\/mp-webhook$/,       // MP PLATFORM billing webhook (verified by refetch with our token)
   /^\/api\/payments\/sumup\/webhook$/, // SumUp webhook (public — re-verified via SumUp API before confirming)
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)

@@ -14,7 +14,11 @@ import { getPublicSiteUrl } from "@/lib/public-url";
 
 const PAGES: { path: string; priority: number; changeFrequency: "weekly" | "monthly" | "yearly" }[] = [
   { path: "/site",                          priority: 1.0, changeFrequency: "weekly" },
-  { path: "/site/como-funciona",            priority: 0.9, changeFrequency: "monthly" },
+  { path: "/site/atendimento-com-ia",       priority: 0.9, changeFrequency: "monthly" },
+  { path: "/site/crm",                      priority: 0.9, changeFrequency: "monthly" },
+  { path: "/site/solucoes",                 priority: 0.9, changeFrequency: "monthly" },
+  { path: "/site/experimente",              priority: 0.9, changeFrequency: "monthly" },
+  { path: "/site/como-funciona",            priority: 0.7, changeFrequency: "monthly" },
   { path: "/site/precos",                   priority: 0.9, changeFrequency: "monthly" },
   { path: "/site/demonstracao",             priority: 0.9, changeFrequency: "monthly" },
   { path: "/site/sobre",                    priority: 0.6, changeFrequency: "monthly" },

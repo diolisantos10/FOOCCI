@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { PlanSubscriptionService } from "@/services/billing/PlanSubscriptionService";
-import { MercadoPagoPlatformBilling, isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
+import { isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
 import { getNfseConfig } from "@/services/billing/PlanNfseService";
 
 export async function GET(req: NextRequest) {
@@ -51,8 +51,10 @@ export async function POST(req: NextRequest) {
   let mpError: string | null = null;
   if (isPlatformBillingConfigured() && sub.customerEmail) {
     try {
-      const pre = await MercadoPagoPlatformBilling.createPreapproval(sub);
-      if (pre) await PlanSubscriptionService.attachMercadoPago(sub.id, pre.id, pre.initPoint);
+      // G2: `ensurePreapproval` no lugar do `createPreapproval` cru — um POST
+      // reenviado nunca vira uma segunda recorrência no cartão do cliente.
+      const pre = await PlanSubscriptionService.ensurePreapproval(sub.id);
+      if (!pre.ok) mpError = `Link de cobrança não gerado (${pre.reason}).`;
     } catch (err) {
       mpError = err instanceof Error ? err.message : String(err);
     }

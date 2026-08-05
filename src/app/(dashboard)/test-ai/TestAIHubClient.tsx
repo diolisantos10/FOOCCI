@@ -35,7 +35,7 @@ export function TestAIHubClient({ restaurantName, pedidoUrl }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-56px)] flex-col items-center justify-center overflow-y-auto bg-[#FAFAF8] px-4 py-10">
+    <div className="flex h-[calc(100vh-var(--topbar))] flex-col items-center justify-center overflow-y-auto bg-[#FAFAF8] px-4 py-10">
       <div className="w-full max-w-md space-y-6">
 
         {/* Header */}

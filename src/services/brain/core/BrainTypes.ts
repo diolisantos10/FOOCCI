@@ -26,6 +26,40 @@ export interface SanitizedTurn {
   content: string;
 }
 
+/**
+ * Uma ação que o agente PODE PROPOR neste turno.
+ *
+ * O Brain NÃO executa e NÃO tem tool-calling: o raciocínio devolve, no máximo,
+ * a CHAVE de uma destas ações — nunca um comando, nunca um payload. Quem executa
+ * é um executor separado, FORA do Brain, e só depois que o humano confirmar.
+ * Mesma disciplina do SupportRemediationLadder: escolher entre chaves
+ * pré-declaradas, jamais gerar comando livre.
+ */
+export interface BrainProposableAction {
+  key: string;
+  label: string;
+  /** O que a ação faz, em uma frase — é por isto que a IA escolhe. */
+  description: string;
+}
+
+/**
+ * Uma ação que REALMENTE rodou neste turno, registrada por quem executou.
+ *
+ * É o lastro do verificador de capacidade: sem um registro aqui, o agente não
+ * pode falar no pretérito ("já subi seu cardápio"). Ausência de registro NÃO é
+ * permissão — é reprovação (guardrail 2).
+ */
+export interface ExecutedActionRecord {
+  key: string;
+  label: string;
+  /**
+   * Verbos (no infinitivo canônico) que ESTA execução autoriza o agente a
+   * afirmar como feitos. Ex.: preparar a prévia autoriza "preparar", nunca
+   * "publicar".
+   */
+  backsClaims: readonly string[];
+}
+
 export interface BrainReasoningRequest {
   businessId: string;
   businessType: BusinessType;
@@ -40,12 +74,43 @@ export interface BrainReasoningRequest {
   customerMemory?: string;
   currentResponse?: string;
   contextHints?: string[];
+  /**
+   * Verdade CURADA que só o chamador conhece e o adapter do negócio não tem como
+   * carregar — ex.: os trechos do manual recuperados para esta pergunta, ou os
+   * sinais read-only do sistema no momento do relato.
+   *
+   * REGRA (Lei 2): isto é VERDADE, não entrada. Só entra aqui conteúdo curado e
+   * governado (manual publicado, mapa de falhas, probe do sistema). NUNCA texto
+   * digitado pelo usuário — senão o usuário passaria a escrever a própria verdade
+   * e o verificador de fato ficaria cego.
+   */
+  extraTruthSources?: Record<string, unknown>;
+  /**
+   * ALLOWLIST de ações que o agente pode PROPOR neste turno. Omitir = o agente
+   * não propõe nada. O Brain valida a chave devolvida contra esta lista: chave
+   * fora da lista é DESCARTADA (vira null + nota de segurança), nunca executada.
+   */
+  proposableActions?: readonly BrainProposableAction[];
+  /**
+   * O que de fato JÁ FOI EXECUTADO neste turno, por quem executou (fora do Brain).
+   * Omitir significa NADA executado — e é o padrão mais estrito de propósito:
+   * qualquer afirmação em pretérito na resposta reprova o verificador de
+   * capacidade.
+   */
+  executedThisTurn?: readonly ExecutedActionRecord[];
 }
 
 export interface BrainCoherenceCheck {
   answersUserQuestion: boolean;
   matchesIntent: boolean;
+  /** Não mentiu sobre o MUNDO (preço/produto inventado). */
   doesNotInventFacts: boolean;
+  /**
+   * Não mentiu sobre SI MESMO: não afirmou ter executado o que não executou.
+   * São duas perguntas diferentes — o verificador de fato não pega a segunda,
+   * e foi assim que um agente desta casa prometeu pedido que não podia criar.
+   */
+  doesNotClaimUnexecutedAction: boolean;
   keepsBusinessObjective: boolean;
   verdict: "PASS" | "FAIL" | "NEEDS_REVIEW";
   reason: string;
@@ -66,6 +131,12 @@ export interface BrainReasoningResult {
   safetyNotes: string[];
   shouldEscalate: boolean;
   escalationReason?: string;
+  /**
+   * A CHAVE da ação proposta — sempre de `proposableActions`, ou null.
+   * Proposta ≠ execução: o Brain devolve a chave, e um executor separado decide
+   * (pela escada) se a prepara. A confirmação final é sempre do humano.
+   */
+  proposedActionKey: string | null;
   coherenceCheck: BrainCoherenceCheck;
   /** Auditável: quando a verdade usada neste raciocínio foi montada. */
   knowledgeAsOf?: string;

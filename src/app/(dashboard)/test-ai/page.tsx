@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { TopBar } from "@/components/layout/TopBar";
 import { TestAIHubClient } from "./TestAIHubClient";
 
 export const metadata = { title: "Testar IA" };
@@ -24,11 +25,15 @@ export default async function TestAIPage() {
 
   const pedidoUrl = `${appOrigin}/pedido/${restaurant.slug}`;
 
+  // A tela desconta `--topbar` da altura: sem o cabeçalho, sobrava uma faixa.
   return (
-    <TestAIHubClient
-      restaurantName={restaurant.name}
-      restaurantSlug={restaurant.slug}
-      pedidoUrl={pedidoUrl}
-    />
+    <>
+      <TopBar title="Testar IA" />
+      <TestAIHubClient
+        restaurantName={restaurant.name}
+        restaurantSlug={restaurant.slug}
+        pedidoUrl={pedidoUrl}
+      />
+    </>
   );
 }

@@ -9,6 +9,7 @@
 
 import { reasonAboutWaiterCase } from "@/services/agents/reasoning/WaiterReasoningService";
 import type { BrainReasoningRequest, BrainReasoningResult } from "../core/BrainTypes";
+import { verifyCapabilityClaims } from "./CapabilityCoherenceVerifier";
 
 export async function reasonViaBrain(request: BrainReasoningRequest): Promise<BrainReasoningResult> {
   if (request.agentId !== "waiter") {
@@ -23,6 +24,8 @@ export async function reasonViaBrain(request: BrainReasoningRequest): Promise<Br
     sanitizedConversation: null,
     sourceType,
   });
+
+  const capability = verifyCapabilityClaims(result.idealResponse ?? "");
 
   return {
     primaryIntent: result.primaryIntent,
@@ -39,13 +42,20 @@ export async function reasonViaBrain(request: BrainReasoningRequest): Promise<Br
     safetyNotes: result.safetyNotes,
     shouldEscalate: result.shouldEscalate,
     escalationReason: result.escalationReason,
+    // O Garçom também não executa por aqui: este caminho é proposta pura. Como
+    // o pipeline dele não tem veredito de capacidade próprio, calculamos um —
+    // omitir seria aprovar por omissão (guardrail 2).
+    proposedActionKey: null,
     coherenceCheck: {
       answersUserQuestion: result.coherenceCheck.answersCustomerQuestion,
       matchesIntent: result.coherenceCheck.matchesIntent,
       doesNotInventFacts: result.coherenceCheck.doesNotInventFacts,
+      doesNotClaimUnexecutedAction: capability.doesNotClaimUnexecutedAction,
       keepsBusinessObjective: result.coherenceCheck.keepsSalesFlow,
       verdict: result.coherenceCheck.verdict,
-      reason: result.coherenceCheck.reason,
+      reason: capability.doesNotClaimUnexecutedAction
+        ? result.coherenceCheck.reason
+        : `${result.coherenceCheck.reason}; ${capability.reason}`,
     },
     runtimeTouched: false,
   };
