@@ -29,6 +29,7 @@ import {
   indiceEtapa,
 } from "./foocciCrmFunnel";
 import { normalizaWhatsapp, rotuloDaOrigem, canalDoContato, linkWhatsapp } from "./leadOrigin";
+import { extractLeadCode, LEAD_CODE_LEN } from "@/lib/site/leadCode";
 
 /** Quem pode aparecer como autor. Texto livre viraria "admin"/"Admin"/"adm". */
 export type FoocciCrmActor = "admin" | "sistema" | "sdr-agent";
@@ -190,6 +191,11 @@ export interface ListarContatosFiltro {
 export interface ContatoResumo {
   id: string;
   nome: string;
+  /**
+   * Código curto que viaja na mensagem do WhatsApp (`#A7K2M`). É por ele que um
+   * "oi" que chega solto vira ESTE contato — por isso a busca também aceita ele.
+   */
+  codigo: string | null;
   whatsapp: string;
   whatsappLink: string | null;
   restaurante: string | null;
@@ -222,10 +228,14 @@ export async function listarContatos(f: ListarContatosFiltro = {}): Promise<Cont
   const busca = f.busca?.trim();
   if (busca) {
     const digitos = busca.replace(/\D/g, "");
+    // O código pode ser colado com `#` ou sem, e o teclado do celular capitaliza
+    // sozinho — quem atende cola o que chegou no WhatsApp, não o que é bonito.
+    const codigo = extractLeadCode(busca) ?? busca.replace(/^#/, "").toUpperCase();
     where.OR = [
       { nome:        { contains: busca, mode: "insensitive" } },
       { restaurante: { contains: busca, mode: "insensitive" } },
       { cidade:      { contains: busca, mode: "insensitive" } },
+      ...(codigo.length === LEAD_CODE_LEN ? [{ codigo }] : []),
       ...(digitos.length >= 4 ? [{ whatsappDigits: { contains: digitos } }] : []),
     ];
   }
@@ -240,6 +250,7 @@ export async function listarContatos(f: ListarContatosFiltro = {}): Promise<Cont
   return leads.map((l) => ({
     id: l.id,
     nome: l.nome,
+    codigo: l.codigo,
     whatsapp: l.whatsapp,
     whatsappLink: linkWhatsapp(l.whatsapp),
     restaurante: l.restaurante,
@@ -323,6 +334,7 @@ export async function getDossie(leadId: string): Promise<DossieContato | null> {
   return {
     id: l.id,
     nome: l.nome,
+    codigo: l.codigo,
     whatsapp: l.whatsapp,
     whatsappLink: linkWhatsapp(l.whatsapp),
     restaurante: l.restaurante,

@@ -129,6 +129,83 @@ describe("SiteLeadService.capture", () => {
     );
   });
 
+  /* ── O código curto: o elo entre o formulário e o "oi" do WhatsApp ───────── */
+
+  it("gera e GRAVA um código curto junto com o lead", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.codigo).toMatch(/^[A-Z2-9]{5}$/);
+    // Não basta devolver: tem que estar na linha gravada, senão o "oi" que chegar
+    // no WhatsApp não tem para onde apontar.
+    const data = db.siteLead.create.mock.calls[0][0].data as { codigo: string };
+    expect(data.codigo).toBe(r.codigo);
+  });
+
+  it("o código nasce ANTES do aviso — chega no e-mail que o time lê", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "dono@exemplo.com");
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true, status: 200, text: async () => "",
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    const body = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string,
+    ) as { text: string };
+    expect(body.text).toContain(`#${r.codigo}`);
+  });
+
+  it("tenta outro código quando o banco acusa colisão", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    const colisao = Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["codigo"] } });
+    db.siteLead.create
+      .mockRejectedValueOnce(colisao)
+      .mockResolvedValueOnce({ id: "lead1" });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(db.siteLead.create).toHaveBeenCalledTimes(2);
+    expect(r.id).toBe("lead1");
+    expect(r.codigo).toMatch(/^[A-Z2-9]{5}$/);
+    // E o segundo código é outro — não insistiu no mesmo.
+    const primeiro = (db.siteLead.create.mock.calls[0][0].data as { codigo: string }).codigo;
+    const segundo = (db.siteLead.create.mock.calls[1][0].data as { codigo: string }).codigo;
+    expect(segundo).not.toBe(primeiro);
+  });
+
+  it("colidiu todas as vezes: grava o lead SEM código — perder o lead nunca é opção", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    const colisao = Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["codigo"] } });
+    // Só a gravação SEM código passa — é a última linha de defesa do serviço.
+    db.siteLead.create.mockImplementation(async (args: { data: { codigo: string | null } }) => {
+      if (args.data.codigo !== null) throw colisao;
+      return { id: "lead-sem-codigo" };
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.id).toBe("lead-sem-codigo");
+    expect(r.codigo).toBeNull();
+  });
+
+  it("erro que NÃO é colisão sobe na hora — não fica insistindo em banco caído", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+
+    db.siteLead.create.mockRejectedValue(new Error("connection refused"));
+
+    await expect(SiteLeadService.capture(LEAD)).rejects.toThrow("connection refused");
+    expect(db.siteLead.create).toHaveBeenCalledOnce();
+  });
+
   it("never puts the visitor's data in the alert subject line beyond their name", async () => {
     vi.stubEnv("RESEND_API_KEY", "re_test");
     vi.stubEnv("LEADS_NOTIFY_EMAIL", "dono@exemplo.com");
@@ -267,6 +344,57 @@ describe("SiteLeadService.capture — a mesma pessoa não vira dois contatos", (
     const r = await SiteLeadService.capture(LEAD);
     expect(r.duplicado).toBe(false);
     expect(db.siteLead.create).toHaveBeenCalledOnce();
+  });
+
+  it("o reenvio reaproveita o código que a pessoa já tinha", async () => {
+    // Se o reenvio gerasse código novo, a mensagem antiga — que a pessoa pode
+    // mandar amanhã — apontaria para um código que não existe mais.
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-existente", nome: "Ana", codigo: "A7K2M", restaurante: "Cantina da Ana",
+      cidade: null, tipo: null, desafio: null,
+      utmSource: null, utmMedium: null, utmCampaign: null,
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.codigo).toBe("A7K2M");
+    // Um único update: o de completar campos. Nenhum update extra de código.
+    expect(db.siteLead.update.mock.calls.every((c) => c[0].data.codigo === undefined)).toBe(true);
+  });
+
+  it("contato da safra antiga, sem código, ganha um no reenvio", async () => {
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-antigo", nome: "Ana", codigo: null, restaurante: null,
+      cidade: null, tipo: null, desafio: null,
+      utmSource: null, utmMedium: null, utmCampaign: null,
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.codigo).toMatch(/^[A-Z2-9]{5}$/);
+    const atribuicao = db.siteLead.update.mock.calls.find((c) => typeof c[0].data.codigo === "string");
+    expect(atribuicao?.[0].where.id).toBe("lead-antigo");
+  });
+
+  it("não conseguir dar código NUNCA derruba o reenvio", async () => {
+    db.siteLead.findFirst.mockResolvedValue({
+      id: "lead-antigo", nome: "Ana", codigo: null, restaurante: null,
+      cidade: null, tipo: null, desafio: null,
+      utmSource: null, utmMedium: null, utmCampaign: null,
+      utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+    });
+    // Só o update de código falha; o de notificação segue normal.
+    db.siteLead.update.mockImplementation(async (args: { data: { codigo?: string } }) => {
+      if (typeof args.data.codigo === "string") throw new Error("banco tossiu");
+      return {};
+    });
+
+    const r = await SiteLeadService.capture(LEAD);
+
+    expect(r.id).toBe("lead-antigo");
+    expect(r.codigo).toBeNull(); // sem código é diferente de sem contato
   });
 
   it("WhatsApp impossível de normalizar não deduplica com ninguém", async () => {

@@ -54,7 +54,7 @@ interface Performance {
 }
 
 interface Contato {
-  id: string; nome: string; whatsapp: string; whatsappLink: string | null;
+  id: string; nome: string; codigo: string | null; whatsapp: string; whatsappLink: string | null;
   restaurante: string | null; cidade: string | null; tipo: string | null; desafio: string | null;
   stage: FoocciLeadStage; stageChangedAt: string; stageChangedBy: string | null;
   origemRotulo: string; canal: string; utmCampaign: string | null;
@@ -511,7 +511,7 @@ function SecaoBase({
           type="search"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar nome, restaurante, cidade ou telefone"
+          placeholder="Buscar nome, restaurante, cidade, telefone ou código (#A7K2M)"
           /* `!border-*`: o globals.css tem uma regra base para input/select/textarea
              com a borda clara do painel do lojista, e ela vence por especificidade
              num tema escuro. Corrigido aqui, na tela que estou tocando. */
@@ -557,7 +557,10 @@ function SecaoBase({
                   className="w-full bg-gray-900 px-4 py-3 text-left hover:bg-gray-800/60"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <span className="font-medium text-gray-100">{c.nome}</span>
+                    <span className="font-medium text-gray-100">
+                      {c.nome}
+                      {c.codigo && <CodigoDoLead codigo={c.codigo} />}
+                    </span>
                     <Selo stage={c.stage} />
                   </div>
                   <p className="mt-0.5 text-xs text-gray-400">
@@ -593,7 +596,10 @@ function SecaoBase({
                 {contatos.map((c) => (
                   <tr key={c.id} className="align-middle hover:bg-gray-900/60">
                     <td className="whitespace-nowrap px-4 py-3 text-gray-500">{dataCurta(c.createdAt)}</td>
-                    <td className="px-4 py-3 font-medium text-gray-100">{c.nome}</td>
+                    <td className="px-4 py-3 font-medium text-gray-100">
+                      {c.nome}
+                      {c.codigo && <CodigoDoLead codigo={c.codigo} />}
+                    </td>
                     <td className="px-4 py-3 text-gray-400">{c.restaurante ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-400">{c.cidade ?? "—"}</td>
                     <td className="max-w-[220px] truncate px-4 py-3 text-gray-400" title={c.origemRotulo}>
@@ -622,6 +628,19 @@ function SecaoBase({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * O código que a pessoa leva junto no "oi" do WhatsApp. Fica colado no nome de
+ * propósito: quando a mensagem chega com `#A7K2M`, quem atende precisa achar
+ * ESTA linha — e a busca do topo aceita o código exatamente como foi colado.
+ */
+function CodigoDoLead({ codigo }: { codigo: string }) {
+  return (
+    <span className="ml-2 rounded-md bg-gray-800 px-1.5 py-0.5 align-middle text-[11px] font-semibold tracking-wide text-gray-400">
+      #{codigo}
+    </span>
   );
 }
 
