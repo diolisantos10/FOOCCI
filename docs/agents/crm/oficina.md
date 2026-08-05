@@ -623,3 +623,212 @@ melhor evidência disponível, não a leitura final.**
    no mesmo commit. Regra: **ao começar a registrar o que antes não se registrava,
    procure quem CONTA aquele registro.** Origem: `src/lib/crm-safety.ts:333`,
    2026-08-05.
+## 2026-08-05 — O CRM inteiro dispara quanto? 4.462 em 30 dias — em UMA casa
+
+**Pergunta do CEO:** o site vende *"dispara as campanhas certas no automático"*. O
+diagnóstico do carrinho (fechado hoje, mesma sala) achou 4 mensagens em 2,5 meses
+naquela campanha. O CRM inteiro dispara pouco, ou era só o carrinho?
+
+**Resposta curta: era só o carrinho.** O CRM disparou **4.462 mensagens em 30
+dias** e **5.295 em 90** — 4.456 delas de campanhas prontas, automáticas. Está
+enviando hoje (43 até as 14h20 de 05/08). A frase do site é verdade **onde o
+produto está ligado**, e o produto está ligado em **um** restaurante.
+
+### a) Por que os logs do cron não bastavam (e por que quase virou número errado)
+
+O bloco do carrinho reconstruiu a série pelos logs públicos do Actions. Repeti o
+molde e ele deu **434 envios em 30 dias**. Se eu tivesse parado ali, teria
+entregado ao CEO um número **10× menor que o real**.
+
+A causa: além do cron do GitHub existe o `ScheduledCampaignScheduler`, um
+temporizador **dentro do processo do Railway**, a cada 10 min
+(`ScheduledCampaignScheduler.ts:27`), que envia sem passar pelo Actions. Ele fez
+4.028 dos 4.462. O log do Actions é limite inferior; só o banco é total.
+
+Ficou assim, e é a divisão que recomendo manter:
+
+| Coletor | Fonte | Serve para |
+|---|---|---|
+| `scripts/raio-x-crm-producao.mjs` | banco + rotas admin (credencial do Railway) | o **total** e o estado de agora |
+| `scripts/raio-x-envios-crm.mjs` | logs públicos do Actions | os **motivos**, tick a tick |
+
+Workflow: `.github/workflows/raio-x-crm-envios.yml`. Somente leitura nas duas
+metades; o log é público, então só saem contagens, slug e código de máquina.
+
+### b) O número, campanha a campanha (banco, sushi-cazza — a única casa com campanha)
+
+| campanha | 30d | 90d | bloq 90d | novos elegíveis agora | prateleira real |
+|---|---|---|---|---|---|
+| recuperar-perdidos | 948 | 948 | 731 | **0** | **2.963** |
+| cupom-vencendo | 780 | 780 | 64 | 64 | 272 |
+| siga-redes | 678 | 678 | 513 | 12 | **5.050** |
+| cadastro-sem-compra | 582 | 582 | 102 | 10 | **1.742** |
+| indique-amigo | 573 | 573 | 248 | 1 | — |
+| recuperar-frios | 476 | 636 | 32 | **0** | 150 |
+| segunda-compra | 131 | 131 | 13 | 55 | 162 |
+| reativar-mornos | 93 | 271 | 1 | 23 | 88 |
+| carrinho-abandonado | 89 | 280 | 0 | **338** | — (calada desde 20/07) |
+| quente-esfriando | 67 | 67 | 8 | 10 | 107 |
+| aniversariantes | 39 | 63 | 0 | 0 | 22 |
+| TODOS (manual) | 0 | 0 | 0 | 500 | — |
+| clientes-vip | 0 | 0 | 0 | — | PAUSED pelo lojista |
+
+Automáticas 30d: **4.456** · manuais/agendadas pelo lojista: **5**.
+Motor legado de automações: **0 rodadas em 79 execuções de 90 dias** — o zero
+está provado, não suposto (bate com `AutomationRetired.test.ts`).
+
+### c) As três famílias, e a quarta que precisei separar
+
+Das 1.904 avaliações campanha×tick de 30 dias no log do cron:
+
+| família | ocorrências | o que é |
+|---|---|---|
+| **RITMO** | 902 | "Aguardando intervalo mínimo entre ciclos" — ciclo ADIADO para o próximo tick |
+| **SEM AUDIÊNCIA** | 386 | "No new eligible recipients" + "Sem clientes elegíveis no momento" |
+| **BLOQUEADO** | 267 | pausa por falhas (120), canal desconectado (93), teto diário (59), silêncio (18), saldo de contatos (6), cap global (4) |
+| **ENVIOU** | 130 | — |
+| nunca dispara | ~0 | nenhuma campanha ativa que jamais fique de vez |
+
+**RITMO teve que sair das três.** Somar "aguardando 10 minutos" a "nunca dispara"
+transformaria espaçamento funcionando na maior avaria do relatório — e eram 902
+de 1.904. É o oposto do padrão do carrinho: lá o motor era mudo; aqui ele fala o
+tempo todo e o que atrasa é o compasso.
+
+Bloqueios por destinatário, 90 dias: **1.702 × `RECENT_CRM_MESSAGE_24H`** (o
+cooldown fazendo o trabalho dele) e 47 × `INVALID_PHONE_FORMAT`. Das 844 falhas,
+**744 são da Evolution** — provedor aposentado em 04/08; é histórico, não fila.
+
+### d) O achado que muda a pergunta: o teto de 500 mora no meio da fila
+
+`resolveAudience` resolve **no máximo 500 por segmento** (`MAX_AUDIENCE`,
+`CrmCampaignService.ts:110`) e ordena por `lastOrderAt` **ASC** — sempre os
+mesmos primeiros. Contra a prateleira real, medida sem o teto:
+
+- `recuperar-perdidos`: prateleira **2.963**, enxerga 500, reporta **0 novos** →
+  ~2.463 pessoas que a campanha nunca vai ver;
+- `cadastro-sem-compra`: prateleira **1.742**, enxerga 500, reporta 10 novos;
+- `siga-redes` (TODOS): prateleira **5.050**, enxerga 500, reporta 12 novos.
+
+Ou seja: **"sem novos elegíveis" não quer dizer base esgotada.** A casa tocou
+1.879 pessoas distintas em 30 dias — 37% dos 5.050 contactáveis. Os outros 63%
+não são inalcançáveis: são invisíveis para o resolvedor.
+
+**PAREI AQUI DE PROPÓSITO.** Elevar ou paginar o teto destrava ~8 mil pessoas de
+uma vez no sushi-cazza, e o ritmo pularia de ~70/dia para o teto de 420/dia
+(soma dos limites das campanhas; o teto global aplicado é 900). Isso é enxurrada
+sobre gente com 120+ dias sem pedir. Guardrail 5: a correção seria mais
+destrutiva que o problema. **É decisão do CEO, não minha.**
+
+### e) O que é volume real e o que é defeito — a separação honesta
+
+- **pizzaria-testando**: 8.613 clientes, **4.440 contactáveis**, prateleira de
+  3.066 perdidos + 1.182 sem pedido — e **zero campanha, nem rascunho**. O
+  `contact-safety` responde **canal INDISPONÍVEL**. Não é defeito do CRM: é
+  onboarding incompleto. Ligar campanha sem canal não produz uma mensagem.
+- **sushi-cazza**: 147 pedidos e 103 rascunhos de carrinho em 30 dias. Há volume
+  real, e o CRM está em cima dele.
+- **foocci-bakery**: 1 cliente. Vitrine. Nada a enviar, e isso não é bug.
+
+Das 16 campanhas prontas, o sushi-cazza ligou **11**. Desligadas:
+`pedido-avaliacao`, `clientes-vip`, `subiu-de-nivel`, `quase-no-proximo-nivel`,
+`mimo-mensal-nivel` — as três últimas dependem do programa de níveis, que tem
+interruptor próprio (`RELATIONSHIP_PROGRAM_TEMPLATE_IDS`,
+`ScheduledCampaignRunnerService.ts:684`).
+
+### f) O único conserto que fiz, e por que ele não move volume nenhum
+
+`/api/admin/diagnostics/crm-campaigns` respondia **`lastExecutionAt: null`** —
+"nunca" — para `recuperar-perdidos`, que tem **948 envios em 30 dias**. Todas as
+11 campanhas ativas apareciam como "último envio: nunca".
+
+A causa não é o dado, é o `ORDER BY`: no Postgres `ORDER BY "sentAt" DESC`
+devolve **NULLS FIRST**, e BLOCKED/FAILED/PENDING nascem com `sentAt` nulo — a
+casa tinha 1.702 bloqueios de cooldown. O `findFirst` sem filtro pegava um deles.
+
+O irmão desta leitura já fazia certo: `diagnostics/crm-performance` usa `groupBy`
+com `sentAt: { not: null }` + `_max`. **Duas rotas, duas respostas para a mesma
+pergunta, e a errada é a que o diagnóstico lê.**
+
+Conserto: `where: { campaignId, sentAt: { not: null } }`
+(`crm-campaigns/route.ts:181`). Trava com as duas metades em
+`CrmDiagnosticoUltimoEnvio.test.ts` — reproduz a regra NULLS FIRST em 8 linhas,
+roda a consulta de antes (devolve "nunca") e a de agora (devolve 02/08), garante
+que campanha que realmente nunca enviou continua nula, e prende a rota ao filtro.
+
+Zero mensagens/dia de impacto. Impacto total em confiança: este é o número que
+alguém lê para decidir se o CRM está calado, e um "nunca" falso não parece
+defeito — parece diagnóstico.
+
+### g) O que NÃO toquei, e o risco escrito
+
+1. **`MAX_AUDIENCE = 500`** — item (d). ~8 mil pessoas de uma vez.
+2. **1.949 execuções PENDING**, todas entre 23/05 e 24/06, nenhuma nos últimos 30
+   dias. É resíduo de um motor que parou, não fila viva. Quem "reprocessar" isso
+   dispara 1.949 mensagens sobre gente contatada há dois meses.
+3. **`carrinho-abandonado` com 338 novos elegíveis, calada desde 20/07.** É o
+   território do bloco irmão de hoje, que já registrou que o conserto óbvio passa
+   a 51 carrinhos de uma enxurrada.
+4. **Ligar campanha sozinho no restaurante sem canal.** Ativar as 16 prontas por
+   padrão é o que faria a frase do site virar verdade para todo mundo — e é
+   exatamente "envio em massa sem o lojista pedir". Decisão do CEO.
+
+### h) Duas coisas que enganam quem lê a tela e não são bug
+
+- **"audiência 500"** é o teto de resolução, não o tamanho do segmento. Lido como
+  platô, parece que a base parou de crescer.
+- **"agendador interno: inativo"** no `crm-campaigns` é estado de **memória de um
+  processo**. A réplica que atende a requisição pode não ser a que roda o timer.
+  Quem prova envio é a contagem do banco — e ela prova que ele roda.
+
+### i) Verificação
+
+`npx tsc --noEmit` limpo. `npx vitest run`: **420 arquivos / 5.386 testes
+verdes** (4 novos). Quatro rodadas do workflow contra produção, somente leitura;
+nenhuma mensagem enviada, nenhuma campanha criada, pausada ou promovida.
+
+Duas armadilhas de coleta, para quem repetir: o `git config` sem `--global` não
+alcança o repositório novo do `git init` (a publicação morre com "empty ident
+name" — o molde `diagnostico-escada-crm.yml` tem o mesmo defeito); e
+`/api/admin/restaurants` devolve `{ data: [...] }`, não a lista crua — um HTTP
+200 com formato inesperado apareceu como "não há restaurante". A 4ª rodada
+também bateu no **rate limit da API do GitHub** no coletor de logs; ele degrada
+sem derrubar o resto.
+
+Nota de branch: o trabalho do carrinho (commit `a2c03c56`, que põe
+`carrinho-abandonado` em `BUDGET_EXEMPT_TEMPLATE_IDS`) vive noutra worktree e
+ainda não está na padrão. Não há sobreposição de arquivos com este bloco.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **"Quanto o CRM enviou" não se responde pelo log do Actions.** Existem DOIS
+   motores: o cron do GitHub e o `ScheduledCampaignScheduler`, dentro do processo
+   do Railway, a cada 10 min (`ScheduledCampaignScheduler.ts:27`). O log viu 434
+   envios em 30 dias; o banco tinha 4.462. Log serve para **motivo**; banco serve
+   para **total**. Origem: raio-x do CRM, 2026-08-05.
+
+2. **"Sem novos elegíveis" ≠ base esgotada.** `resolveAudience` resolve no máximo
+   `MAX_AUDIENCE = 500` por segmento (`CrmCampaignService.ts:110`) ordenando por
+   `lastOrderAt` ASC — sempre os mesmos 500. Contatados esses, a campanha reporta
+   0 novos para sempre, com milhares atrás: `recuperar-perdidos` tem prateleira de
+   2.963 e enxerga 500. Antes de concluir "acabaram os clientes", meça a
+   prateleira SEM o teto. Origem: idem.
+
+3. **`ORDER BY x DESC` no Postgres é NULLS FIRST — e em tabela de execução isso
+   inverte o significado.** `campaign_executions` guarda BLOCKED/FAILED/PENDING
+   com `sentAt` nulo; um `findFirst` ordenado por `sentAt` desc **sem filtro**
+   devolve um bloqueio e a tela escreve "nunca enviou" para campanha com 948
+   envios. Toda leitura de "último X" nessa tabela precisa de `{ not: null }`.
+   Travado em `CrmDiagnosticoUltimoEnvio.test.ts`. Origem: idem.
+
+4. **A quarta família: RITMO.** O diagnóstico do carrinho deixou três (nunca
+   dispara / não acha ninguém / acha e é bloqueado). O CRM inteiro exigiu uma
+   quarta: "aguardando intervalo mínimo entre ciclos" é o ciclo **adiado** para o
+   próximo tick, não avaria — e eram 902 de 1.904 avaliações. Somá-la a "nunca
+   dispara" faria espaçamento funcionando virar a maior falha do relatório.
+   Origem: idem.
+
+5. **O CRM tem UM cliente de verdade, e isso é o tamanho do buraco da promessa do
+   site.** Não é o motor que dispara pouco: é que só uma casa ligou campanha. A
+   outra, com 4.440 contactáveis, está com o canal INDISPONÍVEL — e campanha sem
+   canal não produz uma mensagem. Antes de investigar o motor, pergunte quantas
+   casas têm canal conectado E campanha ativa. Origem: idem.
