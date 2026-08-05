@@ -122,16 +122,24 @@ export function CommissionCalculator() {
   return (
     <section id="calculadora" className="scroll-mt-16 bg-canvas py-12 sm:py-20">
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
+        {/*
+          É AQUI que o marketplace é nomeado — e em nenhum lugar antes (ordem do CEO,
+          05/08). No hero a menção só serviria para o visitante conhecer a Foocci
+          falando de outra empresa. Neste bloco ela é legítima: os números são do
+          próprio dono, a taxa é editável, e a pergunta é exatamente a que a
+          calculadora responde na linha de baixo.
+        */}
         <header className="text-center">
           <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">
             A conta que ninguém te mostra
           </p>
-          <h2 className="mt-2 text-[1.7rem] font-semibold leading-tight text-ink sm:mt-3 sm:text-4xl">
-            Quanto sobraria no seu bolso?
+          <h2 className="mt-2 text-balance text-[1.7rem] font-semibold leading-tight text-ink sm:mt-3 sm:text-4xl">
+            Quanto o {MARKETPLACE_NAME} leva do seu faturamento todo mês?
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-ink2 sm:mt-4">
             Coloque o que você fatura no delivery e a taxa que você paga hoje. A conta é
-            feita na hora, com os seus números.
+            feita na hora, com os seus números — e mostra quanto sobraria no seu bolso
+            com o Foocci.
           </p>
         </header>
 

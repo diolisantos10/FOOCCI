@@ -1,12 +1,24 @@
 /**
  * Hero (home) — o GANCHO, não a explicação.
  *
- * REESCRITA COMERCIAL (2026-08-04, ordem do CEO). O hero anterior falava do NOSSO
- * ponto de vista ("todo mundo vende um pedaço; o Foocci faz os quatro conversarem")
- * e gastava cinco linhas de celular explicando posicionamento antes de qualquer
- * pergunta. Posicionamento é o que a gente pensa; dor é o que o dono sente. Agora o
- * hero faz UMA pergunta que o dono responde sozinho — quanto o marketplace leva —
- * e manda ele para a calculadora.
+ * O CONCORRENTE NÃO APARECE AQUI (2026-08-05, ordem do CEO). O hero anterior
+ * perguntava "quanto o {marketplace} leva do seu faturamento". Funcionava como
+ * conta, mas queimava o primeiro impacto falando de outra empresa: a primeira
+ * imagem que o dono forma da Foocci não pode ser a de alguém apontando para o
+ * vizinho. Aquela pergunta NÃO foi descartada — ela foi para o topo da
+ * `CommissionCalculator`, que é onde a comparação tem lastro (os números são os
+ * dele, e a taxa é editável).
+ *
+ * O que ficou no lugar é a dor mais funda, não o sintoma: a comissão dói todo mês,
+ * mas o que machuca de verdade é que **o cliente não é seu**. Quem recebe o pedido
+ * fica com o nome, o telefone e o histórico — e cobra de novo para devolver a
+ * mesma pessoa amanhã. Comissão é consequência; posse do cliente é a causa. É
+ * também a única dor que a Foocci resolve inteira, e por isso ela abre o site.
+ *
+ * REESCRITA COMERCIAL ANTERIOR (2026-08-04): o hero de antes falava do NOSSO ponto
+ * de vista ("todo mundo vende um pedaço; o Foocci faz os quatro conversarem") e
+ * gastava cinco linhas de celular explicando posicionamento antes de qualquer
+ * pergunta. Posicionamento é o que a gente pensa; dor é o que o dono sente.
  *
  * A tese dos "quatro serviços que não se falam" NÃO sumiu do site: ela é a
  * `FourContractsSection`, mais abaixo, onde tem espaço para ser argumentada.
@@ -21,7 +33,6 @@
  */
 
 import Image from "next/image";
-import { MARKETPLACE_NAME } from "@/lib/site/commissionRates";
 import { PrimaryCta } from "./Cta";
 import { Eyebrow } from "./premium";
 import { hasAsset, SITE_ASSETS } from "./siteAssets";
@@ -41,21 +52,24 @@ export function HeroSection() {
           </span>
 
           {/*
-            `text-balance` distribui as linhas: sem ele o desktop deixava "mês?"
-            sozinho na terceira linha. O laranja marca UMA expressão — "do seu
-            faturamento" — e não meia manchete: a marca é 90% neutro + 10% laranja,
-            e destaque em tudo é destaque em nada.
+            Duas frases curtas, e a virada na segunda. O laranja marca UMA expressão
+            — "o cliente é seu" — e não meia manchete: a marca é 90% neutro + 10%
+            laranja, e destaque em tudo é destaque em nada. `text-balance` distribui
+            as linhas para nenhuma palavra ficar órfã na última.
           */}
           <h1
             id="hero-title"
             className="mt-3 text-balance text-[2.1rem] font-semibold leading-[1.08] tracking-tight text-ink sm:text-[2.7rem] lg:mt-4 lg:text-[3.05rem]"
           >
-            Quanto o {MARKETPLACE_NAME} leva{" "}
-            <span className="text-brand-500">do seu faturamento</span> todo mês?
+            Você faz a comida.{" "}
+            <span className="block">
+              Aqui, <span className="text-brand-500">o cliente é seu</span>.
+            </span>
           </h1>
 
           <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
-            Descubra em 30 segundos — e veja quanto sobraria no seu bolso com o Foocci.
+            Quem recebe o pedido fica com o cliente — e cobra de novo para devolver a
+            mesma pessoa amanhã. No Foocci, o canal, a base e o lucro são seus.
           </p>
 
           {/*

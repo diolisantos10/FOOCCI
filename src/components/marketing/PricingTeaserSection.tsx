@@ -13,7 +13,7 @@
  */
 
 import { PrimaryCta } from "./Cta";
-import { DEMO_URL } from "./config";
+import { PRECOS_URL } from "./config";
 import { PLANS } from "@/lib/site/plans";
 import { formatBRL } from "@/lib/site/commissionRates";
 
@@ -31,8 +31,8 @@ export function PricingTeaserSection() {
 Um plano para cada momento do seu restaurante.
           </h2>
           <p className="mt-3 text-base text-ink2 sm:mt-4 sm:text-lg">
-            Cada plano abre pelo que só ele te dá. Peça uma demonstração e a gente
-            monta a proposta certa para o seu tamanho — sem compromisso.
+            Cada plano abre pelo que só ele te dá. Veja a tabela completa — o que
+            entra em cada um, mensal ou anual, e os adicionais.
           </p>
         </div>
 
@@ -61,8 +61,15 @@ Um plano para cada momento do seu restaurante.
           ))}
         </div>
 
+        {/*
+          Este bloco é RESUMO, e resumo termina na tabela — não no formulário (ordem
+          do CEO, 05/08). Quem chegou até aqui está comparando preço, não pedindo
+          reunião: mandar para a demonstração troca o passo natural (ver tudo) por um
+          pedido de contato, e perde quem só queria conferir o que entra em cada plano.
+          O caminho da demonstração continua no header e no fim da página.
+        */}
         <div className="mt-7 flex justify-center">
-          <PrimaryCta label="Pedir uma demonstração" href={DEMO_URL} />
+          <PrimaryCta label="Ver os planos completos" href={PRECOS_URL} />
         </div>
       </div>
     </section>
