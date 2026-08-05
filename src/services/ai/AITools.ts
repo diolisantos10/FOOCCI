@@ -255,11 +255,17 @@ async function execAddItem(
     };
   }
 
-  // Safety: validate item belongs to this restaurant
+  // Safety: validate item belongs to this restaurant AND is sellable in this
+  // channel. `showInDelivery` entrou em 05/08/2026: o Garçom passou a CONTAR
+  // sobre itens que a casa só serve no salão (rodízio, couvert, buffet) e um
+  // pedido de entrega jamais pode conter um deles. Falar de um produto e poder
+  // vendê-lo são coisas diferentes — e a diferença tem que ser código.
   const menuItem = await prisma.menuItem.findFirst({
     where: {
       id: menuItemId,
       isActive: true,
+      isAvailable: true,
+      showInDelivery: true,
       category: { restaurantId: ctx.restaurantId },
     },
     select: { id: true, name: true, price: true },
@@ -268,7 +274,8 @@ async function execAddItem(
   if (!menuItem) {
     return {
       success: false,
-      message: `Item "${menuItemId}" não encontrado no cardápio. Nunca invente itens.`,
+      message: `Item "${menuItemId}" não está disponível para pedido neste canal. ` +
+               `Se for item de salão, apenas informe o cliente — nunca adicione ao pedido.`,
     };
   }
 
