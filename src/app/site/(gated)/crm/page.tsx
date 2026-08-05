@@ -5,8 +5,9 @@
  *
  * O coração da página é `CrmRealShowcase`: telas reconstruídas dos prints reais do
  * painel, com NÚMEROS reais de um restaurante operando no Foocci (jul/2026). A
- * faixa curta antes da prova fala com o LOJISTA — o que o CRM faz por ele. Toda
- * conversão aponta pro FORMULÁRIO de demonstração (DEMO_URL).
+ * faixa curta antes da prova fala com o LOJISTA — o que o CRM faz por ele. UM CTA
+ * comercial, no fim, para o FORMULÁRIO de demonstração — ver a regra em
+ * `DEMO_CTA_LABEL` (config do site).
  *
  * Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line + escala brand-*),
  * ação primária brand-500/600, card rounded-2xl, pesos 400/600.
@@ -24,7 +25,7 @@ import {
   MegaphoneIcon,
   TrendingUpIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, DEMO_CTA_LABEL, SOLUCOES_URL } from "@/components/marketing/config";
+import { SOLUCOES_URL } from "@/components/marketing/config";
 
 const TITLE = "CRM para restaurantes | Traga o cliente de volta com o Foocci";
 const DESCRIPTION =
@@ -61,8 +62,12 @@ export default function CrmPage() {
         badge="CRM"
         title="Seu cliente não deveria sumir depois do primeiro pedido."
         subtitle="O CRM do Foocci monta uma base viva, vê quem está esfriando e age antes de perder — e prova, em reais, quanto cada mensagem trouxe de volta."
-        primaryLabel={DEMO_CTA_LABEL}
-        primaryHref={DEMO_URL}
+        /* O hero NÃO convida para o formulário (05/08) — mesmo motivo da página do
+           Garçom: convite antes da prova, para quem acabou de pousar. O botão leva
+           às telas reais do painel, com os números de julho, mais abaixo. O convite
+           é a `CtaBand`, no fim. */
+        primaryLabel="Ver as telas reais"
+        primaryHref="#crm-na-pratica"
         secondaryLabel="Ver as outras soluções"
         secondaryHref={SOLUCOES_URL}
         /* O CRM é tela de PAINEL, não de celular: quem lê esta página é o dono,
@@ -116,11 +121,8 @@ export default function CrmPage() {
       {/* A prova: telas reais do painel, números reais (jul/2026) */}
       <CrmRealShowcase />
 
-      <CtaBand
-        title="Veja o CRM trabalhando com a base do seu restaurante."
-        label={DEMO_CTA_LABEL}
-        href={DEMO_URL}
-      />
+      {/* O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
+      <CtaBand title="Veja o CRM trabalhando com a base do seu restaurante." />
     </>
   );
 }

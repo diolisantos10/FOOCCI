@@ -144,10 +144,14 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
         ) : (
           /* Sem número de vendas: exatamente a tela de antes. Nada regride. */
           <div role="status" className="rounded-2xl border border-brand-200 bg-brand-50 p-7 text-center">
+            {/* A MESMA promessa da página, repetida no momento em que ela passa a
+                valer: uma pessoa, o WhatsApp que ela digitou, o cardápio dela — e
+                nenhum prazo, porque prazo a gente não tem para prometer. */}
             <p className="text-lg font-semibold text-ink">Recebemos seu pedido! 🎉</p>
             <p className="mt-2 text-base leading-relaxed text-ink2">
-              Vamos entrar em contato pelo WhatsApp <strong>{whatsapp}</strong> para combinar a
-              demonstração.
+              Uma pessoa do Foocci vai chamar você no WhatsApp <strong>{whatsapp}</strong> para
+              combinar um horário e mostrar o sistema funcionando com o cardápio do seu
+              restaurante.
             </p>
           </div>
         )}
@@ -193,7 +197,7 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
             ? "Enviando…"
             : temWhatsApp
               ? "Enviar e falar no WhatsApp"
-              : "Solicitar demonstração"}
+              : "Enviar meus dados"}
         </button>
         {/*
           Dizer ANTES o que vai acontecer. Ninguém gosta de ser jogado num
@@ -202,7 +206,7 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
         <p className="mt-2 text-center text-sm text-muted">
           {temWhatsApp
             ? "Salvamos seus dados e te levamos pro WhatsApp com a mensagem pronta."
-            : "Sem compromisso. Retornamos pelo WhatsApp."}
+            : "Sem compromisso. Uma pessoa do Foocci chama você no WhatsApp."}
         </p>
       </div>
     </form>

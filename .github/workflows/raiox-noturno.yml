@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Raio-X Noturno — a coleta determinística do sistema
+#
+# Varre banco e código-fonte todas as madrugadas e persiste a execução, para que
+# a leitura da manhã possa dizer "37 mensagens presas, contra 4 ontem". A coleta
+# NÃO usa IA de propósito: coleta que erra diferente toda noite não permite
+# comparação, e a comparação é metade do valor.
+#
+# 100% somente leitura. Nunca envia WhatsApp, nunca cria pedido, nunca gera Pix,
+# nunca toca em runtime. A única escrita é nas tabelas raiox_*.
+#
+# Segredos necessários (os MESMOS já usados pelos outros crons):
+#   FOOCCI_BASE_URL   URL de produção, sem barra no fim.
+#   CRON_SECRET       Igual ao CRON_SECRET do Railway.
+#
+# Horário: 06:00 UTC = 03:00 America/Sao_Paulo. Roda ANTES da auditoria de
+# qualidade (06:30 UTC) de propósito: assim o raio-x da noite seguinte já vê a
+# auditoria mais recente, e a sonda "portões" mede o intervalo real entre elas.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Raio-X Noturno
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run-raiox:
+    name: "Raio-X do sistema"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Montar a URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/raiox/run" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/raiox/run"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ Endpoint: $ENDPOINT_URL"
+
+          set +e
+          curl --connect-timeout 20 --max-time 600 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -o /tmp/raiox.json \
+            -w "%{http_code}" > /tmp/status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/status.txt 2>/dev/null || echo "000")
+          echo "← HTTP $HTTP_STATUS (curl exit $CURL_EXIT)"
+          jq . /tmp/raiox.json 2>/dev/null || cat /tmp/raiox.json || echo "(sem corpo)"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::curl falhou com código $CURL_EXIT"
+            exit "$CURL_EXIT"
+          fi
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo "::error::endpoint devolveu $HTTP_STATUS"
+            exit 1
+          fi
+
+          # O raio-x achar problema NÃO é falha do cron — é o trabalho dele.
+          # O que falha aqui é a coleta não ter acontecido.
+          BLOQUEADOS=$(jq -r '.unavailableBlocks | length' /tmp/raiox.json 2>/dev/null || echo 0)
+          if [ "$BLOQUEADOS" != "0" ]; then
+            echo "::warning::$BLOQUEADOS bloco(s) da coleta ficaram SEM RESPOSTA — o relatório da manhã precisa dizer isso."
+          fi

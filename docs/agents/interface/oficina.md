@@ -1032,3 +1032,94 @@ Autoavaliação das cinco imagens: hierarquia 9, tipografia 9, espaçamento 9,
 consistência 9.
 
 — interface, worktree `agent-ad7ca2b138d044884`
+
+---
+
+## 2026-08-05 · Um rótulo, um botão por página: a limpeza dos CTAs do site
+
+**Pedido do CEO:** "tem um monte de botão 'pedir uma demonstração', espalhado em
+todos os cantos; é o SDR que faz a demonstração, então tem que ir pro formulário".
+Duas decisões já tomadas pelo Diretor e executadas aqui: **texto único** (`Ver no
+meu restaurante`) e **no máximo um CTA comercial por página**, além do header e da
+barra fixa do celular.
+
+### O inventário, medido no DOM (não no grep)
+
+Antes: **17 chamadas** para `/site/demonstracao` com **10 textos diferentes** —
+onze eram botão laranja, e o décimo texto morava fora de `/site`, no checkout
+(`/contratar/novo`). Depois: **1 no header + 1 por página + a barra fixa**, todos
+lendo `DEMO_CTA_LABEL`.
+
+Removidos: `FourContractsSection` (home), `WaiterRealShowcase`, `CrmRealShowcase`,
+o botão de demonstração dos três cartões de `/precos`, a `CtaBand` de
+`/site/demonstracao` (ela ficava logo ABAIXO do formulário) e o link duplicado
+"Demonstração" do rodapé (ele e "Contato" apontavam para a mesma página).
+Convertidos em passo não-comercial: o CTA do hero de `/atendimento-com-ia`, `/crm`
+e `/solucoes` — viraram âncora para a prova da própria página.
+
+### O que só apareceu porque o rótulo virou um só
+
+Enquanto a barra fixa do celular dizia outra coisa e ia para outro lugar
+(`/site/como-funciona`), ela e o CTA da página ainda se distinguiam. Com o texto e
+o destino unificados, **as duas viram o mesmo botão duplicado na mesma dobra** —
+laranja, largura cheia, a poucos pixels. Foi preciso generalizar a regra que a
+barra já tinha para o formulário (`[data-demo-form]`) e criar `[data-demo-cta]`,
+posto pela `CtaBand`, pela calculadora e por quem for o CTA único da página.
+
+**A lição que vale além deste bloco:** unificar rótulo e destino **cria colisões
+que a variação escondia**. Dois botões com textos diferentes parecem duas ofertas;
+com o mesmo texto, parecem um defeito. Quem unifica copy tem que reconferir a
+sobreposição, não só a semântica.
+
+Dois defeitos apareceram por tabela e foram corrigidos:
+1. a barra fixa em `/site/como-funciona` linkava para a **própria página** — botão
+   fixo que não faz nada. Ela agora aponta para o formulário e **não renderiza** na
+   página do formulário (`usePathname`).
+2. `/precos` tinha quatro CTAs comerciais: três cartões + a faixa. Cartão de plano
+   com dois botões faz o "Contratar agora" disputar com o "ver antes" logo abaixo.
+
+### As exceções, todas comentadas no ponto de uso
+
+- **Home:** ficou o CTA da **calculadora**, não o da tabela de quatro serviços —
+  ele só existe depois que o dono vê a economia **dele** na tela; é a conclusão do
+  argumento, não uma faixa. O "Calcular minha economia" do hero não conta (leva à
+  ferramenta).
+- **`/site/demonstracao`:** os botões que sobraram são **âncora para o formulário
+  da própria página** — rotulados "Ir para o formulário", não com o rótulo único.
+  Quem já está na porta precisa da maçaneta, não de um convite.
+- **`/experimente`:** o CTA do **estado vazio** (padaria fora do ar) fica — sem ele
+  a página que a campanha paga aponta não tem saída nenhuma.
+- **`/precos`:** o link de texto "Fale com a gente" acima de 4.000 pedidos fica —
+  é frase, não botão, e atende quem não cabe na tabela.
+
+### A promessa do formulário
+
+`/site/demonstracao` não dizia o que acontece depois de enviar. Agora diz, em três
+passos numerados acima do formulário, e **sem prazo** (não temos compromisso de
+"em até X horas" — guardrail 7): os dados vão para **uma pessoa** do Foocci, ela
+chama no WhatsApp informado e mostra o sistema com o cardápio do restaurante. A
+mesma promessa foi repetida na tela de confirmação do envio.
+
+### Drift do DESIGN.md corrigido de passagem
+
+`CtaBand` (`bg-white`/`gray-*`/hex → tokens; card `rounded-3xl` → `rounded-2xl`),
+`MarketingFooter` (`gray-*` → `muted`/`ink2`/`line`/`paper`, `font-medium` fora) e
+`SecondaryCta` (`gray-300/800/50` → `line2`/`ink`/`canvas`).
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` 5.359/5.360 (só o
+`noSideEffects.test.ts`, que estoura o timeout de 5s sob carga e passa isolado com
+`--testTimeout=60000` — ambiental, confirmado). O teste de marca passou sem
+ajuste: "Ver no meu restaurante" não toca no gênero de "Foocci".
+
+Playwright em **375 / 768 / 1280** nas nove páginas de `/site` (27 capturas):
+`documentElement.scrollWidth` igual à largura da janela nas 27 — **zero rolagem
+lateral**. Conferência mecânica extra: com a dobra posicionada sobre cada CTA
+(calculadora da home, faixa de fechamento de `/crm`, `/precos` e
+`/atendimento-com-ia`, e o meio de página com a barra fixa), a contagem de botões
+laranja para o formulário **visíveis na dobra é exatamente 1** em todos os casos.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, worktree `agent-af6737050c07de929`

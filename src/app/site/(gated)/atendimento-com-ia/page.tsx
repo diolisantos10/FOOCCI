@@ -6,7 +6,8 @@
  * O coração da página é `WaiterRealShowcase`: as CINCO telas reais do pedido pelo
  * Garçom, capturadas no celular do CEO (03/08) e já publicadas. Aqui elas ganham
  * casa própria, com uma faixa curta que nomeia o que o agente faz antes de mostrar
- * a prova. Toda conversão aponta pro FORMULÁRIO de demonstração (DEMO_URL).
+ * a prova. UM CTA comercial, no fim, para o FORMULÁRIO de demonstração — ver a
+ * regra em `DEMO_CTA_LABEL` (config do site).
  *
  * Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line + escala brand-*),
  * ação primária brand-500/600, card rounded-2xl, pesos 400/600.
@@ -25,7 +26,7 @@ import {
   TrendingUpIcon,
   CheckIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, DEMO_CTA_LABEL, SOLUCOES_URL } from "@/components/marketing/config";
+import { SOLUCOES_URL } from "@/components/marketing/config";
 
 const TITLE = "Atendimento com IA | O garçom de IA do Foocci";
 const DESCRIPTION =
@@ -67,8 +68,13 @@ export default function AtendimentoComIaPage() {
         badge="Atendimento com IA"
         title="Um garçom de IA que atende, sugere e vende — pelo seu cardápio."
         subtitle="O cliente conversa, escolhe e paga numa tela só. O Garçom conduz o pedido do “oi” à confirmação, sem app, sem cadastro e sem fila de atendente."
-        primaryLabel={DEMO_CTA_LABEL}
-        primaryHref={DEMO_URL}
+        /* O hero NÃO convida para o formulário (05/08). A página tinha três CTAs
+           comerciais — hero, meio e fim — e este era o pior dos três: chegava antes
+           de qualquer prova, para quem acabou de pousar. No lugar dele, o botão
+           leva às cinco telas reais do Garçom, mais abaixo nesta mesma página: o
+           argumento primeiro, o convite no fim (`CtaBand`). */
+        primaryLabel="Ver as telas reais"
+        primaryHref="#garcom-na-pratica"
         secondaryLabel="Ver as outras soluções"
         secondaryHref={SOLUCOES_URL}
         /* A abertura é a própria prova: o Garçom respondendo, numa tela real.
@@ -120,11 +126,9 @@ export default function AtendimentoComIaPage() {
       {/* A prova: as 5 telas reais do pedido pelo Garçom (prints do CEO) */}
       <WaiterRealShowcase />
 
-      <CtaBand
-        title="Veja o Garçom atendendo com o cardápio do seu restaurante."
-        label={DEMO_CTA_LABEL}
-        href={DEMO_URL}
-      />
+      {/* O único CTA comercial da página. Rótulo e destino vêm do padrão da
+          `CtaBand` — nada de rótulo escrito à mão. */}
+      <CtaBand title="Veja o Garçom atendendo com o cardápio do seu restaurante." />
     </>
   );
 }

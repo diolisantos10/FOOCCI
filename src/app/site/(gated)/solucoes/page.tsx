@@ -37,12 +37,7 @@ import {
   CheckIcon,
   ArrowRightIcon,
 } from "@/components/marketing/icons";
-import {
-  DEMO_URL,
-  DEMO_CTA_LABEL,
-  ATENDIMENTO_IA_URL,
-  CRM_URL,
-} from "@/components/marketing/config";
+import { ATENDIMENTO_IA_URL, CRM_URL } from "@/components/marketing/config";
 
 const TITLE = "Soluções do Foocci | Loja, cardápio, cozinha, pagamento e gestão";
 const DESCRIPTION =
@@ -176,8 +171,11 @@ export default function SolucoesPage() {
         badge="Soluções"
         title="Todo o resto que faz o restaurante rodar — num sistema só."
         subtitle="Do cardápio à nota fiscal, tudo conversa entre si e nada é ferramenta solta. O atendimento por IA e o CRM, os dois carros-chefe, têm página própria."
-        primaryLabel={DEMO_CTA_LABEL}
-        primaryHref={DEMO_URL}
+        /* O hero NÃO convida para o formulário (05/08): quem abre "Soluções" veio
+           ver O QUE está incluído, e o convite antes da lista chega antes do motivo.
+           O botão desce para a lista; o convite é a `CtaBand`, no fim. */
+        primaryLabel="Ver o que está incluído"
+        primaryHref="#o-sistema-inteiro"
         /* Esta página é "o sistema inteiro": a abertura é a tela onde tudo
            desemboca — os pedidos chegando no painel. Sem a captura, a foto da mão
            com a loja aberta no celular, que é a outra ponta do mesmo sistema. */
@@ -197,7 +195,13 @@ export default function SolucoesPage() {
       />
 
       {/* As demais soluções, por tema */}
-      <section aria-labelledby="solucoes-title" className="relative overflow-hidden bg-canvas py-16 lg:py-20">
+      {/* `scroll-mt-20` porque o header é `sticky`: sem ele a âncora do hero
+          entrega o título por baixo da barra. Mesmo padrão das seções de prova. */}
+      <section
+        id="o-sistema-inteiro"
+        aria-labelledby="solucoes-title"
+        className="relative scroll-mt-20 overflow-hidden bg-canvas py-16 lg:py-20"
+      >
         <DotGrid className="[mask-image:radial-gradient(ellipse_at_top,black,transparent_65%)]" />
         <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
@@ -272,11 +276,8 @@ export default function SolucoesPage() {
         </div>
       </section>
 
-      <CtaBand
-        title="Veja todas as soluções rodando com o cardápio do seu restaurante."
-        label={DEMO_CTA_LABEL}
-        href={DEMO_URL}
-      />
+      {/* O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
+      <CtaBand title="Veja todas as soluções rodando com o cardápio do seu restaurante." />
     </>
   );
 }

@@ -51,7 +51,6 @@ import {
   ATENDIMENTO_IA_URL,
   CRM_URL,
   EXPERIMENTE_URL,
-  DEMO_URL,
 } from "@/components/marketing/config";
 
 const TITLE = "Como funciona o Foocci | Sistema inteligente para restaurantes";
@@ -235,12 +234,8 @@ export default function ComoFuncionaPage() {
         </div>
       </section>
 
-      {/* 5. CTA */}
-      <CtaBand
-        title="Veja o Foocci rodando com o cardápio do seu restaurante."
-        label="Pedir uma demonstração"
-        href={DEMO_URL}
-      />
+      {/* 5. O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
+      <CtaBand title="Veja o Foocci rodando com o cardápio do seu restaurante." />
     </>
   );
 }

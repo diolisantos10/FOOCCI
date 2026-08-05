@@ -7,11 +7,12 @@
  * camada interna (justificativas de precificação, tarja de decisão, teto acima de
  * 4.000 pedidos etc.). Palavra "contrato" é proibida — usar "serviço/serviços".
  *
- * CONVERSÃO (04/08, self-service): cada plano tem DOIS caminhos — "Contratar
- * agora", que leva ao checkout `/contratar/novo` já com plano e ciclo escolhidos,
- * e "Pedir uma demonstração" (DEMO_URL), que continua existindo para quem quer
- * ver antes. Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 +
- * escala brand-*), ação primária brand-500/600, card rounded-2xl, pesos 400/600.
+ * CONVERSÃO (04/08, self-service; enxugada em 05/08): o cartão do plano tem UMA
+ * ação — "Contratar agora", que leva ao checkout `/contratar/novo` já com plano e
+ * ciclo escolhidos. Quem quer ver antes tem "Experimentar antes" no topo (a
+ * degustação) e a faixa de fechamento, que é o único CTA comercial da página.
+ * Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 + escala
+ * brand-*), ação primária brand-500/600, card rounded-2xl, pesos 400/600.
  *
  * PREÇO: nenhum número desta página é digitado aqui. Tudo vem de
  * `@/lib/billing/pricing`, a MESMA fonte que o checkout usa para cobrar. Antes
@@ -52,7 +53,7 @@ import {
   TrendingUpIcon,
   RepeatIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, DEMO_CTA_LABEL, CALCULADORA_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
+import { DEMO_URL, CALCULADORA_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
 import {
   ASSUMED_RATE_PERCENT,
   ASSUMED_RATE,
@@ -470,7 +471,13 @@ function PlanCard({ plan }: { plan: Plan }) {
         <span className="text-xs text-muted">{plan.limitSub}</span>
       </div>
 
-      {/* CTA — comprar é o caminho principal; a demonstração continua existindo */}
+      {/*
+        UMA AÇÃO POR CARTÃO (05/08): contratar. O segundo botão levava ao formulário
+        de demonstração — e, com três cartões na tela, virava o MESMO convite três
+        vezes, competindo com o "Contratar agora" logo acima dele. Quem ainda não
+        quer contratar tem duas saídas melhores nesta página: "Experimentar antes"
+        no topo (a degustação, sem formulário) e a faixa de fechamento, no fim.
+      */}
       <div className="mt-5 space-y-2.5">
         <PrimaryCta
           label="Contratar agora"
@@ -479,7 +486,6 @@ function PlanCard({ plan }: { plan: Plan }) {
           withArrow={false}
           className="!py-3 !text-[15px]"
         />
-        <SecondaryCta label={DEMO_CTA_LABEL} href={DEMO_URL} block className="!py-3 !text-[14px]" />
         <p className="text-center text-[11.5px] text-muted">
           Primeiro mês por {formatBRL(firstChargeCents(code, "MENSAL"))}. Sem fidelidade.
         </p>
@@ -539,8 +545,8 @@ export default function PrecosPage() {
         primaryLabel="Contratar agora"
         primaryHref={checkoutUrl("crescimento")}
         /* Quem chega no preço sem ter visto o produto trava aqui. O segundo botão
-           é a saída sem atrito: a degustação, que não pede dado nenhum. O pedido de
-           demonstração continua em cada cartão e na faixa final. */
+           é a saída sem atrito: a degustação, que não pede dado nenhum. O convite
+           para a demonstração vive na faixa de fechamento — uma vez, no fim. */
         secondaryLabel="Experimentar antes"
         secondaryHref={EXPERIMENTE_URL}
         /* Página de preço abre pelo que o dinheiro compra. Primeiro a tela de
@@ -576,6 +582,10 @@ export default function PrecosPage() {
             ))}
           </div>
 
+          {/* EXCEÇÃO à regra de um CTA por página: isto é um LINK DE TEXTO dentro de
+              uma frase, para um caso que os três cartões não atendem (acima de 4.000
+              pedidos). Não disputa atenção com o botão laranja — é a saída de quem
+              não cabe na tabela. */}
           <p className="mt-8 text-center text-sm text-muted">
             Passa de 4.000 pedidos por mês?{" "}
             <a href={DEMO_URL} className="font-semibold text-ink underline decoration-line2 underline-offset-2 hover:text-brand-600">
@@ -787,11 +797,8 @@ export default function PrecosPage() {
         </div>
       </section>
 
-      <CtaBand
-        title="Veja o Foocci rodando com o cardápio do seu restaurante."
-        label="Peça uma demonstração"
-        href={DEMO_URL}
-      />
+      {/* O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
+      <CtaBand title="Veja o Foocci rodando com o cardápio do seu restaurante." />
     </>
   );
 }

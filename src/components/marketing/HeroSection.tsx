@@ -52,24 +52,31 @@ export function HeroSection() {
           </span>
 
           {/*
-            Duas frases curtas, e a virada na segunda. O laranja marca UMA expressão
-            — "o cliente é seu" — e não meia manchete: a marca é 90% neutro + 10%
-            laranja, e destaque em tudo é destaque em nada. `text-balance` distribui
-            as linhas para nenhuma palavra ficar órfã na última.
+            É uma OBSERVAÇÃO, não uma promessa — e é por isso que funciona. O dono lê
+            e pensa "é exatamente isso": ele já viveu o mês em que vendeu mais e
+            fechou igual. Frase que descreve a vida de quem lê não precisa ser
+            acreditada; ela já é reconhecida.
+
+            O laranja marca a VIRADA, não o benefício: "ganha a mesma coisa" é onde
+            dói. Uma expressão só — a marca é 90% neutro + 10% laranja, e destaque em
+            tudo é destaque em nada. `text-balance` evita palavra órfã na última linha.
           */}
           <h1
             id="hero-title"
             className="mt-3 text-balance text-[2.1rem] font-semibold leading-[1.08] tracking-tight text-ink sm:text-[2.7rem] lg:mt-4 lg:text-[3.05rem]"
           >
-            Você faz a comida.{" "}
-            <span className="block">
-              Aqui, <span className="text-brand-500">o cliente é seu</span>.
-            </span>
+            Você vende mais todo mês e{" "}
+            <span className="text-brand-500">ganha a mesma coisa</span>.
           </h1>
 
+          {/*
+            A linha de apoio fecha o raciocínio que a manchete abre: por que acontece,
+            e o que muda aqui. "Comissão" aparece sem dono — é um fato do negócio do
+            leitor, não uma afirmação sobre a tabela de ninguém (trava jurídica 04/08).
+          */}
           <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink2 sm:text-lg lg:mx-0 lg:mt-5">
-            Quem recebe o pedido fica com o cliente — e cobra de novo para devolver a
-            mesma pessoa amanhã. No Foocci, o canal, a base e o lucro são seus.
+            Porque o que cresce junto com a venda é a comissão. No Foocci o custo é
+            fixo — o que você vender a mais fica com você.
           </p>
 
           {/*

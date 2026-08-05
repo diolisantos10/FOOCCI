@@ -16,7 +16,6 @@ import { youtubeEmbedUrl } from "@/lib/site/youtube";
 import { PageHero } from "@/components/marketing/PageHero";
 import { heroShot } from "@/components/marketing/HeroShot";
 import { PRODUCT_SHOTS } from "@/components/marketing/siteAssets";
-import { CtaBand } from "@/components/marketing/CtaBand";
 import { CheckIcon, UsersIcon, SparklesIcon, RepeatIcon } from "@/components/marketing/icons";
 import { OrderMockup, CrmProfileMockup, InsightMockup } from "@/components/marketing/mockups";
 import { FoocciProductShowcase } from "@/components/marketing/FoocciProductShowcase";
@@ -42,6 +41,20 @@ const STEPS = [
   { icon: UsersIcon, title: "Cliente escolhe", copy: "O pedido começa simples, guiado pelo cardápio do restaurante." },
   { icon: SparklesIcon, title: "O sistema entende", copy: "O Foocci reconhece o cliente, salva o histórico e enxerga oportunidades." },
   { icon: RepeatIcon, title: "O relacionamento continua", copy: "Campanhas e reativação no momento certo trazem o cliente de volta." },
+];
+
+/**
+ * O compromisso desta página, em três passos — e nenhum deles tem prazo.
+ *
+ * Quem faz a demonstração é uma PESSOA do Foocci (o SDR), não um vídeo automático
+ * nem um robô: dizer isso com todas as letras é o que separa "deixei meu telefone
+ * num site" de "combinei uma conversa". "Uma pessoa do Foocci" e não "nossa
+ * equipe": equipe é abstração, pessoa é quem vai chamar.
+ */
+const DEPOIS_DE_ENVIAR = [
+  "Seus dados chegam para uma pessoa do Foocci — ninguém mais recebe.",
+  "Ela chama você no WhatsApp que você informou aqui, para entender o seu restaurante e combinar um horário.",
+  "Na conversa, ela mostra o Foocci funcionando com o cardápio do seu restaurante. Sem compromisso e sem custo.",
 ];
 
 const WILL_SHOW = [
@@ -101,9 +114,13 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
           ],
           <FoocciProductShowcase />,
         )}
-        primaryLabel={hasVideos ? "Assistir à demonstração" : "Pedir uma demonstração"}
+        /* Aqui os botões NÃO são convite: são atalho para o formulário que já está
+           nesta mesma página, mais abaixo. Por isso o rótulo é "Ir para o
+           formulário" e não o `DEMO_CTA_LABEL` — quem já está na porta não precisa
+           ser convidado a entrar, precisa saber onde é a maçaneta. */
+        primaryLabel={hasVideos ? "Assistir à demonstração" : "Ir para o formulário"}
         primaryHref={hasVideos ? "#videos" : "#formulario"}
-        secondaryLabel={hasVideos ? "Pedir uma demonstração" : undefined}
+        secondaryLabel={hasVideos ? "Ir para o formulário" : undefined}
         secondaryHref={hasVideos ? "#formulario" : undefined}
         note={PRELAUNCH_NOTE}
       />
@@ -175,7 +192,7 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
                 href="#formulario"
                 className="inline-flex items-center justify-center rounded-full bg-brand-500 px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
               >
-                Gostou? Pedir uma demonstração
+                Gostou? Ir para o formulário
               </a>
               <p className="mt-2 text-sm text-muted">
                 Preencha seus dados que a gente entra em contato pelo WhatsApp.
@@ -256,6 +273,33 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
                 </li>
               ))}
             </ul>
+            {/*
+              O QUE ACONTECE DEPOIS DE ENVIAR — a página não dizia, e essa é a
+              pergunta que segura o dedo em cima do botão. Sem PRAZO de propósito:
+              não existe compromisso de "em até X horas", e prometer prazo que não
+              se cumpre é o contrário do que esta casa faz (guardrail 7). O que se
+              promete aqui é o que de fato acontece: uma PESSOA recebe, chama no
+              WhatsApp e mostra o produto com o cardápio do restaurante dela.
+            */}
+            <div className="mt-7 border-t border-line pt-7">
+              <h3 className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-ink2">
+                Depois que você enviar
+              </h3>
+              <ol className="mt-4 space-y-3.5">
+                {DEPOIS_DE_ENVIAR.map((passo, i) => (
+                  <li key={passo} className="flex items-start gap-3">
+                    <span
+                      aria-hidden
+                      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[12.5px] font-semibold text-brand-600 ring-1 ring-brand-100"
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-[15px] leading-relaxed text-ink2">{passo}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
             <div className="mt-7 border-t border-line pt-7">
               <DemoForm includeChallenge />
             </div>
@@ -263,11 +307,12 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
         </div>
       </section>
 
-      <CtaBand
-        title="Ainda com dúvida se o Foocci faz sentido para o seu restaurante?"
-        label="Pedir uma demonstração"
-        href="#formulario"
-      />
+      {/*
+        SEM FAIXA DE FECHAMENTO (05/08). Ela ficava logo ABAIXO do formulário e
+        convidava a pessoa a pedir a demonstração que o formulário acima já estava
+        pedindo — um botão que só podia rolar a tela de volta para onde ela já
+        estava. É o caso mais claro de botão que ensina a ignorar o laranja.
+      */}
     </>
   );
 }
