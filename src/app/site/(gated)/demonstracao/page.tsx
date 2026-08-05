@@ -13,7 +13,9 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { youtubeEmbedUrl } from "@/lib/site/youtube";
-import { InternalVisualHero } from "@/components/marketing/InternalVisualHero";
+import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { CheckIcon, UsersIcon, SparklesIcon, RepeatIcon } from "@/components/marketing/icons";
 import { OrderMockup, CrmProfileMockup, InsightMockup } from "@/components/marketing/mockups";
@@ -67,7 +69,7 @@ export default async function DemonstracaoPage() {
 
   return (
     <>
-      <InternalVisualHero
+      <PageHero
         badge="Demonstração sem compromisso"
         title={
           <>
@@ -79,7 +81,26 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
             ? "Assista ao Foocci funcionando de verdade nos vídeos abaixo — e, se quiser, preencha seus dados que a gente entra em contato."
             : "A gente mostra, com o seu cardápio, como o Foocci transforma atendimento, pedido e relacionamento na prática. Preencha abaixo que entramos em contato."
         }
-        visual={<FoocciProductShowcase />}
+        /* Quem chega aqui vai preencher um formulário para VER o produto — então
+           a abertura já entrega uma amostra dele: a tela onde o pedido cai. Sem a
+           captura do painel, a tela real de pedido confirmado; sem nem isso, a
+           prévia ilustrada que esta página já usava. */
+        visual={heroShot(
+          [
+            {
+              kind: "browser",
+              src: PRODUCT_SHOTS.painelPedidos,
+              alt: "Painel do Foocci na tela do computador: a fila de pedidos do restaurante chegando em tempo real.",
+              address: "foocci.com.br/orders",
+            },
+            {
+              kind: "phone",
+              src: "/site/waiter/passo-5-confirmacao.png",
+              alt: "Tela de celular: o pedido confirmado, com os itens, o valor, a forma de pagamento e a previsão de entrega.",
+            },
+          ],
+          <FoocciProductShowcase />,
+        )}
         primaryLabel={hasVideos ? "Assistir à demonstração" : "Pedir uma demonstração"}
         primaryHref={hasVideos ? "#videos" : "#formulario"}
         secondaryLabel={hasVideos ? "Pedir uma demonstração" : undefined}
@@ -89,14 +110,14 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
 
       {/* Demonstração em vídeo — só existe quando há vídeo publicado */}
       {hasVideos && (
-        <section id="videos" aria-labelledby="videos-title" className="scroll-mt-20 bg-white py-20 lg:py-24">
+        <section id="videos" aria-labelledby="videos-title" className="scroll-mt-20 bg-paper py-20 lg:py-24">
           <div className="mx-auto max-w-5xl px-5 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
               <Eyebrow>Demonstração em vídeo</Eyebrow>
-              <h2 id="videos-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+              <h2 id="videos-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
                 Veja o Foocci funcionando.
               </h2>
-              <p className="mt-4 text-lg leading-relaxed text-gray-600">
+              <p className="mt-4 text-lg leading-relaxed text-ink2">
                 É só apertar o play e ver o sistema por dentro, do painel do
                 restaurante ao pedido no celular do cliente.
               </p>
@@ -105,7 +126,7 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
             <div className="mt-12 space-y-10">
               {/* O primeiro vídeo é o principal — tela cheia da coluna */}
               <figure>
-                <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+                <div className="overflow-hidden rounded-2xl border border-line shadow-sm">
                   <iframe
                     src={videos[0]!.embedUrl}
                     title={videos[0]!.title}
@@ -117,9 +138,9 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
                   />
                 </div>
                 <figcaption className="mt-3 text-center">
-                  <span className="text-base font-semibold text-[#0B0B0B]">{videos[0]!.title}</span>
+                  <span className="text-base font-semibold text-ink">{videos[0]!.title}</span>
                   {videos[0]!.description && (
-                    <span className="block text-sm text-gray-500">{videos[0]!.description}</span>
+                    <span className="block text-sm text-muted">{videos[0]!.description}</span>
                   )}
                 </figcaption>
               </figure>
@@ -128,7 +149,7 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
                 <div className="grid gap-8 sm:grid-cols-2">
                   {videos.slice(1).map((v) => (
                     <figure key={v.id}>
-                      <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+                      <div className="overflow-hidden rounded-2xl border border-line shadow-sm">
                         <iframe
                           src={v.embedUrl}
                           title={v.title}
@@ -140,8 +161,8 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
                         />
                       </div>
                       <figcaption className="mt-3">
-                        <span className="text-sm font-semibold text-[#0B0B0B]">{v.title}</span>
-                        {v.description && <span className="block text-sm text-gray-500">{v.description}</span>}
+                        <span className="text-sm font-semibold text-ink">{v.title}</span>
+                        {v.description && <span className="block text-sm text-muted">{v.description}</span>}
                       </figcaption>
                     </figure>
                   ))}
@@ -156,7 +177,7 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
               >
                 Gostou? Pedir uma demonstração
               </a>
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-muted">
                 Preencha seus dados que a gente entra em contato pelo WhatsApp.
               </p>
             </div>
@@ -165,11 +186,11 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
       )}
 
       {/* Three-step experience flow */}
-      <section aria-labelledby="fluxo-title" className="relative overflow-hidden bg-white py-20 lg:py-24">
+      <section aria-labelledby="fluxo-title" className="relative overflow-hidden bg-paper py-20 lg:py-24">
         <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>Como a experiência acontece</Eyebrow>
-            <h2 id="fluxo-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            <h2 id="fluxo-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
               Do pedido ao relacionamento, em três passos.
             </h2>
           </div>
@@ -185,16 +206,16 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
       </section>
 
       {/* Illustrative product screens */}
-      <section aria-labelledby="previa-title" className="relative overflow-hidden bg-gray-50 py-20 lg:py-24">
+      <section aria-labelledby="previa-title" className="relative overflow-hidden bg-canvas py-20 lg:py-24">
         <DotGrid className="[mask-image:radial-gradient(ellipse_at_center,black,transparent_72%)]" />
         <Halo className="left-1/2 top-0 h-64 w-[40rem] -translate-x-1/2" color="rgba(249,115,22,0.07)" />
         <div className="relative mx-auto max-w-5xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>Prévia</Eyebrow>
-            <h2 id="previa-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            <h2 id="previa-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
               Uma prévia de como o Foocci se parece.
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-gray-600">
+            <p className="mt-4 text-lg leading-relaxed text-ink2">
               Pedido guiado, CRM e dados comerciais em uma só operação — pensados para
               o dia a dia do restaurante.
             </p>
@@ -210,16 +231,16 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
             </div>
           </div>
 
-          <p className="mt-8 text-center text-xs text-gray-400">
+          <p className="mt-8 text-center text-xs text-muted">
             Telas ilustrativas do produto.
           </p>
         </div>
       </section>
 
       {/* What a future demo will show */}
-      <section id="formulario" aria-labelledby="demo-mostra-title" className="scroll-mt-20 bg-white py-20">
+      <section id="formulario" aria-labelledby="demo-mostra-title" className="scroll-mt-20 bg-paper py-20">
         <div className="mx-auto max-w-2xl px-5 lg:px-8">
-          <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-sm ring-1 ring-gray-900/[0.03] sm:p-9">
+          <div className="rounded-2xl border border-line bg-paper p-7 shadow-sm ring-1 ring-ink/[0.03] sm:p-9">
             <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
               O que a demonstração vai mostrar
@@ -231,11 +252,11 @@ Veja o <span className="text-brand-500">Foocci</span> no seu restaurante.
               {WILL_SHOW.map((item) => (
                 <li key={item} className="flex items-start gap-3">
                   <CheckIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
-                  <span className="text-base text-gray-700">{item}</span>
+                  <span className="text-base text-ink2">{item}</span>
                 </li>
               ))}
             </ul>
-            <div className="mt-7 border-t border-gray-100 pt-7">
+            <div className="mt-7 border-t border-line pt-7">
               <DemoForm includeChallenge />
             </div>
           </div>

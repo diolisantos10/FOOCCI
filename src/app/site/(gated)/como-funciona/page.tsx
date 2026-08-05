@@ -26,7 +26,9 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { InternalVisualHero } from "@/components/marketing/InternalVisualHero";
+import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import {
   ArrowRightIcon,
@@ -106,14 +108,31 @@ const APROFUNDAR = [
 export default function ComoFuncionaPage() {
   return (
     <>
-      <InternalVisualHero
+      <PageHero
         badge="Como funciona"
         title="Da primeira mensagem ao próximo pedido."
         subtitle="O Foocci conecta atendimento, cardápio, WhatsApp, CRM e inteligência comercial para ajudar seu restaurante a vender melhor antes, durante e depois do pedido."
-        visual={<FoocciProductShowcase />}
         primaryLabel="Conhecer a proposta"
         primaryHref={PROPOSTA_URL}
         note={PRELAUNCH_NOTE}
+        /* A jornada abre no momento em que ela dá dinheiro: o "mais alguma
+           coisa?". Sem captura, fica a prévia ilustrada do sistema, que é o que
+           esta página já mostrava — degradar nunca deixa buraco. */
+        visual={heroShot(
+          [
+            {
+              kind: "phone",
+              src: PRODUCT_SHOTS.atendimentoCelular,
+              alt: "Tela de celular: a conversa do cliente com o Garçom de IA, do pedido à confirmação.",
+            },
+            {
+              kind: "phone",
+              src: "/site/waiter/passo-3-extras.png",
+              alt: "Tela de celular: antes de fechar o pedido, o Garçom oferece bebida e sobremesa que combinam com o prato escolhido.",
+            },
+          ],
+          <FoocciProductShowcase />,
+        )}
       />
 
       {/* 1. A jornada — os cinco passos */}

@@ -17,11 +17,11 @@
   jogável, agente de suporte com cérebro fundido e barra única no painel.
 - Lead do formulário **salvo e verificado em produção** (teste ponta a ponta).
 
-## FASE 1 — em construção agora (não depende do número)
+## FASE 1 — ✅ NO AR desde a madrugada de 05/08 (PR #94)
 | # | O quê | Estado |
 |---|---|---|
-| 1.1 | **CRM da Foocci no admin** — a base de todos os contatos capturados, com etapa do funil (novo → contatado → qualificado → proposta → fechado/perdido), origem da campanha, histórico de contato e taxa de conversão honesta. É a base de trabalho do SDR. | em construção |
-| 1.2 | **Formulário → WhatsApp** — salva o lead SEMPRE primeiro, depois leva a pessoa ao WhatsApp com a mensagem pronta e um **código de ligação** (`#A7K2M`) que amarra o "oi" ao formulário preenchido. Sem número configurado, o fluxo atual continua idêntico. | em construção |
+| 1.1 | **CRM da Foocci no admin** — a base de todos os contatos capturados, com etapa do funil (novo → contatado → qualificado → proposta → fechado/perdido), origem da campanha, histórico de contato e taxa de conversão honesta. É a base de trabalho do SDR. | ✅ no ar |
+| 1.2 | **Formulário → WhatsApp** — salva o lead SEMPRE primeiro, depois leva a pessoa ao WhatsApp com a mensagem pronta e um **código de ligação** (`#A7K2M`) que amarra o "oi" ao formulário preenchido. Sem número configurado, o fluxo atual continua idêntico. | ✅ no ar, desligado esperando o número |
 
 ## FASE 2 — assim que o número existir (esta semana)
 | # | O quê | Depende de |
@@ -56,7 +56,7 @@
 ## Pendências do CEO, consolidadas
 | # | O quê | Impacto |
 |---|---|---|
-| 1 | 🔴 **`MP_PLATFORM_ACCESS_TOKEN` no Railway** | sem ele o cliente contrata e **não recebe link de pagamento** |
+| 1 | ✅ **`MP_PLATFORM_ACCESS_TOKEN` no Railway** — o CEO colocou em 05/08. A variável está presente (`/api/health` → `mpPlatformToken`). Se a CHAVE responde é outra pergunta, e agora a tela de Assinaturas do admin responde sozinha, sem criar cobrança para descobrir. | destravado |
 | 2 | 📱 **Número de WhatsApp de vendas** | destrava as fases 2 e 3 — *chega esta semana* |
 | 3 | 💰 **Resposta sobre preço** | o SDR não passa da 2ª mensagem sem ela |
 | 4 | 🟡 E-mail (`RESEND_API_KEY`) | **rebaixado**: com o CRM no admin, o e-mail vira conveniência |

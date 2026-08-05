@@ -197,4 +197,73 @@ export const MercadoPagoPlatformBilling = {
       approvedAt: body.date_approved ?? null,
     };
   },
+
+  /**
+   * A chave de cobrança está VIVA? — pergunta ao Mercado Pago sem criar nada.
+   *
+   * POR QUE ISTO EXISTE. `isPlatformBillingConfigured()` responde outra pergunta:
+   * "a variável está definida". Uma variável presente com token errado, vencido
+   * ou rotacionado dá exatamente o mesmo `true` — e o primeiro a descobrir a
+   * diferença seria um cliente real, no meio da contratação, recebendo uma tela
+   * sem link de pagamento. Falha em silêncio, do lado do dinheiro.
+   *
+   * `GET /users/me` é o jeito mais barato de perguntar: é leitura pura, não cria
+   * preapproval, não gera cobrança, não deixa rastro na conta. **A alternativa
+   * seria fazer uma contratação de mentira em produção** — o que suja a carteira
+   * com contrato falso e cria um objeto de recorrência de verdade no gateway.
+   *
+   * Nunca devolve o token, nem pedaço dele. Devolve o veredito e, quando falha,
+   * a razão que o MP deu — guardrail 6: o alerta carrega a própria evidência.
+   */
+  async checkCredential(): Promise<
+    | { ok: true; accountId: number | null; nickname: string | null; siteId: string | null }
+    | { ok: false; reason: string }
+  > {
+    const token = platformToken();
+    if (!token) return { ok: false, reason: "MP_PLATFORM_ACCESS_TOKEN ausente no ambiente." };
+
+    let res: Response;
+    try {
+      res = await fetch(`${MP_API}/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        // Diagnóstico não pode pendurar a tela do admin esperando o gateway.
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch (e) {
+      return { ok: false, reason: `não deu para falar com o Mercado Pago: ${e instanceof Error ? e.message : String(e)}` };
+    }
+
+    const body = (await res.json().catch(() => null)) as
+      | { id?: number; nickname?: string; site_id?: string; message?: string; error?: string }
+      | null;
+
+    if (!res.ok) {
+      // 401 é o caso que interessa: token errado, vencido ou rotacionado.
+      const detalhe = body?.message ?? body?.error ?? "sem detalhe";
+      return { ok: false, reason: `Mercado Pago recusou a chave (HTTP ${res.status}): ${detalhe}` };
+    }
+
+    // Tudo que vem do gateway passa por aqui antes de virar tela. Ver `semSegredo`.
+    return {
+      ok: true,
+      accountId: body?.id ?? null,
+      nickname: semSegredo(body?.nickname ?? null, token),
+      siteId: semSegredo(body?.site_id ?? null, token),
+    };
+  },
 };
+
+/**
+ * Corta qualquer texto vindo do gateway que contenha o token.
+ *
+ * Parece paranoia até lembrar do que este arquivo faz: pega uma resposta de fora,
+ * escolhe alguns campos e manda para uma tela. No dia em que um desses campos
+ * ecoar a credencial — porque a API mudou, porque alguém acrescentou um campo,
+ * porque o provedor decidiu devolver o que recebeu —, o segredo aparece no admin
+ * e ninguém percebe. É barato demais para não travar: guardrail 4, código é trava
+ * e não combinado. O teste que provou a necessidade está no arquivo vizinho.
+ */
+function semSegredo(valor: string | null, token: string): string | null {
+  if (valor === null) return null;
+  return valor.includes(token) ? "[oculto]" : valor;
+}

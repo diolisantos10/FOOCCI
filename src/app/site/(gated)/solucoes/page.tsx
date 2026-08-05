@@ -19,6 +19,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { Eyebrow, DotGrid } from "@/components/marketing/premium";
 import {
@@ -176,6 +178,22 @@ export default function SolucoesPage() {
         subtitle="Do cardápio à nota fiscal, tudo conversa entre si e nada é ferramenta solta. O atendimento por IA e o CRM, os dois carros-chefe, têm página própria."
         primaryLabel={DEMO_CTA_LABEL}
         primaryHref={DEMO_URL}
+        /* Esta página é "o sistema inteiro": a abertura é a tela onde tudo
+           desemboca — os pedidos chegando no painel. Sem a captura, a foto da mão
+           com a loja aberta no celular, que é a outra ponta do mesmo sistema. */
+        visual={heroShot([
+          {
+            kind: "browser",
+            src: PRODUCT_SHOTS.painelPedidos,
+            alt: "Painel do Foocci na tela do computador: a fila de pedidos do restaurante chegando em tempo real.",
+            address: "foocci.com.br/orders",
+          },
+          {
+            kind: "photo",
+            src: SITE_ASSETS.journey[1]!,
+            alt: "Mão segurando um celular com a loja do restaurante aberta, mostrando um prato com foto, preço e o botão de adicionar ao pedido.",
+          },
+        ])}
       />
 
       {/* As demais soluções, por tema */}

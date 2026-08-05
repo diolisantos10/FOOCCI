@@ -41,6 +41,8 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
+import { heroShot } from "@/components/marketing/HeroShot";
+import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { PrimaryCta, SecondaryCta } from "@/components/marketing/Cta";
 import { Eyebrow, DotGrid, Halo } from "@/components/marketing/premium";
@@ -541,6 +543,24 @@ export default function PrecosPage() {
            demonstração continua em cada cartão e na faixa final. */
         secondaryLabel="Experimentar antes"
         secondaryHref={EXPERIMENTE_URL}
+        /* Página de preço abre pelo que o dinheiro compra. Primeiro a tela de
+           resultado — a que ele abre de manhã; sem ela, a cena que o resultado
+           produz: o cliente sentado, voltando. `journey-5` é um recorte redondo,
+           por isso vai como medalhão (o retângulo mostraria os cantos brancos). */
+        visual={heroShot([
+          {
+            kind: "browser",
+            src: PRODUCT_SHOTS.painelResultado,
+            alt: "Painel do Foocci na tela do computador: a visão de resultado do restaurante, com vendas e clientes do período.",
+            address: "foocci.com.br/dashboard",
+          },
+          {
+            kind: "photo",
+            shape: "circle",
+            src: SITE_ASSETS.journey[4]!,
+            alt: "Casal jantando e conversando em um restaurante aconchegante, com os pratos servidos à mesa.",
+          },
+        ])}
       />
 
       {/* 1. Os três planos */}
