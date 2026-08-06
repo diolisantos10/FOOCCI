@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# O INVENTÁRIO DOS RESTAURANTES — antes de qualquer exclusão.
+#
+# Nasceu do pedido do CEO (06/08/2026) de deixar no admin só `foocci-bakery` e
+# `sushi-cazza`. A decisão está tomada; o que este workflow impede é apagar no
+# escuro. Ele responde, restaurante por restaurante, "isto já viveu?".
+#
+# SOMENTE LEITURA. Não apaga, não altera, não exporta dado pessoal.
+# O ADMIN_SECRET é lido do Railway dentro do runner e nunca aparece no log.
+#
+# ⚠️ ESTE WORKFLOW NUNCA VAI GANHAR UM MODO "APAGAR".
+# O log deste repositório é público e a exportação (a rede de segurança) carrega
+# nome, telefone, endereço e conversa de cliente. Exportar e apagar são o
+# `scripts/purgar-restaurante.mjs`, que RECUSA rodar dentro do Actions.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Inventário dos restaurantes (somente leitura)
+
+on:
+  workflow_dispatch:
+  # Disparo automático quando o próprio script muda — é o que permite rodar a
+  # partir de uma branch de trabalho, antes de existir na branch padrão.
+  push:
+    paths:
+      - "scripts/inventario-restaurantes.mjs"
+      - ".github/workflows/inventario-restaurantes.yml"
+
+jobs:
+  inventariar:
+    name: "Inventário (somente leitura)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: "Ler produção e montar o inventário"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/inventario-restaurantes.mjs

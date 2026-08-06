@@ -1287,3 +1287,77 @@ para o Diretor decidir se olha.
    Mostrar o valor NORMALIZADO é o que dá à pessoa a chance de ver o próprio
    engano. Vale para telefone, endereço e valor de troco.
    Origem: `DemoForm.tsx`, 2026-08-05.
+
+---
+
+## 2026-08-06 · Exclusão de restaurante: o mecanismo, antes do primeiro corte
+
+**Pedido:** o CEO mandou deixar no admin só `foocci-bakery` e `sushi-cazza` e
+apagar os outros. O Diretor pediu inventário + mecanismo com rede + simulação, e
+**proibiu executar**. Somente leitura em produção nesta rodada.
+
+### O que eu NÃO consegui entregar, e por quê
+
+**A tabela do inventário com números de produção não saiu.** Não é escolha, é
+falta de acesso: não há `ADMIN_SECRET` nem `RAILWAY_TOKEN` neste ambiente, o
+`gh` não está instalado e o `GITHUB_TOKEN` do ambiente responde `401 Bad
+credentials`. O único caminho até produção passa pelo GitHub Actions, e o Actions
+exige um push — que o Diretor proibiu. Reportado como bloqueio, não contornado.
+**Não inventei número.**
+
+### Os quatro achados que mudam o tamanho do problema
+
+1. **Não existia caminho de exclusão.** `/api/admin/restaurants/[id]` só tem
+   PATCH. Não há `DELETE` de restaurante em rota, serviço ou script nenhum. A
+   alternativa real, sem este bloco, era SQL cru em produção.
+
+2. **`prisma.restaurant.delete()` provavelmente EXPLODE no meio.** A cascata
+   alcança 75 modelos, mas dentro do conjunto existem 6 arestas `ON DELETE
+   RESTRICT` (`orders.customerId`, `order_drafts.customerId`,
+   `conversations.customerId`, `orders.orderDraftId`, `campaigns.segmentId`,
+   `deliveryAddressId`). `RESTRICT` no Postgres é checado na hora. Se a cascata
+   chegar em `customers` antes de `orders`, o banco recusa tudo. Falhar é o certo;
+   o perigo é o passo seguinte, quando alguém parte para o SQL na mão.
+
+3. **23 tabelas carregam `restaurantId` SEM chave estrangeira.** `crm_contact_ledger`,
+   `crm_base_exclusions`, `referrals`, `menu_events`, `media_uploads`,
+   `support_tickets`, `brain_shadow_logs`, `restaurant_experiences`,
+   `customer_channel_identities`, `instagram_channel_configs`, `meta_oauth_states`
+   e mais. A cascata não as enxerga: sobreviveriam apontando para restaurante
+   inexistente.
+
+4. **Apagar o restaurante NÃO cancela a cobrança.** `PlanSubscription.restaurantId`
+   é `onDelete: SetNull`. A linha guarda `mpPreapprovalId` — recorrência viva no
+   Mercado Pago. Sem cancelar lá, o cartão continua sendo debitado depois do
+   restaurante deixar de existir. Virou bloqueio duro na purga.
+
+### O que ficou construído
+
+`src/services/restaurant/restaurantPurgeMap.ts` (mapa e ordem, com os dois slugs
+protegidos), `RestaurantPurgeService.ts` (inventário sem PII, simulação,
+exportação com sha256, corte com 7 portões em transação única), as rotas
+`/api/admin/restaurants/inventario` e `/api/admin/restaurants/purga`, os scripts
+`inventario-restaurantes.mjs` (seguro para log público) e `purgar-restaurante.mjs`
+(recusa rodar dentro do Actions) e o workflow só-leitura.
+
+`npx tsc --noEmit` limpo · `npx vitest run` verde: 5.741 testes, 2.063 arquivos.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **"Cascata do ORM não é o mapa da exclusão — o mapa é o schema do banco."**
+   Neste repositório, apagar um tenant pela cascata do Prisma deixaria 23 tabelas
+   órfãs (referência mole, sem FK) e provavelmente falharia no meio por 6 arestas
+   `RESTRICT`. Antes de qualquer exclusão em cascata: leia o schema, separe o que
+   cai, o que bloqueia e o que sobra — e escreva a ordem, versionada e testada.
+   Origem: `src/services/restaurant/restaurantPurgeMap.ts`, 2026-08-06.
+
+2. **"Rede de segurança que não é conferida contra o banco é encenação."**
+   Exportar antes de apagar só vira reversibilidade se o corte exigir de volta o
+   sha256 da exportação e o RECALCULAR na hora. Isso prova duas coisas de uma vez:
+   que o arquivo existe e que nada entrou entre a exportação e o corte.
+   Origem: `RestaurantPurgeService.executarPurga`, 2026-08-06.
+
+3. **"Cascata apaga o operacional e deixa o financeiro vivo."** `SetNull` numa
+   assinatura significa recorrência de cartão sem dono. Toda exclusão em massa
+   precisa perguntar: o que aqui continua cobrando depois que o registro sumir?
+   Origem: `PlanSubscription` × purga, 2026-08-06.
