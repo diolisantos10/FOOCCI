@@ -1682,3 +1682,86 @@ mutação: `cp` para o scratchpad antes, `cp` de volta depois. Nunca `git checko
 Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, sobre `origin/claude/remove-legacy-runner-q8iXa` (969c29fd)
+
+---
+
+## 2026-08-06 — A tela de excluir restaurante (`/admin/restaurants/excluir`)
+
+**O que foi feito:** a máquina da purga (`RestaurantPurgeService`, rotas
+`/api/admin/restaurants/{inventario,purga}`) existia, estava testada e era
+**inexecutável**: o corte exige o sha256 de uma exportação recém-baixada, a
+exportação carrega nome/telefone/endereço/conversa de cliente, e o único caminho
+automatizado recusa rodar em CI porque o log é público. Faltava a única superfície
+onde a rede de segurança não vira o próprio vazamento — o navegador de quem decide.
+Quatro passos numa tela: inventário → simulação → backup → corte.
+
+**Onde entrou, e por quê não é porta nova.** `/admin/restaurants` já é a casa dos
+restaurantes; a exclusão virou **sub-rota** dela, alcançada por um link discreto no
+cabeçalho da lista. O menu lateral continua com uma entrada só e o item
+"Restaurantes" segue aceso (o realce é `pathname.startsWith`). Não pus lixeira por
+linha de propósito: caminho sem volta não fica a um toque de distância do botão de
+editar.
+
+**Aprendizado 1 — `color: inherit` do `globals.css` também vence utilitário, e no
+admin isso pinta texto branco sobre fundo branco.** A vitrine já registrava que a
+regra base de input (especificidade 0,7,1) vence `border-red-400`. Ela declara
+**`color: inherit`** na mesma linha, e isso vence `text-ink` (0,1,0) igual. Em
+`(dashboard)` não incomoda porque a cor herdada é escura. No `/admin`, o layout é
+`bg-gray-950 text-white` — então **toda página de admin com `bg-canvas` e input
+tem o texto digitado invisível**. Medido: `color: rgb(255,255,255)` sobre
+`background: rgb(255,255,255)`. O screenshot mostrava um campo "vazio" com valor
+dentro. Corrigi com `!text-ink`. **Corolário para a vitrine: em página de admin
+clara, todo input precisa de `!text-ink`, não só `!border-*`.**
+
+**Aprendizado 2 — o hash que o serviço cobra NÃO prova que o arquivo chegou
+inteiro.** `exportarRestaurante().sha256` é a impressão digital do **banco**
+(`executarPurga` a recalcula lendo o banco, para detectar movimento). Um download
+cortado no meio produziria um arquivo inútil com hash "válido", a exclusão
+seguiria e a volta atrás não existiria. Acrescentei à rota que já existia — sem
+mudar o corpo JSON — os cabeçalhos `x-purga-sha256`, `x-purga-sha256-arquivo`,
+`x-purga-bytes-arquivo` e `x-purga-linhas`. A tela baixa por `res.arrayBuffer()`
+(não `res.json()`: 8.613 clientes viram um grafo de objetos que mata o navegador
+de celular), recalcula o sha256 **dos bytes recebidos** e só libera o passo 4
+quando bate. Onde não há `crypto.subtle` (contexto inseguro), a tela **diz que não
+conferiu** em vez de fingir — ausência de verificação não é verificação.
+
+**Aprendizado 3 — a quebra tabela↔cartão de uma tabela com ação tem de subir para
+`lg`, não `md`.** A 768px a tabela de 8 colunas (largura mínima medida: 1005px)
+cabia *rolando*, e a coluna da AÇÃO ficava fora da tela: o único botão do passo 1
+invisível justamente no tamanho em que ninguém pensa em arrastar tabela. Passei o
+corte para `lg` (cartões em 2 colunas a partir de 640) e as duas colunas opcionais
+para `xl`. A 1024 a tabela cabe em 816px de conteúdo com 6 colunas.
+
+**Aprendizado 4 — medir DEPOIS de soltar o shell fixo produz alarme falso.** O
+truque de `main{overflow:visible}` (necessário para o `fullPage` enxergar o scroll
+interno do admin) **quebra o recorte dos `overflow-x-auto` internos**: o script
+acusou `doc=1319` a 1280 numa tela que não tem rolagem horizontal nenhuma. A
+ordem certa é **medir primeiro, soltar depois**. É a mesma armadilha da decoração
+de fundo já registrada na vitrine, por outro caminho.
+
+**Uma coisa que eu mesmo quebrei e o número denunciou:** ao pendurar o link de
+exclusão no cabeçalho de `/admin/restaurants`, o `flex justify-between` com dois
+elementos `shrink-0` levou `main.scrollWidth` de 375 para **436** a 375px —
+devolvendo a rolagem horizontal que o drawer do admin tinha matado em 03/08.
+Baseline conferida com `git stash`. Corrigido com `flex-wrap`. Grupo que cresce
+quebra linha; não se conserta com `shrink-0`.
+
+**Portão novo, com as duas metades:** `portoesDaTela.ts` é função pura (não
+importa `@/services/**`, para não arrastar o Prisma ao pacote do navegador) e tem
+25 testes. O que importa: `foocci-bakery` e `sushi-cazza` são recusados **com
+backup, simulação, interruptor ligado e o slug digitado exatamente certo**, e
+também quando o protegido aparece só no campo digitado à mão. A outra metade foi
+provada no navegador: `auditprobe04597` foi apagado de ponta a ponta no banco
+local, 4 linhas, com o resultado na tela.
+
+**Achado que NÃO consertei (não é meu de decidir):** o `exportarRestaurante`
+monta o objeto inteiro em memória e o serializa **duas vezes** (uma para o hash,
+dentro do serviço; outra para a resposta). Em 8.613 clientes deu 6,3 MB e
+respondeu em ~0,5 s. Não trunca — `JSON.stringify` acima do limite de string do
+V8 lança `RangeError`, falha alta. Mas numa base com conversa e mensagem o pico de
+memória do processo é várias vezes o tamanho do arquivo, e isso é decisão de
+serviço, não de tela.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 8.
+
+— interface, sobre `origin/claude/remove-legacy-runner-q8iXa` (1e368396)

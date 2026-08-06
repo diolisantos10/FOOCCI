@@ -636,17 +636,40 @@ export default function AdminRestaurantsPage() {
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Header */}
-      <div className="border-b border-gray-800 px-6 py-4 flex items-center justify-between gap-4">
+      {/*
+        `flex-wrap` porque o cabeçalho ganhou um segundo elemento à direita: a 375px,
+        título + link + botão numa linha só empurravam o `main` para 436px de largura
+        (medido) e devolviam a rolagem horizontal que o drawer do admin tinha acabado
+        de matar. Grupo que cresce quebra linha; não se conserta com `shrink-0`.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-gray-800 px-6 py-4">
         <div>
           <h1 className="text-lg font-semibold text-white">Restaurantes</h1>
           <p className="text-gray-400 text-sm">{rows.length} restaurante{rows.length !== 1 ? "s" : ""} cadastrado{rows.length !== 1 ? "s" : ""}</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-        >
-          + Novo restaurante
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          {/*
+            A porta da exclusão é UM LINK DISCRETO, e não um ícone de lixeira em cada
+            linha: o caminho sem volta não pode ficar a um toque de distância da mesma
+            área onde se clica para editar ou abrir o cardápio. Quem vai excluir sai
+            desta tela de propósito.
+
+            É sub-rota de /admin/restaurants, então o menu lateral continua com uma
+            porta só — "Restaurantes" segue aceso (o realce é `pathname.startsWith`).
+          */}
+          <a
+            href="/admin/restaurants/excluir"
+            className="text-xs font-medium text-gray-500 underline decoration-gray-700 underline-offset-4 transition-colors hover:text-gray-300"
+          >
+            Excluir restaurante
+          </a>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+          >
+            + Novo restaurante
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
