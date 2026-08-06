@@ -6,6 +6,33 @@ export default defineConfig({
     globals:     true,
     environment: "node",
     include:     ["src/**/*.test.ts"],
+
+    /*
+      PRAZO DE 20s NO LUGAR DOS 5s PADRÃO — e a razão é um padrão, não um teste.
+
+      Em 06/08/2026, QUATRO arquivos diferentes reprovaram por `Test timed out in
+      5000ms` — `noSideEffects`, `runRequest`, `dashboardModel` e `MetaOAuth`. Os
+      três primeiros foram remendados um a um com prazo próprio. O quarto matou o
+      argumento: rodando sozinho ele leva **371ms**. Treze vezes de folga, e ainda
+      assim estourou no runner do CI.
+
+      Ou seja: não são quatro testes lentos. É o relógio de 5s — pensado para teste
+      unitário isolado — medindo uma bateria de 5.700 casos em máquina de duas
+      linhas de execução, onde um worker starvado espera pela CPU sem estar fazendo
+      nada de errado.
+
+      O QUE ISSO CUSTA, dito com honestidade: um teste que trave de verdade agora
+      demora 20s para reprovar em vez de 5s. A bateria inteira leva ~2 minutos, e
+      esse é o preço aceito.
+
+      O QUE ISSO **NÃO** MUDA: nenhuma asserção. Prazo não é portão — o que estes
+      testes medem é conteúdo e determinismo, nunca velocidade. Se um dia algo
+      estourar 20s, aí sim é sinal de verdade: alguma coisa ficou lenta.
+
+      Portão que reprova por sorte ensina a rodar de novo até passar, e a partir daí
+      já não barra nada. Foi por isso que virou configuração e não o quarto remendo.
+    */
+    testTimeout: 20_000,
   },
   resolve: {
     alias: {
