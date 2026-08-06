@@ -2,7 +2,8 @@ import { z } from "zod";
 import { whatsappBrValido, MENSAGEM_WHATSAPP_INVALIDO } from "@/lib/whatsapp-br";
 
 /**
- * Validation for the public demo-request form (/site/demonstracao).
+ * Validation for the public demo-request form (`DemoForm`, hoje na última seção de
+ * /site/precos — a página /site/demonstracao foi eliminada em 06/08).
  *
  * PUBLIC endpoint — anyone on the internet can post here, so every field is
  * length-bounded. Only `nome` and `whatsapp` are required; the rest qualify the

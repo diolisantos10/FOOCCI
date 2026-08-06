@@ -9,10 +9,23 @@
  *
  * CONVERSÃO (04/08, self-service; enxugada em 05/08): o cartão do plano tem UMA
  * ação — "Contratar agora", que leva ao checkout `/contratar/novo` já com plano e
- * ciclo escolhidos. Quem quer ver antes tem a degustação no topo (a
- * degustação) e a faixa de fechamento, que é o único CTA comercial da página.
+ * ciclo escolhidos. Quem quer ver antes tem a degustação no topo.
  * Design: tokens do DESIGN.md (ink/ink2/muted/paper/canvas/line/line2 + escala
  * brand-*), ação primária brand-500/600, card rounded-2xl, pesos 400/600.
+ *
+ * ⚑ ESTA PÁGINA VIROU A PORTA DO SDR (06/08, decisão do CEO). `/site/demonstracao`
+ * foi eliminada e o formulário de demonstração é a ÚLTIMA SEÇÃO daqui,
+ * `id="demonstracao"` — o destino de `DEMO_URL` e, portanto, de TODO botão
+ * "Agende uma demonstração" do site (header, barra fixa do celular, faixa de
+ * fechamento das outras oito páginas). Duas consequências para quem mexer aqui:
+ *
+ *   1. **O `id="demonstracao"` não é decoração.** Renomeá-lo ou tirá-lo derruba o
+ *      funil inteiro em silêncio — o link continua abrindo a página, só que no
+ *      topo, e ninguém vê defeito nenhum.
+ *   2. **A faixa de fechamento (`CtaBand`) saiu.** Ver o comentário na seção 6:
+ *      convite para o formulário que está logo abaixo é botão que só rola a tela.
+ *      Se um dia voltar um CTA comercial a esta página, ele é o SEGUNDO — e a
+ *      regra é um por página.
  *
  * PREÇO: nenhum número desta página é digitado aqui. Tudo vem de
  * `@/lib/billing/pricing`, a MESMA fonte que o checkout usa para cobrar. Antes
@@ -45,8 +58,8 @@ import { PageHero } from "@/components/marketing/PageHero";
 import { SinaisDeVenda } from "@/components/marketing/SinaisDeVenda";
 import { heroShot } from "@/components/marketing/HeroShot";
 import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
-import { CtaBand } from "@/components/marketing/CtaBand";
-import { PrimaryCta, SecondaryCta } from "@/components/marketing/Cta";
+import { DemoForm } from "@/components/marketing/DemoForm";
+import { PrimaryCta } from "@/components/marketing/Cta";
 import { Eyebrow, DotGrid, Halo } from "@/components/marketing/premium";
 import {
   CheckIcon,
@@ -54,11 +67,9 @@ import {
   TrendingUpIcon,
   RepeatIcon,
 } from "@/components/marketing/icons";
-import {
-  DEMO_URL,
-  CALCULADORA_URL,
-  EXPERIMENTE_URL,
-} from "@/components/marketing/config";
+/* `EXPERIMENTE_URL` saiu daqui em 06/08: estava importado e não usado desde a
+   enxugada de 05/08 — import morto que o `tsc` não acusa. */
+import { DEMO_URL, CALCULADORA_URL } from "@/components/marketing/config";
 import {
   ASSUMED_RATE_PERCENT,
   MIGRATION_RANGE,
@@ -396,6 +407,23 @@ const DEGUSTACAO = SITE_PLAN_IDS.map((id) => {
   const code = SITE_PLAN_TO_CODE[id];
   return { planId: id, plan: PLAN_LABEL[code], value: formatBRL(firstChargeCents(code, "MENSAL")) };
 });
+
+/**
+ * O compromisso da seção do formulário, em três passos — e nenhum deles tem prazo.
+ * Texto VINDO DA PÁGINA `/site/demonstracao`, eliminada em 06/08; ele nasceu lá
+ * respondendo à pergunta que trava o envio, e mudou de endereço sem mudar de
+ * palavra.
+ *
+ * Quem faz a demonstração é uma PESSOA do Foocci (o SDR), não um vídeo automático
+ * nem um robô: dizer isso com todas as letras é o que separa "deixei meu telefone
+ * num site" de "combinei uma conversa". "Uma pessoa do Foocci" e não "nossa
+ * equipe": equipe é abstração, pessoa é quem vai chamar.
+ */
+const DEPOIS_DE_ENVIAR = [
+  "Seus dados chegam para uma pessoa do Foocci — ninguém mais recebe.",
+  "Ela chama você no WhatsApp que você informou aqui, para entender o seu restaurante e combinar um horário.",
+  "Na conversa, ela mostra o Foocci funcionando com o cardápio do seu restaurante. Sem compromisso e sem custo.",
+];
 
 const ADDONS = [
   { name: "Nota fiscal (NFC-e)", price: "R$ 89/mês", desc: "Custo por documento + certificado digital do lojista." },
@@ -931,8 +959,84 @@ export default function PrecosPage() {
         </div>
       </section>
 
-      {/* O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
-      <CtaBand title="Veja o Foocci rodando com o cardápio do seu restaurante." />
+      {/*
+        6. O FORMULÁRIO — a última seção, e o único CTA comercial da página.
+
+        A `CtaBand` que ficava aqui SAIU, e não por gosto: ela convidava a pedir a
+        demonstração que o formulário logo abaixo já está pedindo. Seria um botão
+        laranja cuja única função é rolar 200px até o campo "Nome" — o mesmo
+        defeito que fez a antiga `/site/demonstracao` tirar a faixa dela em 05/08.
+        Nada se perdeu: o título e a linha de apoio da faixa viraram o cabeçalho
+        DESTA seção, e o botão virou o próprio formulário.
+
+        `scroll-mt-20` (80px) porque o cabeçalho do site é `sticky top-0 h-16`
+        (64px): sem isso a âncora entrega o título embaixo da barra.
+
+        A ordem interna é deliberada — formulário PRIMEIRO, "depois que você
+        enviar" abaixo dele. Quem chega pela âncora tem que cair vendo os campos,
+        não uma lista para ler antes; e o que acontece após o envio é, literalmente,
+        o que vem depois do botão.
+      */}
+      <section
+        id="demonstracao"
+        aria-labelledby="demonstracao-title"
+        className="relative scroll-mt-20 overflow-hidden bg-paper py-16 lg:py-20"
+      >
+        <Halo className="left-1/2 top-0 h-64 w-[40rem] -translate-x-1/2" color="rgba(249,115,22,0.10)" />
+        <div className="relative mx-auto max-w-2xl px-5 lg:px-8">
+          <div className="text-center">
+            <Eyebrow>Prefere ver antes de contratar?</Eyebrow>
+            <h2
+              id="demonstracao-title"
+              className="mt-3 text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl"
+            >
+              Veja o Foocci rodando com o cardápio do seu restaurante.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2">
+              Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do
+              seu restaurante. São dois campos: seu nome e seu WhatsApp.
+            </p>
+          </div>
+
+          {/*
+            Cartão BRANCO sobre seção branca, com borda e anel — o mesmo tratamento
+            que a antiga página do formulário usava, e não é decoração: os dois
+            estados de sucesso do `DemoForm` moram DENTRO deste cartão e cada um
+            escolheu o próprio fundo contra o branco (`brand-50` na confirmação,
+            `canvas` no painel do WhatsApp). Tingir o cartão apagaria os dois.
+          */}
+          <div className="mt-8 rounded-2xl border border-line bg-paper p-6 shadow-sm ring-1 ring-ink/[0.03] sm:p-8">
+            <DemoForm includeChallenge />
+
+            {/*
+              O QUE ACONTECE DEPOIS DE ENVIAR — a pergunta que segura o dedo em cima
+              do botão. Sem PRAZO de propósito: não existe compromisso de "em até X
+              horas", e prometer prazo que não se cumpre é o contrário do que esta
+              casa faz (guardrail 7). O que se promete aqui é o que de fato acontece:
+              uma PESSOA recebe, chama no WhatsApp e mostra o produto com o cardápio
+              do restaurante dela.
+            */}
+            <div className="mt-7 border-t border-line pt-7">
+              <h3 className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-ink2">
+                Depois que você enviar
+              </h3>
+              <ol className="mt-4 space-y-3.5">
+                {DEPOIS_DE_ENVIAR.map((passo, i) => (
+                  <li key={passo} className="flex items-start gap-3">
+                    <span
+                      aria-hidden
+                      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[12.5px] font-semibold text-brand-600 ring-1 ring-brand-100"
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-[15px] leading-relaxed text-ink2">{passo}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
     </>
   );
 }

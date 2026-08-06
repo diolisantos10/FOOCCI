@@ -1442,3 +1442,119 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
 
 — interface, worktree `agent-a922fa55c06961a3f`, sobre
 `origin/claude/remove-legacy-runner-q8iXa` (13495d82)
+
+---
+
+## 2026-08-06 · A página `/site/demonstracao` morreu; o formulário mudou de casa
+
+**Pedido:** ordem do CEO, confirmada duas vezes — eliminar `/site/demonstracao`.
+O desenho aprovado: a *página* morre, o **formulário** vira a última seção de
+`/site/precos`. Sem commit, sem push, por ordem do Diretor.
+
+### Por que isto não era um `rm`
+
+Aquela página era a **única porta de lead do site inteiro**: onze CTAs — header,
+barra fixa do celular, faixa de fechamento de oito páginas, rodapé, checkout —
+apontavam para ela. Apagar sem destino deixaria oito páginas com botão morto e o
+SDR sem entrada.
+
+O que salvou o trabalho foi uma decisão tomada por outra sessão, meses antes:
+**`DEMO_URL` no `config.ts` é a fonte única.** Mudar o destino dos onze CTAs foi
+mudar **uma linha**. Nenhum `href` literal em página nenhuma — conferido com
+`grep`, e agora com portão.
+
+### O que mudou de casa, e o que NÃO podia mudar
+
+`DemoForm` foi **movido inteiro**, sem uma linha reescrita. Ele é peça delicada e
+cada pedaço dela tem cicatriz: preserva o que foi digitado quando o servidor
+falha, valida WhatsApp brasileiro no **servidor** (a do navegador é conveniência),
+guarda a origem do **primeiro toque** da visita (não a página do envio) e gera o
+código do lead. Reescrever era perder alguma — e não dá para saber qual antes de
+perder.
+
+Veio junto o bloco **"Depois que você enviar"** (3 passos, sem prazo prometido).
+Ficou **abaixo** do formulário, e não acima como era: o que acontece depois do
+envio é, literalmente, o que vem depois do botão — e cada pixel acima do
+formulário é pixel que empurra o campo "Nome" para fora da tela de quem chega
+pela âncora.
+
+**Não trouxe** as 5 linhas de "O que a demonstração vai mostrar": na página de
+preços elas vêm **depois** de três cartões com a lista completa de recursos, ROI,
+ciclos e add-ons. É a mesma informação, pela quarta vez, no lugar onde a pessoa
+precisa ver um campo de texto. Está reportado ao Diretor para veto.
+
+### A âncora, medida (é o defeito da calculadora de ontem, na mesma semana)
+
+O botão leva a pessoa para o **meio de uma página de 14.370px**. Medi a chegada
+pelos quatro percursos reais, incluindo o 308 da rota velha:
+
+| Tamanho | scrollY na chegada | topo do formulário | campo "Nome" |
+|---|---|---|---|
+| 375 | 12.313 | **421px** (dobra 812) | visível inteiro |
+| 768 | 9.393 | **385px** (dobra 1024) | visível inteiro |
+| 1280 | 6.130 | **401px** (dobra 800) | visível inteiro, com o botão |
+
+`scroll-mt-20` (80px) porque o header é `sticky top-0 h-16` (64px). Sem isso a
+âncora entrega o título embaixo da barra.
+
+### O defeito mudo que eu quase deixei passar
+
+`StickyMobileCta` escondia a barra com `usePathname() === DEMO_URL`. Com a âncora
+no destino, **`usePathname()` nunca devolve o `#`** — a comparação nunca mais
+daria verdadeiro e a barra voltaria a aparecer na própria página do formulário,
+competindo em laranja com os três "Contratar agora". Nada quebra, nada loga,
+nenhum teste vermelho. Resolvido com `DEMO_PAGE_PATH`, **derivado** de `DEMO_URL`
+e não digitado de novo.
+
+**A regra, e ela vale para qualquer rota que ganhe âncora:** comparar caminho com
+uma constante que carrega fragmento é comparação que já nasceu falsa.
+
+### O que TIREI da página de preços
+
+A `CtaBand` do fecho. Com o formulário logo abaixo, ela era um botão laranja cuja
+única função seria rolar 200px até o campo "Nome" — exatamente o motivo pelo qual
+a própria `/site/demonstracao` tinha tirado a faixa dela em 05/08. **Nada se
+perdeu:** o título e a linha de apoio da faixa viraram o cabeçalho da seção nova,
+e o botão virou o formulário. Medido: `[data-demo-cta]` na página = 0.
+
+### Estados (DESIGN.md §6.1), os cinco
+
+Capturados nos três tamanhos: **vazio** (idle), **erro de preenchimento**
+(pendências coladas no botão + borda vermelha + foco no primeiro), **erro de
+servidor** com 500 forjado — os quatro campos voltam preenchidos, provado no DOM
+—, **carregando** ("Enviando…", botão travado) e **enviado** nos dois ramos
+(confirmação e, com `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` ligado, o handoff de
+WhatsApp com a mensagem à vista).
+
+O cartão ficou **branco sobre seção branca**, com borda e anel — e isso não é
+gosto: os dois painéis de sucesso escolheram o próprio fundo contra o branco
+(`brand-50` na confirmação, `canvas` no handoff). Tingir o cartão apagaria os
+dois. Foi a razão de não usar a moldura quente da `CtaBand`.
+
+### Portão
+
+`src/components/marketing/tests/ancoraDoFormulario.test.ts` — 6 casos. Provado
+que reprova: renomeei o `id="demonstracao"` para `id="demo-form"` e o teste
+falhou com a frase certa. Ele tranca as três formas mudas do defeito: âncora que
+some, caminho escrito à mão de novo, rota aposentada que vira 404. Cuidado que
+custou uma iteração: a primeira versão acusou o **comentário** de
+`leadOriginStorage.ts` que cita a rota velha — teste que proíbe escrever a
+história é teste que a gente apaga. Passou a varrer o código sem comentários.
+
+### Fora do meu recorte, e reportado
+
+Os **vídeos de demonstração** (`/admin/demo-videos`) eram exibidos SÓ naquela
+página. Publicar um vídeo hoje não mostra em lugar nenhum. Não havia vídeo
+publicado — a seção nem existia —, mas onde eles passam a morar é decisão de
+produto. Não podia nem avisar no admin: `src/app/admin/**` está travado nesta
+sessão.
+
+**Verificação:** `npx tsc --noEmit` limpo · `npx vitest run` **2.059 arquivos /
+5.775 testes verdes** (5.769 antes + 6 do portão novo), relatório JSON
+registrado. Zero rolagem horizontal nos três tamanhos e nas oito páginas
+(`scrollWidth` = viewport, exato). Sem commit, sem push.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, worktree `agent-a65e3ac7f8dc472f6`, sobre
+`origin/claude/remove-legacy-runner-q8iXa` (ea301165)

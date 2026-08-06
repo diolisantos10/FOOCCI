@@ -50,7 +50,6 @@ export const WHATSAPP_SALES_NUMBER: string | null =
 /** Internal destinations used by the CTAs. */
 export const COMO_FUNCIONA_URL = "/site/como-funciona";
 export const PROPOSTA_URL = "/site/sobre";
-export const DEMO_URL = "/site/demonstracao";
 
 /**
  * MENU DE PRODUTO (decisão do CEO, 04/08): cada item vira PÁGINA própria — nada de
@@ -70,6 +69,37 @@ export const PRECOS_URL = "/site/precos";
  * e "Planos e preços" no menu de propósito: é o último passo antes do preço.
  */
 export const EXPERIMENTE_URL = "/site/experimente";
+
+/**
+ * ⚑ ONDE MORA O FORMULÁRIO — a porta única do SDR.
+ *
+ * DECISÃO DO CEO (06/08, confirmada duas vezes): a página `/site/demonstracao`
+ * foi ELIMINADA e o formulário virou a ÚLTIMA SEÇÃO de `/site/precos`. Uma página
+ * a menos, o mesmo lead — e quem clica em "agende uma demonstração" chega com o
+ * preço na frente, que é a informação que ele ia perguntar na ligação de qualquer
+ * jeito.
+ *
+ * A rota velha NÃO sumiu: `/site/demonstracao` (e `/site/agendar`, que já
+ * apontava para ela) respondem 308 para cá. Ela foi divulgada e está em índice de
+ * busca; 404 em porta de lead é lead perdido sem ninguém ver.
+ *
+ * ESTA CONSTANTE É A FONTE ÚNICA. Nenhuma página escreve o caminho à mão — é uma
+ * linha justamente para que mudar o endereço do formulário seja mudar uma linha.
+ * Foi o que aconteceu aqui: onze CTAs mudaram de destino sem tocar em onze
+ * arquivos.
+ */
+export const DEMO_URL = `${PRECOS_URL}#demonstracao`;
+
+/**
+ * O caminho SEM a âncora. Existe para quem precisa comparar com `usePathname()`,
+ * que nunca devolve o `#` — a barra fixa do celular usa isso para não se oferecer
+ * a levar a pessoa para a página em que ela já está (ver `StickyMobileCta`).
+ *
+ * Derivado, e não digitado de novo: duas cópias do mesmo endereço é como a
+ * comparação silenciosamente para de bater no dia em que o formulário se mudar.
+ */
+export const DEMO_PAGE_PATH = DEMO_URL.split("#")[0]!;
+
 /**
  * A calculadora de comissão, na home. É o único lugar do site onde a taxa do
  * marketplace é EDITÁVEL — por isso todo número comparativo de outra página aponta
@@ -80,8 +110,8 @@ export const CALCULADORA_URL = "/site#calculadora";
  * ⚑ O RÓTULO ÚNICO DE TODO CTA COMERCIAL. Escreva-o AQUI e em lugar nenhum mais.
  *
  * Caminho único de conversão (decisão do CEO, 04/08): TODO CTA comercial leva ao
- * FORMULÁRIO de `/site/demonstracao`, onde o cliente deixa os dados e uma pessoa do
- * Foocci entra em contato.
+ * FORMULÁRIO — que desde 06/08 é a última seção de `/site/precos` (`DEMO_URL`),
+ * onde o cliente deixa os dados e uma pessoa do Foocci entra em contato.
  *
  * TEXTO ÚNICO (decisão do Diretor, 05/08). O site tinha ONZE chamadas para este
  * mesmo destino com NOVE textos diferentes — "Pedir uma demonstração", "Ver
