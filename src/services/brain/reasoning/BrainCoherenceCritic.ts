@@ -17,6 +17,7 @@
 import { selectEngineRouted } from "../engines/AIEngineRouter";
 import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
 import type { BusinessKnowledgeSnapshot } from "../knowledge/BusinessKnowledgeContract";
+import { TRUTH_LABELS, truthPriorityIndex } from "../knowledge/truthLabels";
 
 export interface CriticVerdict {
   approved: boolean;
@@ -43,32 +44,17 @@ const JUDGE_SYSTEM_PROMPT =
   "aparece na base é CORRETA — aprove.\n" +
   'Responda SOMENTE JSON: {"approved": boolean, "reason": "curta, em português"}';
 
-// Rótulos por fonte (espelham os do BrainReasoner) para o juiz LER a verdade,
-// não um JSON cru. Ordem de prioridade: fatos pequenos e mais afirmados primeiro,
-// o cardápio (grande) depois — assim preços/pagamentos/horários NUNCA são cortados.
-const TRUTH_LABELS: Record<string, string> = {
-  policies: "Identidade/política",
-  prices: "Preços",
-  payments: "Pagamentos",
-  hours: "Horários/atendimento",
-  materials: "Materiais",
-  evidence: "Evidências",
-  products: "Produtos",
-  customers: "Clientes (agregado)",
-  orders: "Pedidos (agregado)",
-  conversations: "Conversas (agregado)",
-};
-const TRUTH_PRIORITY = [
-  "policies", "prices", "payments", "hours", "materials", "evidence", "products", "customers", "orders", "conversations",
-];
-
-/** Verdade rotulada e priorizada para o juiz — completa, sem cortar os fatos-chave. */
-function formatTruthForJudge(truth: Record<string, unknown>, maxChars = 15000): string {
-  const keys = Object.keys(truth).sort((a, b) => {
-    const ia = TRUTH_PRIORITY.indexOf(a);
-    const ib = TRUTH_PRIORITY.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  });
+/**
+ * Verdade rotulada e priorizada para o juiz — completa, sem cortar os fatos-chave.
+ *
+ * Os rótulos e a fila vêm de `knowledge/truthLabels`, a MESMA tabela que o
+ * BrainReasoner usa. Eram duas cópias até 06/08/2026, e a cópia daqui não
+ * acompanhou o PR #111: `loja`/`entrega`/`local` caíam no fim da fila e o corte
+ * de 15.000 caracteres apagava justo o estado da loja — para o juiz, e só para
+ * ele. Uma tabela, dois leitores.
+ */
+export function formatTruthForJudge(truth: Record<string, unknown>, maxChars = 15000): string {
+  const keys = Object.keys(truth).sort((a, b) => truthPriorityIndex(a) - truthPriorityIndex(b));
   const parts: string[] = [];
   let used = 0;
   for (const key of keys) {
