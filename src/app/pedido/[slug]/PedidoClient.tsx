@@ -25,7 +25,7 @@ import {
   type DeliverySubId,
 } from "@/services/order/paymentOptions";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
-import { ImageCarousel, menuItemPhotos } from "@/components/menu";
+import { ImageCarousel, menuItemPhotos, COR_PADRAO_DA_LOJA } from "@/components/menu";
 import { phoneCandidates } from "@/lib/phone";
 import {
   telefoneEfetivoDoCliente,
@@ -2469,7 +2469,7 @@ export function PedidoClient({
   aiIncluded = true,
   identificacaoOpcional = false,
 }: Props) {
-  const pc = brandPrimaryColor || '#25d366';
+  const pc = brandPrimaryColor || COR_PADRAO_DA_LOJA;
   const sc = brandSecondaryColor || '#128c7e';
   // ── Chat ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);

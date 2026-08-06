@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CAPA_DEGRADE_DA_MARCA, capaMostraFoto, escurecerCor, iniciaisDoNome } from "./cover";
+import { CAPA_DEGRADE_DA_MARCA, COR_PADRAO_DA_LOJA, capaMostraFoto, escurecerCor, iniciaisDoNome } from "./cover";
 
 const raiz = process.cwd();
 const ler = (p: string) => readFileSync(path.join(raiz, p), "utf8");
@@ -153,9 +153,11 @@ describe("prévia da capa no painel — prévia que mente é pior que prévia ne
   it("a prévia usa a MESMA conta do cardápio, não uma fórmula própria", () => {
     const marca = ler("src/app/(dashboard)/marca/page.tsx");
     expect(marca).toContain("escurecerCor(corDaCapa)");
-    // A cor de reserva da prévia é a MESMA do /qr/[slug]. Enquanto era outra, o
-    // lojista via um degradê que o cliente dele nunca ia ver.
-    expect(marca).toMatch(/const corDaCapa = form\.brandPrimaryColor \|\| "#f97316"/);
+    // A cor de reserva da prévia é a MESMA do /qr/[slug] — e agora isso é lido de
+    // uma constante, não conferido entre duas cópias. Enquanto eram dois literais,
+    // a versão "sincronizada" estava sincronizada na cor ERRADA: as duas traziam
+    // o laranja da Foocci numa superfície white-label.
+    expect(marca).toMatch(/const corDaCapa = form\.brandPrimaryColor \|\| COR_PADRAO_DA_LOJA/);
   });
 
   it("o formulário NÃO inventa cor de marca — vazio salva vazio", () => {
@@ -199,5 +201,43 @@ describe("padaria de vitrine — a identidade não depende de rodada paga", () =
     expect(svc).toContain("coverImageUrl: BAKERY_IDENTITY.coverImageUrl");
     expect(svc).toContain("instagramUrl: BAKERY_IDENTITY.instagramUrl");
     expect(svc).toContain("tiktokUrl: BAKERY_IDENTITY.tiktokUrl");
+  });
+});
+
+describe("a cor de reserva da loja — uma constante, três telas", () => {
+  /*
+    O DEFEITO QUE ISTO TRANCA, e ele passou despercebido por ser pequeno demais:
+
+    a reserva estava escrita à mão em três lugares e DISCORDAVA. O `/pedido` usava
+    o verde que o DESIGN.md §1 declara; o cardápio da mesa (`/qr`) e a prévia da
+    tela Marca usavam `#f97316` — o laranja da Foocci, que é a marca do PAINEL DO
+    LOJISTA e não tem o que fazer numa loja white-label.
+
+    Enquanto a reserva pintava só um botão, ninguém via. A capa do cardápio a
+    transformou numa faixa larga no topo, e o desvio virou a primeira coisa que o
+    cliente do restaurante enxerga — com a marca errada.
+
+    Estes testes vão no LITERAL, não no valor calculado, porque o defeito era um
+    literal digitado: um teste que só comparasse `pc === COR_PADRAO_DA_LOJA` passaria
+    feliz com as três telas trazendo hex diferentes de volta.
+  */
+  const TELAS = [
+    "src/app/qr/[slug]/QRMenuClient.tsx",
+    "src/app/pedido/[slug]/PedidoClient.tsx",
+    "src/app/(dashboard)/marca/page.tsx",
+  ];
+
+  it("é o verde do DESIGN.md, não o laranja da Foocci", () => {
+    expect(COR_PADRAO_DA_LOJA).toBe("#25d366");
+  });
+
+  it("nenhuma das três telas digita a cor de reserva à mão", () => {
+    for (const tela of TELAS) {
+      const src = ler(tela);
+      // O laranja da marca da Foocci não pode voltar como reserva de loja.
+      expect(src).not.toMatch(/brandPrimaryColor\s*\|\|\s*["']#f97316["']/);
+      expect(src).not.toMatch(/brandPrimaryColor\s*\|\|\s*["']#25d366["']/);
+      expect(src).toContain("COR_PADRAO_DA_LOJA");
+    }
   });
 });
