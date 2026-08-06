@@ -69,7 +69,7 @@ async function main(): Promise<void> {
 
   console.log(`    itens no cardápio  : ${plano.totalItens}`);
   console.log(`    sem capa           : ${plano.semFoto}${force ? " (--force: inclui quem já tem)" : ""}`);
-  console.log(`    sem as ${plano.fotosExtrasPorItem} extras     : ${plano.semCarrossel}`);
+  console.log(`    sem as ${plano.fotosExtrasPorItem} extras    : ${plano.semCarrossel}`);
   console.log(`    itens nesta rodada : ${plano.itensNestaRodada}${limite ? ` (--limit=${limite})` : ""}`);
   console.log(`    fotos a gerar      : ${plano.aGerar}  (${plano.capasAGerar} capa(s) + ${plano.extrasAGerar} extra(s))`);
   console.log(`    modelo             : ${plano.modelo}`);

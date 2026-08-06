@@ -31,7 +31,7 @@
  */
 
 import { useState } from "react";
-import { CAPA_BRILHO, CAPA_DEGRADE_DA_MARCA, CAPA_VEU, capaMostraFoto } from "./cover";
+import { CAPA_BRILHO, CAPA_DEGRADE_DA_MARCA, CAPA_VEU, capaMostraFoto, iniciaisDoNome } from "./cover";
 
 export function MenuCover({
   coverImageUrl,
@@ -51,7 +51,12 @@ export function MenuCover({
   return (
     <div className={className}>
       <div
-        className="relative h-32 w-full overflow-hidden sm:h-40 lg:h-56"
+        className={`relative h-32 w-full overflow-hidden sm:h-40 ${
+          // No desktop a faixa só cresce QUANDO HÁ FOTO: foto merece o espaço,
+          // degradê não tem o que mostrar em 224px. Sem esta linha, o cardápio
+          // de quem nunca escolheu cor abria com um bloco de tinta de meia tela.
+          temFoto ? "lg:h-56" : ""
+        }`}
         style={{
           // O degradê é o CHÃO da capa: existe com foto e sem foto. Com foto, é o
           // placeholder enquanto ela chega e a rede de segurança se ela falhar.
@@ -88,18 +93,30 @@ export function MenuCover({
       </div>
 
       {/* O logo monta na divisa capa/conteúdo (padrão iFood/Rappi). O anel branco
-          é o que separa o logo da capa em QUALQUER cor de marca — não é enfeite. */}
-      {logoUrl && (
-        <div className="relative z-10 -mt-12 flex justify-center sm:-mt-14">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          é o que separa o logo da capa em QUALQUER cor de marca — não é enfeite.
+
+          SEM logo, o lugar não fica vazio: entra o monograma com as iniciais do
+          restaurante. Uma faixa colorida com nada em cima não é capa, é um bloco
+          de tinta — e restaurante sem logo é maioria, não exceção. */}
+      <div className="relative z-10 -mt-12 flex justify-center sm:-mt-14">
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoUrl}
             alt={restaurantName}
             className="h-20 w-20 rounded-full bg-white object-cover shadow-md ring-4 ring-white sm:h-24 sm:w-24"
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           />
-        </div>
-      )}
+        ) : (
+          <div
+            aria-hidden="true"
+            className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-semibold shadow-md ring-4 ring-white sm:h-24 sm:w-24 sm:text-3xl"
+            style={{ color: "var(--brand-primary)" }}
+          >
+            {iniciaisDoNome(restaurantName)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,10 @@
 
 import { useState, useEffect, type FormEvent } from "react";
 import { TopBar } from "@/components/layout/TopBar";
+// Importado do MÓDULO, não do barril: o barril de @/components/menu arrasta a
+// ficha do produto, o carrossel e o modal de boas-vindas para dentro do pacote
+// desta tela do painel, que não usa nada disso.
+import { escurecerCor } from "@/components/menu/cover";
 import {
   apiFetch,
   Feedback,
@@ -137,8 +141,8 @@ const FORM_DEFAULTS: MarcaForm = {
   differentials: "",
   mostProfitableProducts: "",
   cuisineType: "",
-  brandPrimaryColor: "#6366f1",
-  brandSecondaryColor: "#8b5cf6",
+  brandPrimaryColor: "",
+  brandSecondaryColor: "",
   googleReviewUrl: "",
   ifoodReviewUrl: "",
   instagramUrl: "",
@@ -478,8 +482,14 @@ export default function MarcaPage() {
           differentials:         String(p.differentials ?? ""),
           mostProfitableProducts: String(p.mostProfitableProducts ?? ""),
           cuisineType:           String(p.cuisineType ?? ""),
-          brandPrimaryColor:     data.brandPrimaryColor ?? "#6366f1",
-          brandSecondaryColor:   data.brandSecondaryColor ?? "#8b5cf6",
+          // Vazio continua VAZIO. Antes o formulário preenchia sozinho com o
+          // indigo padrão; quem abrisse esta tela e clicasse em Salvar gravava
+          // #6366f1 como cor da loja sem nunca ter escolhido cor — e indigo é
+          // justamente o que o DESIGN.md proíbe como cor de ação. Os campos de
+          // cor mostram o indigo só como VALOR DE EXIBIÇÃO (o <input type=color>
+          // exige um hex válido); o que vai para o banco é o que a pessoa mexeu.
+          brandPrimaryColor:     data.brandPrimaryColor ?? "",
+          brandSecondaryColor:   data.brandSecondaryColor ?? "",
           googleReviewUrl:       data.googleReviewUrl ?? "",
           ifoodReviewUrl:        data.ifoodReviewUrl ?? "",
           instagramUrl:          data.instagramUrl ?? "",
@@ -606,6 +616,10 @@ export default function MarcaPage() {
     setSaving(false);
   }
 
+  // A cor que o cardápio do cliente REALMENTE usa quando o lojista não escolheu
+  // nenhuma — a mesma reserva do /qr/[slug]. Ver o comentário da prévia.
+  const corDaCapa = form.brandPrimaryColor || "#f97316";
+
   // O cabeçalho é a ÚNICA régua do topo — e é dentro dele que mora a pílula do
   // Assistente. Tela do menu lateral sem `TopBar` ficava sem assistente nenhum.
   if (loading) {
@@ -661,7 +675,12 @@ export default function MarcaPage() {
           <div
             className="relative h-28 w-full overflow-hidden rounded-2xl border border-line sm:h-36"
             style={{
-              backgroundImage: `linear-gradient(135deg, ${form.brandPrimaryColor || "#25d366"} 0%, ${form.brandSecondaryColor || form.brandPrimaryColor || "#128c7e"} 100%)`,
+              // A prévia usa a MESMA conta do cardápio (QRMenuClient + MenuCover):
+              // mesma cor de reserva e mesma derivação da segunda ponta. Prévia
+              // com fórmula própria é prévia que mente — e esta já mentia: ela
+              // desenhava o indigo padrão do formulário, cor que o cardápio do
+              // cliente nunca usou.
+              backgroundImage: `linear-gradient(135deg, ${corDaCapa} 0%, ${form.brandSecondaryColor || escurecerCor(corDaCapa)} 100%)`,
             }}
           >
             {form.coverImageUrl && (

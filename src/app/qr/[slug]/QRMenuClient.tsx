@@ -23,6 +23,7 @@ import {
   type MenuDisplayCategory,
   type MenuDisplayItem,
   type PromotionBannerData,
+  escurecerCor,
 } from "@/components/menu";
 
 type Props = {
@@ -46,9 +47,10 @@ type Props = {
 export function QRMenuClient({ slug, restaurant, categories, featured, promotedItems = [], promoBanner, promotionBanners = [], coverImageUrl, brandPrimaryColor, brandSecondaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
   const pc = brandPrimaryColor || '#f97316';
   // A secundária só era usada pela Loja; a capa precisa dela para o degradê do
-  // estado vazio. Sem cor secundária definida, a primária vale para as duas
-  // pontas — degradê de uma cor só continua sendo a marca, nunca cinza.
-  const sc = brandSecondaryColor || pc;
+  // estado vazio. Sem cor secundária definida, ela é DERIVADA da primária —
+  // usar a primária nas duas pontas dá um bloco chapado de tinta, que é
+  // exatamente o que a capa vazia não pode ser.
+  const sc = brandSecondaryColor || escurecerCor(pc);
   const [selectedItem, setSelectedItem] = useState<MenuDisplayItem | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
