@@ -1558,3 +1558,127 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
 
 — interface, worktree `agent-a65e3ac7f8dc472f6`, sobre
 `origin/claude/remove-legacy-runner-q8iXa` (ea301165)
+
+---
+
+## 2026-08-06 · Capa do cardápio, carrossel na ficha e a identidade da padaria
+
+**Pedido do CEO (print da loja do Sushi Cazza):** *"Essas abas precisam aparecer
+na bakery. Faltam as imagens que te pedi nos produtos da bakery e a capa no
+cardápio QR Code."* Mais o pedido anterior: logo, capa, os três ícones (Instagram,
+TikTok, WhatsApp) fictícios, e **2 fotos a mais para cada produto**.
+
+### As três perguntas, respondidas no código antes de escrever qualquer linha
+
+1. **O `/qr/[slug]` já mostrava os ícones sociais?** Mostrava. `page.tsx:205-208`
+   já passava `instagramUrl`/`tiktokUrl`/`restaurantPhone`, e o `MenuHero` já
+   renderizava o `MenuSocialLinks`. **Não faltava código, faltava DADO:** o
+   `configureStore()` da padaria nunca preencheu esses campos, e o
+   `MenuSocialLinks` some sozinho quando os três estão vazios. Por isso a bakery
+   exibia só o WhatsApp (que nasce do telefone da loja).
+2. **Existia capa em alguma superfície?** Em nenhuma. `bannerImageUrl` existe,
+   mas é da **Promotion**, não do restaurante. Recurso novo de produto → coluna
+   própria `RestaurantBrandConfig.coverImageUrl`, campo na tela Marca para todo
+   lojista, e estado vazio desenhado.
+3. **A ficha montava o carrossel com `carouselEnabled`?** **Não — em duas das três
+   fichas.** O carrossel existia SÓ no `PedidoClient` (Loja com IA). O
+   `components/menu/ProductModal`, usado pelo QR e pela Loja sem IA, desenhava
+   `item.imageUrl` cru. E o `/qr/[slug]/page.tsx` sequer pedia `images` /
+   `carouselEnabled` ao banco. Duas camadas mudas: o lojista subiria 3 fotos e o
+   cardápio da mesa mostraria 1, sem erro nenhum.
+
+### O defeito que a prova em navegador achou (e que a leitura não pegaria)
+
+Medido com Playwright na ficha do Pão Francês, **na versão da base** (`969c29fd`):
+a Loja com IA abria o carrossel com **2 fotos**, não 3. O `PedidoClient` montava
+`item.images` puro — a **capa sumia justo do item que a pessoa tinha acabado de
+tocar**. Depois do conserto: 3 fotos, 3 pontinhos, nas três larguras.
+
+A regra virou peça única e testável: `menuItemPhotos()` em
+`src/components/menu/photos.ts` (capa primeiro, extras depois, sem duplicata,
+opt-in respeitado). O `ImageCarousel` saiu do `PedidoClient` para
+`src/components/menu/` — havia duas fichas de produto e só uma tinha carrossel.
+
+### Defeito que EU criei e a captura pegou
+
+A primeira versão do `MenuCover` fazia a foto aparecer com `onLoad` +
+`opacity-0 → opacity-100`. Medido no DOM: **`img.complete === true` com
+`opacity: "0"`**. Página renderizada no servidor + imagem em cache = o evento
+`load` dispara antes de o React pendurar o handler, e a capa fica invisível para
+sempre. **O sintoma é mudo**: a faixa continua bonita porque o degradê está
+atrás — ninguém descobriria que a foto do lojista nunca apareceu. Visibilidade de
+imagem em página SSR não pode depender de evento de JavaScript. Portão em
+`capa.test.ts`.
+
+### O estado vazio, que é o caso da maioria
+
+Sem capa a faixa **não some e não fica cinza**: ela é o degradê da própria marca
+(`--brand-primary` → `--brand-secondary`), e ganhou duas correções nascidas da
+captura:
+- **Segunda ponta derivada** (`escurecerCor`). Com primária = secundária o
+  resultado é um bloco chapado de tinta, não uma faixa desenhada.
+- **Monograma** quando não há logo. Faixa colorida com nada em cima não é capa.
+- No desktop a faixa **só cresce quando há foto** (`lg:h-56` condicional): 224px
+  de cor lisa é meia tela de tinta em quem nunca escolheu cor.
+
+### Duas mentiras de tela consertadas de passagem
+
+- A **prévia da capa** na tela Marca desenhava o indigo padrão do formulário —
+  cor que o cardápio do cliente **nunca** usou. Agora usa a mesma conta do
+  `/qr/[slug]`.
+- O formulário da Marca **inventava** `#6366f1`/`#8b5cf6` quando o restaurante não
+  tinha cor: quem abrisse a tela e clicasse em Salvar **gravava indigo como cor da
+  loja** sem ter escolhido nada — e indigo é a cor que o `DESIGN.md` proíbe. Vazio
+  volta a salvar vazio; o `<input type="color">` mantém o hex só para exibir.
+
+### O dinheiro
+
+`limite` passou a ser em **ITENS**, não em fotos — "prove com um produto" quer
+dizer a ficha inteira (capa + 2 extras). E o ensaio agora recebe o mesmo `limite`
+da geração: enquanto eram duas contas separadas, o botão do admin anunciava 5 e o
+gerador cobrava 15. O `custoTudo` do admin também mentia por 3× (`totalItens ×
+custoPorFoto`, ignorando as extras).
+
+**Não rodei a geração paga.** Não há `OPENAI_API_KEY` (o `.env` local tem o
+literal `sk-...`) nem `ADMIN_SECRET` nesta caixa, e o Chromium não alcança a
+internet pública. O ensaio local: 40 itens, 0 sem capa, 78 extras faltando,
+**~US$ 3,12**. Em produção, com as 40 capas prontas: **80 fotos × US$ 0,04 = ~US$
+3,20**.
+
+Para provar o carrossel sem gastar, gerei **duas variações locais** da própria
+capa do Pão Francês com `sharp` (recorte + espelho + ajuste). São andaimes de
+prova, não as fotos de produção.
+
+### Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` **5.820 testes verdes / 2.068 arquivos**,
+lido no JSON (`--reporter=json --outputFile=…`), zero falhas.
+
+Portões novos com as **duas metades**, mutação a mutação:
+| Mutação injetada | Reprovou |
+|---|---|
+| tirar `images/carouselEnabled` de um dos dois `select` do QR | 1 teste |
+| `menuItemPhotos` voltar a devolver só `images` | 3 testes |
+| degradê da capa com hex literal no lugar das vars da marca | 1 teste |
+| `carouselEnabled` não subir junto com a foto extra | 1 teste |
+
+### Achados que NÃO consertei (não são meus de decidir)
+
+1. **A cor de reserva do cardápio da mesa é o laranja da Foocci (`#f97316`)**,
+   enquanto o `DESIGN.md` declara o padrão da loja como o verde `#25d366`. Numa
+   superfície white-label, a capa vazia agora exibe esse laranja em faixa larga.
+   É drift **anterior** a este bloco (a reserva já pintava preço e CTA), mas a
+   capa o torna protagonista. **Identidade é decisão do CEO.**
+2. **`/pedido/[slug]` (Loja com IA) roda com hidratação quebrada** —
+   `sessionStorage` no `useState` inicial. Confirmado por A/B contra `969c29fd`:
+   o erro existe **na base**, não veio deste bloco.
+
+### Uma advertência de método, para mim mesmo
+
+Usei `git checkout -- <arquivo>` para desfazer uma mutação de teste e **apaguei
+todas as alterações daquele arquivo**, que tiveram de ser refeitas. Para desfazer
+mutação: `cp` para o scratchpad antes, `cp` de volta depois. Nunca `git checkout`.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 9.
+
+— interface, sobre `origin/claude/remove-legacy-runner-q8iXa` (969c29fd)
