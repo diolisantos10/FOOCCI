@@ -99,3 +99,37 @@ não sendo fiel ao que roda de verdade.
 
 — promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-visibilidade-categorias.md` §3
 (commit `a66a7554`)
+
+## O agente pode dizer que não achou um PRATO; nunca que o restaurante não OFERECE
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-05 ·
+**Origem:** P0 com cliente real no Sushi Cazza · **Commits:** #103, #104
+
+Uma cliente perguntou duas vezes *"vocês tem rodízio"* e o agente respondeu *"não
+encontrei rodízios no nosso cardápio"* nas duas. **O restaurante tem rodízio** —
+R$ 119 por pessoa, ativo no cadastro, marcado como serviço de salão. O catálogo
+do Garçom só enxerga `showInDelivery: true`, então o produto nunca entrou na
+busca, e busca vazia virava negação.
+
+**A distinção que precisa morar em código:** busca vazia é fato sobre o RECORTE
+do catálogo daquele canal, e o recorte de delivery esconde por construção tudo
+que é do salão. Negar um prato é permitido; negar que a casa oferece um serviço,
+não. A trava tem que ser **regra de validador de saída** — toda resposta
+determinística passa por lá — e nunca instrução de prompt: a frase que a cliente
+leu estava escrita no código, e a instrução equivalente no prompt **mandava** o
+modelo fazer o mesmo (`AIOrderService:382`).
+
+**Existe é diferente de vendível, e o cadastro sabe a diferença.** O canal governa
+o que pode ir ao carrinho; não governa o que o agente pode CONTAR. Tratar os dois
+como a mesma coisa produz ou negar o que a casa vende, ou vender o que ela não
+entrega. E a lista que vira pedido tem que ser validada **no servidor, na hora de
+criar o pedido** — o `finalize` conferia `isActive` e `isAvailable` e não olhava o
+canal.
+
+**Teste de "achou → responde certo" nunca cobre "não achou → cala a boca".** Já
+existia um caso de rodízio no conjunto e ele estava verde: cobria outro agente e
+testava a verdade PRESENTE. O que custa cliente é o contrário.
+
+**O plural mata o casamento.** "rodízio**s**" (o que o cliente digita) não casava
+com "rodízio" (o que o lojista cadastra). O Q&A podia existir e não ser
+encontrado.

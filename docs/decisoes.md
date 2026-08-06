@@ -724,3 +724,54 @@ produção). O visitante que já tinha decidido falar não tinha com quem.
 **A regra:** microcopy de contato **descreve o que acontece depois do clique**, e
 não convida para um canal que não existe. Quando o número de vendas for ligado, o
 convite direto volta — com link de verdade.
+
+## Existe é diferente de vendível — o canal governa o carrinho, não a conversa
+
+**Data:** 2026-08-05 · **Decidido por:** CEO · **Registrado por:** Diretor do Foocci
+**Origem:** P0 com cliente real no Sushi Cazza
+
+Uma cliente perguntou duas vezes "vocês tem rodízio" e o agente respondeu "não
+encontrei rodízios no nosso cardápio". O restaurante **tem** rodízio: R$ 119 por
+pessoa, ativo, marcado como serviço de salão. O catálogo do Garçom só enxerga o
+que é delivery.
+
+**A decisão do CEO, nas palavras dele:** *"o rodízio não deve aparecer no cardápio
+delivery, mas tem que ter a mesma informação que o agente de WhatsApp tem — o
+preço, como funciona, mas é só pessoalmente."*
+
+**A regra que fica, e vale para todo produto:** o recorte de canal governa **o que
+pode ir ao carrinho**; não governa **o que o agente pode contar**. Item que a casa
+vende só no salão existe para ser CONTADO, nunca para ser VENDIDO no delivery.
+Vale para couvert, buffet, self-service, chopp na torneira.
+
+**Dois corolários que custaram caro para descobrir:**
+
+1. **Busca vazia não é negação.** É fato sobre o recorte, não sobre o restaurante.
+   Negar um PRATO é permitido; negar que a casa OFERECE, não. A trava mora num
+   validador de saída — a frase que a cliente leu estava escrita no código, e a
+   instrução equivalente no prompt MANDAVA o modelo negar.
+2. **A lista que vira pedido se valida no servidor.** O `finalize` conferia
+   `isActive` e `isAvailable` e não olhava o canal: um id de item de salão no
+   carrinho viraria pedido de entrega.
+
+**Candidato a subir ao Diretor Geral:** o guardrail 1 tem uma segunda metade que
+não estava escrita. "Ausência de informação não é informação" já proibia inferir
+negação do silêncio. Falta dizer que **o agente também não pode calar o que a base
+SABE** — mandar para um humano uma pergunta que o sistema responde é atendimento
+pior, não mais seguro.
+
+## Calar o que se entrega custa igual a prometer o que não se entrega
+
+**Data:** 2026-08-05 · **Decidido por:** CEO · **Registrado por:** Diretor do Foocci
+
+O desconto de 50% do primeiro mês existia, estava cobrado certo e com teste — e o
+site **não contava para ninguém**. O mesmo com "funciona no navegador, não é
+aplicativo para baixar".
+
+**A regra:** o guardrail 7 tem duas direções. Ele proíbe vender como pronto o que
+está em piloto, e pelo mesmo motivo proíbe esconder o que já está entregue.
+Mentira em qualquer direção custa a mesma confiança, e o silêncio custa venda.
+
+**Como isso não volta a divergir:** o percentual que aparece no site é DERIVADO da
+mesma função que cobra o cartão. Não existe estado em que o site anuncie 50% e o
+checkout cobre outra coisa.

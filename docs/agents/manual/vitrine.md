@@ -94,3 +94,33 @@ rodar atrasado (a de 21/07 saiu às 08:41 UTC).
 linha no playbook sozinho (fez isso com `guia-precificacao`).
 
 — promovido em 2026-08-01 pelo Diretor · origem: `HANDOFF-manual.md` §7 (commit `5b1c885c`)
+
+## O Whisper decide o formato pela EXTENSÃO DO NOME, e o iPhone não grava webm
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-05 ·
+**Origem:** P0 do suporte, print do CEO · **Commit:** #106
+
+O código carimbava `type: "audio/webm"` e nome `.webm` em **toda** gravação. O
+Safari do iPhone grava **MPEG-4** — então todo ditado de iPhone chegava rotulado
+errado e voltava recusado, com "Não consegui ler o áudio" na cara do lojista.
+
+**Nunca carimbe extensão numa gravação sem olhar `MediaRecorder.mimeType`.**
+
+**E o erro era metade do defeito:** a frase não dizia o próximo passo, o caminho
+não tinha um único log, e **a gravação sumia junto com o aviso vermelho**. A
+pessoa falava e perdia o que falou. Proteção que apaga o trabalho de quem usa
+custa mais que o problema (guardrail 5).
+
+## Arquivo que o usuário manda: confira os PRIMEIROS BYTES, não o `file.type`
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-05 · **Origem:** o mesmo P0
+
+O `file.type` é o que o navegador **afirma**, e ele aceita ser enganado. Ler o
+cabeçalho do arquivo deixa entrar HEIC de iPhone (que o navegador rotula de
+formas variadas) e barra executável disfarçado de PNG. Validação no servidor, não
+só na tela.
+
+**Onde o arquivo é guardado é decisão de privacidade, não de infraestrutura.** O
+caminho de S3 deste projeto grava com `ACL: public-read` e a rota de mídia não
+pede sessão — porque serve foto de cardápio. Print de suporte tem dado de cliente
+final e por isso ficou no Postgres.
