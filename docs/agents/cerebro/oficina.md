@@ -675,3 +675,133 @@ Instagram × WhatsApp.
 - A dívida do `SupportIncidentReasoner` continua: ele usa `customerMemory` para
   os sinais em vez de `extraTruthSources`, e o portão de FATO segue não aplicado
   ali. Registrado pela terceira entrada seguida.
+
+---
+
+## 2026-08-06 — A ficha passa a dizer o canal e o estado da loja
+
+**Pedido:** a ficha de verdade cobre a verdade inteira do restaurante (salão +
+entrega, dizendo a qual canal cada item pertence) e carrega o estado da loja.
+Duas provas ao vivo: o rodízio negado (05/08, cliente Júlia) e o print das 23:49
+(loja fechada, agente pedindo WhatsApp para fechar pedido).
+
+### O diagnóstico mudou depois de ler o código
+
+A hipótese de entrada era "a ficha é recortada por canal". **Ela não é** — e o
+que ela é dá mais medo. `RestaurantKnowledgeAdapter.ts:134-146` (antes desta
+mudança) buscava `menuItem` só com `isActive: true`, **sem** filtro de canal e
+**sem** ler `showInDelivery`/`showInDineIn`. Ou seja: o RODIZIO PRESENCIAL
+entrava na ficha ao lado do temaki, com preço, **sem nenhuma etiqueta**.
+
+O recorte por canal existe, mas mora em outro lugar — no catálogo do Garçom
+(`src/app/api/pedido/[slug]/route.ts:277`) e no do WhatsApp
+(`WhatsAppReceptionistService.ts:916`). Isso separa os dois erros:
+
+- **Recorte** (catálogo do Garçom) → nega o que existe. Foi o caso da Júlia,
+  consertado por fora em #103/#104.
+- **Mistura sem etiqueta** (ficha do Cérebro) → promete entregar o que só se
+  serve no salão. Ninguém tinha visto ainda, e é o erro mais caro dos dois,
+  porque ele não fala do restaurante: fala de uma capacidade que o canal não
+  tem. Verificador de fato não pega (`docs/decisoes.md` — "mentir sobre si
+  mesmo").
+
+Anotar as duas perguntas separadamente foi o que fez o segundo aparecer. Se eu
+tivesse ido direto "consertar o recorte", teria filtrado a ficha por canal — e
+**pioraria** as duas coisas de uma vez.
+
+### O que quebrou / o que aprendi
+
+- **O teto de itens comia justamente o salão.** `MAX_MENU_ITEMS = 120` cortava
+  por `sortOrder`, e item de salão vive no fim do cardápio. Num cadastro de 180
+  itens o rodízio era o 175º: **nunca** entrava na ficha. Medido, não deduzido —
+  a primeira medição deu `rodizioSemHint: false`.
+- **Amarrar a garantia ao `queryHint` foi meu primeiro erro.** Ficou bonito no
+  teste com pergunta e deixava de fora as chamadas que não passam pergunta: o
+  portão de promoção (`freeFormGovernance.ts:66`) e a Oficina
+  (`TruthSource.ts:109`) chamam `getSnapshot` sem `opts`. Garantia que só vale
+  quando alguém pergunta não é garantia. Reescrito: os itens só-salão entram
+  **sempre**; o `queryHint` só decide quem ocupa o resto do teto.
+- **Não deixei o `queryHint` encolher a ficha**, que era o caminho óbvio para
+  mostrar economia. Um cardápio de 100 itens hoje chega inteiro; com teto menor
+  sob pergunta ele passaria a chegar cortado. Economia de token comprada com
+  verdade é o negócio errado. O `queryHint` troca **quais** itens, nunca
+  **quantos** — e isso está travado em teste.
+- **O rótulo de canal quase virou `canais: ["entrega","salao"]`.** São ~28
+  caracteres por item × 120 itens, em toda conversa. Virou `"ES" | "E" | "S"`
+  com legenda no cabeçalho: mesma informação explícita item a item, 10× mais
+  barato. Explícito importa — a alternativa de omitir o rótulo no caso comum
+  obrigaria o modelo a lembrar de um default.
+- **Canal é do item E da categoria.** Ler só a flag do item faria a ficha
+  prometer entrega de um item cuja categoria inteira está fora do canal. A loja
+  já monta a tela com o AND (`src/app/pedido/[slug]/page.tsx:334-340`).
+- **Estado da loja: não escrevi régua de horário nenhuma.** `EstadoDaLoja.ts`
+  chama `src/lib/business-hours.ts`, a mesma que a tarja amarela usa. A conta de
+  pausa vencida também é a mesma da tela e da API de pausa. O que fiz foi
+  traduzir para o vocabulário da ficha e separar `aberta` de `aceitandoPedidos`
+  — porque quem governa "posso pedir o telefone?" é o segundo, e a loja pode
+  estar aberta com pedidos pausados.
+- **`isOpenFromRow(null)` devolve `true`.** Sem horário cadastrado o sistema
+  trata a loja como aberta. Isso é decisão do sistema, não fato do restaurante —
+  então a ficha carrega `horarioCadastrado: false` e um `missingContext` que diz
+  isso com todas as letras. Sem essa distinção, "aberta: true" viraria afirmação
+  forte apoiada em silêncio de cadastro.
+- **Um teste caiu e eu mudei a expectativa dele:** `Brain.test.ts:124` comparava
+  o cabeçalho de `products` com `toEqual({ totalItens, listados })`. Mantive
+  `toEqual` (a comparação exata é o que barra chave nova entrando sem ninguém
+  olhar) e escrevi a forma nova. **Não** troquei por `toMatchObject` — teria sido
+  afrouxar o portão para o teste passar, que é o erro que já registrei aqui em
+  julho com o `rankChapters`.
+- **Não mexi no `completenessScore`.** Ele alimenta o portão de promoção
+  (`freeFormGovernance.ts:67`, piso 0.6). Acrescentar "tem estado de loja" aos
+  sinais mudaria o denominador e afrouxaria a escada em silêncio. Virou teste
+  explícito ("o que NÃO podia mudar").
+
+### Medição (guardrail 5, em número)
+
+Pior caso realista — 180 itens, 40 perguntas de Q&A, entrega configurada:
+
+| | caracteres | ~tokens |
+|---|---|---|
+| antes | 18.374 | 4.594 |
+| depois | 20.831 | 5.211 |
+
++13,4%. Comprou: etiqueta de canal em **todo** item, o estado da loja e a
+garantia de que o item só-salão está na ficha. `FichaOrcamento.test.ts` trava o
+teto em 24.000 caracteres **e** exige o conteúdo junto — teto sozinho convidaria
+a economia errada, que é apagar exatamente o que custou caro.
+
+### O que NÃO fiz, e por quê
+
+A ficha do Cérebro alimenta o caminho do WhatsApp em sombra
+(`WhatsAppBrainRuntimeService`), a Oficina e o portão de promoção. Ela **não**
+alimenta o Garçom do cardápio: `AIOrderService`/`PromptBuilderService` montam a
+própria verdade. Então a prova 2 (o print das 23:49) **segue viva em produção** —
+o conserto dela é a ligação do estado da loja no caminho do Garçom, que passa
+pelo `route.ts` e pelo `V2Input`, onde outro agente está trabalhando. Levei como
+desenho ao Diretor em vez de mexer.
+
+### Achados fora do meu escopo (para o Diretor)
+
+- **O prompt do Garçom lista item de salão como comprável.**
+  `PromptBuilderService.ts:230-238` busca `menuCategory`/`menuItem` só com
+  `isActive: true` — sem `showInDelivery`, sem `isAvailable`. O item de salão
+  entra no bloco "CARDÁPIO COMPLETO (use os IDs exatos)" com ID, e o mesmo item
+  aparece depois em `AIOrderService.ts:484` sob "SÓ NO SALÃO — EXISTE, MAS NÃO SE
+  VENDE AQUI". Duas instruções contraditórias sobre o mesmo ID, no mesmo prompt.
+  A trava de `add_item` (`AITools.ts:268`) segura o pedido, mas o modelo já
+  prometeu antes de descobrir.
+- **E com dois preços.** `buildMenuBlock` imprime `Number(item.price)` (base);
+  `loadDineInOnlyItems` imprime `channelPrice(i, "DINE_IN")`
+  (`AIOrderService.ts:234`). Com `priceDineIn` cadastrado, o mesmo item aparece
+  no mesmo prompt com dois valores diferentes.
+- **`handleFinalizeClick` só olha a pausa de emergência.**
+  `PedidoClient.tsx:4291` barra quando `isOrderingPaused`, e não barra quando
+  `!restaurantIsOpen`. É por isso que, com a loja fechada por horário, o clique
+  em Finalizar caiu na exigência de telefone (`PedidoClient.tsx:4319`) — a tarja
+  logo acima dizendo que os pedidos estavam pausados. Não toquei (escopo do outro
+  agente), mas é o coração da prova 2.
+- A dívida do `rankByEmbedding` sem piso (`RestaurantKnowledgeAdapter.ts:84-85`)
+  continua aberta — registrada em julho e não é deste bloco. O ranking de
+  PRODUTOS que abri agora não tem o mesmo problema: ele preenche até o teto sem
+  filtrar, e o desempate por ordem impede que item irrelevante do fim do cardápio
+  desloque item relevante do começo.
