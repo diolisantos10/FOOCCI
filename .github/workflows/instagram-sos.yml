@@ -21,6 +21,13 @@ on:
         description: 'Escrever as correções do escopo Instagram (1 = sim)'
         required: false
         default: '0'
+      # Os dois passos de perícia abaixo já testavam `inputs.pericia`, mas o input NUNCA
+      # foi declarado aqui — então por dispatch manual a condição era sempre falsa e eles
+      # só rodavam em `push`. Quem quisesse a perícia à mão não tinha como pedir.
+      pericia:
+        description: 'Rodar a perícia da credencial e a prova da troca do token (1 = sim)'
+        required: false
+        default: '0'
   push:
     paths:
       - 'scripts/instagram-sos.mjs'

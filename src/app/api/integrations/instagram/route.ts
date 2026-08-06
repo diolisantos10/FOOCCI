@@ -87,6 +87,10 @@ export async function GET(req: NextRequest) {
       webhookUrl: wbUrl,
       lastWebhookAt: view?.lastWebhookAt ?? null,
       lastError: view?.lastError ?? null,
+      // A evidência da última conexão, em português e sem segredo — para o card
+      // Diagnóstico mostrar POR QUE nasceu quebrada, em vez de só um selo verde que
+      // mente. Nunca contém token: `readConnectionEvidence` limpa na leitura.
+      evidence: view?.evidence ?? null,
       allowlistedExternalUserIds: config?.allowlistedExternalUserIds ?? [],
       appId: view?.appId ?? null,
       envVerifyTokenConfigured: !!process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,

@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { getInstagramConfig, decryptPageToken } from "@/services/instagram/InstagramConfigService";
+import { readConnectionEvidence } from "@/services/instagram/instagramConnectionEvidence";
 import { GRAPH_INSTAGRAM_BASE, GRAPH_FACEBOOK_BASE } from "@/services/instagram/InstagramSendClient";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,12 @@ export async function GET(req: NextRequest) {
     tokenExpiresAt: tokenExpiresAtRaw,
     expiresInDays,
     tokenLooksShortLived,
+    // A EVIDÊNCIA DA CONEXÃO — o que a Meta respondeu quando recusou. Já era gravada em
+    // `metadata` desde 05/08 (instagramLoginOAuth.ts:394-396) e esta rota, que é a
+    // ferramenta que a vitrine manda usar para diagnosticar, não devolvia nenhum dos
+    // campos. Sem isto, "descobrir por que a troca falha" dependia do log do Railway —
+    // cuja retenção é por deploy. Foi assim que o motivo se perdeu em 25/07 e 04/08.
+    evidence: readConnectionEvidence(config.metadata),
     lastError: config.lastError,
     me: me.json,
     subscribedApps: subs.json,

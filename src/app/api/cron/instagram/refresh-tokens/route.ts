@@ -33,10 +33,21 @@ export async function POST(req: NextRequest) {
     }
     const result = await refreshExpiringInstagramTokens(typeof body.withinDays === "number" ? body.withinDays : 10);
     // O alarme já existia e já falhava — dentro do Actions, onde ninguém entra. Aqui ele
-    // sai para o WhatsApp do responsável. O resultado do aviso volta na resposta para o
-    // Actions poder gritar "nem consegui avisar", que é pior ainda.
+    // sai por e-mail (primeira via, sem depender da Meta) e, se estiver ligado, também
+    // por WhatsApp. O resultado volta na resposta para o Actions poder gritar "nem
+    // consegui avisar", que é pior ainda.
     const alert = await alertInstagramAttention(result.attention);
-    return NextResponse.json({ ok: true, ...result, alertSent: alert.sent, alertReason: alert.reason }, { status: 200 });
+    return NextResponse.json(
+      // `alertChannel` existe para o log do Actions não mentir sobre por onde o aviso
+      // saiu; `alertDetail` mantém a via QUEBRADA visível mesmo quando a outra funcionou.
+      // Meio aviso funcionando parece aviso inteiro — foi assim que treze dias passaram.
+      {
+        ok: true, ...result,
+        alertSent: alert.sent, alertReason: alert.reason,
+        alertChannel: alert.channel, alertDetail: alert.detail,
+      },
+      { status: 200 },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";
     return NextResponse.json({ ok: false, error: message }, { status: 200 });

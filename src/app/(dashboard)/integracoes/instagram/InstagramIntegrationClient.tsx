@@ -41,7 +41,24 @@ interface ConfigView {
   webhookUrl: string | null;
   lastWebhookAt: string | null;
   lastError: string | null;
+  evidence?: InstagramEvidence | null;
   env?: InstagramEnv | null;
+}
+
+/**
+ * Por que a última conexão nasceu quebrada — a resposta literal da Meta, já traduzida
+ * em frases de português e limpa de segredo pelo servidor. Este dado já era gravado
+ * desde 05/08 e não tinha caminho de leitura nenhum: nem API, nem tela. Sem ele, a
+ * pessoa via "Conectado / Ativo" em verde e nada mais.
+ */
+interface InstagramEvidence {
+  connectedAt: string | null;
+  tokenExpiresAt: string | null;
+  tokenLifetimeHours: number | null;
+  longLivedExchangeError: string | null;
+  webhookSubscribedAt: string | null;
+  webhookSubscribeError: string | null;
+  problemas: string[];
 }
 
 interface InstagramEnv {
@@ -343,12 +360,50 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
         </section>
       )}
 
+      {/* ── O que a Meta respondeu na última conexão ──
+          Isto NÃO fica atrás do botão "Rodar diagnóstico" de propósito: é fato já
+          gravado, não medição nova. O card Diagnóstico abaixo depende de alguém
+          lembrar de clicar — e ninguém clicou por treze dias. */}
+      {flow === "normal" && (view?.evidence?.problemas.length ?? 0) > 0 && (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <h2 className="text-sm font-semibold text-amber-900">Por que a conexão não está funcionando</h2>
+          <p className="mt-1 text-xs text-amber-800">
+            Isto foi registrado no momento da última conexão
+            {view?.evidence?.connectedAt ? ` (${fmtDate(view.evidence.connectedAt)})` : ""}.
+          </p>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-amber-900">
+            {view?.evidence?.problemas.map((p, i) => <li key={i}>{p}</li>)}
+          </ul>
+          {view?.evidence?.tokenLifetimeHours !== null && view?.evidence?.tokenLifetimeHours !== undefined && (
+            <p className="mt-2 text-xs text-amber-800">
+              Duração do acesso obtido: <b>{view.evidence.tokenLifetimeHours}h</b> · esperado: <b>1440h (60 dias)</b>
+            </p>
+          )}
+          <p className="mt-2 text-xs text-amber-800">
+            Se você reconectar e esta mesma mensagem voltar, <b>não tente uma terceira vez</b>:
+            o problema é do lado do Foocci, não seu. Avise o suporte com este texto.
+          </p>
+        </section>
+      )}
+
       {/* Diagnóstico amigável */}
       {test && (
         <section className="rounded-xl border border-line2 bg-paper p-4 text-sm">
           <h2 className="text-sm font-semibold">Diagnóstico</h2>
           <div className="mt-2 space-y-0.5">
             <p>Conta conectada: <b>{view?.facebookPageId ? "OK" : "pendente"}</b></p>
+            {/* As duas linhas que faltavam: um acesso de 1h e uma conta não inscrita
+                no webhook produzem exatamente o mesmo "Conectado / Ativo" verde. */}
+            <p>Duração do acesso: <b>{
+              view?.evidence?.tokenLifetimeHours == null ? "—"
+                : view.evidence.tokenLifetimeHours >= 168 ? `${view.evidence.tokenLifetimeHours}h (OK)`
+                : `${view.evidence.tokenLifetimeHours}h — curto demais`
+            }</b></p>
+            <p>Inscrita para receber mensagens: <b>{
+              view?.evidence?.webhookSubscribedAt ? "OK"
+                : view?.evidence?.webhookSubscribeError ? "falhou"
+                : "sem registro"
+            }</b></p>
             <p>Instagram profissional: <b>{view?.instagramBusinessAccountId ? "OK" : "pendente"}</b></p>
             <p>Token salvo com segurança: <b>{view?.tokenConfigured ? "OK" : "pendente"}</b></p>
             <p>Webhook: <b>{test.webhook}</b></p>

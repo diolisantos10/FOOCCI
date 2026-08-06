@@ -395,3 +395,238 @@ Daí o botão "Reconectar Instagram" ficar sempre visível no card conectado.
   inscrita em `messages`, e isso agora acontece na conexão.
 - **`tokenExpiresAt − connectedAt == 1h` é assinatura digital do fallback** da troca
   short→long. Aritmética simples que dispensa log.
+
+---
+
+## 2026-08-06 · O que aconteceu em 23/07, o estado da chave hoje, e o inventário das proteções mudas
+
+**Pedido do CEO (via Diretor):** o workflow `Instagram Token Refresh` (run `31087648136`,
+06/08 09:05 UTC) falhou pelo 4º dia seguido com três linhas: token expirado em 05-Ago
+16:00 PDT, canal LIGADO e MUDO desde 23/07 (13 dias), e o aviso por WhatsApp não saiu
+porque `INSTAGRAM_ALERT_PHONE` não existe. Cinco perguntas: (1) o que houve em 23/07,
+(2) o estado real da credencial, (3) o passo a passo do CEO, (4) `INSTAGRAM_ALERT_PHONE`
+é a única faltando, (5) a trava para não repetir.
+
+### 0 · O que consegui e o que NÃO consegui medir
+
+- ✅ Produção responde: `GET /api/health` → `commitSha 1e368396`, `db:"ok"`,
+  `mpWebhookSecret:true`, `mpPlatformToken:true`.
+- ❌ **Não consegui medir a Graph API nem o banco.** O `.env` local tem 10 nomes e
+  **nenhum** `META_*` / `INSTAGRAM_*` de credencial. Testei o `ADMIN_SECRET` local contra
+  `…/instagram/env-diagnostic` em produção: **HTTP 401** — não é o segredo de produção.
+  Sem `gh` CLI e sem `RAILWAY_TOKEN` no ambiente. Guardrail 1: onde não medi, digo que
+  não medi.
+- Caminho de medição que existe e que o Diretor alcança: `workflow_dispatch` de
+  `.github/workflows/instagram-sos.yml` (lê o `ADMIN_SECRET` do Railway dentro do runner).
+
+### 1 · 23/07 — a prova de que o silêncio NÃO é filtro nem falta de DM
+
+**A peça que decide:** `InstagramChannelService.ts:191` chama `recordWebhookReceived`
+**logo depois de resolver a config e ANTES de todos os filtros** — antes de
+`mode/paused` (`:194`), antes do descarte de echo/delivery/read (`:199`), antes da
+allowlist. Logo `lastWebhookAt` é *"a última vez que a Meta ENTREGOU qualquer evento
+para esta conta"*, não "a última DM que virou conversa".
+
+Consequência dura: `lastWebhookAt: 2026-07-23T12:23:20Z`
+(`docs/passagem-de-bastao-foocci-2026-08-05.md:75`, apurado em produção) significa que a
+**Meta parou de entregar**. Ficam derrubadas de uma vez: allowlist, `scope`, `paused`,
+`mode`, e "ninguém mandou DM" — echo, delivery e read também marcariam.
+
+**A linha do tempo de 23/07, do próprio git (UTC):**
+
+| Hora | Commit | O quê |
+|---|---|---|
+| 11:06 | `71d0805c` | `fix(instagram): DMs somem — conexão nascia em "conta de teste"`. Muda o padrão para `RESTAURANT_WIDE` **no ato da conexão** (`instagramLoginOAuth.ts:382`) → **só pega quem reconectar** |
+| **12:23:20** | — | **último evento que a Meta entregou. Nunca mais chegou nada.** |
+| 12:26 | `644d3a56` | log temporário do webhook (3 min depois) |
+| 17:23 | `8f93ad17` | nasce o `graph-check` — "the usual reason inbound DMs don't arrive" |
+| 17:29 | `a24a21d1` | *"the OAuth flow silently falls back to the 1h short-lived token — which then expires in ~1h and **kills inbound DMs**"* |
+| 20:03 | `115d3575` | *"**Root cause of the Instagram outage**: the OAuth flow silently fell back to the 1h short-lived token … so the token died and inbound DMs stopped"* |
+
+**Leitura sustentada:** entre 11:06 e 12:23 alguém reconectou para pegar o fix das 11:06
+(ele não tem efeito sem reconexão). A conexão nasceu com token de 1 hora; ~1h depois a
+sessão morreu, a Meta revogou a inscrição da conta e a entrega parou. Às 17:29 e às 20:03
+do mesmo dia quem estava olhando produção já escreveu exatamente isso nos commits.
+
+**O que NÃO consigo provar:** o `metadata.connectedAt` daquela conexão foi **sobrescrito**
+pelas reconexões de 04/08 e 05/08. A prova aritmética direta não existe mais. Não inferi
+além disso.
+
+**Hipótese alternativa que fica registrada, com o teste:** se o
+`instagramBusinessAccountId` mudasse, os eventos chegariam e **não resolveriam**
+(`InstagramChannelService.ts:186-187` sai antes do `recordWebhookReceived`), congelando
+`lastWebhookAt` do mesmo jeito. Teste: linha `[ig-wh]` com `resolved:false` no log do
+webhook, ou comparar o `id` do `/me` do `graph-check` com o campo guardado.
+
+### 2 · O estado da chave hoje
+
+**Expirou por prazo. Não foi revogação, não foi desautorização, não foi App Review.**
+Quem classifica é a própria Meta: `"Session has expired on <data>"` é a mensagem de
+expiração por tempo. Revogação diria *"Session has been invalidated because the user
+changed their password…"*; permissão retirada diria *"The user has not authorized
+application…"*; App Review reprovado não dá 190 — dá erro de permissão (#200) no uso do
+escopo, e os escopos pedidos são `instagram_business_basic`,
+`instagram_business_manage_messages`, `instagram_business_manage_comments`
+(`instagramLoginOAuth.ts:38-41`).
+
+**Mas o prazo era de UMA HORA, não de 60 dias — pela TERCEIRA vez.** Comparando as duas
+leituras registradas:
+
+| Quando lido | `lastError` da Meta | Expirou em (UTC) |
+|---|---|---|
+| 04/08 21:22 | `Session has expired on Monday, 03-Aug-26 19:00:00 PDT` | 04/08 02:00 |
+| 06/08 09:05 | `Session has expired on Wednesday, 05-Aug-26 16:00:00 PDT` | **05/08 23:00** |
+
+São tokens **diferentes** → houve **nova reconexão em 05/08**, e o token novo morreu no
+mesmo dia. Como o token curto do Instagram dura exatamente 1h, ele foi emitido entre
+22:00 e 23:00 UTC de 05/08 — **depois do deploy das 14:23 UTC** que subiu o retry 5×/30s
+e o `subscribe()`. **O retry ampliado não resolveu.** A falha da troca `ig_exchange_token`
+não é transitória; é sistemática.
+
+**A evidência mais valiosa está no banco AGORA e ninguém lê.** Desde 05/08 o callback
+grava `metadata.longLivedExchangeError`, `webhookSubscribedAt` e `webhookSubscribeError`
+(`instagramLoginOAuth.ts:394-396`) — ou seja, **o motivo que a Meta deu para recusar a
+troca sobreviveu ao deploy**. Só que:
+
+- `graph-check/route.ts` devolve `tokenExpiresAt`, `expiresInDays`,
+  `tokenLooksShortLived` e `lastError` — **nenhum dos três campos novos**;
+- `InstagramConfigService.ts:123-126` (`toView`) projeta só `connectedVia`,
+  `connectedAt`, `facebookPageName`, `instagramUsername`.
+
+**Campo escrito sem caminho de leitura = evidência morta.** Correção de 4 linhas,
+read-only, dentro do meu domínio — proposta, não executada.
+
+### 3 · Proteções que se desligam sozinhas quando falta variável
+
+**`INSTAGRAM_ALERT_PHONE` NÃO é a única — e definir só ela não faz o aviso sair.**
+`instagramAttentionAlert.ts:58-68` exige **duas** condições: o telefone **E**
+`isBuildOsMetaChannelEnabled()`, que por sua vez (`BuildOsMetaChannel.ts:31-43`) exige
+`BUILDOS_META_PHONE_NUMBER_ID` **e** `BUILDOS_META_ACCESS_TOKEN`. São **3 variáveis**
+para um aviso, e a oficina de 05/08 (linhas 380-384) registra `BUILDOS_META_*` ausentes.
+
+| Proteção | Variáveis | Sem elas | Arquivo:linha | Medido? |
+|---|---|---|---|---|
+| Aviso de Instagram por WhatsApp | `INSTAGRAM_ALERT_PHONE` | `sent:false, reason:"desligado"` — **não conta como problema** | `instagramAttentionAlert.ts:33-35,59` | ❌ ausente (log de hoje) |
+| Canal Master (transporte do aviso) | `BUILDOS_META_PHONE_NUMBER_ID` + `BUILDOS_META_ACCESS_TOKEN` | aviso não sai mesmo com o telefone definido | `BuildOsMetaChannel.ts:31,36,41-43` | ❓ registrado ausente em 05/08 |
+| Suporte por WhatsApp | `SUPPORT_META_PHONE_NUMBER_ID` + `SUPPORT_META_ACCESS_TOKEN` | canal de suporte mudo | `SupportWhatsAppService.ts:21,25` | ❓ registrado ausente em 05/08 |
+| E-mail de chamado de suporte | `RESEND_API_KEY` + (`SUPPORT_NOTIFY_EMAIL` \| `LEADS_NOTIFY_EMAIL`) | chamado **salvo e ninguém avisado** | `SupportTicketService.ts:38-40,145-150` | ❓ não medido |
+| E-mail de lead do site | `RESEND_API_KEY` + `LEADS_NOTIFY_EMAIL` | lead entra e ninguém sabe | `SiteLeadService.ts:287-288` | ❓ não medido |
+| Assinatura do webhook de pagamento | `MERCADO_PAGO_WEBHOOK_SECRET` | **verificação PULADA**, só `console.warn` | `payments/mercadopago/webhook/route.ts:182,190-192` | ✅ **presente** (`/api/health`) |
+
+**Portões que conferi e estão fail-closed (não entram na lista):** `ADMIN_SECRET`
+(`admin-auth.ts:63-64` — sem segredo, 401 sempre), assinatura dos dois webhooks da Meta
+(`webhooks/instagram/route.ts:44-54` → 403 quando nenhum segredo casa, inclusive quando
+não há segredo nenhum), `CRON_SECRET` (`cron/instagram/refresh-tokens/route.ts:19-23` —
+cai no admin, não abre), `WHATSAPP_HANDOFF_ALERT_MINUTES` (default 10 min,
+`check-timeouts/route.ts:29-32`).
+
+**Não consigo enumerar o Railway daqui.** A tabela é o que o CÓDIGO permite estar
+desligado; a coluna "medido" diz o que provei.
+
+### 4 · Por que o buraco existe, em uma frase de mecanismo
+
+`alertInstagramAttention` devolve `sent:false` com um `reason` **e o chamador trata isso
+como estado normal** (`refresh-tokens/route.ts:38-39` só repassa). O workflow só imprime
+o `::error::` do aviso **dentro de um `if` que já exige `needsAttention == true`**
+(`instagram-token-refresh.yml:54-66`). Consequência: **num dia saudável o sistema nunca
+diz "estou cego"** — a cegueira só aparece de carona num incidente que já está
+acontecendo. É o guardrail 2 outra vez: esquecer o portão lê como "aprovado".
+
+E existe um inventário de presença de variável já pronto no repositório —
+`SupportSystemProbe.ts:57-68`, com `CRITICAL`/`OPTIONAL` — que lista **5** variáveis e
+**nenhum canal de aviso**. O mecanismo existe e está incompleto.
+
+### 5 · O que NÃO fiz, de propósito
+
+- Não enviei mensagem nenhuma (nem canário, nem para número de time).
+- Não rotacionei nem toquei em segredo. Nenhum valor foi impresso.
+- Não mexi em `/{app-id}/subscriptions` — camada comum com o WhatsApp, que está no ar.
+- Não escrevi código: o pedido do bloco 5 era **propor** o mecanismo.
+- Não commitei e não dei push.
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **`lastWebhookAt` é marcado ANTES de todo filtro** (`InstagramChannelService.ts:191`).
+  Congelado = a Meta parou de entregar, ponto. Não é allowlist, não é `paused`, não é
+  falta de DM. Proveniência: leitura de código em 06/08 + `lastWebhookAt:
+  2026-07-23T12:23:20Z` apurado em produção em 04/08.
+- **"Session has expired on <data>" é expiração por PRAZO** — a Meta usa textos
+  diferentes para revogação e para desautorização, e App Review reprovado não dá 190.
+  A mensagem já é a classificação; não é preciso adivinhar.
+- **Um aviso exige TRÊS variáveis, não uma.** `INSTAGRAM_ALERT_PHONE` +
+  `BUILDOS_META_PHONE_NUMBER_ID` + `BUILDOS_META_ACCESS_TOKEN`. Meio-configurado é
+  desligado — e desligado hoje é silencioso.
+- **Campo gravado sem caminho de leitura é evidência morta.**
+  `metadata.longLivedExchangeError` existe desde 05/08 e nenhuma rota o devolve.
+
+---
+
+## 2026-08-06 (2) · EXECUÇÃO: caminho de leitura da evidência + aviso por e-mail
+
+**Autorizado pelo Diretor**, escopo estreito: expor o motivo da recusa (API + tela) e
+fazer o alerta sair por e-mail. As três camadas de trava ficaram para o próximo bloco.
+Branch `claude/meta-ig-evidencia`, a partir de `origin/claude/remove-legacy-runner-q8iXa`
+(`1e368396`), em **worktree separado** — a branch em que eu estava tinha WIP de outro
+bloco, e mover aquilo seria destrutivo.
+
+### Metade 1 — a evidência ganhou caminho de leitura
+
+Novo `src/services/instagram/instagramConnectionEvidence.ts`. Lê `metadata` e devolve
+`connectedAt`, `tokenExpiresAt`, `tokenLifetimeHours`, `longLivedExchangeError`,
+`webhookSubscribedAt`, `webhookSubscribeError` e `problemas[]` (frases em português).
+
+Ligado em três pontos: `InstagramConfigService.toView` (campo `evidence`),
+`graph-check/route.ts` e `api/integrations/instagram/route.ts`.
+
+**A armadilha de segurança que apareceu no meio do caminho, e que era real:**
+`instagramLoginOAuth.ts:222-224` monta a URL do subscribe com `access_token=` **na query
+string**. Se o `fetch` estourar, `e.message` pode carregar a URL inteira — e esse texto
+é gravado em `metadata.webhookSubscribeError`. Abrir o caminho de leitura sem limpar
+publicaria um token de cliente na API e na tela. Por isso `redactSecrets` roda **na
+leitura, não na escrita**: assim protege também as linhas já gravadas desde 05/08, que
+eu não posso reescrever. Travado por teste com um token de verdade no texto.
+
+**Na tela** (`InstagramIntegrationClient.tsx`): faixa âmbar *"Por que a conexão não está
+funcionando"*, com as frases em português, a duração obtida × esperada, e o aviso de não
+tentar uma terceira vez. **Fora** do `test &&` de propósito — o card Diagnóstico depende
+de alguém clicar em "Rodar diagnóstico", e ninguém clicou por treze dias. Mais duas
+linhas dentro do próprio Diagnóstico: *Duração do acesso* e *Inscrita para receber
+mensagens*. Redação é funcional; o `interface` refina se o Diretor quiser.
+
+### Metade 2 — o aviso sai por e-mail
+
+`instagramAttentionAlert.ts` reescrito. **E-mail é a primeira via**, pelo mesmo Resend do
+chamado de suporte. Destinatário: `INSTAGRAM_ALERT_EMAIL` → `SUPPORT_NOTIFY_EMAIL` →
+`LEADS_NOTIFY_EMAIL`. **Cair no que já existe é deliberado**: aviso que exige variável
+nova é aviso que fica desligado, e essa foi a lição de agosto. O WhatsApp continua como
+**segunda via, desligado**, esperando decisão do CEO sobre o número Master — não toquei.
+
+`alertInstagramAttention` passa a devolver `channel` e `detail{email,whatsapp}`. Uma via
+basta para `sent:true`, **mas o motivo da que falhou continua visível** — meio aviso
+funcionando parece aviso inteiro, e foi assim que treze dias passaram.
+
+`refresh-tokens/route.ts` repassa `alertChannel`/`alertDetail`; o workflow imprime a via
+usada e as vias indisponíveis, sem derrubar o job quando alguém já foi avisado.
+
+### O teste que me corrigiu
+
+`connectedAt: "nunca"` (ilegível) ainda gerava a acusação *"não há registro de inscrição"*.
+Corrigi a **implementação**, não o teste: a frase agora exige um `connectedAt` que
+realmente vira data. Metadata corrompido não pode virar acusação (guardrail 1).
+
+### Bug lateral encontrado e corrigido
+
+`.github/workflows/instagram-sos.yml` usava `inputs.pericia` em dois `if:` **sem nunca
+declarar o input**. Por dispatch manual a condição era sempre falsa: os dois scripts de
+perícia (`instagram-sos-credencial.mjs`, `instagram-sos-troca.mjs`) **só rodavam em
+push**. Quem quisesse a perícia à mão não tinha como pedir. Input declarado.
+
+### Verificação
+
+`npx tsc --noEmit` → exit 0, limpo. `npx vitest run --reporter=json` → **2089 suítes,
+5883 testes, 5883 verdes, 0 vermelhos**. Não commitei e não dei push.
+
+### O que continua sem medição
+
+Não li o motivo da recusa: sem `ADMIN_SECRET` de produção (testei o local → **401**) e
+**o campo só existe depois do deploy**. O comando exato ficou com o Diretor.

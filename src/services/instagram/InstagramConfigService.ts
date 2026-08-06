@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
 import type { InstagramMode, InstagramScope } from "./types";
 import { INSTAGRAM_MODES, INSTAGRAM_SCOPES } from "./types";
+import { readConnectionEvidence, type InstagramConnectionEvidence } from "./instagramConnectionEvidence";
 
 export interface InstagramConfigRow {
   id: string;
@@ -53,6 +54,13 @@ export interface InstagramConfigView {
   instagramUsername: string | null;
   lastWebhookAt: Date | null;
   lastError: string | null;
+  /**
+   * Por que a última conexão nasceu quebrada — a resposta literal da Meta, já limpa de
+   * segredo. O callback grava isso em `metadata` desde 05/08 e NADA lia: nem esta
+   * projeção, nem o `graph-check`, nem a tela. Campo gravado sem caminho de leitura é
+   * evidência morta, e foi assim que o motivo real se perdeu três vezes seguidas.
+   */
+  evidence: InstagramConnectionEvidence;
 }
 
 export interface InstagramConfigPatch {
@@ -126,6 +134,7 @@ export function toView(row: InstagramConfigRow): InstagramConfigView {
     instagramUsername: (row.metadata?.instagramUsername as string) ?? null,
     lastWebhookAt: row.lastWebhookAt,
     lastError: row.lastError,
+    evidence: readConnectionEvidence(row.metadata),
   };
 }
 

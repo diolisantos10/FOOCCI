@@ -157,6 +157,28 @@ const main = async () => {
       p(`   · graphBase: ${j.graphBase} · connectedVia: ${j.connectedVia}`);
       p(`   · erro do /me: ${JSON.stringify(j.me?.error?.message ?? j.me?.username ?? j.me)}`);
       p(`   · subscribedApps: ${JSON.stringify(j.subscribedApps).slice(0, 300)}`);
+
+      // ── POR QUE a conexão nasceu quebrada ──
+      // Este bloco é a razão de existir do trabalho de 06/08. O motivo que a Meta deu
+      // para recusar a troca do token de 60 dias JÁ era gravado no banco desde 05/08 e
+      // não tinha leitor nenhum — nem API, nem tela, nem este script. O log do Railway,
+      // única outra cópia, morre a cada deploy; foi assim que o motivo se perdeu três
+      // vezes (25/07, 04/08, 05/08). O campo é limpo de segredo no servidor.
+      const ev = j.evidence;
+      if (!ev) {
+        p("   · evidence: AUSENTE — produção ainda não tem o deploy de 06/08.");
+      } else {
+        p(`   · conectado em: ${ev.connectedAt ?? "—"} · vida do token: ${ev.tokenLifetimeHours ?? "—"}h (esperado 1440h)`);
+        p(`   · a Meta recusou a troca com: ${ev.longLivedExchangeError ?? "(não registrou motivo)"}`);
+        p(`   · inscrição da conta no webhook: ${ev.webhookSubscribedAt ?? "sem registro"}`
+          + `${ev.webhookSubscribeError ? ` · erro: ${ev.webhookSubscribeError}` : ""}`);
+        for (const problema of ev.problemas ?? []) p(`   ⚠️  ${problema}`);
+        // Guardrail 1: a diferença entre os dois casos muda o próximo passo inteiro.
+        if (!ev.longLivedExchangeError && ev.tokenLifetimeHours !== null && ev.tokenLifetimeHours < 168) {
+          p("   ❗ A troca NÃO falhou: a Meta devolveu um token curto de propósito.");
+          p("      Isso aponta para a identidade do app/credencial, não para a chamada.");
+        }
+      }
     }
   }
 

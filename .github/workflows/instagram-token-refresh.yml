@@ -54,15 +54,22 @@ jobs:
           NEEDS=$(jq -r '.needsAttention // false' /tmp/ig-refresh.json 2>/dev/null)
           if [[ "$NEEDS" == "true" ]]; then
             jq -r '.attention[]? | "::error::" + .' /tmp/ig-refresh.json 2>/dev/null
-            # Este job falhou em 03, 04 e 05 de agosto, sozinho, sem ninguém ver — e o
+            # Este job falhou em 03, 04, 05 e 06 de agosto, sozinho, sem ninguém ver — e o
             # Instagram do cliente seguiu mudo. Falhar aqui não é avisar: por isso o
-            # endpoint também manda o aviso por WhatsApp. Se NEM ISSO saiu, diga.
+            # endpoint manda o aviso por E-MAIL (primeira via, não depende da Meta) e,
+            # quando o canal Master estiver ligado, também por WhatsApp. Se NEM ISSO saiu,
+            # diga — com o motivo de cada via.
             ALERT=$(jq -r '.alertSent // false' /tmp/ig-refresh.json 2>/dev/null)
+            CANAL=$(jq -r '.alertChannel // "—"' /tmp/ig-refresh.json 2>/dev/null)
             REASON=$(jq -r '.alertReason // "—"' /tmp/ig-refresh.json 2>/dev/null)
             if [[ "$ALERT" == "true" ]]; then
-              echo "📲 aviso enviado por WhatsApp ao responsável."
+              echo "📬 aviso enviado ao responsável por: $CANAL"
+              # Meio aviso funcionando parece aviso inteiro. Se a OUTRA via falhou, o log
+              # conta — sem derrubar o job por isso, porque alguém já foi avisado.
+              jq -r '.alertDetail // {} | to_entries[] | select(.value != null) | "⚠️  via \(.key) indisponível: \(.value)"' \
+                /tmp/ig-refresh.json 2>/dev/null
             else
-              echo "::error::O aviso por WhatsApp NÃO saiu ($REASON). Este log é o único lugar onde o problema aparece — e ninguém lê log."
+              echo "::error::O aviso NÃO saiu por NENHUMA via ($REASON). Este log é o único lugar onde o problema aparece — e ninguém lê log."
             fi
             echo "::error::Instagram token refresh precisa de atenção humana — veja as linhas acima."
             exit 1
