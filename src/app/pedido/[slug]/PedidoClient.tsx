@@ -26,6 +26,10 @@ import {
 } from "@/services/order/paymentOptions";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 import { phoneCandidates } from "@/lib/phone";
+import {
+  telefoneEfetivoDoCliente,
+  precisaPedirWhatsAppParaFechar,
+} from "@/lib/identidadeCheckout";
 
 // ── Order tracking (post-checkout) ────────────────────────────────────────────
 
@@ -1559,13 +1563,30 @@ function CartDrawer({
 // ── PhoneEntryCard ────────────────────────────────────────────────────────────
 // Phone-first identification: step 1 = phone only, step 2 = name only (new customers).
 
+/**
+ * O que a tela de identificação devolve para quem a hospeda.
+ *
+ * `phone` é **obrigatório** de propósito: era o campo que faltava, e faltando
+ * ele o app fechava pedido sem contato e voltava a pedir o WhatsApp de quem já
+ * tinha informado. Campo obrigatório é trava de compilador — qualquer caminho
+ * novo de identificação é forçado a dizer qual telefone entrou.
+ */
+export interface ClienteIdentificado {
+  name: string | null;
+  /** Telefone cru, como digitado. É o que vale para fechar o pedido. */
+  phone: string;
+  customerId?: string;
+  /** Versão formatada, só para exibição na faixa de identidade. */
+  displayPhone?: string;
+}
+
 function PhoneEntryCard({
   slug,
   onIdentified,
   onSkip,
 }: {
   slug: string;
-  onIdentified: (name: string | null, customerId?: string, displayPhone?: string) => void;
+  onIdentified: (identificado: ClienteIdentificado) => void;
   onSkip?: () => void;
 }) {
   const [phase, setPhase]               = useState<"phone" | "name">("phone");
@@ -1598,7 +1619,7 @@ function PhoneEntryCard({
             JSON.stringify({ phone: ph, name: data.name, customerId: data.customerId, displayPhone: displayPh }),
           );
         } catch { /* ignore */ }
-        onIdentified(data.name, data.customerId, displayPh);
+        onIdentified({ name: data.name, phone: ph, customerId: data.customerId, displayPhone: displayPh });
       } else {
         // New customer — ask name next
         setCollectedPhone(ph);
@@ -1633,7 +1654,7 @@ function PhoneEntryCard({
           JSON.stringify({ phone: collectedPhone, name: resolved, customerId: data.customerId, displayPhone: displayPh }),
         );
       } catch { /* ignore */ }
-      onIdentified(resolved, data.customerId, displayPh);
+      onIdentified({ name: resolved, phone: collectedPhone, customerId: data.customerId, displayPhone: displayPh });
     } catch {
       setError("Erro ao salvar. Tente novamente.");
     } finally {
@@ -2709,7 +2730,7 @@ export function PedidoClient({
   const [guidedMode, setGuidedMode] = useState(false);
 
   // ── Cross-flow identity: read what /qr/[slug] or a prior session stored ───
-  const [storedCustomer] = useState<{
+  const [storedCustomer, setStoredCustomer] = useState<{
     phone: string; name: string; customerId?: string; displayPhone?: string;
   } | null>(() => {
     if (typeof window === "undefined") return null;
@@ -2734,8 +2755,23 @@ export function PedidoClient({
     return sameNumber ? storedCustomer : null;
   })();
 
-  // Effective phone: from server (WhatsApp link) or from session-stored identify response
-  const effectiveCustomerPhone = knownCustomerPhone ?? trustedStored?.phone ?? null;
+  /* Telefone informado NESTA carga da página, na tela de identificação.
+   *
+   * `storedCustomer` acima é um inicializador de `useState`: lê o sessionStorage
+   * UMA vez, no mount. A tela de identificação grava lá depois disso — então,
+   * sem este estado, quem se identificava durante a navegação continuava sem
+   * telefone até um recarregamento. Foi o que produziu o laço da vitrine (a
+   * mesma frase pedindo o WhatsApp balão após balão) e o pedido que saía com
+   * `customerPhone: undefined`. Ver `src/lib/identidadeCheckout.ts`. */
+  const [sessionCustomerPhone, setSessionCustomerPhone] = useState<string | null>(null);
+
+  // Effective phone: from server (WhatsApp link), from a previous session, or
+  // from the identification the customer just completed in this page load.
+  const effectiveCustomerPhone = telefoneEfetivoDoCliente({
+    knownPhone:   knownCustomerPhone,
+    storedPhone:  trustedStored?.phone,
+    sessionPhone: sessionCustomerPhone,
+  });
   // Effective customerId: from server prop or from session-stored identify response
   const effectiveCustomerId = knownCustomerId ?? trustedStored?.customerId ?? undefined;
 
@@ -2811,9 +2847,13 @@ export function PedidoClient({
   const [sessionCustomerId, setSessionCustomerId] = useState<string | undefined>(undefined);
   const resolvedCustomerId = effectiveCustomerId ?? sessionCustomerId;
 
-  function handlePhoneIdentified(name: string | null, customerId?: string, displayPhone?: string) {
+  function handlePhoneIdentified({ name, phone, customerId, displayPhone }: ClienteIdentificado) {
     if (customerId) setSessionCustomerId(customerId);
     if (displayPhone) setIdentifiedPhone(displayPhone);
+    /* O telefone é o dado que sobrevive: `/api/qr/[slug]/identify` não devolve
+     * `customerId` (decisão de segurança da própria rota), então ele é a ÚNICA
+     * prova de contato que temos desta pessoa nesta carga da página. */
+    setSessionCustomerPhone(phone);
     enterBrowsing(name);
   }
 
@@ -2824,6 +2864,13 @@ export function PedidoClient({
     setCustomerName("");
     setIdentifiedPhone(null);
     setSessionCustomerId(undefined);
+    /* "Trocar" tem de apagar TODAS as origens do telefone, inclusive as que só
+     * existem em memória. Limpar o sessionStorage não basta: `storedCustomer` é
+     * uma cópia feita no mount e `sessionCustomerPhone` nunca esteve lá — deixar
+     * qualquer uma das duas de pé faz a pessoa continuar identificada com o
+     * número que ela acabou de pedir para trocar. */
+    setStoredCustomer(null);
+    setSessionCustomerPhone(null);
     setEntryPhase("identifying");
   }
 
@@ -2894,6 +2941,11 @@ export function PedidoClient({
     if (!effectiveCustomerPhone) return;     // no phone context
     if (resolvedCustomerId)       return;     // already have an ID
     if (entryPhase !== "browsing") return;   // only run after phone-entry resolved/skipped
+    /* Se o telefone veio da tela de identificação AGORA, o `/identify` já rodou
+     * há um instante — e cada chamada dele grava uma "visita" (MenuEvent). Sem
+     * este corte, o conserto do laço passaria a contar toda entrada web em
+     * dobro no KPI. Conserto que quebra número não é conserto. */
+    if (sessionCustomerPhone)     return;
     let cancelled = false;
 
     fetch(`/api/qr/${slug}/identify`, {
@@ -4312,7 +4364,13 @@ export function PedidoClient({
      *
      * Vem DEPOIS do carrinho vazio de propósito: cobrar telefone de quem clicou
      * em finalizar sem nada na sacola seria pedir dado para não fazer nada. */
-    if (identificacaoOpcional && !effectiveCustomerPhone && !resolvedCustomerId) {
+    if (precisaPedirWhatsAppParaFechar({
+      identificacaoOpcional,
+      knownPhone:   knownCustomerPhone,        // link verificado do WhatsApp
+      storedPhone:  trustedStored?.phone,      // visita anterior desta aba
+      sessionPhone: sessionCustomerPhone,      // informado agora, nesta página
+      customerId:   resolvedCustomerId,
+    })) {
       setIdentidadeExigida(true);
       setEntryPhase("identifying");
       pushAssistantMessage(
@@ -4332,7 +4390,7 @@ export function PedidoClient({
     checkoutPendingRef.current = true;
     sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
   }, [cart, stage, entryPhase, isOrderingPaused, pausedUntil, sendText, pushAssistantMessage, aiPermState,
-      identificacaoOpcional, effectiveCustomerPhone, resolvedCustomerId]);
+      identificacaoOpcional, effectiveCustomerPhone, sessionCustomerPhone, resolvedCustomerId]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
