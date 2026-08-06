@@ -27,7 +27,7 @@
  * fora. A obrigatoriedade da Loja de cliente continua intacta.
  */
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useRef, useState, FormEvent } from "react";
 import { fmtPhone } from "./format";
 import type { CustomerIdentity } from "./types";
 
@@ -52,6 +52,9 @@ export function WelcomeModal({
   /** Dispensável = existe saída. Uma variável só, para os três gestos não divergirem. */
   const dispensavel = !required;
 
+  /* O foco volta para o campo pendente quando o toque no botão não passa. */
+  const campoRef = useRef<HTMLInputElement>(null);
+
   /* Esc fecha — a expectativa universal de modal. Não fecha durante o envio: a
      requisição de identificação já está a caminho e sumir com a tela no meio
      deixaria a pessoa sem saber se foi ou não. */
@@ -67,7 +70,9 @@ export function WelcomeModal({
   async function handlePhoneSubmit(e: FormEvent) {
     e.preventDefault();
     const ph = phoneInput.trim();
-    if (ph.replace(/\D/g, "").length < 10) { setError("Informe um WhatsApp válido."); return; }
+    /* Botão HABILITADO + validação no toque (padrão da casa desde 05/08): no
+       celular, botão desabilitado não tem como dizer o que falta. */
+    if (ph.replace(/\D/g, "").length < 10) { setError("Informe um WhatsApp válido."); campoRef.current?.focus(); return; }
     setLoading(true);
     setError(null);
     try {
@@ -96,7 +101,7 @@ export function WelcomeModal({
   async function handleNameSubmit(e: FormEvent) {
     e.preventDefault();
     const name = nameInput.trim();
-    if (name.length < 2) { setError("Informe seu nome."); return; }
+    if (name.length < 2) { setError("Informe seu nome."); campoRef.current?.focus(); return; }
     setLoading(true);
     setError(null);
     try {
@@ -117,12 +122,23 @@ export function WelcomeModal({
     finally    { setLoading(false); }
   }
 
-  const inputCls = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
-  const btnCls   = "w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50";
+  /* Foco = cor do RESTAURANTE, e com `!`: a regra base de `globals.css` tem sete
+     `:not` (0,7,1) e ganha de qualquer `focus:border-*` de classe — o
+     `focus:border-orange-400` daqui só funcionava por coincidir com ela, e numa
+     loja white-label o laranja do painel não é a cor de ninguém. */
+  const inputCls = "w-full rounded-xl border border-line2 bg-canvas px-4 py-3 text-ink placeholder:text-muted focus:outline-none focus:!border-[var(--brand-primary)] focus:!ring-[color-mix(in_srgb,var(--brand-primary)_22%,white)] disabled:opacity-60";
+  const btnCls   = "w-full rounded-xl py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50";
 
   return (
+    /* ─── Por que o overlay rola ──────────────────────────────────────────────
+     * `items-end`/`items-center` centraliza pelo EIXO, e quando o painel é mais
+     * alto que a janela o excedente sai pelo TOPO — sem barra de rolagem, sem
+     * gesto, inalcançável. Medido a 375px com o teclado aberto (janela de 283px,
+     * painel de 376px): o topo ficava em **-93px**, levando junto o título, a
+     * frase que explica o pedido de telefone e o próprio "×" que serve de saída.
+     * `overflow-y-auto` no fundo + `max-h-full` no painel devolvem o topo. */
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       /* Clique fora fecha — só onde há saída, e nunca no meio do envio. */
       onClick={dispensavel && !loading ? () => onClose(null) : undefined}
     >
@@ -130,14 +146,14 @@ export function WelcomeModal({
         role="dialog"
         aria-modal="true"
         aria-label={step === "phone" ? "Identificação rápida" : "Novo cadastro"}
-        className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
+        className="relative max-h-full w-full overflow-y-auto rounded-t-3xl bg-paper shadow-2xl sm:max-w-sm sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* A alcinha do topo é o gesto universal de "arraste para fechar". Numa
             tela que não fecha, ela promete uma saída que não existe. */}
         {dispensavel && (
           <div className="flex justify-center pt-3 sm:hidden">
-            <div className="h-1 w-10 rounded-full bg-gray-200" />
+            <div className="h-1 w-10 rounded-full bg-line2" />
           </div>
         )}
 
@@ -151,7 +167,7 @@ export function WelcomeModal({
               onClick={() => onClose(null)}
               disabled={loading}
               aria-label="Fechar e continuar sem se identificar"
-              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xl font-bold leading-none text-white transition hover:bg-white/30 active:scale-95 disabled:opacity-40"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xl font-semibold leading-none text-white transition hover:bg-white/30 active:scale-95 disabled:opacity-40"
             >
               ×
             </button>
@@ -159,7 +175,7 @@ export function WelcomeModal({
           <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
             {step === "phone" ? "Identificação rápida" : "Novo cadastro"}
           </p>
-          <p className={`mt-0.5 text-base font-bold leading-snug${dispensavel ? " pr-8" : ""}`}>
+          <p className={`mt-0.5 text-base font-semibold leading-snug${dispensavel ? " pr-8" : ""}`}>
             {step === "phone"
               ? required
                 // Sem saída: o texto diz o porquê. "Informe seu WhatsApp" sem
@@ -174,13 +190,13 @@ export function WelcomeModal({
           {step === "phone" ? (
             <form onSubmit={handlePhoneSubmit} className="space-y-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-gray-500">Seu WhatsApp</label>
-                <input type="tel" inputMode="numeric" autoComplete="tel"
+                <label className="mb-1.5 block text-xs font-semibold text-ink2">Seu WhatsApp</label>
+                <input type="tel" inputMode="numeric" autoComplete="tel" ref={campoRef}
                   value={phoneInput} onChange={(e) => { setPhoneInput(e.target.value); setError(null); }}
                   placeholder="(11) 99999-9999" disabled={loading} style={{ fontSize: "16px" }} className={inputCls} />
               </div>
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <button type="submit" disabled={!phoneInput.trim() || loading} className={btnCls}
+              {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+              <button type="submit" disabled={loading} className={btnCls}
                 style={{ backgroundColor: "var(--brand-primary)" }}>
                 {loading ? "Verificando…" : "Continuar →"}
               </button>
@@ -188,25 +204,25 @@ export function WelcomeModal({
           ) : (
             <form onSubmit={handleNameSubmit} className="space-y-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-gray-500">Seu nome</label>
-                <input type="text" inputMode="text" autoCapitalize="words" autoFocus
+                <label className="mb-1.5 block text-xs font-semibold text-ink2">Seu nome</label>
+                <input type="text" inputMode="text" autoCapitalize="words" autoFocus ref={campoRef}
                   value={nameInput} onChange={(e) => { setNameInput(e.target.value); setError(null); }}
                   placeholder="Ex: João Silva" disabled={loading} style={{ fontSize: "16px" }} className={inputCls} />
               </div>
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <button type="submit" disabled={!nameInput.trim() || loading} className={btnCls}
+              {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+              <button type="submit" disabled={loading} className={btnCls}
                 style={{ backgroundColor: "var(--brand-primary)" }}>
                 {loading ? "Salvando…" : "Continuar →"}
               </button>
             </form>
           )}
           {required ? (
-            <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-400">
+            <p className="mt-3 text-center text-[11px] leading-relaxed text-muted">
               Usamos seu WhatsApp só para identificar o pedido e seus cupons.
             </p>
           ) : (
             <button type="button" onClick={() => onClose(null)}
-              className="mt-3 w-full py-2 text-xs text-gray-400 transition-colors hover:text-gray-600">
+              className="mt-3 w-full py-2 text-xs text-muted transition-colors hover:text-ink2">
               Pular identificação
             </button>
           )}
