@@ -38,6 +38,7 @@ import { storeEnhancedImage } from "@/services/imageEnhancement/storage";
 import { RestaurantDefaultsService } from "@/services/restaurant/RestaurantDefaultsService";
 import {
   BAKERY_HOURS,
+  BAKERY_IDENTITY,
   BAKERY_MENU,
   BAKERY_PRINT_STATIONS,
   BAKERY_STORE,
@@ -286,6 +287,8 @@ async function upsertRestaurant(dryRun: boolean): Promise<{ id: string; createdN
           phone: BAKERY_STORE.phone,
           email: BAKERY_STORE.email,
           address: BAKERY_STORE.address,
+          // Vetor do repositório: não depende de chave nem de rodada paga.
+          logoUrl: BAKERY_IDENTITY.logoUrl,
           timezone: "America/Sao_Paulo",
           isActive: true,
           // Reafirmado a cada execução: se alguém desmarcar a vitrine no banco,
@@ -311,6 +314,7 @@ async function upsertRestaurant(dryRun: boolean): Promise<{ id: string; createdN
       phone: BAKERY_STORE.phone,
       email: BAKERY_STORE.email,
       address: BAKERY_STORE.address,
+      logoUrl: BAKERY_IDENTITY.logoUrl,
       timezone: "America/Sao_Paulo",
       isActive: true,
       isDemo: true,
@@ -414,6 +418,12 @@ async function configureStore(restaurantId: string, dryRun: boolean): Promise<vo
     // vitrine tem que parecer marca do lojista, não painel da Foocci.
     brandPrimaryColor: "#8A4B1E",
     brandSecondaryColor: "#4A2511",
+    // Capa do cardápio do QR Code + as redes fictícias. Ver BAKERY_IDENTITY: os
+    // três ícones (Instagram, TikTok, WhatsApp) só aparecem no cardápio quando
+    // há valor aqui — o WhatsApp vem do telefone da loja, os outros dois daqui.
+    coverImageUrl: BAKERY_IDENTITY.coverImageUrl,
+    instagramUrl: BAKERY_IDENTITY.instagramUrl,
+    tiktokUrl: BAKERY_IDENTITY.tiktokUrl,
     greetingTemplate:
       "Bom dia! Aqui é a Foocci Bakery 🥐 A fornada das {hora} acabou de sair. O que vai ser hoje?",
     waiterPrompt:
@@ -753,14 +763,56 @@ export function hasOpenAiKey(): boolean {
 }
 
 /**
- * O molde da foto. É o mesmo enquadramento para todos os itens porque cardápio
- * bonito é cardápio CONSISTENTE — 40 fotos com luz e ângulo diferentes ficam
- * piores do que 40 fotos iguais e medianas.
+ * Quantas fotos EXTRAS cada item ganha, além da capa. Pedido do CEO: "2 fotos a
+ * mais para cada produto". O número mora aqui porque três lugares precisam dele
+ * — o ensaio (para estimar), a geração (para saber quando parar) e o teste.
+ */
+export const BAKERY_EXTRA_PHOTOS_PER_ITEM = 2;
+
+/**
+ * Os enquadramentos, em ordem. O índice 0 é a CAPA e continua **palavra por
+ * palavra** o texto de antes: quem já tem capa gerada não pode ver o cardápio
+ * mudar porque mexemos no prompt. Os índices 1 e 2 são as fotos do carrossel.
+ *
+ * O cenário (mármore, tábua, luz de janela) e o estilo são IGUAIS nos três: o
+ * carrossel tem de parecer um ensaio do mesmo dia, não três fotos de três lojas.
+ * O que muda é só a câmera.
+ */
+const BAKERY_ANGULOS: readonly string[] = [
+  [
+    `ENQUADRAMENTO: um único produto, centralizado, ocupando cerca de 80% do quadro.`,
+    `Ângulo de 45 graus. Fundo de mármore claro levemente desfocado, com uma tábua de`,
+    `madeira clara ou prato de cerâmica branca. Luz natural lateral, suave e quente,`,
+    `como de manhã perto de uma janela. Sombras macias.`,
+  ].join("\n"),
+  [
+    `ENQUADRAMENTO: o MESMO produto, no MESMO cenário e na MESMA luz da foto principal,`,
+    `agora visto DE CIMA (90 graus, vista de topo), centralizado, ocupando cerca de 75%`,
+    `do quadro. Fundo de mármore claro, tábua de madeira clara ou prato de cerâmica branca.`,
+    `Luz natural lateral, suave e quente, sombras macias.`,
+  ].join("\n"),
+  [
+    `ENQUADRAMENTO: o MESMO produto, no MESMO cenário e na MESMA luz da foto principal,`,
+    `agora em PRIMEIRÍSSIMO PLANO, câmera quase na altura da mesa, mostrando a TEXTURA`,
+    `de perto — casca, miolo, farelo, camadas ou creme. Profundidade de campo curta,`,
+    `com o mesmo fundo de mármore claro bem desfocado atrás. Luz natural lateral,`,
+    `suave e quente, sombras macias.`,
+  ].join("\n"),
+];
+
+/**
+ * O molde da foto. É o mesmo cenário para todos os itens porque cardápio bonito
+ * é cardápio CONSISTENTE — 40 fotos com luz e ângulo diferentes ficam piores do
+ * que 40 fotos iguais e medianas.
+ *
+ * `angulo` escolhe o enquadramento: 0 = capa (padrão, texto inalterado), 1 e 2 =
+ * as fotos extras do carrossel. Índice fora da lista volta para a capa.
  */
 export function buildBakeryImagePrompt(
   name: string,
   description: string,
   ingredients: string | null,
+  angulo = 0,
 ): string {
   const linhaIngredientes = ingredients ? [`INGREDIENTES VISÍVEIS: ${ingredients}`] : [];
   return [
@@ -770,10 +822,7 @@ export function buildBakeryImagePrompt(
     `DESCRIÇÃO: ${description}`,
     ...linhaIngredientes,
     ``,
-    `ENQUADRAMENTO: um único produto, centralizado, ocupando cerca de 80% do quadro.`,
-    `Ângulo de 45 graus. Fundo de mármore claro levemente desfocado, com uma tábua de`,
-    `madeira clara ou prato de cerâmica branca. Luz natural lateral, suave e quente,`,
-    `como de manhã perto de uma janela. Sombras macias.`,
+    BAKERY_ANGULOS[angulo] ?? BAKERY_ANGULOS[0]!,
     ``,
     `ESTILO: realista, apetitoso e honesto — o produto como ele realmente é servido,`,
     `sem exagero de porção. Cores naturais. Textura visível (casca, farelo, creme).`,
@@ -781,6 +830,51 @@ export function buildBakeryImagePrompt(
     `PROIBIDO: texto, letras, números, logotipos, marca d'água, mãos, pessoas,`,
     `talheres em uso, colagem, moldura, mais de um produto no quadro.`,
   ].join("\n");
+}
+
+/** O que ainda falta fotografar num item. */
+interface PendenciaDeFoto {
+  id: string;
+  name: string;
+  description: string | null;
+  ingredients: string | null;
+  /** A capa (imageUrl) está faltando — ou vai ser refeita (`regerar`). */
+  precisaCapa: boolean;
+  /** Quantas fotos extras ainda faltam para fechar o carrossel. */
+  extrasFaltando: number;
+}
+
+/** Quantas CHAMADAS PAGAS um conjunto de pendências representa. */
+function contarFotos(pendencias: PendenciaDeFoto[]): number {
+  return pendencias.reduce((s, p) => s + (p.precisaCapa ? 1 : 0) + p.extrasFaltando, 0);
+}
+
+/**
+ * O levantamento do que falta, item a item — a mesma conta para o ensaio, para a
+ * geração e para o trabalho em segundo plano. Enquanto cada um fazia a sua, o
+ * número do botão ("gerar as N fotos") podia não ser o número que o gerador ia
+ * cobrar. Uma conta só, três leitores.
+ */
+async function levantarPendencias(
+  restaurantId: string,
+  regerar: boolean,
+): Promise<PendenciaDeFoto[]> {
+  const itens = await prisma.menuItem.findMany({
+    where: { category: { restaurantId } },
+    orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+    select: { id: true, name: true, description: true, ingredients: true, imageUrl: true, images: true },
+  });
+
+  return itens.map((i) => ({
+    id: i.id,
+    name: i.name,
+    description: i.description,
+    ingredients: i.ingredients,
+    precisaCapa: regerar || !i.imageUrl,
+    extrasFaltando: regerar
+      ? BAKERY_EXTRA_PHOTOS_PER_ITEM
+      : Math.max(0, BAKERY_EXTRA_PHOTOS_PER_ITEM - (i.images?.length ?? 0)),
+  }));
 }
 
 export interface BakeryImagePlan {
@@ -791,22 +885,43 @@ export interface BakeryImagePlan {
   totalItens: number;
   comFoto: number;
   semFoto: number;
-  /** Quantos seriam gerados agora (respeita "regerar"). */
+  /** Quantas fotos EXTRAS cada item deve ter além da capa (hoje: 2). */
+  fotosExtrasPorItem: number;
+  /** Itens que já têm as {@link BAKERY_EXTRA_PHOTOS_PER_ITEM} fotos extras. */
+  comCarrossel: number;
+  /** Itens a quem ainda falta pelo menos uma foto extra. */
+  semCarrossel: number;
+  /** Capas a gerar agora. */
+  capasAGerar: number;
+  /** Fotos extras a gerar agora. */
+  extrasAGerar: number;
+  /**
+   * O total de CHAMADAS PAGAS agora — capas + extras, já respeitando "regerar" e
+   * o "limite" de itens. É este número que o botão mostra e é este que o gerador
+   * cobra: os dois saem da mesma conta, de propósito.
+   */
   aGerar: number;
+  /** Quantos ITENS entram nesta execução (o `limite`, quando houver). */
+  itensNestaRodada: number;
   modelo: string;
   custoPorFotoUsd: number;
   custoEstimadoUsd: number;
   temChaveOpenAi: boolean;
   /** Exemplo do texto que iria para o modelo — dá para conferir antes de gastar. */
   exemploDePrompt: string | null;
+  /** Exemplo de um dos ângulos EXTRAS — o que o carrossel vai ganhar. */
+  exemploDePromptExtra: string | null;
 }
 
 /**
- * Ensaio: conta, estima o custo e mostra o prompt. NÃO gasta e NÃO exige chave —
- * quem vai autorizar o gasto tem o direito de ver antes o que será pedido.
+ * Ensaio: conta, estima o custo e mostra os prompts. NÃO gasta e NÃO exige chave
+ * — quem vai autorizar o gasto tem o direito de ver antes o que será pedido.
+ *
+ * `limite` é em ITENS, não em fotos: "gere UM produto primeiro" quer dizer um
+ * produto INTEIRO (capa + as 2 extras), senão a prova é de meia ficha.
  */
 export async function planBakeryImages(
-  options: { regerar?: boolean } = {},
+  options: { regerar?: boolean; limite?: number } = {},
 ): Promise<BakeryImagePlan> {
   const regerar = options.regerar === true;
 
@@ -822,43 +937,56 @@ export async function planBakeryImages(
       totalItens: 0,
       comFoto: 0,
       semFoto: 0,
+      fotosExtrasPorItem: BAKERY_EXTRA_PHOTOS_PER_ITEM,
+      comCarrossel: 0,
+      semCarrossel: 0,
+      capasAGerar: 0,
+      extrasAGerar: 0,
       aGerar: 0,
+      itensNestaRodada: 0,
       modelo: BAKERY_IMAGE_MODEL,
       custoPorFotoUsd: APPROX_USD_PER_IMAGE,
       custoEstimadoUsd: 0,
       temChaveOpenAi: hasOpenAiKey(),
       exemploDePrompt: null,
+      exemploDePromptExtra: null,
     };
   }
 
-  const totalItens = await prisma.menuItem.count({ where: { category: { restaurantId: restaurant.id } } });
-  const semFoto = await prisma.menuItem.count({
-    where: { category: { restaurantId: restaurant.id }, OR: [{ imageUrl: null }, { imageUrl: "" }] },
-  });
-  const aGerar = regerar ? totalItens : semFoto;
+  const todas = await levantarPendencias(restaurant.id, regerar);
+  const pendentes = todas.filter((p) => p.precisaCapa || p.extrasFaltando > 0);
+  const alvo = options.limite && options.limite > 0 ? pendentes.slice(0, options.limite) : pendentes;
 
-  const amostra = await prisma.menuItem.findFirst({
-    where: {
-      category: { restaurantId: restaurant.id },
-      ...(regerar ? {} : { OR: [{ imageUrl: null }, { imageUrl: "" }] }),
-    },
-    orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
-    select: { name: true, description: true, ingredients: true },
-  });
+  const semFoto = todas.filter((p) => p.precisaCapa).length;
+  const semCarrossel = todas.filter((p) => p.extrasFaltando > 0).length;
+  const capasAGerar = alvo.filter((p) => p.precisaCapa).length;
+  const extrasAGerar = alvo.reduce((s, p) => s + p.extrasFaltando, 0);
+  const aGerar = capasAGerar + extrasAGerar;
+
+  const amostra = alvo[0] ?? todas[0] ?? null;
 
   return {
     padariaExiste: true,
     eVitrine: restaurant.isDemo,
-    totalItens,
-    comFoto: totalItens - semFoto,
+    totalItens: todas.length,
+    comFoto: todas.length - semFoto,
     semFoto,
+    fotosExtrasPorItem: BAKERY_EXTRA_PHOTOS_PER_ITEM,
+    comCarrossel: todas.length - semCarrossel,
+    semCarrossel,
+    capasAGerar,
+    extrasAGerar,
     aGerar,
+    itensNestaRodada: alvo.length,
     modelo: BAKERY_IMAGE_MODEL,
     custoPorFotoUsd: APPROX_USD_PER_IMAGE,
     custoEstimadoUsd: Number((aGerar * APPROX_USD_PER_IMAGE).toFixed(2)),
     temChaveOpenAi: hasOpenAiKey(),
     exemploDePrompt: amostra
-      ? buildBakeryImagePrompt(amostra.name, amostra.description ?? "", amostra.ingredients)
+      ? buildBakeryImagePrompt(amostra.name, amostra.description ?? "", amostra.ingredients, 0)
+      : null,
+    exemploDePromptExtra: amostra
+      ? buildBakeryImagePrompt(amostra.name, amostra.description ?? "", amostra.ingredients, 1)
       : null,
   };
 }
@@ -870,7 +998,7 @@ export interface BakeryImageFailure {
 
 export interface BakeryImageRunResult {
   geradas: number;
-  /** Itens que já tinham foto quando chegou a vez deles — dinheiro NÃO gasto. */
+  /** Fotos que já existiam quando chegou a vez delas — dinheiro NÃO gasto. */
   puladas: number;
   falhas: BakeryImageFailure[];
   custoRealEstimadoUsd: number;
@@ -881,9 +1009,19 @@ export interface BakeryImageRunOptions {
   confirmar: boolean;
   /** Refaz também quem JÁ tem foto. Ato consciente e separado. */
   regerar?: boolean;
-  /** Teto de fotos nesta execução (para provar o fluxo com 1 antes de soltar 40). */
+  /**
+   * Teto de ITENS nesta execução — para provar o fluxo com 1 antes de soltar 40.
+   * É em itens, não em fotos, porque um item só fica pronto com a ficha inteira
+   * (capa + as extras); parar no meio provaria meia coisa.
+   */
   limite?: number;
-  onProgress?: (p: { indice: number; total: number; item: string }) => void;
+  onProgress?: (p: {
+    indice: number;
+    total: number;
+    item: string;
+    /** "capa" = imageUrl; "extra" = mais uma foto do carrossel. */
+    tipo: "capa" | "extra";
+  }) => void;
 }
 
 const IMAGE_LEASE_MS = 180_000; // 3 min por foto — gpt-image-1 é lento, mas não eterno
@@ -943,68 +1081,116 @@ export async function generateBakeryImages(
 
   const regerar = options.regerar === true;
 
-  const candidatos = await prisma.menuItem.findMany({
-    where: {
-      category: { restaurantId: restaurant.id },
-      ...(regerar ? {} : { OR: [{ imageUrl: null }, { imageUrl: "" }] }),
-    },
-    orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
-    select: { id: true, name: true, description: true, ingredients: true },
-  });
+  const pendentes = (await levantarPendencias(restaurant.id, regerar))
+    .filter((p) => p.precisaCapa || p.extrasFaltando > 0);
+  const limite = options.limite && options.limite > 0 ? options.limite : pendentes.length;
+  const alvo = pendentes.slice(0, limite);
+  const totalFotos = contarFotos(alvo);
 
-  const limite = options.limite && options.limite > 0 ? options.limite : candidatos.length;
-  const alvo = candidatos.slice(0, limite);
-
-  if (alvo.length === 0) {
+  if (totalFotos === 0) {
     throw new BakeryOperationError(
       "NADA_A_FAZER",
       regerar
         ? "Não há item nenhum no cardápio da padaria para fotografar."
-        : "Todos os itens do cardápio já têm foto. Nada a gerar — e nada a gastar. " +
-            'Se quiser fotos novas, use "Regerar todas as fotos".',
+        : "Todos os itens do cardápio já têm a capa e as fotos extras. Nada a gerar — " +
+            'e nada a gastar. Se quiser fotos novas, use "Regerar todas as fotos".',
     );
   }
 
   imageLease.acquire();
 
   const result: BakeryImageRunResult = { geradas: 0, puladas: 0, falhas: [], custoRealEstimadoUsd: 0 };
+  let indice = 0;
+
+  /** Uma chamada paga, com a re-leitura logo antes e a gravação logo depois. */
+  const tirarFoto = async (
+    item: PendenciaDeFoto,
+    tipo: "capa" | "extra",
+    angulo: number,
+  ): Promise<void> => {
+    imageLease.renew();
+    indice++;
+    options.onProgress?.({ indice, total: totalFotos, item: item.name, tipo });
+
+    // Re-leitura imediatamente antes de gastar. Ver comentário do cabeçalho.
+    // Vale para os DOIS tipos: o admin e a linha de comando rodando juntos não
+    // podem pagar duas vezes nem pela capa nem pela terceira foto do carrossel.
+    const atual = await prisma.menuItem.findUnique({
+      where: { id: item.id },
+      select: { imageUrl: true, images: true },
+    });
+    if (!atual) throw new Error("O item sumiu do cardápio no meio da geração.");
+    if (!regerar) {
+      if (tipo === "capa" && atual.imageUrl) { result.puladas++; return; }
+      if (tipo === "extra" && (atual.images?.length ?? 0) >= BAKERY_EXTRA_PHOTOS_PER_ITEM) {
+        result.puladas++;
+        return;
+      }
+    }
+
+    // A conversa com a OpenAI acontece no provedor de imagem — o único lugar
+    // do `src/` autorizado a isso (Regra de Ouro do Brain).
+    const foto = await generateFoodPhotoFromPrompt(
+      buildBakeryImagePrompt(item.name, item.description ?? "", item.ingredients, angulo),
+    );
+    if (!foto.success) throw new Error(foto.error);
+
+    const url = await storeEnhancedImage(foto.buffer, foto.mimeType, restaurant.id, item.id);
+
+    if (tipo === "capa") {
+      // A capa NUNCA vai para `images`: ela é o primeiro slide por construção
+      // (components/menu/photos.ts), não por estar duplicada no array.
+      await prisma.menuItem.update({ where: { id: item.id }, data: { imageUrl: url } });
+    } else {
+      // Concatena sobre o que o BANCO tem AGORA, não sobre o que líamos no
+      // começo: se outro processo acrescentou uma foto, ela não pode se perder.
+      // `carouselEnabled` sobe junto com a primeira extra — foto extra guardada
+      // com o carrossel desligado é dinheiro gasto que ninguém vê.
+      await prisma.menuItem.update({
+        where: { id: item.id },
+        data: { images: [...(atual.images ?? []), url], carouselEnabled: true },
+      });
+    }
+
+    result.geradas++;
+    result.custoRealEstimadoUsd = Number((result.geradas * APPROX_USD_PER_IMAGE).toFixed(2));
+  };
 
   try {
-    for (let i = 0; i < alvo.length; i++) {
-      const item = alvo[i]!;
-      imageLease.renew();
-      options.onProgress?.({ indice: i + 1, total: alvo.length, item: item.name });
+    for (const item of alvo) {
+      // A capa primeiro: se o orçamento acabar no meio, o cardápio fica com a
+      // foto que aparece no card, não com um carrossel órfão.
+      if (item.precisaCapa) {
+        try {
+          await tirarFoto(item, "capa", 0);
+        } catch (err) {
+          registrarFalha(result, item.name, "capa", err);
+        }
+      }
 
-      try {
-        // Re-leitura imediatamente antes de gastar. Ver comentário do cabeçalho.
-        if (!regerar) {
-          const atual = await prisma.menuItem.findUnique({
-            where: { id: item.id },
-            select: { imageUrl: true },
-          });
-          if (atual?.imageUrl) {
-            result.puladas++;
-            continue;
-          }
+      if (item.extrasFaltando > 0) {
+        // Em `regerar`, o array das extras é zerado UMA vez por item, antes da
+        // primeira foto nova. Sem isto, refazer 40 itens empilharia 2 fotos em
+        // cima das 2 antigas e o carrossel viraria 4.
+        if (regerar) {
+          await prisma.menuItem.update({ where: { id: item.id }, data: { images: [] } });
         }
 
-        // A conversa com a OpenAI acontece no provedor de imagem — o único lugar
-        // do `src/` autorizado a isso (Regra de Ouro do Brain).
-        const foto = await generateFoodPhotoFromPrompt(
-          buildBakeryImagePrompt(item.name, item.description ?? "", item.ingredients),
-        );
-        if (!foto.success) throw new Error(foto.error);
-
-        const url = await storeEnhancedImage(foto.buffer, foto.mimeType, restaurant.id, item.id);
-        await prisma.menuItem.update({ where: { id: item.id }, data: { imageUrl: url } });
-
-        result.geradas++;
-        result.custoRealEstimadoUsd = Number((result.geradas * APPROX_USD_PER_IMAGE).toFixed(2));
-      } catch (err) {
-        const motivo = err instanceof Error ? err.message : String(err);
-        // Guardrail 6: a falha carrega o caso concreto, não só "deu erro".
-        console.error("[FoocciBakery] foto falhou", { item: item.name, motivo });
-        result.falhas.push({ item: item.name, motivo });
+        for (let k = 0; k < item.extrasFaltando; k++) {
+          // O ângulo sai de QUANTAS extras o item já tem, não do laço: assim uma
+          // segunda rodada num item que já tem 1 extra pede o ângulo 2 em vez de
+          // repetir o 1.
+          const jaTem = await prisma.menuItem.findUnique({
+            where: { id: item.id },
+            select: { images: true },
+          });
+          const angulo = 1 + ((jaTem?.images?.length ?? 0) % BAKERY_EXTRA_PHOTOS_PER_ITEM);
+          try {
+            await tirarFoto(item, "extra", angulo);
+          } catch (err) {
+            registrarFalha(result, item.name, "extra", err);
+          }
+        }
       }
     }
 
@@ -1012,6 +1198,18 @@ export async function generateBakeryImages(
   } finally {
     imageLease.release();
   }
+}
+
+/** Guardrail 6: a falha carrega o caso concreto, não só "deu erro". */
+function registrarFalha(
+  result: BakeryImageRunResult,
+  item: string,
+  tipo: "capa" | "extra",
+  err: unknown,
+): void {
+  const motivo = `${tipo === "capa" ? "capa" : "foto extra"}: ${err instanceof Error ? err.message : String(err)}`;
+  console.error("[FoocciBakery] foto falhou", { item, motivo });
+  result.falhas.push({ item, motivo });
 }
 
 // ─── 3. O trabalho em curso, visto de fora (o painel precisa disso) ───────────
@@ -1110,7 +1308,9 @@ export async function startBakeryImageJob(
     );
   }
 
-  const plano = await planBakeryImages({ regerar: options.regerar });
+  // O ensaio recebe o MESMO `limite` que a geração vai receber: o número que o
+  // trabalho anuncia ("gerar N fotos") tem de ser o número que o gerador cobra.
+  const plano = await planBakeryImages({ regerar: options.regerar, limite: options.limite });
 
   if (!plano.padariaExiste) {
     throw new BakeryOperationError(
@@ -1133,12 +1333,12 @@ export async function startBakeryImageJob(
     );
   }
 
-  const total = Math.min(plano.aGerar, options.limite && options.limite > 0 ? options.limite : plano.aGerar);
+  const total = plano.aGerar;
   if (total === 0) {
     throw new BakeryOperationError(
       "NADA_A_FAZER",
-      "Todos os itens do cardápio já têm foto. Nada a gerar — e nada a gastar. " +
-        'Se quiser fotos novas, use "Regerar todas as fotos".',
+      "Todos os itens do cardápio já têm a capa e as fotos extras. Nada a gerar — " +
+        'e nada a gastar. Se quiser fotos novas, use "Regerar todas as fotos".',
     );
   }
 
@@ -1229,6 +1429,10 @@ export interface BakeryOverview {
   totalCategorias: number;
   comFoto: number;
   semFoto: number;
+  /** Itens com as {@link BAKERY_EXTRA_PHOTOS_PER_ITEM} fotos extras e o carrossel ligado. */
+  comCarrossel: number;
+  semCarrossel: number;
+  fotosExtrasPorItem: number;
   routes: BakeryRoutes;
   temChaveOpenAi: boolean;
 }
@@ -1248,18 +1452,22 @@ export async function getBakeryOverview(): Promise<BakeryOverview> {
       totalCategorias: 0,
       comFoto: 0,
       semFoto: 0,
+      comCarrossel: 0,
+      semCarrossel: 0,
+      fotosExtrasPorItem: BAKERY_EXTRA_PHOTOS_PER_ITEM,
       routes: bakeryRoutes(),
       temChaveOpenAi: hasOpenAiKey(),
     };
   }
 
-  const [totalItens, semFoto, totalCategorias] = await Promise.all([
-    prisma.menuItem.count({ where: { category: { restaurantId: restaurant.id } } }),
-    prisma.menuItem.count({
-      where: { category: { restaurantId: restaurant.id }, OR: [{ imageUrl: null }, { imageUrl: "" }] },
-    }),
+  const [pendencias, totalCategorias] = await Promise.all([
+    levantarPendencias(restaurant.id, false),
     prisma.menuCategory.count({ where: { restaurantId: restaurant.id } }),
   ]);
+
+  const totalItens = pendencias.length;
+  const semFoto = pendencias.filter((p) => p.precisaCapa).length;
+  const semCarrossel = pendencias.filter((p) => p.extrasFaltando > 0).length;
 
   return {
     padariaExiste: true,
@@ -1269,6 +1477,9 @@ export async function getBakeryOverview(): Promise<BakeryOverview> {
     totalCategorias,
     comFoto: totalItens - semFoto,
     semFoto,
+    comCarrossel: totalItens - semCarrossel,
+    semCarrossel,
+    fotosExtrasPorItem: BAKERY_EXTRA_PHOTOS_PER_ITEM,
     routes: bakeryRoutes(),
     temChaveOpenAi: hasOpenAiKey(),
   };

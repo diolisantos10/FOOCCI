@@ -117,6 +117,29 @@ export const BAKERY_STORE: BakeryStore = {
   ownerEmail: "owner@foocci-bakery.example.com",
 };
 
+/**
+ * A cara da padaria — logo, capa e redes.
+ *
+ * **Logo e capa são vetores do próprio repositório** (`public/demo/`), não fotos
+ * geradas por IA: a padaria é semeada sozinha no deploy, e identidade que só
+ * existe depois de alguém rodar um comando pago é identidade que a vitrine sobe
+ * sem ter. Custam zero e são iguais em todo ambiente.
+ *
+ * **As redes são FICTÍCIAS de propósito, e apontam para `example.com`** — o
+ * domínio reservado pela RFC 2606, o mesmo critério já usado nos e-mails desta
+ * loja. A alternativa (um `instagram.com/<handle>` inventado) é pior de duas
+ * formas: se o handle não existir, o cliente da demonstração cai num 404 da
+ * Meta; se existir, mandamos gente para a conta de um terceiro que nada tem a
+ * ver com isto. Nenhum ícone do cardápio pode levar à conta de outra pessoa.
+ * O WhatsApp não entra aqui: ele nasce do `phone` acima (também fictício).
+ */
+export const BAKERY_IDENTITY = {
+  logoUrl: "/demo/foocci-bakery-logo.svg",
+  coverImageUrl: "/demo/foocci-bakery-capa.svg",
+  instagramUrl: "https://instagram.example.com/foocci.bakery",
+  tiktokUrl: "https://tiktok.example.com/@foocci.bakery",
+} as const;
+
 /** Estações de impressão da padaria. Sem impressora atribuída — a vitrine não tem papel. */
 /**
  * Categorias que o Garçom oferece no FECHAMENTO do pedido, nesta ordem.
