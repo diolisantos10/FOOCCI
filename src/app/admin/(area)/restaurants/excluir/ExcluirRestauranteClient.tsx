@@ -557,15 +557,17 @@ export function ExcluirRestauranteClient({
         descricao="Quem já viveu, quem nunca viveu, e quanta gente tem dentro. Só leitura."
         estado={slugAlvo ? "feito" : "atual"}
       >
-        <Card className="overflow-hidden">
-          {carregandoInventario ? (
+        {carregandoInventario ? (
+          <Card>
             <div className="space-y-2.5 p-5">
               {[0, 1, 2, 3, 4].map((i) => (
                 <Esqueleto key={i} className="h-12" />
               ))}
               <p className="pt-1 text-sm text-muted">Contando os números de cada restaurante…</p>
             </div>
-          ) : erroInventario ? (
+          </Card>
+        ) : erroInventario ? (
+          <Card>
             <div className="p-5">
               <Recado tom="erro" titulo="Não deu para carregar o inventário.">
                 {erroInventario}
@@ -574,21 +576,35 @@ export function ExcluirRestauranteClient({
                 Tentar de novo
               </Button>
             </div>
-          ) : !inventario?.length ? (
+          </Card>
+        ) : !inventario?.length ? (
+          <Card>
             <EmptyState
               icon="🏪"
               title="Nenhum restaurante cadastrado."
               sub="Não há o que excluir. A lista de restaurantes fica em Restaurantes."
             />
-          ) : (
-            <>
-              {/* Celular: cartões. Tabela de 8 colunas não cabe em 375px sem virar rolagem lateral. */}
-              <ul className="divide-y divide-line md:hidden">
+          </Card>
+        ) : (
+          <>
+              {/*
+                Até 1023px: CARTÕES. A tabela de 8 colunas precisa de ~1005px de
+                largura mínima; a 768 ela rolava na horizontal e levava a coluna de
+                AÇÃO para fora da tela — o único botão do passo 1 ficava invisível
+                justamente no tamanho em que ninguém pensa em arrastar a tabela.
+                A 640px+ os cartões viram duas colunas para não ficarem esticados.
+              */}
+            <ul className="grid gap-3 sm:grid-cols-2 lg:hidden">
                 {inventario.map((l) => {
                   const prot = ehProtegidoNaTela(l.slug, protegidos);
                   const sel = l.slug === slugAlvo;
                   return (
-                    <li key={l.slug} className={`p-4 ${sel ? "bg-brand-50" : ""}`}>
+                    <li
+                      key={l.slug}
+                      className={`flex flex-col rounded-2xl border p-4 ${
+                        sel ? "border-brand-400 bg-brand-50" : "border-line bg-paper"
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-[14px] font-semibold text-ink">{l.nome}</p>
@@ -596,7 +612,7 @@ export function ExcluirRestauranteClient({
                         </div>
                         <Pill tone={VEREDITO[l.veredito].tom}>{VEREDITO[l.veredito].rotulo}</Pill>
                       </div>
-                      <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <dl className="mt-3 grid flex-1 grid-cols-3 gap-2 text-center">
                         {[
                           ["Clientes", num.format(l.clientes)],
                           ["Pedidos", num.format(l.pedidos)],
@@ -608,7 +624,7 @@ export function ExcluirRestauranteClient({
                           </div>
                         ))}
                       </dl>
-                      <div className="mt-3">
+                      <div className="mt-3 pt-0.5">
                         {prot ? (
                           <Pill tone="brand">🔒 Protegido — não pode ser apagado</Pill>
                         ) : (
@@ -626,8 +642,9 @@ export function ExcluirRestauranteClient({
                 })}
               </ul>
 
-              {/* Tablet/desktop: tabela. */}
-              <div className="hidden overflow-x-auto md:block">
+            {/* 1024px+: tabela. */}
+            <Card className="hidden overflow-hidden lg:block">
+              <div className="overflow-x-auto">
                 <table className="w-full text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-line">
@@ -646,7 +663,7 @@ export function ExcluirRestauranteClient({
                           key={(rotulo as string) || i}
                           className={`whitespace-nowrap px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[.04em] text-muted ${
                             direita ? "text-right" : ""
-                          } ${soLg ? "hidden lg:table-cell" : ""}`}
+                          } ${soLg ? "hidden xl:table-cell" : ""}`}
                         >
                           {rotulo}
                         </th>
@@ -671,7 +688,7 @@ export function ExcluirRestauranteClient({
                               {!l.ativo && <Pill tone="neutral">Inativo</Pill>}
                             </div>
                           </td>
-                          <td className="hidden whitespace-nowrap px-4 py-3 tabular-nums text-ink2 lg:table-cell">
+                          <td className="hidden whitespace-nowrap px-4 py-3 tabular-nums text-ink2 xl:table-cell">
                             {dataCurta(l.criadoEm)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 tabular-nums text-ink2">
@@ -687,7 +704,7 @@ export function ExcluirRestauranteClient({
                             {num.format(l.pedidos)}
                             <span className="block text-[11px] text-muted">{num.format(l.pedidos90d)} em 90 d</span>
                           </td>
-                          <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums text-ink2 lg:table-cell">
+                          <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums text-ink2 xl:table-cell">
                             {num.format(l.conversas)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-right">
@@ -709,9 +726,9 @@ export function ExcluirRestauranteClient({
                   </tbody>
                 </table>
               </div>
-            </>
-          )}
-        </Card>
+            </Card>
+          </>
+        )}
 
         <div className="mt-3">
           <Recado tom="info" titulo="“Nunca viveu” quer dizer zero pedido NESTE sistema.">
