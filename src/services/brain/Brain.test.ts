@@ -121,12 +121,21 @@ describe("(7) Restaurant Knowledge Adapter", () => {
     expect(snap.businessType).toBe("RESTAURANT");
     expect(snap.truthSources.payments).toEqual({ pix: true, cartao: true, dinheiro: true, link: false });
     // v2: fatos reais, não contagens — nomes, preços (incl. canal), resumo primeiro
-    expect(snap.truthSources.products?.[0]).toEqual({ totalItens: 42, listados: 1 });
+    // v3 (06/08/2026): o cabeçalho ganhou a legenda de canal. A comparação segue
+    // EXATA de propósito — é ela que barra uma chave nova entrando na ficha sem
+    // ninguém olhar (foi assim que este teste pegou a mudança).
+    expect(snap.truthSources.products?.[0]).toEqual({
+      totalItens: 42,
+      listados: 1,
+      legendaCanais: "canais: E=entrega (vai ao carrinho) · S=salão (presencial) · ES=os dois",
+      regraDeCanal: "Item marcado só com S EXISTE e pode ser contado com preço, mas NUNCA entra em pedido de entrega.",
+    });
     expect(snap.truthSources.products?.[1]).toMatchObject({
       nome: "Combo Salmão 20 peças",
       preco: 59.9,
       precoDelivery: 62.9,
       categoria: "Combos",
+      canais: "ES", // v3: todo item declara o canal, não só os de salão
     });
     // horários reais chegam ao snapshot
     expect(snap.truthSources.hours).toMatchObject({ funcionamento: { ter: "18:00-23:00" }, delivery: true, retirada: true });

@@ -105,6 +105,10 @@ const TRUTH_LABELS: Record<string, string> = {
   prices: "Preços",
   payments: "Pagamentos",
   hours: "Horários/atendimento",
+  // Distinto de `hours` de propósito: aquele é o que está CADASTRADO, este é o
+  // que vale NESTE minuto. Sem o rótulo, o modelo lia "loja: {...}" e tratava o
+  // estado de agora como mais uma linha de configuração.
+  loja: "Estado da loja AGORA (aceita pedido? quando reabre?)",
   entrega: "Entrega (taxa/área/raio/mínimo)",
   local: "Endereço do restaurante",
   customers: "Clientes (agregado)",
