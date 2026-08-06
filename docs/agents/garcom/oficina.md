@@ -333,3 +333,86 @@ que ser separadas na origem, e a que pode virar pedido tem que ser validada
 **no servidor**, no momento de criar o pedido — não na tela.
 
 — especialista garcom, a partir de `8e4ba0cf` (branch padrão, já com a 1ª parte)
+
+---
+
+2026-08-06 — **A frase repetida da vitrine não era mensagem duplicada: era
+laço.** Print do CEO na `foocci-bakery` (05/08, 23:49) com dois balões idênticos:
+*"Pra fechar o pedido preciso do seu WhatsApp…"*.
+
+**Reproduzido antes de consertar.** Bancada em Chromium com o `PedidoClient`
+**real** (esbuild + playwright-core; nada do componente mockado, só as respostas
+HTTP, com o payload literal da rota). Cenário do print: vitrine, loja fechada,
+carrinho com 1 item, cliente reconhecido como "Diego". Resultado: **3 voltas, 3
+balões idênticos** — e não tem fim.
+
+**As quatro hipóteses do CEO, todas conferidas e todas descartadas:**
+
+| Hipótese | Veredito | Evidência |
+|---|---|---|
+| duplo disparo / dois `useEffect` / StrictMode | não | a frase sai de dentro de um `onClick`, nunca de efeito |
+| re-render reemitindo | não | `pushAssistantMessage` é imperativo, não derivado de render |
+| retry sem idempotência | não | esse ramo não faz chamada de rede |
+| dois caminhos para a mesma frase (a favorita) | **não** | a frase existe em **1** lugar no repositório inteiro: `PedidoClient.tsx:4318` |
+
+**Causa (uma frase):** o portão que pede o WhatsApp **não lê o WhatsApp que a
+pessoa acabou de dar** — `POST /api/qr/[slug]/identify` nunca devolve
+`customerId` (decisão de segurança escrita na própria rota, `route.ts:15-18`) e o
+telefone vinha de `storedCustomer`, um inicializador de `useState` que lê o
+`sessionStorage` **uma vez, no mount**, antes de a tela de identificação gravar
+lá — então as duas metades da condição `!effectiveCustomerPhone &&
+!resolvedCustomerId` ficam verdadeiras para sempre naquela carga da página.
+
+**O segundo dano, pior que o balão, provado na mesma bancada:** em loja de
+cliente (identificação obrigatória, onde o portão nem dispara) o mesmo dado
+faltando fazia o `POST /finalize` sair com `customerPhone: undefined` para quem
+digitou o telefone na entrada e fechou o pedido sem recarregar a página. Depois
+do conserto, `"11987654321"`. Pela mesma raiz também estavam mortos, para esse
+cliente: carrinho abandonado (`OrderDraft`), "Pedir novamente" e o `customerPhone`
+que o Garçom recebe a cada turno.
+
+**Conserto na causa, não no sintoma.** Nenhuma deduplicação de balão foi
+adicionada — filtrar a repetição na tela deixaria o laço vivo e mudo. O que
+mudou: `PhoneEntryCard` devolve `ClienteIdentificado` com `phone` **obrigatório**
+(trava de compilador, não comentário), `handlePhoneIdentified` grava o número em
+estado, e a regra saiu do componente para `src/lib/identidadeCheckout.ts` para
+ser testável no runner do repo (`environment: node`, sem DOM).
+
+**Achado colateral que também consertei, mesma doença:** `handleResetIdentity`
+("Trocar") limpava o `sessionStorage` mas não a cópia em memória — a pessoa
+seguia identificada com o número que pediu para trocar.
+
+**Cuidado que quase virou outro bug:** ligar o telefone faria o efeito de
+auto-identify (`PedidoClient.tsx:2941`) chamar `/identify` de novo, e cada chamada
+grava um `MenuEvent` de visita — toda entrada web passaria a contar **em dobro**
+no KPI. Cortado com um `if (sessionCustomerPhone) return;`.
+
+**O `LojaClient` já fazia certo** (`if (identity.phone) setPhone(identity.phone)`,
+linha 281): o padrão era conhecido, só não tinha sido aplicado no chat.
+
+**Portões:** `npx tsc --noEmit` limpo · `npx vitest run` 440 arquivos / 5671
+testes, `success: true` conferido **no JSON**, não na última linha.
+
+**Não toquei** (território de outros agentes nesta rodada): verdade/ficha do
+restaurante e o estado aberto/fechado, `WelcomeModal.tsx`, `page.tsx`,
+`identificacao-loja.ts`, `marketing/**`, `site/**`.
+
+**Duas coisas que vi e deixei anotadas em vez de mexer:**
+1. Com a loja **fechada** (o caso do print), o botão "Finalizar pedido" abre o
+   checkout normalmente — o `handleFinalizeClick` só barra pausa manual
+   (`isOrderingPaused`), nunca horário. É do agente que está no aberto/fechado.
+2. A tela de revisão diz *"Identifique-se para ver e usar seus cupons"* para
+   quem acabou de se identificar, porque o bloco depende de `customerId` — que a
+   rota, por segurança, não devolve mais. É decisão de produto (prova de posse do
+   telefone), não conserto de tela.
+
+**Proposta de vitrine** (quem promove é o Diretor): *"Mensagem repetida quase
+nunca é mensagem duplicada — é pergunta que não escutou a resposta."* Antes de
+caçar duplo disparo, conte de quantos lugares a frase pode sair: se sair de um
+só, o problema não é emissão, é a **condição que continua verdadeira**. E o
+corolário que custou caro aqui: **dado lido do `sessionStorage` num inicializador
+de `useState` é uma fotografia do mount** — quem grava lá depois não existe para
+o resto da página. Toda identidade obtida durante a sessão tem que virar estado
+na hora, senão o app fica perguntando o que já sabe e fechando pedido sem contato.
+
+— especialista garcom, a partir de `13495d82` (branch padrão)
