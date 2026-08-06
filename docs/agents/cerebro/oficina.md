@@ -805,3 +805,103 @@ desenho ao Diretor em vez de mexer.
   PRODUTOS que abri agora não tem o mesmo problema: ele preenche até o teto sem
   filtrar, e o desempate por ordem impede que item irrelevante do fim do cardápio
   desloque item relevante do começo.
+
+---
+
+## 2026-08-06 · Pedido de promoção do raciocínio livre: o que a régua devolveu
+
+**Pedido.** CEO autorizou ligar. Levantar o relatório de promoção com os números
+de hoje, confirmar que a régua lê só produção, e corrigir a tabela de prioridade
+do juiz (`BrainCoherenceCritic.ts:49-70`, achado repassado pelo Diretor).
+
+### O que tentei e não consegui: os números de produção
+
+Não alcancei produção. Registrado para não repetir a tentativa:
+
+- `gh` não existe neste ambiente (`gh: command not found`).
+- `GITHUB_TOKEN`/`GH_TOKEN` estão no ambiente mas devolvem `401 Bad credentials`
+  contra `api.github.com` — testado, não suposto.
+- Sem `RAILWAY_TOKEN`, sem `ADMIN_SECRET`, sem `DATABASE_URL`.
+- O padrão seguro (`scripts/acompanhar-assistente.mjs`) só funciona **dentro do
+  Actions**, e não existe workflow que leia a escada do free-form — só
+  `diagnostico-escada-crm.yml`, que é do CRM. Criar um exigiria push, proibido no
+  pedido.
+
+Não inventei número. O relatório que subiu diz o que mediu (golden set, que é
+hermético) e o que não mediu.
+
+### O achado que para tudo: a régua não declarava de onde contava
+
+`freeFormGovernance.ts:78` chamava `getShadowStats(restaurantId, { agentId:
+"whatsapp" })` — **sem `origins`**. E em `BrainShadowEvidenceService.ts:118`,
+sem `origins` não há filtro: soma PRODUCTION + REPLAY + TRAINING + **UNKNOWN**.
+
+UNKNOWN é o balde das linhas gravadas antes da migração
+`20260805210000_shadow_sample_origin` — **de ontem**. Ou seja: dentro da janela
+de 7 dias que o gate lê, quase toda linha antiga é de origem indeterminável, e
+o degrau que abre o raciocínio livre estava contando exatamente essas.
+
+A parte que mais me chamou atenção no método: a pergunta do Diretor era sobre a
+esteira de treino. A esteira **não** era o problema — ela grava `agentId: "crm"`
+(`CrmShadowTrainingService.ts:207`) e o gate filtra por whatsapp. O problema
+estava um degrau abaixo da pergunta, no *default* de um parâmetro omitido. Se eu
+tivesse respondido só "a esteira não contamina", teria dado um PASS honesto para
+uma régua furada.
+
+O `crmAgentGovernance.ts:47-49` já tinha `origins` desde 05/08. A régua do
+recepcionista ficou para trás no mesmo dia. Duas cópias do mesmo desenho, uma só
+atualizada — **o mesmo formato de defeito do item do juiz**, no mesmo dia.
+
+### O item do juiz: não era um `if` errado, eram duas tabelas
+
+`TRUTH_LABELS` existia duas vezes — `BrainReasoner.ts:102` e
+`BrainCoherenceCritic.ts:49`. O PR #111 atualizou uma. No juiz, `loja`/`entrega`/
+`local` caíam em prioridade 99 e o corte de 15.000 caracteres as apagava.
+
+Medido em ficha com cardápio de 250 itens (28.081 caracteres crus de produtos):
+
+| | fontes entregues ao juiz | `loja` | `entrega` | `local` |
+|---|---|---|---|---|
+| antes | 6 (15.015 chars) | **ausente** | **ausente** | **ausente** |
+| depois | 9 (15.018 chars) | posição 2 | posição 330 | posição 415 |
+
+Custo real: 157 caracteres tirados da **cauda** do cardápio, que já era cortada
+de qualquer forma. Não é troca; é ordem.
+
+Consertei tirando a duplicação (`knowledge/truthLabels.ts`), não sincronizando as
+cópias. Lembrar de editar dois arquivos não é trava.
+
+**Sub-achado que não estava no pedido:** chave não listada ia para o fim da fila
+(índice 99) — ou seja, *"ninguém classificou"* virava *"pode apagar"*. Agora
+`truthPriorityIndex()` põe fonte desconhecida **antes** dos blocos grandes: ela
+não some atrás do cardápio, e também não empurra preço para fora.
+
+### O que quebrou enquanto eu fazia
+
+- Minha primeira sonda do teste "toda chave do adapter está rotulada" varria o
+  texto com regex solta e trouxe `pix`, `cartao`, `nome`, `preco` — chave
+  aninhada. Sonda que não sabe contar devolve lixo, e lixo vira alarme que
+  ninguém investiga. Refiz com contagem de chaves, só nível 1.
+- A segunda versão lia só a **primeira** ocorrência de `truthSources: {` — e a
+  primeira é o retorno **vazio** de `RestaurantKnowledgeAdapter.ts:333`. Teste
+  passava olhando o bloco errado: pior que teste nenhum. Agora varre todas.
+- O mock de `brainShadowLog.findMany` em `FreeFormGovernance.test.ts` era
+  `mockResolvedValue` cru: devolvia tudo, ignorando o `where`. Com ele, o teste
+  passaria **mesmo sem o filtro de origem** — carimbo. Troquei por um mock que
+  honra `sampleOrigin: { in: [...] }` e não casa `null`, como o Prisma.
+
+### Verificação das duas metades
+
+Removi `loja` de `truthLabels.ts` → 2 testes reprovam. Removi `origins` da
+chamada em `freeFormGovernance.ts` → 5 testes reprovam. As metades legítimas
+também estão presas: 120 amostras de REPLAY **promovem** o primeiro degrau
+(senão a régua vira muro — a sombra do recepcionista vive do replay noturno) e o
+cardápio continua chegando ao juiz com os primeiros itens.
+
+`npx tsc --noEmit` limpo · `npx vitest run` 445 arquivos / 5787 testes verdes.
+
+### Aberto, para o Diretor decidir
+
+A escolha de origens por degrau (ALLOWLIST = PRODUCTION+REPLAY; RESTAURANT_WIDE =
+só PRODUCTION) é doutrina, não conserto. Espelhei o CRM e só apertei — nenhuma
+porta abriu. Precisa de ratificação.

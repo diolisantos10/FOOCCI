@@ -23,6 +23,7 @@ import type { AIEngineSelection } from "../engines/AIEngineTypes";
 import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
 import { resolveKnowledgeAdapter } from "../knowledge/KnowledgeAdapterRegistry";
 import type { BusinessKnowledgeSnapshot } from "../knowledge/BusinessKnowledgeContract";
+import { TRUTH_LABELS } from "../knowledge/truthLabels";
 import { listApprovedLearningsForBrain } from "../training/BrainTrainingContract";
 import { getExperienceBrief } from "../experience/ExperienceBriefService";
 import { verifyAgainstSnapshot } from "./SnapshotCoherenceVerifier";
@@ -99,27 +100,9 @@ function actionsBlock(actions: readonly BrainProposableAction[] | undefined): st
 
 // ── Knowledge → truth block ─────────────────────────────────────────────────────
 // Serializes EVERY truthSources key — anything an adapter loads reaches the LLM.
-const TRUTH_LABELS: Record<string, string> = {
-  policies: "Identidade/política",
-  products: "Produtos",
-  prices: "Preços",
-  payments: "Pagamentos",
-  hours: "Horários/atendimento",
-  // Distinto de `hours` de propósito: aquele é o que está CADASTRADO, este é o
-  // que vale NESTE minuto. Sem o rótulo, o modelo lia "loja: {...}" e tratava o
-  // estado de agora como mais uma linha de configuração.
-  loja: "Estado da loja AGORA (aceita pedido? quando reabre?)",
-  entrega: "Entrega (taxa/área/raio/mínimo)",
-  local: "Endereço do restaurante",
-  customers: "Clientes (agregado)",
-  orders: "Pedidos (agregado)",
-  materials: "Materiais",
-  conversations: "Conversas (agregado)",
-  evidence: "Evidências",
-  manual: "Manual/documentação curada (trechos relevantes)",
-  systemSignals: "Sinais read-only do sistema agora",
-};
-
+// Os rótulos vêm de knowledge/truthLabels, a MESMA tabela que o juiz
+// (BrainCoherenceCritic) usa. Eram duas cópias; a do juiz não acompanhou o
+// PR #111 e o estado da loja sumia do julgamento. Uma tabela, dois leitores.
 function knowledgeBlock(snap: BusinessKnowledgeSnapshot): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(snap.truthSources)) {
