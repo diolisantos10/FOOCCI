@@ -42,7 +42,12 @@ export async function GET(req: NextRequest) {
     const [config, gates, shadowStats, recentSamples] = await Promise.all([
       getFreeFormConfig(restaurantId),
       runFreeFormGates(restaurantId),
-      getShadowStats(restaurantId),
+      // Escopo do recepcionista, sempre. Sem `agentId` esta leitura somava a
+      // sombra de TODOS os agentes — inclusive a esteira de treino do CRM — num
+      // painel que fala do raciocínio livre do WhatsApp. Sem filtro de origem
+      // de propósito: aqui o objetivo é MOSTRAR a composição inteira
+      // (`byOrigin`), enquanto os gates contam só o que o degrau aceita.
+      getShadowStats(restaurantId, { agentId: "whatsapp" }),
       listRecentShadowSamples(restaurantId),
     ]);
     return NextResponse.json({ ok: true, config, gates, shadowStats, recentSamples, runtimeTouched: false });

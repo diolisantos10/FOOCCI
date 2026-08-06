@@ -16,7 +16,12 @@
 import { runGateForBrain } from "../quality/BrainQualityGate";
 import { restaurantKnowledgeAdapter } from "../knowledge/RestaurantKnowledgeAdapter";
 import { createChangeRequest } from "../director/PersistentBrainDirectorService";
-import { getShadowStats } from "./BrainShadowEvidenceService";
+import {
+  getShadowStats,
+  type ShadowOriginBucket,
+  type ShadowOriginBreakdown,
+  type ShadowSampleOrigin,
+} from "./BrainShadowEvidenceService";
 import { getFreeFormConfig, writeFreeFormConfig, type FreeFormMode } from "./BrainFreeFormConfigService";
 
 export const PROMOTE_ALLOWLIST_CONFIRM = "PROMOTE_BRAIN_FREEFORM_ALLOWLIST";
@@ -26,11 +31,34 @@ export const ROLLBACK_FREEFORM_CONFIRM = "ROLLBACK_BRAIN_FREEFORM";
 /** Piso de completude da verdade para o Brain poder falar ao vivo. */
 export const KNOWLEDGE_COMPLETENESS_FLOOR = 0.6;
 
-/** Evidência de sombra mínima por degrau — números auditáveis, não achismo. */
+/**
+ * Evidência de sombra mínima por degrau — números auditáveis, não achismo.
+ *
+ * `origins` entrou em 06/08/2026 e fecha um P0: até aqui esta régua chamava
+ * `getShadowStats` SEM filtro de origem, e sem filtro o contador soma tudo —
+ * inclusive as linhas gravadas ANTES do campo existir (migração
+ * `20260805210000_shadow_sample_origin`), cuja origem é indeterminável. Ou seja:
+ * o degrau que abre o raciocínio livre estava contando amostras que ninguém
+ * consegue atribuir a atendimento nenhum. Ausência de informação virando
+ * informação, dentro do portão que existe justamente para impedir isso.
+ *
+ *  • ALLOWLIST aceita PRODUCTION + REPLAY. REPLAY é a esteira PRÓPRIA do
+ *    recepcionista (workflow `brain-shadow-replay`): pergunta de gente de
+ *    verdade, reprocessada com a base de hoje, resposta que não chegou a
+ *    ninguém. É o análogo do TRAINING do CRM — e é mais forte, porque a
+ *    pergunta não é sintética.
+ *  • RESTAURANT_WIDE aceita SÓ PRODUCTION. Abrir para os clientes reais do
+ *    restaurante inteiro é a decisão mais cara da escada: ela exige as 100
+ *    amostras de vida real, e nenhum reprocessamento substitui isso.
+ *
+ * TRAINING não entra em NENHUM dos dois: não existe esteira de treino do
+ * recepcionista hoje (a de 05/08 é do CRM, grava `agentId: "crm"`). Listar uma
+ * origem que não existe seria abrir porta por antecipação.
+ */
 export const SHADOW_EVIDENCE = {
-  ALLOWLIST: { minSamples: 20, minPassRate: 0.7 },
-  RESTAURANT_WIDE: { minSamples: 100, minPassRate: 0.85 },
-} as const;
+  ALLOWLIST: { minSamples: 20, minPassRate: 0.7, origins: ["PRODUCTION", "REPLAY"] },
+  RESTAURANT_WIDE: { minSamples: 100, minPassRate: 0.85, origins: ["PRODUCTION"] },
+} as const satisfies Record<string, { minSamples: number; minPassRate: number; origins: readonly ShadowSampleOrigin[] }>;
 
 export interface FreeFormGates {
   diagnosticPass: boolean; // golden set hermético (incl. caso rodízio) p0=0
@@ -39,9 +67,20 @@ export interface FreeFormGates {
   shadowEvidence: boolean; // amostras + taxa de coerência PASS ≥ mínimos do degrau
   shadowSamples: number;
   shadowPassRate: number;
+  /** Quais origens ESTE degrau aceitou contar. */
+  shadowOriginsCounted: readonly ShadowSampleOrigin[];
+  /** Composição da amostra — quanto é vida real, quanto é replay, quanto ninguém sabe. */
+  shadowByOrigin: Record<ShadowOriginBucket, ShadowOriginBreakdown>;
   allPass: boolean;
   notes: string[];
 }
+
+const EMPTY_BY_ORIGIN: Record<ShadowOriginBucket, ShadowOriginBreakdown> = {
+  PRODUCTION: { samples: 0, llmSamples: 0, coherencePass: 0 },
+  REPLAY: { samples: 0, llmSamples: 0, coherencePass: 0 },
+  TRAINING: { samples: 0, llmSamples: 0, coherencePass: 0 },
+  UNKNOWN: { samples: 0, llmSamples: 0, coherencePass: 0 },
+};
 
 export interface FreeFormTransitionResult {
   success: boolean;
@@ -75,14 +114,29 @@ export async function runFreeFormGates(
   // Evidência de sombra: o Brain só sobe de degrau com desempenho PROVADO em
   // tráfego real (amostras suficientes + coerência PASS acima do mínimo).
   const required = SHADOW_EVIDENCE[stage];
-  const stats = await getShadowStats(restaurantId, { agentId: "whatsapp" });
+  const stats = await getShadowStats(restaurantId, { agentId: "whatsapp", origins: required.origins });
   const shadowEvidence = stats.llmSamples >= required.minSamples && stats.coherencePassRate >= required.minPassRate;
   if (!shadowEvidence) {
     notes.push(
       `evidência de sombra insuficiente para ${stage} (amostras LLM ${stats.llmSamples}/${required.minSamples}, ` +
-        `coerência PASS ${(stats.coherencePassRate * 100).toFixed(0)}%/${required.minPassRate * 100}%) — deixe o shadow colher tráfego real`,
+        `coerência PASS ${(stats.coherencePassRate * 100).toFixed(0)}%/${required.minPassRate * 100}%) ` +
+        `contando origem ${required.origins.join("+")}` +
+        (stage === "RESTAURANT_WIDE" ? " — replay NÃO conta neste degrau, precisa de atendimento real" : ""),
     );
   }
+
+  // O relatório SEMPRE diz a composição. Promover sem saber quanto veio de
+  // reprocessamento — ou de linha sem origem — é promover com um número que
+  // ninguém consegue interpretar. Se a composição não vier, ele diz que não
+  // sabe, em vez de estourar e derrubar o relatório inteiro.
+  const byOrigin = stats.byOrigin ?? null;
+  notes.push(
+    byOrigin
+      ? `composição da amostra: produção ${byOrigin.PRODUCTION.llmSamples}, ` +
+          `replay ${byOrigin.REPLAY.llmSamples}, treino ${byOrigin.TRAINING.llmSamples}, ` +
+          `origem desconhecida ${byOrigin.UNKNOWN.llmSamples}`
+      : "composição da amostra INDISPONÍVEL — não dá para dizer quanto é reprocessamento",
+  );
 
   return {
     diagnosticPass,
@@ -91,6 +145,8 @@ export async function runFreeFormGates(
     shadowEvidence,
     shadowSamples: stats.llmSamples,
     shadowPassRate: stats.coherencePassRate,
+    shadowOriginsCounted: required.origins,
+    shadowByOrigin: byOrigin ?? EMPTY_BY_ORIGIN,
     allPass: diagnosticPass && knowledgeComplete && shadowEvidence,
     notes,
   };
