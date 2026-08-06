@@ -31,7 +31,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { DEMO_URL, DEMO_CTA_LABEL } from "./config";
+import { DEMO_URL, DEMO_PAGE_PATH, DEMO_CTA_LABEL } from "./config";
 
 export function StickyMobileCta() {
   const [show, setShow] = useState(false);
@@ -40,8 +40,15 @@ export function StickyMobileCta() {
     formulário ela apareceria apontando para a página em que a pessoa já está —
     um botão fixo, laranja, de largura cheia, que ao ser tocado não faz nada. Era
     o defeito que a barra tinha em `/site/como-funciona` quando levava para lá.
+
+    ⚠️ COMPARAR COM `DEMO_PAGE_PATH`, NUNCA COM `DEMO_URL`. Desde 06/08 o destino
+    carrega âncora (`/site/precos#demonstracao`) e `usePathname()` NUNCA devolve o
+    `#` — comparar com a URL inteira nunca mais daria verdadeiro, e a barra
+    voltaria a aparecer na página do formulário sem ninguém ver. Falha muda: o
+    botão até rolaria a tela, mas competiria em laranja com os três "Contratar
+    agora" dos cartões de plano, que são a ação principal daquela tela.
   */
-  const naPaginaDoFormulario = usePathname() === DEMO_URL;
+  const naPaginaDoFormulario = usePathname() === DEMO_PAGE_PATH;
 
   useEffect(() => {
     const onScroll = () => {
