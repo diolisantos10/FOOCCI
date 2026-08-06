@@ -5,6 +5,64 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-06
+- **Arquivos que dispararam** (janela de 26h, telas do lojista — commits `6ae8798a`..`13495d82`):
+  - `src/app/(dashboard)/analytics/AnalyticsClient.tsx`, `atendimento/AtendimentoClient.tsx`,
+    `crm/CRMClient.tsx`, `crm/CrmCampaignAI.tsx` — **microfone em todo campo de escrita do
+    painel** (commit `ae879174`). Passou a existir um gancho único (`@/components/voice`:
+    `VoiceButton` + `VoiceStatus`): o botão fica **dentro** do campo, a fala **vira texto no
+    campo** e quem envia é o lojista. Três estados visíveis — parado, **"Gravando… fale e toque
+    no microfone para parar"** e **"Transcrevendo o que você falou…"** — e, na falha, a gravação
+    **sobrevive** com **Tentar de novo** e tocador de áudio. O botão **não é desenhado** em
+    navegador que não grava.
+  - `src/app/(dashboard)/integracoes/instagram/InstagramIntegrationClient.tsx` — dentro do
+    cartão verde **Conectado** nasceu o bloco vermelho **"A conexão está com problema — as
+    mensagens não estão chegando."** com **Reconectar agora**; e, ao lado do **Rodar
+    diagnóstico**, o botão **Reconectar Instagram** (antes, renovar acesso exigia passar pelo
+    **Desconectar**). Também entraram dois avisos de pós-login que dizem "conectado" e ainda
+    assim não funcionam: acesso de 1 hora em vez de 60 dias, e conta não inscrita para receber
+    (commit `c00fd14e`).
+- **Guias atualizados:**
+  - `guia-analytics` — nova seção **"Perguntar ao Analista (aba Analista)"**: o cartão
+    **Analista de Dados**, as cinco **Perguntas rápidas** com o texto exato de cada uma, o campo
+    **Digite ou fale sua pergunta**, o passo do microfone, o botão **Perguntar** e a leitura do
+    cartão de resposta (selo do assunto, **Alta/Média/Baixa confiança**, **Métricas**, **Ações
+    recomendadas**, **Limitações dos dados**, **Perguntas de continuidade**).
+  - `guia-central-conversas` — o passo de responder agora cita o campo real **Digite ou fale…**,
+    o comportamento do **📎** (nome do arquivo, **Legenda (opcional)…**, **✕**) e o Shift+Enter.
+    Nova seção **"Falar em vez de digitar"** com os três estados, a regra de reler antes de
+    enviar (o áudio nunca vai sozinho para o cliente) e as mensagens de erro reais. Registrado
+    também que **Instagram e Messenger só aceitam texto** — nessas conversas o **📎** não existe.
+  - `guia-criar-campanha-crm` — **corrigido guia que mentia**: a seção "Com IA" mandava clicar em
+    **🎤 Falar** e **⏹ Parar**, botões que **deixaram de existir**. Reescrita com o microfone
+    dentro do campo, o **Montar/Montando…**, o erro **"Escreva ou fale o que você quer."** e a
+    leitura do **Rascunho da IA** (selo do público, objetivo, selo **cupom X%** e o lembrete do
+    cupom). Nova seção **"7. Mandar um WhatsApp para um cliente só (aba Clientes)"** — botões
+    **WhatsApp** / **Enviar WhatsApp**, os casos **Opt-out** e **Sem telefone**, o campo
+    **Digite ou fale a mensagem…** com contador de 4096, o microfone que **acrescenta** ao texto
+    sugerido, e os desfechos (**"Mensagem enviada pelo WhatsApp."** + **Ver conversa em
+    Atendimento →**).
+  - `guia-integracoes` — a seção do Instagram estava desatualizada: mandava começar por
+    **Conectar com Facebook**, quando o caminho principal é **Entrar com Instagram** (sem
+    Facebook). Reescrita com o caminho principal, a alternativa pelo Facebook, o cartão
+    **Conectado**, o **Rodar diagnóstico** (não envia mensagem), o **Receber de todos os
+    clientes** e a nova seção **"Quando o Instagram para de receber"** com o bloco vermelho, os
+    dois botões de reconectar e os dois avisos de "conectado mas não funciona".
+- **Disparou mas não gerou guia:**
+  - `src/app/(dashboard)/chat/ChatClient.tsx` e `conversations/[id]/page.tsx` — ganharam o mesmo
+    microfone, mas **nenhuma das duas telas tem guia** no mapa do playbook. Não inventei guia
+    novo: não são rotas novas. Fica anotado para o Diretor decidir se merecem entrada.
+  - `src/app/(dashboard)/chat-sim/ChatSimClient.tsx` — mudou **só um comentário** no código,
+    explicando que o simulador **fica sem microfone de propósito** (o valor dele é repetir a
+    mesma frase palavra por palavra). Nenhum rótulo mudou.
+  - `src/components/help/**` e `src/components/voice/**` (commit `ffc9cab2`) — o **assistente de
+    ajuda** passou a aceitar **anexo de print e PDF** e a transcrever áudio do iPhone. É mudança
+    de cara para o lojista, mas **não existe guia sobre o próprio assistente** e ele não é uma
+    tela do painel. Proposta para o Diretor: criar `guia-assistente-ajuda`.
+- **Nenhuma rota nova** em `(dashboard)/` → nenhum guia criado.
+
+---
+
 ## 2026-08-04
 - **Arquivos que dispararam** (janela de 26h, telas do lojista):
   - `src/app/(dashboard)/menu/MenuManager.tsx`, `src/app/(dashboard)/menu/QRCard.tsx`,

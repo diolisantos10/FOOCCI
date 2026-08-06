@@ -316,7 +316,7 @@ Para gerar o Pix automaticamente no checkout:
     slug: "guia-criar-campanha-crm",
     title: "Como criar uma campanha / promoção no CRM",
     area: "CRM",
-    description: "Ler a Visão Geral, ligar campanhas prontas ou criar a sua (manual ou por IA), acompanhar o resultado e conferir as Regras de Segurança.",
+    description: "Ler a Visão Geral, ligar campanhas prontas ou criar a sua (manual, por IA ou ditando por voz), mandar WhatsApp para um cliente, acompanhar o resultado e conferir as Regras de Segurança.",
     content: `# Como criar uma campanha / promoção no CRM
 
 Vá no menu lateral em **Marketing → CRM**. No topo ficam as abas **Visão Geral**, **Campanhas**, **Migração**, **Cupons**, **Conversões**, **Clientes**, **Programa de Relacionamento**, **Avaliações** e **Configurações**.
@@ -373,12 +373,15 @@ Desça até **Campanhas prontas** ("já vêm configuradas para qualquer restaura
 O bloco **Criar campanha personalizada** fica logo acima da lista de campanhas. Dois caminhos:
 
 ### a) Com IA — texto ou voz
-Na caixa **✨ Criar campanha com IA**:
-1. Escreva o que você quer (ex: "recuperar quem sumiu faz 30 dias com 10% de desconto") **ou** clique em **🎤 Falar**, fale e clique em **⏹ Parar**.
-2. Clique em **Montar**.
-3. Confira o **Rascunho da IA** (nome, público, objetivo e a mensagem) e clique em **Criar campanha** — ou **Descartar** e tente de novo.
+Na caixa **✨ Criar campanha com IA** ("Descreva (ou fale) o que você quer — ex.: 'recuperar quem sumiu faz 30 dias com 10% de desconto' — e a IA monta pra você"):
+1. Escreva no campo **Escreva aqui a campanha que você quer…**.
+2. **Se preferir falar:** toque no **microfone** do canto direito do campo e fale. Embaixo aparece **"Gravando… fale e toque no microfone para parar"**; toque no microfone de novo e vem **"Transcrevendo o que você falou…"**. A sua fala **vira texto no próprio campo** — dá para corrigir na mão antes de seguir.
+3. Clique em **Montar** (enquanto pensa, o botão fica **Montando…**). Campo vazio devolve **"Escreva ou fale o que você quer."**
+4. Confira o **Rascunho da IA** — nome, o selo do público, o objetivo, o selo **cupom X%** quando você pediu desconto, e a mensagem — e clique em **Criar campanha**. Se não gostou, **Descartar** e tente de novo.
 
-A campanha nasce como rascunho: você revisa e ativa na lista abaixo.
+A campanha nasce como rascunho: você revisa e ativa na lista abaixo. Pediu desconto? A tela lembra: **"💡 Você pediu X% de desconto — crie o cupom na aba de cupons e ligue na campanha."**
+
+> **Mudou em 05/08/2026:** antes existiam os botões **🎤 Falar** e **⏹ Parar** e o áudio ia direto para a IA montar sozinha. Agora o microfone fica dentro do campo e a fala **só vira texto** — quem aperta **Montar** é você, depois de ler. Se o navegador não souber gravar, o microfone nem aparece (antes ele aparecia e não funcionava).
 
 ### b) Manual
 Clique em **Preencher manual**. A campanha nasce **pausada** de propósito e abre a janela **Gerenciar campanha**, com as abas **Visão Geral**, **Mensagem**, **Agendamento**, **Performance** e **Diagnóstico**.
@@ -403,6 +406,14 @@ Quando o teto acaba, a barra fica amarela e aparece o aviso **"Limite de contato
 No rodapé do cartão, as **Proteções sempre ativas**: quem pediu para sair (opt-out) nunca mais recebe, sem telefone válido ninguém recebe, a mesma campanha não chega duas vezes pra mesma pessoa e quem já recebeu algo hoje espera o intervalo (só o aniversário passa na frente).
 
 Ao final, clique em **Salvar configurações**.
+
+## 7. Mandar um WhatsApp para um cliente só (aba Clientes)
+Fora das campanhas, dá para falar com uma pessoa específica:
+
+1. Na aba **Clientes**, clique em **WhatsApp** na linha do cliente (ou **Enviar WhatsApp** no cartão dele). Quem pediu para sair aparece como **Opt-out** e quem não tem número como **Sem telefone** — nesses casos o botão não existe.
+2. Abre a janela **Enviar WhatsApp para** *(nome do cliente)*, com o telefone embaixo e uma mensagem já sugerida ("Oi, *primeiro nome*! Tudo bem? 😊 Passando para dizer que estamos aqui caso queira fazer um pedido…"). Edite à vontade no campo **Digite ou fale a mensagem…** (até 4096 caracteres — o contador fica no canto).
+3. **Para ditar:** toque no **microfone** do canto do campo, fale, toque nele de novo para parar. A fala **é acrescentada ao texto que já está lá** — releia tudo antes de mandar.
+4. Clique em **Enviar WhatsApp** (fica **Enviando…**). Deu certo, aparece **"Mensagem enviada pelo WhatsApp."** e o atalho **Ver conversa em Atendimento →**. Deu errado, a janela mostra o motivo e você tenta de novo. **Cancelar** fecha sem enviar.
 
 > Se preferir montar a mensagem antes, salve um rascunho em **Modelos salvos** e depois clique em **Usar em campanha** — ali você define **Nome da campanha**, **Público alvo**, **Mensagem sugerida**, **Cupom vinculado** e o tipo: **Envio único**, **Agendada** (Data + Hora) ou **Recorrente**.`,
   },
@@ -552,7 +563,7 @@ Quantos dos clientes identificados compraram em cada porta de entrada — **What
     slug: "guia-central-conversas",
     title: "Como atender clientes na Central de Conversas",
     area: "WHATSAPP",
-    description: "Ler conversas, assumir da IA, responder e resolver.",
+    description: "Ler conversas, assumir da IA, responder (digitando ou falando) e resolver.",
     content: `# Como atender clientes na Central de Conversas
 
 No menu lateral, **Central de Conversas** reúne todas as conversas (WhatsApp, Cardápio, Instagram).
@@ -565,8 +576,20 @@ No menu lateral, **Central de Conversas** reúne todas as conversas (WhatsApp, C
 ## Assumir e responder
 1. Abra a conversa.
 2. Clique em **Assumir atendimento** — a IA para de responder e o campo de mensagem libera.
-3. Digite e clique em **Enviar** (ou tecle Enter). Para anexar imagem/PDF, use o **📎**.
+3. No campo **Digite ou fale…**, escreva e clique em **Enviar** (ou tecle Enter; Shift+Enter pula linha). Para anexar imagem ou PDF, use o **📎** ao lado — o anexo aparece com o nome do arquivo e o campo passa a pedir **Legenda (opcional)…**; o **✕** tira o anexo.
 4. Ao terminar, clique em **Devolver para IA** (a IA volta a responder) ou **Resolver** para encerrar.
+
+## Falar em vez de digitar
+Dentro do campo de mensagem, do lado direito, tem um **microfone**. Serve para quem está com as mãos ocupadas na cozinha.
+
+1. Toque no microfone e fale. Embaixo aparece **"Gravando… fale e toque no microfone para parar"**.
+2. Toque nele de novo para parar. Aparece **"Transcrevendo o que você falou…"** e, em seguida, **a sua fala vira texto no campo**.
+3. **Leia o que ficou escrito e clique em Enviar.** O áudio nunca vai sozinho para o cliente — mensagem errada enviada custa mais caro que um toque a mais.
+
+Se algo der errado, o aviso embaixo do campo diz o próximo passo e **a gravação fica guardada ali**, com **Tentar de novo** e um tocador para você ouvir o que gravou. Exemplos de aviso: **"O microfone está bloqueado para este site. Toque no cadeado ao lado do endereço, marque Permitir microfone e tente de novo."**, **"Outro aplicativo está usando o microfone. Feche a chamada ou o gravador que está aberto e tente de novo."** e **"O áudio ficou longo demais. Grave um trecho mais curto e mande em duas partes."**
+
+> O microfone só aparece se o navegador do seu aparelho souber gravar.
+> **Instagram** (Direct e comentários) e **Messenger** só aceitam texto — nessas conversas o **📎** não aparece. Em comentário do Instagram o campo diz **Responda o comentário…**, e a resposta sai pública.
 
 > Dono e Gerente também podem lançar um pedido pela conversa em **+ Criar pedido**.`,
   },
@@ -613,7 +636,7 @@ Em **Vendas → Agentes IA → WhatsApp Host**, role até a base de conhecimento
     slug: "guia-analytics",
     title: "Como entender seus números (Analytics)",
     area: "ANALYTICS",
-    description: "Ler KPIs, abas e perguntar ao analista de dados.",
+    description: "Ler KPIs, abas e perguntar ao analista de dados — digitando ou falando.",
     content: `# Como entender seus números (Analytics)
 
 No menu lateral, **Vendas → Analytics**. Escolha o período (**Hoje, Ontem, 7 dias, 30 dias, Mês anterior, 90 dias, 12 meses, Personalizado**) e navegue pelas abas:
@@ -621,12 +644,24 @@ No menu lateral, **Vendas → Analytics**. Escolha o período (**Hoje, Ontem, 7 
 > **Mês anterior** pega o mês fechado inteiro — do dia 1º ao último dia do mês passado. Serve pra fechar o mês sem digitar data.
 
 - **Visão Geral** — KPIs (Receita, Pedidos, Ticket médio, Novos clientes, Cancelamentos), receita incremental do Foocci, eficiência operacional e o **Diagnóstico do período**.
-- **Analista** — faça uma pergunta em linguagem natural (ex: "Por que as vendas caíram?") e receba resposta baseada nos seus dados.
+- **Analista** — faça uma pergunta em linguagem natural (ex: "Por que as vendas caíram?"), digitando **ou falando**, e receba resposta baseada nos seus dados. Detalhe mais abaixo.
 - **Produtos** e **Categorias** — o que mais vende e itens parados.
 - **Clientes** — retenção, top clientes, segmentos e tiers.
 - **Canais** — origem dos pedidos.
 - **Receita Incremental** — o que o Foocci vendeu a mais via sugestões.
 - **Cardápio Delivery** — visitas e pedidos por canal, com links rastreáveis para copiar.
+
+## Perguntar ao Analista (aba Analista)
+No topo da aba fica o cartão **Analista de Dados**: "Faça uma pergunta sobre o seu negócio. As respostas são baseadas nos dados reais do período selecionado — sem invenções."
+
+1. Em **Perguntas rápidas** dá para clicar numa pronta e ela já é enviada: **Por que as vendas caíram?**, **Quais produtos mais venderam?**, **Os clientes estão voltando?**, **Como está a operação?** ou **O que devo fazer hoje?**.
+2. Ou escreva a sua no campo **Digite ou fale sua pergunta** e clique em **Perguntar** (tecle Enter que dá no mesmo).
+3. **Prefere falar?** Toque no **microfone** dentro do campo, fale a pergunta e toque nele de novo para parar. Enquanto grava, embaixo aparece **"Gravando… fale e toque no microfone para parar"**; depois, **"Transcrevendo o que você falou…"**. O texto cai no campo — **leia e clique em Perguntar**. A fala não é enviada sozinha.
+
+A resposta abre num cartão com o assunto que a IA entendeu e o selo **Alta confiança**, **Média confiança** ou **Baixa confiança**, seguido de **Métricas**, **Ações recomendadas**, **Limitações dos dados** (quando existem) e **Perguntas de continuidade** — clique numa delas para puxar o assunto adiante.
+
+> A resposta usa o **período escolhido lá no topo da tela**. Trocou o período? Pergunte de novo.
+> O microfone só aparece se o seu navegador souber gravar — no aparelho que não grava, ele não é desenhado. Se der problema, a mensagem embaixo do campo diz o que fazer (ex.: **"O microfone está bloqueado para este site. Toque no cadeado ao lado do endereço, marque Permitir microfone e tente de novo."**) e a gravação fica guardada ali com **Tentar de novo** — o que você falou não se perde.
 
 > Na Visão Geral, o **Gerente Comercial IA** resume tudo e sugere ações.`,
   },
@@ -746,7 +781,7 @@ No menu lateral, **Plataforma → Configurações**. Está dividido em dois grup
     slug: "guia-integracoes",
     title: "Quais integrações existem e como conectar",
     area: "INTEGRATIONS",
-    description: "Visão geral das integrações e como conectar o Instagram.",
+    description: "Visão geral das integrações, como conectar o Instagram e o que fazer quando o Instagram para de receber mensagem.",
     content: `# Quais integrações existem e como conectar
 
 No menu lateral, **Plataforma → Integrações**. Cada cartão tem um status: **Ativo**, **Erro**, **Validação pendente**, **Não conectado** ou **Não configurado**.
@@ -762,9 +797,28 @@ Provedores disponíveis:
 
 ### Conectar o Instagram
 1. Abra **Integrações → Instagram**.
-2. Clique em **Conectar com Facebook** e autorize na Meta.
-3. Em **Escolha a Página do Facebook**, selecione a Página ligada ao seu Instagram profissional e clique em **Conectar esta Página**.
-4. Pronto — as mensagens do Instagram Direct passam a aparecer na **Central de Conversas** com o selo **Instagram DM**.`,
+2. Clique em **Entrar com Instagram** — é o caminho principal e **não precisa de Facebook**. Sua conta precisa ser **Profissional** (Comercial ou Criador), o que é de graça nas configurações do Instagram.
+3. **Alternativa**, se o seu Instagram já está ligado a uma Página do Facebook: clique em **Conectar com Facebook**, autorize na Meta e, em **Escolha a Página do Facebook**, selecione a Página e clique em **Conectar esta Página**.
+4. Conectado, o cartão verde **Conectado** mostra a conexão, o **@** da conta, o **Modo**, o **Recebimento** (Todos os clientes ou Só conta de teste) e o **Último Direct recebido**.
+5. Clique em **Rodar diagnóstico** — ele confere conta, Instagram profissional, token, webhook, Central e envio real, e **não manda mensagem nenhuma**.
+6. Para receber de verdade dos seus clientes (e não só da conta de teste), clique em **Receber de todos os clientes**.
+
+As mensagens do Instagram Direct e os comentários passam a aparecer na **Central de Conversas**, com o selo **Instagram DM**.
+
+### Quando o Instagram para de receber
+Estar escrito **Conectado** não garante que está chegando mensagem. Se a conexão adoecer, o próprio cartão verde passa a mostrar, em vermelho:
+
+**"A conexão está com problema — as mensagens não estão chegando."**, o motivo embaixo e o botão **Reconectar agora**. Clique nele e refaça o login — é seguro, a configuração é regravada igual.
+
+Há também o botão **Reconectar Instagram**, ao lado do **Rodar diagnóstico**: use quando quiser renovar o acesso **sem** passar pelo **Desconectar**.
+
+Logo depois de conectar, dois avisos merecem atenção porque dizem "conectado" e ainda assim não funcionam:
+- **"Conectado, mas a conexão NÃO durou: o Instagram devolveu um acesso de 1 hora em vez do de 60 dias. Tente conectar de novo e, se repetir, avise o suporte Foocci — o motivo fica registrado no Diagnóstico."**
+- **"Conectado, mas a conta não ficou inscrita para receber as mensagens — nenhuma DM vai chegar. Tente conectar de novo; o motivo fica registrado no Diagnóstico."**
+
+Nos dois casos: **conecte de novo**. Se repetir, chame o suporte Foocci — o motivo fica guardado no **Diagnóstico**.
+
+> Outros botões do cartão: **Ativar resposta manual**, **Restringir a conta de teste**, **Pausar** / **Despausar**, **Desconectar** (o histórico de conversas é preservado) e **Abrir Central de Atendimento**.`,
   },
   {
     slug: "guia-primeiros-passos",
