@@ -8,7 +8,7 @@
 export * from "./types";
 export * from "./format";
 export { menuItemPhotos } from "./photos";
-export { escurecerCor, iniciaisDoNome, capaMostraFoto, CAPA_DEGRADE_DA_MARCA } from "./cover";
+export { escurecerCor, iniciaisDoNome, capaMostraFoto, CAPA_DEGRADE_DA_MARCA, COR_PADRAO_DA_LOJA } from "./cover";
 export { WelcomeModal } from "./WelcomeModal";
 export { ProductModal } from "./ProductModal";
 export { ImageCarousel } from "./ImageCarousel";

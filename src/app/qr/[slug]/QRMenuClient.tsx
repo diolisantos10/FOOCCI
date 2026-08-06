@@ -24,6 +24,7 @@ import {
   type MenuDisplayItem,
   type PromotionBannerData,
   escurecerCor,
+  COR_PADRAO_DA_LOJA,
 } from "@/components/menu";
 
 type Props = {
@@ -45,7 +46,7 @@ type Props = {
 };
 
 export function QRMenuClient({ slug, restaurant, categories, featured, promotedItems = [], promoBanner, promotionBanners = [], coverImageUrl, brandPrimaryColor, brandSecondaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
-  const pc = brandPrimaryColor || '#f97316';
+  const pc = brandPrimaryColor || COR_PADRAO_DA_LOJA;
   // A secundária só era usada pela Loja; a capa precisa dela para o degradê do
   // estado vazio. Sem cor secundária definida, ela é DERIVADA da primária —
   // usar a primária nas duas pontas dá um bloco chapado de tinta, que é

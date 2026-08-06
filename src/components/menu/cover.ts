@@ -9,6 +9,28 @@
  */
 
 /**
+ * A COR DA LOJA QUANDO O RESTAURANTE NÃO ESCOLHEU NENHUMA.
+ *
+ * O `DESIGN.md` §1 declara o padrão das superfícies do cliente final como o verde
+ * `#25d366` — a estética de conversa. **Não é o laranja da Foocci**, que é a marca
+ * do painel do lojista e não tem o que fazer numa loja white-label.
+ *
+ * POR QUE ISTO VIROU UMA CONSTANTE (06/08/2026): a reserva estava escrita à mão em
+ * três lugares e discordava entre eles — `/pedido` usava o verde declarado,
+ * enquanto o cardápio da mesa (`/qr`) e a prévia da tela Marca usavam o laranja da
+ * Foocci. Duas telas irmãs, o mesmo restaurante sem cor cadastrada, e a marca
+ * errada aparecendo numa delas.
+ *
+ * Enquanto era um detalhe de botão, ninguém via. A capa do cardápio transformou a
+ * reserva numa **faixa larga no topo** — e o desvio virou a primeira coisa que o
+ * cliente enxerga. A correção é apagar a cópia, não sincronizar as três.
+ *
+ * A prévia da tela Marca lê daqui pelo mesmo motivo: prévia que mostra uma cor
+ * diferente da que o cliente vê não é prévia, é informação errada.
+ */
+export const COR_PADRAO_DA_LOJA = "#25d366";
+
+/**
  * O chão da capa. É o fundo do contêiner, não uma alternativa à foto: a foto
  * entra POR CIMA. Por isso o mesmo valor serve de estado vazio, de placeholder
  * de carregamento e de rede de segurança do erro.

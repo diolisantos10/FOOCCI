@@ -5,7 +5,7 @@ import { TopBar } from "@/components/layout/TopBar";
 // Importado do MÓDULO, não do barril: o barril de @/components/menu arrasta a
 // ficha do produto, o carrossel e o modal de boas-vindas para dentro do pacote
 // desta tela do painel, que não usa nada disso.
-import { escurecerCor } from "@/components/menu/cover";
+import { escurecerCor, COR_PADRAO_DA_LOJA } from "@/components/menu/cover";
 import {
   apiFetch,
   Feedback,
@@ -618,7 +618,7 @@ export default function MarcaPage() {
 
   // A cor que o cardápio do cliente REALMENTE usa quando o lojista não escolheu
   // nenhuma — a mesma reserva do /qr/[slug]. Ver o comentário da prévia.
-  const corDaCapa = form.brandPrimaryColor || "#f97316";
+  const corDaCapa = form.brandPrimaryColor || COR_PADRAO_DA_LOJA;
 
   // O cabeçalho é a ÚNICA régua do topo — e é dentro dele que mora a pílula do
   // Assistente. Tela do menu lateral sem `TopBar` ficava sem assistente nenhum.
