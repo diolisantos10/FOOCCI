@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logo da Foocci Bakery — a padaria FICTÍCIA de demonstração.
+
+  É vetor desenhado à mão, não foto gerada por IA, por três motivos:
+   1. custa zero e não depende de chave da OpenAI para existir;
+   2. é determinístico — o mesmo arquivo em qualquer ambiente, sem "rodou o
+      comando?";
+   3. modelo de imagem escreve letra torta; logo com nome tem de ser vetor.
+
+  Nome em texto RETO, não curvado: `<textPath>` some no librsvg (o renderizador
+  que gera as miniaturas por `sharp` aqui) e o logo chegava sem nome nenhum nas
+  provas. Reto também lê melhor nos 80px em que ele de fato aparece no cardápio.
+
+  Paleta: a mesma marca marrom-pão da loja (#8A4B1E / #4A2511) que o
+  FoocciBakeryService grava em brandPrimaryColor/brandSecondaryColor.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"
+     role="img" aria-label="Foocci Bakery">
+  <defs>
+    <linearGradient id="miolo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FCF6EC"/>
+      <stop offset="100%" stop-color="#F0E0C7"/>
+    </linearGradient>
+    <linearGradient id="crosta" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#C0702E"/>
+      <stop offset="100%" stop-color="#8A4B1E"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Bolacha de fundo -->
+  <circle cx="100" cy="100" r="100" fill="url(#miolo)"/>
+  <circle cx="100" cy="100" r="93" fill="none" stroke="#8A4B1E" stroke-width="4.5"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#8A4B1E" stroke-width="1.5"
+          stroke-dasharray="2 6.5" stroke-linecap="round" opacity=".45"/>
+
+  <!-- Nome -->
+  <text x="100" y="66" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="27" font-weight="600"
+        letter-spacing="1.5" fill="#4A2511">FOOCCI</text>
+
+  <!-- Pão: corpo, brilho da crosta e os três cortes da faca -->
+  <g transform="translate(100 108)">
+    <ellipse cx="0" cy="0" rx="42" ry="24" fill="url(#crosta)"/>
+    <path d="M -42 0 A 42 24 0 0 1 42 0" fill="none" stroke="#DFA167" stroke-width="2.6" opacity=".5"/>
+    <g stroke="#FCF6EC" stroke-width="4.6" stroke-linecap="round" opacity=".95">
+      <line x1="-21" y1="7"   x2="-11" y2="-8"/>
+      <line x1="-5"  y1="9.5" x2="5"   y2="-5.5"/>
+      <line x1="11"  y1="7"   x2="21"  y2="-8"/>
+    </g>
+  </g>
+
+  <!-- Assinatura: filete + palavra + filete -->
+  <g stroke="#8A4B1E" stroke-width="1.4" opacity=".6" stroke-linecap="round">
+    <line x1="42" y1="149" x2="66" y2="149"/>
+    <line x1="134" y1="149" x2="158" y2="149"/>
+  </g>
+  <text x="100" y="154" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="14" font-weight="400"
+        letter-spacing="4.5" fill="#6E3A16">BAKERY</text>
+
+  <!-- Espiga de trigo, embaixo -->
+  <g transform="translate(100 174)" fill="#8A4B1E" opacity=".7">
+    <rect x="-0.9" y="-9" width="1.8" height="15" rx="0.9"/>
+    <ellipse cx="-4" cy="-6" rx="2.3" ry="4.4" transform="rotate(-32 -4 -6)"/>
+    <ellipse cx="4"  cy="-6" rx="2.3" ry="4.4" transform="rotate(32 4 -6)"/>
+    <ellipse cx="-4" cy="0"  rx="2.3" ry="4.4" transform="rotate(-32 -4 0)"/>
+    <ellipse cx="4"  cy="0"  rx="2.3" ry="4.4" transform="rotate(32 4 0)"/>
+  </g>
+</svg>

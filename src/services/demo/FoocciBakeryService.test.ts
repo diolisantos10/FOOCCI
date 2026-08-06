@@ -171,6 +171,7 @@ vi.mock("bcryptjs", () => ({ hash: async (s: string) => `hash:${s}` }));
 
 import {
   BAKERY_ERROR_STATUS,
+  BAKERY_EXTRA_PHOTOS_PER_ITEM,
   BakeryOperationError,
   Lease,
   __resetBakeryImageJob,
@@ -354,24 +355,73 @@ describe("generateBakeryImages — dinheiro real", () => {
     expect(gerarFoto).not.toHaveBeenCalled();
   });
 
-  it("gera só o que falta e grava a URL no item", async () => {
+  it("gera só o que falta e grava a URL no item — CADA item leva capa + as 2 extras", async () => {
+    // `limite` é em ITENS: 3 itens × (1 capa + 2 extras) = 9 chamadas pagas.
     const r = await generateBakeryImages({ confirmar: true, limite: 3 });
-    expect(r.geradas).toBe(3);
-    expect(gerarFoto).toHaveBeenCalledTimes(3);
+    const porItem = 1 + BAKERY_EXTRA_PHOTOS_PER_ITEM;
+
+    expect(r.geradas).toBe(3 * porItem);
+    expect(gerarFoto).toHaveBeenCalledTimes(3 * porItem);
     expect(db.menuItem!.filter((i) => i.imageUrl).length).toBe(3);
-    expect(r.custoRealEstimadoUsd).toBeCloseTo(0.12, 2);
+    expect(r.custoRealEstimadoUsd).toBeCloseTo(3 * porItem * 0.04, 2);
   });
 
-  it("rodar de novo NÃO regera quem já tem foto — e recusa quando não sobrou nada", async () => {
+  it("as extras entram em images[] com o carrossel LIGADO — e a capa não é duplicada lá dentro", async () => {
+    // A meia-correção que este portão pega: gerar as fotos, guardar em `images`
+    // e deixar `carouselEnabled = false`. O dinheiro sai e a ficha não muda.
+    let n = 0;
+    storeEnhancedImage.mockImplementation(async () => `/api/media/foto-${++n}`);
+
+    await generateBakeryImages({ confirmar: true, limite: 1 });
+    const item = db.menuItem![0]!;
+
+    expect(item.imageUrl).toBeTruthy();
+    expect(item.images).toHaveLength(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(item.carouselEnabled).toBe(true);
+    // A capa é o primeiro slide por construção (components/menu/photos.ts).
+    // Repeti-la dentro de `images` faria a ficha abrir com a mesma foto duas vezes.
+    expect(item.images).not.toContain(item.imageUrl);
+    expect(new Set(item.images as string[]).size).toBe(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+  });
+
+  it("os ângulos das extras são DIFERENTES entre si e diferentes do da capa", async () => {
+    await generateBakeryImages({ confirmar: true, limite: 1 });
+    const prompts = gerarFoto.mock.calls.map((c) => String(c[0]));
+
+    expect(prompts).toHaveLength(1 + BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(prompts[0]).toContain("Ângulo de 45 graus");
+    expect(prompts[1]).toContain("DE CIMA");
+    expect(prompts[2]).toContain("PRIMEIRÍSSIMO PLANO");
+    // O cenário é o mesmo nos três: carrossel tem de parecer um ensaio só.
+    for (const p of prompts) expect(p).toContain("mármore claro");
+  });
+
+  it("rodar de novo NÃO regera nada — nem capa nem extra — e recusa quando não sobrou nada", async () => {
     const total = db.menuItem!.length;
+    const porItem = 1 + BAKERY_EXTRA_PHOTOS_PER_ITEM;
     await generateBakeryImages({ confirmar: true });
-    expect(gerarFoto).toHaveBeenCalledTimes(total);
+    expect(gerarFoto).toHaveBeenCalledTimes(total * porItem);
 
     gerarFoto.mockClear();
     await expect(generateBakeryImages({ confirmar: true })).rejects.toMatchObject({
       code: "NADA_A_FAZER",
     });
     expect(gerarFoto).not.toHaveBeenCalled();
+  });
+
+  it("item a quem falta SÓ uma extra paga uma foto, não três", async () => {
+    // A metade que reprova: se a conta fosse por item em vez de por foto que
+    // falta, este caso cobraria a capa de novo — dinheiro por foto que já existe.
+    for (const i of db.menuItem!) { i.imageUrl = "/api/media/capa"; i.images = ["/api/media/e1", "/api/media/e2"]; }
+    const alvo = db.menuItem![0]!;
+    alvo.images = ["/api/media/e1"];
+
+    const r = await generateBakeryImages({ confirmar: true });
+
+    expect(r.geradas).toBe(1);
+    expect(gerarFoto).toHaveBeenCalledTimes(1);
+    expect(alvo.imageUrl).toBe("/api/media/capa"); // a capa NÃO foi refeita
+    expect(alvo.images).toHaveLength(BAKERY_EXTRA_PHOTOS_PER_ITEM);
   });
 
   it("a foto que apareceu no meio do caminho é PULADA sem gastar (corrida entre dois chamadores)", async () => {
@@ -384,21 +434,48 @@ describe("generateBakeryImages — dinheiro real", () => {
 
     const r = await generateBakeryImages({ confirmar: true, limite: 2 });
 
-    expect(r.geradas).toBe(1);
+    // A capa do segundo item apareceu no meio: ela é PULADA (nada gasto). As
+    // extras dos dois itens continuam sendo geradas normalmente.
     expect(r.puladas).toBe(1);
-    expect(gerarFoto).toHaveBeenCalledTimes(1); // pagou uma vez, não duas
     expect(alvos[1]!.imageUrl).toBe("/api/media/veio-do-outro");
+    expect(r.geradas).toBe(1 + 2 * BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(gerarFoto).toHaveBeenCalledTimes(1 + 2 * BAKERY_EXTRA_PHOTOS_PER_ITEM);
+  });
+
+  it("extra que já existe também é pulada na corrida — a trava vale para as duas pontas", async () => {
+    // Todos com capa, nenhum com extra: o que falta são só fotos de carrossel.
+    for (const i of db.menuItem!) { i.imageUrl = "/api/media/capa"; i.images = []; }
+    const alvos = db.menuItem!.slice(0, 2);
+
+    // O outro processo fecha o carrossel do SEGUNDO item enquanto o primeiro roda.
+    gerarFoto.mockImplementationOnce(async () => {
+      alvos[1]!.images = ["/api/media/outro-1", "/api/media/outro-2"];
+      return { success: true, buffer: Buffer.from("x"), mimeType: "image/png", model: "m" };
+    });
+
+    const r = await generateBakeryImages({ confirmar: true, limite: 2 });
+
+    // Pagou só pelas duas extras do primeiro item; as duas do segundo já existiam.
+    expect(r.geradas).toBe(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(r.puladas).toBe(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(gerarFoto).toHaveBeenCalledTimes(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(alvos[1]!.images).toEqual(["/api/media/outro-1", "/api/media/outro-2"]);
   });
 
   it('"regerar" refaz também quem já tem foto — mas é caminho separado e explícito', async () => {
     db.menuItem![0]!.imageUrl = "/api/media/antiga";
+    db.menuItem![0]!.images = ["/api/media/velha1", "/api/media/velha2"];
     storeEnhancedImage.mockResolvedValue("/api/media/nova");
 
     const r = await generateBakeryImages({ confirmar: true, regerar: true, limite: 1 });
 
-    expect(r.geradas).toBe(1);
+    expect(r.geradas).toBe(1 + BAKERY_EXTRA_PHOTOS_PER_ITEM);
     expect(r.puladas).toBe(0);
     expect(db.menuItem![0]!.imageUrl).toBe("/api/media/nova");
+    // Regerar SUBSTITUI as extras. Se acumulasse, o carrossel viraria 4 fotos —
+    // duas novas e duas velhas — sem ninguém pedir.
+    expect(db.menuItem![0]!.images).toHaveLength(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(db.menuItem![0]!.images).not.toContain("/api/media/velha1");
   });
 
   it("uma foto falhando não derruba as outras — o item fica sem foto e o motivo volta", async () => {
@@ -409,11 +486,15 @@ describe("generateBakeryImages — dinheiro real", () => {
       .mockResolvedValueOnce({ success: false, error: "rate limit da OpenAI" })
       .mockResolvedValueOnce(okFoto);
 
+    // 3 itens × 3 fotos = 9 chamadas; a segunda falha, as outras 8 saem.
     const r = await generateBakeryImages({ confirmar: true, limite: 3 });
 
-    expect(r.geradas).toBe(2);
+    expect(r.geradas).toBe(3 * (1 + BAKERY_EXTRA_PHOTOS_PER_ITEM) - 1);
     expect(r.falhas).toHaveLength(1);
     expect(r.falhas[0]!.motivo).toContain("rate limit"); // a evidência vem junto
+    // A falha diz QUAL foto do item quebrou — "o item X falhou" não basta quando
+    // são três fotos por item.
+    expect(r.falhas[0]!.motivo).toMatch(/capa|foto extra/);
     expect(r.falhas[0]!.item).toBeTruthy();
   });
 
@@ -421,8 +502,11 @@ describe("generateBakeryImages — dinheiro real", () => {
     gerarFoto.mockResolvedValue({ success: false, error: "a OpenAI respondeu sem imagem" });
     const r = await generateBakeryImages({ confirmar: true, limite: 1 });
     expect(r.geradas).toBe(0);
-    expect(r.falhas).toHaveLength(1);
+    expect(r.falhas).toHaveLength(1 + BAKERY_EXTRA_PHOTOS_PER_ITEM);
     expect(db.menuItem!.filter((i) => i.imageUrl).length).toBe(0);
+    // Carrossel NÃO liga quando nenhuma extra entrou: ficha vazia é melhor que
+    // ficha com carrossel de zero foto.
+    expect(db.menuItem!.filter((i) => i.carouselEnabled).length).toBe(0);
   });
 });
 
@@ -467,11 +551,24 @@ describe("startBakeryImageJob — o botão do admin", () => {
     await aguardarFim();
   });
 
-  it("informa o custo do trabalho antes de qualquer foto sair", async () => {
+  it("informa o custo do trabalho antes de qualquer foto sair — e o total é em FOTOS", async () => {
+    // `limite` é em itens; o trabalho anuncia FOTOS. Enquanto o botão anunciava
+    // "5" e o gerador cobrava 15, o número da tela era uma mentira de 3×.
+    const porItem = 1 + BAKERY_EXTRA_PHOTOS_PER_ITEM;
     const trabalho = await startBakeryImageJob({ confirmar: true, limite: 5 });
-    expect(trabalho.total).toBe(5);
-    expect(trabalho.custoEstimadoUsd).toBeCloseTo(0.2, 2);
+    expect(trabalho.total).toBe(5 * porItem);
+    expect(trabalho.custoEstimadoUsd).toBeCloseTo(5 * porItem * 0.04, 2);
     await aguardarFim();
+  });
+
+  it("o total anunciado é EXATAMENTE o número de chamadas pagas", async () => {
+    // A metade que reprova: duas contas separadas (uma no botão, outra no
+    // gerador) que podem divergir. Aqui elas são comparadas de frente.
+    const trabalho = await startBakeryImageJob({ confirmar: true, limite: 4 });
+    const anunciado = trabalho.total;
+    await aguardarFim();
+    expect(gerarFoto).toHaveBeenCalledTimes(anunciado);
+    expect(getBakeryImageJob()!.geradas).toBe(anunciado);
   });
 
   it("terminado, o trabalho relata o que saiu e o que falhou — e sai do estado RODANDO", async () => {
@@ -484,7 +581,7 @@ describe("startBakeryImageJob — o botão do admin", () => {
 
     const fim = getBakeryImageJob()!;
     expect(fim.status).toBe("CONCLUIDO");
-    expect(fim.geradas).toBe(1);
+    expect(fim.geradas).toBe(2 * (1 + BAKERY_EXTRA_PHOTOS_PER_ITEM) - 1);
     expect(fim.falhas).toHaveLength(1);
     expect(fim.falhas[0]!.motivo).toContain("recusou a chave");
     expect(fim.processadas).toBe(fim.total); // a barra não fica presa em 90%
@@ -503,7 +600,10 @@ describe("startBakeryImageJob — o botão do admin", () => {
     await new Promise((r) => setTimeout(r, 5));
 
     expect(avisos).toHaveLength(1);
-    expect(avisos[0]).toMatchObject({ status: "CONCLUIDO", geradas: 2 });
+    expect(avisos[0]).toMatchObject({
+      status: "CONCLUIDO",
+      geradas: 2 * (1 + BAKERY_EXTRA_PHOTOS_PER_ITEM),
+    });
   });
 
   it("aviso do chamador que explode não derruba a geração", async () => {
@@ -518,7 +618,7 @@ describe("startBakeryImageJob — o botão do admin", () => {
     await new Promise((r) => setTimeout(r, 5));
 
     expect(getBakeryImageJob()!.status).toBe("CONCLUIDO");
-    expect(getBakeryImageJob()!.geradas).toBe(1);
+    expect(getBakeryImageJob()!.geradas).toBe(1 + BAKERY_EXTRA_PHOTOS_PER_ITEM);
   });
 
   it("depois de terminar, um novo disparo é aceito — o trabalho não trava o botão para sempre", async () => {
@@ -553,19 +653,49 @@ describe("planBakeryImages — o custo aparece ANTES, e de graça", () => {
 
     const p = await planBakeryImages();
 
+    const porItem = 1 + BAKERY_EXTRA_PHOTOS_PER_ITEM;
     expect(p.temChaveOpenAi).toBe(false);
-    expect(p.aGerar).toBe(p.totalItens);
-    expect(p.custoEstimadoUsd).toBeCloseTo(p.totalItens * p.custoPorFotoUsd, 2);
+    expect(p.fotosExtrasPorItem).toBe(BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(p.aGerar).toBe(p.totalItens * porItem);
+    expect(p.capasAGerar).toBe(p.totalItens);
+    expect(p.extrasAGerar).toBe(p.totalItens * BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(p.custoEstimadoUsd).toBeCloseTo(p.totalItens * porItem * p.custoPorFotoUsd, 2);
     expect(p.exemploDePrompt).toContain("PRODUTO:");
+    expect(p.exemploDePromptExtra).toContain("DE CIMA");
     expect(gerarFoto).not.toHaveBeenCalled();
   });
 
-  it("depois de fotografar tudo, o custo do próximo clique é zero", async () => {
+  it("o `limite` do ensaio é em ITENS — o custo mostrado é o do produto inteiro", async () => {
+    await seedBakery();
+    const p = await planBakeryImages({ limite: 1 });
+
+    expect(p.itensNestaRodada).toBe(1);
+    expect(p.aGerar).toBe(1 + BAKERY_EXTRA_PHOTOS_PER_ITEM);
+    expect(p.custoEstimadoUsd).toBeCloseTo((1 + BAKERY_EXTRA_PHOTOS_PER_ITEM) * 0.04, 2);
+  });
+
+  it("com a capa pronta mas sem as extras, o ensaio cobra SÓ as extras", async () => {
     await seedBakery();
     for (const item of db.menuItem!) item.imageUrl = "/api/media/x";
 
     const p = await planBakeryImages();
     expect(p.semFoto).toBe(0);
+    expect(p.capasAGerar).toBe(0);
+    expect(p.semCarrossel).toBe(p.totalItens);
+    expect(p.aGerar).toBe(p.totalItens * BAKERY_EXTRA_PHOTOS_PER_ITEM);
+  });
+
+  it("depois de fotografar tudo — capa E extras — o custo do próximo clique é zero", async () => {
+    await seedBakery();
+    for (const item of db.menuItem!) {
+      item.imageUrl = "/api/media/x";
+      item.images = ["/api/media/y", "/api/media/z"];
+      item.carouselEnabled = true;
+    }
+
+    const p = await planBakeryImages();
+    expect(p.semFoto).toBe(0);
+    expect(p.semCarrossel).toBe(0);
     expect(p.aGerar).toBe(0);
     expect(p.custoEstimadoUsd).toBe(0);
   });

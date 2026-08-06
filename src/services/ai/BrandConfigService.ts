@@ -145,6 +145,8 @@ export class BrandConfigService {
       salesPriority: DEFAULT_BRAND_CONFIG.salesPriority,
       brandPrimaryColor: null,
       brandSecondaryColor: null,
+      // Sem capa é o padrão. O cardápio desenha a faixa com o degradê da marca.
+      coverImageUrl: null,
       instagramUrl: null,
       tiktokUrl: null,
       facebookUrl: null,

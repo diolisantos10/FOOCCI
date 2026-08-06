@@ -1628,6 +1628,11 @@ model RestaurantBrandConfig {
   // ── Visual identity ──────────────────────────────────────────
   brandPrimaryColor   String? // hex e.g. #6366f1
   brandSecondaryColor String? // hex e.g. #8b5cf6
+  // Capa do cardápio — a faixa larga no topo do /qr/[slug], atrás do logo.
+  // Vazio é o caso NORMAL, não um defeito: sem capa o cardápio desenha a faixa
+  // com o degradê da própria marca (brandPrimary → brandSecondary). Por isso é
+  // opcional e por isso a tela nunca depende dela para ficar bonita.
+  coverImageUrl       String?
 
   // ── Social links (shown in ordering header if filled) ──────
   instagramUrl String?

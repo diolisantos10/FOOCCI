@@ -43,7 +43,10 @@ export default async function QRMenuPage({
 
   const brandConfig = await prisma.restaurantBrandConfig.findUnique({
     where: { restaurantId: restaurant.id },
-    select: { brandPrimaryColor: true, instagramUrl: true, tiktokUrl: true, googleReviewUrl: true, brandPersona: true },
+    select: {
+      brandPrimaryColor: true, brandSecondaryColor: true, coverImageUrl: true,
+      instagramUrl: true, tiktokUrl: true, googleReviewUrl: true, brandPersona: true,
+    },
   });
 
   const rawCategories = await prisma.menuCategory.findMany({
@@ -61,7 +64,7 @@ export default async function QRMenuPage({
         select: {
           id: true, name: true, description: true, price: true,
           priceDelivery: true, priceDineIn: true, priceIfood: true,
-          imageUrl: true,
+          imageUrl: true, images: true, carouselEnabled: true,
           isAvailable: true, ingredients: true, servingSize: true, portionInfo: true,
           variants: {
             where: { isAvailable: true },
@@ -82,7 +85,7 @@ export default async function QRMenuPage({
             select: {
               id: true, name: true, description: true, price: true,
               priceDelivery: true, priceDineIn: true, priceIfood: true,
-              imageUrl: true,
+              imageUrl: true, images: true, carouselEnabled: true,
               categoryId: true,
               isAvailable: true, ingredients: true, servingSize: true, portionInfo: true,
               variants: {
@@ -124,6 +127,10 @@ export default async function QRMenuPage({
       // QR is the dine-in / salão channel: use priceDineIn when set, else base.
       price: channelPrice(i, "DINE_IN"),
       imageUrl: i.imageUrl ?? null,
+      // Fotos extras da ficha (carrossel). A capa continua sendo o imageUrl —
+      // sem isto aqui o lojista subia 3 fotos e o cardápio da mesa mostrava 1.
+      images: i.images ?? [],
+      carouselEnabled: i.carouselEnabled === true,
       isAvailable: i.isAvailable,
       ingredients: i.ingredients ?? null,
       servingSize: i.servingSize ?? null,
@@ -201,7 +208,9 @@ export default async function QRMenuPage({
       promotedItems={promotedItems}
       promoBanner={promoBanner}
       promotionBanners={promotionBanners}
+      coverImageUrl={brandConfig?.coverImageUrl ?? null}
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
+      brandSecondaryColor={brandConfig?.brandSecondaryColor ?? null}
       instagramUrl={brandConfig?.instagramUrl ?? null}
       tiktokUrl={brandConfig?.tiktokUrl ?? null}
       googleReviewUrl={brandConfig?.googleReviewUrl ?? null}

@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Capa do cardápio da Foocci Bakery — a padaria FICTÍCIA de demonstração.
+
+  Por que vetor e não foto gerada por IA: a padaria é semeada sozinha no deploy
+  (bakerySelfSeed). Uma capa que só existe depois de alguém rodar um comando pago
+  é uma capa que a vitrine sobe sem ter. Esta sobe junto com o código, custa zero
+  e é igual em todo ambiente.
+
+  ─── Por que 1600×400 e não 1600×600 ────────────────────────────────────────
+  A faixa da capa tem proporções MUITO diferentes nos três tamanhos de tela
+  (≈2,9 no celular, ≈4,8 no tablet, ≈5,7 no desktop) e o `object-cover` sempre
+  corta. Com a arte a 1600×600 o corte comia o balcão inteiro no desktop e
+  sobrava parede. A 1600×400 a cena inteira cabe no celular e o corte do desktop
+  fica em ~30% — e o que sai são as bordas de cima e de baixo, não o assunto.
+  Corolário para quem for desenhar outra: o assunto mora na FAIXA CENTRAL.
+
+  Composição pensada também para o que vai POR CIMA: o logo redondo monta no
+  centro-baixo e um véu escuro cobre o terço inferior. Por isso o miolo central
+  é liso de propósito — o interesse visual mora nas laterais.
+
+  Paleta: a marca marrom-pão da loja (#8A4B1E / #4A2511).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400"
+     preserveAspectRatio="xMidYMid slice" role="img"
+     aria-label="Balcão de padaria ao amanhecer">
+  <defs>
+    <linearGradient id="ar" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%"   stop-color="#AE6832"/>
+      <stop offset="55%"  stop-color="#7C401A"/>
+      <stop offset="100%" stop-color="#3D1D09"/>
+    </linearGradient>
+    <radialGradient id="janela" cx="0.16" cy="0" r="0.8">
+      <stop offset="0%"   stop-color="#FFE0AE" stop-opacity=".75"/>
+      <stop offset="45%"  stop-color="#F2B269" stop-opacity=".26"/>
+      <stop offset="100%" stop-color="#F2B269" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lampada" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%"   stop-color="#FFD79A" stop-opacity=".85"/>
+      <stop offset="100%" stop-color="#FFD79A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="madeira" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#5B2E11"/>
+      <stop offset="100%" stop-color="#2E1607"/>
+    </linearGradient>
+    <linearGradient id="pao" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%"   stop-color="#D89150"/>
+      <stop offset="100%" stop-color="#9A5524"/>
+    </linearGradient>
+    <radialGradient id="vinheta" cx="0.5" cy="0.45" r="0.8">
+      <stop offset="55%"  stop-color="#1E0E04" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#1E0E04" stop-opacity=".45"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ar da loja + luz da manhã entrando pela esquerda -->
+  <rect width="1600" height="400" fill="url(#ar)"/>
+  <rect width="1600" height="400" fill="url(#janela)"/>
+
+  <!-- Raio de sol: um só, e fraco. Com dois e mais opacos, a borda virava um
+       risco duro atravessando a capa — parecia defeito de renderização. -->
+  <g fill="#FFE7C2" opacity=".05">
+    <polygon points="-40,-40 320,-40 700,440 240,440"/>
+  </g>
+
+  <!-- Duas luminárias pendentes -->
+  <g stroke="#2E1607" stroke-width="4" opacity=".85">
+    <line x1="1188" y1="0" x2="1188" y2="52"/>
+    <line x1="1398" y1="0" x2="1398" y2="30"/>
+  </g>
+  <g>
+    <circle cx="1188" cy="92" r="112" fill="url(#lampada)"/>
+    <path d="M1144 52 h88 l24 40 h-136 z" fill="#3A1C08"/>
+    <ellipse cx="1188" cy="94" rx="22" ry="6" fill="#FFDDA4" opacity=".9"/>
+    <circle cx="1398" cy="66" r="90" fill="url(#lampada)"/>
+    <path d="M1362 30 h72 l20 34 h-112 z" fill="#3A1C08"/>
+    <ellipse cx="1398" cy="66" rx="18" ry="5" fill="#FFDDA4" opacity=".9"/>
+  </g>
+
+  <!-- Prateleira do fundo, com pães em pé -->
+  <g opacity=".5">
+    <rect x="130" y="150" width="660" height="10" rx="5" fill="url(#madeira)"/>
+    <g fill="url(#pao)">
+      <ellipse cx="196" cy="130" rx="28" ry="23"/>
+      <ellipse cx="268" cy="127" rx="32" ry="26"/>
+      <ellipse cx="346" cy="132" rx="26" ry="21"/>
+      <rect x="396" y="105" width="112" height="48" rx="24"/>
+      <ellipse cx="556" cy="129" rx="30" ry="24"/>
+      <rect x="606" y="110" width="98" height="43" rx="21"/>
+      <ellipse cx="752" cy="132" rx="24" ry="21"/>
+    </g>
+  </g>
+
+  <!-- Balcão -->
+  <rect x="0" y="300" width="1600" height="100" fill="url(#madeira)"/>
+  <rect x="0" y="293" width="1600" height="13" rx="6" fill="#6B3715"/>
+
+  <!-- A fornada em cima do balcão. Fica NAS BORDAS: o centro é do logo. -->
+  <g fill="url(#pao)">
+    <!-- esquerda: tábua com pães cortados -->
+    <rect x="84" y="280" width="300" height="15" rx="7" fill="#7A4318"/>
+    <g>
+      <ellipse cx="148" cy="261" rx="50" ry="25"/>
+      <ellipse cx="248" cy="256" rx="56" ry="28"/>
+      <ellipse cx="340" cy="263" rx="42" ry="22"/>
+    </g>
+    <g stroke="#FBEBD3" stroke-width="7" stroke-linecap="round" opacity=".8" fill="none">
+      <line x1="126" y1="269" x2="144" y2="248"/>
+      <line x1="156" y1="271" x2="174" y2="250"/>
+      <line x1="224" y1="263" x2="244" y2="240"/>
+      <line x1="258" y1="265" x2="278" y2="242"/>
+      <line x1="326" y1="269" x2="342" y2="252"/>
+    </g>
+    <!-- direita: dois croissants (crescente de verdade: arco de fora menos arco
+         de dentro) com as pontinhas viradas -->
+    <g transform="translate(1240 254)">
+      <path d="M-72 22 A 72 58 0 0 1 72 22 A 72 33 0 0 0 -72 22 Z"/>
+      <ellipse cx="-70" cy="20" rx="12" ry="9" transform="rotate(-24 -70 20)"/>
+      <ellipse cx="70"  cy="20" rx="12" ry="9" transform="rotate(24 70 20)"/>
+      <g stroke="#7A4318" stroke-width="4" opacity=".45" fill="none">
+        <line x1="-30" y1="-6" x2="-30" y2="18"/>
+        <line x1="0"   y1="-12" x2="0"  y2="16"/>
+        <line x1="30"  y1="-6" x2="30"  y2="18"/>
+      </g>
+    </g>
+    <g transform="translate(1448 264) scale(.78)">
+      <path d="M-72 22 A 72 58 0 0 1 72 22 A 72 33 0 0 0 -72 22 Z"/>
+      <ellipse cx="-70" cy="20" rx="12" ry="9" transform="rotate(-24 -70 20)"/>
+      <ellipse cx="70"  cy="20" rx="12" ry="9" transform="rotate(24 70 20)"/>
+    </g>
+  </g>
+
+  <!-- Xícara de café com o vapor subindo: é padaria COM cafeteria -->
+  <g transform="translate(1030 254)">
+    <g stroke="#FFE7C2" stroke-width="5" fill="none" opacity=".3" stroke-linecap="round">
+      <path d="M-16 -12 q10 -16 0 -32 q-10 -16 0 -30"/>
+      <path d="M14 -16 q10 -14 0 -28 q-10 -14 0 -26"/>
+    </g>
+    <path d="M-40 0 h80 v16 a40 28 0 0 1 -80 0 z" fill="#F2E4D2" opacity=".92"/>
+    <path d="M40 5 a19 15 0 0 1 0 25" fill="none" stroke="#F2E4D2" stroke-width="8" opacity=".92"/>
+    <ellipse cx="0" cy="0" rx="40" ry="10" fill="#4A2511"/>
+    <ellipse cx="0" cy="42" rx="55" ry="9" fill="#F2E4D2" opacity=".8"/>
+  </g>
+
+  <!-- Espigas de trigo nas pontas -->
+  <g fill="#F6D5A6" opacity=".2">
+    <g transform="translate(64 330) rotate(-16)">
+      <rect x="-2.5" y="-52" width="5" height="104" rx="2.5"/>
+      <ellipse cx="-13" cy="-40" rx="7" ry="14" transform="rotate(-30 -13 -40)"/>
+      <ellipse cx="13"  cy="-40" rx="7" ry="14" transform="rotate(30 13 -40)"/>
+      <ellipse cx="-13" cy="-16" rx="7" ry="14" transform="rotate(-30 -13 -16)"/>
+      <ellipse cx="13"  cy="-16" rx="7" ry="14" transform="rotate(30 13 -16)"/>
+      <ellipse cx="-13" cy="8"   rx="7" ry="14" transform="rotate(-30 -13 8)"/>
+      <ellipse cx="13"  cy="8"   rx="7" ry="14" transform="rotate(30 13 8)"/>
+    </g>
+    <g transform="translate(1552 340) rotate(14)">
+      <rect x="-2.5" y="-52" width="5" height="104" rx="2.5"/>
+      <ellipse cx="-13" cy="-40" rx="7" ry="14" transform="rotate(-30 -13 -40)"/>
+      <ellipse cx="13"  cy="-40" rx="7" ry="14" transform="rotate(30 13 -40)"/>
+      <ellipse cx="-13" cy="-16" rx="7" ry="14" transform="rotate(-30 -13 -16)"/>
+      <ellipse cx="13"  cy="-16" rx="7" ry="14" transform="rotate(30 13 -16)"/>
+    </g>
+  </g>
+
+  <!-- Vinheta: fecha as bordas e faz o logo branco destacar no meio -->
+  <rect width="1600" height="400" fill="url(#vinheta)"/>
+</svg>

@@ -34,6 +34,9 @@ interface Overview {
   totalCategorias: number;
   comFoto: number;
   semFoto: number;
+  comCarrossel: number;
+  semCarrossel: number;
+  fotosExtrasPorItem: number;
   routes: Routes;
   temChaveOpenAi: boolean;
 }
@@ -62,7 +65,13 @@ interface Plano {
   totalItens: number;
   comFoto: number;
   semFoto: number;
+  fotosExtrasPorItem: number;
+  comCarrossel: number;
+  semCarrossel: number;
+  capasAGerar: number;
+  extrasAGerar: number;
   aGerar: number;
+  itensNestaRodada: number;
   modelo: string;
   custoPorFotoUsd: number;
   custoEstimadoUsd: number;
@@ -220,7 +229,12 @@ export function PadariaVitrineClient() {
 
   const semChave = plano ? !plano.temChaveOpenAi : false;
   const custoFaltantes = plano?.custoEstimadoUsd ?? 0;
-  const custoTudo = plano ? Number((plano.totalItens * plano.custoPorFotoUsd).toFixed(2)) : 0;
+  // Regerar refaz a ficha INTEIRA de cada item: a capa MAIS as fotos extras.
+  // Enquanto esta conta era `totalItens × custoPorFoto`, o botão prometia um
+  // terço do que ia cobrar — número que mente é pior que número ausente.
+  const fotosPorItem = (plano?.fotosExtrasPorItem ?? 0) + 1;
+  const fotosSeRegerarTudo = plano ? plano.totalItens * fotosPorItem : 0;
+  const custoTudo = plano ? Number((fotosSeRegerarTudo * plano.custoPorFotoUsd).toFixed(2)) : 0;
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -252,8 +266,8 @@ export function PadariaVitrineClient() {
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Numero rotulo="categorias" valor={overview.totalCategorias} />
               <Numero rotulo="itens no cardápio" valor={overview.totalItens} />
-              <Numero rotulo="com foto" valor={overview.comFoto} />
-              <Numero rotulo="sem foto" valor={overview.semFoto} />
+              <Numero rotulo="com capa" valor={overview.comFoto} />
+              <Numero rotulo={`sem as ${overview.fotosExtrasPorItem} extras`} valor={overview.semCarrossel} />
             </div>
             <Rotas routes={overview.routes} />
           </>
@@ -360,8 +374,11 @@ export function PadariaVitrineClient() {
         ) : (
           <>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Numero rotulo="itens sem foto" valor={plano.semFoto} />
-              <Numero rotulo="serão gerados" valor={plano.aGerar} />
+              <Numero rotulo="itens sem capa" valor={plano.semFoto} />
+              <Numero
+                rotulo="fotos a gerar"
+                valor={`${plano.aGerar} (${plano.capasAGerar} capa + ${plano.extrasAGerar} extra)`}
+              />
               <Numero rotulo="custo estimado" valor={`~US$ ${custoFaltantes.toFixed(2)}`} />
               <Numero rotulo="modelo" valor={plano.modelo} />
             </div>
@@ -375,7 +392,7 @@ export function PadariaVitrineClient() {
                 {rodando
                   ? "Gerando…"
                   : plano.aGerar === 0
-                    ? "Todos os itens já têm foto"
+                    ? "Todos os itens já têm a capa e as fotos extras"
                     : `Gerar as ${plano.aGerar} fotos que faltam · ~US$ ${custoFaltantes.toFixed(2)}`}
               </Button>
 
@@ -385,14 +402,16 @@ export function PadariaVitrineClient() {
                   disabled={rodando || disparando}
                   title="Refaz TODAS as fotos, inclusive as que já existem"
                 >
-                  Regerar todas as {plano.totalItens} · ~US$ {custoTudo.toFixed(2)}
+                  Regerar as {fotosSeRegerarTudo} fotos · ~US$ {custoTudo.toFixed(2)}
                 </Button>
               )}
             </div>
 
             <p className="mt-2 text-xs text-muted">
-              O padrão nunca refaz foto que já existe — só quem está sem. Regerar é o botão separado,
-              e ele também pede confirmação.
+              Cada item tem {fotosPorItem} fotos: a capa (a que aparece no card) e mais{" "}
+              {plano.fotosExtrasPorItem} no carrossel da ficha. O padrão nunca refaz foto que já
+              existe — só o que está faltando. Regerar é o botão separado, e ele também pede
+              confirmação.
             </p>
           </>
         )}
@@ -415,8 +434,8 @@ export function PadariaVitrineClient() {
           title="Isto gasta dinheiro de verdade"
           subtitle={
             confirmando === "regerar"
-              ? `Serão refeitas TODAS as ${plano.totalItens} fotos, inclusive as ${plano.comFoto} que já existem.`
-              : `Serão geradas ${plano.aGerar} ${plano.aGerar === 1 ? "foto" : "fotos"} — só os itens que estão sem.`
+              ? `Serão refeitas TODAS as ${fotosSeRegerarTudo} fotos — ${plano.totalItens} itens × ${fotosPorItem} (a capa e mais ${plano.fotosExtrasPorItem} do carrossel), inclusive as que já existem.`
+              : `Serão geradas ${plano.aGerar} ${plano.aGerar === 1 ? "foto" : "fotos"}: ${plano.capasAGerar} de capa e ${plano.extrasAGerar} do carrossel, em ${plano.itensNestaRodada} ${plano.itensNestaRodada === 1 ? "item" : "itens"}.`
           }
           footer={
             <>

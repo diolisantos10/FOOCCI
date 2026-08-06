@@ -33,15 +33,22 @@ type Props = {
   promotedItems?: MenuDisplayItem[];
   promoBanner?: MenuDisplayItem | null;
   promotionBanners?: PromotionBannerData[];
+  /** Capa do cardápio (RestaurantBrandConfig.coverImageUrl). Vazio é normal. */
+  coverImageUrl?: string | null;
   brandPrimaryColor?: string | null;
+  brandSecondaryColor?: string | null;
   instagramUrl?: string | null;
   tiktokUrl?: string | null;
   restaurantPhone?: string | null;
   googleReviewUrl?: string | null;
 };
 
-export function QRMenuClient({ slug, restaurant, categories, featured, promotedItems = [], promoBanner, promotionBanners = [], brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
+export function QRMenuClient({ slug, restaurant, categories, featured, promotedItems = [], promoBanner, promotionBanners = [], coverImageUrl, brandPrimaryColor, brandSecondaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
   const pc = brandPrimaryColor || '#f97316';
+  // A secundária só era usada pela Loja; a capa precisa dela para o degradê do
+  // estado vazio. Sem cor secundária definida, a primária vale para as duas
+  // pontas — degradê de uma cor só continua sendo a marca, nunca cinza.
+  const sc = brandSecondaryColor || pc;
   const [selectedItem, setSelectedItem] = useState<MenuDisplayItem | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
@@ -133,7 +140,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
   }
 
   return (
-    <div style={{ '--brand-primary': pc } as React.CSSProperties}>
+    <div style={{ '--brand-primary': pc, '--brand-secondary': sc } as React.CSSProperties}>
       {showWelcome && (
         <WelcomeModal slug={slug} onClose={handleWelcomeClose} />
       )}
@@ -151,6 +158,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
         {/* ── HERO ──────────────────────────────────────────────── */}
         <MenuHero
           restaurant={restaurant}
+          coverImageUrl={coverImageUrl}
           instagramUrl={instagramUrl}
           tiktokUrl={tiktokUrl}
           restaurantPhone={restaurantPhone}
