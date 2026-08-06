@@ -7,9 +7,12 @@
 
 export * from "./types";
 export * from "./format";
+export { menuItemPhotos } from "./photos";
 export { WelcomeModal } from "./WelcomeModal";
 export { ProductModal } from "./ProductModal";
+export { ImageCarousel } from "./ImageCarousel";
 export { PromoBanner, FeaturedCard, ProductCard } from "./cards";
 export { MenuHero, MenuSocialLinks, MenuShowcase } from "./MenuHero";
+export { MenuCover } from "./MenuCover";
 export { CategoryNav, CategoryDescriptionStrip } from "./CategoryNav";
 export { CategorySections } from "./CategorySections";

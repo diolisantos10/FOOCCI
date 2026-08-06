@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * MenuHero — o bloco de abertura do cardápio white-label: logo redondo, nome,
- * subtítulo, ícones sociais, botão de avaliação Google, faixa de identidade,
- * banners de promoção (tabela Promotion), PromoBanner de item e os carrosséis
- * "🔥 Promoções" e "⭐ Mais vendidos".
+ * MenuHero — o bloco de abertura do cardápio white-label: capa, logo redondo,
+ * nome, subtítulo, ícones sociais, botão de avaliação Google, faixa de
+ * identidade, banners de promoção (tabela Promotion), PromoBanner de item e os
+ * carrosséis "🔥 Promoções" e "⭐ Mais vendidos".
  *
  * Movido verbatim de src/app/qr/[slug]/QRMenuClient.tsx. Única parametrização:
  * o subtítulo (QR = "Cardápio digital"; Loja = "Cardápio digital — peça online").
@@ -18,6 +18,7 @@
 
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 import { FeaturedCard, PromoBanner } from "./cards";
+import { MenuCover } from "./MenuCover";
 import type { MenuDisplayItem, PromotionBannerData } from "./types";
 
 /** Ícones sociais do cardápio. Devolve null quando não há nenhum link. */
@@ -161,6 +162,7 @@ export function MenuShowcase({
 
 export function MenuHero({
   restaurant,
+  coverImageUrl,
   subtitle = "Cardápio digital",
   instagramUrl,
   tiktokUrl,
@@ -176,6 +178,8 @@ export function MenuHero({
   onSelectItem,
 }: {
   restaurant: { name: string; logoUrl: string | null };
+  /** Capa do cardápio. Ausente é o caso normal — ver MenuCover (estado vazio). */
+  coverImageUrl?: string | null;
   subtitle?: string;
   instagramUrl?: string | null;
   tiktokUrl?: string | null;
@@ -192,16 +196,20 @@ export function MenuHero({
 }) {
   return (
     <div id="hero" className="bg-white border-b border-gray-100">
-      <div className="mx-auto max-w-2xl px-4 pt-8 pb-5 text-center">
-        {restaurant.logoUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={restaurant.logoUrl}
-            alt={restaurant.name}
-            className="mx-auto mb-4 h-20 w-20 rounded-full object-cover ring-4 ring-orange-50 shadow"
-            loading="lazy"
-          />
-        )}
+      {/* Capa + logo. O logo saiu daqui para o MenuCover porque ele monta na
+          DIVISA entre a capa e o conteúdo — com o anel branco, não com o
+          `ring-orange-50` de antes (laranja da Foocci numa tela white-label). */}
+      <MenuCover
+        coverImageUrl={coverImageUrl}
+        restaurantName={restaurant.name}
+        logoUrl={restaurant.logoUrl}
+      />
+
+      <div
+        className={`mx-auto max-w-2xl px-4 pb-5 text-center ${
+          restaurant.logoUrl ? "pt-3" : "pt-6"
+        }`}
+      >
         <h1 className="text-2xl font-bold text-gray-900">{restaurant.name}</h1>
         <p className="mt-1 text-xs text-gray-400">{subtitle}</p>
 
