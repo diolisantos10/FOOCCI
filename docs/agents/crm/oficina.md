@@ -832,3 +832,85 @@ ainda não está na padrão. Não há sobreposição de arquivos com este bloco.
    outra, com 4.440 contactáveis, está com o canal INDISPONÍVEL — e campanha sem
    canal não produz uma mensagem. Antes de investigar o motor, pergunte quantas
    casas têm canal conectado E campanha ativa. Origem: idem.
+
+---
+
+## 2026-08-06 · "CRM Cron reprovou 4×" — o alerta mentiu o dono. Nenhum código de CRM rodou.
+
+**Pedido:** 4 reprovações hoje (18:46, 18:34, 17:19, 16:52 UTC) na branch padrão.
+Pergunta única: o CRM parou de enviar, ou reprova e envia mesmo assim?
+
+**Resposta: reprova e NÃO deixou de enviar. Não é P0.** Os 4 jobs nunca ganharam
+runner — `steps: []`, `runner_name: ""`. A anotação do check-run é literal:
+
+> `The job was not acquired by Runner of type hosted even after multiple attempts`
+
+Ou seja: o `curl` para `/api/cron/run-scheduled-campaigns` **nunca foi disparado**.
+Nada foi "reprovado" dentro do CRM. Por isso a API do GitHub responde
+*"No failed jobs found"*: `run.conclusion=failure`, mas `job.conclusion=cancelled`.
+
+### Como se prova que não é do CRM
+
+1. **É do repositório inteiro, não do CRM.** Das 11 reprovações de hoje, **9 têm a
+   mesma anotação** — 4 do CRM Cron, **3 do CI**, 2 do Agent Library. A primeira
+   foi 16:24Z (Agent Library).
+2. **Precede todos os merges do dia.** Primeira ocorrência 16:24Z = 13:24 BRT. O
+   merge mais antigo de hoje (#113) entrou 14:37 BRT. O #114
+   (`BrainReasoner`/`BrainCoherenceCritic`) entrou **16:00 BRT = 19:00Z**, ou seja
+   **depois das quatro reprovações**. O run 31126352185 carrega `head_sha`
+   `b20ced11` (#116) — o #114 nem estava na árvore. Descartado por cronologia.
+3. **Não houve nenhuma ocorrência em 21 dias antes de hoje.** Varredura por dia:
+   `cancel=0` de 16/07 a 05/08; `cancel=4` em 06/08.
+
+### O motor de campanha não depende do Actions
+
+`src/services/crm/ScheduledCampaignScheduler.ts:5-13` diz explicitamente que o
+Actions é **backup morno**; o primário é o `setInterval` de 10 min dentro do
+processo Railway, ligado em `src/instrumentation.ts:21-24`.
+
+Prova de que o primário estava vivo hoje: o tick das **14:54:55Z** respondeu
+**HTTP 200** com as **12 campanhas** em
+`"Aguardando intervalo mínimo entre ciclos (10 min)"`. Esse portão
+(`ScheduledCampaignRunnerService.ts:724-739` + `CRMWhatsAppBudgetPlanner.ts:372-381`)
+só fecha quando existe linha em `campaign_executions` criada nos 10 min
+anteriores — e quem cria essas linhas é o agendador interno. O backup chegou
+depois do primário, exatamente como projetado.
+
+### O que se perdeu de verdade
+
+4 ticks do **backup**: 2 de campanhas (16:52Z, 18:34Z) e 2 de carrinho (17:19Z,
+18:46Z). Ambos têm primário no Railway (10 min e 60 s). Perda operacional ≈ 0.
+
+### Não consegui medir
+
+O número de envios de HOJE em `campaign_executions`. Sem `ADMIN_SECRET` e sem
+`RAILWAY_TOKEN` nesta caixa, e o `GH_TOKEN` da sessão devolve **403 Resource not
+accessible by integration** no `workflow_dispatch` do Raio-X. Base disponível
+(rodada de 05/08, seção C2): 03/08=88 · 04/08=72 · **05/08=78** envios/dia.
+
+### Dois achados crônicos que a investigação destampou
+
+**1. O agendador interno colide consigo mesmo — cadência real é 20 min, não 10.**
+`TICK_INTERVAL_MS = 10*60_000` (`ScheduledCampaignScheduler.ts:27`) e
+`minMinutesBetweenCycles = 10` (`src/lib/crm-safety.ts:123` e `:248`).
+`isCycleIntervalActive` usa `<` estrito (`CRMWhatsAppBudgetPlanner.ts:380`): se o
+ciclo T grava a última execução em T+δ, o tick T+10min vê `600s − δ < 600s` e
+**pula a casa inteira**. Só o tick T+20min passa. É o "cron em cima do próprio
+rabo" — não quebra nada, mas entrega metade dos ciclos em silêncio.
+
+**2. Todo deploy custa 10 min de CRM mudo.** `start()` só faz `setInterval`
+(`ScheduledCampaignScheduler.ts:76`) — não há tick imediato. Com 6 merges hoje,
+são ~60 min de janela morta que nenhum painel mostra.
+
+**3. O GitHub entrega ~10% do cron configurado.** Somando os workflows:
+`*/5` (crm-cron) + `*/5` (agent-library) + `*/15` (crm-cron) + diários ≈ **682
+runs/dia pedidos**. Hoje o repositório inteiro teve **76 runs**. O CRM Cron
+sozinho pede ~385/dia e recebeu **17**. Média das 3 semanas: 23–35/dia. Isso é
+crônico e é a razão de a cadência 16:52→17:19→18:34→18:46 não parecer cron.
+**Depender do Actions para envio seria receita parada; por sorte não dependemos.**
+
+**Evidência (somente leitura, campos projetados):** `scripts/raio-x-envios-crm.mjs`
+com `DIAS=14` → 375 execuções, 189 jobs OK, 201 envios pelo caminho Actions,
+0 falhos. Motor legado: `automationsRun=0`, `totalSent=0` — o zero segue provado.
+
+Nenhuma mensagem enviada. Nenhum reprocessamento tocado.
