@@ -1,6 +1,74 @@
 # Pendências — o que está aberto
 
-> Última atualização: 06/08/2026, madrugada.
+> Última atualização: 06/08/2026, tarde.
+
+## 🌇 O bloco da tarde de 06/08 — quatro PRs abertos, e um P0 no portão da escada
+
+O CEO autorizou o lote inteiro ("faz tudo"). Três especialistas rodaram em
+paralelo e voltaram; o trabalho está em revisão.
+
+| PR | O que é | Estado |
+|---|---|---|
+| #113 | P0: `"não "` deixa de ser fim de conversa | **mergeado** |
+| #114 | 🔴 **P0 do portão da escada** + a tabela de verdade vira uma só | aberto |
+| #115 | `/site/demonstracao` morre, o formulário vai para `/site/precos#demonstracao` | aberto |
+| #116 | Inventário dos restaurantes + máquina de exclusão desligada | aberto |
+
+### 🔴 O achado que muda a resposta sobre ligar o raciocínio livre
+
+O CEO disse *"pode ligar o raciocínio"*. **Não dá para ligar hoje — e o motivo
+não é falta de amostra, é que a régua estava contando errado.**
+
+`runFreeFormGates` pedia "20 amostras com 70% de acerto" e chamava
+`getShadowStats` **sem** o parâmetro de origem. Sem ele não há filtro: o portão
+somava produção, replay, treino e — pior — as linhas gravadas **antes de o campo
+de origem existir** (migração de 05/08), cuja procedência é indeterminável. Como
+o gate lê uma janela de 7 dias, quase toda a evidência dentro dela era desse
+balde.
+
+Enquanto isso valer em produção, qualquer número que a escada devolver **não é
+evidência**. Corrigido no PR #114. A leitura só passa a valer depois do deploy.
+
+Segundo defeito, mesma causa: a tabela de rótulos da verdade era **copiada** em
+dois arquivos. O PR #111 acrescentou `loja`/`entrega`/`local` e atualizou só uma.
+No juiz, as três caíam atrás do cardápio e o corte de 15.000 caracteres as
+apagava — o agente sabia que a loja estava fechada e dizia isso, e o juiz julgava
+a frase **sem a linha que a sustenta**.
+
+### 🔴 Apagar restaurante não cancela a cobrança
+
+Levantado ao construir o #116, e é o motivo de nada ter sido apagado:
+`PlanSubscription.restaurantId` é `onDelete: SetNull`, e a linha guarda o
+`mpPreapprovalId` — recorrência viva no Mercado Pago. **O cartão do lojista
+continuaria sendo debitado depois do restaurante deixar de existir.** Virou
+bloqueio duro no serviço de purga.
+
+Junto: não existia `DELETE` de restaurante em lugar nenhum do sistema; a cascata
+do Prisma bate em 6 arestas `ON DELETE RESTRICT` e provavelmente falharia no
+meio; e 23 tabelas carregam `restaurantId` **sem chave estrangeira** — ficariam
+órfãs apontando para nada.
+
+**O inventário ainda não saiu.** Depende do #116 estar no ar para o workflow
+conseguir ler produção. Nada foi apagado, e a lista sobe ao CEO restaurante por
+restaurante antes de qualquer exclusão.
+
+### ⚪ Aberto, para decisão do CEO
+
+- **O SDR que aborda o lead do site não existe** — e o bloqueio é que a Foocci
+  **não tem número de WhatsApp para vender** (conferido: `/site/demonstracao` não
+  tem nenhum `wa.me` no HTML de produção). Duas perguntas travam tudo: chip Meta
+  oficial ou Evolution, e o que o agente responde quando perguntarem preço.
+  Desenho completo em `docs/sdr-foocci-desenho.md`.
+- **Os vídeos de `/admin/demo-videos` ficaram órfãos** com a morte da
+  `/site/demonstracao`. Eram exibidos só naquela página; publicar um vídeo hoje
+  não aparece em lugar nenhum. Não há vídeo publicado, então nada quebrou — é
+  falha silenciosa esperando alguém gravar. Sugestão: `/site/experimente`.
+- **O livro de assinaturas do kit** — proposta aberta em
+  `docs/perguntas-ao-diretor-geral.md`. A pergunta do CEO *"eles já estão com o
+  brain atualizado?"* não tem resposta hoje. Do lado do Foocci já está assinado
+  em `docs/kit-versao-lida.md`; o registro central depende do Diretor Geral.
+
+---
 
 ## 🌅 Onde parou o dia 05/08 — leia isto primeiro
 
