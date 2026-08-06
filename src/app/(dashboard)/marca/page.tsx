@@ -2,6 +2,10 @@
 
 import { useState, useEffect, type FormEvent } from "react";
 import { TopBar } from "@/components/layout/TopBar";
+// Importado do MÓDULO, não do barril: o barril de @/components/menu arrasta a
+// ficha do produto, o carrossel e o modal de boas-vindas para dentro do pacote
+// desta tela do painel, que não usa nada disso.
+import { escurecerCor } from "@/components/menu/cover";
 import {
   apiFetch,
   Feedback,
@@ -78,8 +82,12 @@ const COMM_STYLE_OPTIONS = [
 
 // ── Form state ───────────────────────────────────────────────────────────────
 
+/** Os dois alvos de imagem desta tela. O envio é o mesmo; o destino é que muda. */
+type ImageTarget = "logo" | "capa";
+
 interface MarcaForm {
   logoUrl: string;
+  coverImageUrl: string;
   brandName: string;
   shortDescription: string;
   brandStory: string;
@@ -112,6 +120,7 @@ interface MarcaForm {
 
 const FORM_DEFAULTS: MarcaForm = {
   logoUrl: "",
+  coverImageUrl: "",
   brandName: "",
   shortDescription: "",
   brandStory: "",
@@ -132,8 +141,8 @@ const FORM_DEFAULTS: MarcaForm = {
   differentials: "",
   mostProfitableProducts: "",
   cuisineType: "",
-  brandPrimaryColor: "#6366f1",
-  brandSecondaryColor: "#8b5cf6",
+  brandPrimaryColor: "",
+  brandSecondaryColor: "",
   googleReviewUrl: "",
   ifoodReviewUrl: "",
   instagramUrl: "",
@@ -143,6 +152,63 @@ const FORM_DEFAULTS: MarcaForm = {
 };
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+/**
+ * Botão de enviar imagem — com os três estados na mesma peça: enviando, erro
+ * (com o motivo) e salvo. Era código repetido no cartão do logo; virou peça
+ * única quando a capa nasceu, para os dois não divergirem na primeira correção.
+ */
+function UploadButton({
+  alvo,
+  rotulo,
+  enviando,
+  erro,
+  salvo,
+  dica = "JPEG, PNG ou WebP · máx. 5 MB",
+  onFile,
+}: {
+  alvo: ImageTarget;
+  rotulo: string;
+  enviando: boolean;
+  erro?: string;
+  salvo?: boolean;
+  dica?: string;
+  onFile: (file: File) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="cursor-pointer">
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          disabled={enviando}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onFile(file);
+            e.target.value = "";
+          }}
+        />
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-[13.5px] font-semibold transition-colors ${
+            enviando
+              ? "cursor-not-allowed border-line2 bg-[#FAFAF8] text-muted"
+              : "cursor-pointer border-brand-300 bg-paper text-brand-600 hover:bg-brand-50"
+          }`}
+        >
+          {enviando ? "Enviando…" : rotulo}
+        </span>
+      </label>
+      <p className="text-xs text-muted">{dica}</p>
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {salvo && !erro && (
+        <p className="text-xs text-green-600">
+          {alvo === "logo" ? "Logo salva com sucesso." : "Capa salva com sucesso."}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Chips({
   options,
@@ -380,9 +446,12 @@ export default function MarcaPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
-  const [logoSaved, setLogoSaved] = useState(false);
+  // Dois alvos de imagem na mesma tela (logo e capa) com o MESMO fluxo. Estado
+  // por alvo, e não um par de booleanos por peça: enviar a capa não pode acender
+  // "Enviando…" no logo.
+  const [uploading, setUploading] = useState<ImageTarget | null>(null);
+  const [uploadError, setUploadError] = useState<Partial<Record<ImageTarget, string>>>({});
+  const [uploadSaved, setUploadSaved] = useState<Partial<Record<ImageTarget, boolean>>>({});
 
   useEffect(() => {
     apiFetch("/api/brand-config").then(({ ok, data }) => {
@@ -390,6 +459,7 @@ export default function MarcaPage() {
         const p = (data.brandPersona ?? {}) as Record<string, unknown>;
         setForm({
           logoUrl:               String(p.logoUrl ?? ""),
+          coverImageUrl:         data.coverImageUrl ?? "",
           brandName:             String(p.brandName ?? ""),
           shortDescription:      String(p.shortDescription ?? ""),
           brandStory:            String(p.brandStory ?? ""),
@@ -412,8 +482,14 @@ export default function MarcaPage() {
           differentials:         String(p.differentials ?? ""),
           mostProfitableProducts: String(p.mostProfitableProducts ?? ""),
           cuisineType:           String(p.cuisineType ?? ""),
-          brandPrimaryColor:     data.brandPrimaryColor ?? "#6366f1",
-          brandSecondaryColor:   data.brandSecondaryColor ?? "#8b5cf6",
+          // Vazio continua VAZIO. Antes o formulário preenchia sozinho com o
+          // indigo padrão; quem abrisse esta tela e clicasse em Salvar gravava
+          // #6366f1 como cor da loja sem nunca ter escolhido cor — e indigo é
+          // justamente o que o DESIGN.md proíbe como cor de ação. Os campos de
+          // cor mostram o indigo só como VALOR DE EXIBIÇÃO (o <input type=color>
+          // exige um hex válido); o que vai para o banco é o que a pessoa mexeu.
+          brandPrimaryColor:     data.brandPrimaryColor ?? "",
+          brandSecondaryColor:   data.brandSecondaryColor ?? "",
           googleReviewUrl:       data.googleReviewUrl ?? "",
           ifoodReviewUrl:        data.ifoodReviewUrl ?? "",
           instagramUrl:          data.instagramUrl ?? "",
@@ -429,19 +505,27 @@ export default function MarcaPage() {
     return (value: MarcaForm[K]) => setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleLogoUpload(file: File) {
+  /**
+   * Envia logo OU capa. Um caminho só: o de dois lugares diferentes já tinha
+   * produzido dois tratamentos de erro diferentes para a mesma falha de rede.
+   * Grava na hora (como o logo sempre gravou) — quem sobe uma imagem e sai da
+   * tela sem apertar Salvar não pode perder a imagem.
+   */
+  async function handleImageUpload(file: File, alvo: ImageTarget) {
     const allowed = ["image/jpeg", "image/png", "image/webp"];
+    const falha = (msg: string) => setUploadError((e) => ({ ...e, [alvo]: msg }));
+
     if (!allowed.includes(file.type)) {
-      setLogoUploadError("Formato inválido. Use JPEG, PNG ou WebP.");
+      falha("Formato inválido. Use JPEG, PNG ou WebP.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setLogoUploadError("Arquivo muito grande. Máximo 5 MB.");
+      falha("Arquivo muito grande. Máximo 5 MB.");
       return;
     }
-    setLogoUploading(true);
-    setLogoUploadError(null);
-    setLogoSaved(false);
+    setUploading(alvo);
+    setUploadError((e) => ({ ...e, [alvo]: undefined }));
+    setUploadSaved((e) => ({ ...e, [alvo]: false }));
 
     try {
       const fd = new FormData();
@@ -452,23 +536,32 @@ export default function MarcaPage() {
       const uploadedUrl = json?.data?.url;
 
       if (!res.ok || !uploadedUrl) {
-        const errMsg = json?.error ?? (res.status === 401 ? "Sessão expirada. Faça login novamente." : "Falha no envio. Tente novamente.");
-        setLogoUploadError(errMsg);
+        falha(json?.error ?? (res.status === 401 ? "Sessão expirada. Faça login novamente." : "Falha no envio. Tente novamente."));
         return;
       }
 
-      set("logoUrl")(uploadedUrl);
-
-      // Persist immediately so the logo survives even without clicking "Salvar"
-      await apiFetch("/api/brand-config", "PATCH", {
-        brandPersona: { logoUrl: uploadedUrl },
-      });
-      setLogoSaved(true);
+      if (alvo === "logo") {
+        set("logoUrl")(uploadedUrl);
+        // O logo mora no brandPersona (JSON); a capa tem coluna própria.
+        await apiFetch("/api/brand-config", "PATCH", { brandPersona: { logoUrl: uploadedUrl } });
+      } else {
+        set("coverImageUrl")(uploadedUrl);
+        await apiFetch("/api/brand-config", "PATCH", { coverImageUrl: uploadedUrl });
+      }
+      setUploadSaved((e) => ({ ...e, [alvo]: true }));
     } catch {
-      setLogoUploadError("Erro de conexão. Tente novamente.");
+      falha("Erro de conexão. Tente novamente.");
     } finally {
-      setLogoUploading(false);
+      setUploading(null);
     }
+  }
+
+  /** Tira a capa e volta ao degradê da marca. Some imediatamente, sem Salvar. */
+  async function handleRemoveCover() {
+    set("coverImageUrl")("");
+    setUploadSaved((e) => ({ ...e, capa: false }));
+    setUploadError((e) => ({ ...e, capa: undefined }));
+    await apiFetch("/api/brand-config", "PATCH", { coverImageUrl: null });
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -505,6 +598,7 @@ export default function MarcaPage() {
       communicationStyle: form.communicationStyle,
       brandPrimaryColor:  form.brandPrimaryColor || null,
       brandSecondaryColor: form.brandSecondaryColor || null,
+      coverImageUrl:      form.coverImageUrl || null,
       googleReviewUrl:    form.googleReviewUrl || null,
       ifoodReviewUrl:     form.ifoodReviewUrl || null,
       instagramUrl:       form.instagramUrl || null,
@@ -521,6 +615,10 @@ export default function MarcaPage() {
     }
     setSaving(false);
   }
+
+  // A cor que o cardápio do cliente REALMENTE usa quando o lojista não escolheu
+  // nenhuma — a mesma reserva do /qr/[slug]. Ver o comentário da prévia.
+  const corDaCapa = form.brandPrimaryColor || "#f97316";
 
   // O cabeçalho é a ÚNICA régua do topo — e é dentro dele que mora a pílula do
   // Assistente. Tela do menu lateral sem `TopBar` ficava sem assistente nenhum.
@@ -553,35 +651,73 @@ export default function MarcaPage() {
               <span className="text-3xl">🏪</span>
             )}
           </div>
-          <div className="space-y-2">
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                disabled={logoUploading}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void handleLogoUpload(file);
-                  e.target.value = "";
-                }}
+          <UploadButton
+            alvo="logo"
+            rotulo={form.logoUrl ? "Trocar logo" : "Fazer upload"}
+            enviando={uploading === "logo"}
+            erro={uploadError.logo}
+            salvo={uploadSaved.logo}
+            onFile={(f) => void handleImageUpload(f, "logo")}
+          />
+        </div>
+      </PageCard>
+
+      {/* ── 0.1 Capa do cardápio ─────────────────────────────────── */}
+      <PageCard>
+        <SectionHeading
+          title="🏞️ Capa do cardápio"
+          subtitle="A faixa larga no topo do cardápio do QR Code, atrás do logo."
+        />
+        <div className="space-y-4">
+          {/* A prévia mostra o resultado REAL — inclusive o caminho vazio. Sem
+              capa não aparece caixa cinza nem "sem imagem": aparece o degradê da
+              marca, que é exatamente o que o cliente vai ver no cardápio. */}
+          <div
+            className="relative h-28 w-full overflow-hidden rounded-2xl border border-line sm:h-36"
+            style={{
+              // A prévia usa a MESMA conta do cardápio (QRMenuClient + MenuCover):
+              // mesma cor de reserva e mesma derivação da segunda ponta. Prévia
+              // com fórmula própria é prévia que mente — e esta já mentia: ela
+              // desenhava o indigo padrão do formulário, cor que o cardápio do
+              // cliente nunca usou.
+              backgroundImage: `linear-gradient(135deg, ${corDaCapa} 0%, ${form.brandSecondaryColor || escurecerCor(corDaCapa)} 100%)`,
+            }}
+          >
+            {form.coverImageUrl && (
+              <img
+                src={form.coverImageUrl}
+                alt="Prévia da capa do cardápio"
+                className="absolute inset-0 h-full w-full object-cover object-center"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
               />
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
-                  logoUploading
-                    ? "border-line2 bg-[#FAFAF8] text-muted cursor-not-allowed"
-                    : "border-brand-300 bg-paper text-brand-600 hover:bg-brand-50 cursor-pointer"
-                }`}
-              >
-                {logoUploading ? "Enviando…" : form.logoUrl ? "Trocar logo" : "Fazer upload"}
-              </span>
-            </label>
-            <p className="text-xs text-muted">JPEG, PNG ou WebP · máx. 5 MB</p>
-            {logoUploadError && (
-              <p className="text-xs text-red-500">{logoUploadError}</p>
             )}
-            {logoSaved && !logoUploadError && (
-              <p className="text-xs text-green-600">Logo salva com sucesso.</p>
+            {!form.coverImageUrl && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="rounded-full bg-white/85 px-3 py-1 text-[11.5px] font-semibold text-ink2">
+                  Sem capa — o cardápio usa as cores da sua marca
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-start gap-3">
+            <UploadButton
+              alvo="capa"
+              rotulo={form.coverImageUrl ? "Trocar capa" : "Enviar capa"}
+              enviando={uploading === "capa"}
+              erro={uploadError.capa}
+              salvo={uploadSaved.capa}
+              dica="Deitada (ex.: 1600×600) · JPEG, PNG ou WebP · máx. 5 MB"
+              onFile={(f) => void handleImageUpload(f, "capa")}
+            />
+            {form.coverImageUrl && (
+              <button
+                type="button"
+                onClick={() => void handleRemoveCover()}
+                className="inline-flex items-center gap-2 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-[13.5px] font-semibold text-ink transition-colors hover:bg-[#FAFAF8]"
+              >
+                Tirar capa
+              </button>
             )}
           </div>
         </div>

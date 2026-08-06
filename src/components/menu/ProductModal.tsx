@@ -20,6 +20,8 @@
 
 import { useEffect, useState } from "react";
 import { formatPrice } from "./format";
+import { ImageCarousel } from "./ImageCarousel";
+import { menuItemPhotos } from "./photos";
 import type {
   CartLine,
   MenuDisplayItem,
@@ -197,22 +199,34 @@ export function ProductModal({
 
         {/* One natural scroll flow: image + details scroll together (image is NOT fixed) */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          {/* Image — square, center-cropped, capped at 50vh; part of the scrollable content */}
+          {/* Image — square, center-cropped, capped at 50vh; part of the scrollable content.
+              Com fotos extras (carouselEnabled) vira carrossel, e a CAPA é o
+              primeiro slide: quem tocou no card tem de reencontrar a mesma foto
+              aqui. A regra mora em `menuItemPhotos`, não neste JSX. */}
           <div className="relative w-full bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
-            {item.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                className="w-full h-full object-cover object-center"
-                loading="lazy"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
-            ) : (
-              <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
-                🍽️
-              </div>
-            )}
+            {(() => {
+              const fotos = menuItemPhotos(item);
+              if (fotos.length === 0) {
+                return (
+                  <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
+                    🍽️
+                  </div>
+                );
+              }
+              if (fotos.length === 1) {
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={fotos[0]!}
+                    alt={item.name}
+                    className="w-full h-full object-cover object-center"
+                    loading="lazy"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                );
+              }
+              return <ImageCarousel images={fotos} alt={item.name} />;
+            })()}
           </div>
 
           <div className="px-5 pt-5 pb-2 space-y-3">

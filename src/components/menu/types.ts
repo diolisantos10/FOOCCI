@@ -47,7 +47,12 @@ export type MenuDisplayItem = {
   name: string;
   description: string | null;
   price: number;
+  /** A CAPA. É ela no card, no thumbnail e no primeiro slide da ficha. */
   imageUrl: string | null;
+  /** Fotos EXTRAS da ficha. Só entram no carrossel com `carouselEnabled`. */
+  images?: string[];
+  /** Opt-in do lojista por item. Sem ele a ficha é uma foto só. */
+  carouselEnabled?: boolean;
   ingredients: string | null;
   servingSize: number | null;
   portionInfo: string | null;

@@ -140,6 +140,10 @@ export const upsertBrandConfigSchema = z.object({
   salesPriority:       z.enum(SALES_PRIORITIES).default("bestsellers"),
   brandPrimaryColor:   z.string().max(20).nullable().optional(),
   brandSecondaryColor: z.string().max(20).nullable().optional(),
+  // Capa do cardápio. Aceita caminho interno (/api/media/<id>, o que o upload
+  // devolve) e URL completa — por isso NÃO é `z.string().url()`, que recusaria a
+  // própria saída do /api/menu/upload. Vazio/null = sem capa, o caso normal.
+  coverImageUrl:       z.string().max(500).nullable().optional(),
   instagramUrl:        z.string().url().max(200).nullable().optional(),
   tiktokUrl:           z.string().url().max(200).nullable().optional(),
   facebookUrl:         z.string().url().max(200).nullable().optional(),
