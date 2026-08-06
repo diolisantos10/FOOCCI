@@ -20,6 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import {
   simularPurga,
@@ -69,11 +70,47 @@ export async function GET(req: NextRequest) {
   try {
     if (req.nextUrl.searchParams.get("formato") === "exportacao") {
       const rede = await exportarRestaurante(slug);
-      return NextResponse.json({
+
+      /*
+        O CORPO É MONTADO À MÃO — e não por `NextResponse.json` — para que a
+        resposta possa carregar a impressão digital DOS PRÓPRIOS BYTES ENVIADOS.
+
+        Motivo: quem baixa esta rede pelo navegador precisa saber se recebeu o
+        arquivo inteiro. `rede.sha256` NÃO responde isso: ele é o hash do estado
+        do BANCO (é o que `executarPurga` recalcula para detectar movimento entre
+        a exportação e o corte), e bateria igual com um arquivo cortado pela
+        metade no meio do caminho. Um backup truncado com hash "válido" é pior
+        que backup nenhum: a exclusão seguiria e a volta atrás não existiria.
+
+        `x-purga-sha256-arquivo` é o hash do texto abaixo, exatamente como sai
+        daqui. A tela recalcula sobre os bytes recebidos e só libera o passo
+        seguinte quando os dois batem.
+
+        O corpo JSON é byte a byte o mesmo que `NextResponse.json` produziria —
+        `scripts/purgar-restaurante.mjs` (que faz `text()` + `JSON.parse`) e
+        qualquer consumidor por `res.json()` continuam funcionando iguais.
+      */
+      const corpo = JSON.stringify({
         aviso:
           "CONTÉM DADO PESSOAL. Grave em arquivo local e guarde fora de log, artefato " +
           "ou qualquer lugar público. Sem esta rede guardada, a purga não deve acontecer.",
         ...rede,
+      });
+      const bytesDaResposta = Buffer.byteLength(corpo, "utf8");
+
+      return new NextResponse(corpo, {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": String(bytesDaResposta),
+          // Dado pessoal não fica em cache de navegador nem de intermediário.
+          "cache-control": "no-store, no-cache, must-revalidate",
+          "x-purga-slug": rede.slug,
+          "x-purga-sha256": rede.sha256,
+          "x-purga-sha256-arquivo": createHash("sha256").update(corpo).digest("hex"),
+          "x-purga-bytes-arquivo": String(bytesDaResposta),
+          "x-purga-linhas": String(rede.totalLinhas),
+        },
       });
     }
     return NextResponse.json({ simulacao: true, ...(await simularPurga(slug)) });
