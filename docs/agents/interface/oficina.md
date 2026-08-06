@@ -1330,3 +1330,115 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
 
 — interface, worktree `agent-a478e73f658b2abd5`, branch `work-precos` (de
 `origin/claude/foocci-site-hero`)
+
+
+---
+
+## 2026-08-06 · O cartão de telefone cortado na padaria de vitrine — era rolagem, não camada
+
+**Pedido:** print do CEO (iPhone, 23:49 de 05/08) em `/pedido/foocci-bakery` com a
+loja FECHADA: cartão de identificação com o cabeçalho cortado, encostado na borda
+de baixo da tarja amarela de horário. "Diga o que É, com o valor medido."
+
+### O que É (medido no navegador, não olhado)
+
+Não é sobreposição: `z-index` `auto` nos dois elementos, `position: static`,
+nenhum ancestral com `transform`/`filter`/`backdrop-filter` (que criariam bloco de
+contenção para `fixed`). Não é altura calculada sem contar a tarja. **É rolagem
+presa dentro do contêiner do chat.**
+
+O cartão (`PhoneEntryCard`) mora DENTRO do rolador de mensagens
+(`div.flex-1.overflow-y-auto`), e o efeito de auto-scroll rolava esse rolador até
+o fim (`bottomRef.scrollIntoView()`) a cada render. Quando o conteúdo não cabe, o
+que sai de cena é o TOPO — e o topo é o cabeçalho que diz por que o telefone está
+sendo pedido. O corte aparece exatamente na borda de baixo da tarja porque é ali
+que começa a área de rolagem.
+
+Números a 375px (loja fechada): tarja = **126px + 8 de margem = 134px** comidos do
+chat; conteúdo do chat = **367px**; o topo do cartão começa a ser cortado abaixo de
+**~448px de janela**; o título some inteiro abaixo de **~428px**.
+
+### Fechada × aberta — a tarja é o que traz a falha para o mundo real
+
+| Estado | Limiar de janela em que o topo do cartão começa a sair |
+|---|---|
+| Aberta | **~314px** (nenhum celular chega lá sem teclado) |
+| Fechada | **~448px** (qualquer celular chega, com o teclado aberto) |
+
+A diferença é exatamente os 134px da tarja. Com o teclado aberto num 375×553 a
+área do chat medida foi de **85px** e o corte, de **58,8px** — título 100%
+escondido. **O defeito existe nos dois estados; só o estado "fechada" o torna
+alcançável.** Era o estado que ninguém tinha testado.
+
+### Foi o PR #102? Em parte, e a parte é minha — mas ele não criou o defeito
+
+Medido trocando o arquivo pelo `a25cafef^` e rodando a mesma varredura:
+
+| | conteúdo do chat | limiar do corte |
+|---|---|---|
+| Antes do #102 | 310px | ~414px |
+| Depois do #102 | 367px (+57) | ~448px (+34) |
+
+O #102 acrescentou a terceira linha do convite e o "Pular e ver o cardápio →", e
+com isso **subiu a faixa de falha em ~34–50px**. O mecanismo (rolar um formulário
+até o fim) é anterior a ele. Conclusão honesta: **regressão parcial, não origem.**
+
+O #102 *criou*, sim, um agravante no outro caminho: o "×" que ele adicionou no
+`WelcomeModal` mora justamente na faixa que fica inalcançável (abaixo).
+
+### O segundo defeito, da mesma família, achado por medir o outro caminho
+
+`WelcomeModal` (Loja sem IA) é `flex items-end sm:items-center` sem rolagem no
+fundo. Painel mais alto que a janela = o excedente sai pelo **topo**, sem barra e
+sem gesto. Medido a 375×283 (teclado aberto): `painel.top = **-93px**` — foram
+junto o título, a frase do motivo e o **×**, que é a única saída da vitrine.
+Depois do conserto: `top = 0`, painel rolando por dentro, × visível.
+
+### Consertos
+
+1. **A âncora muda com o momento.** Conversa → fim; identificação → topo do
+   bloco. Convite + cartão viraram um bloco só (`identificacaoRef`) com
+   `scroll-mt-16` — a margem serve de respiro na entrada e, na SEGUNDA vez que a
+   tela aparece (fechamento do pedido), reserva 64px acima do bloco para o balão
+   do motivo continuar à vista (`scroll-margin-top: 64px` medido no DOM; a cena
+   completa do fechamento não foi percorrida — o caminho passa por modal de
+   variação e barra de carrinho, e ficou fora do tempo desta oficina).
+2. **Modal com `overflow-y-auto` no fundo e `max-h-full` no painel.**
+3. **Botão habilitado com validação no toque** (vitrine de 05/08) — era o "bege
+   desabilitado" que o CEO descreveu. `disabled` só enquanto envia.
+4. Drift do `DESIGN.md` nas peças tocadas: `gray-*` → `ink/ink2/muted/line2`,
+   `bg-white` → `bg-paper`, `font-bold` → `font-semibold` (#9), raio de botão e
+   input do modal `rounded-2xl` → `rounded-xl` (#3).
+
+### Duas coisas que só o `getComputedStyle` contou
+
+- `focus:border-[#25d366]` no campo de telefone **nunca pintou**: a regra base do
+  `globals.css` tem sete `:not` (0,7,1). Quem pintava era o laranja do painel,
+  dentro de uma loja white-label. Com `!` + `var(--brand-primary)` o foco medido
+  virou `#8A4B1E` — a cor da padaria.
+- A borda em repouso é `#E5E5E5` **venha de onde vier**: minha `border-line`
+  (#E9E9E6) também perdia. Troquei para `border-line2`, que é o que o navegador
+  realmente pinta. **Classe que não pinta é mentira no código-fonte.**
+
+### Portão
+
+`src/components/menu/identificacaoNaTela.test.ts` — 3 casos. Provado que reprova:
+rodado contra o arquivo pré-conserto, 2 dos 3 falham.
+
+### Achado que NÃO consertei (é de outro dono)
+
+A padaria de vitrine roda hoje com **hidratação quebrada**: `entryPhase` nasce de
+`sessionStorage` no `useState` inicial (servidor devolve "browsing", cliente
+"identifying") e o React descarta o HTML do servidor inteiro — "Hydration failed…
+the entire root will switch to client rendering", 10 erros no console. É a
+vitrine "sessionStorage nunca entra no useState inicial de componente com SSR",
+valendo aqui. Anterior ao #102 e fora do meu recorte porque mexe no portão de
+identificação.
+
+**Verificação:** `npx tsc --noEmit` limpo · `npx vitest run` **2.036 suítes /
+5.661 testes verdes**, relatório JSON registrado. Sem commit, por ordem do CEO.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8, consistência 9.
+
+— interface, worktree `agent-a922fa55c06961a3f`, sobre
+`origin/claude/remove-legacy-runner-q8iXa` (13495d82)

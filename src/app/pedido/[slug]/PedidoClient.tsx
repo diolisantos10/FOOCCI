@@ -1595,12 +1595,18 @@ function PhoneEntryCard({
   const [collectedPhone, setCollectedPhone] = useState("");
   const [loading, setLoading]           = useState(false);
   const [error,   setError]             = useState<string | null>(null);
+  /* O foco volta para o campo pendente quando o toque no botão não passa: no
+     celular não há hover nem foco para insinuar o motivo. */
+  const campoRef = useRef<HTMLInputElement>(null);
 
   async function handlePhoneSubmit(e: FormEvent) {
     e.preventDefault();
     const ph = phoneInput.trim();
     const digits = ph.replace(/\D/g, "");
-    if (digits.length < 10) { setError("Informe um WhatsApp válido."); return; }
+    /* Botão HABILITADO + validação no toque (padrão da casa desde 05/08):
+       desabilitado, ele não tem como dizer o que falta — a pessoa toca, nada
+       acontece, e conclui que a tela quebrou. */
+    if (digits.length < 10) { setError("Informe um WhatsApp válido."); campoRef.current?.focus(); return; }
     setLoading(true);
     setError(null);
     try {
@@ -1635,7 +1641,7 @@ function PhoneEntryCard({
   async function handleNameSubmit(e: FormEvent) {
     e.preventDefault();
     const name = nameInput.trim();
-    if (name.length < 2) { setError("Informe seu nome."); return; }
+    if (name.length < 2) { setError("Informe seu nome."); campoRef.current?.focus(); return; }
     setLoading(true);
     setError(null);
     try {
@@ -1662,28 +1668,43 @@ function PhoneEntryCard({
     }
   }
 
+  /* Foco na loja é a cor do RESTAURANTE, e precisa de `!`: a regra base de
+     `globals.css` tem sete `:not` (0,7,1) e ganha de qualquer `focus:border-*`
+     de classe. O `focus:border-[#25d366]` que estava aqui nunca pintou — quem
+     pintava era o laranja do painel, dentro de uma loja white-label.
+     Medido: em repouso a borda é `#E5E5E5` (`line2`) vinda daquela mesma regra
+     base — por isso a classe diz `border-line2`, e não outra coisa que o
+     navegador jogaria fora. Em foco, agora, `#8A4B1E` = a cor da padaria. */
+  const campoCls =
+    "rounded-xl border border-line2 bg-canvas px-4 py-2.5 text-sm text-ink placeholder:text-muted " +
+    "focus:outline-none focus:!border-[var(--brand-primary)] " +
+    "focus:!ring-[color-mix(in_srgb,var(--brand-primary)_22%,white)]";
+  const botaoCls =
+    "rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-40";
+
   if (phase === "name") {
     return (
-      <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-4 max-w-sm w-full">
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Novo cadastro</p>
-        <p className="mb-3 text-xs text-gray-500">Pra gente identificar seu pedido.</p>
+      <div className="w-full max-w-sm rounded-2xl rounded-bl-sm bg-paper px-4 py-4 shadow-sm">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Novo cadastro</p>
+        <p className="mb-3 text-xs text-ink2">Pra gente identificar seu pedido.</p>
         <form onSubmit={handleNameSubmit} className="flex flex-col gap-2.5">
           <input
             type="text"
             inputMode="text"
             autoCapitalize="words"
             autoFocus
+            ref={campoRef}
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             placeholder="Seu nome"
             style={{ fontSize: "16px" }}
-            className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+            className={campoCls}
           />
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <button
             type="submit"
-            disabled={!nameInput.trim() || loading}
-            className="rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40 transition-all"
+            disabled={loading}
+            className={botaoCls}
             style={{ backgroundColor: "var(--brand-primary)" }}
           >
             {loading ? "Salvando…" : "Continuar →"}
@@ -1694,26 +1715,27 @@ function PhoneEntryCard({
   }
 
   return (
-    <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-4 max-w-sm w-full">
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Identificação rápida</p>
-      <p className="mb-3 text-xs text-gray-500">
+    <div className="w-full max-w-sm rounded-2xl rounded-bl-sm bg-paper px-4 py-4 shadow-sm">
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Identificação rápida</p>
+      <p className="mb-3 text-xs text-ink2">
         Usamos seu WhatsApp para identificar seu cadastro e facilitar seus pedidos.
       </p>
       <form onSubmit={handlePhoneSubmit} className="flex flex-col gap-2.5">
         <input
           type="tel"
           inputMode="numeric"
+          ref={campoRef}
           value={phoneInput}
           onChange={(e) => setPhoneInput(e.target.value)}
           placeholder="(11) 99999-9999"
           style={{ fontSize: "16px" }}
-          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+          className={campoCls}
         />
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
         <button
           type="submit"
-          disabled={!phoneInput.trim() || loading}
-          className="rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40 transition-all"
+          disabled={loading}
+          className={botaoCls}
           style={{ backgroundColor: "var(--brand-primary)" }}
         >
           {loading ? "Verificando…" : "Continuar →"}
@@ -1722,7 +1744,7 @@ function PhoneEntryCard({
             vitrine de demonstração. O rótulo diz para onde ela leva: "Pular →"
             sozinho não conta o que acontece depois. */}
         {onSkip && (
-          <button type="button" onClick={onSkip} className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+          <button type="button" onClick={onSkip} className="py-1 text-xs text-muted transition-colors hover:text-ink2">
             Pular e ver o cardápio →
           </button>
         )}
@@ -2490,6 +2512,9 @@ export function PedidoClient({
   const [inputText, setInputText] = useState("");
   const [ui, setUi] = useState<UIState>("idle");
   const bottomRef = useRef<HTMLDivElement>(null);
+  /* O bloco de identificação (convite + cartão do telefone). Ele é a ÂNCORA da
+     rolagem enquanto a pessoa ainda não entrou: ver o efeito de auto-scroll. */
+  const identificacaoRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Tracks categories already introduced this session — prevents repeated intros.
   const visitedCategoryIds = useRef<Set<string>>(new Set());
@@ -3575,9 +3600,26 @@ export function PedidoClient({
   }, [upsellState.lastUpsellCategory, categories]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────
+  /* Numa conversa, o lugar certo é o FIM: a mensagem nova está embaixo.
+   *
+   * Enquanto a identificação está aberta, porém, o que está no fim não é
+   * mensagem — é FORMULÁRIO. Encostar o rodapé dele na base empurra o cabeçalho
+   * ("Identificação rápida" + a frase que diz por que o telefone é pedido) para
+   * fora da área visível, e sobra um campo de telefone sem contexto colado na
+   * borda da tarja de horário. Medido a 375px com a loja FECHADA: a tarja come
+   * 134px do chat e, abaixo de ~448px de janela — o que qualquer celular vira
+   * assim que o teclado abre —, o topo do cartão sai de cena (com o teclado
+   * aberto, o chat fica com 85px e o corte medido foi de 58,8px).
+   *
+   * Então a âncora muda com o momento: identificando → topo do cartão; conversa
+   * → fim da conversa. */
   useEffect(() => {
+    if (entryPhase !== "browsing") {
+      identificacaoRef.current?.scrollIntoView({ block: "start" });
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, ui]);
+  }, [messages, ui, entryPhase]);
 
   // ── sendText ──────────────────────────────────────────────────────
   // Only called for AI-driven moments: BROWSE (initial greeting, item adds,
@@ -5987,7 +6029,15 @@ export function PedidoClient({
 
           {/* Phone entry inside chat — doesn't block menu on desktop */}
           {entryPhase === "identifying" && (
-            <>
+            /* Convite + cartão são UM bloco: é ele que a rolagem ancora pelo
+               topo (ver o efeito de auto-scroll). A margem de rolagem serve a
+               duas cenas: na entrada ela vira respiro (o `scrollIntoView` não
+               respeita o padding do contêiner e o cartão encostaria na tarja de
+               horário); na SEGUNDA vez — quando o telefone volta a ser pedido no
+               fechamento — ela reserva 64px acima do bloco (medido:
+               `scroll-margin-top: 64px`) para o fim do balão que acabou de dizer
+               POR QUE ele está sendo pedido continuar à vista. */
+            <div ref={identificacaoRef} className="scroll-mt-16 space-y-3">
               {/* Na entrada da vitrine o convite diz que dá para ver antes de se
                   identificar — a promessa da página de degustação ("sem cadastro")
                   precisa valer na tela para a qual ela manda. Quando a tela volta
@@ -6010,7 +6060,7 @@ export function PedidoClient({
                   onSkip={podePularIdentificacao ? handleSkipIdentification : undefined}
                 />
               </div>
-            </>
+            </div>
           )}
 
           {/* Repeat-order agora é um botão "Pedir novamente" ao lado de "Quero
