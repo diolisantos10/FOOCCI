@@ -1,6 +1,69 @@
 # Pendências — o que está aberto
 
-> Última atualização: 05/08/2026.
+> Última atualização: 06/08/2026, madrugada.
+
+## 🌅 Onde parou o dia 05/08 — leia isto primeiro
+
+Dia longo, com o CEO ao vivo até tarde. **Sete blocos subiram para produção** e
+estão confirmados no ar (`/api/health` → `2a12b93d`). O que ficou aberto está
+listado logo abaixo, e o que depende dele está marcado.
+
+### O que entrou em produção
+
+| # | Bloco | Por que importava |
+|---|---|---|
+| #102 | Esteira de treino do CRM + **P0 do simulador** | A tela de teste do painel apagava **cliente e histórico de pedidos reais** por id cru, sem escopo de restaurante e sem checar cargo — contornando as três proteções que já existiam |
+| #103 | **P0 do rodízio** + botões mudos do site | O agente negou um produto que o Sushi Cazza vende (R$ 119, salão) porque o catálogo do Garçom só enxerga delivery |
+| #104 | Item de salão: contar sim, vender não | O agente do cardápio **não lia a base de conhecimento**; só o do WhatsApp lia. E o `finalize` não conferia o canal |
+| #105 | Copies do site | Hero com as duas dores, "olha quanto você paga de comissão", os 50% do 1º mês, "não é aplicativo" |
+| #106 | **P0 do suporte** | O Safari do iPhone grava MPEG-4 e o código carimbava `.webm` em tudo; o Whisper decide pela extensão do nome. Mais anexo de print/PDF |
+| #107 | Cartões de plano | Vantagem grande primeiro, ordenada pela dor; recurso desce |
+| #108 | A ferramenta de olhar o site | Ela mentia sobre o que conseguia ver |
+
+### ⏳ Em curso quando a sessão fechou
+
+- **As quatro negações do WhatsApp** (`garcom`, worktree próprio). Mesmo padrão
+  do rodízio, no outro canal. A pior: *"não aceitamos vale-refeição/voucher"*
+  **fixa no código, igual para todo restaurante**, sem ler `paymentSettings` —
+  mente nas duas direções, para toda a base. As outras três: "não temos
+  bebidas/sobremesas" a partir de filtro por palavra, "não encontrei {assunto}",
+  e um prompt que MANDA o modelo negar.
+
+### 🔴 Decisões que esperam o CEO
+
+1. **O rodízio deve aparecer no cardápio de delivery?** Hoje está certo como
+   salão e o agente encaminha para a equipe. Se for para vender ali, é mudança
+   de **cadastro**, não de código.
+2. **Cadastrar o "como funciona" do rodízio** na base de conhecimento do Sushi
+   Cazza (horário, o que inclui, tempo limite). Hoje o agente diz preço + "é só
+   no salão" + oferece a equipe, porque o resto não existe no sistema — e não
+   inventa. Cadastrou, ele passa a falar sozinho.
+3. **Teto da calculadora em R$ 5.000.000/mês** — palpite de interface, não regra
+   comercial. Se o número certo for outro, é uma constante.
+4. **Com prejuízo no cenário conservador**, a calculadora mostra o ponto de
+   equilíbrio em vez de "você economiza". Reversível numa condição.
+5. **A página `/site/demonstracao` deve ser eliminada?** O CEO pediu, reagindo ao
+   rótulo antigo do botão ("Ver no meu restaurante") que prometia testar no
+   restaurante dele. O rótulo já morreu no site inteiro; a página é o formulário
+   que alimenta o SDR. **Não eliminei** — está esperando ele confirmar.
+6. **A aba Diagnóstico não ganhou anexo** (herdou só a correção do microfone):
+   ela não tem conversa própria para segurar o arquivo.
+
+### ⚠️ Dívida de segurança ainda aberta (varredura de 05/08)
+
+Nenhuma é P0, e nenhuma foi corrigida:
+
+- **Webhook da Saipos sem autenticação alguma** — quem souber o `cod_store` e um
+  id de pedido cancela o pedido. Atinge só restaurante com Saipos ativo. **ATIVO**.
+- **Stone aceita qualquer chamada se o segredo faltar** (`if (!secret)` segue em
+  frente) e, diferente do Mercado Pago, **não reconsulta o provedor** — confia no
+  corpo. **LATENTE**: não deu para conferir se a variável existe em produção.
+- **`cron/expire-wa-ordering-sessions`** com o mesmo `if (secret)`; é a única das
+  44 rotas de cron nesse formato. **LATENTE**.
+- **`/api/recover`** pega "o primeiro restaurante ativo que o banco devolver": se
+  ele ficar sem OWNER, qualquer pessoa cria conta de dono nele. **LATENTE**.
+- **Verificador do Instagram é fail-open na função** e a rota só escapa porque
+  `[].some()` é `false`. Pior: **o teste congela o fail-open como esperado**.
 
 ## 🖼️ Site com imagem em toda página — FEITO na madrugada de 05/08
 

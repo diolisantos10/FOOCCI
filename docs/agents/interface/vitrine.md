@@ -298,3 +298,41 @@ do telefone (waToken). Duas regras:
 
 — promovido em 2026-08-04 pelo Diretor · origem: oficina 04/08 (topo
 marketplace da Loja, branch `claude/foocci-director-onboarding-lhindy`)
+
+## Botão desabilitado é uma resposta que ninguém consegue ouvir
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-05 ·
+**Origem:** varredura de percurso em produção, no celular · **Commit:** #103
+
+No celular não existe hover nem foco para insinuar o motivo: o dono toca, nada
+acontece, e conclui que o site quebrou. Aconteceu na **última tela antes do
+pagamento**, com o aceite do Termo escondido a uma rolagem de distância.
+
+O padrão da casa passa a ser: **botão habilitado, validação no toque, e a resposta
+em três lugares** — resumo colado no botão (onde o polegar está), mensagem no
+campo, e foco no primeiro pendente. `disabled` só enquanto envia; a trava de
+verdade é sempre o servidor.
+
+## `globals.css` vence utilitário de cor de borda em input — e sempre venceu
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-05 · **Origem:** a mesma varredura
+
+A regra base tem sete `:not` (especificidade 0,7,1). `border-red-400` (0,1,0)
+perde em qualquer camada, e **o sintoma é mudo**: a cor simplesmente não pinta. Só
+`getComputedStyle` denuncia — o screenshot deixa acreditar que é o laranja do
+foco. Quem precisa de cor de borda em input usa `!`.
+
+**Corolário: todo `focus:border-brand-500` escrito num input deste repositório é
+decorativo.**
+
+## O número da tela é o argumento; medir na captura, não no olho
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-05
+
+Dois defeitos do mesmo dia só apareceram quando alguém mediu: o resultado da
+calculadora nascia a **1.033px** com a dobra em 812px (a conta era feita fora da
+tela), e o laranja da manchete cobria **duas das quatro linhas** no celular —
+metade da manchete em laranja é a marca gritando, não enfatizando.
+
+Nenhum dos dois é visível "de olho" no desktop. **Toda mudança visual se confere
+na captura de 375px, com o número na mão.**
