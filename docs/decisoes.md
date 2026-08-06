@@ -11,6 +11,71 @@
 
 ---
 
+## O custo de WhatsApp entra na mensalidade — não vira item cobrado à parte
+
+**Decidido em** 2026-08-06 · **por** CEO · **origem:** ele viu no site a linha
+*"WhatsApp oficial da Meta — R$ 149/mês, a Meta cobra por conversa; o repasse é
+transparente"*, não reconheceu, e mandou pesquisar como a Meta cobra de verdade.
+
+Palavras dele: *"então vamos transferir esse custo para mensalidade que usa o CRM.
+Simples."*
+
+**O que muda:** o item "WhatsApp oficial da Meta" **sai** da tabela "Cobrado à
+parte". O custo de mensagem passa a estar **embutido no preço do plano**. O
+lojista não vê linha de WhatsApp na fatura dele.
+
+### O que a pesquisa em fonte oficial da Meta estabeleceu
+
+A cobrança é **por mensagem entregue pela empresa**, e quem manda no preço é a
+**categoria**, não o volume:
+
+| Categoria | Quem começa | Brasil, hoje |
+|---|---|---|
+| Serviço — resposta livre dentro da janela de 24h | o cliente | **R$ 0, ilimitado** |
+| Utilidade dentro da janela — confirmação, status | o cliente | **R$ 0** |
+| Utilidade fora da janela | a empresa | R$ 0,035 |
+| **Marketing** — campanha, reativação, carrinho | a empresa | **R$ 0,3217, sempre** |
+| Autenticação | a empresa | R$ 0,035 |
+| Janela de 72h por anúncio Click-to-WhatsApp | o cliente, via anúncio | **R$ 0, inclusive marketing** |
+| Mensagem que o cliente envia | o cliente | nunca cobrada |
+
+**Não existe cota gratuita mensal.** O que é grátis é grátis por categoria e
+janela — a antiga cota de 1.000 conversas acabou em 01/11/2024, quando toda
+conversa de serviço virou grátis e ilimitada.
+
+Fonte: `developers.facebook.com/documentation/business-messaging/whatsapp/pricing`
+e a calculadora oficial em `whatsappbusiness.com/products/platform-pricing/`
+(tarifas do Brasil vigentes desde 01/07/2026).
+
+### 🔴 A data que muda tudo, e ela não é opcional
+
+**1º de outubro de 2026:** a Meta passa a cobrar **mensagem de serviço** e
+**template de utilidade dentro da janela**. É exatamente o que o Foocci faz o dia
+inteiro. A parte que hoje é grátis — e é a maior — vira paga de uma vez.
+
+A Meta se comprometeu a publicar as tarifas definitivas **até 01/09/2026**.
+Antes disso, qualquer número é estimativa e não entra em preço de plano.
+
+Fonte: `.../whatsapp/pricing/non-template-messages`
+
+### O que esta decisão NÃO resolve, e precisa ser dito
+
+**O custo é variável e a mensalidade é fixa.** Um restaurante com 3.000 conversas
+por mês custa muitas vezes mais que um com 200 — e no mesmo plano. Embutir custo
+variável em preço fixo tem dois resultados possíveis: o pequeno paga pelo grande,
+ou o grande dá prejuízo. Hoje isso não dói porque o custo é ~zero; **em outubro
+passa a doer.**
+
+A decisão do CEO está tomada e vale. O que ela exige junto é **medição**: quantas
+mensagens o agente entrega por conversa, por restaurante. Sem esse número, o preço
+do plano é um chute — e é o mesmo número que destrava a decisão de faixas de preço
+parada em `docs/pendencias.md`.
+
+**O que fica registrado como pendência técnica:** instrumentar contagem de
+mensagens entregues **por restaurante e por categoria**, antes de 01/09/2026.
+
+---
+
 ## Carrinho abandonado: manda em 2 minutos, e loja fechada não manda nunca
 
 **Decidido em** 2026-08-05 · **por** CEO · **origem:** o diagnóstico que mostrou
