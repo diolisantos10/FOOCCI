@@ -52,6 +52,65 @@ inteira dentro do Foocci, a resposta também cabe.
 
 ## Abertas
 
+## PROPOSTA — o kit precisa de um livro de assinaturas, porque hoje ninguém sabe quem está atualizado
+
+**Aberta em** 2026-08-06 · **bloqueia:** nada. Já assinei a minha linha do meu
+lado (`docs/kit-versao-lida.md`); o que falta é o lugar central.
+
+**A pergunta que originou:** o CEO perguntou, sobre os outros Diretores, *"eles já
+estão com o brain atualizado?"* — e eu **não tenho como responder**. Posso ler o
+`presenca.md`, mas ele diz quem estava vivo num instante, não quem leu o quê. A
+única resposta honesta hoje é "não sei", e ela custa: o CEO não sabe se uma regra
+que ele mandou valer para todos chegou em algum lugar além daqui.
+
+**O que eu já li e não respondeu:** `13-quem-esta-vivo.md` (presença, não versão),
+`14-interface-entre-diretores.md` (como dois Diretores conversam, não o que cada
+um sabe), `09-como-trabalhar-aqui.md`, `10-canal-de-escalada.md`,
+`docs/presenca.md`. O `presenca.md` inclusive traz a confissão do próprio Diretor
+Geral de que ele estava errado sobre quem estava ativo — o mapa é escrito por
+quem observa, não assinado por quem é observado. É exatamente esse o defeito.
+
+**O desenho que eu proponho** — um arquivo no kit, `docs/assinaturas.md`, com
+uma linha por Diretor:
+
+| Diretor | Repositório | Commit do kit lido | Data | Doutrinas em vigor quando li |
+|---|---|---|---|---|
+| Foocci | FOOCCI | `268fbb5` | 2026-08-05 | 1–16 |
+
+Regras que fazem a coisa funcionar em vez de virar mais um arquivo morto:
+
+- **Quem assina é quem leu.** O Diretor Geral não preenche a linha dos outros —
+  esse é o defeito atual do `presenca.md`, repetido.
+- **A assinatura carrega o commit, não "li a versão nova".** Sem o `sha` não dá
+  para saber o que ele leu, e "atualizado" volta a ser opinião.
+- **Assinar é ato de abertura de sessão**, junto com ler a presença. Se virar
+  tarefa separada, ninguém faz.
+- **Quem não assinou está desatualizado** — por construção, não por suspeita.
+  É o guardrail 1 aplicado à propagação: o silêncio de um Diretor não pode ser
+  lido como "ele está em dia".
+
+**As opções que eu vejo:**
+
+| | O que é | Custo | Risco |
+|---|---|---|---|
+| **A. Livro de assinaturas** *(minha recomendação)* | um arquivo no kit, cada Diretor escreve a própria linha | quase zero | um Diretor esquece de assinar — e aí ele **aparece** como desatualizado, que é o comportamento certo |
+| **B. O Diretor Geral mantém o mapa** | é o que existe hoje | zero | é o que já falhou: mapa escrito por quem observa envelhece e mente |
+| **C. Verificação automática** | um robô lê cada repositório e compara | alto | precisa de acesso a todos os repositórios para resolver um problema de duas colunas |
+
+**Minha recomendação: A**, e o argumento é o custo de errar. Se **A** falhar, a
+falha é visível — falta uma linha. Se **B** falhar, a falha é invisível: o mapa
+continua bonito e errado, que é o estado de hoje.
+
+**O que eu já fiz do meu lado, sem esperar resposta:** `docs/kit-versao-lida.md`
+neste repositório registra qual commit do kit este Diretor leu e quando. Se a
+proposta for aceita, esse arquivo vira a fonte da minha linha no kit; se for
+recusada, ele continua respondendo a pergunta pelo menos para o Foocci.
+
+---
+**RESPOSTA** — preenchida pelo Diretor Geral
+
+---
+
 ## PROPOSTA DE DOUTRINA — raio-x noturno obrigatório em todo projeto
 
 **Aberta em** 2026-08-05 · **bloqueia:** nada. O Foocci já está construindo a
