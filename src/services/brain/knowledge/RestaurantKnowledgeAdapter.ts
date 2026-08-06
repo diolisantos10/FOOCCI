@@ -9,6 +9,27 @@
  * LLM reasons over; the count-only v1 snapshot is why the model once denied
  * that rodízio existed. Everything is capped by a token budget and whatever
  * is not loaded goes to missingContext so the agent never invents.
+ *
+ * ─── v3, 06/08/2026: a ficha passa a dizer O CANAL e o ESTADO DA LOJA ────────
+ * Dois defeitos, o mesmo padrão — o agente não sabia um fato que o sistema sabia.
+ *
+ * 1. CANAL. A lista de produtos daqui nunca foi filtrada por canal, mas também
+ *    nunca disse a qual canal cada item pertence. Isso é pior que o recorte: o
+ *    RODIZIO PRESENCIAL aparecia ao lado do temaki, com preço e sem etiqueta —
+ *    e o agente não tinha como saber que um vai para entrega e o outro não. Um
+ *    lado do erro nega o que existe (o caso da cliente Júlia); o outro promete
+ *    entregar o que só se serve no salão. Agora cada item carrega `canais`.
+ *    A regra do CEO em `docs/decisoes.md` — "existe é diferente de vendível" —
+ *    fica legível NA ficha, não só no código que a consome.
+ *
+ * 2. ESTADO DA LOJA. Com a loja fechada às 23:49, a tarja da tela dizia
+ *    "pedidos ficam pausados até reabrirmos" e o agente pedia o WhatsApp da
+ *    cliente para fechar pedido. O estado nunca chegava na ficha. Agora chega,
+ *    calculado pela MESMA biblioteca da tarja (`EstadoDaLoja` → `business-hours`).
+ *
+ * Guardrail 5 vive aqui: ficha maior é prompt mais lento e mais caro em TODA
+ * conversa. Por isso o `queryHint` passou a rankear TAMBÉM os produtos (antes
+ * mexia só no Q&A), o rótulo de canal é de 1 letra e o teto de itens não subiu.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -18,9 +39,24 @@ import type {
   KnowledgeSnapshotOptions,
 } from "./BusinessKnowledgeContract";
 import { rankByEmbedding } from "./KnowledgeEmbeddingService";
+import { avisosDoEstadoDaLoja, calcularEstadoDaLoja } from "./EstadoDaLoja";
 
 // Token budget caps — keep the snapshot prompt-sized.
 const MAX_MENU_ITEMS = 120;
+/**
+ * Quantos itens são LIDOS para depois ranquear por relevância. Maior que o teto
+ * de propósito: sem pool, "vocês tem rodízio?" continuaria caindo nos 120
+ * primeiros por `sortOrder` e o rodízio de novo ficaria de fora. O custo é de
+ * banco (uma query já existente), não de prompt.
+ */
+const MENU_FETCH_POOL = 400;
+/**
+ * Teto de itens SÓ-SALÃO garantidos na ficha, custe o que custar ao ranking.
+ * São os mais raros do cadastro e os que mais custaram: espremidos para fora
+ * pelo teto, a ficha volta a ser o recorte do delivery. Mesmo número da leitura
+ * equivalente do Garçom (`AIOrderService.loadDineInOnlyItems`, take: 30).
+ */
+const MAX_DINE_IN_ONLY = 30;
 const MAX_KNOWLEDGE_ITEMS = 30;
 const KNOWLEDGE_FETCH_POOL = 200; // fetched for query-relevance ranking
 const MAX_PROMOTIONS = 10;
@@ -87,6 +123,101 @@ async function selectKnowledgeForQuery(rows: KnowledgeRow[], queryHint?: string)
   return selectRelevantKnowledge(rows, queryHint);
 }
 
+// ── Canal: o que pode ser VENDIDO ali × o que pode ser CONTADO ───────────────
+//
+// `E` = entrega (cardápio do Foocci) · `S` = salão (QR da mesa) · `ES` = os dois.
+// Rótulo de uma/duas letras de propósito: `canais: ["entrega","salao"]` custaria
+// ~28 caracteres por item × 120 itens de ficha — 10× mais caro pela MESMA
+// informação, em toda conversa (guardrail 5).
+//
+// A visibilidade efetiva é a do item E a da categoria: uma categoria escondida
+// do delivery esconde os itens dela, exatamente como a loja monta a tela
+// (`src/app/pedido/[slug]/page.tsx:334-340`). Ler só a flag do item faria a
+// ficha prometer entrega de um item cuja categoria inteira está fora do canal.
+
+type Canal = "ES" | "E" | "S" | "";
+
+interface FlagsDeCanal {
+  showInDelivery?: boolean | null;
+  showInDineIn?: boolean | null;
+  category?: { showInDelivery?: boolean | null; showInDineIn?: boolean | null } | null;
+}
+
+/**
+ * As colunas são NOT NULL com default `true` no schema — `undefined` só acontece
+ * quando a linha veio de uma fixture que não as declarou. Tratar ausência como
+ * `true` aqui é ler o default da coluna, não inferir do silêncio do cadastro.
+ */
+function canalDoItem(i: FlagsDeCanal): Canal {
+  const entrega = (i.showInDelivery ?? true) && (i.category?.showInDelivery ?? true);
+  const salao   = (i.showInDineIn   ?? true) && (i.category?.showInDineIn   ?? true);
+  return `${entrega ? "E" : ""}${salao ? "S" : ""}` as Canal;
+}
+
+interface ItemDeFicha {
+  nome: string;
+  categoria: string;
+  canais: Canal;
+  preco?: number;
+  precoDelivery?: number;
+  precoSalao?: number;
+  indisponivel?: true;
+}
+
+/**
+ * Escolhe QUAIS itens cabem na ficha quando o cardápio é maior que o teto.
+ *
+ * Duas regras, e a primeira NÃO depende de haver pergunta:
+ *
+ *  1. **Todo item só-salão entra** (até `MAX_DINE_IN_ONLY`). Esta lista é curta,
+ *     é a que o recorte de canal apagava, e ela sumia por um motivo bobo: itens
+ *     de salão costumam ficar no fim do `sortOrder`, e o teto cortava pelo fim.
+ *     Num cardápio de 180 itens, o RODIZIO PRESENCIAL era o 175º — nunca
+ *     entrava. Amarrar a garantia ao `queryHint` deixaria de fora justamente as
+ *     chamadas que não passam pergunta (portão de promoção, Oficina).
+ *
+ *  2. O resto entra **por relevância à pergunta real** quando há `queryHint`, e
+ *     pela ordem do cardápio quando não há. Empate desfeito pela ordem — a
+ *     mesma pergunta produz sempre a mesma ficha.
+ *
+ * O teto NÃO muda com a pergunta, de propósito: `queryHint` pode trocar QUAIS
+ * itens aparecem, nunca reduzir quantos. Encolher a ficha porque houve pergunta
+ * faria um cardápio hoje inteiro na ficha passar a chegar cortado — economia de
+ * token comprada com verdade, que é o negócio errado.
+ */
+function selectRelevantMenu(items: ItemDeFicha[], queryHint?: string): ItemDeFicha[] {
+  if (items.length <= MAX_MENU_ITEMS) return items;
+
+  const garantidos = new Set<ItemDeFicha>();
+  const demais: ItemDeFicha[] = [];
+  for (const item of items) {
+    if (item.canais === "S" && garantidos.size < MAX_DINE_IN_ONLY) garantidos.add(item);
+    else demais.push(item);
+  }
+
+  const restantes = MAX_MENU_ITEMS - garantidos.size;
+  if (restantes <= 0) return items.filter((i) => garantidos.has(i)).slice(0, MAX_MENU_ITEMS);
+
+  const query = queryHint ? tokensOf(queryHint) : null;
+  const escolhidos = new Set(garantidos);
+
+  if (query?.size) {
+    const scored = demais.map((item, order) => {
+      const haystack = tokensOf(`${item.nome} ${item.categoria}`);
+      let score = 0;
+      for (const t of query) if (haystack.has(t)) score += 1;
+      return { item, order, score };
+    });
+    scored.sort((a, b) => b.score - a.score || a.order - b.order);
+    for (const s of scored.slice(0, restantes)) escolhidos.add(s.item);
+  } else {
+    for (const item of demais.slice(0, restantes)) escolhidos.add(item);
+  }
+
+  // A ordem final volta a ser a do cardápio: a ficha é lida, não é ranking.
+  return items.filter((i) => escolhidos.has(i));
+}
+
 export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
   businessType: "RESTAURANT",
 
@@ -106,6 +237,11 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
             select: {
               name: true,
               address: true,
+              // Estado da loja — a mesma verdade que a tarja amarela mostra.
+              timezone: true,
+              isOrderingPaused: true,
+              orderingPausedUntil: true,
+              orderingPausedReason: true,
               paymentSettings: { select: { acceptPix: true, acceptCash: true, acceptCard: true, acceptLink: true } },
               deliveryConfig: {
                 select: {
@@ -139,10 +275,13 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
               priceDelivery: true,
               priceDineIn: true,
               isAvailable: true,
-              category: { select: { name: true } },
+              // O canal é do item E da categoria — as duas flags, sempre as duas.
+              showInDelivery: true,
+              showInDineIn: true,
+              category: { select: { name: true, showInDelivery: true, showInDineIn: true } },
             },
             orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
-            take: MAX_MENU_ITEMS,
+            take: MENU_FETCH_POOL,
           })
           .catch(() => [] as Array<{
             name: string;
@@ -150,7 +289,9 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
             priceDelivery: unknown;
             priceDineIn: unknown;
             isAvailable: boolean;
-            category: { name: string } | null;
+            showInDelivery?: boolean | null;
+            showInDineIn?: boolean | null;
+            category: { name: string; showInDelivery?: boolean | null; showInDineIn?: boolean | null } | null;
           }>),
         prisma.businessHours
           .findMany({
@@ -211,20 +352,52 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
     const hasPaymentKnowledge = knowledgeItems.some((k) => k.category === "PAYMENT_INFO");
     if (!hasPaymentKnowledge) missingContext.push("benefício refeição (Alelo/VR/Sodexo) — não cadastrado");
 
-    // ── Products: real names + prices (channel prices when set) ────────────────
-    const items = menuItems.map((i) => ({
+    // ── Products: real names + prices + O CANAL de cada um ─────────────────────
+    // O canal é o que separa "pode ir ao carrinho" de "pode ser contado". Sem ele
+    // a ficha erra dos dois lados: nega o rodízio que existe, ou promete entregar
+    // o que só se serve no salão.
+    const todosOsItens: ItemDeFicha[] = menuItems.map((i) => ({
       nome: i.name,
       categoria: i.category?.name ?? "",
+      canais: canalDoItem(i),
       preco: money(i.price),
       ...(i.priceDelivery != null ? { precoDelivery: money(i.priceDelivery) } : {}),
       ...(i.priceDineIn != null ? { precoSalao: money(i.priceDineIn) } : {}),
-      ...(i.isAvailable ? {} : { indisponivel: true }),
+      ...(i.isAvailable ? {} : { indisponivel: true as const }),
     }));
-    const products: unknown[] = [{ totalItens: menuItemCount, listados: items.length }, ...items];
+
+    // Item ativo escondido dos DOIS canais: o lojista o tirou do ar. Ele não é
+    // vendível nem contável — fica fora da ficha, mas o número entra em
+    // missingContext, porque "não carreguei" e "não existe" são coisas
+    // diferentes e a ficha nunca pode confundir as duas.
+    const semCanal = todosOsItens.filter((i) => i.canais === "").length;
+    const publicados = todosOsItens.filter((i) => i.canais !== "");
+
+    const items = selectRelevantMenu(publicados, opts?.queryHint);
+    const soSalao = items.filter((i) => i.canais === "S").length;
+    const products: unknown[] = [
+      {
+        totalItens: menuItemCount,
+        listados: items.length,
+        legendaCanais: "canais: E=entrega (vai ao carrinho) · S=salão (presencial) · ES=os dois",
+        regraDeCanal:
+          "Item marcado só com S EXISTE e pode ser contado com preço, mas NUNCA entra em pedido de entrega.",
+      },
+      ...items,
+    ];
     if (menuItemCount > items.length) {
       missingContext.push(`cardápio parcial no contexto (${items.length} de ${menuItemCount} itens) — confirmar antes de negar um item`);
     }
+    if (semCanal > 0) {
+      missingContext.push(`${semCanal} item(ns) ativo(s) fora dos dois canais — não carregados; não afirmar que não existem`);
+    }
     if (items.length === 0) missingContext.push("cardápio");
+    if (soSalao === 0 && publicados.length > 0) {
+      // Não é falta de dado: é o fato de que esta casa não tem nada só-salão.
+      // Registrado aqui para que a ausência da etiqueta "S" na ficha seja lida
+      // como cadastro, e não como recorte de canal que comeu a lista de novo.
+      safetyNotes.push("Nenhum item marcado como exclusivo de salão neste cadastro.");
+    }
 
     // ── Hours: real weekly schedule + delivery/pickup flags ────────────────────
     const funcionamento: Record<string, string> = {};
@@ -247,6 +420,32 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
     };
     if (!restaurant.deliveryConfig) missingContext.push("delivery/retirada");
     if (!businessHours.length) missingContext.push("horários de funcionamento detalhados");
+
+    // ── Estado da loja AGORA: aberta? aceita pedido? quando reabre? ────────────
+    // O horário semanal acima diz o que está cadastrado; isto diz o que vale
+    // NESTE minuto. Sem ele, a ficha respondia "funcionamos das 06 às 20" às
+    // 23:49 e o agente seguia pedindo o WhatsApp para fechar pedido.
+    //
+    // A conta NÃO é feita aqui: `EstadoDaLoja` chama a mesma `business-hours`
+    // que a tarja amarela da loja usa. Uma verdade, dois leitores.
+    const loja = calcularEstadoDaLoja({
+      horarios: businessHours,
+      pausa: {
+        isOrderingPaused:     restaurant.isOrderingPaused ?? false,
+        orderingPausedUntil:  restaurant.orderingPausedUntil ?? null,
+        orderingPausedReason: restaurant.orderingPausedReason ?? null,
+      },
+      timezone: restaurant.timezone ?? "America/Sao_Paulo",
+      agora:    new Date(),
+    });
+    // O aviso só existe quando a loja NÃO aceita pedido. Nota de segurança que
+    // aparece em toda conversa é ruído, e ruído treina o agente a ignorar.
+    safetyNotes.push(...avisosDoEstadoDaLoja(loja));
+    if (!loja.horarioCadastrado) {
+      missingContext.push(
+        "horário de hoje não cadastrado — o sistema trata a loja como aberta, mas isso não é fato do restaurante",
+      );
+    }
 
     // ── Entrega: taxa, área/raio de cobertura e pedido mínimo, nos TRÊS modos
     // (simple/distance/advanced-por-zonas). O lojista pode ter cadastrado em
@@ -347,6 +546,7 @@ export const restaurantKnowledgeAdapter: BusinessKnowledgeAdapter = {
         ...(prices ? { prices } : {}),
         payments,
         hours,
+        loja,
         ...(entrega ? { entrega } : {}),
         ...(local ? { local } : {}),
         policies,
