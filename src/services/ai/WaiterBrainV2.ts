@@ -24,6 +24,7 @@ import {
   sanitizeUnprovenDenial,
   type DineInOnlyItem,
 } from "./waiter/offeringClaims";
+import { ehRecusaGenerica, recusaDeComplementoPosposta } from "./waiter/recusaDoCliente";
 import {
   isDrinkCategory,
   resolveUpsellSequence,
@@ -2852,8 +2853,13 @@ const REFUSAL_DESSERT_RE =
   /\b(n[ãa]o\s+quero|n[ãa]o\s+vou\s+querer|sem|nada\s+de|dispenso|n[ãa]o\s+precisa\s+(de|d[ao]))\s+(uma\s+|a\s+)?(sobremesa|doce)\b/i;
 
 // Generic "I'm done / no more" closing signal.
-const REFUSAL_GENERIC_RE =
-  /^(n[ãa]o\s*,?\s*(obrigad[oa])?\.?|n[ãa]o\s+quero\s+(mais\s+)?nada|s[óo]\s+isso|s[óo]\s+isso\s+mesmo|t[áa]\s+(bom|certo|[óo]timo)\s+assim|pode\s+fechar|chega|j[áa]\s+chega|nada\s+mais|tudo\s+certo)\b/i;
+//
+// Mora em `waiter/recusaDoCliente.ts` desde 06/08/2026. A regex que vivia aqui
+// tinha como primeiro ramo `^(n[ãa]o\s*,?\s*(obrigad[oa])?\.?)` — com os dois
+// grupos opcionais, sobrava `^não\s`, e TODA mensagem começada em "não" era
+// lida como "o cliente terminou". "nao consigo achar o rodizio" recebia
+// "Perfeito 😊 Fico por aqui se precisar de uma sugestão." e nunca chegava ao
+// handler de item de salão, que mora adiante neste mesmo arquivo.
 
 // Acceptance without a specific product reference ("gostei, pode colocar").
 const ACCEPTANCE_RE =
@@ -3094,8 +3100,12 @@ function handleUserMessage(input: V2Input): V2Output {
   // as a category request (which would re-suggest the very thing just declined).
   {
     const declined       = input.memory?.declinedSuggestionTypes ?? [];
-    const drinkRefused   = REFUSAL_DRINK_RE.test(msgLow);
-    const dessertRefused = REFUSAL_DESSERT_RE.test(msgLow);
+    // A forma posposta ("não, bebida não") era reconhecida só por acidente, pelo
+    // mesmo ramo frouxo que este bloco acabou de perder. Sem ela, apertar o
+    // genérico faria o Garçom voltar a oferecer bebida a quem acabou de recusar.
+    const posposta       = recusaDeComplementoPosposta(msgRaw);
+    const drinkRefused   = REFUSAL_DRINK_RE.test(msgLow)   || posposta === "BEBIDA";
+    const dessertRefused = REFUSAL_DESSERT_RE.test(msgLow) || posposta === "SOBREMESA";
     if (drinkRefused || dessertRefused) {
       const type = drinkRefused ? "drink_upsell" : "dessert_upsell";
       return {
@@ -3109,7 +3119,8 @@ function handleUserMessage(input: V2Input): V2Output {
       };
     }
     // Generic "no more / I'm done" — guide to checkout without pushing anything.
-    if (REFUSAL_GENERIC_RE.test(msgLow)) {
+    // A mensagem tem que SER uma recusa, não começar parecida com uma.
+    if (ehRecusaGenerica(msgRaw)) {
       return cartItemIds.length > 0
         ? {
             message:     "Perfeito 😊 Quando quiser, é só tocar em Finalizar Pedido.",
