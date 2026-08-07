@@ -26,6 +26,7 @@
  *    confirmação explícita.
  */
 
+import { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { hash } from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -362,11 +363,24 @@ async function configureStore(restaurantId: string, dryRun: boolean): Promise<vo
   // automações). É idempotente por construção e nunca sobrescreve o que existe.
   await RestaurantDefaultsService.createRestaurantDefaults(restaurantId);
 
-  // ── Horário de padaria (abre cedo, domingo meio período) ──
+  /*
+    ── Horário da vitrine: 24 horas, sete dias (ver BAKERY_HOURS) ──
+
+    O `periodsJson: null` NÃO é detalhe de estilo, e trocá-lo por `undefined`
+    reintroduz um defeito mudo. No Prisma, `undefined` num `update` significa
+    "não mexa neste campo" — e `getPeriodsForRow` (lib/business-hours.ts:44) dá
+    PRECEDÊNCIA ao `periodsJson` sobre `openTime`/`closeTime`.
+
+    Ou seja: se alguém já tiver salvo períodos partidos pelo painel (manhã +
+    tarde, que é o normal numa padaria), eles continuariam mandando, o 24h aqui
+    não pegaria, e a tarja de fechada voltaria — sem erro nenhum, e sem que este
+    arquivo parecesse errado. `null` apaga o campo e devolve o comando às duas
+    pontas de horário.
+  */
   for (const h of BAKERY_HOURS) {
     await prisma.businessHours.upsert({
       where: { restaurantId_dayOfWeek: { restaurantId, dayOfWeek: h.dayOfWeek } },
-      update: { isOpen: h.isOpen, openTime: h.openTime, closeTime: h.closeTime, periodsJson: undefined },
+      update: { isOpen: h.isOpen, openTime: h.openTime, closeTime: h.closeTime, periodsJson: Prisma.DbNull },
       create: {
         restaurantId,
         dayOfWeek: h.dayOfWeek,
