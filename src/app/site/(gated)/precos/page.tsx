@@ -63,7 +63,7 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
-import { SinaisDeVenda } from "@/components/marketing/SinaisDeVenda";
+import { SinaisDeVenda, firstMonthDiscountPercent } from "@/components/marketing/SinaisDeVenda";
 import { heroShot } from "@/components/marketing/HeroShot";
 import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { DemoForm } from "@/components/marketing/DemoForm";
@@ -570,9 +570,29 @@ function PlanCard({ plan }: { plan: Plan }) {
   const code = SITE_PLAN_TO_CODE[plan.id];
   // Todo número abaixo sai da fonte única — a mesma que o checkout cobra.
   const monthly = PLAN_CYCLE_CENTS[code].MENSAL;
+  /*
+    TRÊS APARIÇÕES DA MESMA OFERTA VIRARAM DUAS (07/08). O CEO perguntou se o
+    desconto aparecendo no anúncio, no quadrinho "1º mês" e na linha embaixo do
+    botão reforça ou dilui. Dilui: o quadrinho e a linha diziam o MESMO número a
+    três centímetros de distância, e nenhum dos dois dizia nada que o outro já não
+    dissesse.
+
+    O que ficou, e por que cada um tem trabalho diferente:
+      · o anúncio no topo da seção  → cria o desejo, em porcentagem;
+      · este quadrinho              → traduz a porcentagem no VALOR DESTE plano;
+      · a linha embaixo do botão    → deixou de repetir o valor e passou a
+        responder a pergunta que trava o dedo no botão ("e se eu quiser sair?").
+  */
   const highlights = [
-    { label: "Anual", value: `${formatBRL(monthlyEquivalentCents(code, "ANUAL"))}/mês` },
-    { label: "1º mês", value: formatBRL(firstChargeCents(code, "MENSAL")) },
+    { label: "Anual", value: `${formatBRL(monthlyEquivalentCents(code, "ANUAL"))}/mês`, oferta: false },
+    {
+      /* O `−50%` sai da mesma função que cobra o cartão — nunca digitado. É ele que
+         amarra este quadrinho ao anúncio lá em cima: sem a porcentagem, "R$ 89,50"
+         é só mais um número entre os quatro do cartão. */
+      label: `1º mês −${firstMonthDiscountPercent()}%`,
+      value: formatBRL(firstChargeCents(code, "MENSAL")),
+      oferta: true,
+    },
   ];
   return (
     <div
@@ -608,9 +628,26 @@ function PlanCard({ plan }: { plan: Plan }) {
       {/* Os dois preços que mudam: ciclo anual e primeiro mês */}
       <div className="mt-4 grid grid-cols-2 gap-2">
         {highlights.map((d) => (
-          <div key={d.label} className="rounded-xl border border-line bg-canvas px-2 py-2 text-center">
-            <p className="text-[10.5px] uppercase tracking-wide text-muted">{d.label}</p>
-            <p className="mt-0.5 text-[12.5px] font-semibold tabular-nums text-ink">{d.value}</p>
+          <div
+            key={d.label}
+            className={`rounded-xl border px-2 py-2 text-center ${
+              d.oferta ? "border-brand-200 bg-brand-50" : "border-line bg-canvas"
+            }`}
+          >
+            <p
+              className={`text-[10.5px] uppercase tracking-wide ${
+                d.oferta ? "font-semibold text-brand-600" : "text-muted"
+              }`}
+            >
+              {d.label}
+            </p>
+            <p
+              className={`mt-0.5 text-[12.5px] font-semibold tabular-nums ${
+                d.oferta ? "text-brand-700" : "text-ink"
+              }`}
+            >
+              {d.value}
+            </p>
           </div>
         ))}
       </div>
@@ -636,8 +673,10 @@ function PlanCard({ plan }: { plan: Plan }) {
           withArrow={false}
           className="!py-3 !text-[15px]"
         />
+        {/* Lida de `CYCLE_COPY` — a mesma fonte que a tabela de ciclos usa, para a
+            página não prometer 30 dias aqui e outra coisa lá embaixo. */}
         <p className="text-center text-[11.5px] text-muted">
-          Primeiro mês por {formatBRL(firstChargeCents(code, "MENSAL"))}. Sem fidelidade.
+          {CYCLE_COPY.MENSAL.badge}. {CYCLE_COPY.MENSAL.gain}
         </p>
       </div>
 

@@ -33,6 +33,29 @@
  * A frase abaixo diz o que é verdade em 100% dos casos — nada na loja de aplicativos,
  * nem para o lojista nem para o cliente dele — sem negar a ponte da impressora.
  * Guardrail 7 aplicado à vírgula: a promessa é grande o bastante sem precisar mentir.
+ *
+ * ── 07/08/2026 — OS DOIS FATOS DEIXARAM DE DIVIDIR A MESMA MOLDURA ──
+ *
+ * O CEO leu a faixa no celular: *"esse aviso de cinquenta por cento no primeiro mês
+ * está muito tímido. Isso é uma coisa incrível, tem que ser super destacada."*
+ *
+ * O defeito não era a cor da caixa. Era **empate de hierarquia**: os dois fatos
+ * entravam como dois marcadores da mesma lista, mesmo tamanho, mesma moldura — e o
+ * menor ganhava por VOLUME DE TEXTO. Medido no celular: a oferta ocupava 2 linhas,
+ * o "sem aplicativo" ocupava 4. A maior alavanca comercial da casa lia como nota de
+ * rodapé ao lado de um fato técnico.
+ *
+ * A correção é estrutural, não de pintura: a oferta virou **anúncio** (`OfertaPrimeiroMes`)
+ * — superfície escura, o número em escala de manchete, moldura própria — e o fato do
+ * navegador virou **linha de rodapé** (`SemAplicativo`), fora da moldura, em `muted`.
+ * Um é oferta; o outro é resposta a objeção. Nunca mais no mesmo nível.
+ *
+ * Por que fundo `ink` e não laranja cheio: (a) a página já tem três botões
+ * `brand-500` e o selo "Mais vendido" — um quarto bloco laranja vira ruído, não
+ * destaque, e contraria o "90% neutro + 10% laranja"; (b) branco sobre `brand-500`
+ * dá ~2,9:1 de contraste, o que reprova em texto pequeno. Sobre `ink`, o laranja é
+ * o acento e o contraste é folgado. É o bloco mais escuro da página inteira: o olho
+ * cai nele antes de qualquer cartão.
  */
 
 import { CycleCode, PlanCode, PLAN_CYCLE_CENTS, firstMonthDiscountCents } from "@/lib/billing/pricing";
@@ -59,56 +82,120 @@ export function ofertaPrimeiroMes(): string {
   return `${firstMonthDiscountPercent()}% de desconto no primeiro mês, em qualquer plano`;
 }
 
+/**
+ * A oferta em PEDAÇOS, para quem precisa dela em escala tipográfica diferente do
+ * resto da frase (o anúncio abaixo põe o número em 76px e o resto em 26px).
+ *
+ * Existe para que o percentual continue saindo de `firstMonthDiscountPercent()` até
+ * quando a frase é quebrada visualmente — a alternativa seria digitar "50" no JSX,
+ * que é exatamente o que este arquivo inteiro foi criado para impedir.
+ */
+export const OFERTA = {
+  get numero(): string {
+    return String(firstMonthDiscountPercent());
+  },
+  chamada: "de desconto no primeiro mês",
+  /* Uma palavra. Selo de duas linhas rouba a escala do número, que é o que
+     precisa ser lido primeiro. Quem é o público e qual a condição vem na linha
+     de baixo, onde cabe sem competir. */
+  eyebrow: "Oferta",
+  qualquerPlano: "em qualquer um dos três planos",
+} as const;
+
 /** O fato do navegador, escrito uma vez. */
 export const SEM_APLICATIVO =
   "Funciona no navegador, no celular e no computador — nada para baixar na loja de aplicativos, nem para você nem para o seu cliente";
 
+/**
+ * O ANÚNCIO DA OFERTA. Uma peça só, com uma coisa só para dizer.
+ *
+ * A ordem de leitura do DOM é a ordem da frase — eyebrow, "50%", "de desconto no
+ * primeiro mês", condição. Quem ouve a página com leitor de tela recebe a mesma
+ * sentença que quem a vê; foi por isso que o número não ficou numa coluna à parte
+ * do texto no HTML, só no CSS.
+ */
+export function OfertaPrimeiroMes({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl bg-ink px-6 py-7 sm:px-9 sm:py-8 ${className}`}
+    >
+      {/* Brilho de marca. Decoração pura: `aria-hidden`, sem eventos, e maior que a
+          caixa de propósito — quem corta é o `overflow-hidden` do pai. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-28 -top-52 h-[28rem] w-[38rem] rounded-full"
+        style={{ background: "radial-gradient(closest-side, rgba(249,115,22,0.30), transparent)" }}
+      />
+
+      {/* Duas colunas a partir de `lg` — não por gosto: no monitor a coluna única
+          deixava metade da faixa vazia à direita, e o vazio ao lado de um número de
+          84px lê como erro de montagem, não como respiro. */}
+      <div className="relative lg:flex lg:items-center lg:gap-10">
+        <div className="lg:shrink-0">
+          <span className="inline-flex items-center rounded-full bg-brand-500 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white">
+            {OFERTA.eyebrow}
+          </span>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 sm:gap-x-6">
+            <p className="flex items-start leading-[0.8]">
+              <span className="text-[68px] font-semibold tabular-nums tracking-tight text-brand-400 sm:text-[84px]">
+                {OFERTA.numero}
+              </span>
+              <span className="mt-1 text-[30px] font-semibold text-brand-400 sm:text-[38px]">%</span>
+            </p>
+            <p className="max-w-[15ch] text-[23px] font-semibold leading-[1.15] tracking-tight text-white sm:max-w-none sm:text-[30px]">
+              {OFERTA.chamada}
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-white/70 sm:text-[15px] lg:mt-0 lg:max-w-sm lg:border-l lg:border-white/15 lg:pl-10">
+          Vale <span className="font-semibold text-white">{OFERTA.qualquerPlano}</span>, para todo
+          cliente novo — com o produto inteiro, sem recorte.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * O FATO DO NAVEGADOR, em voz baixa. Continua antes dos preços porque é objeção
+ * ("vou ter que instalar alguma coisa?") e objeção respondida tarde já virou saída —
+ * mas fora da moldura da oferta, em `muted`, sem marcador. É rodapé de bloco, não
+ * manchete.
+ */
+export function SemAplicativo({ className = "" }: { className?: string }) {
+  return (
+    <p className={`text-[12.5px] leading-relaxed text-muted ${className}`}>{SEM_APLICATIVO}.</p>
+  );
+}
+
 type Props = {
   className?: string;
-  /** `compacto` para uma linha discreta; `faixa` para o bloco com moldura. */
+  /** `compacto` para uma linha discreta; `faixa` para o anúncio + a linha do navegador. */
   variante?: "faixa" | "compacto";
 };
 
 /**
- * A faixa dos dois fatos. Fica logo abaixo do primeiro argumento da página — não no
- * rodapé: informação que remove objeção só vale antes de a objeção virar saída.
+ * Os dois fatos, agora em DOIS pesos. Fica logo abaixo do primeiro argumento da
+ * página — não no rodapé: informação que remove objeção só vale antes de a objeção
+ * virar saída.
  */
 export function SinaisDeVenda({ className = "", variante = "faixa" }: Props) {
-  const itens = [ofertaPrimeiroMes(), SEM_APLICATIVO];
-
   if (variante === "compacto") {
     return (
       <p className={`text-sm leading-relaxed text-muted ${className}`}>
-        <strong className="font-semibold text-brand-600">{itens[0]}</strong>
+        <strong className="font-semibold text-brand-600">{ofertaPrimeiroMes()}</strong>
         {" · "}
-        {itens[1]}.
+        {SEM_APLICATIVO}.
       </p>
     );
   }
 
   return (
-    <div className={`rounded-2xl border border-brand-200 bg-brand-50/60 px-5 py-4 sm:px-6 ${className}`}>
-      <ul className="mx-auto flex max-w-3xl flex-col gap-2.5 sm:flex-row sm:items-start sm:gap-6">
-        {itens.map((texto, i) => (
-          <li key={texto} className="flex items-start gap-2.5 text-left sm:flex-1">
-            {/* Marca de item própria: `list-disc` não permite cor nem alinhamento
-                com a primeira linha do texto quando ele quebra em duas. */}
-            <span
-              aria-hidden
-              className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500"
-            />
-            <span
-              className={
-                i === 0
-                  ? "text-[14.5px] font-semibold leading-relaxed text-ink"
-                  : "text-[14.5px] leading-relaxed text-ink2"
-              }
-            >
-              {texto}.
-            </span>
-          </li>
-        ))}
-      </ul>
+    <div className={className}>
+      <OfertaPrimeiroMes />
+      <SemAplicativo className="mt-3 px-1 text-center" />
     </div>
   );
 }
