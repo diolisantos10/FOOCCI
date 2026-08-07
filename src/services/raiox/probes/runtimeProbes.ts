@@ -29,28 +29,46 @@ export const iaCustoProbe: RaioXProbe = {
     const metrics = {
       chamadas: s.totalCalls,
       falhas: s.totalFailures,
-      custoMicroUsd: s.totalCostMicroUsd,
+      custoConhecidoMicroUsd: s.knownCostMicroUsd,
+      chamadasSemPreco: s.unpricedCalls,
       motores: s.byModel.length,
     };
-    const top = [...s.byModel].sort((a, b) => b.costMicroUsd - a.costMicroUsd).slice(0, 5);
-    const linhaMotores = top.map(
-      (m) => `${m.model}: ${N(m.calls)} chamadas · ${USD(m.costMicroUsd)} · ${N(m.failures)} falhas`,
-    );
+    const top = [...s.byModel].sort((a, b) => b.knownCostMicroUsd - a.knownCostMicroUsd).slice(0, 5);
+    const linhaMotores = top.map((m) => {
+      const lacuna = m.unpricedCalls > 0 ? ` · ${N(m.unpricedCalls)} sem preço conhecido` : "";
+      return `${m.model}: ${N(m.calls)} chamadas · ${USD(m.knownCostMicroUsd)} · ${N(m.failures)} falhas${lacuna}`;
+    });
 
     const out: RaioXFinding[] = [];
+
+    // O total declara a PRÓPRIA lacuna. Um número de dinheiro que esconde quantas
+    // linhas ficaram de fora é da mesma família do "Total hoje" que mentia:
+    // quem lê não tem como saber que está vendo só uma parte. Guardrail 6.
+    const temLacuna = s.unpricedCalls > 0;
+    const ressalva = temLacuna
+      ? ` NÃO inclui ${N(s.unpricedCalls)} chamada(s) de custo indeterminado (${s.unpricedModels.join(", ")}) — o gasto real é MAIOR que este número.`
+      : "";
 
     // O número do dia sempre sobe, mesmo quando está tudo bem: é ele que dá
     // sentido ao "contra ontem" da próxima madrugada.
     out.push({
       probeId: "ia-custo",
       area: "IA",
-      status: "PASS",
-      severity: "INFO",
-      title: "Consumo de IA nas últimas 24h",
-      summary: `${N(s.totalCalls)} chamadas, ${USD(s.totalCostMicroUsd)} estimados, em ${N(s.byModel.length)} motor(es).`,
+      // Lacuna de preço não é PASS: o relatório não consegue responder a pergunta
+      // que a sonda faz ("quanto a IA consumiu") enquanto houver chamada sem preço.
+      status: temLacuna ? "WARNING" : "PASS",
+      severity: temLacuna ? "P2" : "INFO",
+      title: temLacuna
+        ? "Consumo de IA nas últimas 24h (parcial — há modelo sem preço)"
+        : "Consumo de IA nas últimas 24h",
+      summary:
+        `${N(s.totalCalls)} chamadas, ${USD(s.knownCostMicroUsd)} de custo conhecido, ` +
+        `em ${N(s.byModel.length)} motor(es).${ressalva}`,
       evidence: linhaMotores.length > 0 ? linhaMotores : ["nenhuma chamada registrada na janela"],
       metrics,
-      recommendation: "Número de acompanhamento. A leitura importante é a variação contra ontem.",
+      recommendation: temLacuna
+        ? `Somar preço de ${s.unpricedModels.join(", ")} em src/services/ai/pricing/modelPricing.ts. Até lá o custo relatado é piso, não total.`
+        : "Número de acompanhamento. A leitura importante é a variação contra ontem.",
     });
 
     // Falha é dinheiro gasto sem resposta ao cliente. 10% com volume mínimo é o
@@ -89,12 +107,19 @@ export const iaRetrabalhoProbe: RaioXProbe = {
     // no fim, é retrabalho puro — a mesma pergunta processada de novo.
     const LIMITE = 15;
     const pesadas = s.heaviestConversations.filter((c) => c.calls >= LIMITE && c.producedOrder === false);
-    const custo = pesadas.reduce((a, c) => a + c.costMicroUsd, 0);
+    const custo = pesadas.reduce((a, c) => a + c.knownCostMicroUsd, 0);
+    const semPreco = pesadas.reduce((a, c) => a + c.unpricedCalls, 0);
     const metrics = {
       conversasCaras: pesadas.length,
-      custoDesperdicadoMicroUsd: custo,
+      custoDesperdicadoConhecidoMicroUsd: custo,
+      chamadasSemPreco: semPreco,
       limiteChamadas: LIMITE,
     };
+    // Mesma regra do total: se alguma chamada dessas conversas não tem preço, o
+    // desperdício informado é piso, e o relatório diz isso.
+    const ressalva = semPreco > 0
+      ? ` (sem contar ${N(semPreco)} chamada(s) de custo indeterminado — o desperdício real é maior)`
+      : "";
 
     if (pesadas.length === 0) {
       return [
@@ -121,10 +146,13 @@ export const iaRetrabalhoProbe: RaioXProbe = {
         title: "Conversas que consomem IA e não viram pedido",
         summary:
           `${N(pesadas.length)} conversa(s) passaram de ${LIMITE} chamadas sem gerar pedido, ` +
-          `somando ${USD(custo)}. Ou o cliente não está sendo entendido, ou o agente está repetindo a si mesmo.`,
+          `somando ${USD(custo)}${ressalva}. Ou o cliente não está sendo entendido, ou o agente está repetindo a si mesmo.`,
         evidence: pesadas
           .slice(0, 8)
-          .map((c) => `conversa ${c.conversationId} · ${N(c.calls)} chamadas · ${USD(c.costMicroUsd)} · restaurante ${c.restaurantId}`),
+          .map((c) => {
+            const lacuna = c.unpricedCalls > 0 ? ` · ${N(c.unpricedCalls)} sem preço` : "";
+            return `conversa ${c.conversationId} · ${N(c.calls)} chamadas · ${USD(c.knownCostMicroUsd)}${lacuna} · restaurante ${c.restaurantId}`;
+          }),
         metrics,
         recommendation:
           "Abrir uma dessas conversas na Central e ver onde ela trava. Retrabalho de IA é a fatura pagando o mesmo trabalho duas vezes.",

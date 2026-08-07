@@ -123,21 +123,35 @@ async function collectAi(now: Date): Promise<AiSample> {
     },
   });
 
-  const micro = (v: unknown) => (v === null || v === undefined ? 0 : Math.round(Number(v) * 1_000_000));
+  // `estimatedCostUsd` null significa CUSTO INDETERMINADO (modelo fora da tabela
+  // de preços), não custo zero. Converter null em 0 aqui reintroduziria, um andar
+  // acima, o mesmo defeito que o logger acabou de matar: o total ficaria menor
+  // que a realidade sem nada no relatório indicando a lacuna. Guardrail 1.
+  const micro = (v: unknown): number | null =>
+    v === null || v === undefined ? null : Math.round(Number(v) * 1_000_000);
 
-  const byModelMap = new Map<string, { calls: number; failures: number; totalTokens: number; costMicroUsd: number }>();
-  const byConv = new Map<string, { calls: number; costMicroUsd: number; restaurantId: string }>();
-  let totalCostMicroUsd = 0;
+  const byModelMap = new Map<string, { calls: number; failures: number; totalTokens: number; knownCostMicroUsd: number; unpricedCalls: number }>();
+  const byConv = new Map<string, { calls: number; knownCostMicroUsd: number; unpricedCalls: number; restaurantId: string }>();
+  let knownCostMicroUsd = 0;
+  let unpricedCalls = 0;
+  const unpricedModels = new Set<string>();
   let totalFailures = 0;
   const failureSamples: AiSample["failureSamples"] = [];
 
   for (const l of logs) {
     const cost = micro(l.estimatedCostUsd);
-    totalCostMicroUsd += cost;
-    const g = byModelMap.get(l.model) ?? { calls: 0, failures: 0, totalTokens: 0, costMicroUsd: 0 };
+    const unpriced = cost === null;
+    if (unpriced) {
+      unpricedCalls++;
+      unpricedModels.add(l.model || "(vazio)");
+    } else {
+      knownCostMicroUsd += cost;
+    }
+    const g = byModelMap.get(l.model) ?? { calls: 0, failures: 0, totalTokens: 0, knownCostMicroUsd: 0, unpricedCalls: 0 };
     g.calls++;
     g.totalTokens += l.totalTokens;
-    g.costMicroUsd += cost;
+    if (unpriced) g.unpricedCalls++;
+    else g.knownCostMicroUsd += cost;
     if (!l.success) {
       g.failures++;
       totalFailures++;
@@ -147,9 +161,10 @@ async function collectAi(now: Date): Promise<AiSample> {
     }
     byModelMap.set(l.model, g);
     if (l.conversationId) {
-      const c = byConv.get(l.conversationId) ?? { calls: 0, costMicroUsd: 0, restaurantId: l.restaurantId };
+      const c = byConv.get(l.conversationId) ?? { calls: 0, knownCostMicroUsd: 0, unpricedCalls: 0, restaurantId: l.restaurantId };
       c.calls++;
-      c.costMicroUsd += cost;
+      if (unpriced) c.unpricedCalls++;
+      else c.knownCostMicroUsd += cost;
       byConv.set(l.conversationId, c);
     }
   }
@@ -167,7 +182,9 @@ async function collectAi(now: Date): Promise<AiSample> {
     windowHours: WINDOW_HOURS,
     totalCalls: logs.length,
     totalFailures,
-    totalCostMicroUsd,
+    knownCostMicroUsd,
+    unpricedCalls,
+    unpricedModels: [...unpricedModels].sort(),
     byModel: [...byModelMap.entries()].map(([model, g]) => ({ model, ...g })),
     failureSamples,
     heaviestConversations: heaviestIds.map(([conversationId, c]) => {
@@ -176,7 +193,8 @@ async function collectAi(now: Date): Promise<AiSample> {
         conversationId,
         restaurantId: c.restaurantId,
         calls: c.calls,
-        costMicroUsd: c.costMicroUsd,
+        knownCostMicroUsd: c.knownCostMicroUsd,
+        unpricedCalls: c.unpricedCalls,
         // Conversa não encontrada → `null`, e a sonda não a conta como
         // desperdício. Não sei ≠ não gerou pedido.
         producedOrder: found ? Boolean(found.orderId ?? found.orderDraftId) : null,

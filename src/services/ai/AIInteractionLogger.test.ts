@@ -86,3 +86,22 @@ describe("falha de log nunca quebra o fluxo do cliente", () => {
     spy.mockRestore();
   });
 });
+
+describe("contagem de tokens incompleta", () => {
+  // METADE 1 — o provedor não devolveu `usage` em alguma iteração: custo do turno
+  // é indeterminado, mesmo com modelo precificado. Piso não vira total.
+  it("tokensUnknown grava estimatedCostUsd = null mesmo em modelo conhecido", async () => {
+    await AIInteractionLogger.log({ ...base, model: "gpt-4o-mini", tokensUnknown: true });
+
+    expect(payload().estimatedCostUsd).toBeNull();
+    // Os tokens contados continuam gravados — eles são o que se sabe.
+    expect(payload().totalTokens).toBe(15_000);
+  });
+
+  // METADE 2 — contagem completa continua produzindo número.
+  it("tokensUnknown false/ausente grava o custo normalmente", async () => {
+    await AIInteractionLogger.log({ ...base, model: "gpt-4o-mini", tokensUnknown: false });
+
+    expect(payload().estimatedCostUsd).toBeGreaterThan(0);
+  });
+});

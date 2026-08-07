@@ -118,15 +118,24 @@ export interface AiCallGroup {
   calls: number;
   failures: number;
   totalTokens: number;
-  /** Custo estimado em micro-dólares (inteiro; evita float em dinheiro). */
-  costMicroUsd: number;
+  /**
+   * Custo em micro-dólares das chamadas que SABEMOS precificar (inteiro; evita
+   * float em dinheiro). Chamadas sem preço conhecido NÃO entram aqui — elas são
+   * contadas em `unpricedCalls`. O nome diz "known" de propósito: um campo
+   * chamado `cost` que na verdade é o custo de um subconjunto mente.
+   */
+  knownCostMicroUsd: number;
+  /** Chamadas cujo custo é INDETERMINADO (modelo não precificado). */
+  unpricedCalls: number;
 }
 
 export interface AiConversationLoad {
   conversationId: string;
   restaurantId: string;
   calls: number;
-  costMicroUsd: number;
+  knownCostMicroUsd: number;
+  /** Chamadas desta conversa sem custo conhecido. */
+  unpricedCalls: number;
   /** A conversa gerou pedido/rascunho? `null` = a conversa não foi encontrada. */
   producedOrder: boolean | null;
 }
@@ -135,7 +144,16 @@ export interface AiSample {
   windowHours: number;
   totalCalls: number;
   totalFailures: number;
-  totalCostMicroUsd: number;
+  /**
+   * Soma do custo CONHECIDO. Não é "o custo total" enquanto
+   * `unpricedCalls > 0` — e é por isso que o relatório precisa declarar a
+   * lacuna junto com o número.
+   */
+  knownCostMicroUsd: number;
+  /** Quantas chamadas da janela ficaram sem custo conhecido. */
+  unpricedCalls: number;
+  /** Quais modelos causaram a lacuna — o alerta carrega a própria evidência. */
+  unpricedModels: string[];
   byModel: AiCallGroup[];
   /** Amostras das falhas, já truncadas (mensagem de erro crua). */
   failureSamples: { model: string; error: string; restaurantId: string }[];

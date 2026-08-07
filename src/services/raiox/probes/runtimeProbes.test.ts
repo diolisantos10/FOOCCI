@@ -24,8 +24,9 @@ import {
 const ctx = { runId: "t", now: new Date("2026-08-05T06:00:00Z") };
 
 const AI_OK: AiSample = {
-  windowHours: 24, totalCalls: 100, totalFailures: 1, totalCostMicroUsd: 250_000,
-  byModel: [{ model: "gpt-4o-mini", calls: 100, failures: 1, totalTokens: 50_000, costMicroUsd: 250_000 }],
+  windowHours: 24, totalCalls: 100, totalFailures: 1, knownCostMicroUsd: 250_000,
+  unpricedCalls: 0, unpricedModels: [],
+  byModel: [{ model: "gpt-4o-mini", calls: 100, failures: 1, totalTokens: 50_000, knownCostMicroUsd: 250_000, unpricedCalls: 0 }],
   failureSamples: [], heaviestConversations: [],
 };
 const MSG_OK: MessagesSample = {
@@ -86,14 +87,14 @@ describe("ia-custo", () => {
     const out = iaCustoProbe.run(sample(), ctx);
     expect(out).toHaveLength(1);
     expect(out[0].status).toBe("PASS");
-    expect(out[0].metrics.custoMicroUsd).toBe(250_000);
+    expect(out[0].metrics.custoConhecidoMicroUsd).toBe(250_000);
   });
 
   it("ACHA: taxa de falha alta com volume vira P1, com o erro na evidência", () => {
     const ai: AiSample = {
       ...AI_OK, totalCalls: 50, totalFailures: 12,
       failureSamples: [{ model: "gpt-4o-mini", error: "429 rate limit", restaurantId: "r1" }],
-      byModel: [{ model: "gpt-4o-mini", calls: 50, failures: 12, totalTokens: 100, costMicroUsd: 10 }],
+      byModel: [{ model: "gpt-4o-mini", calls: 50, failures: 12, totalTokens: 100, knownCostMicroUsd: 10, unpricedCalls: 0 }],
     };
     const out = iaCustoProbe.run(sample({ ai: available(ai) }), ctx);
     const f = worst(out);
@@ -113,7 +114,7 @@ describe("ia-retrabalho", () => {
     const ai: AiSample = {
       ...AI_OK,
       heaviestConversations: [
-        { conversationId: "c1", restaurantId: "r1", calls: 22, costMicroUsd: 800_000, producedOrder: false },
+        { conversationId: "c1", restaurantId: "r1", calls: 22, knownCostMicroUsd: 800_000, unpricedCalls: 0, producedOrder: false },
       ],
     };
     const [f] = iaRetrabalhoProbe.run(sample({ ai: available(ai) }), ctx);
@@ -125,7 +126,7 @@ describe("ia-retrabalho", () => {
     const ai: AiSample = {
       ...AI_OK,
       heaviestConversations: [
-        { conversationId: "c1", restaurantId: "r1", calls: 30, costMicroUsd: 900_000, producedOrder: true },
+        { conversationId: "c1", restaurantId: "r1", calls: 30, knownCostMicroUsd: 900_000, unpricedCalls: 0, producedOrder: true },
       ],
     };
     const [f] = iaRetrabalhoProbe.run(sample({ ai: available(ai) }), ctx);
@@ -136,7 +137,7 @@ describe("ia-retrabalho", () => {
     const ai: AiSample = {
       ...AI_OK,
       heaviestConversations: [
-        { conversationId: "c1", restaurantId: "r1", calls: 30, costMicroUsd: 900_000, producedOrder: null },
+        { conversationId: "c1", restaurantId: "r1", calls: 30, knownCostMicroUsd: 900_000, unpricedCalls: 0, producedOrder: null },
       ],
     };
     const [f] = iaRetrabalhoProbe.run(sample({ ai: available(ai) }), ctx);
@@ -424,5 +425,84 @@ describe("pulso-negocio", () => {
     const out = pulsoNegocioProbe.run(sample({ business: available(b) }), ctx);
     expect(out).toHaveLength(1);
     expect(out[0].severity).toBe("INFO");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Portão: total de dinheiro declara a PRÓPRIA lacuna.
+// "Total hoje" que esconde as linhas que ficaram de fora é a família de defeito
+// que este projeto já pagou uma vez. Guardrail 6.
+
+describe("iaCustoProbe — a soma declara quantas linhas ficaram de fora", () => {
+  const comLacuna: AiSample = {
+    ...AI_OK,
+    totalCalls: 100,
+    knownCostMicroUsd: 250_000,
+    unpricedCalls: 7,
+    unpricedModels: ["modelo-novo"],
+    byModel: [
+      { model: "gpt-4o-mini", calls: 93, failures: 1, totalTokens: 50_000, knownCostMicroUsd: 250_000, unpricedCalls: 0 },
+      { model: "modelo-novo", calls: 7, failures: 0, totalTokens: 3_000, knownCostMicroUsd: 0, unpricedCalls: 7 },
+    ],
+  };
+
+  // METADE 1 — com lacuna, o relatório NÃO pode passar batido.
+  it("declara a quantidade e o modelo, e diz que o gasto real é maior", () => {
+    const [f] = iaCustoProbe.run(sample({ ai: available(comLacuna) }), ctx);
+
+    expect(f.summary).toContain("7");
+    expect(f.summary).toMatch(/indeterminado/i);
+    expect(f.summary).toMatch(/MAIOR/);
+    expect(f.summary).toContain("modelo-novo");
+    expect(f.metrics.chamadasSemPreco).toBe(7);
+  });
+
+  it("lacuna de preço não é PASS — a pergunta da sonda não foi respondida", () => {
+    const [f] = iaCustoProbe.run(sample({ ai: available(comLacuna) }), ctx);
+
+    expect(f.status).toBe("WARNING");
+    expect(f.status).not.toBe("PASS");
+    // A recomendação carrega o caminho do conserto, não só o diagnóstico.
+    expect(f.recommendation).toContain("modelPricing");
+  });
+
+  // METADE 2 — sem lacuna, nada de alarme: o relatório do dia normal continua PASS
+  // e limpo. Sem esta metade o detector viraria carimbo de WARNING toda noite.
+  it("sem lacuna, segue PASS e sem ressalva", () => {
+    const [f] = iaCustoProbe.run(sample({ ai: available(AI_OK) }), ctx);
+
+    expect(f.status).toBe("PASS");
+    expect(f.summary).not.toMatch(/indeterminado/i);
+    expect(f.metrics.chamadasSemPreco).toBe(0);
+  });
+});
+
+describe("iaRetrabalhoProbe — desperdício declara a lacuna", () => {
+  const conv = (over: Record<string, unknown> = {}) => ({
+    conversationId: "c1", restaurantId: "r1", calls: 30,
+    knownCostMicroUsd: 900_000, unpricedCalls: 0, producedOrder: false, ...over,
+  });
+
+  // METADE 1
+  it("avisa quando parte das chamadas da conversa não tem preço", () => {
+    const [f] = iaRetrabalhoProbe.run(
+      sample({ ai: available({ ...AI_OK, heaviestConversations: [conv({ unpricedCalls: 5 })] }) }),
+      ctx,
+    );
+
+    expect(f.summary).toMatch(/indeterminado/i);
+    expect(f.summary).toMatch(/maior/i);
+    expect(f.metrics.chamadasSemPreco).toBe(5);
+  });
+
+  // METADE 2
+  it("sem lacuna, o texto não ganha ressalva nenhuma", () => {
+    const [f] = iaRetrabalhoProbe.run(
+      sample({ ai: available({ ...AI_OK, heaviestConversations: [conv()] }) }),
+      ctx,
+    );
+
+    expect(f.summary).not.toMatch(/indeterminado/i);
+    expect(f.metrics.chamadasSemPreco).toBe(0);
   });
 });

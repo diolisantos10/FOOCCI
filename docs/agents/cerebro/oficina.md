@@ -905,3 +905,134 @@ cardápio continua chegando ao juiz com os primeiros itens.
 A escolha de origens por degrau (ALLOWLIST = PRODUCTION+REPLAY; RESTAURANT_WIDE =
 só PRODUCTION) é doutrina, não conserto. Espelhei o CRM e só apertei — nenhuma
 porta abriu. Precisa de ratificação.
+
+---
+
+## 2026-08-07 · Custo de IA por agente — matar o fallback silencioso de preço
+
+**Pedido:** medir quanto cada agente já gastou (Sala dos Agentes, /admin).
+
+### O que confirmei do terreno (não confiei na leitura de terceiro)
+
+- `src/services/ai/AIInteractionLogger.ts` era o único ponto que grava custo, e o
+  fallback era `PRICING_USD_PER_1K[model] ?? [0.0025, 0.01]` — o preço do gpt-4o.
+- `AIInteractionLog` não tinha `agentSlug` (`prisma/schema.prisma:1313-1335`).
+- **A premissa do DeepSeek estava errada.** O projeto NÃO chama DeepSeek: o nome
+  só aparece num regex de scanner (`src/services/raiox/collect/SourceScanner.ts:62`)
+  e numa lista de imports proibidos (`src/services/raiox/noSideEffects.test.ts:35`).
+  Se eu tivesse aceitado a premissa, teria criado uma linha de preço para um
+  modelo que ninguém chama — cobertura de mentira.
+
+### O achado que muda a conclusão do bloco
+
+O modelo gravado vem de `brandConfig.aiModel` (`AIOrderService.ts:1139,1163`), e
+esse campo é validado por `z.enum(["gpt-4o-mini","gpt-4o"])`
+(`src/validators/brand-config.ts:101`). Ou seja: **o fallback existia mas nunca
+disparou** nas linhas que foram efetivamente gravadas — os dois únicos modelos
+possíveis eram exatamente os dois que a tabela conhecia, com o preço certo.
+
+Lição: **defeito que ainda não custou dinheiro não é defeito menor — é defeito
+que ainda não foi chamado.** O router já tem defaults de Claude e Gemini
+(`AIEngineRouter.ts:17-18`) e o `ChangeRequestApplier` já sabe escrever linha de
+roteamento. No dia em que um CR mandasse tráfego para o Gemini, o relatório
+passaria a superestimar o custo de entrada em ~8x, calado. A hora de consertar é
+antes da primeira chamada, não depois da primeira fatura.
+
+### Como separei "não sei" de "custou X"
+
+Três estados não bastavam. Precisei de quatro no nível da chamada, porque
+descobri lendo o código que nem todo modelo é cobrado por token:
+`whisper-1` (`TranscriptionAdapter.ts:135`) é por minuto e `gpt-image-1`
+(`imageEnhancement/providers/openai.ts:17`) é por imagem. Estimar esses por token
+daria zero — um número errado com cara de certo. Ficaram `NOT_TOKEN_PRICED`.
+E `mock`/`local` ficaram `FREE`: **zero conhecido é diferente de desconhecido.**
+
+### O que quebrou / o que verifiquei
+
+Rodei as quatro sabotagens e **conferi com grep + diff que cada uma entrou no
+arquivo antes de olhar o resultado** — é o passo que evita relatar "portão é
+decoração" por engano:
+
+| Sabotagem | Linha confirmada | Efeito |
+|---|---|---|
+| `costUsd` = preço do gpt-4o no desconhecido | `modelPricing.ts:202` | 6 testes vermelhos |
+| slug nulo cai no `waiter` | `costAggregation.ts:165` | 5 testes vermelhos |
+| provedor desconhecido vira `OPENAI` | `costAggregation.ts:160` | 1 teste vermelho |
+| logger regrava fallback no payload | `AIInteractionLogger.ts:66` | 1 teste vermelho |
+
+As metades legítimas também estão presas: gpt-4o continua custando exatamente a
+tarifa antiga, slug preenchido é atribuído ao agente certo, e a soma por provedor
+fecha com a soma linha a linha. Sem essas, bastaria devolver `null` sempre.
+
+Deixei o módulo de preço **puro** (teste próprio prova que ele não importa
+prisma). É a lição da vitrine aplicada de novo: no teste de fiação eu mockei
+**só o prisma**, nunca o módulo de preço — senão a regra que interessa some.
+
+### Ficou aberto (reportado ao Diretor, não consertei)
+
+`src/services/raiox/collect/RaioXCollector.ts:126` converte `estimatedCostUsd`
+null em **zero**. Com a coluna passando a gravar null para não precificado, esse
+consumidor volta a confundir "não sei" com "não gastou" — exatamente o defeito
+que este bloco matou, um andar acima. Não toquei para não mudar a forma da saída
+do raio-x sem decisão.
+
+`npx tsc --noEmit` limpo · `npx vitest run` 2154 suítes / 6115 testes verdes.
+
+### 2026-08-07 (continuação) · O conserto que criou o problema velho um andar acima
+
+O Diretor mandou consertar o `RaioXCollector` que eu tinha só reportado. Estava
+certo: **a mudança do bloco anterior PIOROU aquele ponto.** Antes,
+`estimatedCostUsd` nunca era nulo, então o `?? 0` era inofensivo na prática. Ao
+fazer a coluna gravar null para "não sei", eu transformei um `?? 0` dormente na
+fonte ativa do defeito que eu tinha acabado de matar.
+
+**A lição que fica: quando você cria um valor novo para "não sei", todo consumidor
+que já tratava aquele campo vira suspeito.** Não basta consertar o produtor. O
+produtor honesto com consumidor surdo dá no mesmo número errado — só que agora com
+a aparência de auditado.
+
+#### A forma que escolhi, e por quê
+
+Renomeei `totalCostMicroUsd` → `knownCostMicroUsd` (e `costMicroUsd` →
+`knownCostMicroUsd` nos grupos), somando `unpricedCalls` e `unpricedModels`.
+Considerei a alternativa menos invasiva — manter o nome e só acrescentar o
+contador. Descartei: **um campo chamado `totalCost` que na verdade é o custo de um
+subconjunto mente no nome**, e quem escreve o próximo consumidor não vai ler o
+comentário. Custou 2 arquivos (`runtimeProbes.ts` era o único consumidor) e
+`RaioXRun` persiste findings, não a amostra crua — então não havia histórico para
+quebrar. Verifiquei antes de renomear.
+
+#### O que eu quase deixei passar
+
+`npx tsc --noEmit` deu **limpo com os testes ainda usando os campos antigos**.
+`tsconfig.json` exclui `src/**/*.test.ts`. Ou seja: **neste repositório, tsc verde
+não diz nada sobre teste.** Se eu tivesse parado no tsc, teria entregue teste
+comparando `undefined` e achado que estava tudo certo. Só o vitest pega.
+
+#### A varredura (item 4)
+
+Procurei `?? 0` e `Number(x) || 0` sobre custo/token/contagem em `src/`. A maioria
+esmagadora é `_sum.x ?? 0` do Prisma — e essa é **legítima**: soma de zero linhas é
+genuinamente zero. O critério que usei para separar: *o null significa "conjunto
+vazio" ou "valor desconhecido"?* Só o segundo é defeito.
+
+Achei **um** de verdade além do raio-x: `AIOrderService.ts:1002`,
+`response.usage?.prompt_tokens ?? 0`. Se o provedor não devolve `usage`, os tokens
+da iteração são desconhecidos, não zero — e o custo do turno sairia menor que a
+realidade, calado, no mesmo caminho de dinheiro. Passou a marcar `tokensUnknown` e
+gravar custo null.
+
+#### Sabotagens (todas confirmadas no arquivo antes de julgar)
+
+| Sabotagem | Linha | Efeito |
+|---|---|---|
+| `micro()` volta a mapear null→0 | `RaioXCollector.ts:131` | 3 vermelhos |
+| total esconde a própria lacuna | `runtimeProbes.ts:48` | 1 vermelho |
+| lacuna segue `PASS` | `runtimeProbes.ts:59` | 1 vermelho |
+| logger ignora contagem incompleta | `AIInteractionLogger.ts:59` | 1 vermelho |
+
+Metade legítima presa em todas: dia sem lacuna continua `PASS`, sem ressalva no
+texto e com `chamadasSemPreco: 0`. Sem isso a sonda viraria WARNING toda noite e
+em duas semanas ninguém leria o relatório.
+
+`npx tsc --noEmit` limpo · `npx vitest run` 2159 suítes / 6128 testes verdes.
