@@ -161,17 +161,41 @@ export const BAKERY_PRINT_STATIONS = [
 ] as const;
 
 /**
- * Horário de padaria: abre cedo todo dia. Domingo é meio período — é o que separa
- * um horário crível de um horário de placeholder.
+ * A PADARIA DE VITRINE NUNCA FECHA — 24 horas, sete dias.
+ *
+ * Ordem do CEO em 07/08/2026, navegando pelo celular de madrugada: *"tira o aviso
+ * de horário da nossa padaria de teste porque atrapalha a navegação de quem está
+ * testando, incomoda um pouco na tela, deixa aberto vinte e quatro horas."*
+ *
+ * O horário anterior era crível (abria 06:00, fechava 20:00, domingo meio
+ * período) e é justamente por isso que atrapalhava: fora do expediente, a loja
+ * exibia a tarja de fechada e **bloqueava o checkout**. Quem abre a vitrine às
+ * 23h para conhecer o produto batia na porta trancada de uma padaria que não
+ * existe.
+ *
+ * ── POR QUE `00:00` NAS DUAS PONTAS, E NÃO `00:00`–`23:59` ──
+ *
+ * `isInPeriod` (lib/business-hours.ts:30) trata `close <= open` como período que
+ * atravessa a meia-noite: `nowMin >= open || nowMin < close`. Com as duas pontas
+ * em `00:00`, isso vira `nowMin >= 0 || nowMin < 0` — **verdadeiro em qualquer
+ * minuto**, por construção.
+ *
+ * `23:59` pareceria equivalente e deixaria a loja fechada por 60 segundos por
+ * dia. Um minuto de tarja amarela é raro o bastante para ninguém reproduzir e
+ * frequente o bastante para acontecer numa demonstração.
+ *
+ * ⚠️ Isto vale **só para a vitrine**. Restaurante de verdade tem horário de
+ * verdade, e o `docs/foocci-resumo-executivo.md` continua valendo: horário
+ * fechado que impede pedido é recurso, não defeito.
  */
 export const BAKERY_HOURS: Array<{ dayOfWeek: number; isOpen: boolean; openTime: string; closeTime: string }> = [
-  { dayOfWeek: 0, isOpen: true, openTime: "06:30", closeTime: "13:00" }, // domingo
-  { dayOfWeek: 1, isOpen: true, openTime: "06:00", closeTime: "20:00" },
-  { dayOfWeek: 2, isOpen: true, openTime: "06:00", closeTime: "20:00" },
-  { dayOfWeek: 3, isOpen: true, openTime: "06:00", closeTime: "20:00" },
-  { dayOfWeek: 4, isOpen: true, openTime: "06:00", closeTime: "20:00" },
-  { dayOfWeek: 5, isOpen: true, openTime: "06:00", closeTime: "21:00" },
-  { dayOfWeek: 6, isOpen: true, openTime: "06:00", closeTime: "21:00" },
+  { dayOfWeek: 0, isOpen: true, openTime: "00:00", closeTime: "00:00" }, // domingo
+  { dayOfWeek: 1, isOpen: true, openTime: "00:00", closeTime: "00:00" },
+  { dayOfWeek: 2, isOpen: true, openTime: "00:00", closeTime: "00:00" },
+  { dayOfWeek: 3, isOpen: true, openTime: "00:00", closeTime: "00:00" },
+  { dayOfWeek: 4, isOpen: true, openTime: "00:00", closeTime: "00:00" },
+  { dayOfWeek: 5, isOpen: true, openTime: "00:00", closeTime: "00:00" },
+  { dayOfWeek: 6, isOpen: true, openTime: "00:00", closeTime: "00:00" },
 ];
 
 // ─── O cardápio ───────────────────────────────────────────────────────────────
