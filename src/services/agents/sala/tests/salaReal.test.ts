@@ -20,6 +20,9 @@ import {
   ESSENCIAIS,
   montarSalaDosAgentes,
 } from "../montagem";
+import { DEFAULT_AGENT_PROFILES } from "../../defaultAgentProfiles";
+import { estaEmOperacao } from "@/app/admin/(area)/sala-dos-agentes/_estados";
+import type { AdminAgentProfileView } from "../../types";
 
 const RAIZ = process.cwd();
 const AGORA = new Date();
@@ -31,6 +34,28 @@ function salaDeDesenvolvimento() {
     perfisDeProduto: veio([]),
     motoresPorSlug: {},
     arquivosDeDesenvolvimento: lerAgentesDeDesenvolvimento(RAIZ),
+    usoDeIA: veio([]),
+    provedoresLigados: [],
+  });
+}
+
+/**
+ * A Sala montada com o registro REAL de agentes de produto — a mesma projeção
+ * que `getAdminAgentProfiles()` faz quando o flag de banco está desligado
+ * (que é o estado de produção).
+ */
+function salaDeProduto() {
+  const perfis: AdminAgentProfileView[] = DEFAULT_AGENT_PROFILES.map((p) => ({
+    ...p,
+    updatedAt: null,
+    origin: "code" as const,
+  }));
+  return montarSalaDosAgentes({
+    agora: AGORA,
+    janelaDias: 30,
+    perfisDeProduto: veio(perfis),
+    motoresPorSlug: {},
+    arquivosDeDesenvolvimento: veio([]),
     usoDeIA: veio([]),
     provedoresLigados: [],
   });
@@ -61,6 +86,62 @@ describe("os agentes deste repositório aparecem na Sala", () => {
       expect(a.nome.trim().length, a.slug).toBeGreaterThan(0);
       expect(a.funcao.trim().length, a.slug).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("o contador de 'fora de operação' lê o registro, e não outra lista", () => {
+  /*
+    ── POR QUE ESTE BLOCO EXISTE ──────────────────────────────────────────────
+
+    Em 07/08/2026 o CEO apagou quatro perfis placeholder do registro
+    (`orchestrator`, `security-governance`, `ui-ux`, `qa-test`) e mandou
+    conferir se o número da Sala acompanhava: "se não acompanhar, o contador
+    está lendo de outro lugar e isso é um defeito novo."
+
+    A pergunta é legítima porque este produto JÁ TEVE essa família de defeito
+    duas vezes — o "Total hoje" que somava a página e o contador que dizia
+    "12 falam com o cliente" com oito rascunhos no meio. Contador que não muda
+    quando o dado muda é indistinguível de contador correto, até o dia em que
+    é caro.
+
+    Os testes de `_estados.test.ts` provam o PREDICADO com elenco fabricado.
+    Este prova a CADEIA INTEIRA contra o registro de verdade:
+    registro → montarSalaDosAgentes → estado → estaEmOperacao → número.
+  */
+  const sala = salaDeProduto();
+  const fora = sala.agentes.filter((a) => !estaEmOperacao(a));
+
+  it("são QUATRO fora de operação — o número acompanhou o corte, não ficou em oito", () => {
+    expect(
+      fora.map((a) => a.slug).sort(),
+      "o contador de 'fora de operação' não bate com os DRAFT do registro",
+    ).toEqual(["analytics-product", "branding", "integration", "manual-constitution"]);
+  });
+
+  it("nenhum dos quatro nomes apagados sobrou como cartão na Sala", () => {
+    // A metade que reprova: recriar o perfil faz o nome duplicado reaparecer na
+    // tela do dono, ao lado do Essencial de mesmo trabalho.
+    const slugs = sala.agentes.map((a) => a.slug);
+    for (const apagado of ["orchestrator", "security-governance", "ui-ux", "qa-test"]) {
+      expect(slugs, `"${apagado}" voltou a aparecer na Sala`).not.toContain(apagado);
+    }
+  });
+
+  it("os quatro EM operação continuam montando — o corte não esvaziou a tela", () => {
+    /*
+      A metade que passa. Sem ela, apagar o registro inteiro deixaria os dois
+      testes acima verdes ("zero fora de operação", "nenhum apagado presente")
+      enquanto a Sala virava uma tela vazia. Guardrail 5: a proteção não pode
+      ser mais destrutiva que o problema.
+    */
+    const dentro = sala.agentes.filter(estaEmOperacao).map((a) => a.slug).sort();
+    expect(dentro).toEqual(["crm", "suporte-tecnico", "waiter", "whatsapp"]);
+  });
+
+  it("as parcelas fecham com o total de cartões de produto", () => {
+    // Um cartão que caísse fora das duas parcelas sumiria da tela sem avisar.
+    expect(fora.length + sala.agentes.filter(estaEmOperacao).length).toBe(sala.agentes.length);
+    expect(sala.agentes.length).toBe(DEFAULT_AGENT_PROFILES.length);
   });
 });
 

@@ -1154,3 +1154,137 @@ grandeza em que zero e "nada" significam a mesma coisa. Só apareceu porque
 imprimi a saída real dos 12 cartões antes de entregar; nenhum teste de tipo
 pegaria.
 — origem: Sala dos Agentes (serviço), 07/08/2026, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-07 — Corte dos quatro placeholders que duplicavam Essenciais
+
+**Pedido:** apagar `orchestrator`, `security-governance`, `ui-ux` e `qa-test` de
+`PLACEHOLDER_PROFILES` (`src/services/agents/defaultAgentProfiles.ts`), mantendo
+`manual-constitution`, `integration`, `branding`, `analytics-product`.
+
+### O portão que veio ANTES da remoção: o banco
+
+Instrução do CEO: se algum dos quatro tiver linha no banco, não apagar nada.
+**Não consegui verificar, e digo isso como fato, não como ressalva.** Três vias
+tentadas e as três fechadas:
+
+- `.env` aponta `DATABASE_URL` para `localhost:5432` (P1001, servidor não sobe);
+- `railway status` → *Unauthorized*, CLI não autenticada nesta sessão;
+- `GET /api/admin/agents/profiles/<slug>` em produção → **401** nos cinco slugs
+  testados (inclusive `waiter`, o controle). O `ADMIN_SECRET` local não é o de
+  produção.
+
+O que consegui provar é mais forte que a pergunta, e por isso segui: **a remoção
+não pode apagar linha nenhuma.** Os nove usos de `prisma.agentProfile` vivem
+todos em `AgentProfileService.ts` e **não existe `delete`/`deleteMany`** entre
+eles; `seedDefaultAgentProfiles` (`:294-319`) é upsert puro, sem passo de poda.
+Nenhum hook de deploy semeia agentes — `railway.toml` chama
+`scripts/migrate-deploy.sh` + `scripts/start-production.sh`, e o segundo só
+auto-semeia guias do manual e a padaria-vitrine. Logo: tirar do array só faz
+parar de fazer upsert. Reversível por `git revert`, sempre.
+
+**A consequência que sobra e NÃO se fecha no código** — e é o motivo de eu não
+declarar isto encerrado: se existir linha em produção **e** alguém ligar
+`AGENT_PROFILE_DB_ENABLED=true`, `getAdminAgentProfiles` (`:136`) devolve as
+linhas do banco **sem intersectar com o registro de código**. Os quatro nomes
+voltariam à tela como fantasma, e o teste que escrevi não pega — ele olha o
+código. Zumbi de banco é conserto de banco.
+
+### Onde os quatro estavam referenciados (varri, não confiei na lista)
+
+`grep` por aspas exatas nos quatro slugs em `src/` deu **16 ocorrências**, e a
+lista do CEO estava incompleta em um ponto:
+
+- `_components.tsx:289-295` — quatro abas em `AGENT_TAB_ORDER`. Órfãs: limpei.
+  (`AgentsDashboard.tsx:40` já filtra aba sem perfil, então a tela não quebrava —
+  mas quatro nomes mortos no arquivo que se lê como mapa é lixo pior que erro.)
+- `_components.tsx:596` — `isSecurity`. Limpei, junto com o render em `:634`.
+- **`_components.tsx:482` — `SecurityCallout`, que o CEO não listou.** Componente
+  inteiro de 29 linhas servindo só `security-governance`. Ficaria compilando,
+  passando lint e nunca renderizando. Removido, com comentário apontando para o
+  Essencial `seguranca`.
+- `agents.test.ts:29-35` — a lista de slugs esperados. Virou o portão (abaixo).
+
+**O que NÃO toquei, por ser outro conceito com o mesmo nome:**
+`manualV01Content.ts:600` e `api/admin/manual/seed/route.ts:59` têm
+`slug: "ui-ux"`, mas são **capítulo do Manual Operacional** — gravam em
+`prisma.operationalManualChapter` (`route.ts:135,145,165`), tabela diferente de
+`agentProfile`. Coincidência de nome, não referência. Mexer ali seria estrago
+colateral.
+
+Também deixei intacto o enum `AgentArea` em `prisma/schema.prisma:3003`, que
+ainda declara `ORCHESTRATOR/SECURITY/UI_UX/QA`. Tirar valor de enum é migração —
+irreversível, fora da minha faixa, e o `UI_UX` ainda serve o capítulo do manual.
+`agentGroupOf` (`_components.tsx:103`) cai no `default`, sem órfão.
+
+### O portão, nas duas metades
+
+Em `agents.test.ts`: `APOSENTADOS` carrega **slug + qual Essencial ele duplicava**
+de propósito — teste que só lista nomes proibidos vira enigma em dois meses, e
+quem não entende a regra a remove em vez de obedecê-la. Três casos novos:
+
+1. **reprova** — cada um dos quatro voltando ao registro (`it.each`);
+2. **passa** — os quatro mantidos continuam lá. Sem ela, apagar os oito deixaria
+   o teste verde e o estrago seria maior que o problema (guardrail 5);
+3. **elenco exato** (`toEqual` ordenado) — `toContain` não pega slot novo
+   entrando calado.
+
+Em `salaReal.test.ts`, um bloco que prova a **cadeia inteira** contra o registro
+real: registro → `montarSalaDosAgentes` → `estado` → `estaEmOperacao` → número.
+`_estados.test.ts` já provava o predicado, mas **com elenco fabricado** — nunca
+tocava o registro. Era exatamente o buraco da pergunta do CEO ("o contador está
+lendo de outro lugar?").
+
+### Sabotagem verificada com grep ANTES de julgar — e uma delas me ensinou algo
+
+Três injeções, cada uma confirmada no arquivo por `grep -n` antes de rodar:
+
+| Sabotagem | grep | Reprovou |
+|---|---|---|
+| recria `orchestrator` | `:453` | 2 casos (`não volta` + elenco exato) |
+| apaga `branding` (mantido) | 0 ocorrências | 3 casos (inclui a metade que passa) |
+| recria `qa-test` | `:459` | 2 casos da Sala (contador + fantasma) |
+
+**O que aprendi na sabotagem A:** só o caso do `orchestrator` reprovou dentro do
+`it.each` — os outros três passaram, porque continuavam ausentes. Isso está
+certo, mas me mostrou que um `it` único somando os quatro teria dado a mesma
+"falha vermelha" escondendo **qual** voltou. `it.each` por slug é o que faz o
+alerta carregar a própria evidência (guardrail 6) num teste de lista.
+
+### O número acompanhou
+
+Sala com o registro real: **4 fora de operação** (`analytics-product`,
+`branding`, `integration`, `manual-constitution`), não 8. A metade que passa
+também está lá — 4 **em** operação (`crm`, `suporte-tecnico`, `waiter`,
+`whatsapp`) e `fora + dentro === total`, senão um cartão sumiria da tela sem
+avisar. O contador lê do registro; não é lista paralela.
+
+### Verificação
+
+`npx tsc --noEmit` limpo (exit 0) · `npx next lint` nos dois arquivos de código:
+sem aviso · `npx vitest run --reporter=json` lido do JSON:
+**2184 arquivos, 2184 verdes, 0 vermelhos; 6227 testes, 6227 passaram, 0
+falharam, 0 pendentes** (`success: true`). Escopo dos agentes antes/depois:
+152 → 158 testes (+6 do portão), depois 51 verdes na Sala.
+
+Não commitei — o CEO commita.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+**Portão de remoção precisa de três metades, não duas.** A que reprova o item
+voltando e a que prova que os mantidos ficaram ainda deixam passar o pior caso:
+o slot NOVO que entra calado. `toContain` é cego para excesso. Só o `toEqual`
+sobre a lista ordenada obriga quem adiciona a passar pelo comentário que explica
+a regra — e é ali, e não no teste, que a regressão de dois meses é evitada.
+— origem: corte dos quatro placeholders duplicados, 07/08/2026
+
+**Verificar reversibilidade vale mais que responder à pergunta que foi feita.**
+O CEO perguntou "tem linha no banco?" e eu não consegui responder — três vias
+fechadas. Mas a pergunta existia para proteger contra irreversibilidade, e essa
+eu consegui provar direto: nenhum `delete` no serviço, seed sem poda, nenhum
+hook de deploy. Quando o portão pedido não pode ser fechado, procure o que ele
+protege — às vezes há prova mais forte do lado do mecanismo. O que **não** se
+faz é declarar o portão passado por não ter conseguido olhar (guardrail 2): o
+zumbi de banco com o flag ligado continua aberto e está escrito acima.
+— origem: mesmo bloco
