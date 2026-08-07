@@ -142,3 +142,89 @@ escolher uma pelo silêncio da outra.
 - `src/services/whatsapp/inbound/tests/InboundAgentDispatch.test.ts` — 12 travas.
 - `src/services/buildos/BuildOsMetaChannel.ts` — o canal Master na Meta.
 - `src/app/api/admin/build-os/master-channel/route.ts` — só leitura, substitui o provisionador.
+
+---
+
+## 2026-08-07 · A Central não sabe que o Instagram existe como canal vivo
+
+Pedido do CEO: *"por que o Instagram não conecta com a central de atendimentos"*.
+Recorte: **a tela**, não o token (esse é do `meta`, que apurou `lastWebhookAt`
+congelado em 23/07/2026 12:23 UTC).
+
+### O que li
+
+- `src/app/(dashboard)/atendimento/AtendimentoClient.tsx` (2561 linhas)
+- `src/app/(dashboard)/atendimento/page.tsx`
+- `src/app/api/chat/conversations/route.ts`
+- `src/services/conversation/conversationListFilter.ts`
+- `src/services/conversation/MessageService.ts:114-146`
+- `src/services/instagram/InstagramChannelService.ts:53-120, 365-409`
+- `src/services/instagram/InstagramSendClient.ts:34-45`
+- `src/services/instagram/InstagramConfigService.ts:110-224`
+- `src/app/api/integrations/instagram/route.ts:54-96`
+- `src/app/(dashboard)/integracoes/instagram/InstagramIntegrationClient.tsx:294-344`
+
+### Achados
+
+1. **A Central RENDERIZA Instagram corretamente.** `CHANNEL_META` cobre
+   `INSTAGRAM_DIRECT`/`INSTAGRAM_COMMENT`/`MESSENGER` (linhas 163-173), a aba
+   "📷 Instagram" existe (181) e `buildConversationWhere` **não filtra canal por
+   padrão** — nenhum canal é excluído da consulta. Se um DM chegasse hoje, ele
+   apareceria. **O defeito não é de renderização.**
+
+2. **A janela é de 100 e não tem "carregar mais".** `fetchList` manda
+   `limit: "100"`, sempre `page` 1 (AtendimentoClient:432). O backend busca 400,
+   deduplica por cliente e corta em 100 (route.ts:133,167). **Busca e filtro de
+   Instagram rodam client-side sobre essas 100** (699-708, 726-728). Conversa de
+   Instagram de 23/07 ou antes só aparece se estiver entre as 100 mais recentes por
+   `lastMessageAt`. Com 15 dias de WhatsApp em cima, ela cai fora — e a aba diz
+   "Nenhuma conversa encontrada". **Isto é defeito de tela e é meu.**
+
+3. **A Central é cega para saúde de canal.** Zero referências a
+   `/api/integrations/*`, `lastWebhookAt`, `lastError` ou status de conexão em
+   AtendimentoClient. O vazio genérico está em 1142-1152. Um canal morto e um
+   canal sem movimento são **a mesma tela**. É o mesmo defeito que segurou isto 15
+   dias sem ninguém ver.
+
+4. **O selo verde não tem prazo de validade.**
+   `src/app/api/integrations/instagram/route.ts:58` —
+   `status = "active"` exige apenas `view.lastWebhookAt` **não-nulo**. Carimbo de
+   15 dias vale igual a carimbo de 1 minuto. A Central não consome esse selo (ver
+   3), então ela não mente junto — ela simplesmente não olha.
+
+5. **Bônus fora do token: responder pelo Instagram vem DESLIGADO de fábrica.**
+   `instagramLoginOAuth.ts:378` grava `mode: "RECEIVE_ONLY"` na conexão;
+   `InstagramChannelService.ts:378-380` recusa qualquer resposta manual nesse modo
+   ("Modo somente recebimento", 502 em `MessageService.ts:129`). Mesmo com token
+   saudável, o lojista **não responde da Central** até apertar "Ativar resposta
+   manual" em Integrações. A Central não avisa isso em lugar nenhum.
+
+6. **Guardrail 2 (nada preso para sempre):**
+   `InstagramChannelService.ts:398` e `:467` persistem o outbound com
+   `externalStatus: "pending"` quando `send.dryRun` — inclusive no caso "token
+   ausente" (`InstagramSendClient.ts:38-40`), que é **permanente**, não transitório.
+   Não há retentativa nem prazo: a mensagem fica `pending` eternamente. Deveria ser
+   `failed`. Não corrigi (não foi pedido); fica registrado.
+
+### O que NÃO consegui medir
+
+- **Não há Instagram conversation contável.** `DATABASE_URL` local aponta para
+  `localhost:5432` (fora do ar) e o `ADMIN_SECRET` desta caixa devolve **401** em
+  `https://foocci.com.br/api/admin/restaurants`. Produção responde
+  (`commitSha ccc621a`), mas eu não tenho chave. **Não consegui medir** quantas
+  conversas de Instagram existem no banco nem a posição delas na janela de 100.
+
+### Não fiz
+
+Nenhuma mensagem enviada. Nada tocado em token, segredo, permissão ou App Review.
+Nenhum arquivo de código alterado, nenhum commit, nenhum push.
+
+### Proposta de vitrine
+
+**"A Central de Atendimento não tem noção de canal morto"** — ela consulta todos os
+canais sem filtro, mas a janela é de 100 conversas sem paginação, o filtro de
+Instagram é client-side sobre essa janela, e não existe nenhum aviso de saúde de
+canal. Canal desconectado e canal parado produzem a **mesma tela vazia**.
+Corolário: **"aba de canal vazia na Central nunca é evidência de que o canal está
+bem"** — é a versão forte da entrada de 01/08 sobre o filtro client-side.
+Proveniência: apuração 2026-08-07, código em `ccc621a`, arquivos acima.
