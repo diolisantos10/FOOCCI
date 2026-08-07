@@ -50,8 +50,19 @@ export const zeroProvado = (): Medida => ({ estado: "zeroProvado" });
  */
 export type Populacao = "produto" | "desenvolvimento";
 
-/** Estado operacional, o pontinho do cartão. */
-export type EstadoAgente = "trabalhando" | "atencao" | "desligado";
+/**
+ * Estado operacional, o pontinho do cartão.
+ *
+ * `desconhecido` entrou em 07/08/2026, depois de o serviço mostrar que sem ele
+ * TODO agente de produto ativo saía como `atencao` — não porque houvesse algo
+ * errado, mas porque não dá para provar que ele trabalhou.
+ *
+ * Isso fazia um pontinho só significar duas coisas — "está com problema" e "não
+ * sei" — e essa é exatamente a confusão que o tipo `Medida` existe para impedir
+ * uma linha acima. Um pontinho amarelo que às vezes quer dizer "ignore" ensina o
+ * dono a ignorar o amarelo que importa.
+ */
+export type EstadoAgente = "trabalhando" | "atencao" | "desligado" | "desconhecido";
 
 /**
  * Em qual IA o agente roda — vai na CARA do cartão, por ordem do CEO.

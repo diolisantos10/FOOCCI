@@ -1036,3 +1036,121 @@ texto e com `chamadasSemPreco: 0`. Sem isso a sonda viraria WARNING toda noite e
 em duas semanas ninguém leria o relatório.
 
 `npx tsc --noEmit` limpo · `npx vitest run` 2159 suítes / 6128 testes verdes.
+
+---
+
+## 2026-08-07 (3) · Sala dos Agentes — o SERVIÇO, e a contagem que devolvia 0 para o `garcom`
+
+Ordem do CEO, doutrina 20 do kit. Construí só o serviço; a tela é do outro
+especialista, contra o mesmo contrato (`src/services/agents/salaDosAgentes.types.ts`,
+que não toquei). Ponto de entrada: `getSalaDosAgentes()` em
+`src/services/agents/sala/index.ts`.
+
+### A armadilha, medida antes de codar
+
+Rodei um protótipo contra os 18 arquivos reais de `docs/agents/*/{oficina,vitrine}.md`
+antes de escrever a regra. Duas descobertas que mudaram o desenho:
+
+1. **`^## ` cego devolve 0 para o `garcom`.** A oficina dele não usa cabeçalho:
+   são blocos separados por régua começando com `2026-08-03 — **título**`. Sete
+   blocos, sete incidentes, contagem zero. É a mentira exata que esta tela existe
+   para não contar.
+2. **Data solta no meio da linha envenena a recência.** Um primeiro protótipo com
+   regex frouxa (`data em qualquer posição`) achou 12 "entradas" no meu próprio
+   oficina.md onde há 9 — pegou `05/08=78` e `2026-08-05.` no meio de parágrafo.
+   A regra ficou **ancorada no início** da linha da entrada.
+
+Solução: dois formatos NOMEADOS (`cabecalho`, `datado`) + `vazio` + `desconhecido`.
+Só `vazio` (arquivo existe, zero linhas de conteúdo) produz zero. `desconhecido`
+vira `naoMedido` carregando a primeira linha de conteúdo como evidência.
+Resultado real hoje: 11 oficinas, 11 reconhecidas, nenhuma em zero.
+
+### Duas coisas que eu ia entregar mentindo, e o smoke pegou
+
+- **"Dias desde a última entrada"** era a 3ª métrica. Quem registrou HOJE vale 0
+  → `zeroProvado` → a tela desenha **"—"**, o mesmo símbolo de quem nunca
+  registrou nada. Zero verdadeiro, leitura falsa. Troquei por **"Entradas nos
+  últimos 30 dias"**, onde zero significa literalmente "nada no mês" e o traço lê
+  certo. Lição: *não basta o estado da medida estar certo; o zero tem que
+  significar a mesma coisa que o símbolo que o representa.*
+- **Motor interno saía `naoMedido`.** `mock`/`local` são `billingUnit: "NONE"` —
+  custo zero **conhecido**. Escrever "não medido" ali ensina o dono a ignorar o
+  "não medido" dos outros cartões, que significa outra coisa. Virou `zeroProvado`.
+
+### O achado que vale mais que a tela
+
+`AIInteractionLog` tem **um único escritor**: `AIInteractionLogger.log`, chamado
+de `src/services/ai/AIOrderService.ts:1271`, sempre com `agentSlug: "waiter"`
+(`:1256`). Existem **outros quatro** caminhos que chamam OpenAI e não gravam nele:
+`WhatsAppReceptionistService`, `ChatSimService`, `AISimulatorService` e
+`brain/engines/OpenAIEngineAdapter`.
+
+Consequência que atravessa o módulo inteiro: **ausência de linha nunca vira
+`zeroProvado` para custo**. "A Anthropic custou zero em 30 dias" seria falso — o
+que sabemos é que nada daquele provedor chegou a um log que cobre 1 de 5
+caminhos. Está escrito em `lacunas`, com o arquivo:linha, e travado pelo teste
+`AIInteractionLog ainda tem UM único escritor` — que reprova no dia em que um
+segundo ponto de log entrar sem atualizar a frase.
+
+### Sabotagens (todas confirmadas por `diff` no arquivo ANTES de julgar)
+
+| Sabotagem | Onde | Efeito |
+|---|---|---|
+| custo sem atribuição → `zeroProvado()` | `montagem.ts:326` | 3 vermelhos |
+| contador ingênuo, só `^## ` | `contagemDeEntradas.ts:179` | 4 vermelhos (2 deles contra o arquivo real do `garcom`) |
+| formato desconhecido → `medido(0)` | `montagem.ts:239` | 1 vermelho |
+| `essencial: true` para todos | `montagem.ts:538` | 1 vermelho |
+| rótulo de métrica repetido nas duas populações | `montagem.ts:540` | 9 vermelhos |
+
+O roteiro (`sabota.sh`) aborta se o trecho alvo não existir e imprime o `diff`
+real antes de rodar — porque teste verde com sabotagem que não chegou ao arquivo
+é o modo de falha mais caro desta semana.
+
+**Metade legítima presa em todas:** `garcom` = 7 entradas, `interface` = 23,
+custo do `waiter` = US$ 0,0015 medido, não-Essencial = `false`. Sem elas,
+"não medido em tudo" seria uma implementação verde e uma tela inútil.
+
+### Dois portões de estilo que também são de verdade
+
+- `nenhum módulo da Sala usa ?? 0 / || 0` — varredura literal do próprio código.
+  Reprovou na primeira execução **contra o meu comentário** que explicava por que
+  o `?? 0` não existe ali. Passou a ignorar comentários: detector que barra o
+  texto que explica a regra é o carimbo que faz o time parar de comentar.
+- `a montagem é pura` — proíbe `prisma`, `node:fs` e `process.env` em
+  `montagem.ts`, `contagemDeEntradas.ts` e `amostra.ts`. É a trava contra o modo
+  de falha que já nos custou uma regra invisível: decisão morando junto do
+  encanamento obriga o teste a mockar o módulo inteiro.
+
+### O que ficou por fora, dito sem maquiagem
+
+- **`noArDesde` é `null` para os 12 agentes de desenvolvimento e para os 12 de
+  produto.** Nenhuma das duas populações registra data de criação: o registro de
+  perfis guarda `updatedAt`, e o perfil em `.claude/agents` é markdown sem data.
+  Usar a primeira entrada da oficina seria trocar "implantado em" por "primeiro
+  trabalho registrado". Está em `lacunas`.
+- **Estado dos agentes de produto ativos = `atencao`**, porque não dá para provar
+  que trabalharam. `EstadoAgente` não tem um quarto valor `desconhecido` e o
+  contrato é lei — não alterei. **Fica a pergunta para o Diretor:** vale propor
+  esse quarto estado a quem construiu o contrato? Hoje "atenção" carrega dois
+  significados (parado / não sei), separados só pelo texto da lacuna.
+- `agencia`, `experiencia` e `seguranca` não têm sala em `docs/agents` → três
+  `naoMedido` declarados, nunca zero. Sala nasce sob demanda; isso é agente novo,
+  não agente parado.
+
+### Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` **6205 testes, 6205 verdes, 0
+vermelhos** (474 arquivos), lido do JSON. Meus três arquivos: 47 casos
+(`contagemDeEntradas` 11, `montagem` 26, `salaReal` 10).
+
+### Proposta de vitrine (promoção é do Diretor)
+
+**O zero certo pode ser lido errado — confira o SÍMBOLO, não só o estado.**
+`Medida` distingue "não medido" de "zero provado", e ainda assim a métrica
+"dias desde a última entrada" saía correta e mentia: quem registrou hoje vale 0,
+`zeroProvado` desenha "—", e o agente mais ativo da casa ficaria idêntico ao que
+nunca trabalhou. A escolha da GRANDEZA vem antes da escolha do estado — prefira a
+grandeza em que zero e "nada" significam a mesma coisa. Só apareceu porque
+imprimi a saída real dos 12 cartões antes de entregar; nenhum teste de tipo
+pegaria.
+— origem: Sala dos Agentes (serviço), 07/08/2026, branch `claude/canais-central-canal-morto`
