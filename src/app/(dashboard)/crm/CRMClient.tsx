@@ -2034,7 +2034,10 @@ function CampaignManageModal({
             const msgKey   = phraseKey(d.message ?? "");
             const variants = d.templateId ? getReadyMadeMessageVariants(d.templateId) : [];
             if (variants.some((v) => phraseKey(v) === msgKey)) {
-              setPoolSelected(new Set([msgKey]));
+              // Sem pool salvo, o motor roda TODAS as variantes do catálogo
+              // (crmMessagePool.catalogRotation). O painel tem que marcar as mesmas —
+              // mostrar uma enquanto saem cinco seria um controle que mente.
+              setPoolSelected(new Set(variants.map((v) => phraseKey(v))));
               setPoolCustom([]);
             } else {
               setPoolSelected(new Set());

@@ -60,6 +60,7 @@ import {
   type CRMWhatsAppSafetyConfig,
 } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
+import { missingSocialVariables } from "./renderCrmMessage";
 import { reasonCrmMessage } from "./CrmAgentReasoner";
 import {
   getCrmPilotConfig,
@@ -1339,11 +1340,29 @@ export class ScheduledCampaignRunnerService {
     const includeAgent = isAgentActive(campaign.scheduleConfig)
       ? await isAgentGloballyEnabled(campaign.restaurantId)
       : false;
-    const activePhrases = resolveActivePhrases(
+    let activePhrases = resolveActivePhrases(
       { templateId: campaign.templateId, message: campaign.message },
       parseMessagePool(campaign.scheduleConfig),
       { hasCoupon, includeAgent },
     );
+    // TRAVA DA REDE QUE NÃO EXISTE. Variável social sem valor resolve para string
+    // VAZIA — não sobra "{tiktok}" para ninguém notar, e a frase sai sem o link em
+    // cima de cliente real. Como o rodízio do catálogo tem variantes em redes
+    // diferentes (siga-redes cobre Instagram, TikTok e Facebook), tira do rodízio a
+    // frase que pede uma rede que este restaurante não cadastrou.
+    // Nunca esvazia: se TODAS pedirem rede faltando, mantém o rodízio como estava —
+    // reduzir repertório é aceitável, deixar a campanha muda não é.
+    {
+      const enviaveis = activePhrases.filter((p) => missingSocialVariables(p.text, msgCtx).length === 0);
+      if (enviaveis.length > 0 && enviaveis.length < activePhrases.length) {
+        console.info("[CampaignRunner] frases fora do rodízio — rede social não cadastrada", {
+          campaignId: campaign.id,
+          removidas:  activePhrases.length - enviaveis.length,
+          redes:      [...new Set(activePhrases.flatMap((p) => missingSocialVariables(p.text, msgCtx)))],
+        });
+        activePhrases = enviaveis;
+      }
+    }
     const fallbackPhrase: PoolPhrase = {
       key: phraseKey(campaign.message), text: withCouponLine(campaign.message, hasCoupon), source: "fallback",
     };

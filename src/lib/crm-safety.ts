@@ -45,7 +45,10 @@ export interface CRMWhatsAppBudgetConfig {
   globalDailyLimit: number;
   /** Max CRM messages the whole CRM may send in ONE scheduler cycle, shared across all campaigns. Default 5. */
   globalCycleLimit: number;
-  /** Minimum minutes between two scheduler cycles. Default 10. */
+  /**
+   * Minimum minutes between two scheduler cycles. Default 9 — NÃO 10, e o 9 é
+   * de propósito (ver DOC do defeito abaixo). Não "arrume" para 10.
+   */
   minMinutesBetweenCycles: number;
   /** How the daily budget is divided among active campaigns. */
   distributionMode: CRMBudgetDistributionMode;
@@ -120,7 +123,15 @@ export const DEFAULT_BUDGET_CONFIG: Readonly<CRMWhatsAppBudgetConfig> = {
   providerMode:                   "META_CLOUD",
   globalDailyLimit:               META_SAFE_DAILY_LIMIT,
   globalCycleLimit:               META_CYCLE_LIMIT, // total across ALL campaigns per cron run
-  minMinutesBetweenCycles:        10,
+  // 9, não 10 — O CRON EM CIMA DO PRÓPRIO RABO. O agendador interno tica a cada
+  // 10 min (ScheduledCampaignScheduler.TICK_INTERVAL_MS) e este portão usa `<`
+  // ESTRITO (CRMWhatsAppBudgetPlanner.isCycleIntervalActive). O ciclo do minuto T
+  // grava a última execução em T+δ (δ = o tempo de mandar o lote), então o tick de
+  // T+10min enxerga 600s − δ < 600s e PULA a casa inteira: a cadência real virava
+  // 20 min, metade dos ciclos morria em silêncio. 9 abre a folga de 1 min que o
+  // lote precisa. NÃO devolva para 10 achando que foi engano — existe teste que
+  // prova o pulo (CrmCadenciaCiclo.test.ts).
+  minMinutesBetweenCycles:        9,
   // AUDIENCE by default: split the day's budget proportionally to each campaign's
   // eligible audience. This is the only mode that bypasses the per-campaign 200/day
   // clamp, so a single big campaign can use the full daily budget (Meta 900).
@@ -245,7 +256,9 @@ export function applyEffectiveSafety(raw: CRMWhatsAppSafetyConfig): CRMWhatsAppS
       enabled:                        true,
       globalDailyLimit:               safeDaily,
       globalCycleLimit:               META_CYCLE_LIMIT,
-      minMinutesBetweenCycles:        10,
+      // 9 pelo mesmo motivo do default (ver DEFAULT_BUDGET_CONFIG). Este é o valor
+      // APLICADO no modo seguro — mudar só o default não muda nada em produção.
+      minMinutesBetweenCycles:        9,
       stopOnInstanceDisconnected:     true,
       pauseOnFailureRatePercent:      50,
       maxConsecutiveProviderFailures: 3,

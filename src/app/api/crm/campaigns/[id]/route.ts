@@ -10,7 +10,7 @@ import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-r
 import { prisma } from "@/lib/prisma";
 import { classifyExecution, summarizeExecutions, buildEligibilityMetrics } from "@/services/crm/crmExecutionClassification";
 import { META_CLOUD_MAX_PER_RUN, ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
-import { parseMessagePool } from "@/services/crm/crmMessagePool";
+import { mergeMessagePoolPatch } from "@/services/crm/crmMessagePool";
 import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -295,9 +295,11 @@ export async function PATCH(
       const patch    = body.scheduleConfig;
       // messagePool goes through the canonical sanitizer (drops malformed rows,
       // caps custom phrases at MAX_CUSTOM_PHRASES); phrase texts are length-capped.
+      // O merge preserva o balde do AGENTE, que o painel do lojista não envia —
+      // sem isso um clique em "ligar/desligar frase" apagava o repertório do agente.
       let poolPatch: Record<string, unknown> = {};
       if (patch.messagePool !== undefined) {
-        const parsed = parseMessagePool({ messagePool: patch.messagePool });
+        const parsed = mergeMessagePoolPatch(campaign.scheduleConfig, patch.messagePool);
         poolPatch = {
           messagePool: parsed
             ? { ...parsed, custom: parsed.custom?.map((c) => ({ ...c, text: c.text.slice(0, 1000) })) }
