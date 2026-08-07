@@ -63,7 +63,7 @@
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
-import { SinaisDeVenda } from "@/components/marketing/SinaisDeVenda";
+import { SinaisDeVenda, firstMonthDiscountPercent } from "@/components/marketing/SinaisDeVenda";
 import { heroShot } from "@/components/marketing/HeroShot";
 import { PRODUCT_SHOTS, SITE_ASSETS } from "@/components/marketing/siteAssets";
 import { DemoForm } from "@/components/marketing/DemoForm";
@@ -85,6 +85,7 @@ import {
 } from "@/lib/site/commissionRates";
 import { migrationSavings } from "@/lib/site/savings";
 import { SERVICOS_A_PARTE, NOTA_FISCAL_A_PARTE } from "@/lib/site/servicosAParte";
+import { SELETOR, PLANO_ABERTO } from "@/lib/site/seletorDePlanos";
 import {
   SITE_PLAN_IDS,
   SITE_PLAN_TO_CODE,
@@ -565,14 +566,132 @@ function FeatureGroup({ label, items }: FeatureGroupData) {
   );
 }
 
+/* ── O SELETOR DE PLANO ───────────────────────────────────────────────────────
+
+  O PROBLEMA (CEO, 07/08, navegando no celular): *"a gente tem que arrumar uma
+  forma do cliente saber que existem três planos logo quando ele chega na parte de
+  planos. Ele só descobre que tem os outros quando vai descendo a tela."*
+
+  Medido: no celular, o cartão do Essencial tem ~3.400px de altura. O Crescimento
+  começa a três telas e meia de rolagem, o Performance a sete. Quem não rola não
+  sabe que existem — e a página se chama "três planos".
+
+  A DECISÃO É DELE, e ele já descartou a alternativa: três botões, não carrossel
+  ("o carrossel talvez tire um pouco da informação, deixe a tabela um pouco
+  estreita"). Não reabrir.
+
+  ── POR QUE ISTO É CSS PURO, E NÃO `useState` ────────────────────────────────
+
+  Esta é uma página comercial indexada. Um seletor em React renderizaria os três
+  planos no HTML, sim — mas quem chega sem JavaScript ficaria preso no plano
+  inicial, sem conseguir trocar. O par `<input type="radio">` + `:checked` é HTML
+  nativo: funciona com o JavaScript desligado, responde a seta do teclado de
+  graça, e os TRÊS cartões estão sempre no HTML servido. A troca é `display`, não
+  montagem — nada nasce depois do clique, então nada some do buscador.
+
+  O preço disso é uma amarração de estrutura que precisa ser respeitada:
+
+    1. Os três `<input>` são IRMÃOS DIRETOS dos rótulos e dos cartões, dentro do
+       mesmo `grid`. O seletor gerado é `~` (irmão geral) — enfiar os rótulos
+       dentro de uma `<div>` "organizadora" quebra tudo em silêncio, sem erro de
+       compilação e sem aviso: o clique passa a não pintar mais nada.
+    2. Os `<input>` são `sr-only`, que é `position:absolute` — por isso não
+       ocupam célula do grid.
+    3. As classes abaixo são LITERAIS de propósito. `peer-checked/${plan.id}`
+       montado em template não existe para o Tailwind, que lê o código como texto:
+       a classe simplesmente não é gerada e, de novo, o defeito é mudo.
+
+  ── O QUE SE GANHA E O QUE SE PERDE ──────────────────────────────────────────
+
+  Ganha-se DESCOBERTA: os três nomes e os três preços ficam visíveis na primeira
+  tela da seção, sem rolar. Perde-se a comparação SIMULTÂNEA de recursos no
+  celular — mas ela já não existia: com 3.400px por cartão, nunca coube um cartão
+  e meio na mesma tela. O que havia era comparação por memória, depois de rolar
+  sete telas. Os preços continuam comparáveis lado a lado em dois lugares: nos
+  próprios botões e na tabela de ciclos, logo abaixo.
+
+  No desktop (`lg`) nada muda: os rótulos somem, os três cartões voltam lado a
+  lado como sempre estiveram. O seletor é peça de celular e tablet.
+*/
+
+/*
+  ⚠️ `PLANO_ABERTO`, `SELETOR` e o contrato de visibilidade moram em
+  `@/lib/site/seletorDePlanos` — não por organização, por PORTÃO: classe de
+  Tailwind escrita errada não quebra compilação nem emite aviso, e o sintoma é a
+  página esconder dois planos de todo mundo para sempre. Dado puro tem teste;
+  string dentro de JSX não tinha.
+*/
+
+/**
+ * O rótulo-botão. Mostra nome E preço: um seletor que só diz "Crescimento" obriga
+ * a trocar de aba para descobrir quanto custa — o visitante teria de fazer três
+ * cliques para ter na cabeça o que a tabela de ciclos entrega de uma vez.
+ */
+function BotaoDePlano({ plan }: { plan: Plan }) {
+  const code = SITE_PLAN_TO_CODE[plan.id];
+  return (
+    <label
+      htmlFor={`plano-${plan.id}`}
+      className={`relative mt-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-line2 bg-paper px-1.5 py-2.5 text-ink2 transition-colors hover:border-brand-400 sm:py-3.5 lg:hidden ${SELETOR[plan.id].rotulo}`}
+    >
+      {/*
+        O "Mais vendido" SOBREVIVE à troca — se ele só existisse dentro do cartão,
+        quem abrisse em outro plano perderia o empurrão. Fundo `ink` e não
+        `brand-500`: quando o botão está selecionado ele TAMBÉM fica laranja, e
+        selo laranja sobre botão laranja é selo invisível.
+      */}
+      {plan.highlighted && (
+        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink px-2 py-[3px] text-[9px] font-semibold uppercase tracking-[0.06em] text-white">
+          Mais vendido
+        </span>
+      )}
+      <span className="sr-only">Ver o plano </span>
+      <span className="text-[10.5px] uppercase tracking-[0.08em] opacity-70 sm:text-[11px]">
+        {plan.name}
+      </span>
+      <span className="mt-0.5 text-[13.5px] font-semibold tabular-nums sm:text-[15px]">
+        {formatBRL(PLAN_CYCLE_CENTS[code].MENSAL)}
+        {/*
+          O "/mês" só entra a partir de `sm`, e o motivo foi medido: com ele, o
+          preço ocupa 92px dentro de um botão que tem 73px de área útil a 320px e
+          91px a 375px — ou seja, estourava até no tamanho que é prioridade. Sem
+          ele o preço cabe folgado em todo aparelho, e a unidade não se perde:
+          o cartão logo abaixo abre com "R$ 429,00 /mês · no plano mensal".
+        */}
+        <span className="hidden text-[10.5px] font-normal opacity-70 sm:inline">/mês</span>
+      </span>
+    </label>
+  );
+}
+
 function PlanCard({ plan }: { plan: Plan }) {
   const featured = Boolean(plan.highlighted);
   const code = SITE_PLAN_TO_CODE[plan.id];
   // Todo número abaixo sai da fonte única — a mesma que o checkout cobra.
   const monthly = PLAN_CYCLE_CENTS[code].MENSAL;
+  /*
+    TRÊS APARIÇÕES DA MESMA OFERTA VIRARAM DUAS (07/08). O CEO perguntou se o
+    desconto aparecendo no anúncio, no quadrinho "1º mês" e na linha embaixo do
+    botão reforça ou dilui. Dilui: o quadrinho e a linha diziam o MESMO número a
+    três centímetros de distância, e nenhum dos dois dizia nada que o outro já não
+    dissesse.
+
+    O que ficou, e por que cada um tem trabalho diferente:
+      · o anúncio no topo da seção  → cria o desejo, em porcentagem;
+      · este quadrinho              → traduz a porcentagem no VALOR DESTE plano;
+      · a linha embaixo do botão    → deixou de repetir o valor e passou a
+        responder a pergunta que trava o dedo no botão ("e se eu quiser sair?").
+  */
   const highlights = [
-    { label: "Anual", value: `${formatBRL(monthlyEquivalentCents(code, "ANUAL"))}/mês` },
-    { label: "1º mês", value: formatBRL(firstChargeCents(code, "MENSAL")) },
+    { label: "Anual", value: `${formatBRL(monthlyEquivalentCents(code, "ANUAL"))}/mês`, oferta: false },
+    {
+      /* O `−50%` sai da mesma função que cobra o cartão — nunca digitado. É ele que
+         amarra este quadrinho ao anúncio lá em cima: sem a porcentagem, "R$ 89,50"
+         é só mais um número entre os quatro do cartão. */
+      label: `1º mês −${firstMonthDiscountPercent()}%`,
+      value: formatBRL(firstChargeCents(code, "MENSAL")),
+      oferta: true,
+    },
   ];
   return (
     <div
@@ -582,8 +701,14 @@ function PlanCard({ plan }: { plan: Plan }) {
           : "border border-line shadow-[0_1px_2px_rgba(11,11,11,0.04),0_18px_38px_-26px_rgba(11,11,11,0.22)]"
       }`}
     >
+      {/*
+        UM selo por tela, nunca dois. Abaixo de `lg` quem carrega o "Mais vendido"
+        é o BOTÃO do seletor — ele precisa do selo mesmo quando o visitante está
+        olhando outro plano. Deixar os dois acesos punha o mesmo selo duas vezes a
+        noventa pixels de distância, e o de cima anulava o de baixo.
+      */}
       {featured && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.55)]">
+        <span className="absolute -top-3 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.55)] lg:inline-flex">
           Mais vendido
         </span>
       )}
@@ -608,9 +733,26 @@ function PlanCard({ plan }: { plan: Plan }) {
       {/* Os dois preços que mudam: ciclo anual e primeiro mês */}
       <div className="mt-4 grid grid-cols-2 gap-2">
         {highlights.map((d) => (
-          <div key={d.label} className="rounded-xl border border-line bg-canvas px-2 py-2 text-center">
-            <p className="text-[10.5px] uppercase tracking-wide text-muted">{d.label}</p>
-            <p className="mt-0.5 text-[12.5px] font-semibold tabular-nums text-ink">{d.value}</p>
+          <div
+            key={d.label}
+            className={`rounded-xl border px-2 py-2 text-center ${
+              d.oferta ? "border-brand-200 bg-brand-50" : "border-line bg-canvas"
+            }`}
+          >
+            <p
+              className={`text-[10.5px] uppercase tracking-wide ${
+                d.oferta ? "font-semibold text-brand-600" : "text-muted"
+              }`}
+            >
+              {d.label}
+            </p>
+            <p
+              className={`mt-0.5 text-[12.5px] font-semibold tabular-nums ${
+                d.oferta ? "text-brand-700" : "text-ink"
+              }`}
+            >
+              {d.value}
+            </p>
           </div>
         ))}
       </div>
@@ -636,8 +778,10 @@ function PlanCard({ plan }: { plan: Plan }) {
           withArrow={false}
           className="!py-3 !text-[15px]"
         />
+        {/* Lida de `CYCLE_COPY` — a mesma fonte que a tabela de ciclos usa, para a
+            página não prometer 30 dias aqui e outra coisa lá embaixo. */}
         <p className="text-center text-[11.5px] text-muted">
-          Primeiro mês por {formatBRL(firstChargeCents(code, "MENSAL"))}. Sem fidelidade.
+          {CYCLE_COPY.MENSAL.badge}. {CYCLE_COPY.MENSAL.gain}
         </p>
       </div>
 
@@ -762,9 +906,32 @@ export default function PrecosPage() {
             feita com o número cheio.
           */}
           <SinaisDeVenda className="mb-8" />
-          <div className="grid items-start gap-6 lg:grid-cols-3 lg:gap-5">
+
+          {/*
+            A ORDEM DO DOM AQUI É A MECÂNICA, não arrumação: inputs → rótulos →
+            cartões, todos irmãos diretos do mesmo grid. Ver a nota longa em
+            `SELETOR`. Três colunas em todo tamanho: no celular elas seguram os
+            três botões e o cartão atravessa (`col-span-3`); no desktop os botões
+            somem e cada cartão fica com a sua coluna.
+          */}
+          <div className="grid grid-cols-3 items-start gap-x-2.5 gap-y-6 lg:gap-x-5">
             {PLANS.map((plan) => (
-              <PlanCard key={plan.name} plan={plan} />
+              <input
+                key={`radio-${plan.id}`}
+                type="radio"
+                name="plano"
+                id={`plano-${plan.id}`}
+                defaultChecked={plan.id === PLANO_ABERTO}
+                className={`sr-only ${SELETOR[plan.id].peer}`}
+              />
+            ))}
+            {PLANS.map((plan) => (
+              <BotaoDePlano key={`botao-${plan.id}`} plan={plan} />
+            ))}
+            {PLANS.map((plan) => (
+              <div key={plan.id} className={`col-span-3 lg:col-span-1 ${SELETOR[plan.id].cartao}`}>
+                <PlanCard plan={plan} />
+              </div>
             ))}
           </div>
 

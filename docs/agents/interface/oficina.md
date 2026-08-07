@@ -1830,3 +1830,131 @@ Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 8,5.
 
 — interface, sobre `origin/claude/remove-legacy-runner-q8iXa` (6b040419),
 branch `claude/foocci-precos-cobrado-a-parte`
+
+---
+
+## 2026-08-07 — `/site/precos`: a oferta virou anúncio, e os três planos ganharam botão
+
+**Branch:** `claude/precos-desconto-e-planos`, aberta de
+`origin/claude/remove-legacy-runner-q8iXa` (f12cb237). Sem commit, sem push —
+o Diretor leva.
+
+### P0 — os 50% estavam tímidos
+
+O diagnóstico do CEO estava certo e não era de pintura: os dois fatos do
+`SinaisDeVenda` entravam como **dois marcadores da mesma lista**, mesmo tamanho,
+mesma moldura. Medido no celular: a oferta ocupava **2 linhas**, o "funciona no
+navegador" ocupava **4**. Empate de hierarquia com o fato menor ganhando por
+volume de texto — a maior alavanca comercial da casa lendo como nota de rodapé.
+
+Separei as duas peças: `OfertaPrimeiroMes` (moldura escura, `bg-ink`, número em
+68px no celular e 84px no monitor, `brand-400`) e `SemAplicativo` (linha em
+`muted` 12,5px, **fora** da moldura). Um é oferta; o outro é resposta a objeção.
+
+**Por que `ink` e não laranja cheio, que era o reflexo óbvio:** (a) a seção já tem
+três botões `brand-500` e o selo "Mais vendido" — um quarto bloco laranja vira
+ruído, não destaque, e contraria o 90/10 do Brand Book; (b) branco sobre
+`brand-500` dá ~2,9:1 de contraste, que reprova em texto pequeno. Sobre `ink` o
+laranja é o acento e o contraste é folgado. É o único bloco escuro da página: o
+olho cai nele antes de qualquer cartão.
+
+**As três aparições viraram duas.** O CEO perguntou se reforça ou dilui. Diluía:
+o quadrinho "1º MÊS · R$ 89,50" e a linha "Primeiro mês por R$ 89,50" diziam o
+MESMO número a três centímetros de distância. Ficaram o quadrinho (agora
+`1º MÊS −50%` em tom brand — é ele que traduz a porcentagem no valor DESTE plano)
+e a linha embaixo do botão, que **deixou de repetir o valor** e passou a responder
+a pergunta que trava o dedo: "Sem fidelidade. Cancela avisando 30 dias antes." —
+lida de `CYCLE_COPY.MENSAL`, não digitada.
+
+### Item 2 — o seletor de três botões
+
+Medida que justifica o pedido: o cartão do Essencial tem ~3.400px no celular; o
+Crescimento começava a três telas e meia de rolagem, o Performance a sete.
+
+Fiz **CSS puro** — `<input type="radio">` + `:checked` + `peer` nomeado — e não
+`useState`. Provado no navegador com o **JavaScript desligado**: a troca funciona
+igual em 375 e 768, e os três cartões estão sempre no HTML servido. Com React, o
+visitante sem JS ficaria preso no plano de partida.
+
+Três amarrações que quebram **em silêncio** se alguém "organizar" o markup depois:
+
+1. os `<input>` são **irmãos diretos** dos rótulos e dos cartões dentro do mesmo
+   `grid` — o seletor gerado é `~`. Enfiar os rótulos numa `<div>` organizadora
+   mata a troca sem erro de compilação e sem aviso;
+2. `sr-only` é `position:absolute` — é por isso que os rádios não ocupam célula;
+3. `peer-checked/${id}` montado em template **não existe para o Tailwind**, que lê
+   o código como texto. As classes são literais, três vezes, de propósito.
+
+Por isso `PLANO_ABERTO`, `SELETOR` e `faltasDaVisibilidade` saíram do `page.tsx`
+para `@/lib/site/seletorDePlanos` — dado puro tem portão, string dentro de JSX
+não tinha.
+
+**Um selo por tela.** Com o botão carregando "Mais vendido", o selo do cartão
+ficava duplicado a 90px de distância; o do cartão passou a ser `lg:` apenas. O do
+botão é `bg-ink` e não `brand-500`, senão some quando o botão está selecionado.
+
+**O "/mês" do botão só entra a partir de `sm`, e isso foi medido, não achado:**
+com ele o preço ocupava 92px num botão com 73px de área útil a 320px e **91px a
+375px** — estourava até no tamanho que é prioridade. Sem ele, 70px, folgado em
+todo aparelho.
+
+### Portões (as duas metades, provadas por sabotagem no arquivo de verdade)
+
+- `src/components/marketing/tests/ofertaDoPrimeiroMes.test.ts` — o percentual sai
+  de `firstMonthDiscountPercent()`. Troquei `${firstMonthDiscountPercent()}` por
+  `50` no `page.tsx`: **reprovou nomeando o arquivo**; revertido, passou. O
+  detector é estreito de propósito (só percentual colado em "primeiro mês"/"1º
+  mês") — um genérico acusaria `object-position: 50% 38%`, `max-w-[80%]`,
+  `transparent_65%` e o "10% de desconto em cada mês" do trimestral, e portão que
+  reprova o caso certo ensina a desligar o portão. Guarda também a hierarquia: o
+  detector `doisFatosEmpatados` reprova o markup da faixa antiga e passa no de
+  hoje.
+- `src/lib/site/tests/tresPlanosSempreNoHtml.test.ts` — contrato de visibilidade
+  (`hidden` + `peer-checked/<id>:block` + `lg:block`), sem filtro em `PLANS`, sem
+  `"use client"`. Tirei `lg:block` do Performance: **reprovou nomeando o plano**;
+  revertido, passou.
+- 18 casos novos. `npx tsc --noEmit` limpo.
+
+### Medidas
+
+| | 375 | 768 | 1280 |
+|---|---|---|---|
+| `documentElement.scrollWidth` | 375 | 768 | 1280 (= `clientWidth`, exato) |
+| altura da página antes | 13.703px | 10.717px | 7.434px |
+| altura da página depois | **9.390px** | **7.315px** | 7.536px |
+
+O celular perdeu **4.313px** — de ~17 telas para ~11,5 — sem tirar uma linha de
+conteúdo: os dois planos que sobravam empilhados agora ficam a um toque.
+
+Conferi também 320 / 360 / 414 / 1024 / 1100 / 1440 / 1920. Em 1024 (o
+breakpoint exato do seletor) a faixa da oferta mantém 174px de altura e os três
+cartões voltam lado a lado.
+
+⚠️ **Alarme falso confirmado, o mesmo que a vitrine já avisa:** o
+`scrollWidth` da faixa da oferta acusa **112px** de estouro em todas as larguras.
+É o brilho decorativo (`absolute`, `pointer-events-none`, maior que a caixa de
+propósito), cortado pelo `overflow-hidden` do pai. O sinal que vale é o do
+documento, e ele é exato nos três tamanhos.
+
+### Autoavaliação
+
+Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
+
+### Duas coisas que NÃO decidi, de propósito
+
+1. **Onde o seletor abre.** Está em `crescimento` (o "Mais vendido"). Capturei
+   também com `essencial`. O selo sobrevive nos dois casos porque vive no botão.
+2. **A home não fala do desconto.** `src/app/site/(gated)/page.tsx:38` importa
+   `SinaisDeVenda` e **não usa** — import morto que o `tsc` não acusa. O HTML de
+   `/site` não contém "primeiro mês" nenhuma vez. Não mexi: é decisão de
+   percurso/negócio, não troca de classe.
+
+### Achado de higiene do repositório
+
+A árvore de trabalho já vinha **suja** ao criar a branch: `src/services/ai/`
+(4 arquivos modificados) + 2 arquivos novos, trabalho em curso de outro agente.
+São eles que reprovam 2 testes de `WaiterBrainV2.cards-and-restrictions`.
+Verificado por eliminação: `git stash push -- src/services/ai/` → os mesmos 2
+testes passam. Nada meu toca aquilo.
+
+— interface, branch `claude/precos-desconto-e-planos`
