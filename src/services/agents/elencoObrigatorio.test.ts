@@ -117,6 +117,35 @@ describe("as restrições que já foram decididas", () => {
   });
 });
 
+describe("os cinco apontam para a constituição", () => {
+  /*
+    "Regra não se copia, se aponta." Se a constituição for colada dentro de cada
+    perfil, ela diverge em três meses e ninguém sabe qual versão vale — foi o
+    motivo de o kit existir.
+
+    O que este bloco protege é o VÍNCULO. Um perfil que perde o ponteiro deixa de
+    ser um Essencial e vira um agente qualquer com o mesmo nome: continua sendo
+    despachado, continua respondendo, e ninguém percebe que ele parou de operar
+    sob as travas.
+  */
+  it.each(OBRIGATORIOS)("`$slug` se declara Essencial e cita a doutrina", ({ slug }) => {
+    const perfil = ler(slug);
+    expect(perfil).toMatch(/Essenciais/);
+    expect(perfil).toMatch(/23-constituicao-dos-essenciais\.md/);
+  });
+
+  it.each(OBRIGATORIOS)("`$slug` carrega a regra da reversibilidade", ({ slug }) => {
+    /*
+      Não basta citar o arquivo: a regra que muda o comportamento no dia a dia
+      tem que estar à mão. Um agente que precisa abrir outro repositório para
+      saber se pode agir sozinho vai decidir sem abrir.
+
+      A metade que reprova: apagar o parágrafo e deixar só o link.
+    */
+    expect(ler(slug)).toMatch(/reversibilidade/i);
+  });
+});
+
 describe("a pasta não perde agentes em silêncio", () => {
   it("todo arquivo em .claude/agents tem frontmatter com nome e ferramentas", () => {
     // Um perfil malformado é carregado como nada. Falha silenciosa é a que mais
