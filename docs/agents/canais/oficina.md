@@ -228,3 +228,133 @@ canal. Canal desconectado e canal parado produzem a **mesma tela vazia**.
 Corolário: **"aba de canal vazia na Central nunca é evidência de que o canal está
 bem"** — é a versão forte da entrada de 01/08 sobre o filtro client-side.
 Proveniência: apuração 2026-08-07, código em `ccc621a`, arquivos acima.
+
+---
+
+## 2026-08-07 (2) · A Central passa a saber que existe canal morto
+
+CEO autorizou os três consertos que propus. Executados na ordem.
+
+### 1. Faixa de canal fora do ar (`/atendimento`)
+
+- `src/services/channels/channelHealth.ts` — avaliador **puro**.
+- `src/app/api/atendimento/channel-health/route.ts` — leitura, tenant-scoped.
+- `src/components/atendimento/ChannelHealthBanner.tsx` — a faixa.
+- `AtendimentoClient.tsx:508-537` (sondagem, 5 min) e `:1009-1013` (render).
+
+Quatro decisões que valem mais que o código:
+
+- **Silêncio nunca fica vermelho.** Vermelho exige fato positivo (`lastError`).
+  Ficar mudo, por 15 dias ou por um ano, é sempre âmbar — restaurante de baixo
+  movimento passa dias sem Direct legitimamente. Guardrail 5: a proteção não pode
+  ser pior que o problema. Trocaria um selo que mente "tudo bem" por um alarme que
+  mente "quebrou".
+- **Canal ausente ≠ canal caído.** Sem config, sem `enabled`, `DISABLED` ou
+  pausado → devolve vazio. Faixa que acende para quem não usa Instagram é
+  ignorada no primeiro dia e não serve para o dia em que importa.
+- **Falha de leitura zera a faixa.** Não conseguir ler saúde não autoriza a tela
+  a dizer que está tudo bem — ela cala (guardrail 1). Está no comentário da rota
+  e no do `useEffect`, porque é o tipo de coisa que alguém "conserta" errado.
+- **Uma faixa por vez.** O recado de `RECEIVE_ONLY` só aparece quando não há
+  problema de saúde. Empilhar duas comia metade da tela a 375px — medido.
+
+**A ação é curta de propósito** (≤32 caracteres, travado por teste). Na primeira
+versão era "Se você espera Directs, confira a conexão em Integrações → Instagram"
+e a 375px a faixa ocupava um terço da tela. A ressalva foi para o `headline`; o
+botão virou "Abrir Integrações". Screenshot me obrigou a isso — não teria visto no
+código.
+
+**WhatsApp ficou de fora, de propósito.** `MetaWhatsAppConfig` não tem carimbo de
+último evento recebido, e `connectionStatus: "ERROR"` na Meta **não** significa
+WhatsApp fora do ar — a Evolution é o padrão E o fallback, então o número pode
+estar atendendo normalmente. Avisar "WhatsApp caiu" ali é alarme falso no canal
+que carrega todo o movimento. Documentado no cabeçalho do serviço.
+
+### 2. A aba de canal busca no servidor
+
+`conversationListFilter.ts:75-78` + `chat/conversations/route.ts:130` +
+`AtendimentoClient.tsx:449-458`. Parâmetro `instagram=1`, no mesmo formato de
+`staff=1` e `crm=1` (booleano, não `channel`, porque a aba precisa de dois canais).
+
+**A busca por texto foi junto.** Ela tinha o mesmo defeito. Mandar `search` ao
+servidor é alargamento puro: o back casa nome/telefone inclusive fora da janela, e
+o filtro do cliente (um OU que inclui o conteúdo da última mensagem) deixa passar
+tudo que o servidor casou. Nada some.
+
+### 3. Selo com prazo de validade
+
+`instagramCardStatus()` em `channelHealth.ts` (função pura, para ter portão) usado
+por `api/integrations/instagram/route.ts:54-67`. Novo estado **`attention`** →
+badge âmbar **"Sem receber"**, distinto de "Erro" no texto e na cor.
+`IntegrationsCenterClient.tsx`: tipo, `StatusBadge`, `mergeStatus` (com `attention`
+rankeado ACIMA de `active`, para um "ativo" nunca apagar um sinal de silêncio) e
+chip próprio no resumo — somar em "Conectado" era exatamente a mentira antiga.
+
+Levei junto duas mentiras menores da tela do Instagram: a data do último Direct
+agora vem com ressalva quando velha, e o item de checklist "mensagens chegando"
+deixou de ficar marcado com um carimbo de 15 dias.
+
+### Portões — e a sabotagem que passou verde
+
+`tsc --noEmit` limpo. `vitest run` **6068/6068**, 0 suítes vermelhas (JSON).
+39 testes novos.
+
+Sete sabotagens aplicadas, **cada uma confirmada no arquivo antes de julgar**:
+
+| # | O que quebrei | Pegou |
+|---|---|---|
+| A | silêncio vira `down` | 4 |
+| B | guardas de `configured`/`enabled` | 2 → **5** |
+| C | guarda de `paused` | 1 |
+| D | filtro do Instagram sai do banco | 3 |
+| E | filtro do Instagram sempre ligado | 4 |
+| F | selo volta a não ter prazo | 3 |
+| G | tudo vira `attention` | 2 |
+
+**A sabotagem B pegou só 2 na primeira rodada — e foi o achado do dia.** Os
+portões de "canal ausente" passavam **vazios**: eu testava `configured: false` com
+um estado que não acenderia de qualquer jeito. Teste que devolve `[]` porque não
+havia nada a dizer não prova guarda nenhuma. Reescrevi com um estado `LOUD` (erro
++ 15 dias de silêncio + RECEIVE_ONLY) que **acende comprovadamente** quando o canal
+está ligado — com um teste de controle explícito para isso — e aí a mesma
+sabotagem passou a ser pega por 5 portões. Fica a regra:
+
+> **Portão de "não deve acontecer" precisa provar que o caso ACONTECERIA sem a
+> guarda.** Senão ele passa verde para sempre e você acha que está protegido.
+
+### Screenshots — 375 / 768 / 1280
+
+Postgres 16 descartável + `next dev` na porta 3100, banco semeado com **120
+conversas de WhatsApp mais recentes que a única do Instagram** (posição 121, fora
+da janela de 100). Tudo derrubado e apagado no fim.
+
+- **Faixa acesa:** âmbar, "Instagram sem receber mensagem há 15 dias", com
+  "Abrir Integrações". Nos três tamanhos.
+- **Faixa apagada:** mesmo restaurante, `lastWebhookAt` de 10 min atrás. Nada.
+- **Aba Instagram, o antes e o depois no MESMO banco:** com o filtro só no
+  navegador → *"0 conversas · Nenhuma conversa encontrada"*; com `instagram=1` →
+  *"1 conversa"*, a DM de 22/07 de volta. É a prova do defeito que o CEO estava
+  vendo.
+- **Integrações:** mudo → `Sem receber` âmbar, resumo `0 Conectado / 1 Sem
+  receber`; saudável → `Ativo` verde, `1 Conectado`.
+- **Sem empilhar:** `RECEIVE_ONLY` + mudo a 375px → **uma** faixa.
+
+### Não fiz
+
+Nenhuma mensagem enviada. Nada tocado em token, segredo, permissão, App Review ou
+no fluxo de conexão. `RECEIVE_ONLY` continua o padrão — a faixa informa, não
+altera. O `externalStatus: "pending"` eterno ficou para o próximo bloco. Sem
+commit, sem push.
+
+### Proposta de vitrine
+
+1. **"Portão de 'não deve acontecer' precisa provar que o caso aconteceria sem a
+   guarda."** Vale para qualquer agente, não só canais. Origem: sabotagem B desta
+   sessão, 2026-08-07.
+2. **"Silêncio nunca é prova de defeito — no máximo é atenção."** Só um fato
+   positivo (erro registrado) autoriza vermelho. Vale para todo alerta de canal.
+   Origem: `channelHealth.ts`, 2026-08-07.
+3. **"Aba de canal vazia na Central nunca é evidência de que o canal está bem"** —
+   proposta na apuração da manhã, agora **com o conserto junto**: o filtro é do
+   servidor e existe faixa de saúde. A entrada de 01/08 sobre o filtro
+   client-side pode ser aposentada.

@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type IntegrationStatus = "unconfigured" | "configured" | "active" | "error" | "pending_validation";
+// "attention" = conectado, sem erro registrado, mas sem receber nada há tempo
+// demais. Nasceu do Instagram que ficou treze dias verde com o canal morto. É
+// deliberadamente DIFERENTE de "error" no texto e na cor: silêncio pode ser
+// movimento baixo, e um alarme que grita "quebrou" sem prova seria pior que o
+// selo que ele substitui.
+type IntegrationStatus = "unconfigured" | "configured" | "active" | "error" | "attention" | "pending_validation";
 
 interface IntegrationView {
   provider:     string;
@@ -107,7 +112,10 @@ const INTEGRATIONS: {
 // ── API helper ────────────────────────────────────────────────────────────────
 
 function mergeStatus(a: IntegrationStatus | undefined, b: IntegrationStatus | undefined): IntegrationStatus {
-  const rank: Record<IntegrationStatus, number> = { active: 5, error: 4, configured: 3, pending_validation: 2, unconfigured: 1 };
+  // `attention` fica ACIMA de `active` de propósito: quando um lado diz "ativo" e
+  // o outro diz "não chega nada há dois dias", o aviso é que precisa sobreviver.
+  // Um "ativo" nunca pode apagar um sinal de silêncio.
+  const rank: Record<IntegrationStatus, number> = { attention: 6, active: 5, error: 4, configured: 3, pending_validation: 2, unconfigured: 1 };
   const ra = a ? rank[a] : 0;
   const rb = b ? rank[b] : 0;
   return ra >= rb ? (a ?? "unconfigured") : (b ?? "unconfigured");
@@ -152,6 +160,15 @@ function StatusBadge({ status }: { status: IntegrationStatus }) {
       <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">
         <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
         Erro
+      </span>
+    );
+  // Conectado, sem erro, mas mudo há tempo demais. Âmbar e "Sem receber" —
+  // nunca vermelho, nunca "Erro": não temos prova de que quebrou.
+  if (status === "attention")
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Sem receber
       </span>
     );
   if (status === "pending_validation")
@@ -1358,7 +1375,10 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
   const total     = INTEGRATIONS.length;
   const connected = Object.values(views).filter((v) => v.status === "active").length;
   const withError = Object.values(views).filter((v) => v.status === "error").length;
-  const pending   = total - connected - withError;
+  // Canal mudo tem chip próprio: somar em "Conectado" era exatamente a mentira
+  // antiga, e escondê-lo dentro de "Pendente" o tornaria invisível de novo.
+  const stale     = Object.values(views).filter((v) => v.status === "attention").length;
+  const pending   = total - connected - withError - stale;
 
   return (
     <div className="flex h-full min-h-0">
@@ -1377,6 +1397,7 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
                 <SummaryChip label="Total" value={total} color="gray" />
                 <SummaryChip label="Conectado" value={connected} color="green" />
                 <SummaryChip label="Pendente" value={pending} color="yellow" />
+                {stale > 0 && <SummaryChip label="Sem receber" value={stale} color="yellow" />}
                 {withError > 0 && <SummaryChip label="Com erro" value={withError} color="red" />}
               </div>
             )}

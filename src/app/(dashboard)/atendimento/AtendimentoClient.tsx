@@ -22,6 +22,8 @@ import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledge
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import { formatOrderNumber } from "@/lib/order-number";
+import { ChannelHealthBanner } from "@/components/atendimento/ChannelHealthBanner";
+import type { ChannelHealthItem } from "@/services/channels/channelHealth";
 
 // ── Internal command detection (client-safe pure helper) ──────────────────────
 
@@ -400,6 +402,10 @@ export function AtendimentoClient({
   const [search,        setSearch]        = useState("");
   const [searchInput,   setSearchInput]   = useState("");
 
+  // Saúde dos canais de entrada. Começa e permanece VAZIO enquanto a leitura
+  // não voltar — vazio significa "nada a dizer", nunca "o canal está bem".
+  const [channelHealth, setChannelHealth] = useState<ChannelHealthItem[]>([]);
+
   const [deleteConvOpen,    setDeleteConvOpen]    = useState(false);
   const [deleteConvLoading, setDeleteConvLoading] = useState(false);
   const [deleteConvError,   setDeleteConvError]   = useState<string | null>(null);
@@ -441,6 +447,15 @@ export function AtendimentoClient({
     // The Staff tab filters server-side too, so classified conversations older
     // than the default loaded window still appear.
     if (statusFilter === "STAFF") params.set("staff", "1");
+    // Mesmo motivo, mesma forma: a aba "📷 Instagram" filtrava no navegador,
+    // sobre as 100 conversas já carregadas. Uma DM de 23/07 empurrada para fora
+    // dessa janela por 15 dias de WhatsApp sumia da aba — existindo no banco.
+    if (statusFilter === "INSTAGRAM") params.set("instagram", "1");
+    // A busca por texto tinha o mesmo defeito: só peneirava a janela. Mandar ao
+    // servidor é ALARGAMENTO puro — o back casa nome e telefone (inclusive de
+    // conversas antigas, fora da janela) e o filtro do cliente, que é um OU com
+    // o conteúdo da última mensagem, deixa passar tudo o que o servidor casou.
+    if (search.trim()) params.set("search", search.trim());
 
     try {
       // Use /api/chat/conversations: supports channel, all status values, aiEnabled
@@ -459,7 +474,7 @@ export function AtendimentoClient({
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, search]);
 
   // Immediate refetch when filter/search changes
   useEffect(() => {
@@ -507,6 +522,33 @@ export function AtendimentoClient({
       if (!s) return;
       setHandoffSoundEnabled(s.soundEnabled && s.humanAttentionSoundEnabled);
     });
+  }, []);
+
+  // ── Saúde dos canais de entrada ───────────────────────────────────────────
+  // Um canal fora do ar produzia exatamente a mesma tela que um dia parado:
+  // "Nenhuma conversa encontrada". Foi assim que o Instagram ficou 15 dias mudo
+  // sem ninguém ver. Sondagem lenta de propósito (5 min): isto muda em escala de
+  // horas, e não pode competir com o poll de 7 s da lista.
+  //
+  // Falha de rede/rota → ZERA a faixa. Não conseguir ler a saúde do canal não
+  // autoriza a tela a dizer que está tudo bem — ela só cala (guardrail 1).
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/atendimento/channel-health");
+        if (!alive) return;
+        if (!res.ok) { setChannelHealth([]); return; }
+        const json = await res.json();
+        const items = json?.data?.items;
+        setChannelHealth(Array.isArray(items) ? (items as ChannelHealthItem[]) : []);
+      } catch {
+        if (alive) setChannelHealth([]);
+      }
+    };
+    void load();
+    const id = setInterval(load, 5 * 60 * 1000);
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
   // Conversations waiting for a human (status === "HUMAN", not Staff/equipe),
@@ -724,7 +766,9 @@ export function AtendimentoClient({
       // leave when the owner reclassifies them back to "Cliente".
       items = items.filter((c) => c.aiLocked === true);
     } else if (statusFilter === "INSTAGRAM") {
-      // Only Instagram (Direct + comentários). Client-side over the loaded window.
+      // Only Instagram (Direct + comentários). O filtro REAL agora é do servidor
+      // (`instagram=1`), como Staff e CRM; este aqui é rede de segurança para o
+      // intervalo entre trocar de aba e a resposta chegar — igual ao STAFF acima.
       items = items.filter((c) => c.channel === "INSTAGRAM_DIRECT" || c.channel === "INSTAGRAM_COMMENT");
     } else if (statusFilter !== "RESOLVED") {
       // "Todas": hide CRM outbound-only — they don't need human attention.
@@ -983,9 +1027,15 @@ export function AtendimentoClient({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex overflow-hidden"
+      className="flex flex-col overflow-hidden"
       style={{ height: "calc(100vh - var(--topbar))" }}
     >
+      {/* Canal fora do ar. Fica ACIMA das duas colunas de propósito: no celular
+          a lista some quando a conversa abre, e o aviso não pode sumir junto.
+          Lista vazia → não renderiza nada (ver ChannelHealthBanner). */}
+      <ChannelHealthBanner items={channelHealth} />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* ── LEFT PANEL ───────────────────────────────────────────────────── */}
       <aside
         className={`
@@ -1377,6 +1427,7 @@ export function AtendimentoClient({
           />
         ) : null}
       </section>
+      </div>
     </div>
   );
 }
