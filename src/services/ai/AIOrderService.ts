@@ -982,6 +982,8 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   // 7. OpenAI tool-call loop
   let promptTokens = 0;
   let completionTokens = 0;
+  /** Alguma iteração voltou sem `usage` → a contagem do turno está incompleta. */
+  let tokensUnknown = false;
   const toolCallsMade: Array<{ name: string; args: unknown; result: unknown; success: boolean }> = [];
   let finalResponse = "";
   let addItemAttempts = 0;            // guard: max 2 add_item calls per turn
@@ -999,8 +1001,15 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
       temperature: 0.3,
     });
 
-    promptTokens += response.usage?.prompt_tokens ?? 0;
-    completionTokens += response.usage?.completion_tokens ?? 0;
+    // Se a resposta vier sem `usage`, os tokens desta iteração são DESCONHECIDOS,
+    // não zero. Somar zero faria o custo do turno sair menor que a realidade sem
+    // nada indicando a lacuna — o mesmo defeito de "não sei" virando número.
+    if (response.usage) {
+      promptTokens += response.usage.prompt_tokens ?? 0;
+      completionTokens += response.usage.completion_tokens ?? 0;
+    } else {
+      tokensUnknown = true;
+    }
 
     const choice = response.choices[0];
     if (!choice) break;
@@ -1137,7 +1146,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 
     await sendWhatsAppReply(restaurantId, toPhone, handoffMsg, conversationId);
     await logTurn({ restaurantId, conversationId, model: brandConfig.aiModel,
-      promptTokens, completionTokens, latencyMs, toolCallsMade,
+      promptTokens, completionTokens, latencyMs, toolCallsMade, tokensUnknown,
       turnNumber: 1, success: true, errorMessage: `handoff: ${handoffReason}` });
     return;
   }
@@ -1165,6 +1174,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     completionTokens,
     latencyMs,
     toolCallsMade,
+    tokensUnknown,
     turnNumber: 1,
     success: true,
   });
@@ -1237,6 +1247,14 @@ async function safeHandoff(conversationId: string, message: string): Promise<voi
   }
 }
 
+/**
+ * Slug do agente dono deste fluxo. NÃO é chute: este mesmo arquivo já se
+ * identifica como "waiter" ao buscar o conhecimento de runtime
+ * (getWaiterRuntimeKnowledge, linhas 543 e 973). Fluxo que não souber seu dono
+ * deve deixar nulo — "não atribuído" é melhor que atribuído errado.
+ */
+const AI_ORDER_AGENT_SLUG = "waiter";
+
 async function logTurn(params: {
   restaurantId: string;
   conversationId: string;
@@ -1248,6 +1266,7 @@ async function logTurn(params: {
   turnNumber: number;
   success: boolean;
   errorMessage?: string;
+  tokensUnknown?: boolean;
 }): Promise<void> {
   await AIInteractionLogger.log({
     restaurantId: params.restaurantId,
@@ -1260,6 +1279,8 @@ async function logTurn(params: {
     toolCalls: params.toolCallsMade,
     success: params.success,
     errorMessage: params.errorMessage,
+    agentSlug: AI_ORDER_AGENT_SLUG,
+    tokensUnknown: params.tokensUnknown,
   });
 }
 
