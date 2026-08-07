@@ -2,10 +2,18 @@
  * /site/precos — Planos e preços (público). Inherits /site/layout.tsx.
  *
  * Página estática (server component, sem fetch — não precisa dos estados
- * loading/vazio/erro). Preços e recursos vêm da proposta comercial fechada pelo
- * CEO ("Planos Foocci v3"); ver spec do bloco de lançamento. NÃO publicar nada da
- * camada interna (justificativas de precificação, tarja de decisão, teto acima de
- * 4.000 pedidos etc.). Palavra "contrato" é proibida — usar "serviço/serviços".
+ * loading/vazio/erro). NÃO publicar nada da camada interna (justificativas de
+ * precificação, tarja de decisão, teto acima de 4.000 pedidos etc.). Palavra
+ * "contrato" é proibida — usar "serviço/serviços".
+ *
+ * ⚠️ "PLANOS FOOCCI V3" NÃO EXISTE (achado de 06/08/2026). Este cabeçalho dizia,
+ * até hoje, que preços e recursos vinham "da proposta comercial fechada pelo CEO
+ * (Planos Foocci v3)". Não há documento com esse nome no repositório — e a seção
+ * que mais se apoiava nele, os seis add-ons de "Cobrado à parte", foi lida pelo
+ * próprio CEO com um "não sei de onde vieram essas ideias". Cinco daqueles seis
+ * preços foram aposentados; o que sobrou está em `@/lib/site/servicosAParte`, com
+ * o motivo de cada corte. **Não cite fonte comercial que ninguém consegue abrir:**
+ * um comentário assim faz o número seguinte parecer decidido quando não foi.
  *
  * CONVERSÃO (04/08, self-service; enxugada em 05/08): o cartão do plano tem UMA
  * ação — "Contratar agora", que leva ao checkout `/contratar/novo` já com plano e
@@ -76,6 +84,7 @@ import {
   formatBRL as formatBRLReais,
 } from "@/lib/site/commissionRates";
 import { migrationSavings } from "@/lib/site/savings";
+import { SERVICOS_A_PARTE, NOTA_FISCAL_A_PARTE } from "@/lib/site/servicosAParte";
 import {
   SITE_PLAN_IDS,
   SITE_PLAN_TO_CODE,
@@ -369,10 +378,22 @@ const PLANS: Plan[] = [
 
 /* ── Ciclos de pagamento ──────────────────────────────────────────────────── */
 
+/*
+  ⚠️ A IMPLANTAÇÃO SAIU DAQUI EM 06/08 — e não é enfeite de texto.
+
+  As três linhas prometiam desconto de implantação ("cheia", "pela metade",
+  "grátis à vista"). O desconto era sobre R$ 299/599/1.490, faixas que o CEO
+  aposentou no mesmo dia; a implantação virou "Configuração", sob consulta. Manter
+  a promessa era publicar meia-entrada de um ingresso sem preço — e o motor de
+  cobrança nunca soube cobrar nem descontar nada disso.
+
+  Se um dia a Configuração tiver preço decidido E cobrança no checkout, o desconto
+  por ciclo volta aqui — junto do número, nunca antes dele.
+*/
 const CYCLE_COPY: Record<CycleCode, { badge: string; gain: string }> = {
-  MENSAL: { badge: "Sem fidelidade", gain: "Cancela avisando 30 dias antes. Implantação cheia." },
-  TRIMESTRAL: { badge: "−10%", gain: "10% de desconto. Implantação pela metade." },
-  ANUAL: { badge: "2 meses grátis", gain: "Paga 10, usa 12. Implantação grátis à vista." },
+  MENSAL: { badge: "Sem fidelidade", gain: "Cancela avisando 30 dias antes." },
+  TRIMESTRAL: { badge: "−10%", gain: "10% de desconto em cada mês." },
+  ANUAL: { badge: "2 meses grátis", gain: "Paga 10 meses e usa 12." },
 };
 
 /**
@@ -425,13 +446,16 @@ const DEPOIS_DE_ENVIAR = [
   "Na conversa, ela mostra o Foocci funcionando com o cardápio do seu restaurante. Sem compromisso e sem custo.",
 ];
 
-const ADDONS = [
-  { name: "Nota fiscal (NFC-e)", price: "R$ 89/mês", desc: "Custo por documento + certificado digital do lojista." },
-  { name: "WhatsApp oficial da Meta", price: "R$ 149/mês", desc: "A Meta cobra por conversa; o repasse é transparente." },
-  { name: "Pacote de 1.000 mensagens", price: "R$ 79", desc: "Pra quem estoura a cota sem precisar subir de plano." },
-  { name: "Unidade adicional", price: "60% do plano", desc: "Segunda loja da mesma marca, com cardápio e base próprios." },
-  { name: "Gestão pela agência", price: "Sob consulta", desc: "É serviço com hora humana." },
-  { name: "Implantação", price: "R$ 299 / 599 / 1.490", desc: "Única, por faixa. Metade no trimestral, grátis no anual à vista." },
+/**
+ * As três linhas do "Fora a mensalidade", na ordem em que o dono pergunta: o que
+ * a gente faz por ele (Configuração), o que a agência faz (hora humana) e a nota
+ * fiscal — que entra na lista por ser a dúvida, não por ser cobrança nossa. Os
+ * textos e o motivo de cada preço estar como está vivem em `servicosAParte.ts`;
+ * aqui só se decide a ordem.
+ */
+const LINHAS_A_PARTE: { name: string; price: string; desc: string }[] = [
+  ...SERVICOS_A_PARTE,
+  NOTA_FISCAL_A_PARTE,
 ];
 
 /* ── "Faz a conta" — premissa declarada, números calculados ──────────────────
@@ -787,7 +811,7 @@ export default function PrecosPage() {
               Escolha o ciclo. Quanto mais longo, menor a mensalidade.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-ink2">
-              O mesmo produto inteiro nos três ciclos — o que muda é a mensalidade e a implantação.
+              O mesmo produto inteiro nos três ciclos — o que muda é só a mensalidade.
             </p>
           </div>
 
@@ -883,7 +907,7 @@ export default function PrecosPage() {
                 <p className="mt-4 text-base leading-relaxed text-ink2">
                   Você paga metade da mensalidade no primeiro mês — o de instalação e aprendizado — e
                   recebe o produto completo, sem recorte. Vale para <strong className="font-semibold text-ink">todo cliente novo, em qualquer plano</strong>.
-                  É só o primeiro mês; a partir do segundo, o valor cheio. A implantação nunca entra no desconto.
+                  É só o primeiro mês; a partir do segundo, o valor cheio.
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
@@ -903,31 +927,48 @@ export default function PrecosPage() {
         </div>
       </section>
 
-      {/* 4. Cobrado à parte — add-ons */}
-      <section aria-labelledby="addons-title" className="bg-paper py-16 lg:py-20">
-        <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <Eyebrow>Cobrado à parte</Eyebrow>
-            <h2 id="addons-title" className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-              O que vem só se você usar.
-            </h2>
-            <p className="mt-4 text-lg leading-relaxed text-ink2">
-              Nada disso está embutido no preço — você só paga o que precisar, quando precisar.
-            </p>
-          </div>
+      {/*
+        4. FORA A MENSALIDADE — nota, não seção de venda.
 
-          <div className="mt-12 grid gap-4 sm:grid-cols-2">
-            {ADDONS.map((a) => (
-              <div key={a.name} className="flex items-start justify-between gap-4 rounded-2xl border border-line bg-paper p-5">
-                <div>
-                  <p className="text-sm font-semibold text-ink">{a.name}</p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-ink2">{a.desc}</p>
+        Era "Cobrado à parte": eyebrow, manchete de 4xl e SEIS cartões com preço.
+        Cinco daqueles preços foram aposentados pelo CEO em 06/08 (o porquê está em
+        `@/lib/site/servicosAParte`) e sobraram três linhas — duas "Sob consulta" e
+        uma que nem é cobrança nossa.
+
+        Manchete de 4xl anuncia tabela; entregar "Sob consulta" duas vezes depois
+        dela é anticlímax — e foi essa seção que o CEO leu dizendo "não estava
+        entendendo nada". Então ela deixou de competir com "Escolha o ciclo" e
+        "Primeiro mês pela metade": virou uma caixa discreta, com título pequeno,
+        que responde a pergunta de quem procura ("o que mais eu vou pagar?") sem
+        fingir que tem preço para mostrar.
+
+        O `id="aparte-title"` é o rótulo acessível da seção — o `h2` é pequeno de
+        propósito, mas continua sendo um `h2` na árvore do documento.
+      */}
+      <section aria-labelledby="aparte-title" className="bg-paper py-12 lg:py-16">
+        <div className="mx-auto max-w-3xl px-5 lg:px-8">
+          <div className="rounded-2xl border border-line bg-canvas p-6 sm:p-7">
+            <h2 id="aparte-title" className="text-[12.5px] font-semibold uppercase tracking-[.04em] text-ink2">
+              Fora a mensalidade
+            </h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-ink2">
+              Não existe taxa escondida no meio do caminho. Isto é tudo o que pode aparecer na
+              conta além do plano — e nada aqui é obrigatório para usar o Foocci.
+            </p>
+
+            <dl className="mt-5 divide-y divide-line border-t border-line">
+              {LINHAS_A_PARTE.map((l) => (
+                <div key={l.name} className="py-4 last:pb-0">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <dt className="text-sm font-semibold text-ink">{l.name}</dt>
+                    <dd className="shrink-0 whitespace-nowrap text-[12.5px] font-semibold text-ink2">
+                      {l.price}
+                    </dd>
+                  </div>
+                  <dd className="mt-1.5 text-[13px] leading-relaxed text-ink2">{l.desc}</dd>
                 </div>
-                <span className="shrink-0 whitespace-nowrap rounded-lg bg-canvas px-2.5 py-1 text-[13px] font-semibold tabular-nums text-ink">
-                  {a.price}
-                </span>
-              </div>
-            ))}
+              ))}
+            </dl>
           </div>
         </div>
       </section>
