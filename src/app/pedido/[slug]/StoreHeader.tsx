@@ -37,6 +37,7 @@ export function StoreHeader({
   restaurantName,
   logoUrl,
   isOpen,
+  semHorarioParaMostrar = false,
   deliveryEnabled,
   pickupEnabled,
   cartCount,
@@ -48,6 +49,16 @@ export function StoreHeader({
   restaurantName: string;
   logoUrl: string | null;
   isOpen: boolean;
+  /**
+   * Loja que nunca fecha: o estado deixa de ser desenhado.
+   *
+   * "Aberto agora" so informa alguma coisa quando existe a possibilidade de
+   * estar fechado. Numa loja 24h a linha ocupa o topo e nao responde pergunta
+   * nenhuma — foi o que o CEO viu na padaria de vitrine em 07/08. Restaurante
+   * com horario de verdade continua mostrando: para ele, esse e o dado que
+   * decide se a pessoa perde tempo montando um carrinho.
+   */
+  semHorarioParaMostrar?: boolean;
   deliveryEnabled: boolean;
   pickupEnabled: boolean;
   cartCount: number;
@@ -89,16 +100,22 @@ export function StoreHeader({
           <p className="truncate text-[15px] font-semibold leading-tight text-gray-900">
             {restaurantName}
           </p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-none text-gray-500">
-            <span
-              aria-hidden="true"
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOpen ? "bg-green-500" : "bg-gray-300"}`}
-            />
-            <span className="truncate">
-              {isOpen ? "Aberto agora" : "Fechado agora"}
-              {modes ? ` · ${modes}` : ""}
-            </span>
-          </p>
+          {/* Loja 24h nao mostra estado — so os modos de entrega, se houver. */}
+          {(!semHorarioParaMostrar || modes) && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-none text-gray-500">
+              {!semHorarioParaMostrar && (
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOpen ? "bg-green-500" : "bg-gray-300"}`}
+                />
+              )}
+              <span className="truncate">
+                {semHorarioParaMostrar
+                  ? modes
+                  : `${isOpen ? "Aberto agora" : "Fechado agora"}${modes ? ` · ${modes}` : ""}`}
+              </span>
+            </p>
+          )}
         </div>
 
         {/* Minha conta — avatar com iniciais quando identificado */}

@@ -84,6 +84,8 @@ interface Props {
   /** waToken validado no servidor — destrava cupons/endereços (read-only). */
   pedidoToken?: string | null;
   restaurantIsOpen?: boolean;
+  /** Loja 24h: o cabecalho omite o estado (ver abre24hTodosOsDias). */
+  semHorarioParaMostrar?: boolean;
   closedMessage?: string | null;
   /**
    * A identificação da entrada pode ser PULADA? Só a vitrine de demonstração
@@ -144,7 +146,7 @@ export function LojaClient({
   deliveryEnabled, pickupEnabled, deliveryFee,
   knownCustomerPhone = null, knownCustomerName = null, knownCustomerId = null,
   knownDefaultAddress = null, pedidoToken = null,
-  restaurantIsOpen = true, closedMessage = null,
+  restaurantIsOpen = true, closedMessage = null, semHorarioParaMostrar = false,
   identificacaoOpcional = false,
 }: Props) {
   const pc = brandPrimaryColor || "#f97316";
@@ -576,6 +578,7 @@ export function LojaClient({
           restaurantName={restaurantName}
           logoUrl={logoUrl}
           isOpen={restaurantIsOpen}
+          semHorarioParaMostrar={semHorarioParaMostrar}
           deliveryEnabled={deliveryEnabled}
           pickupEnabled={pickupEnabled}
           cartCount={cartCount}

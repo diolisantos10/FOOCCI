@@ -426,6 +426,8 @@ interface Props {
   ga4Id?: string | null;
   /** Whether the restaurant is currently within its configured business hours. */
   restaurantIsOpen?: boolean;
+  /** Loja 24h: o cabecalho omite "Aberto agora" (ver abre24hTodosOsDias). */
+  semHorarioParaMostrar?: boolean;
   /** Pre-computed closed message with today's hours and next opening time. */
   closedMessage?: string | null;
   /** Emergency pause flag — overrides business hours. */
@@ -2457,6 +2459,7 @@ export function PedidoClient({
   deliveryEstimatedMinutes = null, averagePreparationMinutes = null,
   ga4Id = null,
   restaurantIsOpen = true,
+  semHorarioParaMostrar = false,
   closedMessage = null,
   isOrderingPaused = false,
   pauseReason = null,
