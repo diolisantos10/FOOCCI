@@ -14,7 +14,7 @@ import { isCardEnabled } from "@/services/payment/PaymentRouter";
 import { phoneCandidates, customerFirstName, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
-import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
+import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage, abre24hTodosOsDias } from "@/lib/business-hours";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
 import { channelPrice } from "@/services/menu/MenuPricingService";
@@ -302,6 +302,8 @@ export default async function PedidoPage({
   const todayPeriods     = todayHoursRow ? getPeriodsForRow(todayHoursRow) : [];
   const nextOpenAt       = restaurantIsOpen ? null : getNextOpenAt(allHoursRows, todayDow, localMin);
   const closedMessage    = restaurantIsOpen ? null : buildClosedMessage(todayPeriods, nextOpenAt);
+  /* Loja que nunca fecha nao tem o que dizer sobre horario — ver abre24hTodosOsDias. */
+  const semHorarioParaMostrar = abre24hTodosOsDias(allHoursRows);
 
   // ── Emergency pause ──────────────────────────────────────────────────────────
   const pausedUntil = restaurant.orderingPausedUntil;
@@ -546,6 +548,7 @@ gtag('config', '${ga4Id}');
         ga4Id={ga4Id}
         cardOnlineEnabled={cardOnlineEnabled}
         restaurantIsOpen={restaurantIsOpen}
+        semHorarioParaMostrar={semHorarioParaMostrar}
         closedMessage={closedMessage}
         isOrderingPaused={isOrderingPaused}
         pauseReason={pauseReason}
@@ -590,6 +593,7 @@ gtag('config', '${ga4Id}');
         knownDefaultAddress={knownDefaultAddress}
         pedidoToken={pedidoToken}
         restaurantIsOpen={restaurantIsOpen}
+        semHorarioParaMostrar={semHorarioParaMostrar}
         closedMessage={closedMessage}
         identificacaoOpcional={identificacaoOpcional}
       />

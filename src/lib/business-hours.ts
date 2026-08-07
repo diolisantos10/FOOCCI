@@ -56,6 +56,67 @@ export function getPeriodsForRow(row: {
 }
 
 /**
+ * A LOJA ABRE 24 HORAS, TODOS OS DIAS?
+ *
+ * Ordem do CEO em 07/08/2026, olhando a padaria de vitrine: *"quero que tire a
+ * informação do horário."*
+ *
+ * Ele está certo, e a regra é de produto, não de vitrine: **loja que nunca fecha
+ * não tem o que dizer sobre horário.** "Aberto agora" só informa alguma coisa
+ * quando existe a possibilidade de estar fechado. Sem essa possibilidade, a
+ * linha ocupa espaço no topo e não responde a pergunta nenhuma.
+ *
+ * O que ela NÃO faz, de propósito: esconder o estado de um restaurante com
+ * horário de verdade. Para esse, "Aberto agora" e "Fechado agora" é a
+ * informação mais útil da tela — é o que decide se a pessoa perde tempo
+ * montando um carrinho.
+ *
+ * Reconhece as duas formas legítimas de "nunca fecha":
+ *   • as duas pontas iguais (`00:00`–`00:00`), que `isInPeriod` já trata como
+ *     período que atravessa a meia-noite e cobre o dia inteiro;
+ *   • períodos que somados cobrem os 1.440 minutos do dia.
+ *
+ * Dia sem linha cadastrada NÃO conta como 24h. `isOpenFromRow(null)` devolve
+ * `true` por conveniência, mas "ninguém cadastrou" é ausência de informação —
+ * e ausência de informação não é informação (guardrail 1). Um restaurante que
+ * nunca preencheu horário continua vendo "Aberto agora", que é o comportamento
+ * de hoje e não deve mudar por tabela.
+ */
+export function abre24hTodosOsDias(
+  rows: ReadonlyArray<{ dayOfWeek: number; isOpen: boolean; openTime: string; closeTime: string; periodsJson: unknown }>,
+): boolean {
+  if (rows.length < 7) return false;
+
+  for (let dia = 0; dia < 7; dia++) {
+    const row = rows.find((r) => r.dayOfWeek === dia);
+    if (!row || !row.isOpen) return false;
+
+    const periods = getPeriodsForRow(row);
+    if (periods.length === 0) return false;
+
+    // Cobre o dia inteiro? Ou uma ponta atravessa a meia-noite fechando o ciclo,
+    // ou a soma dos períodos alcança os 1.440 minutos.
+    const cobreTudo = periods.some((p) => {
+      const open = toMinutes(p.open);
+      const close = toMinutes(p.close);
+      return close === open; // 00:00–00:00, 08:00–08:00 … dá a volta completa
+    });
+    if (cobreTudo) continue;
+
+    const minutosCobertos = new Set<number>();
+    for (const p of periods) {
+      const open = toMinutes(p.open);
+      const close = toMinutes(p.close);
+      const fim = close > open ? close : close + 1440;
+      for (let m = open; m < fim; m++) minutosCobertos.add(m % 1440);
+    }
+    if (minutosCobertos.size < 1440) return false;
+  }
+
+  return true;
+}
+
+/**
  * Finds the next future opening time given all rows, current day, and current minute.
  * Returns `{ dayLabel: "hoje"|"amanhã"|"<day name>", time: "HH:MM" }` or null if no
  * scheduled opening is found in the next 7 days.
