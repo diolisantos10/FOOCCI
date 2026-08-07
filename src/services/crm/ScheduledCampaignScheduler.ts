@@ -27,6 +27,22 @@ import { ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaign
 const TICK_INTERVAL_MS = 10 * 60_000; // 10 minutes — conservative
 const BATCH_LIMIT      = 5;           // matches the cron endpoint default
 
+/**
+ * Atraso do PRIMEIRO tick depois do boot.
+ *
+ * `setInterval` só dispara ao fim do primeiro período: sem um tick de partida,
+ * TODO deploy custava 10 minutos de CRM mudo — e num dia de 6 merges isso vira
+ * ~1 hora de janela morta que nenhum painel mostra.
+ *
+ * Meio minuto de folga para o processo subir (Prisma conectar, env carregada)
+ * antes de tocar o banco. Não é uma exceção a nenhuma proteção: o tick de boot
+ * chama o MESMO runner, então janela de envio, teto diário, cooldown por cliente,
+ * dedupe cross-campanha e o intervalo mínimo entre ciclos continuam valendo. Em
+ * particular, o portão `minMinutesBetweenCycles` (lido do banco) impede que uma
+ * sequência de deploys aperte a cadência de mensagens para o cliente real.
+ */
+const BOOT_TICK_DELAY_MS = 30_000;
+
 export interface SchedulerLastRun {
   at:                 string;  // ISO timestamp of the tick
   mode:               "internal-scheduler";
@@ -41,6 +57,7 @@ export interface SchedulerLastRun {
 
 export class ScheduledCampaignScheduler {
   private static handle:  ReturnType<typeof setInterval> | null = null;
+  private static bootHandle: ReturnType<typeof setTimeout> | null = null;
   private static running = false;
   private static started = false;
   private static lastRun: SchedulerLastRun | null = null;
@@ -48,6 +65,16 @@ export class ScheduledCampaignScheduler {
   /** Whether the in-process scheduler timer is active in this process. */
   static isActive(): boolean {
     return this.handle !== null;
+  }
+
+  /** Delay of the post-boot catch-up tick (diagnostics/tests). */
+  static get bootTickDelayMs(): number {
+    return BOOT_TICK_DELAY_MS;
+  }
+
+  /** Whether the post-boot catch-up tick is still pending in this process. */
+  static isBootTickPending(): boolean {
+    return this.bootHandle !== null;
   }
 
   /** Last completed tick summary (for diagnostics). Null until the first tick. */
@@ -67,19 +94,30 @@ export class ScheduledCampaignScheduler {
     }
     this.started = true;
     console.log("[ScheduledCampaignScheduler] Started", {
-      tickIntervalMs: TICK_INTERVAL_MS,
-      batchLimit:     BATCH_LIMIT,
-      NODE_ENV:       process.env.NODE_ENV,
-      NEXT_RUNTIME:   process.env.NEXT_RUNTIME,
-      RAILWAY_ENV:    process.env.RAILWAY_ENVIRONMENT,
+      tickIntervalMs:   TICK_INTERVAL_MS,
+      bootTickDelayMs:  BOOT_TICK_DELAY_MS,
+      batchLimit:       BATCH_LIMIT,
+      NODE_ENV:         process.env.NODE_ENV,
+      NEXT_RUNTIME:     process.env.NEXT_RUNTIME,
+      RAILWAY_ENV:      process.env.RAILWAY_ENVIRONMENT,
     });
     this.handle = setInterval(() => void this.tick(), TICK_INTERVAL_MS);
+    // Tick de partida: sem ele o primeiro ciclo depois de cada deploy só
+    // aconteceria 10 minutos adiante (ver BOOT_TICK_DELAY_MS).
+    this.bootHandle = setTimeout(() => {
+      this.bootHandle = null;
+      void this.tick();
+    }, BOOT_TICK_DELAY_MS);
   }
 
   static stop(): void {
     if (this.handle !== null) {
       clearInterval(this.handle);
       this.handle = null;
+    }
+    if (this.bootHandle !== null) {
+      clearTimeout(this.bootHandle);
+      this.bootHandle = null;
     }
   }
 

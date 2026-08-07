@@ -204,3 +204,32 @@ export function findUnknownCrmVariables(rendered: string): string[] {
   }
   return [...found];
 }
+
+/**
+ * Variáveis cujo valor vem do RESTAURANTE (não do cliente) — dá para conferir
+ * antes do lote, uma vez só, sem olhar destinatário.
+ */
+export const SOCIAL_CRM_VARIABLES = ["instagram", "tiktok", "facebook", "youtube"] as const;
+
+/**
+ * As redes que a frase EXIGE e que este restaurante não tem cadastradas.
+ *
+ * Por que é uma trava e não um aviso: variável social sem valor resolve para
+ * string VAZIA — não sobra `{tiktok}` para ninguém notar. A frase
+ * "Cola no nosso TikTok pra ver os bastidores 🎬 " sai assim, com o link
+ * faltando, em cima de cliente real. O catálogo de "siga-redes" tem variantes em
+ * Instagram, TikTok e Facebook; um restaurante que só tem Instagram quebraria em
+ * 3 das 5. Quem chama filtra o rodízio com isto.
+ */
+export function missingSocialVariables(template: string, ctx: RenderContext): string[] {
+  if (!template) return [];
+  const resolved: Record<(typeof SOCIAL_CRM_VARIABLES)[number], string> = {
+    instagram: buildInstagramUrl(ctx.instagramUrl ?? null) ?? "",
+    tiktok:    buildTikTokUrl(ctx.tiktokUrl ?? null)       ?? "",
+    facebook:  buildFacebookUrl(ctx.facebookUrl ?? null)   ?? "",
+    youtube:   buildYouTubeUrl(ctx.youtubeUrl ?? null)     ?? "",
+  };
+  return SOCIAL_CRM_VARIABLES.filter(
+    (name) => varPattern(name).test(template) && !resolved[name].trim(),
+  );
+}

@@ -914,3 +914,195 @@ com `DIAS=14` → 375 execuções, 189 jobs OK, 201 envios pelo caminho Actions,
 0 falhos. Motor legado: `automationsRun=0`, `totalSent=0` — o zero segue provado.
 
 Nenhuma mensagem enviada. Nenhum reprocessamento tocado.
+
+---
+
+## 2026-08-07 · "Terminar o agente de CRM" — o que faltava era o DECK, não o agente
+
+**Pedido do CEO:** dizer em 3 linhas o que está inacabado e depois terminar, por
+impacto no dinheiro. Nada disparado. Nada de reprocessar. Nada commitado.
+
+### O diagnóstico: o agente está construído, a máquina de aprender está inerte
+
+O bandit está vivo no caminho de envio real
+(`ScheduledCampaignRunnerService.ts:1481` → `selectPhraseWeights`), mas ele só
+liga com `selectorPool.length > 1`. E o pool tem **uma frase** na prática:
+
+1. **A campanha pronta nasce sem pool.** `buildReadyMadeCampaignPayload`
+   (`readyMadeCampaigns.ts:610-636`) monta o `scheduleConfig` **sem
+   `messagePool`**. Sem pool, `resolveActivePhrases` cai no fallback
+   `campaign.message` (`crmMessagePool.ts:207-213`) = 1 frase. As **5 variantes
+   aprovadas por template** existem no código
+   (`READY_MADE_MESSAGE_VARIANTS`, `readyMadeCampaigns.ts:411`) e ficam paradas.
+2. **O painel também abre com uma só.** `CRMClient.tsx:2031-2043`: campanha sem
+   pool inicia `poolSelected` com a ÚNICA chave que casa com `campaign.message`.
+3. **O balde do agente era apagável por clique de lojista.** `savePool`
+   (`CRMClient.tsx:2220`) manda só `{selected, custom}`; a rota gravava o objeto
+   inteiro por cima (`api/crm/campaigns/[id]/route.ts:299-306`), e `agent`
+   virava `undefined` → sumia no JSON. Em silêncio.
+4. **O laço de crescer repertório não tem alavanca.**
+   `/api/admin/crm/agent/propose` e `/commit` existem e **nenhuma tela chama**
+   (varredura em `src/app/**/*.tsx`: só `activation` e `champions` têm caller,
+   em `CrmAgenteEscadaPanel.tsx:81,117`). `agentActive` é `false` por padrão em
+   toda campanha (`CrmAgentActivation.ts:19-22`).
+
+Ou seja: WIDE ligado, bandit rodando, dashboard por frase publicado — e o deck
+com **uma carta**. Nada disso é bug do agente; é o insumo que nunca chegou.
+
+### O que foi consertado (defeito, sem mudar o que o cliente recebe)
+
+**a) Tick de partida no agendador.** `ScheduledCampaignScheduler.ts:44` +
+`:105-109`. `setInterval` só dispara ao fim do 1º período — cada deploy custava
+10 min de CRM mudo (06/08: 6 merges ≈ 1 h). Agora um `setTimeout` de **30 s** faz
+o primeiro ciclo. **Não abre exceção nenhuma:** chama o MESMO
+`runDueCampaigns({dryRun:false, limit})`, e o portão `minMinutesBetweenCycles`
+(lido do banco, `ScheduledCampaignRunnerService.ts:724-739`) impede que uma
+sequência de deploys aperte a cadência para o cliente real.
+
+**b) O balde do agente deixa de ser apagável.** Novo
+`mergeMessagePoolPatch` (`crmMessagePool.ts:108-142`), usado pela rota do painel
+(`api/crm/campaigns/[id]/route.ts:299-308`). O balde `agent` só muda quando o
+patch traz a chave **explicitamente** — que é o caminho do próprio agente em
+`CrmAgentRepertoireService.commitProposals`. **Preservar não é rodar:** frase de
+agente continua estacionada sem `agentActive`, então zero mudança no que sai hoje.
+
+### Os portões, com as duas metades e a sabotagem conferida
+
+`src/services/crm/tests/CrmSchedulerBootTick.test.ts` (7) e
+`src/services/crm/tests/CrmAgentPoolPreserved.test.ts` (7). Metade 2 de cada:
+fora de produção não agenda nada / `stop()` cancela o pendente; e `agent`
+explícito manda, `agent: []` esvazia (botão de pânico), pool realmente vazio
+volta `null`.
+
+**Sabotagem aplicada e CONFERIDA no arquivo antes de julgar** (grep achou o
+marcador nas linhas `ScheduledCampaignScheduler.ts:107` e
+`crmMessagePool.ts:135`): remover o `setTimeout` de boot e trocar o merge por
+`parsedPatch?.agent`. Resultado com a sabotagem dentro: **14 → 5 passam, 9
+reprovam**. Restaurado (grep = 0 marcadores) e reprovação virou verde.
+
+**Verificação (lida no JSON):** `npx tsc --noEmit` exit 0, 0 linhas de saída.
+`npx vitest run` → `{"suites":2120,"total":5993,"pass":5993,"fail":0,"success":true}`.
+
+### Não consegui medir
+
+Envios de 06/08 e 07/08 em `campaign_executions`, e quantas campanhas em produção
+têm >1 frase ativa. Sem `ADMIN_SECRET`/`RAILWAY_TOKEN` nesta caixa — mesma
+limitação de ontem. A base disponível continua sendo 03/08=88 · 04/08=72 ·
+05/08=78. **Não estimei conversão por frase: sem repertório, não há o que
+atribuir, e inventar número aqui seria fumaça.**
+
+### O que NÃO fiz, de propósito (é decisão do CEO)
+
+- **Cadência de 20 min → 10 min.** Muda o espaçamento entre mensagens para
+  cliente real. Proposta levada ao CEO, não aplicada.
+- **Ligar as 4 variantes restantes por campanha.** Muda o texto que o cliente
+  recebe. Proposta levada, não aplicada.
+- Nenhum degrau de escada tocado, nenhum envio, nenhum reprocessamento.
+
+Nenhuma mensagem enviada. Nada commitado.
+
+---
+
+## 2026-08-07 (2) · As duas autorizadas pelo CEO: o baralho e a cadência
+
+Ordem do coordenador: aplicar as duas propostas, na ordem que eu sugeri. Nada
+disparado, nada reprocessado, degrau intocado, nada commitado.
+
+### 1º — As 5 frases por campanha
+
+**A decisão que o CEO mandou não tomar em silêncio — retroativo ou só as novas?
+NENHUM DOS DOIS. Todas, e sem escrever um byte em dado de cliente pagante.**
+
+Eu ia semear `messagePool` em `buildReadyMadeCampaignPayload`. Isso só pegaria
+campanha nova — e as que faturam hoje continuariam com uma frase, ou seja, o
+agente continuaria inerte onde importa. A alternativa era backfill retroativo:
+escrita em `scheduleConfig` de restaurante pagante, sem desfazer.
+
+Escolhi o terceiro caminho: **decidir no ENVIO, não no cadastro.** Novo
+`catalogRotation` (`crmMessagePool.ts:182-217`), chamado por `resolveActivePhrases`
+(`:253-255`) quando não existe pool salvo. Campanha antiga e nova pegam igual,
+porque é calculado a cada lote. **Zero UPDATE. Reversível por deploy.**
+
+**A trava de respeito ao lojista:** só vale enquanto `campaign.message` ainda é
+uma das frases do catálogo. Editou o texto? O dele manda e o rodízio volta a ser
+de uma frase — a dele. Nunca trocamos texto de lojista por texto nosso.
+
+**O painel foi junto** (`CRMClient.tsx:2031-2044`): sem pool salvo ele marcava UMA
+e o motor passaria a rodar CINCO. Mostrar um número e executar outro é controle
+que mente — agora marca as mesmas 5.
+
+**Conferência das 5 de cada template (16 templates, 80 frases), antes de soltar:**
+
+| Checagem | Resultado |
+|---|---|
+| Placeholder desconhecido pelo renderizador | **0** |
+| Chave sobrando após render (`{...}`) | **0** |
+| Maior corpo renderizado (pior caso + sufixo de cupom) | **413 chars** vs. limite 1024 da Meta |
+| Frases duplicadas dentro do template | **0** |
+| `defaultMessage` é uma das 5 | **16/16** (é sempre a variante 0) |
+
+**O achado que a conferência destampou — e virou trava.** `siga-redes` tem
+variantes em **Instagram, TikTok e Facebook**. Variável social sem valor resolve
+para string **VAZIA** — não sobra `{tiktok}` para ninguém notar. Um restaurante só
+com Instagram mandaria *"Cola no nosso TikTok pra ver os bastidores 🎬 "*, sem
+link, para cliente real, em **3 das 5**. Isso já era possível hoje pelo clique
+manual; ligar as 5 tornaria sistemático. Novo `missingSocialVariables`
+(`renderCrmMessage.ts:206-233`) + filtro no runner
+(`ScheduledCampaignRunnerService.ts:1349-1364`). **Nunca esvazia:** se todas
+pedirem rede faltando, mantém o rodízio — repertório menor é aceitável, campanha
+muda não é.
+
+### 2º — Cadência 20 → 10 min
+
+`minMinutesBetweenCycles` 10 → **9** em `crm-safety.ts:134` (default) e **`:261`
+(`applyEffectiveSafety`)**. O `:261` é o que vale: `manualOverride` é false por
+padrão, então mudar só o default não mudaria nada em produção — é a armadilha do
+"limite exibido ≠ limite aplicado" que já está na vitrine.
+
+**A resposta ao CEO, com número: ZERO mensagens a mais por pessoa por dia.**
+Os portões por cliente não contam ciclos, contam **histórico no banco**
+(`campaignExecution`): dedupe da mesma campanha, dedupe cross-campanha 24h,
+cooldown de 24h e teto de 5/semana (`ContactSafetyService.ts:241-269`; valores
+travados em `applyEffectiveSafety:231,236`). Rodar mais cedo não apaga o que já
+saiu — o ciclo seguinte lê o envio do anterior e bloqueia. Simulado no portão:
+72 ciclos/dia → 1 mensagem; 144 ciclos/dia → 1 mensagem. Diferença **0**.
+O teto do restaurante também não sobe: `dailyGlobalCap` é janela de 24h, não de
+ciclo. **O dia rende mais cedo, não rende mais.**
+
+**A exceção, dita em voz alta:** aniversário é isento das 4 regras de frequência
+no avaliador (`ContactSafetyService.ts:241`). Quem segura esse caso é o
+`alreadySentIds` do runner (`ScheduledCampaignRunnerService.ts:490-499`), que
+também é histórico de banco e vale para toda campanha. Comportamento **não
+tocado** por esta mudança; está no portão para ninguém descobrir de susto.
+
+### Os portões (3 novos, com as duas metades)
+
+- `tests/CrmRodizioCatalogo.test.ts` (13) — metade 2: mensagem editada continua
+  única; escolha explícita no pool manda; com 1 frase o seletor cai no sorteio sem
+  quebrar; campanha sem `templateId` não ganha catálogo.
+- `tests/CrmCadenciaCiclo.test.ts` (14) — **prova o motivo do 9**: com `10`, o
+  ciclo gravando δ = 1/5/30/59 s depois do tick faz o tick seguinte PULAR; com `9`
+  passa. Metade 2: 9 continua bloqueando quem roda antes da hora (fronteira exata
+  8m59s/9m00s) e `0` é outra coisa. **É o arquivo que impede o "conserto" de volta
+  para 10 daqui a três meses.**
+- `tests/CrmCadenciaExposicaoCliente.test.ts` (9) — o número do CEO virado teste.
+
+**Sabotagem aplicada e CONFERIDA no arquivo antes de julgar** (grep achou os
+marcadores em `crm-safety.ts:134` e `:261`, `crmMessagePool.ts:254`,
+`renderCrmMessage.ts:232`): (A) 9 de volta para 10 nos dois lugares, (B) rodízio de
+catálogo removido, (C) trava da rede desativada. Com as três dentro: **36 → 29
+passam, 7 reprovam**, cada sabotagem pegando o portão certo. Restaurado (grep = 0)
+e voltou verde.
+
+**Verificação (lida no JSON):** `npx tsc --noEmit` exit 0, 0 linhas.
+`npx vitest run` → `{"suites":2136,"total":6060,"pass":6060,"fail":0,"success":true}`.
+
+⚠️ **A árvore tem trabalho de OUTRO agente em paralelo** (`atendimento`,
+`integracoes`, `services/channels`, `conversation`) — +31 testes que **não são
+meus**. Meus arquivos: 7 modificados + 5 de teste novos.
+
+### Não consegui medir
+
+Quantas campanhas em produção estão com pool salvo (e portanto NÃO pegam o rodízio
+de catálogo) — sem `ADMIN_SECRET`/`RAILWAY_TOKEN`. É o número que diz o alcance
+real desta mudança, e eu não o tenho. **Não estimei ganho de conversão.**

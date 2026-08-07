@@ -106,6 +106,44 @@ export function parseMessagePool(scheduleConfig: unknown): MessagePoolConfig | n
 }
 
 /**
+ * Aplica um patch de pool vindo do PAINEL DO LOJISTA preservando o balde do AGENTE.
+ *
+ * O painel só conhece dois baldes (`selected` do catálogo e `custom` do lojista) e
+ * manda o pool inteiro a cada clique. Como a gravação substitui o objeto, um simples
+ * ligar/desligar de frase APAGAVA em silêncio o balde `agent` — as frases que o
+ * agente criou e mandou aprovar na Meta, que são o repertório inteiro dele. O
+ * lojista nunca veria o que perdeu; o agente perderia a única coisa que tem para
+ * otimizar.
+ *
+ * Regra: o balde `agent` só muda quando o patch traz `agent` EXPLICITAMENTE (é o
+ * caminho do próprio agente, em `CrmAgentRepertoireService.commitProposals`). Um
+ * patch sem a chave herda o balde existente — inclusive quando o lojista esvazia
+ * os dois baldes dele (aí o pool continua existindo, só com o balde do agente).
+ *
+ * Preservar não é rodar: frase de agente só entra no rodízio com `agentActive`
+ * (ver `resolveActivePhrases`/`CrmAgentActivation`). Nada muda no que o cliente
+ * recebe hoje.
+ */
+export function mergeMessagePoolPatch(
+  existingScheduleConfig: unknown,
+  patchPool: unknown,
+): MessagePoolConfig | null {
+  const parsedPatch = parseMessagePool({ messagePool: patchPool });
+  const patchHasAgentKey =
+    !!patchPool && typeof patchPool === "object" && "agent" in (patchPool as Record<string, unknown>);
+
+  const agent = patchHasAgentKey
+    ? parsedPatch?.agent
+    : parseMessagePool(existingScheduleConfig)?.agent;
+
+  const selected = parsedPatch?.selected;
+  const custom   = parsedPatch?.custom;
+
+  if (!selected?.length && !custom?.length && !agent?.length) return null;
+  return { selected, custom, agent };
+}
+
+/**
  * Every phrase the owner COULD enable: catalog variants + their custom ones.
  * `opts.hasCoupon` appends the prize line to each text (key stays on the base
  * text — see withCouponLine).
@@ -142,9 +180,49 @@ export function listPoolCandidates(
 }
 
 /**
+ * O rodízio PADRÃO de uma campanha pronta: as variantes do catálogo do template.
+ *
+ * Por que existe: `buildReadyMadeCampaignPayload` nunca semeou `messagePool`, e o
+ * painel abre marcando só a frase que casa com `campaign.message`. Resultado — toda
+ * campanha pronta rodava com UMA frase, o seletor por conversão só liga com mais de
+ * uma (`selectorPool.length > 1`) e as 5 redações aprovadas de cada template ficavam
+ * paradas no código. Sem repertório não há o que medir nem o que otimizar.
+ *
+ * A trava de respeito ao lojista: isto só vale enquanto `campaign.message` AINDA é
+ * uma das frases do catálogo. Editou a mensagem? O texto dele manda, e o rodízio
+ * volta a ser de uma frase — a dele. Nunca troca texto de lojista por texto nosso.
+ *
+ * Puro: nenhuma escrita, nenhum dado de cliente tocado. Vale igual para campanha
+ * nova e para campanha que já existe, porque é decidido na hora do envio.
+ */
+export function catalogRotation(
+  campaign: { templateId: string | null; message: string },
+  opts:     { hasCoupon?: boolean } = {},
+): PoolPhrase[] {
+  const variants = campaign.templateId ? getReadyMadeMessageVariants(campaign.templateId) : [];
+  if (variants.length <= 1) return [];
+
+  const msgKey = phraseKey((campaign.message ?? "").trim());
+  if (!msgKey) return [];
+  // A mensagem da campanha precisa ser uma das do catálogo — senão foi editada.
+  if (!variants.some((v) => phraseKey(v) === msgKey)) return [];
+
+  const out: PoolPhrase[] = [];
+  const seen = new Set<string>();
+  for (const text of variants) {
+    const key = phraseKey(text);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, text: withCouponLine(text, opts.hasCoupon ?? false), source: "catalog" });
+  }
+  return out;
+}
+
+/**
  * The phrases actually rotating for a campaign. Empty pool (or nothing matching
- * the current catalog) falls back to campaign.message so a campaign NEVER goes
- * silent because of stale selections.
+ * the current catalog) falls back to the template's catalog rotation, and only
+ * then to campaign.message — a campaign NEVER goes silent because of stale
+ * selections.
  */
 export function resolveActivePhrases(
   campaign: { templateId: string | null; message: string },
@@ -170,6 +248,11 @@ export function resolveActivePhrases(
     }
   }
   if (active.length > 0) return active;
+  // Campanha que nunca configurou o pool: roda as variantes do catálogo (ver
+  // catalogRotation). Decidido no envio, então campanha antiga e nova pegam igual —
+  // sem escrever um byte em dado de restaurante.
+  const catalog = catalogRotation(campaign, opts);
+  if (catalog.length > 0) return catalog;
   const fallback = (campaign.message ?? "").trim();
   return fallback
     ? [{ key: phraseKey(fallback), text: withCouponLine(fallback, opts.hasCoupon ?? false), source: "fallback" }]
