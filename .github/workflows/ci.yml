@@ -1,9 +1,40 @@
 name: CI
 
+# ─────────────────────────────────────────────────────────────────────────────
+# POR QUE ESTE ARQUIVO MUDOU (07/08/2026) — o CEO não conseguia mais ler a caixa
+# de entrada dele, e a culpa não era do volume de trabalho.
+#
+# DOIS DEFEITOS DE ALERTA, medidos:
+#
+#  1. TODO COMMIT RODAVA O CI DUAS VEZES. `push: ["**"]` + `pull_request` disparam
+#     juntos em qualquer branch com PR aberto: 300 execuções para 224 commits em
+#     três dias — 25% de desperdício. E pior que o desperdício: no sha 8e0bb922 o
+#     run de `push` deu SUCCESS e o de `pull_request` deu FAILURE. O mesmo código,
+#     dois veredictos opostos, dois e-mails.
+#
+#  2. SEM `concurrency`, uma rajada de 6 commits numa branch de agente enfileirava
+#     12 CIs completos, nenhum cancelando o anterior. Em 06/08, com o GitHub
+#     degradado (incidente qcvjkzcs7j74), essa fila virou 3 e-mails de "cancelado"
+#     que chegam escritos como "failed" — porque o GitHub agrega job cancelado
+#     como run reprovado.
+#
+# O QUE NÃO MUDA, e é o ponto: a cobertura. `pull_request` roda em toda proposta,
+# e `push` continua rodando na branch padrão, que é a que faz deploy. O que sai é
+# a SEGUNDA execução do mesmo código, não a primeira.
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   push:
-    branches: ["**"]
+    # Só a branch padrão. Branch de trabalho é coberta pelo `pull_request` abaixo;
+    # rodar nas duas é o mesmo código medido duas vezes.
+    branches: ["claude/remove-legacy-runner-q8iXa"]
   pull_request:
+
+# Rajada de commits cancela a própria fila. `cancel-in-progress` só vale por
+# referência: dois PRs diferentes não se cancelam.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

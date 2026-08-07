@@ -85,6 +85,13 @@ jobs:
   run-campaigns:
     name: "Scheduled Campaigns"
     runs-on: ubuntu-latest
+    # Tick novo cancela o anterior encalhado na fila. Dois efeitos: o run
+    # conclui como `cancelled` (e o GitHub NAO manda e-mail de cancelamento,
+    # so de falha), e some o zumbi de 90 minutos — um tick liberado tarde
+    # dispararia um lote velho em cima de cliente real.
+    concurrency:
+      group: crm-cron-run-campaigns
+      cancel-in-progress: true
     timeout-minutes: 10
     if: >-
       github.event.schedule == '*/15 * * * *' ||
@@ -184,6 +191,13 @@ jobs:
   run-automations:
     name: "CRM Automations"
     runs-on: ubuntu-latest
+    # Tick novo cancela o anterior encalhado na fila. Dois efeitos: o run
+    # conclui como `cancelled` (e o GitHub NAO manda e-mail de cancelamento,
+    # so de falha), e some o zumbi de 90 minutos — um tick liberado tarde
+    # dispararia um lote velho em cima de cliente real.
+    concurrency:
+      group: crm-cron-run-automations
+      cancel-in-progress: true
     timeout-minutes: 10
     if: >-
       github.event.schedule == '0 11 * * *' ||
@@ -288,6 +302,13 @@ jobs:
   send-cart-recovery:
     name: "Cart Recovery"
     runs-on: ubuntu-latest
+    # Tick novo cancela o anterior encalhado na fila. Dois efeitos: o run
+    # conclui como `cancelled` (e o GitHub NAO manda e-mail de cancelamento,
+    # so de falha), e some o zumbi de 90 minutos — um tick liberado tarde
+    # dispararia um lote velho em cima de cliente real.
+    concurrency:
+      group: crm-cron-send-cart-recovery
+      cancel-in-progress: true
     timeout-minutes: 5
     if: >-
       github.event.schedule == '*/5 * * * *' ||
