@@ -29,6 +29,9 @@ export function AdminSidebar() {
     {
       title: "🧠 Inteligência",
       items: [
+        // Item PRÓPRIO, não dentro de Configurações — ordem do CEO (doutrina 20
+        // do kit): "quem trabalha aqui?" é pergunta de primeira ordem.
+        { href: "/admin/sala-dos-agentes",  label: "Sala dos Agentes", icon: "🏛️" },
         { href: "/admin/agents",           label: "Agentes",         icon: "🤖" },
         { href: "/admin/agentes/training", label: "Treinamento IA",  icon: "🧠" },
         { href: "/admin/quality",          label: "Qualidade",       icon: "🛡️" },
