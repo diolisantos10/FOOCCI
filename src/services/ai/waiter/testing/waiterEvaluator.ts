@@ -8,6 +8,7 @@
  */
 
 import { decide, createWaiterMemory, type V2CatalogItem, type V2Input } from "../../WaiterBrainV2";
+import { classifyDietarySafety } from "../dietarySafety";
 import type { WaiterTestCase, EvalCheck } from "./waiterScenarios";
 
 // ─── result types ─────────────────────────────────────────────────────────────
@@ -212,6 +213,80 @@ function runCheck(
           : pass
             ? `All ${available.length} available item(s) in /${check.categoryPattern}/i shown (${output.cards.length} cards)`
             : `Hid ${missing.length}/${available.length} available item(s): ${missing.slice(0, 5).join(", ")}`,
+      };
+    }
+
+    // ── P0 segurança alimentar — a metade que barra ───────────────────────────
+    // Não confere se o card EXISTE (isso é `has_real_cards`): confere se o card é
+    // SEGURO, perguntando ao cadastro daquele item. `unknown` reprova junto com
+    // `blocked` — "não tive o que ler" nunca é "está limpo".
+    case "dietary_cards_safe": {
+      const dietary = check.dietary ?? [];
+      if (dietary.length === 0) {
+        return { type: check.type, pass: false, detail: "Missing dietary[] for dietary_cards_safe check" };
+      }
+      const ofensores = output.cards
+        .map((id) => catalogMap.get(id))
+        .filter((i): i is V2CatalogItem => !!i)
+        .map((i) => ({
+          item: i,
+          safety: classifyDietarySafety(
+            `${i.name} ${i.description ?? ""} ${i.categoryName}`,
+            i.alergenosDetalhados ?? null,
+            dietary,
+            [],
+          ),
+        }))
+        .filter((r) => r.safety !== "safe");
+      const pass = ofensores.length === 0;
+      return {
+        type:   check.type,
+        pass,
+        detail: pass
+          ? `Os ${output.cards.length} card(s) estão declarados limpos para ${dietary.join(" / ")}`
+          : `${ofensores.length}/${output.cards.length} card(s) NÃO são seguros para ${dietary.join(" / ")}: ` +
+            ofensores.slice(0, 5).map((r) => `${r.item.name} [${r.safety}${r.item.alergenosDetalhados ? ": " + r.item.alergenosDetalhados : ": sem declaração"}]`).join(" · "),
+      };
+    }
+
+    // ── P0 segurança alimentar — a metade que prova que o legítimo passa ──────
+    // Um filtro de segurança que dispara para quem não pediu nada esconde o
+    // cardápio inteiro e vira mais destrutivo que o problema (guardrail 5).
+    case "dietary_cards_unfiltered": {
+      const dietary = check.dietary ?? [];
+      const share   = check.minCatalogShare;
+      if (share !== undefined) {
+        const esperado = Math.ceil(catalog.length * share);
+        const pass = output.cards.length >= Math.min(esperado, MAX_CARDS_PER_RESPONSE);
+        return {
+          type:   check.type,
+          pass,
+          detail: pass
+            ? `Sem restrição declarada: ${output.cards.length} card(s) — o filtro não disparou`
+            : `Filtro de dieta vazou: só ${output.cards.length} card(s) para quem não declarou nada (esperado ≥ ${Math.min(esperado, MAX_CARDS_PER_RESPONSE)})`,
+        };
+      }
+      if (dietary.length === 0) {
+        return { type: check.type, pass: false, detail: "Missing dietary[] or minCatalogShare for dietary_cards_unfiltered" };
+      }
+      // Prova pelo contrário: quem não declarou restrição TEM que continuar
+      // vendo pelo menos um item que a restrição bloquearia.
+      const conflitantes = output.cards
+        .map((id) => catalogMap.get(id))
+        .filter((i): i is V2CatalogItem => !!i)
+        .filter((i) => classifyDietarySafety(
+          `${i.name} ${i.description ?? ""} ${i.categoryName}`,
+          i.alergenosDetalhados ?? null,
+          dietary,
+          [],
+        ) !== "safe");
+      const pass = conflitantes.length > 0;
+      return {
+        type:   check.type,
+        pass,
+        detail: pass
+          ? `Sem restrição declarada, o cliente segue vendo ${conflitantes.length} item(ns) que ${dietary.join("/")} esconderia — filtro não vazou`
+          : `Nenhum item conflitante com ${dietary.join("/")} nos ${output.cards.length} card(s): o filtro de dieta pode ter vazado para quem não declarou nada`,
       };
     }
 

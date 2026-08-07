@@ -12,8 +12,9 @@
  *   Products are ALWAYS shown via cards, never listed in text.
  */
 
-import { matchKnowledgeItems } from "@/services/knowledge/knowledgeMatch";
+import { matchKnowledgeItems, foldPlural } from "@/services/knowledge/knowledgeMatch";
 import { isDessertCategory } from "./ConversationGuardrails";
+import { classifyDietarySafety } from "./waiter/dietarySafety";
 import {
   buildDineInOnlyAnswer,
   cannotConfirmSentence,
@@ -1150,6 +1151,66 @@ function isAccessoryQuery(rawQuery: string): boolean {
  * of session history. Upsell callers pass the session suggestedProductIds to
  * suppress already-shown items.
  */
+/**
+ * As formas do termo que valem casamento: a que o cliente digitou e, quando o
+ * plural simples se dobra sem virar um toco, a singular.
+ *
+ * ── 07/08/2026 — O PLURAL NEGAVA O QUE A LOJA VENDE ─────────────────────────
+ *
+ * O casamento é por SUBSTRING (`nameNorm.includes(word)`), e substring é
+ * assimétrica no plural: "bolo" está contido em "Bolo de Fubá", mas "bolos" não
+ * está contido em nada. Medido na padaria de vitrine, em 11 pares
+ * singular/plural, **7 viravam negação**:
+ *
+ *   "tem bolo?"  → 3 cards   |  "tem bolos?"  → "Não encontrei bolos no cardápio"
+ *   "tem torta?" → 1 card    |  "tem tortas?" → idem
+ *   "quais sobremesas vocês têm?" → negação, com 7 cadastradas em Confeitaria
+ *
+ * "salgados" e "cestas" escapavam só porque a CATEGORIA foi cadastrada no
+ * plural — acaso de cadastro, não regra.
+ *
+ * É o mesmo defeito que derrubou o rodízio do Sushi Cazza, corrigido no Q&A em
+ * `knowledgeMatch.foldPlural` e nunca aplicado ao matcher do cardápio. A função
+ * é a MESMA — importada, não recriada: duas cópias da mesma régua é como o
+ * primeiro conserto deixou de valer aqui.
+ *
+ * ── O freio, porque o defeito oposto é pior ──────────────────────────────────
+ *
+ * Dobra frouxa faz o agente achar qualquer coisa em tudo. Com substring, um
+ * token curto casa dentro de palavra sem relação nenhuma: "chás" → "chas" →
+ * "cha" acharia "Misto Quente na **Cha**pa". Por isso só dobramos quando a forma
+ * singular ainda tem corpo (≥ 4 letras), e a forma ORIGINAL continua valendo
+ * junto — assim nenhum casamento que já funcionava pode ser perdido por esta
+ * mudança; ela só acrescenta.
+ */
+function queryForms(word: string): string[] {
+  const singular = foldPlural(word);
+  return singular !== word && singular.length >= 4 ? [word, singular] : [word];
+}
+
+/**
+ * A pergunta do cliente com cada palavra no singular.
+ *
+ * Serve aos padrões de vocabulário (`MENU_SYNONYM_GROUPS`,
+ * `CATEGORY_PROXIMITY_MAP`), que casam por PALAVRA INTEIRA (`\b…\b`) — e por isso
+ * "sobremesas" não casava com `\bsobremesa\b`. Foi o que sobrou do defeito do
+ * plural depois do conserto da busca por substring: na padaria de vitrine,
+ * *"tem sobremesa?"* devolvia 10 cards e *"tem sobremesas?"* negava as 7
+ * sobremesas cadastradas em Confeitaria.
+ *
+ * Aqui a dobra pode ser a crua de `foldPlural`, sem o freio de tamanho de
+ * `queryForms`: casamento por palavra inteira não sofre do problema do toco —
+ * "cha" só casa com a palavra "cha", nunca dentro de "Chapa".
+ */
+function foldQueryPlurals(raw: string): string {
+  return normalizeSearch(raw).split(/\s+/).map(foldPlural).join(" ");
+}
+
+/** O padrão casa a pergunta como ela veio, ou com os plurais dobrados. */
+function matchesQueryPattern(pattern: RegExp, raw: string, folded: string): boolean {
+  return pattern.test(raw) || pattern.test(folded);
+}
+
 export function searchMenuByQuery(
   rawQuery:         string,
   catalog:          V2CatalogItem[],
@@ -1158,8 +1219,9 @@ export function searchMenuByQuery(
   maxBudget?:       number,
   excludeKeywords?: string[],
 ): { ids: string[]; confidence: "high" | "medium" | "low"; queryTermCount: number } {
-  const normQuery  = normalizeSearch(rawQuery);
-  const words      = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
+  const normQuery   = normalizeSearch(rawQuery);
+  const foldedQuery = foldQueryPlurals(rawQuery);
+  const words       = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
 
   if (words.length === 0) return { ids: [], confidence: "low", queryTermCount: 0 };
 
@@ -1184,14 +1246,15 @@ export function searchMenuByQuery(
     let score      = 0;
 
     for (const word of words) {
-      if (nameNorm.includes(word))  score += 50;
-      if (catNorm.includes(word))   score += 40;
-      if (descNorm.includes(word))  score += 15;
+      const formas = queryForms(word);
+      if (formas.some((f) => nameNorm.includes(f)))  score += 50;
+      if (formas.some((f) => catNorm.includes(f)))   score += 40;
+      if (formas.some((f) => descNorm.includes(f)))  score += 15;
     }
 
     const itemText = `${item.name} ${item.categoryName} ${item.description ?? ""}`;
     for (const [queryPat, itemPat] of MENU_SYNONYM_GROUPS) {
-      if (queryPat.test(rawQuery) && itemPat.test(itemText)) {
+      if (matchesQueryPattern(queryPat, rawQuery, foldedQuery) && itemPat.test(itemText)) {
         score += 35;
         break;
       }
@@ -1345,8 +1408,11 @@ export function resolveMenuIntent(
   // 6. Find real alternatives when noMatch via proximity map
   let alternativeProducts: V2CatalogItem[] = [];
   if (noMatch) {
+    // Mesma dobra de plural da busca: sem ela, quem perguntou no plural e não
+    // achou nada saía sem NENHUMA alternativa — negação seca.
+    const foldedMessage = foldQueryPlurals(userMessage);
     for (const [queryRe, itemRe] of CATEGORY_PROXIMITY_MAP) {
-      if (queryRe.test(userMessage)) {
+      if (matchesQueryPattern(queryRe, userMessage, foldedMessage)) {
         alternativeProducts = catalogItems
           .filter((item) =>
             itemRe.test(`${item.name} ${item.categoryName} ${item.description ?? ""}`)
@@ -2040,37 +2106,65 @@ function handleMenuMode(): V2Output {
 
 // Deterministic acknowledgement pools by cart/item context.
 // Never calls OpenAI — instant, zero-cost, varied.
+//
+// ── 07/08/2026 — O "ÓTIMA ESCOLHA" QUE O CEO NOMEOU DUAS VEZES ──────────────
+//
+// O balde `first` tinha 4 frases e três eram a MESMA fórmula ("Boa/Ótima" +
+// "escolha/pedida"), idênticas para pão francês, brownie e café. Uma delas era
+// **"Ótima pedida 🍱"** — marmita japonesa numa padaria: o emoji nasceu no
+// cardápio de sushi e nunca foi revisto.
+//
+// O rodízio anti-repetição (`lastAckMessages`) já funcionava; o problema era o
+// repertório, e principalmente o fato de que NENHUMA frase dizia o que a pessoa
+// acabou de escolher. `{x}` é substituído pelo nome do item — e o molde com
+// `{x}` é descartado quando o nome não está disponível, nunca renderizado cru.
 const ACK_POOL: Record<"drink" | "dessert" | "first" | "second" | "third_plus", string[]> = {
   drink: [
     "Boa pedida pra acompanhar 🥤",
-    "Ótima escolha de bebida 🥤",
+    "{x} pra acompanhar — combina 🥤",
+    "Anotado o {x} 🥤",
     "Toque final no pedido 🥤",
     "",
   ],
   dessert: [
     "Pra fechar com doce — escolha certeira 🍰",
+    "{x} pra fechar 🍰",
     "Sobremesa no pedido — ótima decisão ✨",
     "",
   ],
   first: [
+    "{x} anotado 👌",
     "Boa escolha 👌",
+    "{x} — bom começo ✨",
     "Escolha certeira pra começar ✨",
-    "Ótima pedida 🍱",
+    "Anotei o {x} 📝",
     "Boa pedida 👌",
+    "{x} tá no pedido ✅",
   ],
   second: [
     "Pedido já está bem composto 👌",
+    "{x} junto — boa combinação 👌",
     "Boa combinação 👌",
     "Ficou equilibrado o pedido ✨",
     "",
   ],
   third_plus: [
     "Pedido ficando muito bom 🔥",
-    "Boa composição de pedido 🍱",
+    "{x} também — tá completo 🔥",
+    "Boa composição de pedido 👌",
     "",
     "",
   ],
 };
+
+/**
+ * Resolve o molde com o nome do item. Molde com `{x}` sem nome disponível é
+ * descartado — melhor cair numa frase genérica que mostrar "{x}" ao cliente.
+ */
+function resolveAckTemplates(pool: string[], nomeDoItem: string | undefined): string[] {
+  if (!nomeDoItem) return pool.filter((m) => !m.includes("{x}"));
+  return pool.map((m) => m.replace("{x}", nomeDoItem));
+}
 
 function handleItemAdded(input: V2Input): V2Output {
   const { catalog, cartItemIds, lastAddedId } = input;
@@ -2092,7 +2186,7 @@ function handleItemAdded(input: V2Input): V2Output {
     if (t.tags.includes("dessert")) poolKey = "dessert";
   }
 
-  const pool      = ACK_POOL[poolKey];
+  const pool      = resolveAckTemplates(ACK_POOL[poolKey], addedItem?.name);
   const recentMsg = mem.lastAckMessages ?? [];
   // Prefer messages not recently used; fall back to full pool if all exhausted
   const available = pool.filter((m) => !recentMsg.includes(m));
@@ -2534,6 +2628,13 @@ export interface CommercialResponseInput {
   mode:             WaiterMode;
   cartAnalysis?:    { hasFood: boolean; hasDrink: boolean; hasDessert: boolean };
   confidence?:      number;
+  /**
+   * O catálogo, para a abertura poder dizer o NOME do que está mostrando em vez
+   * de mais uma moldura genérica. Ausente → comportamento antigo (moldura).
+   */
+  catalog?:         V2CatalogItem[];
+  /** A pergunta do cliente — entra no seed para duas perguntas não colidirem. */
+  userMessage?:     string;
 }
 
 // Aberturas VARIADAS para a apresentação genérica de opções. Antes era uma frase
@@ -2565,15 +2666,135 @@ function presentationOpener(seed: string): string {
   return PRESENTATION_OPENERS[seedIndex(seed, PRESENTATION_OPENERS.length)] ?? PRESENTATION_OPENERS[0]!;
 }
 
-function getCopy(intent: CustomerIntent, config: WaiterSalesConfig, seed = ""): string {
+// ─── a abertura que fala do que está mostrando ───────────────────────────────
+//
+// ── 07/08/2026 — "FORMULÁRIO COM EMOJI" ─────────────────────────────────────
+//
+// O CEO nomeou o defeito duas vezes: *"o garçom é super repetitivo… ele só fala
+// 'é isso', 'está ótimo', 'ótima escolha'"*. Medido na loja de vitrine, em 40
+// perguntas: 34 respostas determinísticas, **15 frases distintas**, a campeã 8×,
+// e — o número que resume tudo — **0 de 34 citavam qualquer produto ou categoria
+// pelo nome**, com 34 de 34 terminando em 👇.
+//
+// Duas causas somadas:
+//  1. as 9 aberturas de `PRESENTATION_OPENERS` são MOLDURAS: nenhuma diz o que
+//     está sendo mostrado, então servem para qualquer resposta e por isso todas
+//     soam iguais;
+//  2. o sorteio era `seedIndex(cards)` — determinístico na LISTA DE CARDS. Duas
+//     perguntas diferentes com a mesma lista davam resposta idêntica byte a
+//     byte: "o que vocês têm?" e "qual você recomenda?" eram a mesma frase e os
+//     mesmos 12 cards, na mesma ordem.
+//
+// Agora, quando dá para dizer DE QUE se está falando (um item só, ou todos os
+// cards da mesma categoria), a abertura diz. O molde põe o nome na frente
+// (aposição) de propósito: assim ele funciona com qualquer rótulo de cardápio —
+// "Confeitaria", "Café & Bebidas", "Da Nossa Despensa" — sem concordância de
+// gênero nem preposição para errar.
+
+const OPENERS_CATEGORIA: readonly string[] = [
+  "{x} — separei tudo o que temos 👇",
+  "{x}: essas são as opções da casa 👇",
+  "{x} — dá uma olhada 👇",
+  "{x}: {n} opções pra escolher 👇",
+  "{x} — é isso que sai do nosso balcão 👇",
+];
+
+const OPENERS_ITEM: readonly string[] = [
+  "{x} — é este aqui 👇",
+  "Achei o que você pediu: {x} 👇",
+  "{x}, temos sim 👇",
+  "{x} — esse é o nosso 👇",
+];
+
+/** Onde o card está, para quando a linha de cima já contou a história. */
+const PONTEIROS_ITEM: readonly string[] = [
+  "É este aqui 👇",
+  "Tá logo abaixo 👇",
+  "Esse é o nosso 👇",
+];
+
+/**
+ * De que a resposta está falando: o item, quando é um só; a categoria, quando
+ * todos os cards vêm da mesma. Lista misturada não tem assunto — e inventar um
+ * seria pior que a moldura genérica.
+ */
+function respostaSobre(
+  cards: string[],
+  catalog: V2CatalogItem[],
+): { tipo: "item" | "categoria"; nome: string; item?: V2CatalogItem } | null {
+  const itens = cards
+    .map((id) => catalog.find((i) => i.id === id))
+    .filter((i): i is V2CatalogItem => !!i);
+  if (itens.length === 0) return null;
+  if (itens.length === 1) return { tipo: "item", nome: itens[0]!.name, item: itens[0] };
+  const cats = new Set(itens.map((i) => i.categoryName).filter((c) => c && c.trim()));
+  if (cats.size === 1) {
+    const nome = [...cats][0]!;
+    if (itens.length === cards.length) return { tipo: "categoria", nome };
+  }
+  return null;
+}
+
+/**
+ * A alma do prato, que já está cadastrada e nunca saía da boca do agente.
+ *
+ * `storytellingIA` e `perfilPaladar` chegam ao Garçom em todo turno e só eram
+ * citados dentro de uma instrução para a IA — ou seja, em ~15% das conversas.
+ * "O levain da casa tem nome e sete anos: chama Aurora" estava no cadastro da
+ * padaria enquanto o agente respondia "Dei uma garimpada e separei essas 👇".
+ *
+ * Alma cadastrada que não sai da boca do agente é o mesmo que não estar
+ * cadastrada. Só é usada quando há UM card — com vários, viraria parágrafo.
+ */
+function almaDoItem(item: V2CatalogItem | undefined): string | null {
+  if (!item) return null;
+  const bruto = (item.storytellingIA ?? "").trim() || (item.perfilPaladar ?? "").trim();
+  if (!bruto) return null;
+  const primeira = bruto.split(/(?<=[.!?])\s+/)[0]?.trim() ?? bruto;
+  const frase = primeira.length > 150 ? `${primeira.slice(0, 147).trimEnd()}…` : primeira;
+  return /[.!?…]$/.test(frase) ? frase : `${frase}.`;
+}
+
+/**
+ * A abertura da resposta.
+ *
+ * O seed inclui a PERGUNTA, não só os cards: era isso que fazia duas perguntas
+ * diferentes com a mesma lista devolverem a mesma frase.
+ */
+function openerFor(cards: string[], catalog: V2CatalogItem[], pergunta: string): string {
+  const seed = `${pergunta}|${cards.join(",")}`;
+  const alvo = respostaSobre(cards, catalog);
+  if (!alvo) return presentationOpener(seed);
+
+  if (alvo.tipo === "item") {
+    const alma = almaDoItem(alvo.item);
+    if (alma) {
+      const ponteiro = PONTEIROS_ITEM[seedIndex(seed, PONTEIROS_ITEM.length)]!;
+      return `${alvo.nome}: ${alma}\n${ponteiro}`;
+    }
+    return (OPENERS_ITEM[seedIndex(seed, OPENERS_ITEM.length)] ?? "{x} 👇").replace("{x}", alvo.nome);
+  }
+
+  return (OPENERS_CATEGORIA[seedIndex(seed, OPENERS_CATEGORIA.length)] ?? "{x} 👇")
+    .replace("{x}", alvo.nome)
+    .replace("{n}", String(cards.length));
+}
+
+function getCopy(
+  intent: CustomerIntent,
+  config: WaiterSalesConfig,
+  seed = "",
+  aberturaNomeada?: string | null,
+): string {
   const map =
     config.upsellStyle === "subtle"     ? { ...INTENT_COPY, ...SUBTLE_COPY }     :
     config.upsellStyle === "aggressive" ? { ...INTENT_COPY, ...AGGRESSIVE_COPY } :
     INTENT_COPY;
-  // wants_recommendation é a apresentação genérica (a que mais repetia ao navegar
-  // categorias) — sempre variada pelo seed. Intents específicos mantêm cópia própria.
-  if (intent === "wants_recommendation") return presentationOpener(seed);
-  return map[intent] ?? presentationOpener(seed);
+  // A apresentação genérica (`wants_recommendation`) é a que mais repetia ao
+  // navegar categorias. Quando dá para nomear o assunto, ela deixa de ser
+  // moldura e passa a dizer o que está mostrando.
+  if (intent === "wants_recommendation") return aberturaNomeada ?? presentationOpener(seed);
+  return map[intent] ?? aberturaNomeada ?? presentationOpener(seed);
 }
 
 /**
@@ -2585,9 +2806,12 @@ export function buildCommercialResponse(
   params: CommercialResponseInput,
   config: WaiterSalesConfig = DEFAULT_WAITER_CONFIG,
 ): Pick<V2Output, "message" | "options" | "cards" | "mode"> {
-  const { intent, selectedProducts, mode } = params;
-  // Seed = os produtos mostrados: categorias diferentes → aberturas diferentes.
-  const message = getCopy(intent, config, selectedProducts.join(","));
+  const { intent, selectedProducts, mode, catalog, userMessage } = params;
+  // Seed = a PERGUNTA + os produtos. Só os produtos fazia perguntas diferentes
+  // com a mesma lista devolverem resposta idêntica byte a byte.
+  const seed = `${userMessage ?? ""}|${selectedProducts.join(",")}`;
+  const nomeada = catalog?.length ? openerFor(selectedProducts, catalog, userMessage ?? "") : null;
+  const message = getCopy(intent, config, seed, nomeada);
   return { message, options: [], cards: selectedProducts, mode };
 }
 
@@ -2653,7 +2877,7 @@ function buildObjectionCopy(message: string, intent: CustomerIntent): string | n
  * Returns context-aware copy for the high-confidence search fast-path.
  * Objection and constraint messages get empathy-first pivoting copy instead of a generic "Encontrei".
  */
-function buildSearchCopy(message: string): string {
+function buildSearchCopy(message: string, cards: string[] = [], catalog: V2CatalogItem[] = []): string {
   if (PRICE_OBJECTION_RE_MSG.test(message)) {
     return "Entendido! Se a ideia é algo mais em conta, essas opções entregam muito pelo valor 👇";
   }
@@ -2663,6 +2887,9 @@ function buildSearchCopy(message: string): string {
   if (CONSTRAINT_RE_MSG.test(message)) {
     return "Entendido! Levei em conta sua restrição — veja essas opções 👇";
   }
+  // Busca explícita é onde mais dá para nomear: o cliente perguntou por um
+  // produto ou uma categoria, e a resposta agora diz qual.
+  if (cards.length > 0 && catalog.length > 0) return openerFor(cards, catalog, message);
   return presentationOpener(message);
 }
 
@@ -2721,11 +2948,29 @@ function applyConstraints(
 // say "não temos", and NEVER surface obvious meat/seafood for a vegan. We
 // exclude by name/description/category heuristics and present candidates the
 // customer confirms before adding. Copyright/data-safe: no invented tags.
+//
+// ── 07/08/2026 — O QUE ESTAVA ERRADO, E CUSTAVA SAÚDE ────────────────────────
+//
+// `selectRestrictionCandidates` lia só `name + description + categoryName` e,
+// para alergia, `excludeTermsFor` devolvia `[]` com o comentário "can't infer the
+// allergen safely". O efeito na loja de vitrine: *"tem alguma coisa sem glúten?"*
+// numa PADARIA devolvia 12 cards, **10 deles de trigo** — Coxinha, Empada,
+// Esfiha, Quiche, Croque-Monsieur e o **Pão Francês** —, acompanhados de
+// *"separei opções que parecem mais simples, mas confira os ingredientes antes"*,
+// que transfere a conferência para o celíaco enquanto entrega o pão.
+//
+// O dado existia: `alergenosDetalhados` está no `V2CatalogItem`, é carregado pela
+// rota (`api/pedido/[slug]/route.ts`) e estava preenchido em 40/40 itens. A
+// função tinha a informação na mão e não olhava — guardrail 1 invertido, com o
+// custo do lado caro.
+//
+// Agora o filtro chama `classifyDietarySafety` (ConversationGuardrails), a MESMA
+// régua de três estados criada em 02/08. Não existe segunda cópia da regra.
 
 type RestrictionKind = "vegan" | "vegetarian" | "no_seafood" | "no_pork" | "allergy";
 
 const RESTRICTION_STATEMENT_RE =
-  /\b(sou|somos)\s+vegan[oa]s?\b|\b(sou|somos)\s+vegetarian[oa]s?\b|\bvegan[oa]s?\b|\bvegetarian[oa]s?\b|\bsem\s+(frutos?\s+do\s+mar|peixe|carne|porco|gl[uú]ten|lactose|camar[ãa]o)\b|\bn[ãa]o\s+como\s+(carne|peixe|porco|frutos?\s+do\s+mar|camar[ãa]o)\b|\bal[eé]rgic[oa]\b/i;
+  /\b(sou|somos)\s+vegan[oa]s?\b|\b(sou|somos)\s+vegetarian[oa]s?\b|\bvegan[oa]s?\b|\bvegetarian[oa]s?\b|\bsem\s+(frutos?\s+do\s+mar|peixe|carne|porco|gl[uú]ten|lactose|camar[ãa]o)\b|\bn[ãa]o\s+como\s+(carne|peixe|porco|frutos?\s+do\s+mar|camar[ãa]o)\b|\bal[eé]rgic[oa]\b|\bcel[íi]ac[oa]\b|\bintolerante\s+[àa]?\s*(lactose|gl[uú]ten)\b/i;
 
 const SEAFOOD_TERMS = ["peixe", "salm", "atum", "camar", "kani", "polvo", "lula", "ceviche", "sashimi", "tartar", "tártar", "frutos do mar", "marisco", "siri", "caranguejo", "unagi", "enguia", "tilapia", "tilápia", "robalo", "niguiri"];
 const MEAT_TERMS = ["carne", " boi", "bovin", "frango", "galinha", "porco", "suino", "suíno", "bacon", "presunto", "lingui", "calabres", "pernil", "picanha", "costela", "cordeiro"];
@@ -2749,8 +2994,63 @@ function excludeTermsFor(kind: RestrictionKind): string[] {
     case "vegetarian": return [...SEAFOOD_TERMS, ...MEAT_TERMS];
     case "no_seafood": return [...SEAFOOD_TERMS];
     case "no_pork":    return [...PORK_TERMS];
-    case "allergy":    return []; // can't infer the allergen safely; rely on explicit keywords
+    // Alergia não tem palavra fixa: o alérgeno vem do que o CLIENTE declarou
+    // (`declaredRestrictionLabels`) e é conferido contra o que o RESTAURANTE
+    // declarou (`alergenosDetalhados`). Ver `passesDeclaredSafety`.
+    case "allergy":    return [];
   }
+}
+
+/**
+ * O que o cliente declarou, no vocabulário que `classifyDietarySafety` entende.
+ *
+ * Sem isto, "sem glúten" e "sem lactose" chegavam ao seletor como o mesmo
+ * `allergy` genérico: a única informação que importava — QUAL alérgeno — era
+ * jogada fora na classificação e nunca mais recuperada.
+ */
+function declaredRestrictionLabels(kind: RestrictionKind, msg: string): string[] {
+  const m = msg.toLowerCase();
+  switch (kind) {
+    case "vegan":      return ["vegano"];
+    case "vegetarian": return ["vegetariano"];
+    case "no_seafood": return ["sem peixe", "sem frutos do mar"];
+    case "no_pork":    return ["porco"];
+    case "allergy": {
+      const out: string[] = [];
+      if (/gl[uú]ten|cel[íi]ac[oa]/.test(m))      out.push("sem glúten");
+      if (/lactose/.test(m))                       out.push("sem lactose");
+      // "sou alérgico a camarão" → o termo entra cru; `classifyDietarySafety`
+      // faz casamento direto contra o texto do item, então não precisa estar no
+      // mapa para funcionar.
+      const livre = m.match(/al[eé]rgic[oa]\s+(?:a|ao|à|a\s+o)\s+([\p{L}\s]{3,40})/u);
+      if (livre?.[1]) {
+        for (const t of livre[1].split(/\s+e\s+|,/)) {
+          const termo = t.trim();
+          if (termo.length >= 3) out.push(termo);
+        }
+      }
+      return out;
+    }
+  }
+}
+
+/**
+ * A restrição exige PROVA no cadastro, ou basta não haver sinal contrário?
+ *
+ * `allergy` (glúten, lactose, "alérgico a X") é assunto de saúde: só entra na
+ * lista o item cujo cadastro prova que está limpo. Item sem declaração é
+ * `unknown` — e `unknown` fica de fora.
+ *
+ * Preferência (vegano, vegetariano, sem peixe, sem porco) NÃO passa pela mesma
+ * régua, por dois motivos: (a) o campo de alérgeno não sabe responder se algo é
+ * vegano — ele fala de leite, ovo, glúten, castanha, não de carne; (b) exigir
+ * declaração ali esvaziaria a resposta em todo restaurante que não preenche o
+ * campo, e proteção que apaga o cardápio inteiro é mais destrutiva que o
+ * problema que ela evita (guardrail 5). Nesses casos o campo declarado só
+ * ACRESCENTA bloqueio — nunca é exigido.
+ */
+function requiresRegisteredProof(kind: RestrictionKind): boolean {
+  return kind === "allergy";
 }
 
 function selectRestrictionCandidates(
@@ -2758,13 +3058,40 @@ function selectRestrictionCandidates(
   cartItemIds: string[],
   kind: RestrictionKind,
   extraExclude: string[],
+  labels: string[],
 ): string[] {
   const exclude = [...excludeTermsFor(kind), ...extraExclude.map((s) => s.toLowerCase())].filter(Boolean);
   const hayOf = (i: V2CatalogItem) => `${i.name} ${i.description ?? ""} ${i.categoryName}`.toLowerCase();
   const isExcluded = (i: V2CatalogItem) => exclude.some((t) => hayOf(i).includes(t));
   const isPlant = (i: V2CatalogItem) => PLANT_TERMS.some((t) => hayOf(i).includes(t));
 
-  const pool = catalog.filter((i) => !cartItemIds.includes(i.id) && !isExcluded(i));
+  const strict = requiresRegisteredProof(kind);
+
+  /**
+   * O item sobrevive ao que o restaurante DECLAROU sobre ele?
+   *
+   * O texto lido é nome + descrição + categoria (para pegar o alérgeno escrito
+   * por extenso) e a PROVA é `alergenosDetalhados` — o campo em que o lojista
+   * declara. `classifyDietarySafety` devolve `safe` só quando havia o que ler.
+   */
+  const passesDeclaredSafety = (i: V2CatalogItem): boolean => {
+    // Cliente disse "sou alérgico" sem dizer a quê: não há como filtrar, e
+    // fingir que filtrou é o pior dos dois mundos. Ninguém passa → o chamador
+    // cai no caminho de "preciso confirmar" + escalada.
+    if (labels.length === 0) return !strict;
+    const safety = classifyDietarySafety(
+      `${i.name} ${i.description ?? ""} ${i.categoryName}`,
+      i.alergenosDetalhados ?? null,
+      labels,
+      [],
+    );
+    if (safety === "blocked") return false;
+    return safety === "safe" || !strict;
+  };
+
+  const pool = catalog.filter(
+    (i) => !cartItemIds.includes(i.id) && !isExcluded(i) && passesDeclaredSafety(i),
+  );
   // Plant-leaning items first (more likely to fit), then best-seller order.
   const sorted = pool.sort((a, b) => {
     const pa = isPlant(a) ? 1 : 0;
@@ -2775,20 +3102,55 @@ function selectRestrictionCandidates(
   return sorted.slice(0, RECOMMENDATION_CARD_CAP).map((i) => i.id);
 }
 
+/** Como o alérgeno declarado aparece na frase ("glúten", "lactose", "camarão"). */
+function allergenNoun(labels: string[]): string {
+  const limpos = labels.map((l) => l.replace(/^sem\s+/, "").trim()).filter(Boolean);
+  if (limpos.length === 0) return "";
+  if (limpos.length === 1) return limpos[0]!;
+  return `${limpos.slice(0, -1).join(", ")} e ${limpos[limpos.length - 1]}`;
+}
+
 function handleRestriction(
   kind: RestrictionKind,
   catalog: V2CatalogItem[],
   cartItemIds: string[],
   extraExclude: string[],
+  msgRaw: string,
+  whatsapp?: string | null,
 ): V2Output {
-  const cards = selectRestrictionCandidates(catalog, cartItemIds, kind, extraExclude);
+  const labels = declaredRestrictionLabels(kind, msgRaw);
+  const cards = selectRestrictionCandidates(catalog, cartItemIds, kind, extraExclude, labels);
   const noun =
     kind === "vegan" ? "vegana" :
     kind === "vegetarian" ? "vegetariana" :
     kind === "no_seafood" ? "sem peixe/frutos do mar" :
     kind === "no_pork" ? "sem porco" : "para sua restrição";
 
+  const wa = whatsapp?.replace(/\D/g, "");
+  const escalada: WaiterOption[] = wa
+    ? [
+        { label: "💬 Falar com o restaurante", value: `open_whatsapp:${wa}` },
+        { label: "Ver cardápio",               value: "browse_menu" },
+      ]
+    : [{ label: "Ver cardápio", value: "browse_menu" }];
+
   if (cards.length === 0) {
+    // Alergia sem nada que o cadastro prove limpo: escalada, nunca "olha essas e
+    // confere você". A frase antiga oferecia "opções sem peixe/carne", que não
+    // tem relação nenhuma com glúten ou lactose.
+    if (kind === "allergy") {
+      const alergeno = allergenNoun(labels);
+      return {
+        message: alergeno
+          ? `Sobre ${alergeno}, o cardápio não me dá como confirmar item por item — e nisso eu prefiro não arriscar. A equipe consegue te responder com segurança 🙏`
+          : "Pra alergia eu prefiro não arriscar sem saber exatamente a qual ingrediente. A equipe consegue te responder com segurança 🙏",
+        cards: [],
+        mode: "BROWSE",
+        options: escalada,
+        requiresAI: false,
+        aiDirective: "",
+      };
+    }
     return {
       message: `Não encontrei uma opção ${noun} confirmada no cardápio. Posso te mostrar opções sem peixe/carne aparente pra você avaliar?`,
       cards: [],
@@ -2799,9 +3161,17 @@ function handleRestriction(
     };
   }
 
+  // Alergia COM candidatos: a frase diz o que a máquina realmente fez (filtrou
+  // pela declaração do restaurante) e não promete segurança que ela não pode
+  // provar. A antiga — "separei opções que parecem mais simples, mas confira os
+  // ingredientes antes" — devolvia a conferência para quem tem a alergia, e
+  // fazia isso enquanto entregava pão de trigo a um celíaco.
+  const alergeno = kind === "allergy" ? allergenNoun(labels) : "";
   const message =
     kind === "allergy"
-      ? "Pra alergia eu prefiro não arriscar: separei opções que parecem mais simples, mas confira os ingredientes antes de adicionar 👇"
+      ? alergeno
+        ? `Deixei de fora tudo que o restaurante declara com ${alergeno}. Estes não constam — ainda assim, confirme com a equipe antes de pedir 🙏👇`
+        : "Separei o que o restaurante declara sem esse ingrediente — confirme com a equipe antes de pedir 🙏👇"
       : kind === "no_seafood" || kind === "no_pork"
         ? `Separei opções ${noun} aparentes — dá uma conferida nos ingredientes antes de adicionar 👇 Quer que eu te ajude a montar?`
         : `Prefiro não cravar como ${noun} sem confirmar os ingredientes, mas separei opções que parecem mais simples pra você conferir 👇 Quer que eu te ajude a montar?`;
@@ -2891,7 +3261,9 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     const cards = applyConstraints(ids, catalog, maxBudget, excludedIngredients);
     if (cards.length === 0 && rawIds.length > 0) return noCardsFound();
-    const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
+    const base    = buildCommercialResponse(
+      { intent, selectedProducts: cards, mode, catalog, userMessage: msgRaw }, cfg,
+    );
     const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
     return { ...base, message, requiresAI: false, aiDirective: "", cardScope: scopeForIntent(intent) };
   };
@@ -2900,7 +3272,12 @@ function handleUserMessage(input: V2Input): V2Output {
   // deterministically and cautiously: never claims an item IS vegan, never says
   // "não temos", never surfaces obvious meat/seafood for a vegan.
   const dietaryRestriction = detectRestriction(msgRaw);
-  if (dietaryRestriction) return handleRestriction(dietaryRestriction, catalog, cartItemIds, excludedIngredients);
+  if (dietaryRestriction) {
+    return handleRestriction(
+      dietaryRestriction, catalog, cartItemIds, excludedIngredients,
+      msgRaw, input.storeChannels?.whatsapp,
+    );
+  }
 
   // ── Discovery answer paths — strict intent-matched filters ───────────────────
   // Each path uses a dedicated filter function that enforces inclusion AND exclusion.
@@ -3431,7 +3808,7 @@ function handleUserMessage(input: V2Input): V2Output {
   const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, [], maxBudget, excludedIngredients);
   if (searchResult.confidence !== "low" && searchResult.ids.length > 0) {
     return {
-      message:     buildSearchCopy(msgRaw),
+      message:     buildSearchCopy(msgRaw, searchResult.ids, catalog),
       cards:       searchResult.ids,
       mode:        "SUGGESTION",
       options:     [],
@@ -3701,6 +4078,12 @@ export function validateWaiterResponse(
   event:   V2Event,
   /** Itens de salão — para a regra 10 saber a diferença entre "não sei" e "existe, mas é presencial". */
   dineInOnly: readonly DineInOnlyItem[] = [],
+  /**
+   * IDs que a resposta pode CITAR pelo nome mesmo sem virar card: o carrinho do
+   * cliente e o item recém-adicionado. Nomear o que a pessoa acabou de escolher
+   * não é vender o que não está à mostra — é responder a ela.
+   */
+  nameableIds: readonly string[] = [],
 ): V2Output {
   let { message, cards, mode, options, requiresAI, aiDirective } = output;
 
@@ -3733,12 +4116,20 @@ export function validateWaiterResponse(
     }
 
     // 4. Product mention guard (deterministic responses only — AI messages are empty at this point)
+    //
+    // A regra existe para o agente não FALAR de um produto que ele não está
+    // mostrando. Mas o item que o cliente acabou de pôr no carrinho é nomeável
+    // por definição: ele está na tela, foi ele que escolheu, e `ON_ITEM_ADDED`
+    // não pode carregar cards (regra 7). Sem esta exceção, "Pão Francês anotado
+    // 👌" saía como "anotado 👌" — a correção do repertório de 07/08 morria aqui,
+    // silenciosamente, e o agente voltava a elogiar sem dizer o quê.
+    const nomeaveis = new Set([...cards, ...nameableIds]);
     if (!requiresAI && message.length > 0) {
       for (const item of catalog) {
         if (item.name.length < 4) continue; // very short names risk false positives
         const escaped = item.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const nameRe  = new RegExp(escaped, "gi");
-        if (nameRe.test(message) && !cards.includes(item.id)) {
+        if (nameRe.test(message) && !nomeaveis.has(item.id)) {
           // Fix B: strip the name from the message text
           message = message.replace(nameRe, "").replace(/\s{2,}/g, " ").trim();
           if (message.replace(/[^a-zà-ú]/gi, "").length < 5) {
@@ -3943,7 +4334,10 @@ export function decide(input: V2Input): V2Output {
       return { ...SAFE_FALLBACK };
     }
   })();
-  const validated   = validateWaiterResponse(raw, input.catalog, input.event, input.dineInOnlyItems ?? []);
+  const validated   = validateWaiterResponse(
+    raw, input.catalog, input.event, input.dineInOnlyItems ?? [],
+    [...(input.cartItemIds ?? []), ...(input.lastAddedId ? [input.lastAddedId] : [])],
+  );
   // computeMemoryPatch reads raw.memoryPatch (set by handlers like handleCheckoutStarted).
   // Must receive `raw` not `validated` — validateWaiterResponse strips memoryPatch/pinnedCardId.
   const memoryPatch = computeMemoryPatch(input, raw);
