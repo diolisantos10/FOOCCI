@@ -54,87 +54,22 @@ export function sortByCategory<T extends { categoryName: string }>(items: T[]): 
 }
 
 // ── Dietary / allergy filtering ───────────────────────────────────────────────
+//
+// A régua mudou de casa em 07/08/2026 e virou módulo PURO
+// (`./waiter/dietarySafety`). Motivo, em uma frase: este arquivo importa
+// `prisma`, então as suítes do Garçom mockavam ele inteiro — e um mock que
+// exporta duas funções e omite `classifyDietarySafety` não quebra o build,
+// apenas devolve `undefined` e apaga a regra de segurança em silêncio.
+//
+// A reexportação abaixo existe para que nenhum consumidor antigo precise mudar
+// de import. Um dono, vários consumidores — nunca duas cópias da mesma régua.
 
-// Maps known restriction labels to ingredient keywords that should be blocked.
-// Keys are lowercase — matched case-insensitively against customer preference strings.
-const DIETARY_BLOCK_MAP: Record<string, string[]> = {
-  vegetariano:       ["carne", "frango", "peixe", "bacon", "presunto", "costela", "boi", "bovino"],
-  vegetariana:       ["carne", "frango", "peixe", "bacon", "presunto", "costela", "boi", "bovino"],
-  vegano:            ["carne", "frango", "peixe", "bacon", "queijo", "leite", "ovo", "manteiga", "mel"],
-  vegana:            ["carne", "frango", "peixe", "bacon", "queijo", "leite", "ovo", "manteiga", "mel"],
-  "sem glúten":      ["trigo", "farinha", "pão", "massa", "pizza", "macarrão"],
-  "sem lactose":     ["queijo", "leite", "creme", "manteiga", "iogurte", "requeijão"],
-  "sem peixe":       ["peixe", "salmão", "atum", "tilápia", "bacalhau"],
-  "sem frutos do mar": ["camarão", "lagosta", "mariscos", "fruto do mar", "polvo", "lula"],
-  "sem carne":       ["carne", "boi", "bovino", "bacon", "costela", "presunto"],
-  halal:             ["porco", "bacon", "presunto", "linguiça"],
-};
-
-/**
- * How safe an item is for a customer who declared a restriction.
- *
- * `unknown` is the state that was missing, and its absence was the dietary P1: the
- * filter matched keywords against the item name plus its ingredients, so an item with
- * NO ingredients registered never matched anything — and not matching was read as
- * "safe". A dish named "Risoto do Chef" with an empty ingredient list went straight to
- * a customer who had declared "sem lactose".
- *
- * That is guardrail 1 inverted — absence of information treated as information — and
- * here the cost is not money or reputation. It is the health of whoever ordered.
- */
-export type DietarySafety = "safe" | "blocked" | "unknown";
-
-/**
- * Classifies an item against the customer's restrictions.
- *
- * Returns `unknown` when the customer declared a restriction AND the item has no
- * ingredients registered: we cannot prove it conflicts, and we equally cannot prove it
- * is safe. An `unknown` item must never be presented as suitable — it either stays out
- * of the suggestion, or goes out with an explicit "preciso confirmar".
- */
-export function classifyDietarySafety(
-  itemName:     string,
-  ingredients:  string | null | undefined,
-  dietary:      string[],
-  allergies:    string[],
-): DietarySafety {
-  const restrictions = [...dietary, ...allergies].filter((r) => r && r.trim());
-  // Nothing declared → nothing to prove.
-  if (restrictions.length === 0) return "safe";
-
-  const text = `${itemName} ${ingredients ?? ""}`.toLowerCase();
-
-  for (const restriction of restrictions) {
-    const lower = restriction.toLowerCase().trim();
-
-    // Direct match: restriction term appears literally in the item text
-    if (text.includes(lower)) return "blocked";
-
-    // Mapped blockers: restriction maps to specific ingredient keywords
-    const blockers = DIETARY_BLOCK_MAP[lower] ?? [];
-    if (blockers.some((b) => text.includes(b))) return "blocked";
-  }
-
-  // Nothing matched — but that only means "safe" if there was something to read.
-  const hasIngredients = !!ingredients && ingredients.trim().length > 0;
-  return hasIngredients ? "safe" : "unknown";
-}
-
-/**
- * Returns true if an item must NOT be offered to this customer.
- *
- * Both `blocked` and `unknown` exclude it. Staying quiet about a dish is recoverable;
- * a wrong reassurance to someone with an allergy is not — so when the two are in
- * tension, silence wins.
- */
-export function isBlockedByDietary(
-  itemName:     string,
-  ingredients:  string | null | undefined,
-  dietary:      string[],
-  allergies:    string[],
-): boolean {
-  return classifyDietarySafety(itemName, ingredients, dietary, allergies) !== "safe";
-}
+export {
+  DIETARY_BLOCK_MAP,
+  classifyDietarySafety,
+  isBlockedByDietary,
+  type DietarySafety,
+} from "./waiter/dietarySafety";
 
 // ── Already-suggested product tracking ───────────────────────────────────────
 

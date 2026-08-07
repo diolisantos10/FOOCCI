@@ -31,12 +31,36 @@ export type CheckType =
   | "no_long_menu_dump"     // cards.length ≤ MAX_CARDS_PER_RESPONSE (never dump the whole menu)
   | "respects_refusal"      // when refusedCategory set: NO returned card belongs to that category
   // ── P0 card policy: category/options browsing must NOT hide available products ──
-  | "returns_all_in_category"; // every available catalog item in categoryPattern is present in cards
+  | "returns_all_in_category"  // every available catalog item in categoryPattern is present in cards
+  // ── P0 segurança alimentar (07/08/2026) ─────────────────────────────────────
+  // As duas metades da mesma régua. `dietary_cards_safe` reprova quando um card
+  // conflita com a restrição declarada OU quando o cadastro não prova que ele
+  // está limpo; `dietary_cards_unfiltered` reprova quando a proteção vazou para
+  // quem NÃO declarou restrição e passou a esconder o cardápio.
+  //
+  // Ambos leem o CADASTRO (`alergenosDetalhados`) do catálogo recebido — nunca
+  // uma lista de nomes escrita à mão. Lista de nomes envelhece com o cardápio:
+  // item novo entra sem cobertura e o portão continua verde.
+  | "dietary_cards_safe"
+  | "dietary_cards_unfiltered";
 
 export interface EvalCheck {
   type:             CheckType;
   categoryPattern?: string;          // regex string — required for includes_category
   refusedCategory?: "drink" | "dessert"; // required for respects_refusal
+  /**
+   * Restrições declaradas pelo cliente naquele cenário, no vocabulário de
+   * `classifyDietarySafety` ("sem glúten", "sem lactose", "vegano", …).
+   * Obrigatório para `dietary_cards_safe`.
+   */
+  dietary?:         string[];
+  /**
+   * Fração mínima do catálogo que a resposta precisa mostrar quando NÃO há
+   * restrição declarada. Usado por `dietary_cards_unfiltered`.
+   * Ausente → basta haver pelo menos um card conflitante com a dieta listada
+   * em `dietary` (prova de que o filtro não está ligado sem motivo).
+   */
+  minCatalogShare?: number;
 }
 
 // ─── scenario definition ──────────────────────────────────────────────────────
@@ -326,6 +350,57 @@ export const WAITER_TEST_CASES: WaiterTestCase[] = [
       { type: "no_forbidden_denial" },
       { type: "has_real_cards" },
       { type: "no_hallucination" },
+    ],
+  },
+
+  // ── P0 07/08/2026 — os casos que nasceram do teste na foocci-bakery ─────────
+  //
+  // O caso real: numa PADARIA, "tem alguma coisa sem glúten?" devolvia 12 cards,
+  // 10 deles de trigo (Coxinha, Empada, Esfiha, Quiche, Croque-Monsieur, Pão
+  // Francês…). O `re-02` acima estava VERDE nesse exato momento, porque suas três
+  // checagens perguntam se o id é real, se não houve negação proibida e se não
+  // houve alucinação — três perguntas legítimas, nenhuma sobre o risco.
+  //
+  // Um portão só cobre o dano que ele sabe nomear. Estes três nomeiam.
+
+  {
+    id:          "re-03",
+    group:       "restrictions",
+    groupLabel:  "Restrições / Dieta",
+    description: "'sem glúten' → NENHUM card com glúten declarado (nem sem declaração)",
+    message:     "tem alguma coisa sem glúten?",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "has_real_cards" },
+      { type: "dietary_cards_safe", dietary: ["sem glúten"] },
+    ],
+  },
+  {
+    id:          "re-04",
+    group:       "restrictions",
+    groupLabel:  "Restrições / Dieta",
+    description: "'sem lactose' → NENHUM card com lactose declarada (nem sem declaração)",
+    message:     "tem algo sem lactose?",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "has_real_cards" },
+      { type: "dietary_cards_safe", dietary: ["sem lactose"] },
+    ],
+  },
+  {
+    // A METADE QUE PROVA QUE O LEGÍTIMO PASSA. Sem ela, esconder o cardápio
+    // inteiro seria a maneira mais fácil de ficar verde nos dois casos acima —
+    // e o detector viraria carimbo na direção oposta.
+    id:          "re-05",
+    group:       "restrictions",
+    groupLabel:  "Restrições / Dieta",
+    description: "SEM restrição declarada → o cardápio continua inteiro (o filtro não vaza)",
+    message:     "o que vocês têm de bom?",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "dietary_cards_unfiltered", minCatalogShare: 0.2 },
+      { type: "dietary_cards_unfiltered", dietary: ["sem glúten"] },
     ],
   },
 

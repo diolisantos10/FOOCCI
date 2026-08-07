@@ -416,3 +416,262 @@ o resto da página. Toda identidade obtida durante a sessão tem que virar estad
 na hora, senão o app fica perguntando o que já sabe e fechando pedido sem contato.
 
 — especialista garcom, a partir de `13495d82` (branch padrão)
+
+---
+
+2026-08-07 — **Auditoria da `foocci-bakery`: a embalagem ficou pronta, a conversa
+não.** Pedido do CEO: *"a Bakery tem que dar um show de atendimento… dá uma
+verificada em como está a inteligência e como está saindo o agente."* Só leitura:
+nenhum degrau mexido, nenhuma mensagem enviada, cardápio e cadastro intactos.
+
+**Bancada.** Não há `DATABASE_URL` de produção nem `OPENAI_API_KEY` nesta caixa
+(o `.env` local é gabarito: banco em `localhost`, `ADMIN_SECRET =
+"local-dev-admin-1234"`, chave `"sk-..."`). Então: catálogo montado de
+`foocci-bakery.data.ts` e **conferido item a item contra o payload público de
+produção** (`GET /api/pedido/foocci-bakery`, commit `f12cb237`) — **40/40 itens,
+nome e preço idênticos, zero divergência**. Em cima disso, `decide()` do
+`WaiterBrainV2` com `upsellCategories = BAKERY_UPSELL_CATEGORIES`, exatamente o
+que a rota passa em produção. 78 perguntas rodadas.
+
+**O que NÃO consegui medir, e digo como fato:**
+1. O valor gravado de `BrainFreeFormConfig` da bakery — a única leitura é
+   `GET /api/admin/brain/free-form` e ela exige `ADMIN_SECRET` (`route.ts:27-34`).
+2. Se a bakery tem linha em `AutoSimulatorConfig` (o robô noturno só roda para
+   quem tem — `AutoSimulatorScheduler.ts:35`).
+3. A redação dos 15% de turnos que caem na IA (sem chave da OpenAI).
+
+**Achado estrutural que muda a pergunta do CEO.** `BrainFreeFormConfig` é lido em
+**um** lugar em runtime: `WhatsAppBrainRuntimeService`. A conversa da LOJA
+(`/pedido/[slug]` → `AIOrderService.runWebTurn` → `WaiterBrainV2`) **não passa por
+lá em ponto nenhum**. Promover a escada não muda uma vírgula do que o visitante da
+vitrine lê. São dois agentes distintos na mesma casa.
+
+**Os cinco defeitos, todos reproduzidos:**
+
+1. **🔴 SEGURANÇA — "sem glúten" numa PADARIA devolve 10 itens de trigo.**
+   `selectRestrictionCandidates` (`WaiterBrainV2.ts:2756-2776`) monta a lista com
+   `excludeTermsFor(kind)`, e para `allergy` isso é `[]` (`:2752`, comentário:
+   *"can't infer the allergen safely"*). O `hayOf` (`:2763`) lê
+   `name + description + categoryName` — **nunca `alergenosDetalhados`**, que está
+   no `V2CatalogItem` (`:74`), é carregado pela rota (`route.ts:285`) e está
+   preenchido nos **40/40** itens da bakery. A função tem o dado na mão e não olha.
+   Resultado literal: Coxinha (*"Batata, farinha de trigo…"*), Empada, Esfiha,
+   Pão de Batata, Enroladinho, Quiche, Croque-Monsieur, **Pão Francês**, Pão de
+   Fermentação Natural, Brioche. `classifyDietarySafety` — a correção da vitrine
+   de 02/08 — existe em `ConversationGuardrails.ts:95` e **este caminho não a
+   chama**. Dois donos da mesma regra; o determinístico é o que responde.
+   **E o portão carimba:** o caso `re-02` do golden set
+   (`waiterScenarios.ts:322-332`) checa `no_forbidden_denial` + `has_real_cards` +
+   `no_hallucination`. Nenhum checa se o card é seguro. Passou verde com os 10
+   itens de trigo. `validateWaiterResponse` tem 10 regras (`:3713-3779`) e nenhuma
+   é dietética.
+
+2. **🔴 O plural nega produto que a loja vende.** `searchMenuByQuery` casa por
+   `nameNorm.includes(word)` (`WaiterBrainV2.ts:1187-1189`) e `normalizeSearch`
+   (`:997`) **não dobra plural**. "bolo" contém-se em "Bolo de Fubá"; "bolos" não.
+   Medido em 11 pares singular/plural: **7 viram negação**. `tem bolos?`,
+   `tem tortas?`, `tem sucos?`, `tem sobremesas?`, `tem sanduíches?`,
+   `tem geleias?`, `tem brownies?` → *"Não encontrei X no nosso cardápio"* — todos
+   existem. `tem salgados?` e `tem cestas?` escapam só porque a **categoria** está
+   cadastrada no plural. É o mesmo defeito da vitrine ("O plural mata o
+   casamento"), consertado em `knowledgeMatch.ts:45` e **não** aplicado ao matcher
+   do cardápio: dois matchers, um com o remédio.
+
+3. **🟠 O repertório é curto e não fala da padaria.** `PRESENTATION_OPENERS`
+   (`WaiterBrainV2.ts:2544-2554`) tem 9 frases; `presentationOpener` escolhe por
+   `seedIndex(selectedProducts.join(","))` (`:2564-2566`) — **determinístico na
+   lista de cards**. Logo: mesmo conjunto de produtos ⇒ mesma frase, sempre.
+   Em 40 perguntas: 34 determinísticas, **15 frases distintas**, a campeã 8×.
+   Quatro perguntas diferentes ("o que vocês têm?", "qual você recomenda?", "me
+   indica alguma coisa", "o que tem de mais vendido?") devolvem resposta
+   **idêntica byte a byte**. **0 de 34 citam qualquer produto ou categoria pelo
+   nome; 34 de 34 terminam em 👇.** O `ACK_POOL` (`:2043-2072`) tem 4 frases no
+   balde `first`, três delas "Boa/Ótima + escolha/pedida", iguais para pão
+   francês, brownie e café — e uma delas é **"Ótima pedida 🍱"**, bento box numa
+   padaria. O rodízio anti-repetição (`lastAckMessages`, `:2098`) funciona: o
+   problema é o repertório, não o sorteio.
+
+4. **🟠 A alma da bakery está cadastrada e o Garçom não lê.** `storytellingIA`
+   ("o levain da casa chama Aurora, tem sete anos") e `harmonizacaoSugerida` estão
+   nos 40 itens, chegam ao `V2CatalogItem` — e só aparecem dentro de uma
+   `aiDirective` (`:1949-1951`), isto é, **só nos 15% de turnos que vão à IA**.
+   "por que o pão de vocês é diferente?" devolve *"Dei uma garimpada e separei
+   essas 👇"*.
+
+5. **🟡 Pergunta de preço não recebe preço, e o matcher difuso continua.**
+   "quanto custa o pão francês?" → *"Dei uma garimpada e separei essas 👇"* + 12
+   cards. "o pão de queijo tem lactose?" → 12 cards, sem responder (o cadastro diz
+   `lactose, ovo`). E `MENU_SYNONYM_GROUPS` (`:1083-1084`) manda "lasanha" casar
+   com qualquer texto contendo "massa": **"tem lasanha?" → Brioche, Croissant,
+   Pastel de Nata, Coxinha**, com *"Essas aqui são bem pedidas 👇"* — nunca diz
+   que não tem. "vocês têm pizza?" acerta e nega; a inconsistência é do sinônimo.
+
+**O que está BOM e não deve ser tocado:** o fechamento configurado funciona
+(Café & Bebidas → Confeitaria → concluir, o conserto de 04/08 vivo em produção);
+a trava de negação de oferta responde certo em horário, pagamento, entrega por
+região e estacionamento (*"preciso confirmar"* + botão), sem inventar.
+
+**Simuladores oficiais contra o catálogo real da bakery:** golden set **34/37,
+score 92** — as 3 falhas são `ac-01/02/03`, que procuram categoria "Porções" e
+"Sobremesa" e devolvem *"cannot verify"* numa padaria (taxonomia de sushi/pizza,
+não defeito). `runWaiterSimulation` (24 cenários, seed `bakery-20260807`): ok 15 ·
+aviso 7 · falha 2 · P0 0 — **mas esse simulador usa catálogo sintético próprio, não
+o da bakery**, então o número não fala da vitrine. Os dois portões dizem "verde"
+sobre a loja que entrega 10 itens de trigo a um celíaco: é o ponto cego já
+anotado nesta oficina, agora com caso concreto.
+
+**Nada foi alterado.** Scripts de reprodução ficaram fora do repositório; a
+modificação em `src/components/marketing/SinaisDeVenda.tsx` na árvore é de outro
+especialista, não minha.
+
+**Proposta de vitrine** (quem promove é o Diretor): *"Detector que só confere se o
+card EXISTE não é portão de segurança alimentar."* O golden set carimbou de verde
+uma resposta que ofereceu Pão Francês a quem pediu "sem glúten", porque suas três
+checagens perguntavam se o id era real, se não havia negação proibida e se não
+houve alucinação — três perguntas legítimas, nenhuma sobre o risco. **Um portão só
+cobre o dano que ele sabe nomear**; e quando o dano é físico, a checagem tem que
+ser sobre o ATRIBUTO do item, não sobre a integridade da lista. O corolário caro:
+`classifyDietarySafety` foi consertado em fevereiro do domínio e **nunca foi
+chamado** pelo seletor determinístico — regra com dois donos protege só o caminho
+de quem lembrou dela.
+
+— especialista garcom, a partir de `f12cb237` (branch padrão, no ar em produção)
+
+---
+
+2026-08-07 (2ª parte) — **Os três consertos autorizados: dietético, plural e
+repertório.** Executados na ordem pedida, cada um com portão nas duas metades e
+sabotagem conferida NO ARQUIVO antes de julgar o resultado.
+
+**① 🔴 O dietético — e um segundo defeito que só apareceu rodando.**
+
+O conserto planejado era `selectRestrictionCandidates` chamar
+`classifyDietarySafety` e ler `alergenosDetalhados`. Feito
+(`WaiterBrainV2.ts:2830-2870`), com uma distinção que precisa ficar registrada:
+**alérgeno exige prova, preferência não.** `allergy` (glúten, lactose, "alérgico
+a X") só oferece item cujo cadastro prova estar limpo — `unknown` fica de fora.
+Vegano/vegetariano/sem peixe/sem porco continuam pela heurística de nome, porque
+o campo de alérgeno não sabe responder se algo é vegano, e exigir declaração ali
+esvaziaria a resposta em todo restaurante que não preenche o campo (guardrail 5).
+
+**Rodei antes de acreditar, e ainda estava errado.** Depois do conserto, "sem
+glúten" na padaria devolvia Baguete Rústica, Caracol de Canela, Torta Holandesa
+— todos com `alergenosDetalhados: "glúten"`. Causa: `DIETARY_BLOCK_MAP["sem
+glúten"]` listava `trigo · farinha · pão · massa · pizza · macarrão` e **não
+listava "glúten"**. O campo onde o lojista declara é preenchido com o NOME do
+alérgeno, e o vocabulário do filtro não continha esse nome. O dado era lido e
+mesmo assim não casava. Corrigido no mapa (glúten/gluten/cevada/centeio; lactose
+em "sem lactose" e em vegano/vegana).
+
+**A régua mudou de casa, e isso não é arrumação.** A suíte
+`WaiterBrainV2.cards-and-restrictions.test.ts` **mocka `ConversationGuardrails`
+inteiro** para escapar do import de `prisma` — e o mock exporta duas funções. Meu
+import novo virou `undefined`, o handler estourou, e o `decide()` devolveu
+`SAFE_FALLBACK`. Dois testes ficaram vermelhos e me mostraram o problema real:
+regra de segurança atrás de um import de banco é regra que some em silêncio no
+mock. Extraí para `src/services/ai/waiter/dietarySafety.ts` (puro),
+`ConversationGuardrails` reexporta, nenhum consumidor mudou de import. É
+literalmente o mesmo remédio de `knowledgeMatch.ts`, aplicado à segunda régua que
+tinha o mesmo problema.
+
+**O portão que existia era carimbo.** `re-02` checava `no_forbidden_denial` +
+`has_real_cards` + `no_hallucination` e passou VERDE com os 10 itens de trigo.
+Nasceram `dietary_cards_safe` e `dietary_cards_unfiltered`
+(`waiterEvaluator.ts`), que leem o **cadastro** (`alergenosDetalhados`) do
+catálogo recebido — nunca lista de nomes, que envelhece com o cardápio — e três
+casos novos: `re-03` (glúten), `re-04` (lactose) e `re-05` (**sem restrição
+declarada → o cardápio continua inteiro**). Sabotagem: `re-03`/`re-04` vermelhos
+com a evidência item a item, `re-05` verde. Sabotagem inversa (filtro vazando
+para todo mundo): `re-05` vermelho, os outros verdes.
+
+**A resposta que o Diretor pediu: o defeito era GERAL, não da bakery.**
+`selectRestrictionCandidates` é código compartilhado — 100% dos restaurantes
+respondiam pergunta de alergia com lista não filtrada. O que muda por
+restaurante é o que a correção tem para ler:
+
+| | `alergenosDetalhados` preenchido | resposta nova |
+|---|---|---|
+| `foocci-bakery` | **40/40** | 11 cards, filtrados pelo alérgeno pedido |
+| `sushi-cazza` (cliente real) | **0/112** (`data/cardapio-sushi-cazza.csv`) | escalada: *"o cardápio não me dá como confirmar item por item"* + botão do WhatsApp |
+
+Conferido contra o catálogo de produção do sushi-cazza (125 itens): vegano, sem
+peixe e as buscas normais **não mudaram** — só o caminho de alérgeno.
+
+**② O plural.** Duas causas, não uma. A busca casa por SUBSTRING
+(`nameNorm.includes(word)`), e "bolos" não cabe em "Bolo de Fubá" — resolvido com
+`queryForms`, que testa a forma original **e** a singular, com freio de tamanho
+(≥4 letras) porque "chás"→"cha" acharia "Chapa". Mas `MENU_SYNONYM_GROUPS` e
+`CATEGORY_PROXIMITY_MAP` casam por PALAVRA INTEIRA (`\bsobremesa\b`), e o "s"
+quebra a fronteira: `foldQueryPlurals` + `matchesQueryPattern` cobrem esse
+segundo caso. A função de dobra é a **mesma** de `knowledgeMatch` (exportada, não
+recriada). Resultado: 7 de 7 negações falsas viraram resposta; "vocês têm pizza?"
+continua negando.
+
+**③ O repertório.** Três frentes. (a) A abertura nomeia o assunto quando existe
+um — item único, ou categoria quando todos os cards são dela; moldes em aposição
+("{x} — separei tudo o que temos 👇") para funcionar com qualquer rótulo, sem
+concordância para errar. (b) O seed passou a incluir a PERGUNTA, não só a lista
+de cards. (c) `ACK_POOL` de 4 para 7 frases no balde `first`, quatro delas
+nomeando o item — e o **🍱 saiu da padaria**.
+
+**A alma cadastrada.** `storytellingIA`/`perfilPaladar` entram quando a resposta
+é de UM item só. "Torta Holandesa: cremoso, doce, baunilha, chocolate. / É este
+aqui 👇". Só 10 dos 40 itens da bakery têm `storytellingIA`; os 40 têm
+`perfilPaladar`, e é ele que carrega o peso.
+
+**A regra 4 do validador quase matou o conserto em silêncio.** Ela apaga do texto
+o nome de qualquer produto que não esteja nos cards — e `ON_ITEM_ADDED` não pode
+ter cards (regra 7). "Pão Francês anotado 👌" saía como "anotado 👌". Passei ao
+validador uma lista de **nomeáveis** (carrinho + item recém-adicionado): o
+produto que a pessoa acabou de escolher é nomeável por definição. A trava contra
+citar o que não está à mostra continua valendo para todo o resto, com teste.
+
+**Números na bakery, antes → depois** (40 perguntas, mesmo roteiro):
+
+| | antes | depois |
+|---|---|---|
+| frases distintas (34 respostas determinísticas) | 15 | **23** |
+| a campeã aparece | 8× | **4×** |
+| respostas idênticas byte a byte | 2 grupos / 6 perguntas | **1 grupo / 2 perguntas** |
+| citam produto ou categoria pelo nome | **0/34** | **8/34** |
+| plurais que negavam produto existente | 7/11 | **0/11** |
+| cards com glúten para quem pediu "sem glúten" | **10 de 12** | **0 de 11** |
+| golden set (catálogo real da bakery) | 34/37 · score 92 | **37/40 · score 93** |
+
+As 3 falhas restantes do golden set são `ac-01/02/03`, que procuram categoria
+"Porções"/"Sobremesa" e devolvem "cannot verify" numa padaria — taxonomia de
+sushi, não defeito.
+
+**Achado que NÃO consertei, e por quê.** `decide()` embrulha tudo num `try/catch`
+e devolve `SAFE_FALLBACK` = *"Perfeito 😊 fico por aqui se precisar de ajuda."*
+Uma exceção no Garçom **parece ao cliente uma despedida educada** e a qualquer
+painel um turno normal (o `console.error` existe, mas ninguém olha o console por
+turno). Foi assim que eu descobri o problema do mock: o teste me devolveu "tchau"
+onde deveria haver um TypeError. É o "silêncio parece sucesso" na forma mais
+cara. Não mexi porque mudar comportamento de queda precisa de decisão — a
+substituição não pode ser mais destrutiva que a queda (guardrail 5).
+
+**Também não toquei** (fora das três frentes autorizadas): preço que não vira
+resposta em texto, e `MENU_SYNONYM_GROUPS:1083` fazendo "lasanha" casar com
+qualquer "massa" (na bakery: Brioche, Croissant, Pastel de Nata).
+
+**Portões:** `npx tsc --noEmit` limpo · `npx vitest run` **2110 arquivos / 5965
+testes, `success: true` lido no JSON**, 0 falhas. 48 testes novos, dos quais
+**23 existem só para provar que o legítimo continua passando**. Cada portão novo
+foi conferido com sabotagem — e em cada caso a sabotagem foi confirmada por
+`grep` no arquivo ANTES de o resultado ser julgado.
+
+**Proposta de vitrine** (quem promove é o Diretor): *"Detector que só confere se
+o card EXISTE não é portão de segurança alimentar"* — e o corolário que apareceu
+executando: **regra de segurança atrás de um import de banco é regra que some no
+mock.** O golden set carimbou de verde uma resposta que ofereceu Pão Francês a um
+celíaco porque suas três checagens perguntavam se o id era real, se não havia
+negação proibida e se não houve alucinação: três perguntas legítimas, nenhuma
+sobre o risco. Um portão só cobre o dano que ele sabe nomear, e quando o dano é
+físico a checagem tem que ser sobre o ATRIBUTO do item, lido do cadastro — nunca
+sobre a integridade da lista, nunca contra nomes escritos à mão. E a régua que
+protege tem que ser **pura**: `classifyDietarySafety` estava correta desde 02/08 e
+mesmo assim não protegia ninguém no cardápio, porque morava atrás de `prisma` e
+o Garçom não conseguia (nem os testes dele) alcançá-la de verdade.
+
+— especialista garcom, a partir de `f12cb237` (branch padrão)

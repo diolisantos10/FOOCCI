@@ -41,7 +41,7 @@ const PT_STOPWORDS = new Set([
  * Aplicado dos DOIS lados (pergunta do cliente e padrão cadastrado), então a
  * régua continua simétrica — nunca casa mais de um lado que do outro.
  */
-function foldPlural(w: string): string {
+export function foldPlural(w: string): string {
   return w.length >= 4 && w.endsWith("s") ? w.slice(0, -1) : w;
 }
 
