@@ -1765,3 +1765,68 @@ serviço, não de tela.
 Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 8.
 
 — interface, sobre `origin/claude/remove-legacy-runner-q8iXa` (1e368396)
+
+---
+
+## 2026-08-06 — "Cobrado à parte" de `/site/precos`: seis itens, cinco preços sem dono
+
+**O que foi feito:** as seis decisões do CEO aplicadas. Saíram WhatsApp oficial
+(R$ 149/mês), pacote de 1.000 mensagens (R$ 79) e unidade adicional (60% do
+plano); a nota fiscal perdeu o preço e virou nota ("a integração já vem incluída;
+certificado e custo por documento são do lojista, direto com o emissor");
+"Implantação R$ 299/599/1.490" virou **Configuração — Sob consulta**, com a
+descrição dizendo o que determina o preço (tamanho do cardápio, importar ou não a
+base) e o que o lojista recebe (nós subimos por ele; fazer sozinho pelo painel e
+pelo manual não custa nada). "Gestão pela agência" ficou palavra por palavra.
+
+**A origem, porque muda como se trata o número:** os seis entraram em 04/08
+(`a81bd46b`) citando "Planos Foocci v3 — a proposta comercial fechada". Esse
+documento **não existe no repositório**, e `@/lib/billing/pricing` — a fonte que o
+checkout usa — conhece três planos e três ciclos, mais nada. Não havia add-on,
+taxa de setup, pacote de mensagem nem unidade adicional. A página vendia cinco
+preços que o produto não sabia faturar.
+
+**Aprendizado 1 — o item mais perigoso não era o preço errado; era o preço de um
+problema inexistente.** O pacote de 1.000 mensagens vendia alívio de cota, e não
+existe cota de mensagem em plano nenhum. Preço inventado envelhece mentindo;
+preço para um problema inventado inventa também o problema — e o visitante passa
+a acreditar que o produto tem um limite que ele vai ter que comprar.
+
+**Aprendizado 2 — preço aposentado deixa rastro em outra seção, e o rastro é uma
+promessa.** A tabela de ciclos prometia "Implantação cheia / pela metade / grátis
+à vista", e a degustação dizia "a implantação nunca entra no desconto". Com as
+faixas aposentadas, aquilo virou meia-entrada de um ingresso sem preço. **Quem
+retira um número tem de varrer quem o citava de longe** — a busca por `implanta`
+achou quatro pontos a mais do que a seção que eu estava editando.
+
+**Aprendizado 3 — o portão precisa poupar o número certo, ou ensina a ser
+desligado.** `R$ 89` está aposentado (nota fiscal) e `R$ 89,50` é legítimo (metade
+exata de R$ 179,00 no primeiro mês, calculada por `firstChargeCents`); a tabela de
+ciclos imprime `R$ 149,17` de equivalente mensal do anual enquanto `R$ 149/mês`
+está proibido. Os padrões ficaram cirúrgicos (`R\$\s*89(?!,)`), e a prova de que
+funcionam está na captura: a tabela mostra R$ 149,17 e R$ 89,50 com o portão
+verde. Portão que reprova o número certo vira portão apagado no commit seguinte.
+
+**Portão, com as duas metades:** `precosSemValorSemLastro.test.ts` — 7 padrões de
+valor aposentado varridos no texto visível de `src/app/site` + `src/components/marketing`
+(comentário é ignorado de propósito: teste que pune a explicação ensina a apagar a
+explicação), mais 4 asserções sobre os dados (`SERVICOS_A_PARTE` sem dígito
+nenhum, preço exatamente "Sob consulta", e a Configuração dizendo cardápio +
+clientes + "a gente sobe"). Plantei os seis itens de volta na tela e um "A partir
+de R$ 349" no dado: **9 reprovam, cada uma nomeando arquivo, item e a decisão do
+CEO**; revertido, 11 passam. Bateria inteira: 5.899/5.899, lida no JSON.
+
+**Duas opções desenhadas e medidas, porque a pergunta era de percurso:** com três
+linhas — duas "Sob consulta" — a moldura de seção com manchete de 4xl entrega
+anticlímax (a captura de 1280 mostra o cartão da agência com uma linha de texto e
+um vazio do tamanho do cartão). Entreguei a **opção B**: caixa discreta, `h2`
+pequeno no padrão de `SectionTitle`, três linhas em `dl` com o preço alinhado à
+direita, `max-w-3xl` contra os `max-w-5xl/6xl` das seções de venda. Altura da
+seção a 375: 1.160px antes → 689px depois. A decisão final é do Diretor/CEO; a
+opção A está capturada e é uma troca de bloco.
+
+Medidas: `documentElement.scrollWidth` = 375 / 768 / 1280, exato nos três.
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 9, consistência 8,5.
+
+— interface, sobre `origin/claude/remove-legacy-runner-q8iXa` (6b040419),
+branch `claude/foocci-precos-cobrado-a-parte`
