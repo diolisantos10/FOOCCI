@@ -193,8 +193,13 @@ export const PRELAUNCH_BADGE = "Para restaurantes que querem ser donos dos próp
  *
  * Quando `WHATSAPP_SALES_NUMBER` for ligado, o convite direto volta a fazer sentido
  * — e aí ele nasce com link de verdade, não como frase.
+ *
+ * 08/08: saiu a lista de campos ("nome e WhatsApp"). Ela ficou errada no dia em que
+ * o e-mail entrou no formulário, e é o mesmo defeito do "São dois campos" da
+ * `CtaBand` — texto de marketing que enumera campo envelhece a cada mudança de
+ * formulário, num arquivo que ninguém abre junto. Ver `promessaDeCampos.test.ts`.
  */
-export const CONTATO_NOTE = "Você deixa nome e WhatsApp; uma pessoa do Foocci chama você.";
+export const CONTATO_NOTE = "Você deixa seus dados de contato; uma pessoa do Foocci chama você.";
 
 /**
  * @deprecated Use `CONTATO_NOTE`. O nome antigo sobrevive só como apelido porque o

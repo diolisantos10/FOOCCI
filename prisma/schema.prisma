@@ -4860,6 +4860,12 @@ model SiteLead {
   id          String    @id @default(cuid())
   nome        String
   whatsapp    String
+  /// O SEGUNDO caminho de volta. Obrigatório no formulário desde 08/08/2026 —
+  /// três contatos ficaram 51, 29 e 28 dias sem resposta porque o WhatsApp era o
+  /// único caminho e ele não alcançava ninguém. Opcional na COLUNA de propósito:
+  /// os contatos gravados antes dessa data não têm e-mail, e reescrever história
+  /// com um valor inventado é pior que assumir o vazio.
+  email       String?
   restaurante String?
   cidade      String?
   tipo        String?
@@ -4938,6 +4944,7 @@ model SiteLead {
   @@index([utmCampaign])
   @@index([whatsappDigits])
   @@index([lastContactedAt])
+  @@index([email])
 }
 
 /// As etapas do funil comercial da Foocci. ORDEM IMPORTA: a taxa de conversão

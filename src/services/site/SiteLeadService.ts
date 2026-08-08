@@ -38,6 +38,7 @@ import { generateLeadCode } from "@/lib/site/leadCode";
 import type { CreateSiteLeadInput } from "@/validators/site-lead";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
+import { analisarEmail } from "@/lib/email-contato";
 
 /** Sender identity. Resend's shared onboarding domain works with zero DNS setup. */
 const FROM = process.env.LEADS_FROM_EMAIL || "Foocci <onboarding@resend.dev>";
@@ -83,6 +84,16 @@ export const SiteLeadService = {
     const analise = analisarWhatsappBr(input.whatsapp);
     const whatsappDigits = analise.ok ? analise.digitos : normalizaWhatsapp(input.whatsapp);
 
+    /* O e-mail é guardado NORMALIZADO (sem espaço nas pontas, domínio minúsculo)
+     * pelo mesmo motivo do WhatsApp: o que quem atende vê tem de ser o que dá
+     * para usar. "  Contato@Nonna.COM.BR " copiado de um documento é o mesmo
+     * endereço que "contato@nonna.com.br", e guardar os dois faz a base parecer
+     * ter duas pessoas. Se por algum motivo não der para ler (só acontece se
+     * alguém chamar este serviço por fora da rota, que valida antes), grava o
+     * texto cru: perder o contato é sempre o pior resultado. */
+    const emailLido = analisarEmail(input.email);
+    const email = emailLido.ok ? emailLido.normalizado : ouNulo(input.email);
+
     const existente = whatsappDigits ? await buscaDuplicata(whatsappDigits) : null;
 
     let leadId: string;
@@ -103,6 +114,9 @@ export const SiteLeadService = {
             // havia informado — um segundo envio apressado costuma vir com menos
             // campos, e sobrescrever perderia informação boa.
             nome:        existente.nome || input.nome,
+            // Contato da primeira safra (antes de 08/08) não tem e-mail: o
+            // reenvio é a chance de completar. Quem já tinha não é sobrescrito.
+            email:       existente.email ?? email,
             restaurante: existente.restaurante ?? ouNulo(input.restaurante),
             cidade:      existente.cidade      ?? ouNulo(input.cidade),
             tipo:        existente.tipo        ?? ouNulo(input.tipo),
@@ -137,7 +151,7 @@ export const SiteLeadService = {
       // duas vezes.
       if (codigo === null) codigo = await atribuiCodigo(leadId);
     } else {
-      const criado = await createWithCode(input, whatsappDigits);
+      const criado = await createWithCode(input, whatsappDigits, email);
       leadId = criado.id;
       codigo = criado.codigo;
 
@@ -159,7 +173,9 @@ export const SiteLeadService = {
         });
     }
 
-    const error = await notify({ ...input, codigo });
+    // O aviso leva o e-mail NORMALIZADO, não o texto cru: quem abre o aviso
+    // costuma responder clicando no endereço, e um espaço a mais quebra o link.
+    const error = await notify({ ...input, email: email ?? input.email, codigo });
 
     await prisma.siteLead.update({
       where: { id: leadId },
@@ -182,8 +198,8 @@ async function buscaDuplicata(whatsappDigits: string) {
       where: { whatsappDigits },
       orderBy: { createdAt: "desc" },
       select: {
-        id: true, nome: true, codigo: true, restaurante: true, cidade: true, tipo: true,
-        desafio: true,
+        id: true, nome: true, codigo: true, email: true, restaurante: true, cidade: true,
+        tipo: true, desafio: true,
         utmSource: true, utmMedium: true, utmCampaign: true, utmContent: true,
         utmTerm: true, clickId: true, landingPath: true, referrer: true,
       },
@@ -228,11 +244,13 @@ async function atribuiCodigo(leadId: string): Promise<string | null> {
 async function createWithCode(
   input: CreateSiteLeadInput,
   whatsappDigits: string | null,
+  email: string | null,
 ): Promise<{ id: string; codigo: string | null }> {
   const base = {
     nome:        input.nome,
     whatsapp:    input.whatsapp,
     whatsappDigits,
+    email,
     restaurante: ouNulo(input.restaurante),
     cidade:      ouNulo(input.cidade),
     tipo:        ouNulo(input.tipo),
@@ -296,6 +314,9 @@ async function notify(lead: CreateSiteLeadInput & { codigo: string | null }): Pr
     lead.codigo ? `Código: #${lead.codigo}` : "Código: — (não gerado)",
     `Nome: ${lead.nome}`,
     `WhatsApp: ${lead.whatsapp}`,
+    // O segundo caminho de volta vai no aviso, ao lado do primeiro. Se o WhatsApp
+    // não alcançar, quem lê já tem por onde responder sem abrir o CRM.
+    `E-mail: ${lead.email}`,
     lead.restaurante ? `Restaurante: ${lead.restaurante}` : null,
     lead.cidade ? `Cidade: ${lead.cidade}` : null,
     lead.tipo ? `Tipo: ${lead.tipo}` : null,
@@ -316,7 +337,7 @@ async function notify(lead: CreateSiteLeadInput & { codigo: string | null }): Pr
         from: FROM,
         to: [to],
         subject: `🍽️ Novo pedido de demonstração — ${lead.nome}`,
-        text: `${linhas.join("\n")}\n\nAbra no CRM da Foocci: /admin/foocci-crm\nResponda pelo WhatsApp: ${lead.whatsapp}`,
+        text: `${linhas.join("\n")}\n\nAbra no CRM da Foocci: /admin/foocci-crm\nResponda pelo WhatsApp: ${lead.whatsapp}\nOu por e-mail: ${lead.email}`,
       }),
       // A slow provider must not hold the visitor's request open.
       signal: AbortSignal.timeout(8_000),

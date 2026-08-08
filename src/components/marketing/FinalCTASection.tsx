@@ -102,9 +102,9 @@ export function FinalCTASection() {
         </div>
 
         {/*
-          A microcopy diz o que tem do outro lado do clique. A versão anterior falava
-          dos dois campos do formulário — que agora não é mais o destino deste botão.
-          Microcopy que descreve outro botão é pior que microcopy nenhuma.
+          A microcopy diz o que tem do outro lado do clique. A versão anterior descrevia
+          o formulário — que agora não é mais o destino deste botão. Microcopy que
+          descreve outro botão é pior que microcopy nenhuma.
         */}
         <p className="mt-4 text-sm text-muted">
           É uma padaria de demonstração, já montada: você pede como um cliente pediria.

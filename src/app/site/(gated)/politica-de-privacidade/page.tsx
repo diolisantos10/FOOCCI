@@ -52,9 +52,14 @@ export default function PoliticaPage() {
       <LegalBlock heading="Dados que coletamos">
         <p>
           Coletamos apenas o que você digita no formulário de demonstração:{" "}
-          <strong>nome e WhatsApp</strong> (obrigatórios) e, se você quiser informar,{" "}
+          <strong>nome, WhatsApp e e-mail</strong> (obrigatórios) e, se você quiser informar,{" "}
           <strong>nome do restaurante, cidade, tipo de restaurante e principal desafio</strong>.
           Registramos também a data do envio e a página de origem.
+        </p>
+        <p>
+          <strong>Por que pedimos os dois contatos:</strong> para conseguir responder. Se o
+          WhatsApp informado estiver errado ou não receber mensagem, o e-mail é o único jeito
+          de voltar até você — sem ele, o seu pedido de demonstração fica sem resposta.
         </p>
         <p>
           <strong>Finalidade:</strong> entrar em contato para combinar a demonstração e

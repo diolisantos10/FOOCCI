@@ -1,13 +1,23 @@
 import { z } from "zod";
 import { whatsappBrValido, MENSAGEM_WHATSAPP_INVALIDO } from "@/lib/whatsapp-br";
+import { emailValido, MENSAGEM_EMAIL_INVALIDO } from "@/lib/email-contato";
 
 /**
  * Validation for the public demo-request form (`DemoForm`, hoje na última seção de
  * /site/precos — a página /site/demonstracao foi eliminada em 06/08).
  *
  * PUBLIC endpoint — anyone on the internet can post here, so every field is
- * length-bounded. Only `nome` and `whatsapp` are required; the rest qualify the
- * lead and an owner in a hurry should not be blocked by them.
+ * length-bounded. Obrigatórios: `nome`, `whatsapp` e `email`. O resto qualifica o
+ * lead e um dono com pressa não pode ser barrado por eles.
+ *
+ * ⚠️ POR QUE O E-MAIL É OBRIGATÓRIO (08/08/2026): três contatos da Dioli Digital
+ * ficaram 51, 29 e 28 dias sem resposta porque havia um único caminho de volta —
+ * o WhatsApp — e ele não alcançava ninguém. Um lead que não dá para alcançar vale
+ * zero, então o custo do campo a mais na conversão é menor que o custo de um
+ * contato mudo. A validação NÃO é o `type="email"` do navegador: ele aceita
+ * `a@b`, porque o padrão HTML não exige ponto no domínio. A regra de verdade está
+ * em `src/lib/email-contato.ts` e a trava é aqui, no servidor — quem posta direto
+ * na API passa exatamente pelo mesmo `refine`.
  *
  * ⚠️ O `whatsapp` era `min(8)` — OITO CARACTERES QUAISQUER. "não tenho" passava,
  * e a tela de sucesso confirmava: "vamos chamar você no WhatsApp não tenho".
@@ -26,6 +36,14 @@ export const createSiteLeadSchema = z.object({
   nome:        z.string().trim().min(2, "Informe seu nome").max(120),
   whatsapp:    z.string().trim().min(1, "Informe seu WhatsApp").max(30)
                  .refine(whatsappBrValido, MENSAGEM_WHATSAPP_INVALIDO),
+  /* O `max(254)` vem ANTES do refine de propósito: é o limite do RFC 5321 e o que
+     impede uma string de megabytes de virar trabalho de regex. */
+  /* `required_error` NÃO é detalhe: sem ele, um POST que simplesmente OMITE o
+     campo recebe "Required" — em inglês, sem dizer qual campo — e essa string vai
+     direto para a tela do visitante (`parsed.error.issues[0].message`). */
+  email:       z.string({ required_error: "Informe seu e-mail" })
+                 .trim().min(1, "Informe seu e-mail").max(254)
+                 .refine(emailValido, MENSAGEM_EMAIL_INVALIDO),
   restaurante: z.string().trim().max(160).optional().or(z.literal("")),
   cidade:      z.string().trim().max(120).optional().or(z.literal("")),
   tipo:        z.string().trim().max(60).optional().or(z.literal("")),

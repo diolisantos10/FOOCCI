@@ -2211,3 +2211,98 @@ Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
 375/768/1280, **inclusive com a gaveta "Fora de operação" aberta**.
 
 — interface, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-08 — E-mail obrigatório no formulário público + evento `Lead` da Meta
+
+**O que foi feito.** O único formulário público de captura do Foocci (o
+`DemoForm`, hoje a última seção de `/site/precos#demonstracao`) ganhou um campo
+de e-mail **obrigatório**, validado no servidor; o site parou de mentir sobre
+quantos campos ele tem; e o envio bem-sucedido passou a disparar o evento padrão
+`Lead` do Pixel da Meta.
+
+**Aprendizado 1 — `type="email"` nunca foi validação, e o caso que prova é
+`a@b`.** O padrão HTML não exige ponto no domínio (`a@intranet` é válido numa
+rede interna), então o navegador aceita `a@b` sem pestanejar. Num formulário
+público da internet isso é sempre engano de digitação. A regra de verdade virou
+`src/lib/email-contato.ts`, espelhando a estrutura de `whatsapp-br.ts` — puro,
+sem I/O, mesmo código no navegador (para a pessoa ver o erro antes de enviar) e
+no servidor (onde é trava). O `type="email"` ficou **pelo teclado do celular**, e
+o comentário no código diz isso, porque a próxima pessoa vai achar que é validação.
+
+**Aprendizado 2 — dois erros da mesma pessoa no mesmo toque não podem ter duas
+respostas visuais.** O formulário tinha DUAS máquinas de erro: campo vazio virava
+o resumo âmbar colado no botão (com link para o campo), e campo com forma
+impossível virava a tarja VERMELHA — que é a tarja de "o servidor falhou" — sem
+dizer qual campo era. O próprio comentário do arquivo já prometia "âmbar para
+pendência do formulário, vermelho só para falha de servidor" e o código não
+cumpria. As duas espécies entraram na mesma lista, com um campo `tipo`
+(`"vazio" | "forma"`), e o cabeçalho mudou junto: **"Falta" só quando de fato
+falta**; quando a pessoa preencheu e o valor não serve, é "Confira". Dizer
+"faltam 2 campos" para quem preencheu tudo manda ela procurar um campo vazio que
+não existe.
+
+**Aprendizado 3 — `break-all` é o inimigo do texto que existe para ser
+conferido.** A confirmação mostra o e-mail normalizado de volta (última chance de
+pegar um "gmial"). Com `break-all` em linha corrida, a 375px o endereço partia no
+meio de uma sílaba: `Cont / ato@pizzarianonna.com.br`. Trocado por `break-words` +
+`block` (linha própria), cabe inteiro. **Só apareceu na captura de 375px** — no
+desktop lia perfeito. Vale a regra da vitrine: o número/o texto se confere na
+captura, não no olho.
+
+**Aprendizado 4 — campo longo pede a linha inteira num grid de duas colunas.**
+Em `sm:grid-cols-2`, o input de e-mail fica com ~250px e o endereço some dentro
+do próprio campo justo quando a pessoa quer revisar. `sm:col-span-2` resolve, e
+como consequência a ordem visual ficou: [Nome | WhatsApp] · [E-mail] ·
+[Restaurante | Cidade] — os três obrigatórios primeiro, sem linha órfã.
+
+**Aprendizado 5 — copy que enumera campo envelhece sozinha, e ninguém percebe.**
+Quatro lugares do site diziam *"São dois campos: seu nome e seu WhatsApp"* com o
+formulário já em SEIS campos, havia meses. A frase não ficou errada por descuido
+de alguém: ela mora numa pasta que ninguém abre quando mexe no formulário. Só uma
+trava mecânica resolve — `promessaDeCampos.test.ts` proíbe contar campos e proíbe
+enumerar os obrigatórios em toda a copy de `/site` e de `components/marketing`. O
+teste tira comentários antes de olhar (comentário que cita a frase antiga é
+memória, não promessa) e **abre exceção para o próprio formulário**, que conta o
+que está pendente — exceção que só se sustenta porque outro teste exige que esse
+número venha de `problemas.length`, nunca de um literal.
+
+**Aprendizado 6 — sucesso na mesma página quebra a medição por URL, e o conserto
+não é furar a trava do Pixel.** O CEO tentou criar uma conversão personalizada na
+Meta com a regra *"URL contém…"*; não tinha como funcionar, porque a confirmação
+acontece sem trocar de URL. A saída é o evento **padrão** `Lead`. Mas o
+`SiteAnalytics.test.ts` proíbe `fbq` fora da camada de analytics — de propósito,
+porque Pixel com dois donos já produziu contagem dobrada aqui. Em vez de relaxar
+o teste, nasceu `siteAnalyticsEvents.ts` (quem instala é o `SiteAnalytics`, quem
+dispara é ele) e **a trava ficou mais estrita**: agora o teste varre `src` inteiro
+e só dois arquivos podem escrever `fbq`. Regra que atrapalha costuma estar certa;
+o que falta é a porta legítima.
+
+**Aprendizado 7 — "dispara só no sucesso" é uma propriedade de POSIÇÃO, e dá para
+travar.** Sem jsdom no projeto, não dava para renderizar o formulário num teste.
+O gate ficou estrutural e continua reprovando as três sabotagens reais: a chamada
+tem de vir **depois** do `fetch`, **depois** do `if (!res.ok)` e **antes** do
+`} catch {`, e existir uma vez só. Fora isso, o auxiliar tem teste de
+comportamento próprio (dispara uma vez por chave, não lança sem Pixel, sobrevive
+a um Pixel que explode) e sete cenários foram medidos em navegador de verdade com
+um `fbq` falso: válido → 1 evento; dois toques → 1; validação recusada → 0;
+500 → 0; rede caída → 0; sem Pixel → captura normal e zero erro; `/pedido/[slug]`
+→ `fbq` indefinido e zero requisição para a Meta.
+
+**Aprendizado 8 — campo novo sem caminho de leitura é campo decorativo.** O
+e-mail foi seguido até a ponta: coluna aditiva, gravado **normalizado** (mesmo
+motivo do WhatsApp — `" Contato@Nonna.COM.BR "` e `contato@nonna.com.br` são a
+mesma pessoa e viravam duas), incluído no aviso do Resend, exposto no dossiê do
+`/admin/foocci-crm` como `mailto:` clicável, e **incluído na busca** do CRM. Sem a
+busca, quem cola no campo o e-mail que chegou não acha ninguém. E onde o contato é
+antigo a tela diz *"não foi perguntado (contato anterior a 08/08)"* em vez de um
+traço: traço lê como "ele não tem", e ausência de informação não é informação.
+
+**Notas de ambiente.** Receita da vitrine funcionou, com um passo a mais: depois
+de mexer no `schema.prisma` é preciso **`npx prisma generate` E reiniciar o
+`next dev`** — o servidor que já estava no ar seguia com o client antigo e o
+`create` reprovava com `PrismaClientValidationError` apontando para a coluna nova.
+
+**Notas.** 375/768/1280 conferidos nos três estados (vazio, erro, enviado);
+`scrollWidth` exato em todos (375/768/1280), zero rolagem horizontal.

@@ -44,9 +44,16 @@ import { PrimaryCta } from "./Cta";
  * O que a pessoa recebe ao clicar. Não promete prazo ("em 24h") porque não há
  * ninguém garantindo esse prazo hoje — prometer atendimento que a operação não
  * sustenta é o guardrail 7 aplicado ao comercial.
+ *
+ * ⚠️ E NÃO PROMETE QUANTIDADE DE CAMPO. Esta frase dizia *"São dois campos: seu
+ * nome e seu WhatsApp"* enquanto o formulário já tinha SEIS — ela envelheceu
+ * sozinha, num commit que ninguém ligou a ela, e passou meses mentindo em quatro
+ * páginas ao mesmo tempo. Número de campo em texto de marketing é uma promessa
+ * que quebra a cada mudança de formulário: descreva o que a pessoa GANHA, não a
+ * conta do que ela digita. Há teste para isso (`promessaDeCampos.test.ts`).
  */
 const DEFAULT_SUBTITLE =
-  "Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do seu restaurante. São dois campos: seu nome e seu WhatsApp.";
+  "Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do seu restaurante. Você deixa seu contato e a gente chama.";
 
 export function CtaBand({
   title,

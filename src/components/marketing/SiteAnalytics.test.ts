@@ -20,15 +20,28 @@
  * METADE 2: sem a metade de baixo, apagar o componente inteiro satisfaria a de cima.
  * Com id → o script aparece. Sem id → NADA é renderizado (bloco de medição vazio é
  * pior que nenhum: parece instalado e não reporta). E nenhum dado pessoal no evento.
+ *
+ * METADE 3 (08/08/2026) — O EVENTO `Lead`. O formulário de demonstração confirma o
+ * envio NA MESMA PÁGINA: a URL não muda e não existe página de obrigado. Logo,
+ * "conversão personalizada por URL" no Gerenciador de Eventos não tem como
+ * funcionar — casaria com quem só visitou, ou com ninguém. Quem manda o sinal é o
+ * evento PADRÃO `Lead`, e ele tem três condições que este arquivo cobra:
+ * sai só no SUCESSO, sai UMA vez, e não sai nada quando não há Pixel.
+ *
+ * A trava arquitetural continua valendo e ficou MAIS estrita: `fbq` só pode
+ * aparecer em DOIS arquivos — `SiteAnalytics.tsx` (que instala) e
+ * `siteAnalyticsEvents.ts` (que dispara). O formulário chama o auxiliar, nunca o
+ * `fbq`. Pixel com dois donos foi como esta casa produziu contagem dobrada.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync, existsSync, readdirSync, statSync } from "fs";
 import path from "path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { SiteAnalytics } from "./SiteAnalytics";
+import { registrarLeadCapturado, __resetEventosDeSite } from "./siteAnalyticsEvents";
 
 const SRC = path.resolve(__dirname, "..", "..");
 const APP = path.join(SRC, "app");
@@ -284,5 +297,168 @@ describe("nenhum evento do Pixel carrega dado pessoal, em lugar nenhum do produt
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// METADE 3 — o evento `Lead`, e o dono único do Pixel.
+// ---------------------------------------------------------------------------
+
+/** Os DOIS únicos arquivos do produto autorizados a escrever `fbq`. */
+const DONOS_DO_PIXEL = [
+  path.join(SRC, "components", "marketing", "SiteAnalytics.tsx"),
+  path.join(SRC, "components", "marketing", "siteAnalyticsEvents.ts"),
+];
+
+/** Todo arquivo de código de `src`, menos os testes (que citam `fbq` em texto). */
+function todoOCodigo(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...todoOCodigo(full));
+    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+describe("o Pixel tem UM dono — a trava arquitetural", () => {
+  it("nenhum arquivo do produto chama `fbq` fora da camada de analytics", () => {
+    const offenders = todoOCodigo(SRC)
+      .filter((f) => !DONOS_DO_PIXEL.includes(f))
+      .filter((f) => /\bfbq\s*\(/.test(readFileSync(f, "utf8")))
+      .map((f) => path.relative(SRC, f));
+
+    expect(
+      offenders,
+      "Alguém passou a chamar `fbq` direto. O Pixel tem um dono só: quem instala é " +
+        "`SiteAnalytics.tsx`, quem dispara é `siteAnalyticsEvents.ts`, e todo o " +
+        "resto do produto usa o auxiliar exportado. Foi Pixel com dois donos que " +
+        "produziu contagem dobrada de PageView nesta casa.",
+    ).toEqual([]);
+  });
+
+  it("os dois donos existem e de fato tocam no Pixel — a regra não vale por vazio", () => {
+    for (const dono of DONOS_DO_PIXEL) {
+      expect(existsSync(dono), `${path.relative(SRC, dono)} sumiu`).toBe(true);
+      expect(/\bfbq\s*\(/.test(readFileSync(dono, "utf8"))).toBe(true);
+    }
+  });
+
+  it("o auxiliar dispara `Lead` puro — sem valor, sem moeda, sem dado pessoal", () => {
+    const fonte = readFileSync(DONOS_DO_PIXEL[1]!, "utf8");
+    const chamadas = [...fonte.matchAll(/fbq\s*\(([^)]*)\)/g)].map((m) => m[1]!.trim());
+
+    expect(chamadas).toEqual(['"track", "Lead"']);
+    for (const chave of ["em:", "ph:", "fn:", "ln:", "external_id", "email", "telefone", "phone", "cpf"]) {
+      expect(fonte.toLowerCase().includes(`fbq("track", "lead", `)).toBe(false);
+      expect(chamadas.join(" ").toLowerCase()).not.toContain(chave);
+    }
+  });
+});
+
+describe("o auxiliar de evento `Lead`", () => {
+  const janelaOriginal = (globalThis as { window?: unknown }).window;
+
+  beforeEach(() => {
+    __resetEventosDeSite();
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  afterEach(() => {
+    if (janelaOriginal === undefined) delete (globalThis as { window?: unknown }).window;
+    else (globalThis as { window?: unknown }).window = janelaOriginal;
+  });
+
+  function ligaPixel() {
+    const eventos: unknown[][] = [];
+    (globalThis as { window?: unknown }).window = {
+      fbq: (...args: unknown[]) => void eventos.push(args),
+    };
+    return eventos;
+  }
+
+  it("com Pixel: dispara `Lead` uma vez, sem parâmetro nenhum", () => {
+    const eventos = ligaPixel();
+
+    expect(registrarLeadCapturado("A7K2M")).toBe(true);
+    expect(eventos).toEqual([["track", "Lead"]]);
+  });
+
+  it("dois toques no mesmo envio contam UMA conversão", () => {
+    const eventos = ligaPixel();
+
+    registrarLeadCapturado("A7K2M");
+    registrarLeadCapturado("A7K2M");
+    registrarLeadCapturado("A7K2M");
+
+    expect(
+      eventos.length,
+      "Um envio virou mais de uma conversão. O anúncio passa a otimizar por um " +
+        "número inflado, e nada quebra para denunciar.",
+    ).toBe(1);
+  });
+
+  it("envios diferentes contam separado — a trava não engole lead de verdade", () => {
+    const eventos = ligaPixel();
+
+    registrarLeadCapturado("A7K2M");
+    registrarLeadCapturado("B3P9Q");
+
+    expect(eventos.length).toBe(2);
+  });
+
+  it("SEM Pixel configurado: não dispara, não lança, devolve false", () => {
+    // `window` nem existe (servidor)…
+    expect(() => registrarLeadCapturado("A7K2M")).not.toThrow();
+    expect(registrarLeadCapturado("B3P9Q")).toBe(false);
+
+    // …e `window` sem `fbq` (site sem Pixel, ou bloqueador de anúncio ligado).
+    (globalThis as { window?: unknown }).window = {};
+    expect(registrarLeadCapturado("C1D2E")).toBe(false);
+  });
+
+  it("Pixel que explode não derruba nada — medição nunca vence a captura", () => {
+    (globalThis as { window?: unknown }).window = {
+      fbq: () => {
+        throw new Error("bloqueador de anúncio");
+      },
+    };
+    expect(() => registrarLeadCapturado("A7K2M")).not.toThrow();
+    expect(registrarLeadCapturado("B3P9Q")).toBe(false);
+  });
+});
+
+describe("o formulário só conta o lead DEPOIS de o servidor confirmar", () => {
+  const FORM = path.join(SRC, "components", "marketing", "DemoForm.tsx");
+  const fonte = readFileSync(FORM, "utf8");
+
+  it("o formulário usa o auxiliar e não toca no `fbq`", () => {
+    expect(/\bfbq\s*\(/.test(fonte)).toBe(false);
+    expect(fonte).toContain("registrarLeadCapturado(");
+  });
+
+  it("a chamada acontece UMA vez, depois do envio e fora do caminho de erro", () => {
+    /*
+      As três sabotagens que este teste existe para pegar, e todas já foram
+      escritas por alguém em algum produto:
+        • disparar no clique (antes do fetch) → mede intenção como conversão;
+        • disparar antes do `if (!res.ok)`    → conta envio recusado como lead;
+        • disparar no `catch`                 → conta falha de rede como lead.
+    */
+    const chamadas = [...fonte.matchAll(/registrarLeadCapturado\s*\(/g)];
+    expect(chamadas.length, "Mais de uma chamada = mais de uma conversão por envio.").toBe(1);
+
+    const posChamada = chamadas[0]!.index!;
+    const posFetch = fonte.indexOf('await fetch("/api/site/leads"');
+    const posRecusa = fonte.indexOf("if (!res.ok)");
+    const posCatch = fonte.indexOf("} catch {", posRecusa);
+
+    expect(posFetch, "não achei o envio ao servidor").toBeGreaterThan(-1);
+    expect(posRecusa, "não achei a checagem de resposta recusada").toBeGreaterThan(-1);
+    expect(posCatch, "não achei o tratamento de falha de rede").toBeGreaterThan(-1);
+
+    expect(posChamada, "o evento sai ANTES do envio — isso é intenção, não lead").toBeGreaterThan(posFetch);
+    expect(posChamada, "o evento sai antes de saber se o servidor aceitou").toBeGreaterThan(posRecusa);
+    expect(posChamada, "o evento sai no caminho de falha de rede").toBeLessThan(posCatch);
   });
 });

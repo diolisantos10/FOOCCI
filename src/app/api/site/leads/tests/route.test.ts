@@ -28,7 +28,12 @@ function req(body: unknown) {
   }) as never;
 }
 
-const CORPO = { nome: "João", whatsapp: "11999998888", restaurante: "Pizzaria Nonna" };
+const CORPO = {
+  nome: "João",
+  whatsapp: "11999998888",
+  email: "joao@pizzarianonna.com.br",
+  restaurante: "Pizzaria Nonna",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,6 +95,74 @@ describe("POST /api/site/leads", () => {
     // A recusa ensina o que fazer — mensagem sem exemplo devolve a pessoa ao
     // mesmo erro.
     expect(body.error).toContain("(11) 98765-4321");
+  });
+
+  /*
+    ── O E-MAIL, NO SERVIDOR ────────────────────────────────────────────────────
+
+    Três contatos da Dioli Digital ficaram 51, 29 e 28 dias sem resposta porque
+    havia um caminho de volta só, e ele não alcançava ninguém. A trava é AQUI:
+    campo que o cliente pode contornar não é campo validado, e o `type="email"`
+    do navegador — que nem chega neste teste — aceita `a@b`.
+  */
+  it("SEM e-mail não vira lead: 400 e nada gravado", async () => {
+    const semEmail: Record<string, unknown> = { ...CORPO };
+    delete semEmail.email;
+
+    const res = await POST(req(semEmail));
+    const body = (await res.json()) as { error?: string };
+
+    expect(res.status).toBe(400);
+    expect(capture).not.toHaveBeenCalled();
+    expect(body.error).toContain("e-mail");
+  });
+
+  it.each([
+    ["a@b",            "domínio sem ponto — o que o navegador ACEITA"],
+    ["sem-arroba",     "sem @"],
+    ["joao@ tal.com",  "espaço no meio"],
+    ["joao@tal",       "domínio sem ponto"],
+    ["joao@tal.c",     "domínio de topo de uma letra"],
+    ["@tal.com",       "sem nome antes do @"],
+    ["   ",            "só espaço"],
+  ])("e-mail impossível (%s) não vira lead: 400 e nada gravado", async (email) => {
+    const res = await POST(req({ ...CORPO, email }));
+    const body = (await res.json()) as { error?: string };
+
+    expect(res.status).toBe(400);
+    expect(capture).not.toHaveBeenCalled();
+    // A recusa ensina o que fazer — mensagem sem exemplo devolve a pessoa ao
+    // mesmo erro.
+    expect(body.error).toMatch(/e-?mail/i);
+  });
+
+  it("os e-mails que gente de verdade digita CONTINUAM entrando", async () => {
+    // A metade que impede o portão de virar parede: recusar quem está certo custa
+    // mais que aceitar dado sujo, porque barra o dono que estava tentando comprar.
+    capture.mockResolvedValue({ id: "lead1", codigo: "A7K2M", notified: true, notifyError: null });
+
+    for (const email of [
+      "contato@pizzarianonna.com.br",
+      "  Contato@Nonna.COM.BR  ",       // colado com espaço e capitalizado pelo celular
+      "joao+foocci@gmail.com",          // alias
+      "joao.da.silva@tal.com.br",
+      "financeiro@grupo.rede.nonna.com.br",
+    ]) {
+      capture.mockClear();
+      const res = await POST(req({ ...CORPO, email }));
+      expect(res.status, `"${email}" foi recusado e não deveria`).toBe(200);
+      expect(capture).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("o e-mail chega ao serviço que grava — não morre na porta", async () => {
+    capture.mockResolvedValue({ id: "lead1", codigo: "A7K2M", notified: true, notifyError: null });
+
+    await POST(req({ ...CORPO, email: "contato@nonna.com.br" }));
+
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "contato@nonna.com.br" }),
+    );
   });
 
   it("os formatos que gente de verdade digita CONTINUAM entrando", async () => {

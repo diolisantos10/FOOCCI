@@ -181,7 +181,7 @@ export interface ListarContatosFiltro {
   stage?: FoocciLeadStage;
   /** true = só quem a Foocci ainda não abordou (a fila do SDR). */
   somenteNaoAbordados?: boolean;
-  /** Busca por nome, restaurante, cidade ou telefone. */
+  /** Busca por nome, restaurante, cidade, telefone, código ou e-mail. */
   busca?: string;
   de?: Date;
   ate?: Date;
@@ -198,6 +198,12 @@ export interface ContatoResumo {
   codigo: string | null;
   whatsapp: string;
   whatsappLink: string | null;
+  /**
+   * O SEGUNDO caminho de volta. `null` só nos contatos anteriores a 08/08/2026 —
+   * a partir dali o formulário exige, e a trava é o `createSiteLeadSchema`.
+   * `null` aqui quer dizer "não foi perguntado", nunca "ele não tem".
+   */
+  email: string | null;
   restaurante: string | null;
   cidade: string | null;
   tipo: string | null;
@@ -235,6 +241,10 @@ export async function listarContatos(f: ListarContatosFiltro = {}): Promise<Cont
       { nome:        { contains: busca, mode: "insensitive" } },
       { restaurante: { contains: busca, mode: "insensitive" } },
       { cidade:      { contains: busca, mode: "insensitive" } },
+      // Quem atende cola no campo de busca o que chegou na mão. Desde 08/08 o que
+      // chega também pode ser um e-mail — se a busca não o encontrasse, o campo
+      // novo seria decorativo justamente para quem mais precisa dele.
+      { email:       { contains: busca, mode: "insensitive" } },
       ...(codigo.length === LEAD_CODE_LEN ? [{ codigo }] : []),
       ...(digitos.length >= 4 ? [{ whatsappDigits: { contains: digitos } }] : []),
     ];
@@ -253,6 +263,7 @@ export async function listarContatos(f: ListarContatosFiltro = {}): Promise<Cont
     codigo: l.codigo,
     whatsapp: l.whatsapp,
     whatsappLink: linkWhatsapp(l.whatsapp),
+    email: l.email,
     restaurante: l.restaurante,
     cidade: l.cidade,
     tipo: l.tipo,
@@ -337,6 +348,7 @@ export async function getDossie(leadId: string): Promise<DossieContato | null> {
     codigo: l.codigo,
     whatsapp: l.whatsapp,
     whatsappLink: linkWhatsapp(l.whatsapp),
+    email: l.email,
     restaurante: l.restaurante,
     cidade: l.cidade,
     tipo: l.tipo,

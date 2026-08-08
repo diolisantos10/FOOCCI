@@ -55,6 +55,8 @@ interface Performance {
 
 interface Contato {
   id: string; nome: string; codigo: string | null; whatsapp: string; whatsappLink: string | null;
+  /** null = contato anterior a 08/08/2026, quando o campo passou a ser exigido. */
+  email: string | null;
   restaurante: string | null; cidade: string | null; tipo: string | null; desafio: string | null;
   stage: FoocciLeadStage; stageChangedAt: string; stageChangedBy: string | null;
   origemRotulo: string; canal: string; utmCampaign: string | null;
@@ -511,7 +513,7 @@ function SecaoBase({
           type="search"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar nome, restaurante, cidade, telefone ou código (#A7K2M)"
+          placeholder="Buscar nome, restaurante, cidade, telefone, e-mail ou código (#A7K2M)"
           /* `!border-*`: o globals.css tem uma regra base para input/select/textarea
              com a borda clara do painel do lojista, e ela vence por especificidade
              num tema escuro. Corrigido aqui, na tela que estou tocando. */
@@ -794,6 +796,17 @@ function GavetaContato({ id, onFechar, onMudou }: { id: string; onFechar: () => 
                     ? <a href={dossie.whatsappLink} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-400 hover:underline">{dossie.whatsapp}</a>
                     : <span className="text-gray-300">{dossie.whatsapp}</span>
                 } />
+                {/* O SEGUNDO caminho de volta, ao lado do primeiro — clicável,
+                    porque quem lê o dossiê quer responder, não copiar.
+
+                    Sem e-mail a linha NÃO some e NÃO vira "—": o traço leria como
+                    "não tem e-mail", e o que houve foi "não perguntamos" (guardrail
+                    1). O contato é anterior a 08/08 e o texto diz isso. */}
+                <Linha rotulo="E-mail" valor={
+                  dossie.email
+                    ? <a href={`mailto:${dossie.email}`} className="font-medium text-brand-400 hover:underline">{dossie.email}</a>
+                    : <span className="text-gray-500">não foi perguntado (contato anterior a 08/08)</span>
+                } />
                 <Linha rotulo="Restaurante" valor={dossie.restaurante ?? "—"} />
                 <Linha rotulo="Cidade" valor={dossie.cidade ?? "—"} />
                 <Linha rotulo="Entrou em" valor={dataHora(dossie.createdAt)} />
@@ -816,7 +829,7 @@ function GavetaContato({ id, onFechar, onMudou }: { id: string; onFechar: () => 
               <h3 className="text-sm font-semibold text-white">O que respondeu no formulário</h3>
               {dossie.respostas.length === 0 ? (
                 <p className="mt-2 text-sm text-gray-500">
-                  Só nome e WhatsApp — os outros campos do formulário são opcionais e ele não preencheu.
+                  Só os campos obrigatórios — os outros são opcionais e ele não preencheu.
                 </p>
               ) : (
                 <dl className="mt-2 space-y-1.5 text-sm">

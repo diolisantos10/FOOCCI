@@ -1200,9 +1200,13 @@ export default function PrecosPage() {
             >
               Veja o Foocci rodando com o cardápio do seu restaurante.
             </h2>
+            {/* Sem contagem de campo — ver `promessaDeCampos.test.ts`. Esta linha
+                dizia "São dois campos" com o formulário já em seis, e a frase
+                envelheceu sozinha porque ninguém liga uma mudança de formulário a
+                um parágrafo de outra pasta. */}
             <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2">
               Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do
-              seu restaurante. São dois campos: seu nome e seu WhatsApp.
+              seu restaurante. Você deixa seu contato e a gente chama.
             </p>
           </div>
 

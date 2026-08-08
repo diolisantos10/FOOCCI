@@ -46,6 +46,28 @@
  * navegador engole o `submit` com um balão próprio, em inglês em alguns
  * aparelhos, e o resumo nunca chega a aparecer. O `required` continua no campo —
  * ele é semântica para leitor de tela, não o mecanismo.
+ *
+ * ── 08/08/2026: O E-MAIL, E POR QUE ELE É OBRIGATÓRIO ───────────────────────
+ *
+ * A Dioli Digital achou três contatos parados há 51, 29 e 28 dias sem nenhuma
+ * resposta: o formulário guardava a conversa inteira e um único caminho de volta.
+ * WhatsApp é UM caminho — um dígito trocado, um número que não tem WhatsApp, um
+ * chip que mudou de dono, e o contato morre em silêncio. Um lead que não dá para
+ * alcançar vale zero, então o custo de um campo a mais na conversão é menor que o
+ * custo de um contato mudo. (E quem chega ao checkout já ia digitar e-mail de
+ * qualquer jeito: `/contratar/novo` exige desde sempre.)
+ *
+ * `type="email"` NÃO é a validação — ele aceita `a@b`, porque o padrão HTML não
+ * exige ponto no domínio. Ele está aqui pelo TECLADO do celular. A regra é
+ * `@/lib/email-contato`, e a trava é o `createSiteLeadSchema`, no servidor.
+ *
+ * ── 08/08/2026: A MEDIÇÃO ───────────────────────────────────────────────────
+ *
+ * O sucesso acontece NESTA página — a URL não muda. Por isso a conversão do
+ * Gerenciador de Eventos não pode ser uma regra de "URL contém": quem manda o
+ * sinal é o evento padrão `Lead`, disparado por `registrarLeadCapturado` só
+ * DEPOIS da resposta boa do servidor. O formulário nunca toca no `fbq` direto —
+ * o Pixel tem um dono só (ver `siteAnalyticsEvents.ts`).
  */
 
 import { useState } from "react";
@@ -53,6 +75,8 @@ import { leOrigemGuardada } from "./leadOriginStorage";
 import { WhatsAppIcon, CheckIcon } from "./icons";
 import { buildLeadWhatsAppMessage, formatSalesNumber, whatsappUrl } from "./config";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
+import { analisarEmail } from "@/lib/email-contato";
+import { registrarLeadCapturado } from "./siteAnalyticsEvents";
 
 const TIPOS = [
   "Pizzaria",
@@ -76,6 +100,7 @@ const DESAFIOS = [
 export function DemoForm({ includeChallenge = false }: { includeChallenge?: boolean }) {
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [email, setEmail] = useState("");
   const [restaurante, setRestaurante] = useState("");
   const [cidade, setCidade] = useState("");
   const [tipo, setTipo] = useState("");
@@ -94,17 +119,50 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
    * normalizado dá a ela a última chance de ver o engano.
    */
   const [whatsappLido, setWhatsappLido] = useState("");
+  /** O e-mail NORMALIZADO, pelo mesmo motivo do número acima. */
+  const [emailLido, setEmailLido] = useState("");
 
   // Calculado no render: o número é constante de build, não estado.
   const numeroLegivel = formatSalesNumber();
   const temWhatsApp = numeroLegivel !== null;
 
-  /** O que falta, na ordem dos campos. Mesma estrutura do checkout. */
-  const problemas: { campo: string; rotulo: string; mensagem: string }[] = [];
+  /**
+   * O que impede o envio, na ordem dos campos. Mesma estrutura do checkout.
+   *
+   * ⚠️ Aqui entram as DUAS espécies de problema — campo vazio e campo com forma
+   * impossível. Antes o vazio virava o resumo âmbar e a forma errada virava a
+   * tarja VERMELHA de erro, que é a tarja de "o servidor falhou". Duas respostas
+   * diferentes para dois erros da MESMA pessoa no MESMO toque, e a vermelha nem
+   * dizia qual campo era. Agora o vermelho é só do servidor, como o comentário
+   * mais abaixo sempre prometeu.
+   */
+  const problemas: {
+    campo: string;
+    rotulo: string;
+    mensagem: string;
+    /** "vazio" = não preencheu · "forma" = preencheu e não dá para usar. */
+    tipo: "vazio" | "forma";
+  }[] = [];
+
   if (nome.trim() === "")
-    problemas.push({ campo: "nome", rotulo: "Nome", mensagem: "Diga como podemos te chamar." });
-  if (whatsapp.trim() === "")
-    problemas.push({ campo: "whatsapp", rotulo: "WhatsApp", mensagem: "Informe o WhatsApp com DDD — é por onde a gente responde." });
+    problemas.push({ campo: "nome", rotulo: "Nome", mensagem: "Diga como podemos te chamar.", tipo: "vazio" });
+
+  if (whatsapp.trim() === "") {
+    problemas.push({ campo: "whatsapp", rotulo: "WhatsApp", mensagem: "Informe o WhatsApp com DDD — é por onde a gente responde.", tipo: "vazio" });
+  } else {
+    /* O MESMO analisador do servidor, rodando aqui só para a pessoa ver o erro
+       sem esperar a ida e volta. Não é a trava — a trava é o `refine` do
+       `createSiteLeadSchema`, que roda mesmo para quem posta direto na API. */
+    const wa = analisarWhatsappBr(whatsapp);
+    if (!wa.ok) problemas.push({ campo: "whatsapp", rotulo: "WhatsApp", mensagem: wa.mensagem, tipo: "forma" });
+  }
+
+  if (email.trim() === "") {
+    problemas.push({ campo: "email", rotulo: "E-mail", mensagem: "Informe seu e-mail — é por ele que a gente te acha se o WhatsApp não responder.", tipo: "vazio" });
+  } else {
+    const em = analisarEmail(email);
+    if (!em.ok) problemas.push({ campo: "email", rotulo: "E-mail", mensagem: em.mensagem, tipo: "forma" });
+  }
 
   const [tentouEnviar, setTentouEnviar] = useState(false);
   const mostrarPendencias = tentouEnviar && problemas.length > 0;
@@ -128,14 +186,10 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
       return;
     }
 
-    /* O MESMO analisador do servidor, rodando aqui só para a pessoa ver o erro
-       sem esperar a ida e volta. Não é a trava — a trava é o `refine` do
-       `createSiteLeadSchema`, que roda mesmo para quem posta direto na API. */
+    // Chegou aqui: os dois já passaram pelo mesmo analisador lá em cima. A leitura
+    // é refeita só para pegar o valor normalizado que a confirmação mostra.
     const analise = analisarWhatsappBr(whatsapp);
-    if (!analise.ok) {
-      setError(analise.mensagem);
-      return;
-    }
+    const leituraEmail = analisarEmail(email);
 
     setStatus("sending");
     setError(null);
@@ -151,6 +205,7 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
         body: JSON.stringify({
           nome,
           whatsapp,
+          email,
           restaurante,
           cidade,
           tipo,
@@ -180,8 +235,20 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
         return;
       }
 
+      /*
+        O EVENTO `Lead` DA META SAI AQUI E SÓ AQUI — depois do `!res.ok` acima e
+        fora do `catch` abaixo. Envio recusado ou que nem chegou não é lead, e
+        contar intenção como conversão faz o anúncio otimizar para quem não
+        converte. A função é idempotente pela chave, então dois toques ou um
+        re-render não viram duas conversões; sem Pixel configurado ela não faz
+        nada e o formulário segue igual.
+      */
+
+      registrarLeadCapturado(data?.codigo ?? "envio-sem-codigo");
+
       setCodigo(data?.codigo ?? null);
-      setWhatsappLido(analise.formatado);
+      setWhatsappLido(analise.ok ? analise.formatado : whatsapp.trim());
+      setEmailLido(leituraEmail.ok ? leituraEmail.normalizado : email.trim());
       setStatus("sent");
     } catch {
       setError("Sem conexão. Verifique a internet e tente de novo.");
@@ -209,17 +276,33 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
                 O número sai NORMALIZADO (`whatsappLido`), não como foi digitado:
                 é a última chance de a pessoa ver que trocou um dígito antes de
                 ir esperar por uma conversa que nunca chegaria. */}
-            <p className="text-lg font-semibold text-ink">Recebemos seu pedido! 🎉</p>
+            {/* ` ` (espaço que não quebra) antes do emoji: a 375px o "🎉"
+                caía sozinho na linha de baixo e a confirmação parecia truncada. */}
+            <p className="text-lg font-semibold text-ink">Recebemos seu pedido!{" "}🎉</p>
             <p className="mt-2 text-base leading-relaxed text-ink2">
               Uma pessoa do Foocci vai chamar você no WhatsApp <strong>{whatsappLido}</strong> para
               combinar um horário e mostrar o sistema funcionando com o cardápio do seu
               restaurante.
             </p>
+            {/* OS DOIS CAMINHOS, MOSTRADOS DE VOLTA — e normalizados, nunca o texto
+                cru. É a última chance de a pessoa ver que trocou um dígito ou
+                escreveu "gmial". Antes de 08/08 existia um caminho só: quando ele
+                estava errado, ela ia esperar por uma conversa que nunca chegaria. */}
+            {/* O e-mail em LINHA PRÓPRIA, e com `break-words` em vez de
+                `break-all`. Medido a 375px: em linha corrida e com `break-all`, o
+                endereço partia no meio de uma sílaba ("Cont / ato@nonna.com.br") —
+                justamente o texto que a pessoa precisa CONFERIR para pegar um
+                engano de digitação. `break-words` só quebra se não couber inteiro,
+                e a linha própria quase sempre faz caber. */}
+            <p className="mt-3 text-sm leading-relaxed text-ink2">
+              Se não conseguirmos falar no WhatsApp, escrevemos para:
+              <strong className="mt-0.5 block break-words text-ink">{emailLido}</strong>
+            </p>
             {/* Sem promessa sobre o que acontece por dentro: um reenvio com outro
                 número cria outro contato, e quem atende decide. Dizer "a gente usa
                 o último" seria inventar uma regra que o serviço não tem. */}
             <p className="mt-3 text-sm text-muted">
-              Não é esse o número? Recarregue a página e preencha de novo com o número certo.
+              Algum dos dois está errado? Recarregue a página e preencha de novo com os dados certos.
             </p>
           </div>
         )}
@@ -235,11 +318,34 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
       ela já estava convertendo. Ver `StickyMobileCta`.
     */
     <form onSubmit={handleSubmit} data-demo-form noValidate className="space-y-4">
+      {/*
+        A ORDEM E A LARGURA são deliberadas. Os três obrigatórios vêm primeiro, e
+        o e-mail ocupa a linha INTEIRA a partir de `sm`: endereço é o campo mais
+        longo do formulário e, em meia coluna (~250px), some dentro do próprio
+        input justo quando a pessoa quer conferir o que digitou. No celular tudo é
+        uma coluna e a regra não muda nada — ela existe para o tablet e o desktop.
+      */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="nome" label="Nome" value={nome} onChange={setNome} placeholder="Seu nome" required erro={erroDe("nome")} />
-        <Field id="whatsapp" label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(00) 00000-0000" required erro={erroDe("whatsapp")} />
-        <Field id="restaurante" label="Nome do restaurante" value={restaurante} onChange={setRestaurante} placeholder="Seu restaurante" />
-        <Field id="cidade" label="Cidade" value={cidade} onChange={setCidade} placeholder="Sua cidade" />
+        <Field id="nome" label="Nome" value={nome} onChange={setNome} placeholder="Seu nome" required autoComplete="name" erro={erroDe("nome")} />
+        <Field id="whatsapp" label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="(00) 00000-0000" required tipo="tel" autoComplete="tel" erro={erroDe("whatsapp")} />
+        <Field
+          id="email"
+          label="E-mail"
+          value={email}
+          onChange={setEmail}
+          placeholder="voce@restaurante.com.br"
+          required
+          /* `type="email"` é pelo TECLADO do celular (o "@" e o ".com" à mão),
+             nunca pela validação — ele aceita `a@b`. Quem valida é o `problemas`
+             acima, e quem trava é o servidor. */
+          tipo="email"
+          autoComplete="email"
+          larguraTotal
+          ajuda="Se o WhatsApp não responder, é por aqui que a gente te procura."
+          erro={erroDe("email")}
+        />
+        <Field id="restaurante" label="Nome do restaurante" value={restaurante} onChange={setRestaurante} placeholder="Seu restaurante" autoComplete="organization" />
+        <Field id="cidade" label="Cidade" value={cidade} onChange={setCidade} placeholder="Sua cidade" autoComplete="address-level2" />
       </div>
 
       <div className={includeChallenge ? "grid gap-4 sm:grid-cols-2" : ""}>
@@ -260,8 +366,13 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
           só para falha de servidor. */}
       {mostrarPendencias && (
         <div id="pendencias-demo" role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          {/* "Falta" só quando de fato falta. Se a pessoa preencheu e o campo está
+              impossível de usar, "falta" é mentira e ela relê o formulário
+              procurando um campo vazio que não existe. */}
           <p className="text-sm font-semibold text-amber-700">
-            {problemas.length === 1 ? "Falta 1 campo" : `Faltam ${problemas.length} campos`}
+            {problemas.every((p) => p.tipo === "vazio")
+              ? problemas.length === 1 ? "Falta 1 campo" : `Faltam ${problemas.length} campos`
+              : problemas.length === 1 ? "Confira 1 campo" : `Confira ${problemas.length} campos`}
           </p>
           <ul className="mt-1.5 space-y-1">
             {problemas.map((p) => (
@@ -437,6 +548,10 @@ function Field({
   onChange,
   placeholder,
   required,
+  tipo = "text",
+  autoComplete,
+  larguraTotal,
+  ajuda,
   erro,
 }: {
   id: string;
@@ -445,24 +560,38 @@ function Field({
   onChange: (v: string) => void;
   placeholder?: string;
   required?: boolean;
+  /**
+   * `tel` e `email` mudam o TECLADO do celular — o "@" e o ".com" à mão, o
+   * teclado numérico no telefone. Não mudam validação nenhuma: o formulário é
+   * `noValidate` de propósito, e quem valida é o resumo âmbar + o servidor.
+   */
+  tipo?: "text" | "tel" | "email";
+  autoComplete?: string;
+  /** Ocupa as duas colunas a partir de `sm`. No celular não muda nada. */
+  larguraTotal?: boolean;
+  /** Linha discreta abaixo do campo — some quando há erro, para não competir. */
+  ajuda?: string;
   /** Mensagem do que falta neste campo — só depois de a pessoa tentar enviar. */
   erro?: string | null;
 }) {
+  const descricao = erro ? `erro-${id}` : ajuda ? `ajuda-${id}` : undefined;
+
   return (
-    <div>
+    <div className={larguraTotal ? "sm:col-span-2" : undefined}>
       <label htmlFor={id} className="mb-1 block text-sm font-semibold text-ink2">
         {label}
         {required && <span className="text-brand-500"> *</span>}
       </label>
       <input
         id={id}
-        type="text"
+        type={tipo}
         value={value}
         required={required}
         placeholder={placeholder}
+        autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={Boolean(erro)}
-        aria-describedby={erro ? `erro-${id}` : undefined}
+        aria-describedby={descricao}
         /* O `!` na borda de erro é obrigatório: a regra base de `globals.css`
            (`input:not(…)` com sete `:not`) tem especificidade maior que qualquer
            utilitário e engole a cor. Mesma armadilha do checkout. */
@@ -470,11 +599,15 @@ function Field({
           erro ? "!border-red-400" : "border-line2 focus:border-brand-400"
         }`}
       />
-      {erro && (
+      {erro ? (
         <p id={`erro-${id}`} className="mt-1 text-xs font-semibold text-red-600">
           {erro}
         </p>
-      )}
+      ) : ajuda ? (
+        <p id={`ajuda-${id}`} className="mt-1 text-xs leading-relaxed text-muted">
+          {ajuda}
+        </p>
+      ) : null}
     </div>
   );
 }
