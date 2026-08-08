@@ -248,3 +248,131 @@ describe("handleInstagramLoginCallback — inscrição da conta no webhook", () 
     expect(String(saved.create.lastError)).toMatch(/nenhuma DM chega/i);
   });
 });
+
+// ── O erro PERMANENTE da troca (o caso `code 100` que está em produção) ───────
+//
+// Até aqui a troca insistia 5 vezes em ~30s em QUALQUER falha, e a frase gravada
+// para o lojista terminava sempre em "Reconecte". Com um erro que não muda com a
+// repetição — parâmetro recusado, permissão ausente, credencial errada — isso
+// gasta meio minuto do redirecionamento dele para chegar ao mesmo lugar, e depois
+// o manda refazer um login que vai falhar igual. Foi o que aconteceu três vezes.
+describe("realInstagramLoginGraph.exchange — erro que não muda com a repetição", () => {
+  function fetchComTrocaFalhando(error: Record<string, unknown>) {
+    const contador = { tentativas: 0 };
+    installFetch((url) => {
+      if (url.includes("api.instagram.com/oauth/access_token")) {
+        return { ok: true, status: 200, body: { access_token: "SHORT_1H", user_id: "IG_1" } };
+      }
+      if (url.includes("grant_type=ig_exchange_token")) {
+        contador.tentativas++;
+        return { ok: false, status: 400, body: { error } };
+      }
+      if (url.includes("/me")) return { ok: true, status: 200, body: { user_id: "IG_1", username: "sushicazza" } };
+      return { ok: false, status: 404, body: {} };
+    });
+    return contador;
+  }
+
+  it("code 100 para na PRIMEIRA tentativa — repetir o mesmo pedido devolve a mesma resposta", async () => {
+    const c = fetchComTrocaFalhando({ message: "Invalid parameter", code: 100, type: "OAuthException", fbtrace_id: "TRACE1" });
+    const profile = await realInstagramLoginGraph.exchange({ code: "CODE", redirectUri: REDIRECT, creds: CREDS });
+    expect(c.tentativas).toBe(1);
+    expect(profile.expiresInSeconds).toBe(3600); // o fallback curto continua sendo gravado, sem fingir 60 dias
+  }, 60_000);
+
+  it("erro transitório continua usando a rede INTEIRA de tentativas (a proteção não encolheu)", async () => {
+    // A metade oposta: se o short-circuit vazasse para o caso transitório, a correção
+    // teria trocado um defeito por outro — desistir cedo de algo que ia dar certo.
+    const c = fetchComTrocaFalhando({ message: "temporarily unavailable", code: 1 });
+    await realInstagramLoginGraph.exchange({ code: "CODE", redirectUri: REDIRECT, creds: CREDS });
+    expect(c.tentativas).toBe(LONG_LIVED_ATTEMPTS);
+  }, 60_000);
+
+  it("guarda a evidência INTEIRA: code, type e fbtrace — não só a mensagem", async () => {
+    fetchComTrocaFalhando({ message: "Invalid parameter", code: 100, type: "OAuthException", fbtrace_id: "TRACE1" });
+    const profile = await realInstagramLoginGraph.exchange({ code: "CODE", redirectUri: REDIRECT, creds: CREDS });
+    expect(profile.longLivedError).toContain("code 100");
+    expect(profile.longLivedError).toContain("type OAuthException");
+    expect(profile.longLivedError).toContain("fbtrace TRACE1");
+  }, 60_000);
+});
+
+// ── A frase que o lojista lê ─────────────────────────────────────────────────
+describe("handleInstagramLoginCallback — a faixa não pede ação que não conserta nada", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.ENCRYPTION_KEY = "0".repeat(64);
+    process.env.INSTAGRAM_APP_ID = "ig-app-123";
+    process.env.INSTAGRAM_APP_SECRET = "ig-secret-456";
+    process.env.FOOCCI_BASE_URL = "https://foocci.com.br";
+    db.metaOAuthState.findUnique.mockResolvedValue(futureState());
+    db.metaOAuthState.update.mockResolvedValue({});
+    db.instagramChannelConfig.findUnique.mockResolvedValue(null);
+    db.instagramChannelConfig.upsert.mockImplementation(async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => ({
+      id: "c1", restaurantId: "r1", enabled: true, paused: false, mode: "RECEIVE_ONLY", scope: "RESTAURANT_WIDE",
+      instagramBusinessAccountId: "IG_1", facebookPageId: null, pageAccessTokenEncrypted: "enc", verifyTokenHash: null,
+      appId: null, appSecretRef: null, allowlistedExternalUserIds: [], lastWebhookAt: null, lastError: null, metadata: null,
+      ...create, ...update,
+    }));
+  });
+
+  function graphComErroDeTroca(longLivedError: string): InstagramLoginGraph {
+    return {
+      exchange: vi.fn(async () => ({
+        igUserId: "IG_1", username: "sushicazza", longLivedToken: "SHORT",
+        expiresInSeconds: 3600, longLivedError,
+      })),
+      subscribe: vi.fn(async () => ({ ok: true })),
+    };
+  }
+
+  it("code 100: NÃO manda reconectar, e grava reconnectCanFix=false", async () => {
+    const r = await handleInstagramLoginCallback(
+      { state: "st-xyz", code: "CODE", error: null, redirectUri: REDIRECT },
+      graphComErroDeTroca("Invalid parameter · code 100 · type OAuthException"),
+    );
+    expect(r.shortLived).toBe(true);
+    const saved = db.instagramChannelConfig.upsert.mock.calls[0][0];
+    const lastError = String(saved.create.lastError);
+    // A palavra que mandava o lojista à quarta tentativa inútil não pode estar aqui.
+    expect(lastError).not.toMatch(/Reconecte/);
+    expect(lastError).toMatch(/equipe Foocci/i);
+    // E a evidência crua continua junto — alerta sem o caso concreto é ruído.
+    expect(lastError).toContain("code 100");
+    expect((saved.create.metadata as Record<string, unknown>).reconnectCanFix).toBe(false);
+  });
+
+  it("token realmente expirado (190): AÍ sim reconectar é o passo certo", async () => {
+    // A metade oposta. Se a correção tivesse tirado "reconectar" de todo mundo, teria
+    // trocado uma mentira por outra: o caso 190 é exatamente o que o lojista resolve.
+    const r = await handleInstagramLoginCallback(
+      { state: "st-xyz", code: "CODE", error: null, redirectUri: REDIRECT },
+      graphComErroDeTroca("Session has expired · code 190"),
+    );
+    expect(r.shortLived).toBe(true);
+    const saved = db.instagramChannelConfig.upsert.mock.calls[0][0];
+    expect(String(saved.create.lastError)).toMatch(/Reconectar a conta resolve/i);
+    expect((saved.create.metadata as Record<string, unknown>).reconnectCanFix).toBe(true);
+  });
+
+  it("inscrição da conta recusada por PERMISSÃO: a frase aponta a Meta, não o lojista", async () => {
+    // A fronteira do despacho: se for permissão do aplicativo, ninguém conserta por
+    // reconexão — é App Review, ato do CEO, e derruba WhatsApp junto se mexido errado.
+    const graph: InstagramLoginGraph = {
+      exchange: vi.fn(async () => ({
+        igUserId: "IG_1", username: "sushicazza", longLivedToken: "LONG", expiresInSeconds: SIXTY_DAYS,
+      })),
+      subscribe: vi.fn(async () => ({ ok: false, error: "(#200) Permissions error · code 200" })),
+    };
+    await handleInstagramLoginCallback(
+      { state: "st-xyz", code: "CODE", error: null, redirectUri: REDIRECT },
+      graph,
+    );
+    const saved = db.instagramChannelConfig.upsert.mock.calls[0][0];
+    const lastError = String(saved.create.lastError);
+    expect(lastError).toMatch(/nenhuma DM chega/i);
+    expect(lastError).toMatch(/autorização da Meta/i);
+    expect(lastError).not.toMatch(/Reconecte/);
+    expect((saved.create.metadata as Record<string, unknown>).reconnectCanFix).toBe(false);
+  });
+});

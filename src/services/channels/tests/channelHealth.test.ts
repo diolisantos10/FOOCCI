@@ -286,3 +286,41 @@ describe("selo do cartão tem prazo de validade", () => {
     expect(card({ enabled: false, tokenConfigured: false, hasAccountIds: false })).toBe("unconfigured");
   });
 });
+
+// ── Regra 4: o próximo passo não pode ser tarefa que não conserta nada ────────
+//
+// O defeito que estes casos travam é o mais caro desta casa: a faixa mandava
+// "Reconectar" para QUALQUER erro. O lojista do Instagram refez o login três
+// vezes (25/07, 04/08, 05/08) e as três conexões nasceram com o mesmo defeito,
+// porque o defeito nunca esteve na conexão dele. As duas metades estão aqui: o
+// caso em que o botão DEVE prometer reconexão e o caso em que NÃO pode.
+describe("a faixa só promete reconectar quando reconectar resolve", () => {
+  const comErro = (reconnectCanFix: boolean | null) =>
+    evaluateInstagramHealth(input({ lastError: "Conexão instável: (code 100)", reconnectCanFix }))
+      .find((i) => i.level === "down")!;
+
+  it("erro que a reconexão RESOLVE: o botão continua sendo Reconectar", () => {
+    const item = comErro(true);
+    expect(item.action).toBe("Reconectar");
+    expect(item.headline).not.toMatch(/NÃO resolve/);
+  });
+
+  it("erro que a reconexão NÃO resolve: o botão para de prometer, e a faixa diz de quem é o conserto", () => {
+    const item = comErro(false);
+    expect(item.action).not.toBe("Reconectar");
+    expect(item.headline).toMatch(/NÃO resolve/);
+    expect(item.headline).toMatch(/lado da Foocci/i);
+  });
+
+  it("não sabemos (null): NÃO vira promessa nova nem acusação — segue o texto de sempre", () => {
+    // Guardrail 1: sem evidência, o módulo não afirma que o conserto é nosso.
+    const item = comErro(null);
+    expect(item.headline).not.toMatch(/NÃO resolve/);
+    expect(item.level).toBe("down");
+  });
+
+  it("campo ausente se comporta como null — deploy do código não muda faixa nenhuma", () => {
+    const item = evaluateInstagramHealth(input({ lastError: "qualquer coisa" })).find((i) => i.level === "down")!;
+    expect(item.action).toBe("Reconectar");
+  });
+});

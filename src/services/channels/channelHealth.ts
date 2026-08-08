@@ -25,6 +25,14 @@
  *     — o módulo devolve vazio: **cala, e não afirma que está saudável.** Quem
  *     consome deve tratar "sem item" como "não sei", nunca como "ok".
  *
+ *  4. **O próximo passo não pode ser uma tarefa que não conserta nada.** A faixa
+ *     dizia "Reconectar" para qualquer erro. Quando o defeito é do nosso lado —
+ *     um pedido malformado à Meta, uma permissão que falta no aplicativo — o
+ *     lojista refaz o login, vê tudo falhar igual e aprende que a faixa não
+ *     resolve. Aconteceu três vezes com o mesmo Instagram (25/07, 04/08, 05/08).
+ *     Agora o botão só promete reconexão quando `reconnectCanFix` diz que ela
+ *     resolve; `null` (não sabemos) **não** vira promessa.
+ *
  * Nada aqui envia mensagem, lê token, decifra segredo ou fala com a Meta. É
  * leitura de estado já gravado.
  *
@@ -80,6 +88,16 @@ export interface InstagramHealthInput {
   mode: string;
   /** Erro registrado pelo provedor/reconexão. Fato positivo de falha. */
   lastError: string | null;
+  /**
+   * Refazer o login pela tela resolve ESTE erro?
+   *
+   * `null` = não sabemos (guardrail 1) — e aí a faixa não promete conserto nenhum.
+   * `false` = já sabemos que NÃO resolve; mandar reconectar seria pedir ao lojista uma
+   * ação que não conserta nada. Foi o que aconteceu com o Instagram: reconectaram em
+   * 25/07, 04/08 e 05/08 e as três conexões nasceram com o mesmo defeito, porque o
+   * defeito nunca esteve na conexão dele.
+   */
+  reconnectCanFix?: boolean | null;
   /** Último evento entregue pela Meta. */
   lastWebhookAt: Date | null;
   /** Quando a conta foi conectada (metadata.connectedAt). */
@@ -107,6 +125,7 @@ export function humanizeSilence(ms: number): string {
  */
 export function evaluateInstagramHealth(input: InstagramHealthInput): ChannelHealthItem[] {
   const { configured, enabled, paused, mode, lastError, lastWebhookAt, connectedAt, now } = input;
+  const reconnectCanFix = input.reconnectCanFix ?? null;
 
   // Regra 1 — canal ausente não é canal caído.
   if (!configured) return [];
@@ -126,11 +145,19 @@ export function evaluateInstagramHealth(input: InstagramHealthInput): ChannelHea
 
   if (lastError) {
     // Fato positivo de falha — o único caminho para o vermelho.
+    //
+    // O botão só promete "Reconectar" quando reconectar resolve. Quando já sabemos que
+    // não resolve, ele leva o lojista à tela de detalhe e a faixa diz, com todas as
+    // letras, que o conserto não é do lado dele — em vez de empurrá-lo para a quarta
+    // tentativa de um login que vai falhar igual.
+    const naoAdiantaReconectar = reconnectCanFix === false;
     items.push({
       ...base,
       level: "down",
-      headline: `A conexão do Instagram está com problema e as mensagens não estão chegando. ${lastError}`,
-      action: "Reconectar",
+      headline: naoAdiantaReconectar
+        ? `A conexão do Instagram está com problema e as mensagens não estão chegando. Refazer o login NÃO resolve este caso — o conserto é do lado da Foocci. ${lastError}`
+        : `A conexão do Instagram está com problema e as mensagens não estão chegando. ${lastError}`,
+      action: naoAdiantaReconectar ? "Ver detalhes" : "Reconectar",
       silentHours: lastWebhookAt ? Math.floor((now.getTime() - lastWebhookAt.getTime()) / (60 * 60 * 1000)) : null,
     });
   } else if (lastWebhookAt === null) {
