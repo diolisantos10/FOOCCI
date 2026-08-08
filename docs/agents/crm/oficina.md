@@ -1106,3 +1106,129 @@ meus**. Meus arquivos: 7 modificados + 5 de teste novos.
 Quantas campanhas em produção estão com pool salvo (e portanto NÃO pegam o rodízio
 de catálogo) — sem `ADMIN_SECRET`/`RAILWAY_TOKEN`. É o número que diz o alcance
 real desta mudança, e eu não o tenho. **Não estimei ganho de conversão.**
+
+---
+
+## 2026-08-08 · "Por que desde o dia 02 a campanha parou" — a que parou tem nome, e o teto de 500 é o culpado
+
+**Pergunta do CEO:** por que desde 02/08 a campanha parou. Diagnóstico apenas —
+nada disparado, nada reprocessado, nenhum degrau tocado.
+
+### A resposta em uma linha
+
+**Não foi o CRM inteiro que parou: parou o `recuperar-perdidos`** — a maior
+campanha da casa (948 dos 4.462 envios de 30 dias, 21% do volume) — e ele parou
+**exatamente em 02/08** porque bateu no `MAX_AUDIENCE = 500`
+(`CrmCampaignService.ts:110`). Não é fim de base: são **2.963** pessoas na
+prateleira e a campanha enxerga **500**.
+
+### A cadeia, elo a elo — onde NÃO arrebentou
+
+Percorri os sete elos do briefing. Seis estão íntegros, e vale registrar para não
+serem re-investigados:
+
+| Elo | Estado | Prova |
+|---|---|---|
+| Relógio | **OK** | `instrumentation.ts:21-24` liga o `ScheduledCampaignScheduler`; o banco prova 78 envios em 05/08 |
+| Escada do agente | **OK** e irrelevante | `CrmAgentPilotService.ts:82` — SHADOW só troca a FRASE, nunca gateia o envio; sem linha = sorteio, e o sorteio envia |
+| Portões de qualidade | **OK** | nenhum portão reprovando 100%; `BLOCKED` 90d é 1.705 cooldown + 48 telefone inválido, nada novo |
+| Canal | **OK** no sushi-cazza | raio-x 05/08: "canal disponível"; zero `META_190`/`META_NOT_CONNECTED` em 90 dias |
+| Teto de contatos | **não é ele** | o teto de contatos **não é aplicado** no runner, de propósito e por escrito (`ScheduledCampaignRunnerService.ts:588-594`). Quem barra é o limite/dia (`:470`) — são coisas diferentes, e a confusão está desfeita |
+| `CRON_SECRET` | **existe** | sonda de autenticação com bearer inválido nas 3 rotas de cron → **HTTP 401** nas três (503 seria ausência). `route.ts:22-26` |
+| Falha permanente / validade | **contribui, não causa** | ver achado 2 |
+
+### Achado 1 (a causa) — o teto de 500 fecha por dentro, e é permanente
+
+Já estava na oficina de 05/08 §d como risco. Hoje ele tem **data**:
+
+1. `resolveAudience` para PERDIDO é `lastOrderAt < lostCutoff` (120 dias),
+   **sem limite inferior**, `orderBy [{lastOrderAt:"asc"},{importedLastOrderAt:"asc"}]`,
+   `take: 500` (`CrmCampaignService.ts:197-211`).
+2. Como a janela é aberta embaixo e a ordem é do mais antigo para o mais novo, os
+   500 primeiros são um **conjunto congelado**: ninguém sai por envelhecer, e quem
+   vira perdido depois entra atrás da posição 500.
+3. `alreadySentIds` exclui **para sempre** quem já recebeu
+   (`ScheduledCampaignRunnerService.ts:490-500`).
+4. Contatados esses 500, `newEligible` é **0 para sempre** (`:558-565`).
+5. E o motor **não avisa**: cai em `reason: "No new eligible recipients this run"`
+   com `completed: false`, porque `endCondition !== "AUDIENCE_EXHAUSTED"`
+   (`:567-586`). A campanha continua **ACTIVE e verde** no painel do lojista.
+
+Mesmo desenho em FRIO (`:171-182`) — e `recuperar-frios` também está em `nova 0`.
+
+**Por que 02/08 e não outro dia:** em 02/08 rodou o `rebuild-metrics` (commit
+`4be9f61d`, 22:42 UTC — está na vitrine). `rebuildCustomerMetrics` **reescreve
+`lastOrderAt`** (`CustomerMetricsSyncService.ts:223` e `:264`), que é exatamente a
+**chave de ordenação** da consulta de audiência. O rebuild sorteou um novo top-500,
+a campanha consumiu o que sobrava dele naquele dia, e travou. A correção de 02/08
+destravou a *segmentação* e, no mesmo movimento, **fechou a janela de 500 de vez**.
+
+### Achado 2 (novo, e é meu erro não ter visto em 05/08) — a Evolution morta ainda expulsa cliente
+
+`saiDaFilaParaSempre` (`crmExecutionClassification.ts:307-311`) tira da fila para
+sempre toda falha que não seja `RETRYABLE_LATER`. Um `EVOLUTION_HTTP_400` cai em
+`EVOLUTION_BAD_REQUEST` → `RETRYABLE_AFTER_FIX` (`:90`), e o texto livre
+`"Evolution API POST /message/sendText/sushicazza → HTTP 400"` cai no mesmo lugar
+pelo `fromText` (`:228`).
+
+No banco (90d): **627 + 99 + 12 linhas** com esse padrão. Ou seja: da ordem de
+**700 clientes** foram expulsos permanentemente da fila das campanhas por erro de
+um **provedor que foi eliminado em 04/08**. O motivo não existe mais e a expulsão
+continua valendo. Isso não causou a parada de 02/08 — é anterior — mas **estreita
+ainda mais os 500 visíveis**, o que faz o teto morder mais cedo.
+
+### O número, e o que eu NÃO consegui medir
+
+Base: raio-x de 05/08 (branch `diagnostico/raio-x-crm-resultado`, somente leitura).
+
+- `recuperar-perdidos`: 948 envios, **último em 02/08**, `audiência 500 (nova 0)`,
+  prateleira **2.963**.
+- `aniversariantes`: **último em 02/08**, `audiência 22 (nova 0)`.
+- `recuperar-frios`: `audiência 500 (nova 0)`.
+- `indique-amigo`: último em 03/08, `audiência 500 (nova 1)`.
+- Volume/dia: 31/07=368 → 01/08=98 · 02/08=63 · 03/08=88 · 04/08=72 · 05/08=78.
+
+**Não medido: 06, 07 e 08 de agosto.** Sem `ADMIN_SECRET`/`RAILWAY_TOKEN` nesta
+caixa, e o `GH_TOKEN` da sessão devolve `403 Resource not accessible by
+integration` na API de Actions — não consigo nem ler o log do cron nem
+`workflow_dispatch` do Raio-X. **Não escrevi "0" no lugar disso.**
+
+Também não medido: quantas mensagens *deixaram* de sair. Depende de decidir qual
+seria o ritmo certo, e isso é escolha, não medição.
+
+### O que NÃO fiz, e por quê
+
+Não toquei em `MAX_AUDIENCE`, não paginei a consulta, não reprocessei nada, não
+mexi em degrau, não disparei uma mensagem. **Elevar ou paginar o teto solta ~8 mil
+pessoas de uma vez** no sushi-cazza (soma dos limites/dia = 420, teto global
+aplicado = 900), em cima de gente com 120+ dias sem pedir. Guardrail 5: a correção
+seria mais destrutiva que o problema. É decisão do CEO — e continua sendo a mesma
+decisão que ficou pendente em 05/08.
+
+Os **1.949 PENDING de 23/05 a 24/06** seguem intocados, conforme a trava.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+1. **Campanha que morre de "audiência esgotada" fica ACTIVE, verde e calada.**
+   Quando `newEligible = 0` e `endCondition !== "AUDIENCE_EXHAUSTED"`, o runner
+   devolve `completed: false` e nenhum alerta
+   (`ScheduledCampaignRunnerService.ts:567-586`). O aviso de "campanha calada" que
+   existe é **só do carrinho** (`CartRecoveryHealthService.ts:49-51`) — campanha
+   agendada não tem equivalente. **Ao investigar "parou de mandar", nunca use o
+   estado da campanha como sinal: use `último envio` + `nova elegível`.**
+   Origem: diagnóstico de 2026-08-08 sobre a série de produção de 05/08.
+
+2. **Rodar o `rebuild-metrics` reordena a fila de audiência, não só os segmentos.**
+   `rebuildCustomerMetrics` reescreve `lastOrderAt`
+   (`CustomerMetricsSyncService.ts:223,264`), que é a **chave de `orderBy`** de
+   PERDIDO/FRIO/MORNO (`CrmCampaignService.ts:171-211`). Com `MAX_AUDIENCE = 500`,
+   isso troca *quem* são os 500 visíveis. O rebuild é seguro e foi certo — mas
+   **quem o roda precisa olhar `nova elegível` depois**, senão destrava a
+   segmentação e tranca a fila no mesmo ato. Origem: idem.
+
+3. **Falha de provedor aposentado continua expulsando cliente para sempre.**
+   `saiDaFilaParaSempre` classifica `EVOLUTION_HTTP_400` como
+   `RETRYABLE_AFTER_FIX` → saída definitiva da fila
+   (`crmExecutionClassification.ts:90,228,307-311`). São ~700 linhas no banco de um
+   provedor eliminado em 04/08. **Ao aposentar um canal, pergunte quem guarda
+   dívida em nome dele.** Origem: idem.
