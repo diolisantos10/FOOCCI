@@ -1361,3 +1361,97 @@ exportação com sha256, corte com 7 portões em transação única), as rotas
    assinatura significa recorrência de cartão sem dono. Toda exclusão em massa
    precisa perguntar: o que aqui continua cobrando depois que o registro sumir?
    Origem: `PlanSubscription` × purga, 2026-08-06.
+
+---
+
+## 2026-08-08 · "O pedido já foi aceito mas o som continua" (defeito do CEO, print de Atendimento)
+
+**Branch:** `claude/som-para-quando-aceita` · **Origem:** despacho do Diretor com
+diagnóstico prévio (confirmado integralmente).
+
+### O diagnóstico, conferido linha a linha antes de consertar
+
+| Linha | O que se confirmou |
+|---|---|
+| `src/lib/order-alert.ts:35-38` | o conjunto que toca inclui `PENDING` **e** `CONFIRMED` — aceitar não tira o pedido de lá |
+| `GlobalAlertEngine.tsx:182` (antes) | `const resolvedOrderIds = new Set<string>()` — memória só de aba |
+| `GlobalAlertEngine.tsx:280` (antes) | alimentada pelo evento `foocci:order-resolved`, que só chega na aba do clique |
+| `GlobalAlertEngine.tsx:189-190` (antes) | quem apita é eleito **entre abas** por Web Locks — pode não ser a aba do clique |
+
+Nada a corrigir no diagnóstico. Um agravante achado por conta própria: o
+mapeamento do payload vivia **inline** dentro do componente, fora do alcance de
+qualquer teste — é o lugar onde um campo novo é esquecido em silêncio (a mesma
+classe do "Zod descarta campo desconhecido" já na vitrine).
+
+### O que se descobriu que já existia
+
+O **mesmíssimo defeito** já tinha sido consertado para o alarme do Atendimento:
+`Conversation.handoffAlarmAckAt` (`src/lib/handoff-alert.ts:20-28`). O texto lá é
+literal: *"'Estou ciente' silenciava o alarme só na aba que tinha Atendimento
+aberto (estado React efêmero) — então o GlobalAlertEngine, rodando em outro
+aparelho, seguia tocando"*. O alarme de **pedido** nunca recebeu o mesmo
+tratamento. Não havia campo de aceite no `Order` — foi preciso criar.
+
+### O conserto
+
+- `prisma/schema.prisma:656-661` — `Order.alarmAckAt` + `alarmAckByUserId`,
+  ambos opcionais. Migration **aditiva** `20260808120000_order_alarm_ack`, sem
+  backfill (carimbar retroativo seria inventar quem aceitou e quando).
+- `OrderService.updateStatus` recebe `actorUserId` e carimba — **só o primeiro
+  carimbo vale**. Caminhos automáticos (checkout, webhook, WhatsApp) não passam
+  por ali e **não** carimbam: pedido que entra confirmado sozinho ninguém viu, e
+  tem que tocar.
+- `pendingActionOrderIds` honra o carimbo; `ringIdsFromOrdersResponse` (nova, no
+  lib) tira o mapeamento de dentro do componente e o põe sob teste.
+- A memória de aba ficou, **rebaixada a atalho** e documentada como tal.
+
+### Fail-safe, na direção certa (três "não sei" que tocam)
+
+1. servidor sem resposta / corpo estranho → `null` → o motor **mantém** o estado;
+2. `createdAt` ausente ou ilegível → toca (já era assim);
+3. `alarmAckAt` presente mas **ilegível** → **não** cala.
+
+### O portão — e por que ele precisou de DUAS baterias
+
+A primeira (`order-alert-cross-tab.test.ts`) simula **duas abas contra um
+servidor**, cada uma com memória local própria. Mas ela sozinha tem um ponto
+cego: o dia em que o servidor parar de gravar o carimbo, ela continua **verde** e
+o defeito volta inteiro. Daí a segunda (`OrderAlarmAck.test.ts`), que prova a
+escrita — inclusive um guarda de fonte de que `updateStatus` tem **um único
+chamador**, a rota autenticada do painel.
+
+**Aprendizado:** *portão que prova só quem LÊ o dado não protege quem o ESCREVE.*
+Toda correção que troca "memória de cliente" por "fato de servidor" precisa das
+duas metades, senão metade da corrente fica sem teste.
+
+### Provas
+- **Antes:** 4 de 7 reprovam por comportamento (`expected [ 'o1' ] to deeply equal []`) — não por importação faltando, porque o refactor de extração foi feito antes.
+- **Depois:** 6314 passam, 0 falham, `success: true`. `tsc --noEmit` limpo.
+- **Sabotagem, três vezes, cada uma confirmada no `git diff` antes de rodar:**
+  (1) comentar o filtro do carimbo → 4 reprovam; (2) sumir com `alarmAckAt` do
+  mapeamento → 3 reprovam (é o teste do mapeamento mordendo); (3) o servidor
+  deixar de carimbar → 3 reprovam na segunda bateria. Todas desfeitas.
+
+### O que ficou de fora, de propósito
+
+- **Confirmação física.** Ninguém viu, numa loja de verdade, o som parar depois
+  de aceitar em outro aparelho. É conserto **no papel** até haver alguém presente
+  confirmando — a mesma ressalva que vale para a impressão.
+- **`item-replacement`** não carimba. Trocar item é agir sobre o pedido, mas não
+  é "vi o pedido novo"; e nele o pedido normalmente já saiu da janela de som.
+- **Janelas de tempo e eleição de aba líder:** intocadas, por ordem. Não era o
+  que estava quebrado.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+**"Memória de 'já tratei isto' que vive numa aba não serve a uma decisão que é
+tomada entre abas."** O Foocci consertou isso no alarme do Atendimento em julho
+(`handoffAlarmAckAt`) e deixou o alarme do Pedido com o mesmo furo por semanas —
+o defeito voltou pela porta ao lado. Duas regras que ficam:
+1. **Quando a decisão é entre abas/aparelhos, a verdade é do servidor.** Estado
+   de navegador só pode ser *atalho* para antecipar o efeito, nunca a única fonte.
+2. **Conserto de "cliente lembra" → "servidor sabe" exige portão nas duas
+   metades**: um teste de quem LÊ e um de quem ESCREVE. Só o de leitura passa
+   verde com o produto quebrado.
+Origem: `src/lib/order-alert.ts`, `src/services/order/OrderService.ts`,
+`src/lib/order-alert-cross-tab.test.ts`, `src/services/order/tests/OrderAlarmAck.test.ts` — 2026-08-08.

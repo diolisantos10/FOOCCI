@@ -46,7 +46,7 @@ import {
   HANDOFF_SOUND_LAST_ERROR_KEY,
   fetchRestaurantSoundSettings,
 } from "@/lib/sound-prefs";
-import { pendingActionOrderIds, type AlertOrderLike } from "@/lib/order-alert";
+import { ringIdsFromOrdersResponse } from "@/lib/order-alert";
 import {
   pendingHumanRequestIds,
   HANDOFF_SOUND_MAX_AGE_MS,
@@ -57,14 +57,6 @@ import {
 const ORDER_POLL_MS   = 8_000;
 const HUMAN_POLL_MS   = 10_000;
 const OVERDUE_POLL_MS = 60_000;
-
-/** Shape of an order row from GET /api/orders (only the fields the alarm needs). */
-interface RawOrderRow {
-  id: string;
-  status: string;
-  createdAt: string;
-  payment?: { providerName?: string | null; status?: string | null } | null;
-}
 
 export function GlobalAlertEngine() {
   const pathname = usePathname();
@@ -176,9 +168,11 @@ export function GlobalAlertEngine() {
       },
     });
 
-    // Orders handled this session (Accept/Reject) — accepting moves PENDING→
-    // CONFIRMED, still inside the new-order ring-set, so without this memory the
-    // alarm would re-ring the order that was just accepted.
+    // ATALHO, não a verdade. Pedidos tratados NESTA aba (Aceitar/Recusar) calam
+    // na hora, sem esperar o próximo poll. A verdade durável é do SERVIDOR
+    // (Order.alarmAckAt, honrado por pendingActionOrderIds): esta memória some
+    // ao recarregar a página e nunca chega na outra aba nem no outro aparelho —
+    // foi exatamente por isso que "o pedido já foi aceito mas o som continua".
     const resolvedOrderIds = new Set<string>();
 
     // ── The rule, in one place ───────────────────────────────────────────────
@@ -202,17 +196,12 @@ export function GlobalAlertEngine() {
       }
       fetch("/api/orders?limit=50")
         .then((r) => r.json())
-        .then((res: { data?: { data?: RawOrderRow[] } }) => {
-          const rows = res?.data?.data;
-          if (!Array.isArray(rows)) return;
-          const mapped: (AlertOrderLike & { id: string })[] = rows.map((o) => ({
-            id:                  o.id,
-            status:              o.status,
-            createdAt:           o.createdAt,
-            paymentProviderName: o.payment?.providerName ?? null,
-            paymentStatus:       o.payment?.status ?? null,
-          }));
-          safeOrderSync(pendingActionOrderIds(mapped));
+        .then((res: unknown) => {
+          // null = payload inutilizável (servidor fora, corpo de erro, formato
+          // mudou) → mantém o estado atual do alarme. Incerteza nunca cala.
+          const ids = ringIdsFromOrdersResponse(res);
+          if (ids === null) return;
+          safeOrderSync(ids);
         })
         .catch(() => { /* keep last state; next poll retries */ });
     };
