@@ -1288,3 +1288,135 @@ protege — às vezes há prova mais forte do lado do mecanismo. O que **não** 
 faz é declarar o portão passado por não ter conseguido olhar (guardrail 2): o
 zumbi de banco com o flag ligado continua aberto e está escrito acima.
 — origem: mesmo bloco
+
+---
+
+## 2026-08-08 · Espelho do `dioli-brain-kit` dentro do Foocci — piloto construído e DESLIGADO
+
+**Pedido:** um espelho automático da doutrina em `docs/kit/`, workflow diário,
+carimbo de versão e um portão que reprove espelho velho ou editado à mão.
+
+### O que ficou no repositório
+
+| Arquivo | Papel |
+|---|---|
+| `src/services/doutrina/kitEspelho.ts` | toda a lógica: cabeçalho, hash, frescor, plano de geração, portão |
+| `src/services/doutrina/kitEspelho.test.ts` | o portão — 36 casos |
+| `scripts/espelhar-kit.ts` | gerador (git + disco e nada mais) |
+| `.github/workflows/kit-espelho.yml` | diário 05:20 UTC + `workflow_dispatch` |
+
+Não escolhi `src/services/brain/knowledge/` de propósito: aquela pasta é verdade
+do agente em runtime, e isto é encanamento de governança. Além disso o
+`architecture.test.ts` varre `services/brain/**` procurando tool-calling — pôr
+código de docs ali é ampliar a superfície do teste sem motivo.
+
+### O achado que mudou a natureza do bloco
+
+Medido, não suposto:
+
+```
+dioli-brain-kit  → "private": true
+diolisantos10/FOOCCI → "visibility": "public"
+```
+
+Espelhar aqui **publica a doutrina inteira num repositório aberto**. Não há
+segredo literal — varri por `ghp_`, `sk-`, `AIza`, chave privada e URL de banco,
+zero achados —, mas há a escada de governança, o processo de cofre de
+credencial, o histórico de incidentes que cita cliente pelo nome e o quadro de
+sessões. E o próprio kit proíbe: `docs/04-seguranca.md`, "Higiene operacional",
+*"Repos do kit e dos produtos: **privados**."*
+
+Publicar é irreversível (histórico, fork, índice de busca) e é decisão de dono.
+Gerei o espelho, provei a máquina inteira contra ele, e **tirei os 28 documentos
+do repositório antes de devolver**. A alternativa — deixar `docs/kit/` na árvore
+para o CEO commitar — era plantar a armadilha e chamá-la de entrega.
+
+### O que tentei e quebrou
+
+1. **Carimbo por arquivo com `gerado-em` derrubou o requisito anti-ruído.** Se a
+   data está em cada arquivo, toda execução diária muda 28 arquivos mesmo sem o
+   kit ter mudado. Movi a data só para o manifesto.
+2. **Aí o portão de frescor virou alarme falso.** Sem commit, `verificadoEm` não
+   se renova, e um espelho perfeito reprovaria por o kit estar parado. "Última
+   conferência" e "última mudança" são fatos diferentes e eu tinha colapsado os
+   dois num campo. Saída: `CADENCIA_DE_CARIMBO_DIAS = 3` — só a data é reescrita,
+   ~10 commits/mês em vez de 30, cada um com `[skip ci]`.
+3. **`git diff --quiet` não enxerga arquivo novo.** Achei relendo o meu próprio
+   workflow. Uma doutrina 24 recém-escrita entraria como untracked e o robô diria
+   "nada mudou" — falhando justamente no caso mais importante. Virou
+   `git add -A` + `git diff --cached --quiet`.
+4. **`tsc` pegou o que 36 testes verdes não pegaram** (`m[1]` sob
+   `noUncheckedIndexedAccess`). É o inverso exato da entrada de vitrine de 07/08:
+   lá o `tsc` era cego aos testes; aqui os testes eram cegos ao tipo. Nenhum dos
+   dois é o portão sozinho.
+5. **Cinco testes meus aprovavam por omissão.** Eu tinha escrito
+   `if (ESPELHO_INSTALADO) return;` — o relatório dizia *passed* para teste que
+   não executou uma asserção. É o defeito que eu classifico como P0 no código dos
+   outros. Trocado por `it.skipIf` / `it.runIf`: agora o relatório diz
+   `33 passed | 3 skipped`, e o pulo é visível.
+
+### As sabotagens, confirmadas com `grep`/`diff` ANTES de julgar
+
+Quatro no disco, com o espelho real de 28 documentos:
+
+| Sabotagem | Confirmação de que entrou | Resultado |
+|---|---|---|
+| linha inventada em `01-filosofia.md` | `grep -n SABOTAGEM-1` → linha 128; `diff` → `126a127,128` | REPROVADO `EDITADO_A_MAO` |
+| `04-seguranca.md` apagado | `ls` → *No such file* | REPROVADO `ARQUIVO_SUMIU` |
+| `24-doutrina-inventada.md` criado | `grep -n` → linha 1 | REPROVADO `ARQUIVO_INTRUSO` |
+| `verificadoEm` recuado 30 dias | `grep -n verificadoEm` → `2026-07-09` | REPROVADO `ESPELHO_VELHO` |
+
+Mais duas de máquina: gerador com clone vazio **abortou sem escrever** (30
+arquivos antes, 30 depois, manifesto com md5 idêntico), e a segunda execução
+seguida produziu bytes idênticos — logo, nenhum commit.
+
+### A metade legítima de cada trava
+
+Sem ela o detector vira carimbo: espelho sadio APROVADO; CRLF não muda o hash
+(checkout no Windows não é falso positivo); exatamente 14,0 dias **não** reprova
+(portão não cai na borda); 8 dias AVISA e deixa passar; `_ESPELHO.json` e
+`README.md` não contam como intrusos; kit parado + carimbo recente não renova
+nada.
+
+### O que eu NÃO fiz, e por quê
+
+- **Não criei o segredo nem inventei que existe.** O kit é privado, o
+  `GITHUB_TOKEN` do Actions não lê outro repositório, e não há caminho sem
+  segredo. O workflow reprova no primeiro passo — testei os dois lados extraindo
+  o `run` do YAML: vazio → exit 1 com moldura de erro; preenchido → exit 0.
+- **Não consegui listar os segredos do repositório** (o proxy bloqueia
+  `/actions/secrets`). Então não afirmo que `DIOLI_BRAIN_KIT_TOKEN` não existe —
+  afirmo que o workflow trata a ausência como falha, que é o que importa.
+- **Não confirmei em quais projetos o kit está anexado.** Isso é configuração de
+  sessão do Claude Code, não fato do GitHub; não tenho como medir. `cityjobs` e
+  `diolidigital` existem e são **públicos** — o que estende o mesmo problema de
+  visibilidade a eles.
+- **Não toquei em `CLAUDE.md` nem em `docs/kit-versao-lida.md`.** São do Diretor,
+  e mudar o que outros agentes leem como verdade pede autorização.
+- **Não commitei.**
+
+Verificação: `npx tsc --noEmit` exit 0. `npx vitest run --reporter=json`:
+`success: true`, 2192 arquivos, 6263 testes, 6260 passaram, 0 falharam, 3
+pendentes (os `skipIf`/`runIf` deste bloco).
+
+### Proposta de vitrine (promoção é do Diretor)
+
+**"Espelho" e "cópia" só se distinguem por mecanismo, nunca por intenção.** A
+regra da casa é *regra não se copia, se aponta* — e o espelho a respeita porque
+três mecanismos, não três promessas, impedem a divergência: o conteúdo é
+**gerado** (ninguém edita), é **carimbado** (sha do commit de origem em cada
+arquivo e no manifesto) e tem **prazo** (portão reprova em 14 dias). Tire
+qualquer um dos três e vira cópia: sem geração alguém edita, sem carimbo ninguém
+sabe de quando é, sem prazo ele apodrece calado — e o pior estado de uma cópia é
+a que parece atual. O teste para qualquer futuro espelho desta casa é esse, e
+não a intenção de quem criou.
+— origem: piloto do espelho do kit, 08/08/2026
+
+**Antes de espelhar A em B, compare a visibilidade dos dois.** O trabalho inteiro
+estava pronto quando medi `private: true` no kit e `visibility: public` no
+destino. Espelho é encanamento — e encanamento move o conteúdo junto com a
+classificação dele. A pergunta "de onde vem?" tem irmã obrigatória: "para onde
+vai, e quem lê lá?". A trava virou código (`PORTÃO 0` do workflow consulta a
+visibilidade em toda execução) porque prompt já falhou em produção neste projeto,
+e porque um repositório pode virar público depois, sem ninguém revisar o robô.
+— origem: mesmo bloco
