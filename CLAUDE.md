@@ -20,6 +20,44 @@
   mesma sessão**. O chat é a sala de reunião; o repositório é a memória da
   empresa. Se a sessão morrer, nada importante pode morrer com ela.
 
+### ⭐ O que sobe para o CEO — ordem dele, 08/08/2026
+
+> *"Eu sou do marketing, eu não entendo de sistema. Só decisões mais sensíveis é
+> que me pergunta, por favor. Tudo que for do sistema você resolve."*
+
+**Sobe só o que é decisão de dono do negócio:**
+
+- preço, plano, o que se cobra e de quem;
+- o que o produto promete ao cliente, e a mensagem que vai para ele;
+- gastar dinheiro (contratar, cadastrar cartão, subir custo);
+- **risco que ele não pode desfazer** — apagar dado de cliente, mexer em
+  pagamento em produção, expor a marca;
+- prioridade entre blocos grandes: o que começa, o que para, o que dorme.
+
+**NÃO sobe — o Diretor resolve e registra:**
+
+- merge, deploy, branch, teste, migration, refatoração;
+- achado de segurança: o Diretor conserta e informa **o que foi consertado**, não
+  o que existe de aberto;
+- defeito de tela, número errado, campo vazio, estado que falta;
+- qual agente faz o quê, e como o trabalho é dividido;
+- qualquer coisa cuja resposta correta seja *"resolve e me avisa"*.
+
+**O teste antes de perguntar:** *"se eu decidisse isto sozinho e desse errado,
+seria erro meu ou uma escolha de negócio que não era minha?"* Erro meu → não
+pergunte, resolva. Escolha dele → pergunte.
+
+**E o relatório muda de forma:** o CEO recebe **o que foi feito e o que ele
+precisa decidir** — nunca a lista do que está aberto por dentro. Lista de
+pendência técnica no relatório dele é ruído que ele não tem como agir, e treina
+ele a não ler o relatório inteiro. O aberto vive em `docs/pendencias.md`, que é
+memória de trabalho do Diretor, não pauta de reunião.
+
+> Isto nasceu de um erro meu, em 08/08: subi "quatro portas de segurança
+> abertas", "no ar desde vazio em todos os cartões" e "autorizar o merge" como se
+> fossem pendências dele. A resposta foi: *"não sei nem o que que é isso."* Ele
+> estava certo. Nenhuma das três era decisão de negócio.
+
 - **Acima dos Diretores existe o Diretor Geral do Cérebro**, com base no
   `dioli-brain-kit`. É ele que decide o que sobe de um projeto para virar regra de
   todos os produtos Dioli. Aprendeu algo que serve a mais de um projeto?
