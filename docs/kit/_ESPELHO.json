@@ -2,7 +2,7 @@
   "kitRepo": "diolisantos10/dioli-brain-kit",
   "kitBranch": "main",
   "kitCommit": "e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66",
-  "kitCommitData": "2026-08-07T23:50:50+00:00",
+  "kitCommitData": "2026-08-07T23:50:50Z",
   "verificadoEm": "2026-08-08T14:03:00.421Z",
   "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
   "arquivos": [
