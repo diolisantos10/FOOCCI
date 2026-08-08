@@ -2211,3 +2211,175 @@ Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
 375/768/1280, **inclusive com a gaveta "Fora de operação" aberta**.
 
 — interface, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-08 · Pixel da Meta: o trabalho não era construir, era trancar (e um 2x que ninguém veria)
+
+Branch `claude/interface-pixel-meta-gate`, a partir de `origin/claude/remove-legacy-runner-q8iXa`.
+
+### O terreno estava desatualizado — e conferir isso foi metade do valor
+
+O despacho dizia que `SiteAnalytics.tsx` "já faz isto para o Google Analytics" e que
+eu deveria seguir o mesmo desenho para o Pixel. **Não era o caso.** O Pixel da Meta
+já estava construído e completo no branch padrão: script, `noscript`, `metaPixelId`
+no `SiteSettingsService`, validação por lista branca, tela em `/admin/site-analytics`
+e a variável `NEXT_PUBLIC_META_PIXEL_ID`. Confirmado por
+`git ls-tree origin/claude/remove-legacy-runner-q8iXa` e `git grep` no branch base,
+não no working tree — que estava em outro branch (`claude/seguranca-portas-abertas`).
+
+Se eu tivesse "seguido o desenho do GA" sem conferir, teria escrito uma segunda
+implementação do Pixel. Que é **exatamente o incidente de 03/08** registrado no
+comentário de `src/app/site/layout.tsx`: duas medições em paralelo, um merge
+desmontando a outra. O despacho pedia para não repetir 03/08 e o caminho mais curto
+para repetir 03/08 era obedecer o despacho ao pé da letra.
+
+**Regra: antes de construir o que te pediram, confirme no branch base que já não
+existe.** "O terreno levantado por mim, confirme antes de agir" não é formalidade.
+
+### O que faltava de verdade: o portão
+
+Não havia **nenhum** teste da fronteira. Escrevi `SiteAnalytics.test.ts` (13 casos).
+
+**Por que este teste não é um `grep` em `src/app/pedido`** — e este é o ponto:
+a loja **não tem layout próprio**. `/pedido/[slug]` e `/qr/[slug]` são embrulhadas
+só por `src/app/layout.tsx`. Ou seja, o jeito realista de o Pixel vazar para a loja
+não é alguém escrever `fbq` dentro de `/pedido` — é alguém "melhorar a medição"
+movendo o `SiteAnalytics` para o layout raiz. **Um grep na pasta da loja passaria
+verde enquanto o Pixel dispara em todo pedido do país.**
+
+Então o teste monta a **cadeia de layouts** que de fato embrulha cada rota e, de cada
+layout, segue os imports locais **transitivamente** — porque montar via componente
+intermediário vaza igual. Mais o controle positivo (o Pixel ESTÁ na cadeia de
+`/site`), sem o qual apagar o componente inteiro deixaria o portão verde.
+
+### As sabotagens, todas confirmadas no arquivo por `diff` ANTES de julgar
+
+| # | Sabotagem | Provada no arquivo | Resultado |
+|---|---|---|---|
+| 1 | `SiteAnalytics` montado no layout raiz | `git diff` +2 linhas | 2 reprovam (as duas rotas da loja) |
+| 1b | montado **transitivamente**, via `AppVersionLogger` | `git diff` +1 import | 2 reprovam — e o layout raiz tem **0** menções ao Pixel |
+| 2 | bloco do Pixel apagado do componente | `git diff` −29 linhas | 4 reprovam, incl. o controle positivo |
+| 3 | renderiza sem id (`{true ?`) | `git diff` | 3 reprovam |
+| 4 | Advanced Matching com e-mail/telefone | `git diff` | 3 reprovam |
+| 5 | `noscript` de volta como `<img>` de React | `git diff` vazio vs base | 1 reprova |
+
+**A sabotagem 5 quase me enganou, e o registro disso importa mais que ela.** Na
+primeira tentativa editei o `.tsx` com cirurgia de `python` e o Vitest respondeu
+`total 0 passed 0 failed 0`. Zero teste não é zero falha: o arquivo não compilou e a
+bateria **não rodou**. Se eu tivesse lido só "failed 0", teria declarado a sabotagem
+"não pega" — ou pior, teria declarado o portão bom. Refiz copiando o arquivo original
+do base: 13 rodaram, 1 reprovou, a certa.
+
+**Regra: `failed 0` só vale acompanhado de `total > 0` e do total esperado.**
+
+### O achado que ninguém teria visto: o Pixel contava PageView duas vezes
+
+Ao conferir o HTML **servido** (`curl`, sem executar React), apareceu no `<head>`:
+
+```
+<link rel="preload" as="image" href="https://www.facebook.com/tr?id=…&ev=PageView&noscript=1">
+```
+
+O `<img>` do `noscript` estava escrito como elemento React. O **Float do React** (que
+o Next 14 liga no App Router) enxerga a imagem e hasteia um preload para o `<head>` —
+**de fora do `<noscript>`**. Preload é honrado por todo navegador, inclusive os que
+têm JS ligado, e a Meta conta esse acesso como PageView.
+
+Medido no navegador de verdade, com Playwright ouvindo a rede em `/site`:
+
+| | preload no `<head>` | requisições a `facebook.com/tr` **com JS ligado** |
+|---|---|---|
+| antes | 1 | **1** — somada ao `fbq('track','PageView')` |
+| depois | 0 | **0** |
+
+Ou seja: todo visitante com JS disparava PageView **duas vezes**. O Pixel parecia
+perfeito — o Pixel Helper acusa verde — e o número do CEO nasceria inflado em ~2x.
+Correção: emitir o `noscript` como **HTML cru** (`dangerouslySetInnerHTML`), assim o
+React não vê elemento e não pré-carrega. O id já é validado como só-dígitos, a mesma
+garantia de que os `<script>` do arquivo dependem.
+
+**A regra que fica: tag de medição se confere no HTML servido E na aba de rede, nunca
+no código.** O comentário do próprio arquivo já dizia que a escolha de `<script>`
+puro tinha sido *medida* no HTML servido — e ainda assim o defeito passou, porque
+ninguém tinha olhado o `<head>` procurando o que o React **acrescenta** por conta
+própria. Medir o que você escreveu não é o mesmo que medir o que foi servido.
+
+O teste dessa regressão não pode ser sobre a string renderizada (o
+`renderToStaticMarkup` não reproduz o Float): é sobre a **árvore de elementos** —
+nenhum elemento React do tipo `img` pode existir no componente.
+
+### Um tropeço de infra que vale registrar
+
+Nenhum teste deste repositório conseguia **renderizar** um componente. O
+`tsconfig.json` usa `"jsx": "preserve"` (quem compila é o Next), o esbuild do Vitest
+lê isso e cai no runtime **clássico**, que espera `React` no escopo — e nenhum `.tsx`
+daqui importa React, porque no Next não precisa. Todo teste que importe um componente
+reprova com `ReferenceError: React is not defined` **antes de asserir qualquer coisa**.
+Resolvido com `esbuild: { jsx: "automatic" }` no `vitest.config.ts`, documentado lá.
+Não muda como o produto é compilado — vale só dentro do Vitest.
+
+### Fronteira confirmada em execução, não só no código
+
+Com um id **de teste** (`000000000000000`) no `.env` e o servidor local rodando:
+
+| Rota | `fbq` | `fbevents` | `facebook.com/tr` |
+|---|---|---|---|
+| `/site` | 4 | 2 | 1 |
+| `/site/precos` | 4 | 2 | 1 |
+| `/pedido/pizzaria-demo` | 0 | 0 | 0 |
+| `/pedido/foocci-bakery` | 0 | 0 | 0 |
+| `/qr/pizzaria-demo` | 0 | 0 | 0 |
+
+A loja não tem **nenhuma** ocorrência da palavra "facebook" no HTML servido. Sem id
+configurado, as três superfícies vêm com zero — nada é renderizado.
+
+### Incidente de processo: um commit que não foi meu
+
+O despacho dizia **"NÃO commite — eu commito"**, e eu não commitei. Mesmo assim
+apareceu no branch o commit `af5c6d08` ("A trava que impede o Pixel de vazar para a
+loja do cliente"), já **empurrado para o `origin`**, varrendo junto
+`docs/agents/meta/oficina.md` (+77 linhas) — arquivo que eu nunca toquei, da sala de
+**outro** agente. Sessão paralela commitando com `add -A` no mesmo diretório de
+trabalho é a explicação provável.
+
+Conferi o conteúdo commitado antes de seguir: o `SiteAnalytics.tsx` de `HEAD` é
+byte a byte a versão corrigida, e nenhuma das cinco sabotagens vazou (`layout.tsx`
+raiz e `AppVersionLogger.tsx` com **0** menções ao Pixel). O risco era concreto:
+se o commit tivesse caído durante a janela de uma sabotagem, a fronteira teria ido
+para o `origin` **quebrada**.
+
+**Regra: quando o working tree é compartilhado, sabotagem é estado perigoso.**
+Restaurar imediatamente após cada uma não é asseio, é contenção — e ao terminar,
+conferir o que o `HEAD` realmente contém, não o que você lembra de ter deixado.
+
+### Autoavaliação
+
+Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
+
+Nota com ressalva honesta: **este bloco não tem superfície visual.** O Pixel é
+invisível por construção. As três capturas (375/768/1280) não medem estética nova —
+existem porque eu injetei **HTML cru** na página, e HTML cru malformado quebraria o
+DOM. Elas provam que não quebrou: `scrollWidth === clientWidth` nos três tamanhos,
+`window.fbq` é função, zero preload do facebook, zero requisição a `facebook.com/tr`
+com JS ligado.
+
+`npx tsc --noEmit` limpo · `npx vitest run` **6.276 testes, 6.274 verdes, 0 falhas,
+2 pendentes** (as 2 pendentes são pré-existentes) · 13 casos novos, todos verdes.
+
+⚠️ `src/**/*.test.ts` está **excluído** do `tsconfig.json`, então `tsc --noEmit` não
+typecheca o arquivo de teste. O `tsc` limpo é sobre o produto, não sobre o portão.
+
+### Proposta de vitrine
+
+Duas, para o Diretor decidir:
+
+1. **Rastreamento se prova no HTML servido e na aba de rede — nunca no código.** O
+   React acrescenta coisa que você não escreveu (Float/preload). Medir o que você
+   escreveu não é medir o que foi servido, e o erro resultante infla número sem
+   quebrar nada.
+2. **Portão de fronteira entre superfícies se escreve sobre a cadeia de layouts, não
+   sobre a pasta da rota.** Rota sem layout próprio herda do raiz; o grep na pasta
+   passa verde enquanto o vazamento acontece um nível acima.
+
+— interface, branch `claude/interface-pixel-meta-gate`
