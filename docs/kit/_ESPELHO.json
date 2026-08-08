@@ -1,0 +1,150 @@
+{
+  "kitRepo": "diolisantos10/dioli-brain-kit",
+  "kitBranch": "main",
+  "kitCommit": "e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66",
+  "kitCommitData": "2026-08-07T23:50:50+00:00",
+  "verificadoEm": "2026-08-08T14:03:00.421Z",
+  "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
+  "arquivos": [
+    {
+      "destino": "docs/kit/casos/foocci.md",
+      "origem": "casos/foocci.md",
+      "sha256": "d01a1953df81fcb57362ff5a861e307594e204a8d7052ae3a45f897eb88ce383"
+    },
+    {
+      "destino": "docs/kit/CLAUDE.md",
+      "origem": "CLAUDE.md",
+      "sha256": "229e7b2fcdf296060824008c98e74fccb792b096e869b45805baf2a88b75ff88"
+    },
+    {
+      "destino": "docs/kit/00-onboarding-sessao.md",
+      "origem": "docs/00-onboarding-sessao.md",
+      "sha256": "fc40ee582d0ec4ab717031d8743093cc43fa2f20891f558a4b015cfc8ac7dd7f"
+    },
+    {
+      "destino": "docs/kit/01-filosofia.md",
+      "origem": "docs/01-filosofia.md",
+      "sha256": "088d428d246ea979739f07a3a048422d578167876e4fac6db80c256cc9fa4a46"
+    },
+    {
+      "destino": "docs/kit/02-arquitetura.md",
+      "origem": "docs/02-arquitetura.md",
+      "sha256": "f5b8842fa7ac4a3953b67234895352944934fa4df26827737ae459cf63926301"
+    },
+    {
+      "destino": "docs/kit/03-como-plantar.md",
+      "origem": "docs/03-como-plantar.md",
+      "sha256": "6910f751c6e3b9bd885a2caee1e58db8fc3994c4a4ddc6b856927a01b9c1d965"
+    },
+    {
+      "destino": "docs/kit/04-seguranca.md",
+      "origem": "docs/04-seguranca.md",
+      "sha256": "b200ea7f1f87c656496c34611fdb5e6a187bc1cec4a771aba4f80754453492f5"
+    },
+    {
+      "destino": "docs/kit/05-laboratorio.md",
+      "origem": "docs/05-laboratorio.md",
+      "sha256": "5de64dcf3274c2ce00c7ba3896bf1fc900b4348c58ffaa1180b92ca9c998dc81"
+    },
+    {
+      "destino": "docs/kit/06-incidentes.md",
+      "origem": "docs/06-incidentes.md",
+      "sha256": "eb9c8aefea8b471206f4bbea97692ee293e0f2f62c980b0d34161fff6c96e52d"
+    },
+    {
+      "destino": "docs/kit/07-memoria-de-agente.md",
+      "origem": "docs/07-memoria-de-agente.md",
+      "sha256": "e02389884a4699fe38ab5aebd78bceeb9ee3916c8de3f2397d59a101e1952aa4"
+    },
+    {
+      "destino": "docs/kit/08-modelo-ceo-pm-agentes.md",
+      "origem": "docs/08-modelo-ceo-pm-agentes.md",
+      "sha256": "98d09897a2a19c39b29ae9e250bf0cb286802633d95034a8e3fc34c144449033"
+    },
+    {
+      "destino": "docs/kit/09-como-trabalhar-aqui.md",
+      "origem": "docs/09-como-trabalhar-aqui.md",
+      "sha256": "9fce3b6c4e3e106034b2f58c604619e765dd3281e93c4bdc22f458f5bed53bb8"
+    },
+    {
+      "destino": "docs/kit/10-canal-de-escalada.md",
+      "origem": "docs/10-canal-de-escalada.md",
+      "sha256": "8c566564d9565b82124ceac87116f8a384f46573ec86b5e2616ce89107d996e7"
+    },
+    {
+      "destino": "docs/kit/11-backlog-do-diretor-geral.md",
+      "origem": "docs/11-backlog-do-diretor-geral.md",
+      "sha256": "1faf3f6c44343bce6a4e3a956690d8331cb0abfd0b9096a31371d4dc0debbca8"
+    },
+    {
+      "destino": "docs/kit/12-cofre-de-credencial.md",
+      "origem": "docs/12-cofre-de-credencial.md",
+      "sha256": "f749d1705ff31b4b0494266ebe35d6bf18e7c299daf92597f1ae3bf7eafa38e8"
+    },
+    {
+      "destino": "docs/kit/13-quem-esta-vivo.md",
+      "origem": "docs/13-quem-esta-vivo.md",
+      "sha256": "69115396192495d5137de531b7f7fe8801162dfbbdfc2cd634144c1faeeea1a2"
+    },
+    {
+      "destino": "docs/kit/14-interface-entre-diretores.md",
+      "origem": "docs/14-interface-entre-diretores.md",
+      "sha256": "89f12859c5448e201c78173ba5cc7ed5ffdfc605da55d5eced8223ce80c9f933"
+    },
+    {
+      "destino": "docs/kit/15-conferir-o-deploy-e-usar-agentes.md",
+      "origem": "docs/15-conferir-o-deploy-e-usar-agentes.md",
+      "sha256": "772bba378ad5d566d2317c097c771d9e8346bdc15da1478b4cf0a6d85534d691"
+    },
+    {
+      "destino": "docs/kit/16-raio-x-noturno.md",
+      "origem": "docs/16-raio-x-noturno.md",
+      "sha256": "f9b8e802462c8f4216d8a4e5313b6ea921198da44aaf78ef8f868f005c56f435"
+    },
+    {
+      "destino": "docs/kit/17-placar-diario.md",
+      "origem": "docs/17-placar-diario.md",
+      "sha256": "b26be0a5c5b4faada5ebeb664a922d5bac8c28c4c448cf9af750b636ae17d712"
+    },
+    {
+      "destino": "docs/kit/18-o-despacho.md",
+      "origem": "docs/18-o-despacho.md",
+      "sha256": "b379ecc93be0aa7ba2a90ebee48fdd00a435666cf00eb9023abefd5e2301f531"
+    },
+    {
+      "destino": "docs/kit/19-pendencia-zero.md",
+      "origem": "docs/19-pendencia-zero.md",
+      "sha256": "e3c47184d0a65063d27e23aa80d2df7762bc8d02b960531ef3d7efabbc922ab7"
+    },
+    {
+      "destino": "docs/kit/20-sala-dos-agentes.md",
+      "origem": "docs/20-sala-dos-agentes.md",
+      "sha256": "e606bcfbe70a8d93a13302b1f051e5115cee59c0021480871067b4f3f204e18f"
+    },
+    {
+      "destino": "docs/kit/21-elenco-obrigatorio.md",
+      "origem": "docs/21-elenco-obrigatorio.md",
+      "sha256": "c255d392f2980717fff21771a5a1f543d8cda6d15a497d2afe936d96e5478f6e"
+    },
+    {
+      "destino": "docs/kit/22-briefing-ao-conselho.md",
+      "origem": "docs/22-briefing-ao-conselho.md",
+      "sha256": "0d8cfe45f7d13daf8c6096ca6cadf4d9dfb0ab17768487f786fc0063a7b3d7a3"
+    },
+    {
+      "destino": "docs/kit/23-constituicao-dos-essenciais.md",
+      "origem": "docs/23-constituicao-dos-essenciais.md",
+      "sha256": "a0286b3069325e71029ca98e1a8cbb602571af1d258f8afe4aeda212891597f4"
+    },
+    {
+      "destino": "docs/kit/perguntas-abertas.md",
+      "origem": "docs/perguntas-abertas.md",
+      "sha256": "60e6fa3d983c5238b4bd2b830ffc137441a17a9243484fb907e275dd0882fbcf"
+    },
+    {
+      "destino": "docs/kit/presenca.md",
+      "origem": "docs/presenca.md",
+      "sha256": "9fd30fca8cd9007324055ad28f08906f73f1c7d818430c6b5f2885a7a5ea3d46"
+    }
+  ]
+}

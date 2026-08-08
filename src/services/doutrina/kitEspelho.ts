@@ -121,7 +121,7 @@ export const MINIMO_DE_ARQUIVOS = 20;
  * repositório. A partir daí, espelho ausente vira reprovação imediata, sem
  * período de graça — não há mais decisão pendente para justificar a ausência.
  */
-export const ESPELHO_INSTALADO = false;
+export const ESPELHO_INSTALADO = true;
 
 /**
  * Até quando "o espelho ainda não está aqui" é uma resposta aceitável.
