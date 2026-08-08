@@ -11,6 +11,7 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
+import { reconnectCanFixAny } from "@/services/meta/metaGraphErrorFamily";
 import type { InstagramMode, InstagramScope } from "./types";
 import { INSTAGRAM_MODES, INSTAGRAM_SCOPES } from "./types";
 
@@ -53,6 +54,12 @@ export interface InstagramConfigView {
   instagramUsername: string | null;
   lastWebhookAt: Date | null;
   lastError: string | null;
+  /**
+   * Refazer o login resolve o `lastError` atual? `null` = não sabemos (guardrail 1).
+   * Derivado da família do erro que a Meta devolveu; existe para a tela não oferecer
+   * um botão que não conserta nada. Nunca carrega credencial — só a conclusão.
+   */
+  reconnectCanFix: boolean | null;
 }
 
 export interface InstagramConfigPatch {
@@ -126,6 +133,17 @@ export function toView(row: InstagramConfigRow): InstagramConfigView {
     instagramUsername: (row.metadata?.instagramUsername as string) ?? null,
     lastWebhookAt: row.lastWebhookAt,
     lastError: row.lastError,
+    // Mesma ordem de fontes da faixa da Central: o campo novo quando existe, senão a
+    // evidência crua já gravada — para valer também na conexão que quebrou antes disto.
+    reconnectCanFix: row.lastError === null
+      ? null
+      : typeof row.metadata?.reconnectCanFix === "boolean"
+        ? row.metadata.reconnectCanFix
+        : reconnectCanFixAny([
+            typeof row.metadata?.longLivedExchangeError === "string" ? row.metadata.longLivedExchangeError : null,
+            typeof row.metadata?.webhookSubscribeError === "string" ? row.metadata.webhookSubscribeError : null,
+            row.lastError,
+          ]),
   };
 }
 

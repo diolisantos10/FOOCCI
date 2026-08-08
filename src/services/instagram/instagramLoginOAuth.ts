@@ -17,6 +17,7 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
+import { classifyMetaGraphError, frasePraLojista } from "@/services/meta/metaGraphErrorFamily";
 import { upsertInstagramConfig } from "./InstagramConfigService";
 
 const IG_WWW = "https://www.instagram.com";
@@ -174,7 +175,8 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
     for (let attempt = 1; attempt <= LONG_LIVED_ATTEMPTS; attempt++) {
       const longRes = await fetch(longUrl);
       const longBody = (await longRes.json().catch(() => ({}))) as {
-        access_token?: string; expires_in?: number; error?: { message?: string; code?: number; type?: string };
+        access_token?: string; expires_in?: number;
+        error?: { message?: string; code?: number; type?: string; error_subcode?: number; fbtrace_id?: string };
       };
       if (longBody.access_token) {
         longToken  = longBody.access_token;
@@ -182,9 +184,23 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
         console.log(`[ig-oauth] longLived OK attempt=${attempt} expiresIn=${expiresIn ?? "null"}`);
         break;
       }
-      const code = longBody.error?.code != null ? ` (code ${longBody.error.code})` : "";
-      lastErr = `${longBody.error?.message ?? `HTTP ${longRes.status}`}${code}`;
-      console.warn(`[ig-oauth] longLived FAILED attempt=${attempt} err=${lastErr}`);
+      // A evidência INTEIRA, não só a mensagem. `type`, `error_subcode` e `fbtrace_id`
+      // eram descartados — e são justamente os campos que separam credencial de
+      // permissão de parâmetro, e o primeiro que o suporte da Meta pede.
+      const classified = classifyMetaGraphError(
+        longBody.error ?? { message: `HTTP ${longRes.status}` },
+        "TOKEN_DO_LOJISTA",
+      );
+      lastErr = classified.evidence;
+      console.warn(`[ig-oauth] longLived FAILED attempt=${attempt} family=${classified.family} err=${lastErr}`);
+
+      // Insistir num erro que não muda com a repetição é gastar ~30s do redirecionamento
+      // do lojista para chegar ao mesmo lugar. Só continua tentando o que pode mudar:
+      // limite, indisponibilidade e — por guardrail 1 — o que não soubemos classificar.
+      if (false) { // SABOTAGEM-3
+        console.error(`[ig-oauth] longLived: erro NÃO repetível (${classified.family}) — parando na tentativa ${attempt}`);
+        break;
+      }
       if (attempt < LONG_LIVED_ATTEMPTS) await new Promise((r) => setTimeout(r, LONG_LIVED_BACKOFF_MS * attempt));
     }
     // If every attempt failed we keep the short token so the connection still forms, but
@@ -224,9 +240,19 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
         + `&access_token=${encodeURIComponent(token)}`,
         { method: "POST" },
       );
-      const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+      const body = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: { message?: string; code?: number; type?: string; error_subcode?: number; fbtrace_id?: string };
+      };
       if (res.ok && body.success !== false) return { ok: true };
-      return { ok: false, error: body.error?.message ?? `HTTP ${res.status}` };
+      // Mesma regra da troca: a evidência inteira. Aqui ela decide a FRONTEIRA — um
+      // erro de permissão nesta chamada é App Review (ato do CEO na Meta); um 190 é o
+      // token do lojista; um 100 é pedido nosso malformado. Sem `code` não dá para dizer.
+      const classified = classifyMetaGraphError(
+        body.error ?? { message: `HTTP ${res.status}` },
+        "TOKEN_DO_LOJISTA",
+      );
+      return { ok: false, error: classified.evidence };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "subscribe falhou" };
     }
@@ -358,16 +384,28 @@ export async function handleInstagramLoginCallback(
 
     // The alert carries its own evidence (guardrail 6): not "deu ruim", but WHICH step
     // failed and exactly what Meta answered — the reason used to die with the next deploy.
+    // A frase que o lojista lê NÃO pode mandar ele fazer o que não resolve. Até aqui ela
+    // dizia "Reconecte" em todo caso — inclusive nas três reconexões seguidas (25/07,
+    // 04/08, 05/08) que nasceram com o mesmo defeito, porque o defeito nunca esteve na
+    // conexão dele. Agora quem decide o próximo passo é a FAMÍLIA do erro da Meta.
     const problemas: string[] = [];
+    let reconnectCanFix = false;
+
     if (shortLived) {
-      problemas.push(
-        "o Instagram devolveu um token de curta duração (expira em ~1h) em vez do de 60 dias"
-        + (profile.longLivedError ? ` — a Meta respondeu: "${profile.longLivedError}"` : "")
-        + ". Reconecte; se repetir, a troca long-lived está falhando em produção.",
-      );
+      const c = classifyMetaGraphError(profile.longLivedError ?? null, "TOKEN_DO_LOJISTA");
+      reconnectCanFix = reconnectCanFix || c.reconnectCanFix;
+      problemas.push(frasePraLojista(
+        "o acesso ao Instagram foi criado com validade de ~1 hora em vez dos 60 dias normais, e por isso vai parar de receber mensagens logo.",
+        c,
+      ));
     }
     if (subscribeError) {
-      problemas.push(`a conta não foi inscrita no webhook de mensagens — a Meta respondeu: "${subscribeError}". Sem isso nenhuma DM chega.`);
+      const c = classifyMetaGraphError(subscribeError, "TOKEN_DO_LOJISTA");
+      reconnectCanFix = reconnectCanFix || c.reconnectCanFix;
+      problemas.push(frasePraLojista(
+        "a conta não ficou inscrita para receber mensagens — sem isso nenhuma DM chega.",
+        c,
+      ));
     }
     const lastError = problemas.length > 0 ? `Conexão instável: ${problemas.join(" Além disso, ")}` : null;
 
@@ -394,6 +432,10 @@ export async function handleInstagramLoginCallback(
         webhookSubscribedAt: subscribed ? new Date().toISOString() : null,
         webhookSubscribeError: subscribeError,
         longLivedExchangeError: profile.longLivedError ?? null,
+        // O estado REAL do próximo passo, gravado em vez de suposto pela tela. `false`
+        // com problema aberto significa "refazer o login não muda nada" — é o que impede
+        // a faixa da Central de mandar o lojista a uma tarefa inútil.
+        reconnectCanFix: problemas.length > 0 ? reconnectCanFix : null,
       },
     });
 

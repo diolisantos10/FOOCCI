@@ -108,6 +108,9 @@ export async function GET(req: NextRequest) {
       // mostrar um carimbo antigo com ar de normalidade.
       webhookIsStale,
       lastError: view?.lastError ?? null,
+      // Refazer o login resolve ESTE erro? `null` = não sabemos, e aí a tela não
+      // promete nada. Só a conclusão trafega — nunca o erro cru da credencial.
+      reconnectCanFix: view?.reconnectCanFix ?? null,
       allowlistedExternalUserIds: config?.allowlistedExternalUserIds ?? [],
       appId: view?.appId ?? null,
       envVerifyTokenConfigured: !!process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,

@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { getInstagramConfig, decryptPageToken } from "@/services/instagram/InstagramConfigService";
 import { GRAPH_INSTAGRAM_BASE, GRAPH_FACEBOOK_BASE } from "@/services/instagram/InstagramSendClient";
+import { classifyMetaGraphError } from "@/services/meta/metaGraphErrorFamily";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +81,19 @@ export async function GET(req: NextRequest) {
     expiresInDays,
     tokenLooksShortLived,
     lastError: config.lastError,
+    // A evidência que a conexão grava desde 05/08 e que NENHUMA rota devolvia — campo
+    // escrito sem caminho de leitura é evidência morta. É aqui que se lê POR QUE a
+    // troca long-lived recusou e POR QUE a conta não ficou inscrita, com a família do
+    // erro já separada: credencial × permissão × parâmetro.
+    longLivedExchangeError: (config.metadata?.longLivedExchangeError as string) ?? null,
+    longLivedExchangeDiagnosis: config.metadata?.longLivedExchangeError
+      ? classifyMetaGraphError(String(config.metadata.longLivedExchangeError))
+      : null,
+    webhookSubscribedAt: (config.metadata?.webhookSubscribedAt as string) ?? null,
+    webhookSubscribeError: (config.metadata?.webhookSubscribeError as string) ?? null,
+    webhookSubscribeDiagnosis: config.metadata?.webhookSubscribeError
+      ? classifyMetaGraphError(String(config.metadata.webhookSubscribeError))
+      : null,
     me: me.json,
     subscribedApps: subs.json,
     subscribedAppsOk: subs.ok,

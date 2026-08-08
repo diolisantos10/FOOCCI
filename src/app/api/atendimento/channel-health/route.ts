@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getInstagramConfig } from "@/services/instagram/InstagramConfigService";
 import { evaluateInstagramHealth, sortChannelHealth } from "@/services/channels/channelHealth";
+import { reconnectCanFixAny } from "@/services/meta/metaGraphErrorFamily";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,20 @@ export async function GET(req: NextRequest) {
   try {
     const config = await getInstagramConfig(ctx.restaurantId);
 
+    // Reconectar resolve? Três fontes, da mais precisa para a mais antiga — porque a
+    // conexão que está quebrada em produção AGORA foi gravada antes do campo existir,
+    // e uma correção que só valesse para conexões futuras não tiraria a faixa mentirosa
+    // da tela de ninguém hoje.
+    const md = config?.metadata ?? null;
+    const reconnectCanFix =
+      typeof md?.reconnectCanFix === "boolean"
+        ? md.reconnectCanFix
+        : reconnectCanFixAny([
+            typeof md?.longLivedExchangeError === "string" ? md.longLivedExchangeError : null,
+            typeof md?.webhookSubscribeError === "string" ? md.webhookSubscribeError : null,
+            config?.lastError ?? null,
+          ]);
+
     const items = sortChannelHealth(
       evaluateInstagramHealth({
         configured: config !== null,
@@ -39,6 +54,7 @@ export async function GET(req: NextRequest) {
         paused: config?.paused ?? false,
         mode: config?.mode ?? "DISABLED",
         lastError: config?.lastError ?? null,
+        reconnectCanFix,
         lastWebhookAt: config?.lastWebhookAt ?? null,
         connectedAt: parseDate(config?.metadata?.connectedAt),
         now: new Date(),

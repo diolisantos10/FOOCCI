@@ -43,6 +43,8 @@ interface ConfigView {
   /** Último Direct velho demais para a tela mostrar a data sem ressalva. */
   webhookIsStale?: boolean;
   lastError: string | null;
+  /** Refazer o login resolve o `lastError`? `null`/ausente = não sabemos. */
+  reconnectCanFix?: boolean | null;
   env?: InstagramEnv | null;
 }
 
@@ -332,10 +334,20 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-left">
               <p className="text-sm font-semibold text-red-800">A conexão está com problema — as mensagens não estão chegando.</p>
               <p className="mt-1 text-xs text-red-700">{view.lastError}</p>
-              <a href="/api/integrations/instagram/login/start"
-                className="mt-2 inline-block rounded-md bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-                Reconectar agora
-              </a>
+              {/* O botão só aparece quando reconectar resolve. Quando já sabemos que não
+                  resolve, oferecê-lo é pedir ao lojista uma ação inútil — foi assim que
+                  três reconexões seguidas nasceram com o mesmo defeito. */}
+              {view.reconnectCanFix === false ? (
+                <p className="mt-2 rounded-md border border-red-200 bg-white p-2 text-xs font-semibold text-red-800">
+                  Refazer o login não resolve este caso: o conserto é do lado da Foocci. Não é preciso
+                  fazer nada — a equipe já tem o motivo registrado aqui.
+                </p>
+              ) : (
+                <a href="/api/integrations/instagram/login/start"
+                  className="mt-2 inline-block rounded-md bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+                  Reconectar agora
+                </a>
+              )}
             </div>
           )}
 

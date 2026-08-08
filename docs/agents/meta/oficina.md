@@ -635,3 +635,130 @@ um novo antes de olhar"; **não** autoriza dizer qual é nem quem o administra.
   Toda leitura de DNS aqui vai por DoH e **com consulta de controle**, senão
   ausência de ferramenta lê como ausência de registro — guardrail 1 mordendo pela
   ferramenta, não pelos dados. Proveniência: incidente da própria sessão, 08/08.
+
+---
+
+## 2026-08-08 · O limite de envio da Meta hoje — e por que o número do código está calibrado numa escada que não existe mais
+
+**Pedido:** o CRM parou (teto de 500 por segmento, `CrmCampaignService.ts:110`) e há
+4.759 clientes sem acionar. O Diretor pediu o limite REAL de envio, a rampa até
+esgotar a base, o freio automático e a ordem dos segmentos. Explicitamente: **não
+enviar nada**, não tocar em reprocessar, não alterar teto nem configuração.
+
+### 1 · O que a documentação oficial diz HOJE (não o folclore)
+
+Fonte: `https://developers.facebook.com/docs/whatsapp/messaging-limits/`
+(**atualizada em 21/05/2026**, baixada ao vivo nesta sessão) e
+`.../upcoming-messaging-limits-changes` (mudanças **já em vigor** desde 07/10/2025).
+
+O que mudou e derruba quase todo material antigo:
+
+| Assunto | Folclore (pré-07/10/2025) | Doc atual |
+|---|---|---|
+| Onde o limite mora | no NÚMERO | no **portfólio de negócios**, compartilhado por todos os números |
+| Escada | 250 → 1K → 10K → 100K → ilimitado | **250 → 2.000 → 10.000 → 100.000 → ilimitado** (o degrau de 1K não existe mais) |
+| O que conta | conversas iniciadas | **destinatários únicos a quem se ENTREGA** mensagem fora da janela de atendimento, em 24h móveis |
+| Qualidade vermelha | derrubava o degrau | **não derruba mais o degrau** — "If your business phone number quality rating drops, its messaging limit will not be downgraded" |
+| Subir de degrau | 24h após critério | **6h** após critério |
+| Campo da API | `messaging_limit_tier` | **DEPRECADO** → `whatsapp_business_manager_messaging_limit` |
+
+Caminhos para sair de 250 e chegar a 2.000 (*scaling paths*, basta UM):
+verificar o negócio · o parceiro verificar por você · **entregar 2.000 mensagens
+fora da janela, a destinatários únicos, em 30 dias móveis, com templates de
+qualidade alta**. Depois disso a subida é automática: mensagens de alta qualidade
++ **ter usado pelo menos METADE do limite atual nos últimos 7 dias** → sobe um
+degrau em 6h.
+
+### 2 · O achado que importa para o Foocci
+
+`src/lib/crm-safety.ts:117` — `META_SAFE_DAILY_LIMIT = 900`, com o comentário
+*"Daily send ceiling in safe mode (under the 1k entry tier)"*. **O degrau de 1k foi
+extinto em 07/10/2025.** O teto do produto está calibrado num degrau que a Meta
+apagou, e `applyEffectiveSafety` (`crm-safety.ts:234-240`) **força** esse 900 sempre
+que `manualOverride` é falso — ou seja, é o teto aplicado em produção.
+
+Se o portfólio estiver no piso documentado (250), **900 é 3,6× o limite da Meta**.
+Não mordeu até hoje só porque o teto de 500 por segmento e a fila travada seguraram
+o volume em ~70/dia. **Destravar o 500 sem corrigir o 900 vai direto contra o teto
+da Meta** — e o sintoma não é erro no envio, é mensagem não entregue.
+
+### 3 · O sistema não sabe em que degrau está — e é estrutural
+
+`MetaConfigService.setHealth` (`MetaConfigService.ts:128-134`) aceita
+`messagingLimit`. O **único** chamador que traz dado da Graph é
+`MetaWhatsAppCloudProvider.healthCheck` (`MetaWhatsAppCloudProvider.ts:106-121`), e
+ele pede só `display_phone_number,quality_rating` — **nunca** o limite. Logo a
+coluna `messagingLimit` (`prisma/schema.prisma:1383`) é lida em quatro lugares
+(`crm-safety/route.ts:33,50,88,98`, `IntegrationService.ts:227`) e **jamais
+escrita**: vale `null` para sempre, e o cartão da tela mostra vazio como se fosse
+"sem informação" em vez de "nunca medimos". Guardrail 1 embutido no schema.
+
+O `diag` (`admin/meta/diag/route.ts:52`) pede `throughput` e `quality_rating`, mas
+**não** pede `whatsapp_business_manager_messaging_limit`; e na linha 58 lista
+templates com `name,status,category,language` — **sem `quality_score`**, que é
+justamente o sinal que antecede a pausa do template.
+
+### 4 · Nenhum código de erro de qualidade da Meta é tratado
+
+Varredura em `src/**/*.ts*`: **zero** ocorrência de `131049`, `131050`, `132015`,
+`131048`, `130429` ou de `message_status` / `held_for_quality_assessment`.
+
+O sinal cru até é guardado: o webhook grava o código em `Message.providerError`
+(`webhooks/meta/whatsapp/route.ts:125-128`). Mas ninguém agrega, ninguém freia.
+
+E o disjuntor que existe (`CRMWhatsAppBudgetPlanner.ts:409` `evaluateCircuitBreaker`)
+conta **só falha síncrona do POST**. Os erros que importam chegam **depois, por
+webhook de status** — o disjuntor é estruturalmente cego para eles.
+
+`MetaWhatsAppCloudProvider.post` (linha 86) descarta o `message_status` da resposta:
+com *template pacing* e *portfolio pacing* ligados, mensagem retida
+(`held_for_quality_assessment`) é contabilizada por nós como **enviada**.
+
+### 5 · Categoria: quase tudo do CRM é MARKETING
+
+`MetaTemplateProvisionService.ts:36-51`. Os dois segmentos do pedido:
+`cadastro-sem-compra` → `converter_primeiro_pedido` (**MARKETING**);
+`recuperar-perdidos` → `cliente_perdido` (**MARKETING**). Só `pedir_avaliacao` e
+`carrinho_abandonado` são UTILITY.
+
+Por isso mordem ANTES do limite geral: limite de marketing **por usuário**
+(adaptativo, invisível para nós, erro `131049`) e **template pacing** — template
+novo nasce `UNKNOWN` e é retido até a Meta ter sinal de qualidade. E
+`portfolio-pacing` alcança portfólios com **menos de 500 mil** templates em 365
+dias, que é o nosso caso.
+
+### 6 · O que NÃO fiz, de propósito
+
+- Não enviei mensagem nenhuma, nem de teste.
+- Não toquei em reprocessar (as ~1.949 execuções represadas ficaram intocadas).
+- Não alterei teto, limite, degrau nem campanha. Nenhum arquivo de código tocado.
+- Não imprimi valor de segredo. Só nome de variável e host do banco.
+
+### 7 · Lacuna que não consegui fechar
+
+`GET /api/admin/meta/diag` em produção devolveu **401**: o `ADMIN_SECRET` deste
+ambiente não é o de produção, e o `DATABASE_URL` local aponta para `localhost` —
+não há espelho de produção aqui. Portanto **degrau atual e qualidade atual do
+número seguem NÃO MEDIDOS**. Não vira "provavelmente verde".
+
+### 8 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **O limite de envio mudou de dono em 07/10/2025: é do PORTFÓLIO, não do número.**
+  A escada nova é 250 → 2.000 → 10.000 → 100.000 → ilimitado; o degrau de 1K não
+  existe mais, `messaging_limit_tier` foi deprecado e o campo certo é
+  `whatsapp_business_manager_messaging_limit`. Todo material anterior a essa data
+  está errado. Proveniência: doc oficial atualizada em 21/05/2026, baixada ao vivo
+  em 08/08/2026.
+- **Qualidade vermelha não derruba mais o degrau — derruba o TEMPLATE.** A punição
+  migrou de limite para *pacing*/pausa de template (`132015`) e, repetida, desativação
+  permanente (`132016`). Quem vigia só o degrau não vê o dano acontecer.
+  Proveniência: `upcoming-messaging-limits-changes`, linha da tabela "Phone number
+  quality states".
+- **`messagingLimit` nunca foi escrito: o Foocci nunca soube seu próprio degrau.**
+  Lido em 4 lugares, escrito em nenhum. Campo nulo por construção lido como "sem
+  limite" é o guardrail 1 morando no schema. Proveniência:
+  `MetaWhatsAppCloudProvider.ts:117-121` × `MetaConfigService.ts:130`.
+- **O disjuntor do CRM é cego para qualidade.** Ele conta falha síncrona do POST;
+  `131049`, `131050`, `132015` e `135000` chegam depois, por webhook de status.
+  Prompt é aviso, código é trava — e aqui a trava está no lugar errado.
+  Proveniência: `CRMWhatsAppBudgetPlanner.ts:409` × `webhooks/meta/whatsapp/route.ts:118-131`.
