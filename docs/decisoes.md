@@ -11,6 +11,32 @@
 
 ---
 
+## 2026-08-08 — O SDR passa o valor dos planos na hora
+
+**Decisão do CEO:** *"Ele passa o valor dos planos."*
+
+Encerra a última pergunta que travava o SDR do Foocci. Quando um lead perguntar
+"quanto custa?", ele **responde o valor**, sem puxar para reunião antes.
+
+**A trava de engenharia que vai junto, e não é opcional:** o SDR lê o preço da
+**mesma fonte que o site publica** — nunca de uma cópia no texto dele. Preço
+copiado envelhece calado: no dia em que a tabela mudar, o site mostra um valor e
+o SDR vende outro, e ninguém percebe até um cliente cobrar a diferença.
+
+É a mesma família do "regra não se copia, se aponta" e do fallback de preço de
+IA que consertamos em 07/08 — **duas fontes para o mesmo número é o defeito, não
+o descuido.**
+
+**O que muda:** o desconto de 50% no primeiro mês faz parte da resposta. Ele é o
+argumento mais forte da tabela e já está no site; omitir na conversa seria vender
+pior do que a página.
+
+**O que continua fora do alcance dele:** negociar desconto que não existe na
+tabela, prometer prazo de implantação, ou afirmar que um recurso existe sem
+lastro. Preço é fato publicado; o resto é conversa que sobe para o humano.
+
+---
+
 ## 2026-08-08 — Todos os repositórios da companhia viram privados
 
 **Decisão do CEO:** *"Todos privados, senão vão roubar nossas ideias."*
