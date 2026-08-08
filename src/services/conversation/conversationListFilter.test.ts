@@ -138,3 +138,50 @@ describe("tenant isolation + purity", () => {
     expect(JSON.stringify(filters)).toBe(before);
   });
 });
+
+/**
+ * Aba "📷 Instagram" — o filtro precisa acontecer NO BANCO.
+ *
+ * Antes de 07/08/2026 ele rodava no navegador, sobre as 100 conversas já
+ * carregadas. Bastava o WhatsApp empurrar a conversa de Instagram para fora
+ * dessa janela — o que 15 dias de movimento fazem sozinhos — para a aba dizer
+ * "Nenhuma conversa encontrada" sobre conversas que existiam no banco.
+ *
+ * Testado com as duas metades: o filtro ligado restringe, e o filtro DESLIGADO
+ * não restringe canal nenhum (regressão que esvaziaria a Central inteira).
+ */
+describe("filtro de Instagram no servidor", () => {
+  /** Extrai a cláusula de canal-em-lista de dentro do AND. */
+  function channelIn(where: Prisma.ConversationWhereInput): unknown[] | undefined {
+    const and = (where.AND as Prisma.ConversationWhereInput[] | undefined) ?? [];
+    const clause = and.find((c) => c.channel && typeof c.channel === "object");
+    return (clause?.channel as { in?: unknown[] } | undefined)?.in;
+  }
+
+  it("instagram=1 restringe aos DOIS canais do Instagram", () => {
+    const list = channelIn(buildConversationWhere(TENANT, { instagram: "1" }));
+    expect(list).toEqual(["INSTAGRAM_DIRECT", "INSTAGRAM_COMMENT"]);
+  });
+
+  it("sem o parâmetro, NENHUM canal é restringido — a lista geral continua inteira", () => {
+    const where = buildConversationWhere(TENANT, {});
+    expect(channelIn(where)).toBeUndefined();
+    expect(where.channel).toBeUndefined();
+    expect(where.AND).toBeUndefined();
+  });
+
+  it("não engole os outros filtros: convive com status e busca", () => {
+    const where = buildConversationWhere(TENANT, { instagram: "1", status: "RESOLVED", search: "ana" });
+    expect(where.status).toBe("RESOLVED");
+    expect(channelIn(where)).toHaveLength(2);
+    expect((where.AND as unknown[]).length).toBe(2); // canal + busca
+  });
+
+  it("o comentário do Instagram entra junto — a aba é dos dois, não só do Direct", () => {
+    expect(channelIn(buildConversationWhere(TENANT, { instagram: "1" }))).toContain("INSTAGRAM_COMMENT");
+  });
+
+  it("continua isolado por restaurante", () => {
+    expect(buildConversationWhere("outro", { instagram: "1" }).restaurantId).toBe("outro");
+  });
+});

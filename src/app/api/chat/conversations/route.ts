@@ -120,6 +120,11 @@ export async function GET(req: NextRequest) {
     // permanently AI-locked — so the "Staff" tab finds them even when older than
     // the default loaded window.
     const staff   = sp.get("staff")   ?? undefined;
+    // instagram=1 restringe aos canais do Instagram (Direct + comentários) NO BANCO.
+    // Antes a aba peneirava as 100 conversas já carregadas no navegador, então uma
+    // conversa de Instagram empurrada para fora dessa janela por movimento de
+    // WhatsApp simplesmente sumia da aba — existindo no banco.
+    const instagram = sp.get("instagram") ?? undefined;
     const page    = Math.max(1, parseInt(sp.get("page")  ?? "1", 10));
     const limit   = Math.min(100, Math.max(1, parseInt(sp.get("limit") ?? "30", 10)));
     const skip    = (page - 1) * limit;
@@ -127,7 +132,7 @@ export async function GET(req: NextRequest) {
     // Canonical "has CRM sent" recipients — only needed when the CRM filter is active.
     const crmRecipientCustomerIds = crm ? await getCrmSentCustomerIds(ctx.restaurantId) : undefined;
 
-    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm, staff }, crmRecipientCustomerIds);
+    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm, staff, instagram }, crmRecipientCustomerIds);
 
     // Fetch more rows than requested so deduplication leaves enough results.
     const fetchLimit = Math.min(limit * 4, 400);

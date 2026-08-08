@@ -13,9 +13,15 @@
  * so there is a single place to edit the Waiter's identity (no prompt blob
  * duplication, no drift).
  *
- * The remaining agents are intentional DRAFT placeholders (registry slots) so
- * the future Admin UI can render the full org chart of agents immediately. They
- * will be fleshed out in later phases.
+ * The remaining agents are intentional DRAFT placeholders (registry slots) that
+ * the Admin UI renders as "fora de operação". They will be fleshed out in later
+ * phases.
+ *
+ * Este array NÃO é o organograma da empresa. Os especialistas que CONSTROEM o
+ * Foocci moram em `.claude/agents/`; aqui só entram agentes de PRODUTO, que
+ * rodam dentro do sistema para o lojista ou o cliente final. Quatro slots foram
+ * apagados em 07/08/2026 justamente por confundir as duas populações — ver o
+ * bloco acima de PLACEHOLDER_PROFILES.
  */
 
 import {
@@ -421,36 +427,33 @@ const SUPPORT_PROFILE: AgentProfileDefinition = {
   source: "CODE_SEED",
 };
 
+/**
+ * ── OS QUATRO QUE FORAM APAGADOS EM 07/08/2026 (não recriar) ──────────────────
+ *
+ * `orchestrator`, `security-governance`, `ui-ux` e `qa-test` saíram deste array
+ * por decisão do CEO. Motivo: cada um duplicava, PELO NOME, um dos cinco
+ * Essenciais que constroem este sistema — `cerebro`, `seguranca`,
+ * `interface`+`experiencia` e `qualidade`, que vivem em `.claude/agents/` e são
+ * protegidos por `elencoObrigatorio.test.ts`.
+ *
+ * Nenhum dos quatro passou do rascunho: descrição terminando em "Placeholder.",
+ * zero regra, zero ferramenta — e o `qa-test` ainda prometia uma "Phase 5" que
+ * nunca existiu. Dois nomes para o mesmo trabalho é exatamente o que a doutrina
+ * 21 do kit existe para matar.
+ *
+ * A tentação que este comentário existe para conter é recriá-los "por
+ * completude do organograma". O portão está em `agents.test.ts`
+ * ("os quatro slugs aposentados não voltam ao registro") e reprova por slug.
+ *
+ * Os quatro placeholders que FICARAM não colidem com Essencial e podem virar
+ * agente de produto de verdade.
+ */
 const PLACEHOLDER_PROFILES: AgentProfileDefinition[] = [
-  placeholder(
-    "orchestrator",
-    "Orchestrator / Manager Agent",
-    "ORCHESTRATOR",
-    "Coordena os demais agentes, roteia conversas e arbitra prioridades. Placeholder.",
-  ),
-  placeholder(
-    "security-governance",
-    "Security & Governance Agent",
-    "SECURITY",
-    "Guardião das regras de segurança, limites e governança. Mandatório. Placeholder.",
-  ),
-  placeholder(
-    "ui-ux",
-    "UI/UX Agent",
-    "UI_UX",
-    "Cuida de coerência de interface e experiência. Placeholder.",
-  ),
   placeholder(
     "manual-constitution",
     "Manual / Constitution Agent",
     "MANUAL",
     "Mantém o Manual Operacional (a constituição) como fonte de verdade. Placeholder.",
-  ),
-  placeholder(
-    "qa-test",
-    "QA / Test Agent",
-    "QA",
-    "Avaliação e testes dos agentes (Phase 5). Placeholder.",
   ),
   placeholder(
     "integration",

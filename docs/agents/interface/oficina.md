@@ -1958,3 +1958,256 @@ Verificado por eliminação: `git stash push -- src/services/ai/` → os mesmos 
 testes passam. Nada meu toca aquilo.
 
 — interface, branch `claude/precos-desconto-e-planos`
+
+---
+
+## 2026-08-07 · Sala dos Agentes — a TELA (doutrina 20 do kit)
+
+Bloco em paralelo: eu construí a tela, outro especialista construiu o serviço,
+os dois contra `src/services/agents/salaDosAgentes.types.ts`. Não toquei em
+`src/services/`.
+
+**Entregue.** Rota `/admin/sala-dos-agentes` com item PRÓPRIO no menu (grupo
+🧠 Inteligência, primeiro item — ordem do CEO: não é sub-item de Configurações).
+Duas abas por URL (`?aba=configuracoes`, para o voltar do navegador funcionar e a
+aba de custo poder ser mandada por link). Ficha em `/admin/sala-dos-agentes/[slug]`.
+
+Arquivos: `src/app/admin/(area)/sala-dos-agentes/{page,SalaDosAgentesClient,_ui,
+_cartao,_dados,_estados}.{tsx,ts}` + `[slug]/{page,FichaClient}.tsx` +
+`src/app/api/admin/sala-dos-agentes/route.ts` (rota fina) + `_estados.test.ts`.
+
+`npx tsc --noEmit` limpo · `next lint` limpo · `vitest` 54 verdes (47 do serviço
++ 7 meus) · rolagem horizontal ZERO em 375/768/1280 (`main.scrollWidth` medido).
+
+### 1. O `truncate` que estourou a grade inteira — e a causa que não é o truncate
+
+A 375px a página tinha **837px de rolagem horizontal**. O culpado aparente era
+uma frase com `truncate` na caixa da IA (`"Perfil em DRAFT — não roda em
+produção…"`). A causa real é outra e vale como regra:
+
+> **`grid` sem `grid-cols-1` explícito não tem coluna definida.** A trilha
+> implícita é `auto` = **min-content**, e `auto` cresce até caber o conteúdo mais
+> largo. `truncate` é `white-space: nowrap` — a frase inteira vira largura
+> mínima e **arrasta a coluna, logo todos os cartões**, não só o dele.
+
+Duas coisas que essa medição ensina:
+
+1. `sm:grid-cols-2 xl:grid-cols-3` **não protege o tamanho base.** As classes
+   `grid-cols-N` do Tailwind já são `repeat(N, minmax(0,1fr))` — o `minmax(0,…)`
+   que segura a coluna. Sem a classe base, o celular fica sem essa trava. Todo
+   grid desta tela ganhou `grid-cols-1` explícito.
+2. **`truncate` é para identificador, não para frase.** Slug, nome de modelo,
+   nome próprio: corta com reticências e tudo bem. Frase inteira: quebra em
+   linha. Cortar uma explicação com "…" esconde justamente a parte que explica.
+
+Só apareceu com **dados reais**: os textos do stub eram curtos demais para
+estourar. O stub cabia; a verdade não.
+
+### 2. O `0` grande que quase saiu na aba Configurações
+
+Minha primeira soma era: `total = Σ medidos`, `foraDaConta = total de IAs −
+medidos`. Com dados reais isso imprimiria **"0"** em corpo 21px sob o rótulo
+"Somado em 30 dias" — com **3 das 4 IAs sem custo atribuído**. O número mais
+errado que essa tela poderia mostrar, e nada nele pareceria errado.
+
+Dois erros distintos na mesma conta, e eles vão em direções opostas:
+
+- **`zeroProvado` estava contado como "fora da conta".** Ele é medição — só vale
+  zero. Contá-lo como buraco é alarme falso, e alarme falso ensina a ignorar
+  alarme.
+- **`naoMedido` estava sendo somado como zero pela porta dos fundos**: não
+  aparecia no `Σ`, mas o resultado saía com cara de total fechado.
+
+O desenho final tem **três** saídas, não uma: conta fechada → o total; conta
+parcial → **`≥ X`**, porque é *piso* e não total; nada em dinheiro provado →
+*não medido* em itálico. Regra que fica: **soma sobre união de estados precisa
+declarar a cobertura junto do número, ou não é um número — é uma opinião.**
+
+### 3. `desconhecido` chegou no meio do bloco: forma, não quarta cor
+
+O contrato ganhou um quarto `EstadoAgente` enquanto eu construía. Tratamento:
+**círculo vazado** (`bg-transparent` + `border-muted`), sem halo — os outros três
+são preenchidos.
+
+O raciocínio, que vale além deste pontinho: **cor distingue gravidade; forma
+distingue "eu sei" de "eu não sei".** Se `desconhecido` virasse um quarto tom,
+o dono teria que decorar quatro cinzas-amarelos parecidos e as duas leituras
+ficariam grudadas. Vazado × preenchido lê antes de a cor ser interpretada — é a
+mesma família visual do *não medido* em itálico das métricas: contorno onde os
+outros têm massa.
+
+Três decisões de apoio:
+
+- **Legenda uma vez por tela**, não rótulo em cada cartão: um ponto de 7px não
+  carrega quatro significados sozinho, e repetir 24 vezes vira ruído.
+- **O mapa saiu do `.tsx` para `_estados.ts` puro** só para poder ser testado.
+  `Record<EstadoAgente, …>` já barra o estado **esquecido** em compilação; o
+  teste barra o estado **copiado** — dois estados com o mesmo desenho — que o
+  compilador não enxerga. É o guardrail 2 aplicado a pixel: um estado novo não
+  pode entrar de carona no visual de outro.
+- **O fallback de estado desconhecido é `desconhecido`, nunca `desligado`.**
+  Dizer "está parado" sobre um valor que não reconheço é inventar informação.
+
+### 4. Motivo repetido não é evidência mais forte — é evidência que ninguém lê
+
+O guardrail 6 manda o alerta carregar a própria evidência, e o serviço obedeceu:
+cada `naoMedido` vem com um motivo de cinco linhas citando arquivo e linha. Só
+que **três métricas do mesmo agente compartilham o MESMO motivo** — e a ficha
+imprimia o parágrafo três vezes seguidas.
+
+`agruparMotivos()` agrupa **pelo motivo**, não pelo rótulo: a evidência aparece
+uma vez, prefixada pelos rótulos que ela explica
+(`Chamadas de IA · Custo atribuído · Tokens: …`). Vale para o cartão e para a
+ficha. **Evidência repetida ensina a pular a leitura** — o oposto do que ela
+existe para fazer.
+
+### 5. O motivo tem que caber no dedo, não no mouse
+
+`title` só existe onde há hover. No celular, explicação em `title` é explicação
+que ninguém lê. O motivo vive num `<details>` nativo: abre no toque, funciona sem
+JS, e — porque o cartão inteiro é clicável — precisou de camada: o link é
+**esticado** (`absolute inset-0 z-0`) e o `<details>` fica em `z-10`. Assim o
+cartão abre a ficha, o "Por que não medido?" abre o motivo, e nenhum dos dois
+rouba o clique do outro. Medido: tocar no motivo **não** navega.
+
+Bônus do link esticado sobre `onClick` no `<article>`: ctrl+clique abre em outra
+aba, teclado alcança, leitor de tela anuncia um link.
+
+### 6. Duas coisas que eu me RECUSEI a desenhar
+
+1. **"+ Novo agente" e "Salvar".** Estão na maquete e na doutrina. Não existe
+   serviço de escrita nesta versão — botão que não salva é controle que mente, e
+   é essa família de defeito, não a feiura, que derruba tela neste produto. O
+   botão nasce junto com o serviço.
+2. **Os seis órgãos da anatomia sem dado** (Olhos, Boca, Mãos, Coleira,
+   Consciência, Aprendizado). Em vez de seis caixas vazias com cara de resposta,
+   um bloco só — *"O que esta ficha ainda não mostra"* — que **nomeia cada
+   órgão e a pergunta que ele responderia**. Buraco assumido é informação; caixa
+   vazia é armadilha.
+
+O bloco travado (Espinha 🔒) mostra o chão da casa — os guardrails 1, 2, 3 e 7
+do `CLAUDE.md`, cada um com a origem citada — mais a linha extra "nunca ser
+apagado" para os cinco Essenciais. É citação de lei existente, não regra
+inventada por mim, e a ficha diz de onde vem.
+
+### 7. Ajustes de celular que só a captura pegou
+
+- A nota de lacunas **aberta** comia a primeira tela inteira a 375px: o dono via
+  só ressalva e nenhum agente. Virou `<details>` dobrado, com o resumo sempre
+  visível ("6 coisas esta Sala ainda não consegue medir"). Fechado nos três
+  tamanhos — `open` não tem variante responsiva sem JS, e tela que muda de
+  comportamento com a largura confunde quem alterna.
+- A nota da ficha tinha três parágrafos; virou um.
+- `min-h-[61px]` na função do cartão: sem isso a caixa da IA e o rodapé de
+  medidas nasciam em alturas diferentes em cada coluna e a **fileira** ficava
+  torta. O defeito é da grade, não do cartão — e só aparece com dois cartões
+  lado a lado.
+- `min-h-[19px]` na célula de valor: *não medido* (12px) e o número (14px)
+  empurravam os rótulos para alturas diferentes.
+- Cabeçalho da ficha em duas linhas: a lista inline `slug · área · estado · no ar
+  desde` deixava um `·` órfão no fim da linha a 375px.
+- **`noArDesde` vem `null` para TODOS** — nada no sistema registra criação de
+  agente. O rótulo "No ar desde" **não some**: fica com *não registrado* em
+  itálico. Espaço em branco sem explicação faria a pessoa procurar defeito na
+  tela.
+
+### 8. Receita de captura do admin (confirma a vitrine e acrescenta)
+
+Sem banco: `ADMIN_SECRET` do `.env` → token = `sha256(secret + ":foocci-admin-v1")`
+→ cookie `foocci-admin-token`. O admin não precisa de Postgres para autenticar.
+
+E o de sempre, que continua verdade: o `fullPage` do Playwright **não enxerga**
+o scroll interno do shell fixo do admin. Antes de capturar, soltar
+(`div.h-screen { height:auto; overflow:visible }` + `main { overflow:visible }`).
+Sem isso a ficha saiu com meia tela branca — e eu quase reportei como defeito.
+
+### Autoavaliação
+
+Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
+
+### O que NÃO fiz, e por quê
+
+- Não toquei em `src/services/` (fronteira do bloco).
+- Não mexi no visual do shell do admin (violet/`gray-*`): é drift real, mas
+  reescrever a casca inteira num bloco de tela nova é ampliar escopo, não
+  corrigir. Meu item de menu segue o padrão dos vizinhos.
+- Não commitei — ordem do Diretor.
+
+— interface, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-07 · Sala dos Agentes — correção do contador que mentia (mesma sessão)
+
+Devolvida pelo Diretor com um achado que eu deveria ter pego sozinho.
+
+### O defeito: "12 falam com o cliente", e oito deles não rodam
+
+O contador do topo dizia **12**. Oito daqueles doze cartões traziam, no corpo,
+*"Perfil em DRAFT — não roda em produção, não tem motor atribuído"*. Quem atende
+cliente de verdade hoje são **quatro**: `waiter`, `crm`, `whatsapp`,
+`suporte-tecnico`.
+
+A informação honesta estava no cartão. O número grande em cima a **contradizia**
+— e ninguém desce doze cartões para conferir um número que já leu. É a família
+do "Total hoje": **soma certa de uma coisa errada**.
+
+O agravante é onde aconteceu: numa tela cujo motivo de existir é não mentir. Eu
+gastei o bloco inteiro protegendo a célula (`Medida` com três estados, `?? 0`
+banido, soma com piso) e **deixei o agregado do topo passar sem o mesmo exame**.
+
+> **A regra que fica: a disciplina da célula não sobe sozinha para o agregado.**
+> Todo contador é um `filter().length`, e o defeito nunca está no `.length` — está
+> no critério do `filter`. Célula honesta com filtro errado dá tela mentirosa com
+> aparência impecável.
+
+### O conserto: critério, e a lista tem que concordar com ele
+
+1. **`estaEmOperacao()`** em `_estados.ts` — predicado puro, testado. Usa o campo
+   `estado` do contrato, **não** o texto da explicação do motor: o serviço marca
+   `desligado` exatamente quando o perfil não é `ACTIVE`. Categoria derivada de
+   frase livre quebra na primeira vez que alguém reescreve a frase.
+2. **`desconhecido` conta como EM OPERAÇÃO.** Ele quer dizer "não consigo provar
+   se trabalhou", não "não roda". Jogá-lo para fora seria transformar ausência de
+   medição em ausência de trabalho — o erro desta tela, só do outro lado.
+3. **O total misto foi REMOVIDO.** "24 agentes" era exatamente o número que
+   somava rascunho com agente vivo. Hoje são quatro parcelas que fecham:
+   *Falam com o cliente (4)* · *Constroem o produto (12)* · *Fora de operação (8)*
+   · *Com medida faltando (15)*.
+4. **A grade passou a concordar com o contador.** Consertar só o número deixaria
+   uma contradição nova: contador 4, lista com 12 cartões abaixo. Quem não roda
+   foi para uma gaveta `<details>` — *"Fora de operação (8) — perfis cadastrados
+   que não rodam hoje, não entram na conta acima"*. É a "Ver desligados" da
+   maquete, nativa.
+
+> **Corolário: conserto de número que não reconcilia a LISTA logo abaixo só troca
+> de contradição.** O leitor compara os dois; se discordarem, ele para de confiar
+> nos dois.
+
+Cinco testes novos em `_estados.test.ts`, incluindo o que trava a aritmética
+(`dentro + fora === total`) e o que prova que o critério não lê texto livre.
+
+### Higiene de prova: print velho com dado falso é armadilha
+
+O Diretor abriu `grade-375-topo.png` e viu **dados do stub** — "15 agentes",
+"1.284", "No ar desde 14/03/2026". Um recorte antigo, de antes de o serviço
+existir, guardado na mesma pasta que os bons. Ele quase reportou ao CEO que a
+tela mostra número onde ela mostra "não medido".
+
+**Screenshot é prova, e prova com procedência ambígua é pior que prova nenhuma.**
+Apaguei a pasta inteira e refiz todas as capturas do serviço real, em vez de
+escolher a dedo quais apagar — seleção manual é onde sobra justamente o arquivo
+esquecido.
+
+Regra para o próximo bloco: **capturas de stub e de dado real nunca dividem
+pasta.** Ao trocar o stub pela fonte real, a pasta de capturas se apaga junto,
+não se acrescenta.
+
+### Autoavaliação (após a correção)
+
+Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
+
+`tsc` limpo · `next lint` limpo · `vitest` 59 verdes · rolagem horizontal zero em
+375/768/1280, **inclusive com a gaveta "Fora de operação" aberta**.
+
+— interface, branch `claude/canais-central-canal-morto`

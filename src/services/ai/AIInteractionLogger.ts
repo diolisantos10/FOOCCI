@@ -4,11 +4,13 @@
  * Fire-and-forget logging of every AI turn to AIInteractionLog.
  * Errors here are swallowed so they never affect the customer-facing flow.
  *
- * Cost calculation uses published OpenAI pricing as of 2025.
- * Update PRICING_USD_PER_1K_TOKENS if rates change.
+ * Cost calculation lives in the PURE module ./pricing/modelPricing — sem prisma,
+ * testável sozinho. Modelo fora da tabela grava estimatedCostUsd = null
+ * (custo indeterminado), NUNCA o preço de outro modelo.
  */
 
 import { prisma } from "@/lib/prisma";
+import { estimateCostUsd } from "./pricing/modelPricing";
 
 interface ToolCallRecord {
   name: string;
@@ -28,28 +30,36 @@ export interface AILogInput {
   toolCalls: ToolCallRecord[];
   success: boolean;
   errorMessage?: string;
-}
-
-// Prices in USD per 1 000 tokens (input / output)
-const PRICING_USD_PER_1K: Record<string, [number, number]> = {
-  "gpt-4o-mini": [0.00015, 0.0006],
-  "gpt-4o":      [0.0025,  0.01],
-};
-
-function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
-  const [inputRate, outputRate] = PRICING_USD_PER_1K[model] ?? [0.0025, 0.01];
-  return (promptTokens / 1000) * inputRate + (completionTokens / 1000) * outputRate;
+  /**
+   * Qual agente fez a chamada. NULÁVEL de propósito: onde o chamador não sabe,
+   * fica nulo e aparece como "não atribuído" — nunca somado ao agente errado.
+   */
+  agentSlug?: string | null;
+  /**
+   * `true` quando a contagem de tokens do turno está INCOMPLETA (o provedor não
+   * devolveu `usage` em alguma iteração). Nesse caso o custo é gravado como null
+   * — custo calculado sobre contagem incompleta seria um piso apresentado como
+   * total. "Não sei" nunca vira número.
+   */
+  tokensUnknown?: boolean;
 }
 
 export class AIInteractionLogger {
   static async log(input: AILogInput): Promise<void> {
     try {
       const totalTokens = input.promptTokens + input.completionTokens;
-      const estimatedCostUsd = estimateCost(
+      // `costUsd` é null quando o modelo não está precificado. Gravar null é a
+      // resposta honesta; gravar o preço do gpt-4o era inventar um número.
+      const { costUsd } = estimateCostUsd(
         input.model,
         input.promptTokens,
         input.completionTokens
       );
+      // Contagem incompleta → custo indeterminado, mesmo com modelo precificado.
+      const finalCostUsd = input.tokensUnknown ? null : costUsd;
+      const slug = typeof input.agentSlug === "string" && input.agentSlug.trim() !== ""
+        ? input.agentSlug.trim()
+        : null;
 
       await prisma.aIInteractionLog.create({
         data: {
@@ -62,7 +72,8 @@ export class AIInteractionLogger {
           latencyMs: input.latencyMs,
           turnNumber: input.turnNumber,
           toolCalls: input.toolCalls as object[],
-          estimatedCostUsd,
+          estimatedCostUsd: finalCostUsd,
+          agentSlug: slug,
           success: input.success,
           errorMessage: input.errorMessage ?? null,
         },

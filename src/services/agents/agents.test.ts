@@ -21,25 +21,86 @@ import {
 import { agentProfileSchema } from "@/validators/agent-profile";
 import { buildWaiterProfileDirective } from "@/services/ai/waiter/WaiterAgentProfile";
 
+/**
+ * Os quatro slots aposentados em 07/08/2026 por decisão do CEO, cada um com o
+ * Essencial que ele duplicava. O motivo viaja junto com o slug de propósito:
+ * um teste que só lista nomes proibidos vira enigma em dois meses, e quem não
+ * entende a regra a remove em vez de obedecê-la.
+ */
+const APOSENTADOS = [
+  { slug: "orchestrator",        duplicava: "cerebro" },
+  { slug: "security-governance", duplicava: "seguranca" },
+  { slug: "ui-ux",               duplicava: "interface + experiencia" },
+  { slug: "qa-test",             duplicava: "qualidade" },
+] as const;
+
+/** O elenco que o registro DEVE ter depois do corte — exato, não "pelo menos". */
+const ELENCO_ESPERADO = [
+  // Os quatro com conteúdo real.
+  "waiter",
+  "crm",
+  "whatsapp",
+  "suporte-tecnico",
+  // Os quatro placeholders que ficaram: não colidem com Essencial nenhum e
+  // podem virar agente de produto de verdade.
+  "manual-constitution",
+  "integration",
+  "branding",
+  "analytics-product",
+] as const;
+
 describe("Agent registry (code-defined defaults)", () => {
   it("includes every expected agent slot", () => {
     const slugs = getDefaultAgentProfiles().map((p) => p.slug);
-    for (const expected of [
-      "waiter",
-      "orchestrator",
-      "security-governance",
-      "whatsapp",
-      "crm",
-      "ui-ux",
-      "manual-constitution",
-      "qa-test",
-      "integration",
-      "branding",
-      "analytics-product",
-      "suporte-tecnico",
-    ]) {
+    for (const expected of ELENCO_ESPERADO) {
       expect(slugs).toContain(expected);
     }
+  });
+
+  /*
+    ── O PORTÃO DO CORTE DE 07/08/2026, NAS DUAS METADES ──────────────────────
+
+    Metade que REPROVA: um dos quatro nomes duplicados volta ao registro. A
+    regressão real deste bloco não é alguém desfazer o corte de propósito — é
+    alguém recriar o slot "por completude do organograma" daqui a dois meses,
+    sem saber que o nome já pertence a um Essencial. O `.toBe(false)` com o
+    motivo na mensagem é o que faz o teste ENSINAR em vez de só barrar.
+
+    Metade que PASSA: os quatro placeholders que sobraram continuam presentes.
+    Sem ela, apagar os OITO satisfaria o teste acima — e o estrago seria maior
+    que o problema que este bloco existe para resolver (guardrail 5).
+  */
+  it.each(APOSENTADOS)(
+    "`$slug` NÃO volta ao registro — duplica o Essencial $duplicava",
+    ({ slug, duplicava }) => {
+      const slugs = getDefaultAgentProfiles().map((p) => p.slug);
+      expect(
+        slugs.includes(slug),
+        `"${slug}" voltou ao registro de agentes de produto. Esse trabalho é do ` +
+          `Essencial "${duplicava}", que vive em .claude/agents e é protegido por ` +
+          `elencoObrigatorio.test.ts. Dois nomes para o mesmo cargo foi o que o ` +
+          `corte de 07/08/2026 apagou — não recrie o slot "por completude".`,
+      ).toBe(false);
+    },
+  );
+
+  it("os placeholders que NÃO colidem com Essencial continuam no registro", () => {
+    // A metade que passa. Se esta falhar junto com a de cima, o corte passou do
+    // ponto: alguém esvaziou o registro em vez de tirar os quatro duplicados.
+    const slugs = getDefaultAgentProfiles().map((p) => p.slug);
+    for (const mantido of ["manual-constitution", "integration", "branding", "analytics-product"]) {
+      expect(
+        slugs,
+        `"${mantido}" não colide com nenhum Essencial e não deveria ter sido removido`,
+      ).toContain(mantido);
+    }
+  });
+
+  it("o registro é EXATAMENTE o elenco esperado — nem a mais, nem a menos", () => {
+    // `toContain` não pega slot novo entrando calado. Este pega, e obriga quem
+    // adiciona um agente de produto a passar por aqui e ler o bloco acima.
+    const slugs = getDefaultAgentProfiles().map((p) => p.slug);
+    expect([...slugs].sort()).toEqual([...ELENCO_ESPERADO].sort());
   });
 
   it("has unique slugs", () => {

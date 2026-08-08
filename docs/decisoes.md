@@ -11,6 +11,68 @@
 
 ---
 
+## 2026-08-08 — O que sobe para o CEO, e o que o Diretor resolve sozinho
+
+**Decisão do CEO, nas palavras dele:** *"Eu sou do marketing, eu não entendo de
+sistema. Só decisões mais sensíveis é que me pergunta, por favor. Tudo que for do
+sistema você resolve."*
+
+**Contexto:** o Diretor subiu como "pendências do CEO" três itens que não eram
+decisão de negócio — autorizar um merge, quatro achados de segurança, e um campo
+vazio numa tela. A resposta foi *"não sei nem o que que é isso"*. Estava certo.
+
+**A regra, com o teste:** antes de perguntar, o Diretor responde *"se eu
+decidisse isto sozinho e desse errado, seria erro meu ou uma escolha de negócio
+que não era minha?"*. Erro meu → resolve. Escolha dele → pergunta.
+
+Sobe: preço e plano · o que o produto promete ao cliente · gastar dinheiro ·
+risco irreversível (dado de cliente, pagamento em produção, exposição da marca) ·
+prioridade entre blocos grandes.
+
+Não sobe: merge, deploy, teste, migration · achado de segurança (conserta e
+informa o que foi consertado) · defeito de tela · divisão de trabalho entre
+agentes.
+
+**Consequência no formato do relatório:** o CEO recebe o que foi feito e o que
+ele precisa decidir. A lista do que está aberto por dentro vive em
+`docs/pendencias.md` e **não** vai para o relatório dele — pendência técnica que
+ele não tem como resolver é ruído, e ruído treina a não ler o relatório inteiro.
+
+Detalhe operacional em `CLAUDE.md`.
+
+---
+
+## 2026-08-08 — SDR: só Meta oficial. Evolution está fora
+
+**Decisão do CEO:** *"SDR jamais Evolution, a gente só vai usar Meta oficial."*
+
+Encerra a escolha de chip que estava aberta desde 07/08. O SDR do Foocci fala
+pelo WhatsApp **Cloud API da Meta**, e a Evolution não é alternativa para este
+caso — nem como plano B.
+
+**Consequência que precisa ser respeitada:** existe **um único aplicativo** da
+Foocci dentro da Meta, e ele serve WhatsApp *e* Instagram. Permissão negada,
+revisão reprovada ou segredo rotacionado sem atualizar o Railway **derrubam os
+dois canais juntos**. Qualquer mexida no SDR passa pelo especialista `meta`.
+
+---
+
+## 2026-08-08 — Cartão na Meta: não perguntar antes de 24/09
+
+**Decisão do CEO:** *"Cartão na conta da Meta — se em outubro para de perguntar
+isso, você só vai me perguntar faltando uma semana."*
+
+A cobrança de conversa de serviço no WhatsApp começa em **01/10/2026**. O assunto
+sai da pauta até **24/09/2026**, quando volta uma vez, com o valor estimado do
+mês já calculado.
+
+**A regra por trás, que vale além deste item:** prazo distante não é pendência —
+é lembrete com data. Item que reaparece toda semana sem poder ser resolvido vira
+ruído, e ruído faz o CEO parar de ler a lista inteira. É o guardrail 6 aplicado à
+pauta: o aviso só chega quando carrega a ação possível.
+
+---
+
 ## O custo de WhatsApp entra na mensalidade — não vira item cobrado à parte
 
 **Decidido em** 2026-08-06 · **por** CEO · **origem:** ele viu no site a linha

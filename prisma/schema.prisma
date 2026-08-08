@@ -1324,13 +1324,17 @@ model AIInteractionLog {
   // Phase 4 additions
   turnNumber       Int      @default(0) // which conversation turn (for multi-turn audit)
   toolCalls        Json? // array of {name, args, result} for every tool executed
-  estimatedCostUsd Decimal? @db.Decimal(10, 6) // calculated from model pricing at log time
+  estimatedCostUsd Decimal? @db.Decimal(10, 6) // null = modelo NÃO precificado (custo indeterminado), nunca preço chutado
+  // Qual agente fez a chamada. NULÁVEL: linhas antigas e chamadores que não sabem
+  // ficam nulos e aparecem como "não atribuído" — nunca somados ao agente errado.
+  agentSlug        String?
   createdAt        DateTime @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
   @@index([conversationId])
+  @@index([agentSlug])
   @@map("ai_interaction_logs")
 }
 

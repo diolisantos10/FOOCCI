@@ -40,6 +40,8 @@ interface ConfigView {
   instagramLoginMissingEnv: string[];
   webhookUrl: string | null;
   lastWebhookAt: string | null;
+  /** Último Direct velho demais para a tela mostrar a data sem ressalva. */
+  webhookIsStale?: boolean;
   lastError: string | null;
   env?: InstagramEnv | null;
 }
@@ -310,6 +312,17 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             <p>Último Direct recebido: <b>{fmtDate(view?.lastWebhookAt ?? null)}</b></p>
           </div>
 
+          {/* A data sozinha não denuncia nada: "23/07" ao lado de um "Ativo" verde
+              passa por normal e passou por treze dias. Enquanto o silêncio durar,
+              ele é dito com todas as letras — e com a ressalva de movimento baixo,
+              porque silêncio não é prova de defeito. */}
+          {view?.webhookIsStale && !view?.lastError && (
+            <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              Nenhuma mensagem chegou nas últimas 48 horas. Pode ser movimento baixo — mas se você
+              espera Directs, rode o diagnóstico ou reconecte a conta.
+            </p>
+          )}
+
           {/* "Conectado" não é evidência de saúde. Esta conta ficou treze dias com o
               selo verde e o acesso morto, sem receber uma única mensagem, porque o
               erro registrado não aparecia em lugar nenhum desta tela — só no card
@@ -509,7 +522,9 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
             { label: "Instagram conectado a uma Página do Facebook", done: !!view?.facebookPageId },
             { label: "Conta Meta conectada ao Foocci", done: connected },
             { label: "Page Access Token salvo com segurança", done: !!view?.tokenConfigured },
-            { label: "Webhook configurado / mensagens chegando", done: !!view?.lastWebhookAt },
+            // "mensagens chegando" no passado não é "mensagens chegando". Um carimbo
+            // de quinze dias marcava este item como feito enquanto nada chegava.
+            { label: "Webhook configurado / mensagens chegando", done: !!view?.lastWebhookAt && !view?.webhookIsStale },
             { label: "Diagnóstico do Foocci aprovado", done: !!test && test.parser === "OK" },
             { label: "Modo inicial recomendado: Receber mensagens", done: view?.mode === "RECEIVE_ONLY" || view?.mode === "REPLY_ONLY" },
           ].map((c) => (

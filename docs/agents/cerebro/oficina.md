@@ -905,3 +905,386 @@ cardápio continua chegando ao juiz com os primeiros itens.
 A escolha de origens por degrau (ALLOWLIST = PRODUCTION+REPLAY; RESTAURANT_WIDE =
 só PRODUCTION) é doutrina, não conserto. Espelhei o CRM e só apertei — nenhuma
 porta abriu. Precisa de ratificação.
+
+---
+
+## 2026-08-07 · Custo de IA por agente — matar o fallback silencioso de preço
+
+**Pedido:** medir quanto cada agente já gastou (Sala dos Agentes, /admin).
+
+### O que confirmei do terreno (não confiei na leitura de terceiro)
+
+- `src/services/ai/AIInteractionLogger.ts` era o único ponto que grava custo, e o
+  fallback era `PRICING_USD_PER_1K[model] ?? [0.0025, 0.01]` — o preço do gpt-4o.
+- `AIInteractionLog` não tinha `agentSlug` (`prisma/schema.prisma:1313-1335`).
+- **A premissa do DeepSeek estava errada.** O projeto NÃO chama DeepSeek: o nome
+  só aparece num regex de scanner (`src/services/raiox/collect/SourceScanner.ts:62`)
+  e numa lista de imports proibidos (`src/services/raiox/noSideEffects.test.ts:35`).
+  Se eu tivesse aceitado a premissa, teria criado uma linha de preço para um
+  modelo que ninguém chama — cobertura de mentira.
+
+### O achado que muda a conclusão do bloco
+
+O modelo gravado vem de `brandConfig.aiModel` (`AIOrderService.ts:1139,1163`), e
+esse campo é validado por `z.enum(["gpt-4o-mini","gpt-4o"])`
+(`src/validators/brand-config.ts:101`). Ou seja: **o fallback existia mas nunca
+disparou** nas linhas que foram efetivamente gravadas — os dois únicos modelos
+possíveis eram exatamente os dois que a tabela conhecia, com o preço certo.
+
+Lição: **defeito que ainda não custou dinheiro não é defeito menor — é defeito
+que ainda não foi chamado.** O router já tem defaults de Claude e Gemini
+(`AIEngineRouter.ts:17-18`) e o `ChangeRequestApplier` já sabe escrever linha de
+roteamento. No dia em que um CR mandasse tráfego para o Gemini, o relatório
+passaria a superestimar o custo de entrada em ~8x, calado. A hora de consertar é
+antes da primeira chamada, não depois da primeira fatura.
+
+### Como separei "não sei" de "custou X"
+
+Três estados não bastavam. Precisei de quatro no nível da chamada, porque
+descobri lendo o código que nem todo modelo é cobrado por token:
+`whisper-1` (`TranscriptionAdapter.ts:135`) é por minuto e `gpt-image-1`
+(`imageEnhancement/providers/openai.ts:17`) é por imagem. Estimar esses por token
+daria zero — um número errado com cara de certo. Ficaram `NOT_TOKEN_PRICED`.
+E `mock`/`local` ficaram `FREE`: **zero conhecido é diferente de desconhecido.**
+
+### O que quebrou / o que verifiquei
+
+Rodei as quatro sabotagens e **conferi com grep + diff que cada uma entrou no
+arquivo antes de olhar o resultado** — é o passo que evita relatar "portão é
+decoração" por engano:
+
+| Sabotagem | Linha confirmada | Efeito |
+|---|---|---|
+| `costUsd` = preço do gpt-4o no desconhecido | `modelPricing.ts:202` | 6 testes vermelhos |
+| slug nulo cai no `waiter` | `costAggregation.ts:165` | 5 testes vermelhos |
+| provedor desconhecido vira `OPENAI` | `costAggregation.ts:160` | 1 teste vermelho |
+| logger regrava fallback no payload | `AIInteractionLogger.ts:66` | 1 teste vermelho |
+
+As metades legítimas também estão presas: gpt-4o continua custando exatamente a
+tarifa antiga, slug preenchido é atribuído ao agente certo, e a soma por provedor
+fecha com a soma linha a linha. Sem essas, bastaria devolver `null` sempre.
+
+Deixei o módulo de preço **puro** (teste próprio prova que ele não importa
+prisma). É a lição da vitrine aplicada de novo: no teste de fiação eu mockei
+**só o prisma**, nunca o módulo de preço — senão a regra que interessa some.
+
+### Ficou aberto (reportado ao Diretor, não consertei)
+
+`src/services/raiox/collect/RaioXCollector.ts:126` converte `estimatedCostUsd`
+null em **zero**. Com a coluna passando a gravar null para não precificado, esse
+consumidor volta a confundir "não sei" com "não gastou" — exatamente o defeito
+que este bloco matou, um andar acima. Não toquei para não mudar a forma da saída
+do raio-x sem decisão.
+
+`npx tsc --noEmit` limpo · `npx vitest run` 2154 suítes / 6115 testes verdes.
+
+### 2026-08-07 (continuação) · O conserto que criou o problema velho um andar acima
+
+O Diretor mandou consertar o `RaioXCollector` que eu tinha só reportado. Estava
+certo: **a mudança do bloco anterior PIOROU aquele ponto.** Antes,
+`estimatedCostUsd` nunca era nulo, então o `?? 0` era inofensivo na prática. Ao
+fazer a coluna gravar null para "não sei", eu transformei um `?? 0` dormente na
+fonte ativa do defeito que eu tinha acabado de matar.
+
+**A lição que fica: quando você cria um valor novo para "não sei", todo consumidor
+que já tratava aquele campo vira suspeito.** Não basta consertar o produtor. O
+produtor honesto com consumidor surdo dá no mesmo número errado — só que agora com
+a aparência de auditado.
+
+#### A forma que escolhi, e por quê
+
+Renomeei `totalCostMicroUsd` → `knownCostMicroUsd` (e `costMicroUsd` →
+`knownCostMicroUsd` nos grupos), somando `unpricedCalls` e `unpricedModels`.
+Considerei a alternativa menos invasiva — manter o nome e só acrescentar o
+contador. Descartei: **um campo chamado `totalCost` que na verdade é o custo de um
+subconjunto mente no nome**, e quem escreve o próximo consumidor não vai ler o
+comentário. Custou 2 arquivos (`runtimeProbes.ts` era o único consumidor) e
+`RaioXRun` persiste findings, não a amostra crua — então não havia histórico para
+quebrar. Verifiquei antes de renomear.
+
+#### O que eu quase deixei passar
+
+`npx tsc --noEmit` deu **limpo com os testes ainda usando os campos antigos**.
+`tsconfig.json` exclui `src/**/*.test.ts`. Ou seja: **neste repositório, tsc verde
+não diz nada sobre teste.** Se eu tivesse parado no tsc, teria entregue teste
+comparando `undefined` e achado que estava tudo certo. Só o vitest pega.
+
+#### A varredura (item 4)
+
+Procurei `?? 0` e `Number(x) || 0` sobre custo/token/contagem em `src/`. A maioria
+esmagadora é `_sum.x ?? 0` do Prisma — e essa é **legítima**: soma de zero linhas é
+genuinamente zero. O critério que usei para separar: *o null significa "conjunto
+vazio" ou "valor desconhecido"?* Só o segundo é defeito.
+
+Achei **um** de verdade além do raio-x: `AIOrderService.ts:1002`,
+`response.usage?.prompt_tokens ?? 0`. Se o provedor não devolve `usage`, os tokens
+da iteração são desconhecidos, não zero — e o custo do turno sairia menor que a
+realidade, calado, no mesmo caminho de dinheiro. Passou a marcar `tokensUnknown` e
+gravar custo null.
+
+#### Sabotagens (todas confirmadas no arquivo antes de julgar)
+
+| Sabotagem | Linha | Efeito |
+|---|---|---|
+| `micro()` volta a mapear null→0 | `RaioXCollector.ts:131` | 3 vermelhos |
+| total esconde a própria lacuna | `runtimeProbes.ts:48` | 1 vermelho |
+| lacuna segue `PASS` | `runtimeProbes.ts:59` | 1 vermelho |
+| logger ignora contagem incompleta | `AIInteractionLogger.ts:59` | 1 vermelho |
+
+Metade legítima presa em todas: dia sem lacuna continua `PASS`, sem ressalva no
+texto e com `chamadasSemPreco: 0`. Sem isso a sonda viraria WARNING toda noite e
+em duas semanas ninguém leria o relatório.
+
+`npx tsc --noEmit` limpo · `npx vitest run` 2159 suítes / 6128 testes verdes.
+
+---
+
+## 2026-08-07 (3) · Sala dos Agentes — o SERVIÇO, e a contagem que devolvia 0 para o `garcom`
+
+Ordem do CEO, doutrina 20 do kit. Construí só o serviço; a tela é do outro
+especialista, contra o mesmo contrato (`src/services/agents/salaDosAgentes.types.ts`,
+que não toquei). Ponto de entrada: `getSalaDosAgentes()` em
+`src/services/agents/sala/index.ts`.
+
+### A armadilha, medida antes de codar
+
+Rodei um protótipo contra os 18 arquivos reais de `docs/agents/*/{oficina,vitrine}.md`
+antes de escrever a regra. Duas descobertas que mudaram o desenho:
+
+1. **`^## ` cego devolve 0 para o `garcom`.** A oficina dele não usa cabeçalho:
+   são blocos separados por régua começando com `2026-08-03 — **título**`. Sete
+   blocos, sete incidentes, contagem zero. É a mentira exata que esta tela existe
+   para não contar.
+2. **Data solta no meio da linha envenena a recência.** Um primeiro protótipo com
+   regex frouxa (`data em qualquer posição`) achou 12 "entradas" no meu próprio
+   oficina.md onde há 9 — pegou `05/08=78` e `2026-08-05.` no meio de parágrafo.
+   A regra ficou **ancorada no início** da linha da entrada.
+
+Solução: dois formatos NOMEADOS (`cabecalho`, `datado`) + `vazio` + `desconhecido`.
+Só `vazio` (arquivo existe, zero linhas de conteúdo) produz zero. `desconhecido`
+vira `naoMedido` carregando a primeira linha de conteúdo como evidência.
+Resultado real hoje: 11 oficinas, 11 reconhecidas, nenhuma em zero.
+
+### Duas coisas que eu ia entregar mentindo, e o smoke pegou
+
+- **"Dias desde a última entrada"** era a 3ª métrica. Quem registrou HOJE vale 0
+  → `zeroProvado` → a tela desenha **"—"**, o mesmo símbolo de quem nunca
+  registrou nada. Zero verdadeiro, leitura falsa. Troquei por **"Entradas nos
+  últimos 30 dias"**, onde zero significa literalmente "nada no mês" e o traço lê
+  certo. Lição: *não basta o estado da medida estar certo; o zero tem que
+  significar a mesma coisa que o símbolo que o representa.*
+- **Motor interno saía `naoMedido`.** `mock`/`local` são `billingUnit: "NONE"` —
+  custo zero **conhecido**. Escrever "não medido" ali ensina o dono a ignorar o
+  "não medido" dos outros cartões, que significa outra coisa. Virou `zeroProvado`.
+
+### O achado que vale mais que a tela
+
+`AIInteractionLog` tem **um único escritor**: `AIInteractionLogger.log`, chamado
+de `src/services/ai/AIOrderService.ts:1271`, sempre com `agentSlug: "waiter"`
+(`:1256`). Existem **outros quatro** caminhos que chamam OpenAI e não gravam nele:
+`WhatsAppReceptionistService`, `ChatSimService`, `AISimulatorService` e
+`brain/engines/OpenAIEngineAdapter`.
+
+Consequência que atravessa o módulo inteiro: **ausência de linha nunca vira
+`zeroProvado` para custo**. "A Anthropic custou zero em 30 dias" seria falso — o
+que sabemos é que nada daquele provedor chegou a um log que cobre 1 de 5
+caminhos. Está escrito em `lacunas`, com o arquivo:linha, e travado pelo teste
+`AIInteractionLog ainda tem UM único escritor` — que reprova no dia em que um
+segundo ponto de log entrar sem atualizar a frase.
+
+### Sabotagens (todas confirmadas por `diff` no arquivo ANTES de julgar)
+
+| Sabotagem | Onde | Efeito |
+|---|---|---|
+| custo sem atribuição → `zeroProvado()` | `montagem.ts:326` | 3 vermelhos |
+| contador ingênuo, só `^## ` | `contagemDeEntradas.ts:179` | 4 vermelhos (2 deles contra o arquivo real do `garcom`) |
+| formato desconhecido → `medido(0)` | `montagem.ts:239` | 1 vermelho |
+| `essencial: true` para todos | `montagem.ts:538` | 1 vermelho |
+| rótulo de métrica repetido nas duas populações | `montagem.ts:540` | 9 vermelhos |
+
+O roteiro (`sabota.sh`) aborta se o trecho alvo não existir e imprime o `diff`
+real antes de rodar — porque teste verde com sabotagem que não chegou ao arquivo
+é o modo de falha mais caro desta semana.
+
+**Metade legítima presa em todas:** `garcom` = 7 entradas, `interface` = 23,
+custo do `waiter` = US$ 0,0015 medido, não-Essencial = `false`. Sem elas,
+"não medido em tudo" seria uma implementação verde e uma tela inútil.
+
+### Dois portões de estilo que também são de verdade
+
+- `nenhum módulo da Sala usa ?? 0 / || 0` — varredura literal do próprio código.
+  Reprovou na primeira execução **contra o meu comentário** que explicava por que
+  o `?? 0` não existe ali. Passou a ignorar comentários: detector que barra o
+  texto que explica a regra é o carimbo que faz o time parar de comentar.
+- `a montagem é pura` — proíbe `prisma`, `node:fs` e `process.env` em
+  `montagem.ts`, `contagemDeEntradas.ts` e `amostra.ts`. É a trava contra o modo
+  de falha que já nos custou uma regra invisível: decisão morando junto do
+  encanamento obriga o teste a mockar o módulo inteiro.
+
+### O que ficou por fora, dito sem maquiagem
+
+- **`noArDesde` é `null` para os 12 agentes de desenvolvimento e para os 12 de
+  produto.** Nenhuma das duas populações registra data de criação: o registro de
+  perfis guarda `updatedAt`, e o perfil em `.claude/agents` é markdown sem data.
+  Usar a primeira entrada da oficina seria trocar "implantado em" por "primeiro
+  trabalho registrado". Está em `lacunas`.
+- **Estado dos agentes de produto ativos = `atencao`**, porque não dá para provar
+  que trabalharam. `EstadoAgente` não tem um quarto valor `desconhecido` e o
+  contrato é lei — não alterei. **Fica a pergunta para o Diretor:** vale propor
+  esse quarto estado a quem construiu o contrato? Hoje "atenção" carrega dois
+  significados (parado / não sei), separados só pelo texto da lacuna.
+- `agencia`, `experiencia` e `seguranca` não têm sala em `docs/agents` → três
+  `naoMedido` declarados, nunca zero. Sala nasce sob demanda; isso é agente novo,
+  não agente parado.
+
+### Verificação
+
+`npx tsc --noEmit` limpo · `npx vitest run` **6205 testes, 6205 verdes, 0
+vermelhos** (474 arquivos), lido do JSON. Meus três arquivos: 47 casos
+(`contagemDeEntradas` 11, `montagem` 26, `salaReal` 10).
+
+### Proposta de vitrine (promoção é do Diretor)
+
+**O zero certo pode ser lido errado — confira o SÍMBOLO, não só o estado.**
+`Medida` distingue "não medido" de "zero provado", e ainda assim a métrica
+"dias desde a última entrada" saía correta e mentia: quem registrou hoje vale 0,
+`zeroProvado` desenha "—", e o agente mais ativo da casa ficaria idêntico ao que
+nunca trabalhou. A escolha da GRANDEZA vem antes da escolha do estado — prefira a
+grandeza em que zero e "nada" significam a mesma coisa. Só apareceu porque
+imprimi a saída real dos 12 cartões antes de entregar; nenhum teste de tipo
+pegaria.
+— origem: Sala dos Agentes (serviço), 07/08/2026, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-07 — Corte dos quatro placeholders que duplicavam Essenciais
+
+**Pedido:** apagar `orchestrator`, `security-governance`, `ui-ux` e `qa-test` de
+`PLACEHOLDER_PROFILES` (`src/services/agents/defaultAgentProfiles.ts`), mantendo
+`manual-constitution`, `integration`, `branding`, `analytics-product`.
+
+### O portão que veio ANTES da remoção: o banco
+
+Instrução do CEO: se algum dos quatro tiver linha no banco, não apagar nada.
+**Não consegui verificar, e digo isso como fato, não como ressalva.** Três vias
+tentadas e as três fechadas:
+
+- `.env` aponta `DATABASE_URL` para `localhost:5432` (P1001, servidor não sobe);
+- `railway status` → *Unauthorized*, CLI não autenticada nesta sessão;
+- `GET /api/admin/agents/profiles/<slug>` em produção → **401** nos cinco slugs
+  testados (inclusive `waiter`, o controle). O `ADMIN_SECRET` local não é o de
+  produção.
+
+O que consegui provar é mais forte que a pergunta, e por isso segui: **a remoção
+não pode apagar linha nenhuma.** Os nove usos de `prisma.agentProfile` vivem
+todos em `AgentProfileService.ts` e **não existe `delete`/`deleteMany`** entre
+eles; `seedDefaultAgentProfiles` (`:294-319`) é upsert puro, sem passo de poda.
+Nenhum hook de deploy semeia agentes — `railway.toml` chama
+`scripts/migrate-deploy.sh` + `scripts/start-production.sh`, e o segundo só
+auto-semeia guias do manual e a padaria-vitrine. Logo: tirar do array só faz
+parar de fazer upsert. Reversível por `git revert`, sempre.
+
+**A consequência que sobra e NÃO se fecha no código** — e é o motivo de eu não
+declarar isto encerrado: se existir linha em produção **e** alguém ligar
+`AGENT_PROFILE_DB_ENABLED=true`, `getAdminAgentProfiles` (`:136`) devolve as
+linhas do banco **sem intersectar com o registro de código**. Os quatro nomes
+voltariam à tela como fantasma, e o teste que escrevi não pega — ele olha o
+código. Zumbi de banco é conserto de banco.
+
+### Onde os quatro estavam referenciados (varri, não confiei na lista)
+
+`grep` por aspas exatas nos quatro slugs em `src/` deu **16 ocorrências**, e a
+lista do CEO estava incompleta em um ponto:
+
+- `_components.tsx:289-295` — quatro abas em `AGENT_TAB_ORDER`. Órfãs: limpei.
+  (`AgentsDashboard.tsx:40` já filtra aba sem perfil, então a tela não quebrava —
+  mas quatro nomes mortos no arquivo que se lê como mapa é lixo pior que erro.)
+- `_components.tsx:596` — `isSecurity`. Limpei, junto com o render em `:634`.
+- **`_components.tsx:482` — `SecurityCallout`, que o CEO não listou.** Componente
+  inteiro de 29 linhas servindo só `security-governance`. Ficaria compilando,
+  passando lint e nunca renderizando. Removido, com comentário apontando para o
+  Essencial `seguranca`.
+- `agents.test.ts:29-35` — a lista de slugs esperados. Virou o portão (abaixo).
+
+**O que NÃO toquei, por ser outro conceito com o mesmo nome:**
+`manualV01Content.ts:600` e `api/admin/manual/seed/route.ts:59` têm
+`slug: "ui-ux"`, mas são **capítulo do Manual Operacional** — gravam em
+`prisma.operationalManualChapter` (`route.ts:135,145,165`), tabela diferente de
+`agentProfile`. Coincidência de nome, não referência. Mexer ali seria estrago
+colateral.
+
+Também deixei intacto o enum `AgentArea` em `prisma/schema.prisma:3003`, que
+ainda declara `ORCHESTRATOR/SECURITY/UI_UX/QA`. Tirar valor de enum é migração —
+irreversível, fora da minha faixa, e o `UI_UX` ainda serve o capítulo do manual.
+`agentGroupOf` (`_components.tsx:103`) cai no `default`, sem órfão.
+
+### O portão, nas duas metades
+
+Em `agents.test.ts`: `APOSENTADOS` carrega **slug + qual Essencial ele duplicava**
+de propósito — teste que só lista nomes proibidos vira enigma em dois meses, e
+quem não entende a regra a remove em vez de obedecê-la. Três casos novos:
+
+1. **reprova** — cada um dos quatro voltando ao registro (`it.each`);
+2. **passa** — os quatro mantidos continuam lá. Sem ela, apagar os oito deixaria
+   o teste verde e o estrago seria maior que o problema (guardrail 5);
+3. **elenco exato** (`toEqual` ordenado) — `toContain` não pega slot novo
+   entrando calado.
+
+Em `salaReal.test.ts`, um bloco que prova a **cadeia inteira** contra o registro
+real: registro → `montarSalaDosAgentes` → `estado` → `estaEmOperacao` → número.
+`_estados.test.ts` já provava o predicado, mas **com elenco fabricado** — nunca
+tocava o registro. Era exatamente o buraco da pergunta do CEO ("o contador está
+lendo de outro lugar?").
+
+### Sabotagem verificada com grep ANTES de julgar — e uma delas me ensinou algo
+
+Três injeções, cada uma confirmada no arquivo por `grep -n` antes de rodar:
+
+| Sabotagem | grep | Reprovou |
+|---|---|---|
+| recria `orchestrator` | `:453` | 2 casos (`não volta` + elenco exato) |
+| apaga `branding` (mantido) | 0 ocorrências | 3 casos (inclui a metade que passa) |
+| recria `qa-test` | `:459` | 2 casos da Sala (contador + fantasma) |
+
+**O que aprendi na sabotagem A:** só o caso do `orchestrator` reprovou dentro do
+`it.each` — os outros três passaram, porque continuavam ausentes. Isso está
+certo, mas me mostrou que um `it` único somando os quatro teria dado a mesma
+"falha vermelha" escondendo **qual** voltou. `it.each` por slug é o que faz o
+alerta carregar a própria evidência (guardrail 6) num teste de lista.
+
+### O número acompanhou
+
+Sala com o registro real: **4 fora de operação** (`analytics-product`,
+`branding`, `integration`, `manual-constitution`), não 8. A metade que passa
+também está lá — 4 **em** operação (`crm`, `suporte-tecnico`, `waiter`,
+`whatsapp`) e `fora + dentro === total`, senão um cartão sumiria da tela sem
+avisar. O contador lê do registro; não é lista paralela.
+
+### Verificação
+
+`npx tsc --noEmit` limpo (exit 0) · `npx next lint` nos dois arquivos de código:
+sem aviso · `npx vitest run --reporter=json` lido do JSON:
+**2184 arquivos, 2184 verdes, 0 vermelhos; 6227 testes, 6227 passaram, 0
+falharam, 0 pendentes** (`success: true`). Escopo dos agentes antes/depois:
+152 → 158 testes (+6 do portão), depois 51 verdes na Sala.
+
+Não commitei — o CEO commita.
+
+### Proposta de vitrine (promoção é do Diretor)
+
+**Portão de remoção precisa de três metades, não duas.** A que reprova o item
+voltando e a que prova que os mantidos ficaram ainda deixam passar o pior caso:
+o slot NOVO que entra calado. `toContain` é cego para excesso. Só o `toEqual`
+sobre a lista ordenada obriga quem adiciona a passar pelo comentário que explica
+a regra — e é ali, e não no teste, que a regressão de dois meses é evitada.
+— origem: corte dos quatro placeholders duplicados, 07/08/2026
+
+**Verificar reversibilidade vale mais que responder à pergunta que foi feita.**
+O CEO perguntou "tem linha no banco?" e eu não consegui responder — três vias
+fechadas. Mas a pergunta existia para proteger contra irreversibilidade, e essa
+eu consegui provar direto: nenhum `delete` no serviço, seed sem poda, nenhum
+hook de deploy. Quando o portão pedido não pode ser fechado, procure o que ele
+protege — às vezes há prova mais forte do lado do mecanismo. O que **não** se
+faz é declarar o portão passado por não ter conseguido olhar (guardrail 2): o
+zumbi de banco com o flag ligado continua aberto e está escrito acima.
+— origem: mesmo bloco

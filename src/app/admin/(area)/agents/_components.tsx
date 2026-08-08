@@ -283,16 +283,16 @@ export interface AgentTabDef {
   label: string;
 }
 
+// `orchestrator`, `security-governance`, `ui-ux` e `qa-test` saíram em
+// 07/08/2026 junto com os perfis (ver defaultAgentProfiles.ts). O filtro em
+// AgentsDashboard.tsx já esconderia a aba órfã, mas deixá-la aqui manteria
+// quatro nomes que não existem mais num arquivo lido como se fosse o mapa.
 export const AGENT_TAB_ORDER: AgentTabDef[] = [
   { key: "geral",               label: "Geral" },
   { key: "waiter",              label: "Waiter" },
-  { key: "orchestrator",        label: "Orquestrador" },
-  { key: "security-governance", label: "Segurança" },
   { key: "whatsapp",            label: "WhatsApp" },
   { key: "crm",                 label: "CRM" },
-  { key: "ui-ux",               label: "UI/UX" },
   { key: "manual-constitution", label: "Manual" },
-  { key: "qa-test",             label: "QA" },
   { key: "integration",         label: "Integrações" },
   { key: "branding",            label: "Branding" },
   { key: "analytics-product",   label: "Analytics" },
@@ -479,35 +479,9 @@ function CrmCallout() {
   );
 }
 
-function SecurityCallout() {
-  return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-5">
-      <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-red-700">
-        Guardião de Segurança e Governança
-      </h2>
-      <p className="mb-3 text-sm leading-relaxed text-gray-800">
-        Camada <strong>mandatória futura</strong> que valida qualquer execução automatizada antes de
-        ela acontecer. Hoje é um rascunho de arquitetura, mas seu papel já está reservado no Build OS.
-      </p>
-      <ul className="grid grid-cols-1 gap-1.5 text-sm text-gray-800 sm:grid-cols-2">
-        {[
-          "Poder de veto sobre ações de risco",
-          "Classificação de risco de cada operação",
-          "Proteção de segredos e credenciais",
-          "Controle de permissões e escopo",
-          "Segurança em produção (production safety)",
-          "Defesa contra prompt injection",
-          "Portões de aprovação (approval gates)",
-        ].map((line) => (
-          <li key={line} className="flex gap-2">
-            <span className="text-red-500">✓</span>
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// SecurityCallout foi removido em 07/08/2026: só existia para o perfil
+// `security-governance`, que saiu do registro. O trabalho que ele descrevia
+// (veto, segredos, permissões) é do Essencial `seguranca`, em .claude/agents.
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
@@ -593,7 +567,6 @@ export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
   }
 
   const isWaiter   = agent.slug === "waiter";
-  const isSecurity = agent.slug === "security-governance";
   const isCrm      = agent.slug === "crm";
   const maturity   = maturityOf(agent);
   const isPlanned  = maturity === "planned"; // empty placeholder (no content yet)
@@ -629,9 +602,8 @@ export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
         </div>
       )}
 
-      {/* ── Agent-specific callouts (Waiter/CRM/Security) ── */}
+      {/* ── Agent-specific callouts (Waiter/CRM) ── */}
       {isWaiter    && <WaiterCallout />}
-      {isSecurity  && <SecurityCallout />}
       {isCrm       && <CrmCallout />}
 
       {/* ── Bloco: Identidade ── */}

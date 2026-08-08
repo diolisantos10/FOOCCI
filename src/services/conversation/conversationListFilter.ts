@@ -41,7 +41,18 @@ export interface ConversationListFilters {
    *  conversations — those permanently locked out of the AI. Server-side so the
    *  Staff tab still finds classified conversations older than the loaded window. */
   staff?:   string | null;
+  /** Any truthy value restricts results to the Instagram channels (Direct +
+   *  comentários). Mesmo motivo de `staff` e `crm`: a aba "📷 Instagram" filtrava
+   *  no NAVEGADOR, sobre as 100 conversas já carregadas. Bastava o WhatsApp
+   *  empurrar o Instagram para fora dessa janela — o que 15 dias de movimento
+   *  fazem sozinhos — para a aba dizer "Nenhuma conversa encontrada" sobre
+   *  conversas que existiam no banco. O parâmetro é booleano (e não `channel`)
+   *  porque a aba precisa de DOIS canais de uma vez. */
+  instagram?: string | null;
 }
+
+/** Os canais que a aba "📷 Instagram" da Central agrupa. */
+export const INSTAGRAM_CHANNELS: Channel[] = [Channel.INSTAGRAM_DIRECT, Channel.INSTAGRAM_COMMENT];
 
 export function buildConversationWhere(
   restaurantId: string,
@@ -49,7 +60,7 @@ export function buildConversationWhere(
   /** Customers with ≥1 CRM send log (CampaignExecution/CRMActionLog), from the route. */
   crmRecipientCustomerIds?: string[],
 ): Prisma.ConversationWhereInput {
-  const { status, channel, search, crm, staff } = filters;
+  const { status, channel, search, crm, staff, instagram } = filters;
 
   // Composable sub-filters live in AND so multiple OR groups never clash.
   const and: Prisma.ConversationWhereInput[] = [];
@@ -59,6 +70,11 @@ export function buildConversationWhere(
   // reclassification back to "Cliente", so it is the canonical Staff-bucket flag.
   if (staff) {
     and.push({ aiLocked: true });
+  }
+
+  // Aba "📷 Instagram" — busca no banco, não no navegador.
+  if (instagram) {
+    and.push({ channel: { in: INSTAGRAM_CHANNELS } });
   }
 
   if (crm) {

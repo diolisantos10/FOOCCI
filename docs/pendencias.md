@@ -1,6 +1,42 @@
 # Pendências — o que está aberto
 
-> Última atualização: 06/08/2026, tarde.
+> Última atualização: 07/08/2026, noite.
+
+## 🏛️ 07/08 — A Sala dos Agentes, e o custo de IA que era chute
+
+### O que está esperando UMA PALAVRA do CEO
+
+| # | O que | Por que só ele decide |
+|---|---|---|
+| 1 | **Elenco obrigatório do kit** — `qualidade`, `cerebro`, `interface`, `experiencia` | Vira regra de todos os projetos. Escrito como **proposta** em `dioli-brain-kit/docs/21-elenco-obrigatorio.md` |
+| 2 | **Criar o especialista `seguranca`** | Recomendação minha. Hoje **ninguém responde** pelas portas abertas listadas abaixo |
+| 3 | **Construir a Sala dos Agentes** no `/admin` | Maquete aprovada. Falta autorizar a obra |
+| 4 | **Escolha de modelo por agente** | Hoje o modelo é **por restaurante** e só aceita 2 da OpenAI. Virar "um por agente" é obra de verdade, não botão |
+
+### O que foi entregue e está no ar
+
+- **Kit oficial** — duas doutrinas com push feito em `dioli-brain-kit`:
+  `20-sala-dos-agentes.md` (obrigatória em todo projeto) e `21-elenco-obrigatorio.md`.
+  ⚠️ **Não consigo avisar os outros Diretores** — cada conversa é uma ilha. Quem
+  aciona é o CEO ou o Diretor Geral. Na prática são só Foocci e Dioli Digital
+  acordados.
+- **Branch `claude/canais-central-canal-morto`** — 3 commits, `tsc` limpo,
+  **6128/6128** testes. **Sem PR aberto ainda.**
+  1. A Central passa a dizer quando o canal está morto (Instagram)
+  2. Custo de IA deixa de ser chute: preço por modelo + `agentSlug` no registro
+  3. O raio-x para de converter "não sei o preço" em "custou zero"
+
+### 🟡 O que se descobriu sobre medir custo
+
+- **Por IA:** dá, e **vale para trás** — o custo é recalculado a partir dos tokens gravados.
+- **Por agente:** só **para frente**. Linha antiga não tem slug e fica em "não atribuído". Backfill seria adivinhação.
+- **A armadilha consertada:** a tabela de preços conhecia 2 modelos da OpenAI e cobrava
+  **todo o resto ao preço deles**. Não custou nada ainda porque uma trava acima só
+  deixa passar esses dois — mas o roteador já tem Claude e Gemini prontos, e o
+  primeiro desvio de tráfego erraria até **8x**, calado.
+- **O projeto NÃO usa DeepSeek.** O nome só aparece em scanner e lista de import proibido.
+
+---
 
 ## 🌇 O bloco da tarde de 06/08 — quatro PRs abertos, e um P0 no portão da escada
 

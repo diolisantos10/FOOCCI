@@ -20,6 +20,7 @@ import {
   toView,
 } from "@/services/instagram/InstagramConfigService";
 import { INSTAGRAM_MODES, INSTAGRAM_SCOPES } from "@/services/instagram/types";
+import { CHANNEL_SILENCE_ATTENTION_MS, instagramCardStatus } from "@/services/channels/channelHealth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,14 +52,31 @@ export async function GET(req: NextRequest) {
   };
 
   // Status for the Integrations Center card (lojista-friendly).
-  let status: "unconfigured" | "configured" | "active" | "error" | "pending_validation" = "unconfigured";
-  if (view) {
-    if (view.lastError) status = "error";
-    else if (view.paused) status = "configured";
-    else if (view.enabled && view.mode !== "DISABLED" && view.lastWebhookAt) status = "active";
-    else if (view.enabled && view.mode !== "DISABLED") status = "pending_validation";
-    else if (view.tokenConfigured || view.instagramBusinessAccountId || view.facebookPageId) status = "configured";
-  }
+  //
+  // ⚠️ O selo tem PRAZO DE VALIDADE. Até 07/08/2026 bastava `lastWebhookAt` ser
+  // não-nulo para o cartão ficar verde: um carimbo de quinze dias valia igual a
+  // um de um minuto, e foi assim que o Instagram passou treze dias "Ativo" com o
+  // canal morto. Agora, silêncio acima do limite vira **"attention"**.
+  //
+  // "attention" NÃO é "error", e a diferença é deliberada (guardrail 5): um
+  // restaurante de baixo movimento pode passar dois dias sem um Direct de forma
+  // perfeitamente legítima. Vermelho continua exigindo um fato positivo de falha
+  // — `lastError`. Trocar um selo que mente "tudo bem" por um alarme que mente
+  // "quebrou" seria a proteção pior que o problema.
+  const now = new Date();
+  const lastWebhookAgeMs = view?.lastWebhookAt ? now.getTime() - new Date(view.lastWebhookAt).getTime() : null;
+  const webhookIsStale = lastWebhookAgeMs !== null && lastWebhookAgeMs > CHANNEL_SILENCE_ATTENTION_MS;
+  const status = instagramCardStatus({
+    configured: view !== null,
+    enabled: view?.enabled ?? false,
+    paused: view?.paused ?? false,
+    mode: view?.mode ?? "DISABLED",
+    lastError: view?.lastError ?? null,
+    lastWebhookAt: view?.lastWebhookAt ?? null,
+    tokenConfigured: view?.tokenConfigured ?? false,
+    hasAccountIds: !!(view?.instagramBusinessAccountId || view?.facebookPageId),
+    now,
+  });
 
   return NextResponse.json({
     data: {
@@ -86,6 +104,9 @@ export async function GET(req: NextRequest) {
       instagramLoginMissingEnv: getInstagramLoginEnvStatus(req.nextUrl.origin).missing,
       webhookUrl: wbUrl,
       lastWebhookAt: view?.lastWebhookAt ?? null,
+      // Para a tela poder dizer "não chega nada há X" ao lado da data, em vez de
+      // mostrar um carimbo antigo com ar de normalidade.
+      webhookIsStale,
       lastError: view?.lastError ?? null,
       allowlistedExternalUserIds: config?.allowlistedExternalUserIds ?? [],
       appId: view?.appId ?? null,
