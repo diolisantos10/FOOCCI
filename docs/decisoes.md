@@ -11,6 +11,55 @@
 
 ---
 
+## 2026-08-08 — Todos os repositórios da companhia viram privados
+
+**Decisão do CEO:** *"Todos privados, senão vão roubar nossas ideias."*
+
+**Como apareceu:** ao construir o espelho da doutrina dentro do projeto, o
+especialista mediu antes de ligar e achou o que mudava tudo — o
+`dioli-brain-kit` era privado e o **`FOOCCI` era público**. Espelhar teria
+publicado a doutrina inteira da companhia num repositório aberto: a escada de
+governança, o processo do cofre de credencial, o histórico de incidentes (que
+cita uma cliente pelo nome) e a lista de quem está vivo. Ele montou a máquina
+toda, provou contra o espelho real, **removeu os arquivos e não ligou.**
+Entregar com aquilo na árvore seria plantar a armadilha e chamar de entrega.
+
+**O que estava exposto, e é erro do Diretor:** em 07-08/08 eu escrevi, no perfil
+do agente `seguranca` e em `docs/pendencias.md`, **a lista nominal das portas de
+segurança abertas do Foocci** — qual webhook não tem autenticação, qual provedor
+de pagamento aceita cobrança forjada. Escrevi para o agente novo saber o que
+consertar. Num repositório público, isso é mapa de ataque pronto. Eu sabia que o
+log do Actions era público e tratei disso; **não conferi a visibilidade do
+próprio repositório**. Presumi.
+
+**Estado antes → depois** (medido pelo campo `private` da API, não por
+impressão):
+
+| Repositório | Antes | Depois |
+|---|---|---|
+| `FOOCCI` | público | **privado** |
+| `cityjobs` | público | **privado** |
+| `diolidigital` | público | **privado** |
+| `Foocci_Manager` | público | **privado** |
+| `control_room` | público | **privado** |
+| `dioli-brain-kit` | privado | privado |
+
+Conferido depois: `foocci.com.br/api/health` continua respondendo, com o
+`commitSha` do merge — fechar não derrubou produção.
+
+**A regra que fica:** repositório de produto e de doutrina nasce **privado**. Já
+estava escrito em `dioli-brain-kit/docs/04-seguranca.md` e ninguém tinha
+conferido se a realidade batia com o papel. **Regra escrita que ninguém mede é
+regra que não existe** — e essa é a mesma família do "sem portão = reprovado".
+
+**Aprendizado do Diretor, para não repetir:** antes de escrever num arquivo
+versionado *qualquer coisa que ajude um atacante*, a pergunta é **"quem consegue
+ler este repositório?"** — e a resposta tem que ser medida, não presumida. A
+lista de vulnerabilidades continua no histórico do git; fechar o repositório
+resolve o acesso, não apaga o passado.
+
+---
+
 ## 2026-08-08 — O que sobe para o CEO, e o que o Diretor resolve sozinho
 
 **Decisão do CEO, nas palavras dele:** *"Eu sou do marketing, eu não entendo de

@@ -120,4 +120,6 @@ ordem em que costumam aparecer:
 em commit, nem "só para conferir". Nome da variável e estado (existe / não
 existe / expirou) — nunca o conteúdo.
 
-O log do GitHub Actions deste repositório é **público**.
+Este repositório é **privado** desde 08/08/2026 (decisão do CEO). Isso reduz o
+estrago, **não** dispensa a regra: segredo em log ou em commit continua vazando
+para todo mundo que tem acesso, e o acesso muda sem aviso.
