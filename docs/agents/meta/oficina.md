@@ -762,3 +762,108 @@ número seguem NÃO MEDIDOS**. Não vira "provavelmente verde".
   `131049`, `131050`, `132015` e `135000` chegam depois, por webhook de status.
   Prompt é aviso, código é trava — e aqui a trava está no lugar errado.
   Proveniência: `CRMWhatsAppBudgetPlanner.ts:409` × `webhooks/meta/whatsapp/route.ts:118-131`.
+
+## 2026-08-08 · Instagram fora do ar: `code 100` não é token vencido, e a faixa pedia ao lojista uma ação que não conserta nada
+
+**Pedido do Diretor:** dois defeitos declarados na mesma faixa vermelha em produção —
+token de curta duração (`code 100`) e conta não inscrita no webhook. Diagnóstico com
+prova, conserto do que for código, e a fronteira "é do aplicativo ou é nosso?".
+
+### 1 · O que MEDI (e é a peça nova desta sessão)
+
+Sondas `GET` puras, sem credencial, sem efeito, contra o próprio endpoint da troca
+`https://graph.instagram.com/access_token?grant_type=ig_exchange_token` (08/08):
+
+| Pedido | Resposta |
+|---|---|
+| sem `client_secret` | **190** `IGApiException` "Invalid OAuth 2.0 Access Token" |
+| sem `access_token` | **190** `IGApiException` |
+| `access_token` inválido | **190** `OAuthException` "Cannot parse access token" |
+| `grant_type` ausente / errado / `fb_exchange_token` | **190** (o token é validado ANTES) |
+| caminho versionado `/v21.0/access_token` | **190** (versão é aceita — não é isso) |
+
+**Conclusão que isto autoriza, e só ela:** naquele endpoint **credencial errada e token
+morto respondem 190**. Logo o `code 100` da faixa **não é** "o token venceu" nem "a chave
+secreta está errada" — as duas leituras caem por medição, não por opinião. Sobra a
+família **PARÂMETRO**: a Meta recusou o *pedido*, e repetir o mesmo pedido devolve a
+mesma resposta. Isso bate com o registro de 06/08 (a rede de 5 tentativas em ~30s não
+resolveu → a falha é sistemática, não transitória).
+
+**O que NÃO consegui medir:** qual parâmetro. Toda sonda sem token real morre no 190
+antes de chegar à validação do pedido, e não tenho credencial de produção
+(`ADMIN_SECRET` local → **HTTP 401** em `…/instagram/env-diagnostic`, confirmando de
+novo o registro de 06/08). **Guardrail 1: declaro a lacuna, não a preencho.**
+
+### 2 · A fronteira do webhook — a pergunta mais importante do despacho
+
+São **duas camadas diferentes**, e só uma é nossa:
+
+| Camada | Chamada | Quem faz | Estado |
+|---|---|---|---|
+| **Aplicativo** | `GET/POST /{app-id}/subscriptions` (`object=instagram`, `fields=messages`, callback) | configuração do app dentro da Meta | ✅ **ativo com `messages`**, verificado ao vivo em 05/08 (oficina, l. 297-301) — **não é o problema** |
+| **Conta** | `POST /{ig-user-id}/subscribed_apps?subscribed_fields=messages` | **chamada NOSSA**, `instagramLoginOAuth.ts:230-243`, com o token do lojista | ❌ falhou nesta conexão |
+
+**Resposta:** a inscrição que falhou é **feita pelo Foocci, por conta** — é código, não
+configuração do app. **Mas** ela só passa se o aplicativo tiver a permissão
+`instagram_business_manage_messages` concedida, o que é App Review. Quem discrimina é o
+**código do erro**: 190 → token do lojista · (#200)/(#10) → App Review (ato do CEO) ·
+100 → pedido nosso. O texto completo desse erro **está gravado no banco desde 05/08**
+(`metadata.webhookSubscribeError`) e **nenhuma rota o devolvia** — evidência morta, já
+registrada em 06/08 §2 como correção proposta e nunca feita. Feita agora.
+
+⚠️ **Não toquei em `/{app-id}/subscriptions`.** É a camada comum com o WhatsApp, que está
+no ar. Mesma decisão de 05/08.
+
+### 3 · O que consertei (arquivo:linha)
+
+| Onde | O quê |
+|---|---|
+| `src/services/meta/metaGraphErrorFamily.ts` (**novo**) | separa CREDENCIAL × PERMISSAO × PARAMETRO × LIMITE × INDISPONIVEL × DESCONHECIDA, com `reconnectCanFix` / `retryCanFix` / `ownedBy`. O classificador que existia (`MetaAppHealthService.explainGraphError:81`) cobre 190/4/17/803, **não cobre 100** e nunca foi aplicado ao Instagram |
+| `instagramLoginOAuth.ts:186-208` | a troca preserva `type`, `error_subcode` e `fbtrace_id` — eram descartados, e são exatamente os campos que separam as famílias. E **para de insistir** quando o erro não muda com a repetição (antes: 5× em ~30s dentro do redirecionamento do lojista, para chegar ao mesmo lugar) |
+| `instagramLoginOAuth.ts:239-249` | o `subscribe` também classifica antes de gravar |
+| `instagramLoginOAuth.ts:379-400` | **a frase do lojista sai do classificador**: "Reconecte" só aparece quando reconectar resolve |
+| `instagramLoginOAuth.ts:~425` | grava `metadata.reconnectCanFix` — estado real, não suposto |
+| `channelHealth.ts:28-34,146-166` | **regra 4**: o botão da faixa deixa de prometer "Reconectar" quando já se sabe que não resolve; `null` (não sei) **não** vira promessa |
+| `InstagramConfigService.ts:110-146` | `toView` passa a derivar `reconnectCanFix` — inclusive **relendo a evidência crua já gravada**, para valer na conexão que está quebrada AGORA e não só nas futuras |
+| `graph-check/route.ts:82-96` | devolve `longLivedExchangeError`, `webhookSubscribedAt`, `webhookSubscribeError` **+ a família já classificada**. Fim da evidência morta |
+| `channel-health/route.ts:38-50` · `integrations/instagram/route.ts` · `InstagramIntegrationClient.tsx:331-352` | a conclusão trafega até as duas telas; **nenhuma credencial trafega** |
+
+### 4 · O portão
+
+- **3 sabotagens**, cada uma confirmada por `git diff` **antes** de julgar: `code 100 →
+  CREDENCIAL`, faixa volta a `action: "Reconectar"` fixo, e remoção do curto-circuito do
+  retry. → **8 testes reprovaram**; sem elas, **67/67 verdes**.
+- **A sabotagem pegou um defeito meu:** o formato de evidência que eu passei a gravar
+  (`… · code 100 · type …`) **não era lido de volta** por `extractMetaCode` — voltava
+  `DESCONHECIDA`. Era o mesmo buraco de antes com outra roupa: gravado e ilegível.
+  Corrigido em `metaGraphErrorFamily.ts:101` e travado por um teste de **ida e volta**.
+- `npx tsc --noEmit` **limpo** · suíte completa **6316 verdes, 0 vermelhos** (JSON lido,
+  não a última linha do terminal).
+
+### 5 · O que NÃO fiz, de propósito
+
+- Não rotacionei nem imprimi segredo nenhum. Só nomes de variável.
+- Não fiz nenhuma chamada que crie, altere ou apague recurso na Meta. Só `GET` sem efeito.
+- Não mexi em permissão, App Review nem em `/{app-id}/subscriptions` — **é o mesmo
+  aplicativo do WhatsApp**, e o WhatsApp está atendendo restaurante agora.
+- Não alterei o fluxo de conexão: a troca continua tentando, continua guardando o token
+  curto como fallback, e a conexão continua se formando. Mudou **quando ela para de
+  insistir** e **o que ela diz**.
+- **Ponto de reversão:** todo o bloco é um commit só em `claude/instagram-token-e-webhook`.
+  Reverter o commit devolve o comportamento anterior por inteiro; nada foi migrado, nenhum
+  dado de cliente foi tocado, nenhuma variável de ambiente mudou.
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **Naquele endpoint, 190 é credencial e 100 não é.** Sonda GET sem credencial descobre a
+  taxonomia de erro de um endpoint da Meta sem tocar em produção — e derruba "o token
+  venceu" como diagnóstico. Proveniência: 11 sondas em 08/08, cabeçalho de
+  `metaGraphErrorFamily.ts`.
+- **Alerta que pede ação humana precisa provar que a ação resolve.** A faixa mandou
+  reconectar três vezes (25/07, 04/08, 05/08) para um defeito que não estava na conexão.
+  Agora `reconnectCanFix` é mecanismo, não combinado (guardrail 4).
+- **Inscrição de webhook tem DUAS camadas.** App (`/{app-id}/subscriptions`, config da
+  Meta, ✅ ok) e conta (`/{ig-user-id}/subscribed_apps`, chamada nossa). Confundir as
+  duas manda o CEO ao painel da Meta para consertar código nosso.
+- **Formato que se grava tem de ser formato que se lê.** Evidência gravada sem teste de
+  ida e volta vira `DESCONHECIDA` na releitura. Pego pela própria sabotagem.

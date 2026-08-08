@@ -154,8 +154,10 @@ export function evaluateInstagramHealth(input: InstagramHealthInput): ChannelHea
     items.push({
       ...base,
       level: "down",
-      headline: `A conexão do Instagram está com problema e as mensagens não estão chegando. `, // SABOTAGEM-2
-      action: "Reconectar", // SABOTAGEM-2
+      headline: naoAdiantaReconectar
+        ? `A conexão do Instagram está com problema e as mensagens não estão chegando. Refazer o login NÃO resolve este caso — o conserto é do lado da Foocci. ${lastError}`
+        : `A conexão do Instagram está com problema e as mensagens não estão chegando. ${lastError}`,
+      action: naoAdiantaReconectar ? "Ver detalhes" : "Reconectar",
       silentHours: lastWebhookAt ? Math.floor((now.getTime() - lastWebhookAt.getTime()) / (60 * 60 * 1000)) : null,
     });
   } else if (lastWebhookAt === null) {

@@ -112,6 +112,26 @@ describe("extractMetaCode — ler o que JÁ está gravado em produção", () => 
     expect(extractMetaCode("(#200) Permissions error")).toBe(200);
   });
 
+  it("lê o formato que ESTE módulo grava: `… · code 100 · type …`", () => {
+    // Sem isto, a evidência que nós mesmos escrevemos no banco voltava como
+    // DESCONHECIDA na releitura — gravada e ilegível. Foi a sabotagem que pegou.
+    const evidencia = "Invalid parameter · code 100 · type OAuthException · fbtrace ABC";
+    expect(extractMetaCode(evidencia)).toBe(100);
+    expect(classifyMetaGraphError(evidencia).family).toBe("PARAMETRO");
+  });
+
+  it("o texto gravado FAZ ida e volta: classificar → guardar → reclassificar dá o mesmo", () => {
+    // O ciclo real: a Meta responde, gravamos `evidence`, e horas depois a tela lê
+    // aquela string. Se as duas pontas discordarem, a faixa mente de novo.
+    for (const [code, familia] of [[100, "PARAMETRO"], [190, "CREDENCIAL"], [200, "PERMISSAO"], [4, "LIMITE"]] as const) {
+      const ida = classifyMetaGraphError({ message: "erro qualquer", code, type: "OAuthException" });
+      const volta = classifyMetaGraphError(ida.evidence);
+      expect(ida.family).toBe(familia);
+      expect(volta.family).toBe(familia);
+      expect(volta.reconnectCanFix).toBe(ida.reconnectCanFix);
+    }
+  });
+
   it("sem código no texto devolve null — e não inventa um", () => {
     expect(extractMetaCode("deu ruim")).toBeNull();
   });

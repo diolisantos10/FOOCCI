@@ -197,7 +197,7 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
       // Insistir num erro que não muda com a repetição é gastar ~30s do redirecionamento
       // do lojista para chegar ao mesmo lugar. Só continua tentando o que pode mudar:
       // limite, indisponibilidade e — por guardrail 1 — o que não soubemos classificar.
-      if (false) { // SABOTAGEM-3
+      if (!classified.retryCanFix) {
         console.error(`[ig-oauth] longLived: erro NÃO repetível (${classified.family}) — parando na tentativa ${attempt}`);
         break;
       }

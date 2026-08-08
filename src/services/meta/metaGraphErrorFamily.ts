@@ -91,9 +91,14 @@ const INDISPONIVEL = new Set([1, 2]);
  */
 export function extractMetaCode(raw: string): number | null {
   const m =
-    /\(code (\d+)\)/.exec(raw) ??      // formato que o nosso próprio código gravava
+    /\(code (\d+)\)/.exec(raw) ??      // formato que o nosso código gravava ANTES desta correção
     /\(#(\d+)\)/.exec(raw) ??          // formato nativo da Meta: "(#200) Permissions error"
-    /"?code"?\s*[:=]\s*(\d+)/.exec(raw);
+    /"?code"?\s*[:=]\s*(\d+)/.exec(raw) ??
+    // O formato que `classifyMetaGraphError` grava AGORA: "… · code 100 · type …".
+    // Sem esta linha o texto que nós mesmos escrevemos no banco voltava como
+    // DESCONHECIDA na releitura — a evidência ficava gravada e ilegível, que é o
+    // mesmo buraco de antes com outra roupa. Pego pelo teste de sabotagem.
+    /\bcode (\d+)\b/.exec(raw);
   return m ? Number(m[1]) : null;
 }
 
@@ -103,7 +108,7 @@ function familyOf(code: number | null, raw: string): MetaErrorFamily {
     if (PERMISSAO.has(code)) return "PERMISSAO";
     if (LIMITE.has(code)) return "LIMITE";
     if (INDISPONIVEL.has(code)) return "INDISPONIVEL";
-    if (code === 100) return "CREDENCIAL"; // SABOTAGEM-1
+    if (code === 100) return "PARAMETRO";
   }
   // Sem código, só o texto. Padrões que a Meta usa de forma estável.
   if (/expired|session has expired|invalid oauth|access token/i.test(raw)) return "CREDENCIAL";
