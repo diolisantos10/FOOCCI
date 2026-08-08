@@ -32,7 +32,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const parsed = updateOrderStatusSchema.safeParse(body);
     if (!parsed.success) return badRequest("Validation failed", parsed.error.flatten());
 
-    const result = await OrderService.updateStatus(ctx.restaurantId, params.id, parsed.data);
+    // ctx.userId é quem está agindo: vira o carimbo alarmAckAt/alarmAckByUserId,
+    // que é o que cala o som do pedido em TODA aba e TODO aparelho.
+    const result = await OrderService.updateStatus(ctx.restaurantId, params.id, parsed.data, ctx.userId);
     if (!result.ok) {
       if (result.status === 404) return notFound(result.error);
       return badRequest(result.error);

@@ -91,6 +91,9 @@ export async function POST(
       data: {
         status: ["PENDING", "AWAITING_PAYMENT"].includes(order.status) ? "CONFIRMED" : order.status,
         notes: order.notes ? `${order.notes}\n${noteAppend}` : noteAppend,
+        // Confirmar o pagamento na mão é agir sobre o pedido: cala o alarme em
+        // toda aba e todo aparelho (só o primeiro carimbo vale).
+        ...(order.alarmAckAt ? {} : { alarmAckAt: now, alarmAckByUserId: ctx.userId ?? null }),
       },
     });
   });

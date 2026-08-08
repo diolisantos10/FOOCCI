@@ -135,14 +135,29 @@ export class OrderService {
     return serviceOk(order as OrderWithDetails);
   }
 
+  /**
+   * Muda o status do pedido a pedido de ALGUÉM DA LOJA (é o único caminho que a
+   * tela do painel usa — aceitar, avançar, recusar).
+   *
+   * `actorUserId` existe para carimbar `alarmAckAt`/`alarmAckByUserId`: a partir
+   * daqui, "este pedido já foi tratado" é fato do BANCO e não memória de uma aba
+   * de navegador. Sem isso, aceitar na cozinha não calava o alarme do painel,
+   * aceitar numa aba não calava a outra, e recarregar a página fazia o som
+   * voltar — PENDING→CONFIRMED continua dentro do conjunto que toca.
+   *
+   * Os caminhos automáticos (checkout, webhook de pagamento, WhatsApp) NÃO
+   * passam por aqui e por isso NÃO carimbam: pedido que entra confirmado sozinho
+   * ainda não foi visto por ninguém, e tem que tocar.
+   */
   static async updateStatus(
     restaurantId: string,
     orderId: string,
-    input: UpdateOrderStatusInput
+    input: UpdateOrderStatusInput,
+    actorUserId?: string | null,
   ): Promise<ServiceResult<Order>> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, restaurantId: true, status: true },
+      select: { id: true, restaurantId: true, status: true, alarmAckAt: true },
     });
 
     if (!order || order.restaurantId !== restaurantId) {
@@ -162,6 +177,9 @@ export class OrderService {
       where: { id: orderId },
       data: {
         status: input.status,
+        // Alguém da loja agiu neste pedido → o alarme cala em toda aba e todo
+        // aparelho. Só o primeiro carimbo vale (quem tratou de verdade).
+        ...(order.alarmAckAt ? {} : { alarmAckAt: now, alarmAckByUserId: actorUserId ?? null }),
         ...(input.estimatedAt && { estimatedAt: new Date(input.estimatedAt) }),
         ...(input.status === "DELIVERED" && { completedAt: now }),
         ...(input.status === "CANCELLED" && { cancelledAt: now }),

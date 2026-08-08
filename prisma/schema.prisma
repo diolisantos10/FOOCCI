@@ -651,6 +651,12 @@ model Order {
   idempotencyKey       String?     @unique
   crmSyncedAt          DateTime? // set once customer metrics have been counted for this order
   printQueuedAt        DateTime? // set once station print jobs have been enqueued (once-only guard)
+  // ── Alarme de pedido novo: "alguém da loja já agiu neste pedido" ─────────────
+  // Carimbado pelo SERVIDOR quando o lojista aceita/avança/recusa (ou confirma o
+  // pagamento na mão). É o que cala o som em TODA aba e TODO aparelho e sobrevive
+  // a recarregar a página — a memória de aba sozinha nunca conseguiu isso.
+  alarmAckAt           DateTime? // quando alguém agiu
+  alarmAckByUserId     String? // quem agiu (null = sistema)
   source               String? // pedido | qr | whatsapp | manual | import — origin channel
   importedAt           DateTime? // set for historically imported orders; actual event date
   // ── Marketing / channel attribution ──────────────────────────────────────────

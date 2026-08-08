@@ -93,6 +93,23 @@ describe("alarm contract — sound is bounded (sound window ≠ visual window)",
     expect(engine).toContain("resolvedOrderIds");
   });
 
+  // 2026-08-08 — "o pedido já foi aceito mas o som continua". A memória de aba
+  // acima é ATALHO; quem decide "já foi tratado" é o servidor. Se um dia o poll
+  // voltar a montar o ring-set na mão dentro do componente, o carimbo
+  // alarmAckAt volta a ser esquecido em silêncio — e o defeito volta.
+  it("o poll do pedido decide pelo seletor compartilhado (que honra o carimbo do servidor)", () => {
+    expect(engine).toContain("ringIdsFromOrdersResponse");
+    expect(engine).not.toMatch(/rows\.map\(/);           // sem mapeamento próprio
+    expect(engine).toMatch(/if \(ids === null\) return;/); // servidor mudo → mantém tocando
+  });
+
+  it("Aceitar/Recusar no painel persiste no servidor antes de calar o alarme", () => {
+    const orders = read("src/app/(dashboard)/orders/OrdersClient.tsx");
+    // persistStatus (PATCH /api/orders/[id]) é o que carimba alarmAckAt no banco;
+    // o evento local só antecipa o silêncio nesta aba.
+    expect(orders).toMatch(/await persistStatus\([\s\S]{0,600}?foocci:order-resolved/);
+  });
+
   it("each alarm rings on any FOREGROUND tab, gated only by visibility (owner's request, 2026-07-23)", () => {
     // The rule that ends the cross-screen bleed WITHOUT muting off-screen tabs:
     // sound = this tab is in the foreground. Which screen you are on no longer
