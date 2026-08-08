@@ -558,3 +558,80 @@ E existe um inventário de presença de variável já pronto no repositório —
   desligado — e desligado hoje é silencioso.
 - **Campo gravado sem caminho de leitura é evidência morta.**
   `metadata.longLivedExchangeError` existe desde 05/08 e nenhuma rota o devolve.
+
+---
+
+## 2026-08-08 — Pixel da Meta para foocci.com.br: levantamento antes da instrução
+
+**Pedido:** o CEO não consegue criar o Pixel no Gerenciador de Eventos. Antes de
+escrever o passo a passo, levantar o que já existe do nosso lado — porque temos
+aplicativo dentro da Meta e o portfólio provavelmente já existe.
+
+### 1 · O que CONFIRMEI
+
+- **O site já sabe receber um Pixel. Não precisa de código nem de deploy.**
+  `src/services/site/SiteSettingsService.ts:57-60` valida o id (`^\d{6,25}$`),
+  `:98` resolve **banco → env `NEXT_PUBLIC_META_PIXEL_ID`** (sem default de
+  lançamento, diferente do GA4), e `src/components/marketing/SiteAnalytics.tsx:45-71`
+  monta `fbq('init')` + `<noscript>`. Ponto de montagem único:
+  `src/app/site/layout.tsx:17`. Tela para colar: `/admin/site-analytics`
+  (`AdminSidebar.tsx:77`, menu **Sistema → Analytics do site**), campo
+  **"Meta Pixel — ID"** (`SiteAnalyticsClient.tsx:41-44`), com selo
+  **ativo / formato inválido** (`:178`).
+
+- **Nenhum Pixel está no ar hoje.** `GET https://foocci.com.br/site` (HTTP 200,
+  77 KB): zero ocorrências de `connect.facebook.net`, zero `fbq('init'`. GA4 sim,
+  `G-VERBSTGMDV` — que é o default de lançamento de `SiteSettingsService.ts:40`.
+  Ou seja: campo vazio no banco **e** no env. Também não há Pixel guardado sem uso
+  em lugar nenhum do repositório.
+
+- **`foocci.com.br` não tem NENHUM registro TXT.** DoH em `dns.google` (controle
+  com `google.com` funcionando): `Status 0`, sem `Answer`, SOA de
+  `pixel.dns-parking.com`/`dns.hostinger.com` na Authority. Logo, **não há
+  `facebook-domain-verification=` por DNS**. Também não há a meta tag no HTML
+  servido, nem arquivo de verificação em `public/`.
+  ⚠️ `dig`/`nslookup` **não existem neste ambiente** — a primeira consulta voltou
+  vazia por falha de ferramenta, não por ausência de registro. Só o controle via
+  DoH tornou a leitura válida. Registrando porque é armadilha de repetir.
+
+### 2 · O que NÃO consegui confirmar (guardrail 1)
+
+- **Qual portfólio empresarial hospeda o app `Foocci Whats` (893641126399955).**
+  O ID do portfólio não existe em lugar nenhum do repositório — grep em `docs/`,
+  `src/`, vitrines e oficinas de `meta` e `canais`. `admin/meta/diag/route.ts:51-58`
+  lê WABA, número e templates; **não lê `business`**. Não consultei a Graph API:
+  exigiria o `META_APP_SECRET`, que não está no `.env` local (só
+  `META_WHATSAPP_ENABLED`) e cuja leitura não era necessária para responder.
+- **Se o portfólio tem verificação de negócio concluída.** Não é observável de fora.
+- **Se `foocci.com.br` está verificado no portfólio.** Os três métodos públicos
+  (TXT, meta tag, arquivo) deram negativo, o que é forte — mas a resposta
+  definitiva é uma tela do painel, não uma consulta.
+
+### 3 · A única inferência estrutural que me permiti, e por quê
+
+Um WABA **não pode existir fora de um portfólio empresarial** — é restrição da
+plataforma, não silêncio da base. Como temos WABA com número LIVE atendendo
+restaurante, **o portfólio existe necessariamente**. Isso autoriza dizer "não crie
+um novo antes de olhar"; **não** autoriza dizer qual é nem quem o administra.
+
+### 4 · O que NÃO fiz, de propósito
+
+- Não toquei em credencial, permissão, token, webhook, App Review nem número.
+- Não imprimi valor de segredo. Só nomes de variável.
+- Não escrevi nem alterei código: o site já está pronto para receber o Pixel.
+- Não chamei a Graph API. Só HTTP público e DNS público.
+
+### 5 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **O Pixel do nosso site é config, não deploy.** Banco vence env; id inválido é
+  descartado em silêncio pela validação, e o selo da tela é o único aviso. Mesma
+  forma de precedência da tela `/admin/meta` — e a mesma armadilha: valor colado
+  errado não estoura, some. Proveniência: leitura de `SiteSettingsService.ts:57-98`
+  + `SiteAnalyticsClient.tsx:41-44` em 08/08, com o HTML de produção conferido ao vivo.
+- **O GA4 tem default embutido; o Pixel NÃO tem.** `SiteSettingsService.ts:40,98`.
+  Ver GA4 no ar nunca é indício de que o Pixel também está — foi assim que confirmei
+  que nenhum Pixel existe. Proveniência: `curl` em `foocci.com.br/site`, 08/08.
+- **Neste ambiente `dig` não existe e devolve vazio como se fosse resposta.**
+  Toda leitura de DNS aqui vai por DoH e **com consulta de controle**, senão
+  ausência de ferramenta lê como ausência de registro — guardrail 1 mordendo pela
+  ferramenta, não pelos dados. Proveniência: incidente da própria sessão, 08/08.
