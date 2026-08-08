@@ -13,18 +13,22 @@
  *   Requires the user to type "CONFIRMAR" before proceeding.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-type Status = "checking" | "allowed" | "blocked" | "done" | "db_error";
+type Status = "auth" | "checking" | "allowed" | "blocked" | "done" | "db_error";
 
 function RecoverForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const forceMode = searchParams.get("force") === "true";
 
-  const [status, setStatus] = useState<Status>("checking");
+  // A chave de administrador (ADMIN_SECRET) é digitada pelo operador e enviada no
+  // cabeçalho x-admin-secret. Ela nunca é gravada em disco, nem em localStorage,
+  // nem colocada na URL — só vive no estado desta aba.
+  const [adminSecret, setAdminSecret] = useState("");
+  const [status, setStatus] = useState<Status>("auth");
   const [restaurantName, setRestaurantName] = useState("");
   const [form, setForm] = useState({ ownerName: "", ownerEmail: "", ownerPassword: "" });
   const [submitting, setSubmitting] = useState(false);
@@ -35,19 +39,29 @@ function RecoverForm() {
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/recover")
-      .then((r) => r.json())
-      .then((data) => {
-        setRestaurantName(data.restaurantName ?? "");
-        if (data.recoveryAllowed) {
-          setStatus("allowed");
-        } else {
-          setStatus("blocked");
-        }
-      })
-      .catch(() => setStatus("db_error"));
-  }, []);
+  async function checkRecoveryState(secret: string) {
+    setStatus("checking");
+    setError("");
+    try {
+      const res = await fetch("/api/recover", { headers: { "x-admin-secret": secret } });
+      const data = await res.json();
+
+      if (res.status === 401 || res.status === 503) {
+        setStatus("auth");
+        setError(
+          res.status === 503
+            ? "Recuperação desativada: ADMIN_SECRET não está configurado no servidor."
+            : "Chave de administrador inválida."
+        );
+        return;
+      }
+
+      setRestaurantName(data.restaurantName ?? "");
+      setStatus(data.recoveryAllowed ? "allowed" : "blocked");
+    } catch {
+      setStatus("db_error");
+    }
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -74,7 +88,7 @@ function RecoverForm() {
     try {
       const res = await fetch("/api/recover", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-secret": adminSecret },
         body: JSON.stringify(form),
       });
       const data = await res.json();
@@ -98,11 +112,20 @@ function RecoverForm() {
       setResetError('Digite exatamente "CONFIRMAR" para prosseguir.');
       return;
     }
+    if (!adminSecret) {
+      setResetError("Informe a chave de administrador.");
+      return;
+    }
     setResetting(true);
     setResetError("");
 
     try {
-      const res = await fetch("/api/admin/reset-owner", { method: "POST" });
+      // O cabeçalho estava faltando: /api/admin/reset-owner sempre exigiu
+      // x-admin-secret, então este botão respondia 401 em produção.
+      const res = await fetch("/api/admin/reset-owner", {
+        method: "POST",
+        headers: { "x-admin-secret": adminSecret },
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -152,6 +175,19 @@ function RecoverForm() {
 
           <div className="mt-5">
             <label className="mb-1 block text-sm font-medium text-gray-700">
+              Chave de administrador
+            </label>
+            <input
+              type="password"
+              value={adminSecret}
+              onChange={(e) => { setAdminSecret(e.target.value); setResetError(""); }}
+              placeholder="••••••••"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
               Digite <strong>CONFIRMAR</strong> para prosseguir
             </label>
             <input
@@ -182,6 +218,55 @@ function RecoverForm() {
               {resetting ? "Resetando..." : "Resetar usuários"}
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Portão da chave de administrador ────────────────────────────────────────
+  // Nada do estado do sistema é revelado antes daqui: sem a chave, a página não
+  // diz sequer qual é o restaurante nem se a recuperação está liberada.
+  if (status === "auth") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold text-gray-900">Recuperação de acesso</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Esta página cria uma conta de proprietário. Ela exige a chave de
+            administrador definida em <code className="font-mono">ADMIN_SECRET</code>.
+          </p>
+
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!adminSecret) {
+                setError("Informe a chave de administrador.");
+                return;
+              }
+              void checkRecoveryState(adminSecret);
+            }}
+          >
+            <Field
+              label="Chave de administrador"
+              name="adminSecret"
+              type="password"
+              placeholder="••••••••"
+              value={adminSecret}
+              onChange={(e) => { setAdminSecret(e.target.value); setError(""); }}
+            />
+
+            {error && (
+              <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              className="mt-2 w-full rounded-lg bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
+            >
+              Continuar
+            </button>
+          </form>
         </div>
       </div>
     );
