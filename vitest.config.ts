@@ -34,6 +34,22 @@ export default defineConfig({
     */
     testTimeout: 20_000,
   },
+
+  /*
+    JSX AUTOMÁTICO — necessário para um teste conseguir RENDERIZAR um componente.
+
+    O `tsconfig.json` usa `"jsx": "preserve"` (o Next compila o JSX depois). O esbuild
+    do Vitest lê isso e cai no runtime CLÁSSICO, que espera `React` no escopo do
+    arquivo — e nenhum `.tsx` deste repositório importa React explicitamente, porque
+    no Next isso não é preciso. Resultado: qualquer teste que importe um componente
+    reprova com `ReferenceError: React is not defined` ANTES de asserir qualquer
+    coisa. Foi exatamente o que aconteceu ao cobrir o Pixel da Meta.
+
+    Isto não muda como o produto é compilado (quem constrói é o Next, pelo tsconfig):
+    vale só dentro do Vitest, e só para os `.tsx` que um teste importar.
+  */
+  esbuild: { jsx: "automatic" },
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

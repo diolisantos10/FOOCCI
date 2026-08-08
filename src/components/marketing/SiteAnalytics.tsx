@@ -58,17 +58,31 @@ fbq('init', '${metaPixelId}');
 fbq('track', 'PageView');`,
             }}
           />
-          {/* noscript fallback — a real share of mobile traffic blocks JS */}
-          <noscript>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              height="1"
-              width="1"
-              style={{ display: "none" }}
-              alt=""
-              src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
-            />
-          </noscript>
+          {/*
+            noscript fallback — a real share of mobile traffic blocks JS.
+
+            HTML CRU, NÃO UM <img> DE REACT — e isto foi MEDIDO no HTML servido, não
+            deduzido. Escrito como elemento React, o Float do React (que o Next 14
+            liga no App Router) enxerga a imagem e ICA UM
+            `<link rel="preload" as="image" href="…facebook.com/tr?…">` NO <head> —
+            de fora do <noscript>. O preload é honrado por TODO navegador, inclusive
+            os que têm JS ligado, e a Meta conta esse acesso como PageView.
+
+            Resultado do jeito antigo: quem tem JS disparava PageView DUAS vezes —
+            uma pelo `fbq('track','PageView')` e outra pelo preload. O Pixel parecia
+            perfeito (o Pixel Helper acusa verde) e o número do CEO nascia inflado em
+            ~2x, que é o tipo de erro que ninguém desconfia porque não quebra nada.
+
+            Como HTML cru o React não vê elemento nenhum, não pré-carrega, e a imagem
+            só é buscada por quem realmente está sem JS — que é o propósito da tag.
+            O id é validado como só-dígitos em `SiteSettingsService`, a mesma garantia
+            de que os <script> acima dependem.
+          */}
+          <noscript
+            dangerouslySetInnerHTML={{
+              __html: `<img height="1" width="1" style="display:none" alt="" src="https://www.facebook.com/tr?id=${metaPixelId}&amp;ev=PageView&amp;noscript=1" />`,
+            }}
+          />
         </>
       ) : null}
     </>
