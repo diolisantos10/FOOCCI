@@ -11,6 +11,81 @@
 
 ---
 
+## 2026-08-08 — O SDR passa o valor dos planos na hora
+
+**Decisão do CEO:** *"Ele passa o valor dos planos."*
+
+Encerra a última pergunta que travava o SDR do Foocci. Quando um lead perguntar
+"quanto custa?", ele **responde o valor**, sem puxar para reunião antes.
+
+**A trava de engenharia que vai junto, e não é opcional:** o SDR lê o preço da
+**mesma fonte que o site publica** — nunca de uma cópia no texto dele. Preço
+copiado envelhece calado: no dia em que a tabela mudar, o site mostra um valor e
+o SDR vende outro, e ninguém percebe até um cliente cobrar a diferença.
+
+É a mesma família do "regra não se copia, se aponta" e do fallback de preço de
+IA que consertamos em 07/08 — **duas fontes para o mesmo número é o defeito, não
+o descuido.**
+
+**O que muda:** o desconto de 50% no primeiro mês faz parte da resposta. Ele é o
+argumento mais forte da tabela e já está no site; omitir na conversa seria vender
+pior do que a página.
+
+**O que continua fora do alcance dele:** negociar desconto que não existe na
+tabela, prometer prazo de implantação, ou afirmar que um recurso existe sem
+lastro. Preço é fato publicado; o resto é conversa que sobe para o humano.
+
+---
+
+## 2026-08-08 — Todos os repositórios da companhia viram privados
+
+**Decisão do CEO:** *"Todos privados, senão vão roubar nossas ideias."*
+
+**Como apareceu:** ao construir o espelho da doutrina dentro do projeto, o
+especialista mediu antes de ligar e achou o que mudava tudo — o
+`dioli-brain-kit` era privado e o **`FOOCCI` era público**. Espelhar teria
+publicado a doutrina inteira da companhia num repositório aberto: a escada de
+governança, o processo do cofre de credencial, o histórico de incidentes (que
+cita uma cliente pelo nome) e a lista de quem está vivo. Ele montou a máquina
+toda, provou contra o espelho real, **removeu os arquivos e não ligou.**
+Entregar com aquilo na árvore seria plantar a armadilha e chamar de entrega.
+
+**O que estava exposto, e é erro do Diretor:** em 07-08/08 eu escrevi, no perfil
+do agente `seguranca` e em `docs/pendencias.md`, **a lista nominal das portas de
+segurança abertas do Foocci** — qual webhook não tem autenticação, qual provedor
+de pagamento aceita cobrança forjada. Escrevi para o agente novo saber o que
+consertar. Num repositório público, isso é mapa de ataque pronto. Eu sabia que o
+log do Actions era público e tratei disso; **não conferi a visibilidade do
+próprio repositório**. Presumi.
+
+**Estado antes → depois** (medido pelo campo `private` da API, não por
+impressão):
+
+| Repositório | Antes | Depois |
+|---|---|---|
+| `FOOCCI` | público | **privado** |
+| `cityjobs` | público | **privado** |
+| `diolidigital` | público | **privado** |
+| `Foocci_Manager` | público | **privado** |
+| `control_room` | público | **privado** |
+| `dioli-brain-kit` | privado | privado |
+
+Conferido depois: `foocci.com.br/api/health` continua respondendo, com o
+`commitSha` do merge — fechar não derrubou produção.
+
+**A regra que fica:** repositório de produto e de doutrina nasce **privado**. Já
+estava escrito em `dioli-brain-kit/docs/04-seguranca.md` e ninguém tinha
+conferido se a realidade batia com o papel. **Regra escrita que ninguém mede é
+regra que não existe** — e essa é a mesma família do "sem portão = reprovado".
+
+**Aprendizado do Diretor, para não repetir:** antes de escrever num arquivo
+versionado *qualquer coisa que ajude um atacante*, a pergunta é **"quem consegue
+ler este repositório?"** — e a resposta tem que ser medida, não presumida. A
+lista de vulnerabilidades continua no histórico do git; fechar o repositório
+resolve o acesso, não apaga o passado.
+
+---
+
 ## 2026-08-08 — O que sobe para o CEO, e o que o Diretor resolve sozinho
 
 **Decisão do CEO, nas palavras dele:** *"Eu sou do marketing, eu não entendo de

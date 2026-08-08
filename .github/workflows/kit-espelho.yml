@@ -1,0 +1,198 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ESPELHO DA DOUTRINA — o `dioli-brain-kit` chega como atualização do sistema
+#
+# O DEFEITO QUE ISTO FECHA, medido em 08/08/2026: uma sessão de Diretor só
+# enxerga os repositórios anexados **na abertura**. O `dioli-brain-kit` é
+# repositório separado. O Diretor do CityJobs abriu sem ele, tentou API, git e
+# raw — todos negados — e trabalhou o dia inteiro sem a doutrina. Anexar depois
+# NÃO entra em sessão que já está rodando.
+#
+# Este robô copia a doutrina para `docs/kit/` deste repositório. Assim ela já
+# está no repo quando a sessão abre, sem depender de anexo.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️⚠️  FALTA UMA DECISÃO DO CEO PARA ESTE ROBÔ FUNCIONAR  ⚠️⚠️
+#
+# Em bom português: **o `dioli-brain-kit` é um repositório privado. Um robô do
+# GitHub não consegue ler repositório privado dos outros sem uma chave. Essa
+# chave não existe ainda. Enquanto ela não for criada, este robô não roda — e ele
+# avisa em vermelho em vez de fingir que rodou.**
+#
+# O que falta, em termos técnicos:
+#   Um segredo chamado `DIOLI_BRAIN_KIT_TOKEN` em
+#   Settings → Secrets and variables → Actions deste repositório, com um
+#   Personal Access Token (fine-grained) que tenha permissão de **leitura de
+#   conteúdo** no repositório `diolisantos10/dioli-brain-kit`.
+#
+# Por que não dá para contornar: o token que o GitHub Actions dá de graça
+# (`GITHUB_TOKEN`) só enxerga ESTE repositório. Não existe caminho sem segredo
+# para um repositório privado — a única alternativa seria tornar o kit público,
+# e isso também é decisão do CEO.
+#
+# Este arquivo NÃO cria o segredo e NÃO finge que ele existe. A primeira etapa
+# abaixo confere e derruba a execução com mensagem clara. Segredo ausente nunca
+# vira "passou".
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Espelho da doutrina
+
+on:
+  schedule:
+    # 05:20 UTC = 02:20 America/Sao_Paulo. Antes do raio-x das 06:00 UTC, para
+    # que a leitura da manhã já veja a doutrina do dia.
+    - cron: "20 5 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: kit-espelho
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  espelhar:
+    name: "Espelhar dioli-brain-kit em docs/kit/"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── PORTÃO 0: este repositório pode receber a doutrina? ─────────────────
+      # ACHADO DE 08/08/2026: o kit é PRIVADO e o `diolisantos10/FOOCCI` é
+      # PÚBLICO. Espelhar aqui publica a doutrina inteira da companhia — e o
+      # próprio kit manda o contrário (docs/04-seguranca.md: "Repos do kit e dos
+      # produtos: privados").
+      #
+      # Isto é TRAVA, não aviso. Prompt já falhou em produção neste projeto
+      # (CLAUDE.md, guardrail 4): a única coisa que impede a publicação é código
+      # que confere a visibilidade no momento de rodar, toda vez. Se um dia o
+      # repositório voltar a ser público por engano, o robô para sozinho.
+      - name: "Conferir que este repositório é privado"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          VIS=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+                 -H "Accept: application/vnd.github+json" \
+                 "https://api.github.com/repos/${{ github.repository }}" \
+                 | jq -r '.visibility // "desconhecida"')
+          echo "Visibilidade de ${{ github.repository }}: $VIS"
+
+          if [ "$VIS" != "private" ]; then
+            echo "::error title=Repositorio publico - espelho bloqueado::O dioli-brain-kit e privado e ${{ github.repository }} esta como '$VIS'. Espelhar a doutrina aqui a tornaria publica: escada de governanca, processo de cofre de credencial, historico de incidentes com cliente citado pelo nome e o quadro de sessoes. O proprio kit proibe (docs/04-seguranca.md). Decisao do CEO: ou o repositorio vira privado, ou o espelho nao roda aqui. O robo parou sem escrever nada."
+            exit 1
+          fi
+
+          # "desconhecida" também cai no if acima: não conseguir medir a
+          # visibilidade nunca pode valer como "é privado".
+          echo "Repositório privado. Seguindo."
+
+      # ── PORTÃO 1: o segredo existe? ─────────────────────────────────────────
+      # Primeiro passo de propósito. Sem chave não há espelho, e um espelho que
+      # não foi conferido não pode terminar em verde.
+      - name: "Conferir a chave de leitura do kit"
+        env:
+          TOKEN_DO_KIT: ${{ secrets.DIOLI_BRAIN_KIT_TOKEN }}
+        run: |
+          if [ -z "$TOKEN_DO_KIT" ]; then
+            echo "::error title=Falta a chave para ler a doutrina::O repositorio dioli-brain-kit e privado e este robo nao tem chave para le-lo. Crie o segredo DIOLI_BRAIN_KIT_TOKEN em Settings > Secrets and variables > Actions, com um token de leitura do repositorio diolisantos10/dioli-brain-kit. Sem isso o espelho em docs/kit/ para de ser atualizado e, em 14 dias, o teste kitEspelho.test.ts trava os PRs de proposito."
+            echo ""
+            echo "  ┌────────────────────────────────────────────────────────────┐"
+            echo "  │ ESTE ROBÔ NÃO RODOU — e isso é o resultado correto.        │"
+            echo "  │                                                            │"
+            echo "  │ Falta o segredo DIOLI_BRAIN_KIT_TOKEN.                     │"
+            echo "  │ Ele NÃO foi criado ainda. Criar é decisão do CEO.          │"
+            echo "  └────────────────────────────────────────────────────────────┘"
+            exit 1
+          fi
+          echo "Chave presente. Seguindo."
+
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/remove-legacy-runner-q8iXa
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      # ── Clonar o kit ────────────────────────────────────────────────────────
+      # `--depth 1`: só precisamos do HEAD. O token vai por arquivo de credencial
+      # e nunca aparece em log nem em `git remote -v`.
+      - name: "Clonar o dioli-brain-kit"
+        env:
+          TOKEN_DO_KIT: ${{ secrets.DIOLI_BRAIN_KIT_TOKEN }}
+        run: |
+          set -e
+          rm -rf /tmp/dioli-brain-kit
+          git clone --depth 1 --branch main \
+            "https://x-access-token:${TOKEN_DO_KIT}@github.com/diolisantos10/dioli-brain-kit.git" \
+            /tmp/dioli-brain-kit 2>&1 | sed "s#${TOKEN_DO_KIT}#***#g"
+          git -C /tmp/dioli-brain-kit remote set-url origin \
+            "https://github.com/diolisantos10/dioli-brain-kit.git"
+          echo "Kit clonado em $(git -C /tmp/dioli-brain-kit rev-parse --short HEAD)."
+
+      # ── Gerar ───────────────────────────────────────────────────────────────
+      # O gerador ABORTA (exit != 0) se vierem menos de 20 documentos. Clone
+      # silenciosamente vazio apagaria a doutrina inteira e commitaria a exclusão
+      # com cara de rotina bem-sucedida.
+      - name: "Gerar docs/kit/"
+        id: gerar
+        env:
+          KIT_DIR: /tmp/dioli-brain-kit
+        run: npx ts-node --project tsconfig.scripts.json scripts/espelhar-kit.ts
+
+      # ── PORTÃO 2: o espelho recém-gerado passa no próprio teste? ────────────
+      # Nada é commitado antes disto. Espelho quebrado no repositório é pior que
+      # espelho velho: o velho pelo menos era verdade uma vez.
+      - name: "Conferir o espelho gerado"
+        run: npx vitest run src/services/doutrina/kitEspelho.test.ts
+
+      # ── Commit só se algo mudou ─────────────────────────────────────────────
+      # `git diff --quiet` decide. Se o kit não mudou e o carimbo ainda está
+      # dentro da cadência de 3 dias, o gerador reescreve bytes idênticos e nada
+      # é commitado. Commit diário num arquivo de docs é o ruído que faz ninguém
+      # olhar — ordem explícita do CEO.
+      #
+      # `[skip ci]` no assunto: sem ele, cada carimbo dispararia um CI completo na
+      # branch padrão, que é exatamente o desperdício que o ci.yml acabou de
+      # cortar em 07/08.
+      - name: "Commitar se mudou"
+        run: |
+          set -e
+          git config user.name  "robo-do-espelho"
+          git config user.email "robo-do-espelho@users.noreply.github.com"
+
+          # `git add` ANTES de comparar, e `--cached`. `git diff` sozinho não
+          # enxerga arquivo NOVO — e arquivo novo é justamente o caso que mais
+          # importa: uma doutrina 24 recém-escrita pelo Diretor Geral entraria
+          # como untracked e o robô diria "nada mudou". Achado ao reler este
+          # próprio arquivo, antes de subir.
+          git add -A docs/kit
+
+          if git diff --cached --quiet -- docs/kit; then
+            echo "Nada mudou. Sem commit — e isso é sucesso, não omissão."
+            echo "Kit em ${{ steps.gerar.outputs.kit_commit_curto }}, ${{ steps.gerar.outputs.arquivos }} documentos."
+            exit 0
+          fi
+
+          if [ "${{ steps.gerar.outputs.mudou_conteudo }}" = "true" ]; then
+            ASSUNTO="docs(kit): espelho da doutrina atualizado para ${{ steps.gerar.outputs.kit_commit_curto }} [skip ci]"
+          else
+            ASSUNTO="docs(kit): espelho conferido, kit sem mudanças (${{ steps.gerar.outputs.kit_commit_curto }}) [skip ci]"
+          fi
+
+          git commit -m "$ASSUNTO" -m \
+            "Gerado por .github/workflows/kit-espelho.yml a partir de diolisantos10/dioli-brain-kit@${{ steps.gerar.outputs.kit_commit }}. Pasta gerada — não edite à mão."
+
+          git push origin HEAD:claude/remove-legacy-runner-q8iXa
+          echo "::notice title=Espelho da doutrina atualizado::${{ steps.gerar.outputs.arquivos }} documentos, kit ${{ steps.gerar.outputs.kit_commit_curto }}."
+
+      # ── O alerta carrega a evidência (guardrail 6) ──────────────────────────
+      - name: "Se falhou, dizer o que fazer"
+        if: failure()
+        run: |
+          echo "::error title=O espelho da doutrina nao foi atualizado::docs/kit/ ficou com o conteudo antigo. O teste src/services/doutrina/kitEspelho.test.ts avisa em 7 dias e reprova o CI em 14. Veja qual etapa acima falhou: falta de chave, clone, geracao (menos de 20 documentos = clone vazio) ou push bloqueado pela protecao de branch."
