@@ -316,7 +316,7 @@ Para gerar o Pix automaticamente no checkout:
     slug: "guia-criar-campanha-crm",
     title: "Como criar uma campanha / promoção no CRM",
     area: "CRM",
-    description: "Ler a Visão Geral, ligar campanhas prontas ou criar a sua (manual, por IA ou ditando por voz), mandar WhatsApp para um cliente, acompanhar o resultado e conferir as Regras de Segurança.",
+    description: "Ler a Visão Geral, ligar campanhas prontas ou criar a sua (manual, por IA ou ditando por voz), escolher as frases que vão rodar, mandar WhatsApp para um cliente, acompanhar o resultado e conferir as Regras de Segurança.",
     content: `# Como criar uma campanha / promoção no CRM
 
 Vá no menu lateral em **Marketing → CRM**. No topo ficam as abas **Visão Geral**, **Campanhas**, **Migração**, **Cupons**, **Conversões**, **Clientes**, **Programa de Relacionamento**, **Avaliações** e **Configurações**.
@@ -388,13 +388,33 @@ Clique em **Preencher manual**. A campanha nasce **pausada** de propósito e abr
 
 ## 4. Ajustar na janela "Gerenciar campanha"
 - **Visão Geral** — **Editar nome da campanha** (+ **Salvar**) e **Público-alvo**: Todos os clientes, Clientes quentes, Clientes mornos, Clientes frios, VIPs (Ouro/Diamante), Fizeram só 1 pedido, Cadastrados sem compra, Recorrentes (2+ pedidos) (+ **Salvar**).
-- **Mensagem** — em **Frases da campanha**, ligue as frases que vão rodar (cada envio sorteia uma das ativas e os números mostram qual converte mais). Para escrever a sua: **+ Nova frase personalizada** → **Adicionar frase**.
+- **Mensagem** — o quadro **Frases da campanha** (ver abaixo, é o mais importante da janela).
 - **Agendamento** — em **Editar agendamento** escolha os **Dias da semana**, a **Início** e **Fim** da janela de horário e o **Limite diário (mensagens)** (máximo 200/dia). Clique em **Salvar agendamento**.
 
-## 5. Ligar e acompanhar
+## 5. As frases da campanha (aba Mensagem)
+Na janela **Gerenciar campanha**, aba **Mensagem**, fica o quadro **Frases da campanha**: *"Ative as frases que vão rodar — cada envio sorteia uma das ativas, e os números mostram qual converte mais."*
+
+**Nas campanhas prontas, todas as frases do catálogo já vêm ligadas.** Isso é o que o sistema realmente faz — cada envio sorteia uma das ativas, e ele precisa rodar todas para descobrir qual vende mais. (Até 07/08/2026 a tela mostrava só uma ligada enquanto o sistema já rodava as cinco: o controle mentia. Se você desligar alguma, sua escolha é respeitada e fica salva.)
+
+Cada frase é uma linha com:
+- a **chavinha** à esquerda para ligar/desligar. Ligada, a linha fica esverdeada. Não tem botão de salvar: mexeu, aparece **Salvando…** e depois **✓ Salvo**;
+- o texto da frase e, quando a campanha tem cupom, o lembrete **"🎁 + linha do cupom no final (automática)"**;
+- o selo de confiança do número: **🏆 Campeã** (converte bem acima da média, com envios suficientes), **✓ Confiável** (já dá para confiar no número) ou **🧪 Em teste** (poucos envios, número provisório);
+- quando o WhatsApp oficial da Meta está em uso, o selo do modelo: **✓ Meta aprovada**, **⏳ Meta em análise**, **✗ Meta rejeitou** ou **Meta: na fila**;
+- os números: **📤 N enviadas · 🛒 N pedidos · X%** (e o R$ quando houver) ou **sem envios ainda**.
+
+Enquanto a campanha é nova, aparece em cima: **"📊 Coletando baseline — X/Y envios. Os números ainda estão maturando: o agente testa todas por igual antes de eleger favoritas."** Não escolha favorita antes disso — os números ainda não valem.
+
+Se você desligar todas, o aviso amarelo avisa: **"Nenhuma frase ativa — a mensagem padrão da campanha continua rodando até você ativar pelo menos uma."**
+
+**Para escrever a sua frase:** clique em **+ Nova frase personalizada (n/5)**, escreva no campo (*"Escreva sua frase… use {nome}, {cupom}, {validade}, {link_cardapio}"*), confira a **Prévia** que aparece embaixo e clique em **Adicionar frase** (ou **Cancelar**). As suas frases ficam com o selo **Sua frase** e têm o botão **Excluir** (ele pergunta antes: *"Excluir esta frase personalizada?"*). O limite é **5** — atingido, a tela diz **"Limite de 5 frases personalizadas atingido — exclua uma para criar outra."**
+
+Duas campanhas não deixam você editar a mensagem, e a tela explica por quê: **"Campanha finalizada — a mensagem não pode ser editada."** e **"A mensagem desta campanha é gerenciada pelo sistema."**
+
+## 6. Ligar e acompanhar
 Em **Campanhas ativas** ("campanhas em execução, agendadas ou recorrentes") cada campanha tem **Pausar** / **Retomar** e o detalhe pelo **Gerenciar**. Em **Ver histórico geral** você vê os **Envios recentes (ao vivo)**, com data e hora.
 
-## 6. Os dois limites (aba Configurações → Regras de Segurança)
+## 7. Os dois limites (aba Configurações → Regras de Segurança)
 Na aba **Configurações**, o cartão **Regras de Segurança** tem **dois** limites que não se confundem:
 
 **a) Limite de mensagens por dia — 🟢 Limite oficial da Meta.** É o teto **oficial da Meta** para o seu WhatsApp Business, mostrado como **"X msgs/dia hoje"**. Ele **sobe sozinho** conforme a qualidade e o histórico do seu número, sem risco de bloqueio — e, quando a Meta informa, a tela ainda diz a **qualidade do número** (alta, média ou baixa). Abaixo ficam os valores congelados do modo seguro, só pra você ver: **Limite diário**, **Intervalo por cliente** (24 h), **Máx. por cliente/semana** (5), **Horário sem envio** (21h–8h), **Delay entre envios** (5–45 s) e **Fim de semana** (permitido).
@@ -407,7 +427,7 @@ No rodapé do cartão, as **Proteções sempre ativas**: quem pediu para sair (o
 
 Ao final, clique em **Salvar configurações**.
 
-## 7. Mandar um WhatsApp para um cliente só (aba Clientes)
+## 8. Mandar um WhatsApp para um cliente só (aba Clientes)
 Fora das campanhas, dá para falar com uma pessoa específica:
 
 1. Na aba **Clientes**, clique em **WhatsApp** na linha do cliente (ou **Enviar WhatsApp** no cartão dele). Quem pediu para sair aparece como **Opt-out** e quem não tem número como **Sem telefone** — nesses casos o botão não existe.
@@ -563,15 +583,32 @@ Quantos dos clientes identificados compraram em cada porta de entrada — **What
     slug: "guia-central-conversas",
     title: "Como atender clientes na Central de Conversas",
     area: "WHATSAPP",
-    description: "Ler conversas, assumir da IA, responder (digitando ou falando) e resolver.",
+    description: "Ler conversas, assumir da IA, responder (digitando ou falando), resolver e entender a faixa que avisa quando um canal para de receber.",
     content: `# Como atender clientes na Central de Conversas
 
 No menu lateral, **Central de Conversas** reúne todas as conversas (WhatsApp, Cardápio, Instagram).
 
+## A faixa no topo: quando um canal para de receber
+Lista vazia nunca foi prova de que está tudo bem — um canal fora do ar e um dia parado davam exatamente a mesma tela. Por isso, quando o **Instagram** para, aparece uma **faixa colorida no topo da Central**, com o nome do canal, um selo e o botão do próximo passo:
+
+- **🔴 Fora do ar** — *"A conexão do Instagram está com problema e as mensagens não estão chegando."*, seguido do motivo. Botão **Reconectar**.
+- **🟡 Atenção** — *"Instagram sem receber mensagem há X dias. Pode ser movimento baixo — mas se você espera Directs, confira a conexão."* Se nunca chegou nada desde que você conectou: *"Instagram conectado há X dias e ainda não recebeu nenhuma mensagem. Confira a conexão."* Botão **Abrir Integrações**.
+- **ℹ️ Aviso** — *"O Instagram está em somente recebimento: você lê os Directs aqui, mas ainda não consegue responder por aqui."* Botão **Ativar resposta em Integrações**.
+
+O que essa faixa **não** faz, de propósito:
+- não acende para canal que você nunca ligou, nem para canal que **você mesmo** pausou;
+- não fica vermelha só porque está quieto — vermelho só quando existe um **erro registrado**. Silêncio, por mais longo que seja, no máximo vira o amarelo de **Atenção**;
+- **faixa ausente não quer dizer "canal saudável"**: quando o painel não consegue ler o estado do canal, a faixa some calada em vez de dizer que está tudo bem;
+- o **WhatsApp** ainda não entra nessa faixa — não existe hoje registro de última mensagem recebida por provedor, e avisar sem esse dado seria chute.
+
+A faixa fica **acima** das duas colunas, então no celular ela continua à vista mesmo com a conversa aberta, e o painel reconfere o estado dos canais a cada 5 minutos.
+
 ## Encontrar a conversa
-- Busque por **Nome, telefone ou mensagem** e use **Ordenar** (Mais recentes, Mais antigas, Nome A–Z…).
-- Filtre pelos chips: **Todas**, **IA ativa**, **Humano**, **Aguardando**, **Resolvidas**, **IA bloqueada**, **CRM enviado**, **Resposta CRM**.
+- Busque por **Nome, telefone ou mensagem…**. A busca é feita no servidor: ela alcança **toda** a sua base de conversas, inclusive as antigas que ainda não estão carregadas na lista.
+- Use **Ordenar** (Mais recentes, Mais antigas, Nome A–Z, Nome Z–A, Canal).
+- Filtre pelos chips: **Todas**, **Humano**, **Aguardando**, **Staff**, **CRM**, **📷 Instagram** e **Resolvidas**. O chip **📷 Instagram** também busca no servidor — um Direct de semanas atrás aparece ali mesmo com muito WhatsApp por cima.
 - Quando alguém pede atendente, aparece **"🙋 X aguardando atendimento humano"** — clique em **Ver pendentes**.
+- Sem resultado, a lista diz **"Nenhuma conversa encontrada."** (no filtro **Staff**: **"Nenhuma conversa classificada como staff."**).
 
 ## Assumir e responder
 1. Abra a conversa.
@@ -781,10 +818,18 @@ No menu lateral, **Plataforma → Configurações**. Está dividido em dois grup
     slug: "guia-integracoes",
     title: "Quais integrações existem e como conectar",
     area: "INTEGRATIONS",
-    description: "Visão geral das integrações, como conectar o Instagram e o que fazer quando o Instagram para de receber mensagem.",
+    description: "Visão geral das integrações, o que cada selo quer dizer (inclusive o novo \"Sem receber\"), como conectar o Instagram e o que fazer quando ele para de receber mensagem.",
     content: `# Quais integrações existem e como conectar
 
-No menu lateral, **Plataforma → Integrações**. Cada cartão tem um status: **Ativo**, **Erro**, **Validação pendente**, **Não conectado** ou **Não configurado**.
+No menu lateral, **Plataforma → Integrações**. Cada cartão tem um selo de status:
+
+- **Ativo** (verde) — conectado e recebendo.
+- **Sem receber** (amarelo) — conectado, sem erro nenhum registrado, mas **nada chega há mais de 48 horas**. Não é o mesmo que **Erro**: pode ser só movimento baixo. Mas se você espera mensagem, confira a conexão.
+- **Erro** (vermelho) — o provedor registrou uma falha. Aqui existe prova de que quebrou.
+- **Validação pendente** — configurado, esperando a primeira mensagem chegar para provar que funciona.
+- **Não conectado** / **Não configurado** — falta ligar.
+
+No topo da lista, os quadradinhos de resumo contam: **Total**, **Conectado**, **Pendente**, **Sem receber** (só aparece quando existe algum) e **Com erro** (idem). Canal mudo tem quadradinho próprio de propósito — antes ele era somado no **Conectado**, e era exatamente por isso que dava para passar duas semanas com um canal morto marcado como saudável.
 
 Provedores disponíveis:
 - **WhatsApp** — conecte por QR Code ou pela conta oficial da Meta.
@@ -809,6 +854,12 @@ As mensagens do Instagram Direct e os comentários passam a aparecer na **Centra
 Estar escrito **Conectado** não garante que está chegando mensagem. Se a conexão adoecer, o próprio cartão verde passa a mostrar, em vermelho:
 
 **"A conexão está com problema — as mensagens não estão chegando."**, o motivo embaixo e o botão **Reconectar agora**. Clique nele e refaça o login — é seguro, a configuração é regravada igual.
+
+E quando **não há erro nenhum**, mas simplesmente parou de chegar, aparece um aviso amarelo logo abaixo do **Último Direct recebido**:
+
+**"Nenhuma mensagem chegou nas últimas 48 horas. Pode ser movimento baixo — mas se você espera Directs, rode o diagnóstico ou reconecte a conta."**
+
+Esse aviso existe porque a data sozinha não denuncia nada: um **"Último Direct recebido: 23/07"** do lado de um selo verde passa por normal — e já passou por treze dias. Pelo mesmo motivo, na lista de conferência do fim da tela o item **"Webhook configurado / mensagens chegando"** só fica marcado se a última mensagem for **recente**; carimbo velho não conta mais como "chegando". O selo do cartão em **Integrações** vira **Sem receber** ao mesmo tempo, e a **Central de Conversas** mostra a faixa de aviso no topo.
 
 Há também o botão **Reconectar Instagram**, ao lado do **Rodar diagnóstico**: use quando quiser renovar o acesso **sem** passar pelo **Desconectar**.
 

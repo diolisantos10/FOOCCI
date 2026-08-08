@@ -5,6 +5,51 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-08
+- **Arquivos que dispararam** (janela de 26h, telas do lojista — commits `a74c3ef8` e `844dc71a`):
+  - `src/app/(dashboard)/atendimento/AtendimentoClient.tsx` + `src/components/atendimento/ChannelHealthBanner.tsx`
+    — nasceu a **faixa de saúde do canal** no topo da Central (acima das duas colunas, para não
+    sumir no celular quando a conversa abre), em três tons: **🔴 Fora do ar** (só com erro
+    registrado), **🟡 Atenção** (silêncio > 48h, com a ressalva de movimento baixo) e **ℹ️ Aviso**
+    (Instagram em somente recebimento). Cada uma com botão de próximo passo — **Reconectar**,
+    **Abrir Integrações**, **Ativar resposta em Integrações**. No mesmo commit, o chip
+    **📷 Instagram** e a **busca por texto** passaram a filtrar no **servidor** — antes peneiravam
+    só as 100 conversas já carregadas, e um Direct antigo sumia da aba existindo no banco.
+  - `src/app/(dashboard)/integracoes/IntegrationsCenterClient.tsx` — novo selo **Sem receber**
+    (âmbar), distinto de **Erro**, e o quadradinho de resumo **Sem receber**, que sai de dentro do
+    **Conectado**.
+  - `src/app/(dashboard)/integracoes/instagram/InstagramIntegrationClient.tsx` — aviso âmbar
+    **"Nenhuma mensagem chegou nas últimas 48 horas…"** abaixo do **Último Direct recebido**, e o
+    item **"Webhook configurado / mensagens chegando"** da lista de conferência deixou de contar
+    carimbo velho como "chegando".
+  - `src/app/(dashboard)/crm/CRMClient.tsx` — em **Gerenciar campanha → Mensagem**, campanha pronta
+    sem pool salvo passa a abrir com **todas** as frases do catálogo ligadas (o motor já rodava
+    todas; a tela mostrava uma).
+- **Guias atualizados:**
+  - `guia-central-conversas` — nova seção **"A faixa no topo: quando um canal para de receber"**,
+    com o texto real de cada nível, o botão de cada um e os quatro limites declarados (não acende
+    para canal desligado ou pausado, silêncio nunca fica vermelho, faixa ausente **não** significa
+    canal saudável, WhatsApp fora por falta de dado). Corrigidos também os chips de filtro, que
+    estavam errados no guia: os reais são **Todas**, **Humano**, **Aguardando**, **Staff**, **CRM**,
+    **📷 Instagram** e **Resolvidas** — o guia listava "IA ativa", "IA bloqueada", "CRM enviado" e
+    "Resposta CRM", que são **selos de conversa**, não chips. Registrado que a busca e o chip do
+    Instagram agora alcançam conversas antigas.
+  - `guia-integracoes` — a lista de selos virou glossário e ganhou **Sem receber**, com a diferença
+    para **Erro** dita em voz alta; entraram os quadradinhos de resumo (**Total**, **Conectado**,
+    **Pendente**, **Sem receber**, **Com erro**) e, na seção do Instagram, o aviso de 48h e o item
+    da lista de conferência que não conta mais carimbo velho.
+  - `guia-criar-campanha-crm` — nova seção **"5. As frases da campanha (aba Mensagem)"**, com a
+    chavinha, o salvamento automático (**Salvando…** / **✓ Salvo**), os selos **🏆 Campeã** /
+    **✓ Confiável** / **🧪 Em teste**, os selos da Meta, os números por frase, o aviso de baseline,
+    o **"Nenhuma frase ativa…"**, o limite de **5** frases personalizadas e as duas mensagens de
+    campanha não editável. Registrado que campanha pronta abre com todas as frases ligadas.
+- **Não mexido:** `guia-conectar-whatsapp` — o `WhatsAppQRPanel` não mudou; a alteração em
+  `IntegrationsCenterClient.tsx` é do selo genérico, já coberta em `guia-integracoes`. Fora do
+  filtro: `src/app/admin/**` (Sala dos Agentes), `src/app/pedido/**` (loja do cliente final),
+  serviços e testes.
+
+---
+
 ## 2026-08-06
 - **Arquivos que dispararam** (janela de 26h, telas do lojista — commits `6ae8798a`..`13495d82`):
   - `src/app/(dashboard)/analytics/AnalyticsClient.tsx`, `atendimento/AtendimentoClient.tsx`,
