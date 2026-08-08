@@ -258,9 +258,19 @@ export function AssinaturasClient() {
               <span className="font-semibold text-ink">Plano</span>
               <select className="mt-1 w-full rounded-xl border border-line px-3 py-2" value={form.plan}
                 onChange={(e) => updatePlanOrCycle(e.target.value as Subscription["plan"], form.cycle)}>
-                <option value="STARTER">Essencial (R$ 179/mês)</option>
-                <option value="GROWTH">Crescimento (R$ 429/mês)</option>
-                <option value="PRO">Performance (R$ 899/mês)</option>
+                {/*
+                  ESTES TRÊS VALORES ERAM DIGITADOS. Achado em 08/08/2026 no bloco
+                  do preço no SDR: eram a SEGUNDA fonte do mesmo número, com
+                  `PLAN_CYCLE_CENTS` já importado três linhas acima do arquivo.
+                  Ninguém percebia porque nada aqui reprova — provado sabotando
+                  `pricing.ts`: a tabela passou a dizer R$ 255,00 e este seletor
+                  continuou oferecendo R$ 179/mês, calado.
+                */}
+                {(["STARTER", "GROWTH", "PRO"] as const).map((code) => (
+                  <option key={code} value={code}>
+                    {PLAN_LABEL[code]} ({money(PLAN_CYCLE_CENTS[code].MENSAL)}/mês)
+                  </option>
+                ))}
               </select>
             </label>
             <label className="text-sm">

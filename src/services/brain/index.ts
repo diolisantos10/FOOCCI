@@ -218,3 +218,22 @@ export {
   type EntrevistaAberta,
 } from "./sdr/SdrService";
 export { runSdrDiagnostic, type SdrDiagnosticResult, type SdrCheck } from "./sdr/SdrDiagnostic";
+
+/*
+  sdr-foocci — o SDR que fala com o LEAD DA FOOCCI. Pasta separada de propósito:
+  `sdr/` é o entrevistador da AGÊNCIA, que fala de outro produto e chama a IA por
+  atalho, fora do portão (`sdr/Entrevistador.ts:332`). Aceitável para entrevista
+  interna; inaceitável para quem fala com estranho em nome da empresa.
+  Ver `docs/sdr-foocci-desenho.md`.
+*/
+export {
+  responderPreco,
+  auditarFalaDePreco,
+  descontoDoPrimeiroMesPercent,
+  valoresPermitidosCents,
+  percentuaisPermitidos,
+  type RespostaDePreco,
+  type PlanoNaResposta,
+  type AuditoriaDaFala,
+  type FaltaNaFala,
+} from "./sdr-foocci/RespostaDePreco";

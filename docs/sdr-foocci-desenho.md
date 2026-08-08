@@ -62,7 +62,7 @@ Se for Evolution: sem essa exigência, mas o risco vira **banimento do número**
 |---|---|
 | **Insistir** | contador de tentativas **por lead**, persistido, teto duro (1 abertura + 1 lembrete). Reprova se não conseguir ler o contador |
 | **Fora de hora** | janela **mais rígida** que a do CRM: 9h–19h, dias úteis (o CRM fala com quem já é cliente; o SDR fala com estranho) |
-| **Prometer** | verificador de promessa + a lista de proibições comerciais; **preço é escalada obrigatória** enquanto as faixas estiverem em stand by |
+| **Prometer** | verificador de promessa + a lista de proibições comerciais. ⚠️ **Preço deixou de ser escalada em 08/08/2026** — o CEO decidiu que o SDR responde o valor na hora. O que continua sendo escalada: negociar desconto fora da tabela, prazo de implantação e recurso sem lastro. Trava em código: `auditarFalaDePreco` em `src/services/brain/sdr-foocci/RespostaDePreco.ts` |
 
 E a regra da casa: **a proteção não pode ser pior que o problema** — se o SDR
 travar no meio de conversa quente, entrega ao CEO com histórico, não some.
@@ -80,6 +80,13 @@ finalidade (`politica-de-privacidade/page.tsx:83`). O que falta é **prova e fre
 ## O caminho até a primeira mensagem
 - **Degrau 0 — só o CEO:** qual número (Meta oficial × Evolution) e **qual a
   resposta sobre preço**. Nada de código antes disso.
+  - ✅ **Preço — RESPONDIDO em 08/08/2026:** *"Ele passa o valor dos planos."*
+    Os três planos com o valor real e os 50% do primeiro mês, lidos da mesma
+    fonte que o site publica (`src/lib/billing/pricing.ts`). Construído em
+    `src/services/brain/sdr-foocci/RespostaDePreco.ts`, com portão próprio.
+  - ⬜ **Número — ainda aberto.** Decidido que o canal é o **WhatsApp oficial da
+    Meta** (a Evolution está fora, nem como plano B), mas o chip dedicado não
+    existe. Continua sendo a dependência que manda em tudo.
 - **Degrau 1 (um bloco):** agente registrado com nome próprio (⚠️ `sdr` já é da
   agência — `BrainQualityGate.ts:130`), perfil, verdade da Foocci, portão de
   qualidade com casos adversariais de venda. **Redige e não envia.**
