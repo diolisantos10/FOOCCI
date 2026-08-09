@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/17-placar-diario.md
-kit-commit: e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66
+kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
 sha256-do-corpo: b26be0a5c5b4faada5ebeb664a922d5bac8c28c4c448cf9af750b636ae17d712
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/17-placar-diario.md`,
-> no commit `e25aefb`.
+> no commit `6782942`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a

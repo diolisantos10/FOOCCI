@@ -1,9 +1,9 @@
 {
   "kitRepo": "diolisantos10/dioli-brain-kit",
   "kitBranch": "main",
-  "kitCommit": "e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66",
-  "kitCommitData": "2026-08-07T23:50:50Z",
-  "verificadoEm": "2026-08-08T14:03:00.421Z",
+  "kitCommit": "678294223e4678da70f4913ce00d8fa7f9b0eaa4",
+  "kitCommitData": "2026-08-09T01:06:30Z",
+  "verificadoEm": "2026-08-09T06:00:48.640Z",
   "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
   "arquivos": [
     {
@@ -14,7 +14,7 @@
     {
       "destino": "docs/kit/CLAUDE.md",
       "origem": "CLAUDE.md",
-      "sha256": "229e7b2fcdf296060824008c98e74fccb792b096e869b45805baf2a88b75ff88"
+      "sha256": "d175a7fd121050caf2f76e7e92d06f7e955bebf92652ad13f5e4ad7b112e2320"
     },
     {
       "destino": "docs/kit/00-onboarding-sessao.md",
@@ -49,7 +49,7 @@
     {
       "destino": "docs/kit/06-incidentes.md",
       "origem": "docs/06-incidentes.md",
-      "sha256": "eb9c8aefea8b471206f4bbea97692ee293e0f2f62c980b0d34161fff6c96e52d"
+      "sha256": "ee0adab49306b454e4e1a9ec0ba54bf118d71e0df6352814c991867c6468f364"
     },
     {
       "destino": "docs/kit/07-memoria-de-agente.md",
@@ -114,7 +114,7 @@
     {
       "destino": "docs/kit/19-pendencia-zero.md",
       "origem": "docs/19-pendencia-zero.md",
-      "sha256": "e3c47184d0a65063d27e23aa80d2df7762bc8d02b960531ef3d7efabbc922ab7"
+      "sha256": "3aa7071a1c7477bd3b9b7743cb40fce6ded84d68b114f7d38b3f5d1650018f65"
     },
     {
       "destino": "docs/kit/20-sala-dos-agentes.md",
@@ -135,6 +135,11 @@
       "destino": "docs/kit/23-constituicao-dos-essenciais.md",
       "origem": "docs/23-constituicao-dos-essenciais.md",
       "sha256": "a0286b3069325e71029ca98e1a8cbb602571af1d258f8afe4aeda212891597f4"
+    },
+    {
+      "destino": "docs/kit/24-o-quadro-do-ceo.md",
+      "origem": "docs/24-o-quadro-do-ceo.md",
+      "sha256": "4f4ebb5f4ed7cbd5e93e475cd6d149b8661565e3b4d29cbe48797741d4b0410a"
     },
     {
       "destino": "docs/kit/perguntas-abertas.md",

@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: CLAUDE.md
-kit-commit: e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66
-sha256-do-corpo: 229e7b2fcdf296060824008c98e74fccb792b096e869b45805baf2a88b75ff88
+kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
+sha256-do-corpo: d175a7fd121050caf2f76e7e92d06f7e955bebf92652ad13f5e4ad7b112e2320
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `CLAUDE.md`,
-> no commit `e25aefb`.
+> no commit `6782942`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
@@ -157,6 +157,7 @@ precisam saber?*
 | `docs/21-elenco-obrigatorio.md` | **Os Essenciais** — os cinco que vêm com o projeto e não se apaga |
 | `docs/22-briefing-ao-conselho.md` | O pedido ao Conselho: a **constituição** dos cinco, travada e sem domínio |
 | `docs/23-constituicao-dos-essenciais.md` | **A Constituição dos Essenciais** — os doze campos de cada um |
+| `docs/24-o-quadro-do-ceo.md` | **O quadro do CEO** — o único formato de relatório. Substitui a prosa |
 | `templates/` | Código-molde generalizado |
 | `casos/` | O que foi plantado em cada produto |
 

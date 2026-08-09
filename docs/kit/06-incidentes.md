@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/06-incidentes.md
-kit-commit: e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66
-sha256-do-corpo: eb9c8aefea8b471206f4bbea97692ee293e0f2f62c980b0d34161fff6c96e52d
+kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
+sha256-do-corpo: ee0adab49306b454e4e1a9ec0ba54bf118d71e0df6352814c991867c6468f364
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/06-incidentes.md`,
-> no commit `e25aefb`.
+> no commit `6782942`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
@@ -220,6 +220,69 @@ if (!runner) return { passed: false, p0Count: -1, reason: `Sem gate para "${agen
 > **REGRA.** Verificação não registrada = REPROVADO por construção. Nunca "passa
 > por não existir". Vale para quality gate, para manual de domínio, para qualquer
 > checagem plugável por registry.
+
+---
+
+## 9. O parecer que avisava não ser um parecer — e dois Diretores usaram assim
+
+**08/08/2026 · Dioli Digital · custou um dia inteiro do CEO**
+
+O CEO desenhou o material de marca entrando pelo Google Drive: a agência abre a
+pasta do cliente e pega o que precisa. Ele criou o projeto no Google Console,
+publicou o app, gerou chave e organizou as pastas — **a pedido do Diretor**.
+
+Nada disso funcionava. O escopo `drive.file` do Google entrega **arquivo por
+arquivo, escolhido na mão**; marcar uma pasta não libera o que está dentro. Ler
+pasta exige escopo restrito, com auditoria de semanas a meses.
+
+Nas palavras do próprio Diretor, e é o melhor diagnóstico deste arquivo:
+
+> *"Comecei pela memória, não pela fonte. Assumi que escolher uma pasta liberaria
+> o que está dentro dela — parece óbvio, e está errado. Só fui checar depois de
+> você já ter criado projeto, publicado app, gerado chave e organizado pastas."*
+
+**O agravante, e é o que vira regra.** Quando o parecer finalmente foi pedido, ele
+voltou **escrito pelo `pm`, não pelo especialista `google`** — a ferramenta de
+despacho estava indisponível. O documento trazia isso declarado, em destaque, no
+cabeçalho: *"não substitui a revisão do `google`."*
+
+**Dois Diretores leram esse aviso e usaram o documento como veredito assim
+mesmo.** Um agiu por ele; o outro, auditando de fora, citou a recomendação ao CEO
+como se fosse a do especialista. Quando o `google` de verdade olhou, **derrubou o
+caminho, com fonte.**
+
+### Por que é sutil
+
+Rascunho honesto é mais perigoso que rascunho desonesto. Ele **parece** parecer:
+tem estrutura, fontes, tabela, veredito. A ressalva de procedência é uma linha no
+topo — e uma linha no topo perde para dez páginas com aparência de rigor.
+
+E a pressa tinha causa legítima: o CEO estava travado, com fila de clientes. **A
+urgência é exatamente o momento em que se pula a conferência da assinatura** — e
+exatamente o momento em que o caminho errado custa mais caro.
+
+> **REGRA 1.** Parecer de plataforma vem do **especialista daquela plataforma**.
+> Quem for agir **confere a assinatura antes** — e citar um parecer ao CEO é agir.
+>
+> **REGRA 2.** Parecer com ressalva de procedência **não é parecer, é rascunho.**
+> Não autoriza construir, não autoriza pedir nada ao CEO, e não se cita como
+> fonte. Tratá-lo como veredito é o guardrail 2 ao contrário: a verificação que
+> não aconteceu virando "aprovado".
+>
+> **REGRA 3.** A trava de plataforma serve **antes de pedir qualquer coisa ao
+> CEO**, não depois de construir. Tempo do dono gasto num caminho impossível não
+> volta.
+
+### Como se protege
+
+- O parecer carrega **assinatura de quem o produziu**, e quem consome verifica.
+  Prompt é aviso; o mecanismo é parecer sem assinatura de especialista **não
+  contar** como parecer no fluxo que o consome.
+- Antes de pedir ação ao CEO que dependa de plataforma externa, o Diretor declara
+  **qual parecer assinado sustenta o pedido**. Sem isso, não pede.
+- **A casa não aposta em comportamento não documentado.** Ausência de fonte
+  oficial dizendo "sim" é um **não**, não um "vamos tentar". É o guardrail 1
+  aplicado a plataforma de terceiro.
 
 ---
 

@@ -21,10 +21,10 @@ repositório quando a sessão abre.
 | Campo | Valor |
 |---|---|
 | Kit | `diolisantos10/dioli-brain-kit` (branch `main`) |
-| Commit espelhado | `e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66` |
-| Data do commit do kit | 2026-08-07T23:50:50Z |
-| Última conferência | 2026-08-08T14:03:00.421Z |
-| Documentos espelhados | 28 |
+| Commit espelhado | `678294223e4678da70f4913ce00d8fa7f9b0eaa4` |
+| Data do commit do kit | 2026-08-09T01:06:30Z |
+| Última conferência | 2026-08-09T06:00:48.640Z |
+| Documentos espelhados | 29 |
 | Gerado por | `.github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts` |
 
 Versão de máquina: [`_ESPELHO.json`](./_ESPELHO.json).
@@ -88,5 +88,6 @@ KIT_DIR=/tmp/kit npx ts-node --project tsconfig.scripts.json scripts/espelhar-ki
 | [`21-elenco-obrigatorio.md`](./21-elenco-obrigatorio.md) | `docs/21-elenco-obrigatorio.md` |
 | [`22-briefing-ao-conselho.md`](./22-briefing-ao-conselho.md) | `docs/22-briefing-ao-conselho.md` |
 | [`23-constituicao-dos-essenciais.md`](./23-constituicao-dos-essenciais.md) | `docs/23-constituicao-dos-essenciais.md` |
+| [`24-o-quadro-do-ceo.md`](./24-o-quadro-do-ceo.md) | `docs/24-o-quadro-do-ceo.md` |
 | [`perguntas-abertas.md`](./perguntas-abertas.md) | `docs/perguntas-abertas.md` |
 | [`presenca.md`](./presenca.md) | `docs/presenca.md` |

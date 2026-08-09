@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/23-constituicao-dos-essenciais.md
-kit-commit: e25aefbe3f4ffa143cd9b66a6f21a8a97b032c66
+kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
 sha256-do-corpo: a0286b3069325e71029ca98e1a8cbb602571af1d258f8afe4aeda212891597f4
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/23-constituicao-dos-essenciais.md`,
-> no commit `e25aefb`.
+> no commit `6782942`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
