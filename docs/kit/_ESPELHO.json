@@ -1,9 +1,9 @@
 {
   "kitRepo": "diolisantos10/dioli-brain-kit",
   "kitBranch": "main",
-  "kitCommit": "678294223e4678da70f4913ce00d8fa7f9b0eaa4",
-  "kitCommitData": "2026-08-09T01:06:30Z",
-  "verificadoEm": "2026-08-09T06:00:48.640Z",
+  "kitCommit": "1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3",
+  "kitCommitData": "2026-08-09T16:03:48Z",
+  "verificadoEm": "2026-08-10T06:44:04.260Z",
   "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
   "arquivos": [
     {
@@ -14,7 +14,7 @@
     {
       "destino": "docs/kit/CLAUDE.md",
       "origem": "CLAUDE.md",
-      "sha256": "d175a7fd121050caf2f76e7e92d06f7e955bebf92652ad13f5e4ad7b112e2320"
+      "sha256": "88b804c419acc6e9df638f2c7991ef54c9da2671b9061d6984e08712b9430c80"
     },
     {
       "destino": "docs/kit/00-onboarding-sessao.md",
@@ -124,7 +124,7 @@
     {
       "destino": "docs/kit/21-elenco-obrigatorio.md",
       "origem": "docs/21-elenco-obrigatorio.md",
-      "sha256": "c255d392f2980717fff21771a5a1f543d8cda6d15a497d2afe936d96e5478f6e"
+      "sha256": "8c9e3c1a48cfe4c1459deb895d33fd671ec7a45a229eba87f627ac31f611733c"
     },
     {
       "destino": "docs/kit/22-briefing-ao-conselho.md",
@@ -134,12 +134,32 @@
     {
       "destino": "docs/kit/23-constituicao-dos-essenciais.md",
       "origem": "docs/23-constituicao-dos-essenciais.md",
-      "sha256": "a0286b3069325e71029ca98e1a8cbb602571af1d258f8afe4aeda212891597f4"
+      "sha256": "7d847fb2002af9aa2bbc009715df60c7efbdb3b05db8a0a48542bbcbb0c7135d"
     },
     {
       "destino": "docs/kit/24-o-quadro-do-ceo.md",
       "origem": "docs/24-o-quadro-do-ceo.md",
       "sha256": "4f4ebb5f4ed7cbd5e93e475cd6d149b8661565e3b4d29cbe48797741d4b0410a"
+    },
+    {
+      "destino": "docs/kit/25-obra-em-espera.md",
+      "origem": "docs/25-obra-em-espera.md",
+      "sha256": "1321d70a98fb4361c50023da1471f55630b373a10a0af690596787dc40d7d962"
+    },
+    {
+      "destino": "docs/kit/26-briefing-ao-conselho-branding.md",
+      "origem": "docs/26-briefing-ao-conselho-branding.md",
+      "sha256": "17b326a460abe5400045199e39de5132622c2ecded5cabc24060c560fa5b7eef"
+    },
+    {
+      "destino": "docs/kit/26a-pedido-pronto-branding.md",
+      "origem": "docs/26a-pedido-pronto-branding.md",
+      "sha256": "2262a6097fdc9890136fa8ee91248c85d2858aa7fe78153244e28a00d69f1a54"
+    },
+    {
+      "destino": "docs/kit/27-ordem-subir-o-branding.md",
+      "origem": "docs/27-ordem-subir-o-branding.md",
+      "sha256": "1135912e6a11add3902d84dc00c5813a1666fb51fdb05a42ec24a272f78da416"
     },
     {
       "destino": "docs/kit/perguntas-abertas.md",

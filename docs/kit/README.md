@@ -21,10 +21,10 @@ repositório quando a sessão abre.
 | Campo | Valor |
 |---|---|
 | Kit | `diolisantos10/dioli-brain-kit` (branch `main`) |
-| Commit espelhado | `678294223e4678da70f4913ce00d8fa7f9b0eaa4` |
-| Data do commit do kit | 2026-08-09T01:06:30Z |
-| Última conferência | 2026-08-09T06:00:48.640Z |
-| Documentos espelhados | 29 |
+| Commit espelhado | `1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3` |
+| Data do commit do kit | 2026-08-09T16:03:48Z |
+| Última conferência | 2026-08-10T06:44:04.260Z |
+| Documentos espelhados | 33 |
 | Gerado por | `.github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts` |
 
 Versão de máquina: [`_ESPELHO.json`](./_ESPELHO.json).
@@ -89,5 +89,9 @@ KIT_DIR=/tmp/kit npx ts-node --project tsconfig.scripts.json scripts/espelhar-ki
 | [`22-briefing-ao-conselho.md`](./22-briefing-ao-conselho.md) | `docs/22-briefing-ao-conselho.md` |
 | [`23-constituicao-dos-essenciais.md`](./23-constituicao-dos-essenciais.md) | `docs/23-constituicao-dos-essenciais.md` |
 | [`24-o-quadro-do-ceo.md`](./24-o-quadro-do-ceo.md) | `docs/24-o-quadro-do-ceo.md` |
+| [`25-obra-em-espera.md`](./25-obra-em-espera.md) | `docs/25-obra-em-espera.md` |
+| [`26-briefing-ao-conselho-branding.md`](./26-briefing-ao-conselho-branding.md) | `docs/26-briefing-ao-conselho-branding.md` |
+| [`26a-pedido-pronto-branding.md`](./26a-pedido-pronto-branding.md) | `docs/26a-pedido-pronto-branding.md` |
+| [`27-ordem-subir-o-branding.md`](./27-ordem-subir-o-branding.md) | `docs/27-ordem-subir-o-branding.md` |
 | [`perguntas-abertas.md`](./perguntas-abertas.md) | `docs/perguntas-abertas.md` |
 | [`presenca.md`](./presenca.md) | `docs/presenca.md` |

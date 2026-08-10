@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/18-o-despacho.md
-kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
+kit-commit: 1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3
 sha256-do-corpo: b379ecc93be0aa7ba2a90ebee48fdd00a435666cf00eb9023abefd5e2301f531
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/18-o-despacho.md`,
-> no commit `6782942`.
+> no commit `1e5d9f7`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a

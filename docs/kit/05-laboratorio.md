@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/05-laboratorio.md
-kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
+kit-commit: 1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3
 sha256-do-corpo: 5de64dcf3274c2ce00c7ba3896bf1fc900b4348c58ffaa1180b92ca9c998dc81
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/05-laboratorio.md`,
-> no commit `6782942`.
+> no commit `1e5d9f7`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a

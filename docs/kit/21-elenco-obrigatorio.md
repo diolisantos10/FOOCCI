@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/21-elenco-obrigatorio.md
-kit-commit: 678294223e4678da70f4913ce00d8fa7f9b0eaa4
-sha256-do-corpo: c255d392f2980717fff21771a5a1f543d8cda6d15a497d2afe936d96e5478f6e
+kit-commit: 1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3
+sha256-do-corpo: 8c9e3c1a48cfe4c1459deb895d33fd671ec7a45a229eba87f627ac31f611733c
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/21-elenco-obrigatorio.md`,
-> no commit `6782942`.
+> no commit `1e5d9f7`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
@@ -151,6 +151,56 @@ escrita para consertar, ao contrário do `qualidade`.
 
 ---
 
+### 6. `branding` — **APROVADO PELO CEO EM 09/08/2026**
+
+> *"A gente não constrói sistemas, a gente constrói marcas. E quem cuida das
+> marcas é o branding agent."* — CEO, 09/08/2026
+
+**Este é o segundo buraco sem dono, e é do mesmo tipo do primeiro.** A companhia
+inteira existe para construir marcas — e a marca não tem agente, não tem endereço
+e não tem quem responda por ela. O resultado é o previsível: cada peça é julgada
+pelo fato (é verdade?) e nunca pela identidade (isto somos nós?).
+
+**Medido na Dioli Digital em 09/08/2026, contra o banco em produção:**
+
+- o cérebro de marca guarda **11 campos de texto** — nome, cor, tipografia, tom,
+  público, posicionamento — e **nenhum campo de proibição**;
+- **nenhum campo de referência visual**. *"Nunca escreva o nome em letra
+  gigante"* não tem onde ser escrito;
+- quem produz a peça recebe **7 linhas** sobre a marca;
+- **a reprovação não vira regra**: sem contador de voltas nem histórico por peça,
+  a peça 3 repete o erro da peça 1.
+
+A auditoria de 08/08 já havia nomeado isto como **a causa raiz de uma peça
+reprovada** — e um dia depois nada tinha mudado. É o mesmo padrão que criou o
+`seguranca`: o defeito é conhecido, está escrito, e não anda porque não é o
+mandato de ninguém.
+
+**Mandato:** responder pela verdade da marca — o que ela é, o que ela **nunca**
+pode fazer, e com o que ela se parece. Guardar proibição e referência visual.
+Transformar cada reprovação do cliente em regra que a próxima peça já obedece. E
+ser o **segundo portão** antes de a peça chegar ao cliente: aprova ou devolve,
+por razão de marca.
+
+**Fronteira com `qualidade`, porque fazem divisa e olham a MESMA peça:**
+`qualidade` pergunta *"isto é verdade e é verificável?"*; `branding` pergunta
+*"isto somos nós?"*. **Uma peça pode ser inteiramente verdadeira e não ser da
+marca** — e hoje ela passa, porque ninguém faz a segunda pergunta.
+
+> ⚠️ **A ressalva entra junto, para não distorcer a ordem de execução.**
+> O `branding` é a alavanca da **qualidade**, não a do **desbloqueio**. Em 09/08
+> a agência estava travada por formato de arquivo, uma porta de upload fechada e
+> uma permissão de plataforma não enviada — **nenhuma das três é questão de
+> marca**, e um `branding` perfeito não teria publicado um post sequer. Criar
+> este agente antes de a última milha fechar produz peças excelentes que
+> continuam não chegando a ninguém.
+
+**Condição para ele não virar enfeite:** os campos precisam existir **e o
+produtor precisa recebê-los**. Campo que ninguém lê é decoração — e foi
+exatamente assim que um cérebro de marca chegou a 11 campos servindo 7 linhas.
+
+---
+
 ## O que eu NÃO tornaria obrigatório — e por quê
 
 | Agente | Por que fica de fora |
@@ -172,10 +222,16 @@ CEO
            ├── interface      ← OBRIGATÓRIO · como a tela fica
            ├── experiencia    ← OBRIGATÓRIO · se a tela funciona para quem usa
            ├── seguranca      ← OBRIGATÓRIO · a porta que ninguém fecha
+           ├── branding       ← OBRIGATÓRIO · a marca: o que é, o que nunca pode
            └── <domínio>      ← por projeto · o que este produto faz
 ```
 
-**Cinco obrigatórios.** Nenhum deles pode ser apagado de um projeto.
+**Seis obrigatórios.** Nenhum deles pode ser apagado de um projeto.
+
+> O sexto entrou em 09/08/2026, por decisão do CEO, com o mesmo argumento que
+> criou o quinto: existe doutrina, existe defeito medido, e não existe dono.
+> A razão dele é a mais estrutural da lista — **a companhia não vende sistema,
+> vende marca**, e até 09/08 a marca era a única coisa sem agente.
 
 ---
 
