@@ -457,7 +457,7 @@ export default async function ExperimentePage() {
                     </p>
                     <p className="mt-2 text-[13px] leading-relaxed text-ink2">
                       Ela volta ao ar em instantes. Enquanto isso, a gente mostra o sistema
-                      rodando com o cardápio do seu restaurante, ao vivo.
+                      funcionando, ao vivo.
                     </p>
                     {/* EXCEÇÃO à regra de um CTA por página, e ela é do estado VAZIO:
                         este botão só existe quando a padaria de demonstração está

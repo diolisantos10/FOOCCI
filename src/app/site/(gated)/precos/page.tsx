@@ -444,7 +444,7 @@ const DEGUSTACAO = SITE_PLAN_IDS.map((id) => {
 const DEPOIS_DE_ENVIAR = [
   "Seus dados chegam para uma pessoa do Foocci — ninguém mais recebe.",
   "Ela chama você no WhatsApp que você informou aqui, para entender o seu restaurante e combinar um horário.",
-  "Na conversa, ela mostra o Foocci funcionando com o cardápio do seu restaurante. Sem compromisso e sem custo.",
+  "Na conversa, ela mostra o Foocci funcionando e responde o que você quiser perguntar. Sem compromisso e sem custo.",
 ];
 
 /**
@@ -1198,11 +1198,11 @@ export default function PrecosPage() {
               id="demonstracao-title"
               className="mt-3 text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl"
             >
-              Veja o Foocci rodando com o cardápio do seu restaurante.
+              Veja o Foocci funcionando, ao vivo.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2">
-              Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do
-              seu restaurante. São dois campos: seu nome e seu WhatsApp.
+              Uma pessoa do Foocci mostra o sistema funcionando e responde o que você
+              quiser perguntar. São dois campos: seu nome e seu WhatsApp.
             </p>
           </div>
 

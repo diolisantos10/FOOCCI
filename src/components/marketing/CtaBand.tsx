@@ -44,9 +44,20 @@ import { PrimaryCta } from "./Cta";
  * O que a pessoa recebe ao clicar. Não promete prazo ("em 24h") porque não há
  * ninguém garantindo esse prazo hoje — prometer atendimento que a operação não
  * sustenta é o guardrail 7 aplicado ao comercial.
+ *
+ * ── 10/08/2026: SAIU "com o cardápio do seu restaurante" ───────────────────
+ *
+ * Ordem do CEO: *"ninguém vai testar nada com cardápio do restaurante. O SDR
+ * vai apenas mostrar como funciona o sistema e depois fechar a venda."*
+ *
+ * A frase antiga prometia uma DEMONSTRAÇÃO MONTADA com o cardápio e os números
+ * do lead — trabalho de horas, por lead, que ninguém ia fazer. É o mesmo
+ * guardrail 7 do parágrafo acima, e o mais caro dos dois: prazo não cumprido
+ * irrita; demonstração prometida e não entregue mata a venda na primeira
+ * conversa, porque o lead descobre no momento em que já esperava ver.
  */
 const DEFAULT_SUBTITLE =
-  "Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do seu restaurante. São dois campos: seu nome e seu WhatsApp.";
+  "Uma pessoa do Foocci mostra o sistema funcionando e responde o que você quiser perguntar. São dois campos: seu nome e seu WhatsApp.";
 
 export function CtaBand({
   title,

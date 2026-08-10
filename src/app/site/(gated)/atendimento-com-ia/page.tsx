@@ -128,7 +128,7 @@ export default function AtendimentoComIaPage() {
 
       {/* O único CTA comercial da página. Rótulo e destino vêm do padrão da
           `CtaBand` — nada de rótulo escrito à mão. */}
-      <CtaBand title="Veja o Garçom atendendo com o cardápio do seu restaurante." />
+      <CtaBand title="Veja o Garçom atendendo, ao vivo." />
     </>
   );
 }
