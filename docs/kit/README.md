@@ -21,10 +21,10 @@ repositório quando a sessão abre.
 | Campo | Valor |
 |---|---|
 | Kit | `diolisantos10/dioli-brain-kit` (branch `main`) |
-| Commit espelhado | `1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3` |
-| Data do commit do kit | 2026-08-09T16:03:48Z |
-| Última conferência | 2026-08-10T06:44:04.260Z |
-| Documentos espelhados | 33 |
+| Commit espelhado | `dd312af89f7cd75c5fcc27ed686e935ea105b78b` |
+| Data do commit do kit | 2026-08-10T13:27:50Z |
+| Última conferência | 2026-08-11T06:06:35.651Z |
+| Documentos espelhados | 34 |
 | Gerado por | `.github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts` |
 
 Versão de máquina: [`_ESPELHO.json`](./_ESPELHO.json).
@@ -93,5 +93,6 @@ KIT_DIR=/tmp/kit npx ts-node --project tsconfig.scripts.json scripts/espelhar-ki
 | [`26-briefing-ao-conselho-branding.md`](./26-briefing-ao-conselho-branding.md) | `docs/26-briefing-ao-conselho-branding.md` |
 | [`26a-pedido-pronto-branding.md`](./26a-pedido-pronto-branding.md) | `docs/26a-pedido-pronto-branding.md` |
 | [`27-ordem-subir-o-branding.md`](./27-ordem-subir-o-branding.md) | `docs/27-ordem-subir-o-branding.md` |
+| [`28-nao-se-para-no-meio.md`](./28-nao-se-para-no-meio.md) | `docs/28-nao-se-para-no-meio.md` |
 | [`perguntas-abertas.md`](./perguntas-abertas.md) | `docs/perguntas-abertas.md` |
 | [`presenca.md`](./presenca.md) | `docs/presenca.md` |

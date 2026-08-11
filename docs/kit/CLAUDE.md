@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: CLAUDE.md
-kit-commit: 1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3
-sha256-do-corpo: 88b804c419acc6e9df638f2c7991ef54c9da2671b9061d6984e08712b9430c80
+kit-commit: dd312af89f7cd75c5fcc27ed686e935ea105b78b
+sha256-do-corpo: 0b79d011933f1fa37152e638036f6e64f9e2794cd6a8fcf421662b44bb3188f4
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `CLAUDE.md`,
-> no commit `1e5d9f7`.
+> no commit `dd312af`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
@@ -265,6 +265,13 @@ um incidente real. Regra que parece exagerada normalmente é cicatriz.
 6. **O alerta carrega a própria evidência.** Alerta sem o caso concreto é ruído.
 7. **Conversa apagada não volta.** Nenhum chat é fechado antes de exportado e
    minerado pelo Diretor do projeto, com o bloco de conclusão escrito.
+8. **Não se para no meio do cronograma.** Projeto com cronograma aberto só para
+   por **ordem do CEO** — nunca por ter terminado um item, nunca por ter escrito
+   um relatório, nunca por achar bom confirmar antes. Terminar um item é o
+   gatilho para começar o próximo. Item bloqueado vira o item seguinte, não
+   turno encerrado. Sessão que vai acabar deixa a retomada **agendada** e o
+   estado **escrito**. Doutrina 28 — e ela nasceu de eu ter parado cinco vezes
+   em dois dias e o CEO ter tido de perguntar *"por que você parou?"*.
 
 ---
 

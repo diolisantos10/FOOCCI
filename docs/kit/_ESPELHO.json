@@ -1,9 +1,9 @@
 {
   "kitRepo": "diolisantos10/dioli-brain-kit",
   "kitBranch": "main",
-  "kitCommit": "1e5d9f70733a43c6e9e1f3c3d8a1386010ba49e3",
-  "kitCommitData": "2026-08-09T16:03:48Z",
-  "verificadoEm": "2026-08-10T06:44:04.260Z",
+  "kitCommit": "dd312af89f7cd75c5fcc27ed686e935ea105b78b",
+  "kitCommitData": "2026-08-10T13:27:50Z",
+  "verificadoEm": "2026-08-11T06:06:35.651Z",
   "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
   "arquivos": [
     {
@@ -14,7 +14,7 @@
     {
       "destino": "docs/kit/CLAUDE.md",
       "origem": "CLAUDE.md",
-      "sha256": "88b804c419acc6e9df638f2c7991ef54c9da2671b9061d6984e08712b9430c80"
+      "sha256": "0b79d011933f1fa37152e638036f6e64f9e2794cd6a8fcf421662b44bb3188f4"
     },
     {
       "destino": "docs/kit/00-onboarding-sessao.md",
@@ -160,6 +160,11 @@
       "destino": "docs/kit/27-ordem-subir-o-branding.md",
       "origem": "docs/27-ordem-subir-o-branding.md",
       "sha256": "1135912e6a11add3902d84dc00c5813a1666fb51fdb05a42ec24a272f78da416"
+    },
+    {
+      "destino": "docs/kit/28-nao-se-para-no-meio.md",
+      "origem": "docs/28-nao-se-para-no-meio.md",
+      "sha256": "09c8a70ebe0e628938603e77d10cab2b265dceabbf6e3c4a5c7a091bc0fd7fc7"
     },
     {
       "destino": "docs/kit/perguntas-abertas.md",
