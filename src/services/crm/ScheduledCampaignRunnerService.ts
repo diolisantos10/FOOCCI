@@ -966,7 +966,7 @@ export class ScheduledCampaignRunnerService {
         if (!dryRun) {
           await this._registrarBloqueioDeCiclo(
             pending.map((p) => ({ id: p.campaignId })),
-            plan.globalBlockReason,
+            describeBudgetAllocation({ allocated: 0, reason: plan.globalBlockReason }),
           );
         }
         for (const p of pending) resultsById.set(p.campaignId, skip(byId.get(p.campaignId)!, plan.globalBlockReason));
