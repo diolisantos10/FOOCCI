@@ -55,6 +55,23 @@ export function isAdminAuthenticated(): boolean {
 }
 
 /**
+ * Guarda ESTRITA, só por cabeçalho `x-admin-secret` — sem cookie.
+ *
+ * Existe para o punhado de rotas cujo efeito é IRREVERSÍVEL (apagar contas, por
+ * exemplo). Aceitar o cookie de sessão ali significaria que um clique numa aba
+ * aberta basta; exigir o cabeçalho força um comando deliberado, com a credencial
+ * na mão. A comparação é a mesma de tempo constante do resto do arquivo, e sem
+ * `ADMIN_SECRET` configurado a resposta é sempre `false` — ausência de segredo
+ * nunca libera (guardrail 2).
+ */
+export function checkAdminSecretHeader(req: NextRequest): boolean {
+  const envSecret = process.env.ADMIN_SECRET;
+  if (!envSecret) return false;
+  const header = req.headers.get("x-admin-secret");
+  return !!header && safeEqual(header, envSecret);
+}
+
+/**
  * For use in Route Handlers — accepts either:
  *   1. x-admin-secret header (backward compat / curl usage)
  *   2. foocci-admin-token httpOnly cookie (browser UI)

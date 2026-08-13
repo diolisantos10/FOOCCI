@@ -15,6 +15,7 @@ import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import { signIn, getProviders } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { SupportContactBlock } from "@/components/auth/SupportContactBlock";
 
 const VALUE_PROPS = [
   "Atendimento que vende sozinho, 24h por dia",
@@ -42,7 +43,9 @@ function LoginForm() {
   // Surface a Google sign-in rejection (e.g. email not provisioned / ambiguous).
   useEffect(() => {
     if (searchParams.get("error")) {
-      setError("Não foi possível entrar com o Google. Use seu e-mail e senha, ou fale com o suporte.");
+      // "fale com o suporte" saiu daqui: mandava a pessoa procurar um suporte que a
+      // tela não dizia onde ficava. Agora aponta para o bloco de contato logo abaixo.
+      setError("Não foi possível entrar com o Google. Use seu e-mail e senha — ou peça ajuda no bloco abaixo do formulário.");
     }
   }, [searchParams]);
 
@@ -229,11 +232,19 @@ function LoginForm() {
             </>
           )}
 
-          <div className="mt-6 text-center">
-            <a href="/recover" className="text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline">
-              Esqueci minha senha
-            </a>
-          </div>
+          {/*
+            AQUI FICAVA "Esqueci minha senha" APONTANDO PARA /recover — e /recover
+            não recupera senha nenhuma: é ferramenta de INSTALAÇÃO, que respondia
+            "uma conta de proprietário ativa já existe" e, a um clique, oferecia
+            APAGAR TODOS OS USUÁRIOS do restaurante. O lojista trancado para fora
+            no meio do expediente levava um beco sem saída e um susto vermelho.
+
+            Enquanto a redefinição por e-mail não existir (não há serviço de e-mail
+            configurado — ver relatório de 13/08), a verdade é esta: quem devolve o
+            acesso é uma pessoa do Foocci. Então a tela mostra COMO chegar nela, em
+            vez de mandar para uma tela que não resolve.
+          */}
+          <SupportContactBlock className="mt-6" />
         </div>
       </main>
     </div>

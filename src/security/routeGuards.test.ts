@@ -79,7 +79,10 @@ const TENANT_HELPER =
   /\b(getTenantContext|getTenantId|assertTenant|getTenantIdFromRequest)\b/;
 
 // Known admin guards. A route under /api/admin/** must reference one of these…
-const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest)\b/;
+// `checkAdminSecretHeader` entrou em 13/08/2026: é a variante ESTRITA (só o
+// cabeçalho x-admin-secret, sem cookie de sessão) usada pelas rotas de efeito
+// irreversível. Ela é mais restritiva que `checkAdminRequest`, não menos.
+const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|checkAdminSecretHeader)\b/;
 
 // …unless it is one of these vetted exceptions. Each does its OWN auth and cannot
 // use the shared helper. Adding to this list is a conscious, reviewed act — a NEW
@@ -89,10 +92,10 @@ const ADMIN_GUARD_EXEMPT = new Map<string, string>([
     "admin/session/route.ts",
     "login de admin: valida o ADMIN_SECRET cru e EMITE o cookie; não pode exigir a sessão que ela mesma cria.",
   ],
-  [
-    "admin/reset-owner/route.ts",
-    "recuperação de emergência (isento no early-exit do middleware); auth inline por x-admin-secret === ADMIN_SECRET.",
-  ],
+  // `admin/reset-owner/route.ts` SAIU desta lista em 13/08/2026: ela agora usa a
+  // guarda compartilhada `checkAdminSecretHeader` (comparação de tempo constante),
+  // em vez do `!==` cru que justificava a isenção. Uma isenção a menos é uma rota a
+  // mais coberta pelo portão.
   [
     "admin/force-deploy/route.ts",
     "fallback de deploy operacional; auth inline por x-admin-secret === ADMIN_SECRET.",
