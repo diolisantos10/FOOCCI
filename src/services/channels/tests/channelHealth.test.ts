@@ -13,6 +13,8 @@ import {
   sortChannelHealth,
   humanizeSilence,
   CHANNEL_SILENCE_ATTENTION_MS,
+  evaluateWhatsAppHealth,
+  WHATSAPP_SILENCE_ATTENTION_MS,
   instagramCardStatus,
   type InstagramHealthInput,
   type InstagramCardStatusInput,
@@ -284,5 +286,100 @@ describe("selo do cartão tem prazo de validade", () => {
     expect(card({ configured: false })).toBe("unconfigured");
     expect(card({ enabled: false })).toBe("configured");
     expect(card({ enabled: false, tokenConfigured: false, hasAccountIds: false })).toBe("unconfigured");
+  });
+});
+
+// ── WHATSAPP ────────────────────────────────────────────────────────────────
+//
+// Entrou na faixa de saúde em 13/08/2026. O caso que motivou é real e caro: um
+// restaurante trocou de chip em 12/08, o sistema continuou ouvindo o número
+// velho, toda mensagem morreu num `console.warn`, e a tela ficou VERDE. O CEO
+// descobriu no dia seguinte — pelas vendas.
+
+describe("WhatsApp: verde nunca significou 'consigo ouvir'", () => {
+  const AGORA = new Date("2026-08-13T12:00:00Z");
+  const base = {
+    configured: true,
+    connectionStatus: "CONNECTED",
+    lastError: null as string | null,
+    lastInboundAt: null as Date | null,
+    connectedAt: new Date("2026-06-01T12:00:00Z"),
+    now: AGORA,
+  };
+
+  it("canal ausente NÃO é canal caído", () => {
+    expect(evaluateWhatsAppHealth({ ...base, configured: false })).toHaveLength(0);
+  });
+
+  it("erro registrado é o único caminho para o vermelho", () => {
+    const r = evaluateWhatsAppHealth({ ...base, lastError: "token expirado", lastInboundAt: AGORA });
+    expect(r[0]!.level).toBe("down");
+    expect(r[0]!.headline).toContain("token expirado");
+  });
+
+  it("connectionStatus ERROR também é fato positivo de falha", () => {
+    expect(evaluateWhatsAppHealth({ ...base, connectionStatus: "ERROR", lastInboundAt: AGORA })[0]!.level).toBe("down");
+  });
+
+  it("recebeu agora há pouco: nada a dizer", () => {
+    expect(evaluateWhatsAppHealth({ ...base, lastInboundAt: new Date("2026-08-13T09:00:00Z") })).toHaveLength(0);
+  });
+});
+
+describe("WhatsApp: o caso do chip trocado", () => {
+  const AGORA = new Date("2026-08-13T12:00:00Z");
+  const base = {
+    configured: true, connectionStatus: "CONNECTED", lastError: null,
+    connectedAt: new Date("2026-06-01T12:00:00Z"), now: AGORA,
+  };
+
+  it("recebia e parou há mais de um dia: ATENÇÃO, nunca vermelho", () => {
+    // Âmbar de propósito: pode ser movimento baixo. Vermelho aqui seria um
+    // alarme que mente "quebrou" — mais destrutivo que o problema.
+    const r = evaluateWhatsAppHealth({ ...base, lastInboundAt: new Date("2026-08-11T12:00:00Z") });
+    expect(r).toHaveLength(1);
+    expect(r[0]!.level).toBe("attention");
+  });
+
+  it("e o aviso NOMEIA a causa dominante em vez de mandar caçar", () => {
+    // Alerta que diz "sem receber" e não diz "você trocou de chip?" faz o
+    // lojista procurar defeito onde não há.
+    const r = evaluateWhatsAppHealth({ ...base, lastInboundAt: new Date("2026-08-11T12:00:00Z") });
+    expect(r[0]!.headline).toMatch(/trocou o chip|trocou.*n[úu]mero/i);
+    expect(r[0]!.headline).toMatch(/reconectar/i);
+    expect(r[0]!.action).toMatch(/n[úu]mero/i);
+  });
+
+  it("o limiar do WhatsApp é MENOR que o do Instagram — aqui passa o pedido", () => {
+    expect(WHATSAPP_SILENCE_ATTENTION_MS).toBeLessThan(CHANNEL_SILENCE_ATTENTION_MS);
+    // 20h de silêncio ainda não alarma; 26h alarma.
+    expect(evaluateWhatsAppHealth({ ...base, lastInboundAt: new Date("2026-08-12T16:00:00Z") })).toHaveLength(0);
+    expect(evaluateWhatsAppHealth({ ...base, lastInboundAt: new Date("2026-08-12T10:00:00Z") })).toHaveLength(1);
+  });
+});
+
+describe("WhatsApp: ausência de informação não vira saúde", () => {
+  const AGORA = new Date("2026-08-13T12:00:00Z");
+  const base = {
+    configured: true, connectionStatus: "CONNECTED", lastError: null,
+    lastInboundAt: null, now: AGORA,
+  };
+
+  it("nunca recebeu E não sei desde quando: CALA — não afirma que está bem", () => {
+    expect(evaluateWhatsAppHealth({ ...base, connectedAt: null })).toHaveLength(0);
+  });
+
+  it("nunca recebeu, conectado há meses: atenção, e aponta para o número", () => {
+    const r = evaluateWhatsAppHealth({ ...base, connectedAt: new Date("2026-06-01T12:00:00Z") });
+    expect(r[0]!.level).toBe("attention");
+    expect(r[0]!.headline).toMatch(/n[úu]mero/i);
+  });
+
+  it("conectado há pouco e ainda sem mensagem é o normal", () => {
+    expect(evaluateWhatsAppHealth({ ...base, connectedAt: new Date("2026-08-13T06:00:00Z") })).toHaveLength(0);
+  });
+
+  it("config existente mas não conectada não vira alarme de saúde", () => {
+    expect(evaluateWhatsAppHealth({ ...base, connectionStatus: "NOT_CONNECTED", connectedAt: new Date("2026-06-01T12:00:00Z") })).toHaveLength(0);
   });
 });

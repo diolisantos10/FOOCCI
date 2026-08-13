@@ -28,14 +28,27 @@
  * Nada aqui envia mensagem, lê token, decifra segredo ou fala com a Meta. É
  * leitura de estado já gravado.
  *
- * ── Por que o WhatsApp NÃO está aqui ─────────────────────────────────────────
- * `MetaWhatsAppConfig` não tem carimbo de último evento recebido — não existe
- * dado para julgar silêncio. E `connectionStatus: "ERROR"` na Meta **não**
- * significa WhatsApp fora do ar: a Evolution é o padrão E o fallback, então o
- * número pode estar atendendo normalmente com a config da Meta em erro. Um aviso
- * de "WhatsApp caiu" nessa situação é alarme falso no canal que carrega todo o
- * movimento. Enquanto não houver um `lastInboundAt` por provedor, este módulo
- * fica calado sobre o WhatsApp — de propósito, pela regra 3.
+ * ── O WhatsApp ENTROU aqui em 13/08/2026, e por quê ──────────────────────────
+ * Este bloco dizia "por que o WhatsApp NÃO está aqui", com duas razões. **Uma
+ * delas morreu e a outra tinha solução.**
+ *
+ *  • *"a Evolution é o padrão E o fallback"* — **CADUCOU**. A Evolution foi
+ *    extraída em 04/08/2026. Há um provedor só, e `connectionStatus: "ERROR"`
+ *    hoje significa exatamente o que parece.
+ *  • *"não existe dado para julgar silêncio"* — havia. `MetaWhatsAppConfig` de
+ *    fato não tem carimbo, mas a última entrada sempre esteve calculável a
+ *    partir de `Message` (é o que
+ *    `api/integracoes/whatsapp/meta/diagnostics/route.ts:30` já fazia).
+ *
+ * **O que essa cegueira custou, medido:** em 12/08 um restaurante trocou de
+ * chip. O `phone_number_id` gravado continuou apontando para o número velho, e
+ * toda mensagem que entrava morria num `console.warn`
+ * (`webhooks/meta/whatsapp/route.ts:168`). A tela ficou **verde o tempo todo**.
+ * O CEO descobriu no dia seguinte, pelas vendas: *"as vendas caíram"*.
+ *
+ * O selo de Integrações vem só de `connectionStatus`, e `connectionStatus` é
+ * gravado no `upsert` e só revisto por um health check que testa **envio**.
+ * **Verde sempre significou "consigo falar", nunca "consigo ouvir".**
  */
 
 /** A partir de quanto tempo em silêncio o canal vira "atenção" (nunca "quebrado"). */
@@ -50,7 +63,7 @@ export type ChannelHealthLevel =
   | "info";
 
 export interface ChannelHealthItem {
-  channel: "INSTAGRAM";
+  channel: "INSTAGRAM" | "WHATSAPP";
   /** Nome que o lojista reconhece. */
   label: string;
   level: ChannelHealthLevel;
@@ -242,4 +255,104 @@ const LEVEL_WEIGHT: Record<ChannelHealthLevel, number> = { down: 0, attention: 1
 
 export function sortChannelHealth(items: ChannelHealthItem[]): ChannelHealthItem[] {
   return [...items].sort((a, b) => LEVEL_WEIGHT[a.level] - LEVEL_WEIGHT[b.level]);
+}
+
+// ─── WHATSAPP ────────────────────────────────────────────────────────────────
+//
+// O canal que carrega o movimento inteiro. Por isso ele tem um limiar PRÓPRIO,
+// mais curto que o do Instagram: 24h. Um restaurante pode passar dois dias sem
+// um Direct e estar tudo bem; passar um dia inteiro sem UMA mensagem no
+// WhatsApp, tendo histórico de receber, não é movimento baixo — é sintoma.
+//
+// E o aviso carrega a CAUSA MAIS PROVÁVEL, não só o sintoma. O raio-X de
+// 13/08/2026 mostrou que o silêncio total do WhatsApp tem uma origem dominante:
+// o restaurante trocou de número e ninguém reconectou no painel. O sistema
+// continua ouvindo o número velho. Um alerta que diz "sem receber" e não diz
+// "você trocou de chip?" faz o lojista procurar defeito onde não há.
+
+/** Silêncio que vira atenção no WhatsApp. Menor que o do Instagram de propósito:
+ *  aqui passa o pedido, e um dia mudo no canal principal não é movimento baixo. */
+export const WHATSAPP_SILENCE_ATTENTION_MS = 24 * 60 * 60 * 1000;
+
+const WA_HREF = "/integracoes/whatsapp";
+
+export interface WhatsAppHealthInput {
+  /** Existe config da Meta gravada para este restaurante. */
+  configured: boolean;
+  /** `connectionStatus` da config. */
+  connectionStatus: string;
+  /** Erro registrado. Fato positivo de falha. */
+  lastError: string | null;
+  /** Última mensagem RECEBIDA, calculada de `Message` — não de um carimbo no canal. */
+  lastInboundAt: Date | null;
+  /** Quando a config foi gravada/atualizada pela última vez. É o que permite
+   *  julgar "conectado há muito tempo e nunca recebeu nada". */
+  connectedAt: Date | null;
+  now: Date;
+}
+
+/**
+ * Avalia o WhatsApp. Devolve 0 ou 1 item.
+ *
+ * Lista vazia significa **"nada a dizer"** — nunca "o canal está bem". É a
+ * regra 3 do cabeçalho, e ela vale aqui com força: o histórico deste canal é
+ * justamente o de parecer saudável enquanto estava mudo.
+ */
+export function evaluateWhatsAppHealth(input: WhatsAppHealthInput): ChannelHealthItem[] {
+  const { configured, connectionStatus, lastError, lastInboundAt, connectedAt, now } = input;
+
+  // Canal ausente não é canal caído.
+  if (!configured) return [];
+
+  const base = {
+    channel: "WHATSAPP" as const,
+    label: "WhatsApp",
+    actionHref: WA_HREF,
+    lastInboundAt: lastInboundAt ? lastInboundAt.toISOString() : null,
+  };
+  const horas = (ms: number) => Math.floor(ms / (60 * 60 * 1000));
+
+  // ── Fato positivo de falha: o único caminho para o vermelho ───────────────
+  if (lastError || connectionStatus === "ERROR") {
+    return [{
+      ...base,
+      level: "down",
+      headline: `A conexão do WhatsApp está com problema e as mensagens podem não estar chegando.${lastError ? ` ${lastError}` : ""}`,
+      action: "Reconectar",
+      silentHours: lastInboundAt ? horas(now.getTime() - lastInboundAt.getTime()) : null,
+    }];
+  }
+
+  // Config existe mas não está conectada: é recado de configuração, não falha.
+  if (connectionStatus !== "CONNECTED") return [];
+
+  // ── Nunca recebeu nada ────────────────────────────────────────────────────
+  if (lastInboundAt === null) {
+    // Sem saber desde quando, não dá para julgar. Cala — e NÃO afirma saúde.
+    if (connectedAt === null) return [];
+    const mudo = now.getTime() - connectedAt.getTime();
+    if (mudo <= CHANNEL_SILENCE_ATTENTION_MS) return [];
+    return [{
+      ...base,
+      level: "attention",
+      headline: `WhatsApp conectado ${humanizeSilence(mudo)} e ainda não recebeu nenhuma mensagem. Normalmente isso é o número: confira se o que está conectado aqui é o mesmo que os clientes usam.`,
+      action: "Conferir número",
+      silentHours: horas(mudo),
+    }];
+  }
+
+  // ── Recebia, e parou ──────────────────────────────────────────────────────
+  const mudo = now.getTime() - lastInboundAt.getTime();
+  if (mudo <= WHATSAPP_SILENCE_ATTENTION_MS) return [];
+
+  // Este restaurante TEM histórico de receber — então o silêncio não é "nunca
+  // teve movimento". A frase nomeia a causa dominante em vez de mandar o
+  // lojista caçar: trocar de chip não troca o número que o sistema escuta.
+  return [{
+    ...base,
+    level: "attention",
+    headline: `WhatsApp sem receber nenhuma mensagem ${humanizeSilence(mudo)}, e antes disso recebia. Se você trocou o chip ou o número, é preciso reconectar aqui — o sistema continua ouvindo o número anterior.`,
+    action: "Conferir número",
+    silentHours: horas(mudo),
+  }];
 }
