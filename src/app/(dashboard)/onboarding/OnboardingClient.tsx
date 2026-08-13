@@ -63,13 +63,15 @@ function CopyBtn({ text }: { text: string }) {
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  const color = pct === 100 ? "bg-green-500" : pct >= 60 ? "bg-amber-400" : "bg-red-400";
+  // Progresso é progresso: laranja da casa enquanto anda, verde ao fechar. A
+  // barra vermelha de antes repreendia quem tinha acabado de começar.
+  const color = pct === 100 ? "bg-green-500" : "bg-brand-500";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-[#F4F4F2] rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-semibold text-muted w-10 text-right">{value}/{max}</span>
+      <span className="w-10 text-right text-xs font-semibold text-muted">{value}/{max}</span>
     </div>
   );
 }
@@ -91,13 +93,21 @@ function StepCard({
   href?: string;
   children?: React.ReactNode;
 }) {
-  const iconColor = { COMPLETE: "bg-green-500", PENDING: "bg-amber-400", WARNING: "bg-brand-400", BLOCKED: "bg-red-500" }[step.status];
-  const borderColor = { COMPLETE: "border-green-200", PENDING: "border-line2", WARNING: "border-brand-200", BLOCKED: "border-red-200" }[step.status];
+  // Etapa que ainda não começou é NEUTRA. Sete bolinhas amarelas e vermelhas de
+  // uma vez transformam a tela num painel de alarme, e aí nenhuma cor significa
+  // mais nada — a cor fica reservada ao que exige atenção de verdade.
+  const iconColor = {
+    COMPLETE: "bg-green-500 text-white",
+    PENDING:  "bg-[#F4F4F2] text-ink2",
+    WARNING:  "bg-brand-500 text-white",
+    BLOCKED:  "bg-red-500 text-white",
+  }[step.status];
+  const borderColor = { COMPLETE: "border-green-200", PENDING: "border-line", WARNING: "border-brand-200", BLOCKED: "border-red-200" }[step.status];
 
   return (
-    <div className={`rounded-2xl border bg-paper p-5 shadow-sm ${borderColor}`}>
+    <div className={`rounded-2xl border bg-paper p-5 shadow-[0_1px_2px_rgba(11,11,11,.03)] ${borderColor}`}>
       <div className="flex items-start gap-4">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ${iconColor}`}>
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${iconColor}`}>
           {step.status === "COMPLETE" ? "✓" : number}
         </div>
         <div className="min-w-0 flex-1">
@@ -196,28 +206,39 @@ export default function OnboardingClient() {
   const r = READINESS_LABELS[status.readiness];
   const stepsArr = Object.values(status.steps);
   const completedCount = stepsArr.filter((s) => s.status === "COMPLETE").length;
+  const tudoPronto = status.readiness === "PRONTO_PARA_PILOTO";
   const checkedCount = Object.values(checked).filter(Boolean).length;
 
   return (
     <div className="min-h-full bg-canvas">
       <div className="mx-auto max-w-3xl px-4 py-8 pb-16 space-y-6">
 
-        {/* ── Header ── */}
-        <div className={`rounded-2xl border ${r.border} ${r.bg} px-5 py-5 sm:px-6`}>
+        {/* ── Header ──
+            Esta é a PRIMEIRA tela de quem acabou de contratar (13/08/2026): o
+            painel manda para cá quem ainda não tem cardápio. O título era o
+            rótulo de prontidão — e num restaurante recém-criado ele é
+            "Bloqueado", em vermelho, tamanho manchete. Boas-vindas nenhuma, e a
+            palavra nem é do vocabulário do lojista: ele não bloqueou nada, ele
+            só ainda não configurou. O rótulo continua na tela, como status
+            secundário, porque quem acompanha o piloto usa ele. */}
+        <div className="rounded-2xl border border-line bg-paper px-5 py-5 shadow-[0_1px_2px_rgba(11,11,11,.03)] sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold uppercase tracking-widest text-muted">
                 {status.restaurantName}
               </p>
-              <h1 className={`mt-1 text-xl font-semibold ${r.color}`}>{r.label}</h1>
+              <h1 className="mt-1 text-xl font-semibold text-ink">
+                {tudoPronto ? "Tudo pronto para vender" : "Vamos configurar seu restaurante"}
+              </h1>
             </div>
-            <span className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold ${r.color} ${r.border} bg-paper`}>
-              {completedCount}/{stepsArr.length} etapas
+            <span className={`shrink-0 rounded-full border px-3 py-1 text-[11.5px] font-semibold ${r.color} ${r.border} ${r.bg}`}>
+              {r.label}
             </span>
           </div>
           <p className="mt-2 text-[13px] leading-snug text-ink2">
-            Siga as etapas abaixo para deixar seu restaurante pronto para receber pedidos.
-            Cada uma leva você direto para a tela certa.
+            {tudoPronto
+              ? "Todas as etapas estão concluídas. Seu restaurante está pronto para receber pedidos de verdade."
+              : "Siga as etapas abaixo para deixar seu restaurante pronto para receber pedidos. Cada uma leva você direto para a tela certa."}
           </p>
           <div className="mt-4">
             <ProgressBar value={completedCount} max={stepsArr.length} />
