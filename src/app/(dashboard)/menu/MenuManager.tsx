@@ -4057,22 +4057,22 @@ export function MenuManager({
         onChange={setFilterQuery}
       />
 
-      {/* Empty state */}
+      {/* Empty state
+          O atalho "popular com um cardápio de exemplo" saiu daqui em 13/08/2026:
+          a loja pública do restaurante está no ar desde o primeiro minuto — não
+          existe estado "ainda não publicada". Um dono clicando para ver como fica
+          virava uma pizzaria de mentira, ao vivo, para os clientes dele. A rota
+          `/seed-menu` continua existindo para uso interno; o que saiu foi o
+          convite na tela de quem tem uma loja de verdade no ar. */}
       {categories.length === 0 && (
-        <div className="rounded-xl border border-dashed border-line2 p-10 text-center text-sm text-muted space-y-3">
-          <p>
-            Nenhuma categoria criada ainda. Clique em{" "}
-            <strong>+ Nova categoria</strong> para começar.
+        <div className="rounded-2xl border border-dashed border-line2 p-10 text-center space-y-3">
+          <p className="text-sm font-semibold text-ink2">Seu cardápio ainda está vazio</p>
+          <p className="text-sm text-muted">
+            Comece criando uma categoria (ex.: <em>Pizzas</em>, <em>Bebidas</em>) em{" "}
+            <strong className="text-ink2">+ Nova categoria</strong>, aí adicione os produtos dentro dela.
           </p>
-          <p>
-            Ou{" "}
-            <a
-              href="/seed-menu"
-              className="font-medium text-brand-600 hover:underline"
-            >
-              popular com um cardápio de exemplo
-            </a>{" "}
-            (pizzaria, 4 categorias, 11 itens).
+          <p className="text-xs text-muted">
+            Seu link já está no ar — enquanto o cardápio estiver vazio, quem abrir não verá o que pedir.
           </p>
         </div>
       )}
@@ -4106,16 +4106,10 @@ export function MenuManager({
         </SortableContext>
       </DndContext>
 
-      {/* Integration callout */}
-      <div className="rounded-xl border border-dashed border-line2 p-4 text-xs text-muted">
-        <span className="font-medium text-muted">Integração futura:</span>{" "}
-        categorias e itens importados automaticamente de um sistema externo
-        (POS, iFood, etc.) aparecerão aqui com a badge{" "}
-        <span className="rounded bg-blue-100 px-1 text-blue-600">
-          Importado
-        </span>{" "}
-        e não poderão ser editados manualmente.
-      </div>
+      {/* O aviso de "Integração futura: categorias importadas de um sistema
+          externo…" saiu em 13/08/2026: era roadmap interno numa tela de trabalho.
+          Não ajudava ninguém a fazer nada hoje e ocupava o rodapé de todas as
+          visitas ao cardápio. */}
 
       {/* Bulk price dialog */}
       <BulkPriceModal

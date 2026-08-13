@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { CockpitReport } from "@/services/dashboard/DashboardCockpitService";
 import type { RevenueSourcesResult, RevenueSourceKey } from "@/services/dashboard/RevenueAttributionService";
-import { Card, SectionTitle, Stat, Pill, Button, EmptyState } from "@/components/ui";
+import { Card, SectionTitle, Stat, Pill, Button, ButtonLink, EmptyState } from "@/components/ui";
+import { useSidebar } from "@/components/layout/SidebarContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -186,6 +187,13 @@ export function SalesChart({ data }: { data: DashboardData }) {
 // ── Operação agora (pipeline — the operational essentials) ─────────────────────
 
 export function OperationNow({ data }: { data: DashboardData }) {
+  // O guia de configuração vem do shell (servidor). Quem ainda não terminou de
+  // se configurar NUNCA pode ler "tudo concluído ✓" num painel que nunca vendeu:
+  // é ausência de informação virando informação, e some justamente o único
+  // próximo passo que existe para essa pessoa.
+  const { guia } = useSidebar();
+  const emConfiguracao = !!guia && !guia.concluido;
+
   const cells = [
     { label: "Aguardando", value: data.pipeline.pending },
     { label: "Em preparo", value: data.pipeline.preparing + data.pipeline.confirmed },
@@ -196,7 +204,16 @@ export function OperationNow({ data }: { data: DashboardData }) {
     <Card className="p-5">
       <SectionTitle meta={`${data.openOrders} ativos`} href="/orders" hrefLabel="Pedidos">Operação agora</SectionTitle>
       {data.openOrders === 0 && data.delayedCount === 0 && data.pendingPaymentsCount === 0 ? (
-        <EmptyState icon="✓" title="Nenhum pedido em andamento" sub="Tudo concluído por aqui." />
+        emConfiguracao ? (
+          <EmptyState
+            icon="🚀"
+            title="Seu restaurante ainda está sendo configurado"
+            sub={`${guia!.pendentes === 1 ? "Falta 1 etapa" : `Faltam ${guia!.pendentes} etapas`} para você receber o primeiro pedido.`}
+            action={<ButtonLink href="/onboarding" variant="primary">Continuar configuração</ButtonLink>}
+          />
+        ) : (
+          <EmptyState icon="✓" title="Nenhum pedido em andamento" sub="Tudo concluído por aqui." />
+        )
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2.5">

@@ -16,7 +16,19 @@ const STORAGE_KEY = "foocci:audio-opted-in";
 let armed = false;
 // Hydrated lazily from localStorage on first read; null = not checked yet.
 let optedIn: boolean | null = null;
+/**
+ * Um alerta REAL tentou tocar e o navegador recusou (autoplay). Isto não é
+ * "configuração", é evidência: só fica true depois de um pedido de verdade ter
+ * entrado mudo. É o único fato que autoriza a tela a pedir um toque ao lojista.
+ */
+let blocked = false;
 const listeners = new Set<Listener>();
+
+function notify(): void {
+  for (const l of [...listeners]) {
+    try { l(); } catch { /* one bad subscriber must not break the rest */ }
+  }
+}
 
 function readOptedIn(): boolean {
   if (optedIn !== null) return optedIn;
@@ -53,14 +65,42 @@ export function isAudioOptedIn(): boolean {
 /** Mark the page armed. Idempotent — subscribers fire only on the false→true edge. */
 export function markAudioArmed(): void {
   persistOptedIn(); // remember the choice across reloads, even if already armed
+  blocked = false;  // armado é o oposto de bloqueado: o aviso some junto
   if (armed) return;
   armed = true;
-  for (const l of [...listeners]) {
-    try { l(); } catch { /* one bad subscriber must not break the rest */ }
-  }
+  notify();
 }
 
-/** Subscribe to arming changes. Returns an unsubscribe fn. */
+/**
+ * True enquanto um alerta real estiver sem conseguir tocar neste carregamento.
+ *
+ * POR QUE ISTO EXISTE (13/08/2026) — o chip "Som ativo" da barra superior foi
+ * removido por ordem do CEO, e ele mentia: dizia "ativo" com base numa marca de
+ * localStorage de algum dia no passado, enquanto o navegador exige um toque a
+ * CADA carregamento. O dono lia "Som ativo" e o pedido entrava mudo.
+ *
+ * O que ficou no lugar não é status: é alarme com evidência. Só aparece quando
+ * um pedido de verdade já tentou tocar e o navegador recusou.
+ */
+export function isAudioBlocked(): boolean {
+  return blocked;
+}
+
+/** Registra que um alerta real foi recusado pelo navegador. Idempotente. */
+export function markAudioBlocked(): void {
+  if (blocked || armed) return;
+  blocked = true;
+  notify();
+}
+
+/** Limpa o alarme (tocou, ou não há mais nada esperando). Idempotente. */
+export function clearAudioBlocked(): void {
+  if (!blocked) return;
+  blocked = false;
+  notify();
+}
+
+/** Subscribe to gate changes (arming and the blocked alarm). Returns an unsubscribe fn. */
 export function subscribeAudioArmed(cb: Listener): () => void {
   listeners.add(cb);
   return () => { listeners.delete(cb); };
@@ -70,6 +110,7 @@ export function subscribeAudioArmed(cb: Listener): () => void {
 export function __resetAudioGate(): void {
   armed = false;
   optedIn = null;
+  blocked = false;
   listeners.clear();
   if (typeof window !== "undefined") {
     try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }

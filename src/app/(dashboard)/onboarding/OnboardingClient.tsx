@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { OnboardingStatusData, StepStatus } from "@/app/api/onboarding/status/route";
+import { Button, ButtonLink } from "@/components/ui";
+import type { OnboardingStatusData, StepStatus } from "@/services/onboarding/onboardingStatus";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -16,13 +17,6 @@ const READINESS_LABELS: Record<OnboardingStatusData["readiness"], { label: strin
   PRONTO_PARA_TESTE: { label: "Pronto para teste",  color: "text-amber-700", bg: "bg-amber-50",    border: "border-amber-200" },
   PRONTO_PARA_PILOTO:{ label: "Pronto para piloto", color: "text-green-700", bg: "bg-green-50",    border: "border-green-200" },
   BLOQUEADO:         { label: "Bloqueado",           color: "text-red-700",   bg: "bg-red-50",      border: "border-red-200" },
-};
-
-const STEP_DOT: Record<StepStatus, string> = {
-  COMPLETE: "bg-green-500",
-  PENDING:  "bg-amber-400",
-  WARNING:  "bg-brand-400",
-  BLOCKED:  "bg-red-500",
 };
 
 const STEP_ICON: Record<StepStatus, string> = {
@@ -103,7 +97,7 @@ function StepCard({
   return (
     <div className={`rounded-2xl border bg-paper p-5 shadow-sm ${borderColor}`}>
       <div className="flex items-start gap-4">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${iconColor}`}>
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ${iconColor}`}>
           {step.status === "COMPLETE" ? "✓" : number}
         </div>
         <div className="min-w-0 flex-1">
@@ -114,7 +108,7 @@ function StepCard({
             </span>
           </div>
           <p className="mt-0.5 text-sm text-muted">{subtitle}</p>
-          <p className={`mt-2 text-xs font-medium ${STEP_TEXT[step.status]}`}>{step.message}</p>
+          <p className={`mt-2 text-xs font-semibold ${STEP_TEXT[step.status]}`}>{step.message}</p>
           {children && <div className="mt-3">{children}</div>}
           {href && step.status !== "COMPLETE" && (
             <Link
@@ -169,20 +163,30 @@ export default function OnboardingClient() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F5]">
-        <div className="mx-auto max-w-3xl px-4 py-10 space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-paper" />)}
+      <div className="min-h-full bg-canvas">
+        <div className="mx-auto max-w-3xl px-4 py-8 space-y-4">
+          {[1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-line2" />)}
         </div>
       </div>
     );
   }
 
+  // Erro: o que houve + como resolver + "Tentar de novo" (DESIGN.md §6.1). Antes
+  // era um retângulo vermelho sem saída — tela morta na primeira falha de rede.
   if (error || !status) {
     return (
-      <div className="min-h-screen bg-[#F5F5F5]">
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-            {error ?? "Não foi possível carregar o status de configuração."}
+      <div className="min-h-full bg-canvas">
+        <div className="mx-auto max-w-3xl px-4 py-8">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+            <p className="text-sm font-semibold text-red-700">
+              {error ?? "Não foi possível carregar a configuração do restaurante."}
+            </p>
+            <p className="mt-1 text-xs text-red-600">
+              Nada foi perdido — o que você já configurou continua salvo.
+            </p>
+            <Button variant="secondary" className="mt-3" onClick={() => void load()}>
+              Tentar de novo
+            </Button>
           </div>
         </div>
       </div>
@@ -195,22 +199,26 @@ export default function OnboardingClient() {
   const checkedCount = Object.values(checked).filter(Boolean).length;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
+    <div className="min-h-full bg-canvas">
       <div className="mx-auto max-w-3xl px-4 py-8 pb-16 space-y-6">
 
         {/* ── Header ── */}
-        <div className={`rounded-2xl border ${r.border} ${r.bg} px-6 py-5`}>
+        <div className={`rounded-2xl border ${r.border} ${r.bg} px-5 py-5 sm:px-6`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold uppercase tracking-widest text-muted">
                 {status.restaurantName}
               </p>
-              <h1 className={`mt-1 text-xl font-bold ${r.color}`}>{r.label}</h1>
+              <h1 className={`mt-1 text-xl font-semibold ${r.color}`}>{r.label}</h1>
             </div>
-            <span className={`rounded-full border px-4 py-1.5 text-sm font-bold ${r.color} ${r.border} bg-paper`}>
+            <span className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold ${r.color} ${r.border} bg-paper`}>
               {completedCount}/{stepsArr.length} etapas
             </span>
           </div>
+          <p className="mt-2 text-[13px] leading-snug text-ink2">
+            Siga as etapas abaixo para deixar seu restaurante pronto para receber pedidos.
+            Cada uma leva você direto para a tela certa.
+          </p>
           <div className="mt-4">
             <ProgressBar value={completedCount} max={stepsArr.length} />
           </div>
@@ -259,7 +267,7 @@ export default function OnboardingClient() {
             ].map(({ label, active }) => (
               <span
                 key={label}
-                className={`rounded-full border px-3 py-1 font-medium ${
+                className={`rounded-full border px-3 py-1 font-semibold ${
                   active
                     ? "border-green-200 bg-green-50 text-green-700"
                     : "border-line2 bg-[#FAFAF8] text-muted"
@@ -269,7 +277,7 @@ export default function OnboardingClient() {
               </span>
             ))}
             {!status.payment.hasOnlineProvider && (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-medium text-amber-700">
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
                 ⚠ Pagamento online não configurado
               </span>
             )}
@@ -295,7 +303,7 @@ export default function OnboardingClient() {
               { label: "Com foto",    value: status.counts.productsWithImage },
             ].map(({ label, value }) => (
               <div key={label} className="rounded-xl bg-[#FAFAF8] px-3 py-2.5">
-                <p className="text-xl font-bold text-ink">{value}</p>
+                <p className="text-xl font-semibold text-ink">{value}</p>
                 <p className="text-[10px] text-muted mt-0.5">{label}</p>
               </div>
             ))}
@@ -337,13 +345,13 @@ export default function OnboardingClient() {
 
           {/* WhatsApp */}
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasPhone ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+            <span className={`rounded-full border px-3 py-1 font-semibold ${status.whatsapp.hasPhone ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
               {status.whatsapp.hasPhone ? "✓" : "⚠"} Telefone WhatsApp
             </span>
-            <span className={`rounded-full border px-3 py-1 font-medium ${status.whatsapp.hasWhatsApp ? "border-green-200 bg-green-50 text-green-700" : "border-line2 bg-[#FAFAF8] text-muted"}`}>
+            <span className={`rounded-full border px-3 py-1 font-semibold ${status.whatsapp.hasWhatsApp ? "border-green-200 bg-green-50 text-green-700" : "border-line2 bg-[#FAFAF8] text-muted"}`}>
               {status.whatsapp.hasWhatsApp ? "✓" : "○"} WhatsApp oficial (Meta)
             </span>
-            <span className="rounded-full border border-line2 bg-[#FAFAF8] px-3 py-1 font-medium text-ink2">
+            <span className="rounded-full border border-line2 bg-[#FAFAF8] px-3 py-1 font-semibold text-ink2">
               Modo: {status.whatsapp.agentMode === "RECEPTIONIST_ONLY" ? "Recepcionista" : status.whatsapp.agentMode === "HUMAN_ASSISTED" ? "Humano Assistido" : "IA Pedidos (exp.)"}
             </span>
           </div>
@@ -405,7 +413,9 @@ export default function OnboardingClient() {
           )}
         </StepCard>
 
-        {/* ── Actions ── */}
+        {/* ── Actions ──
+            `?painel=1` é a saída do vaivém: sem cardápio, o `/dashboard` devolve
+            para cá. O parâmetro diz "eu quero o painel mesmo assim". */}
         <div className="flex flex-wrap gap-3 pt-2">
           <a
             href={status.links.delivery}
@@ -415,12 +425,9 @@ export default function OnboardingClient() {
           >
             Abrir cardápio delivery ↗
           </a>
-          <Link
-            href="/dashboard"
-            className="flex-1 min-w-36 text-center rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
-          >
-            Voltar ao painel
-          </Link>
+          <ButtonLink href="/dashboard?painel=1" variant="primary" className="flex-1 min-w-36">
+            Ir para o painel
+          </ButtonLink>
         </div>
       </div>
     </div>

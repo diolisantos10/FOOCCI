@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useSidebar } from "./SidebarContext";
-import { SoundStatusChip } from "./SoundStatusChip";
+import { SoundBlockedChip } from "./SoundBlockedChip";
 import { AssistantPill } from "@/components/help/AssistantPill";
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -145,11 +145,12 @@ export function TopBar({ title }: TopBarProps) {
         {title && (
           <span className="min-w-0 truncate text-[13.5px] font-semibold text-ink">{title}</span>
         )}
-        {/* Sound control lives right here in the white bar on every tab (owner's
-            request, 2026-07-30) — not a floating balloon over the account cluster. */}
-        <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-line2 sm:block" />
-        {/* Fica no celular também: é aqui que o lojista arma o som dos pedidos. */}
-        <SoundStatusChip />
+        {/* O indicador permanente de som saiu daqui em 13/08/2026 (ordem do CEO):
+            ele dizia "Som ativo" com base numa marca antiga do navegador, e o
+            pedido entrava mudo mesmo assim. No lugar dele fica só o alarme com
+            evidência — invisível até um alerta real falhar de verdade. Quem
+            quiser conferir tem "Testar som" em Configurações → Sons. */}
+        <SoundBlockedChip />
       </div>
 
       {/* Center: o Assistente — pílula compacta dentro DESTA barra */}

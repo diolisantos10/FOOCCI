@@ -225,12 +225,28 @@ export function ConfirmDialog({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-export function EmptyState({ icon, title, sub }: { icon?: React.ReactNode; title: string; sub?: string }) {
+/**
+ * Vazio da casa. O `action` não é enfeite: o `DESIGN.md` §6.1 exige que todo
+ * estado vazio traga **o próximo passo** — mensagem sem saída ensina o lojista a
+ * ignorar a tela. Sem `action` o componente segue idêntico ao que era.
+ */
+export function EmptyState({
+  icon,
+  title,
+  sub,
+  action,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  sub?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
       {icon && <div className="text-2xl opacity-60">{icon}</div>}
       <p className="text-sm font-semibold text-ink2">{title}</p>
       {sub && <p className="max-w-xs text-xs text-muted">{sub}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }

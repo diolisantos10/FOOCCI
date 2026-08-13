@@ -32,9 +32,9 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { AlertLoopController } from "@/lib/alert-loop";
+import { AlertLoopController, type AlertLoopDiagnostics } from "@/lib/alert-loop";
 import { playAlertAudio, installGlobalAudioArming, resumeSharedAudioContext } from "@/lib/sound-player";
-import { markAudioArmed } from "@/lib/audio-gate";
+import { markAudioArmed, markAudioBlocked, clearAudioBlocked } from "@/lib/audio-gate";
 import { startSoundLeaderElection } from "@/lib/sound-leader";
 import {
   ORDER_ALERT_ASSET,
@@ -64,6 +64,27 @@ interface RawOrderRow {
   status: string;
   createdAt: string;
   payment?: { providerName?: string | null; status?: string | null } | null;
+}
+
+/**
+ * O navegador recusou tocar um alerta que TINHA motivo para tocar?
+ *
+ * É este fato — e só ele — que autoriza a barra superior a pedir um toque ao
+ * lojista (ver `SoundBlockedChip`). Um erro de rede ou um alarme sem item
+ * esperando não valem: alarme sem evidência é ruído que ninguém investiga.
+ */
+function refletirBloqueioDeAudio(
+  d: AlertLoopDiagnostics,
+  /** Só o alarme de PEDIDO apaga o aviso ao ficar sem itens: o de atendimento
+   *  esvaziar não prova nada sobre o pedido que entrou mudo. */
+  limpaAoEsvaziar = false,
+): void {
+  const recusado = /notallowed|not allowed|suspended|gesture/i.test(d.lastError ?? "");
+  if (d.lastResult === "error" && d.activeCount > 0 && recusado) {
+    markAudioBlocked();
+  } else if (d.lastResult === "success" || (limpaAoEsvaziar && d.activeCount === 0)) {
+    clearAudioBlocked();
+  }
 }
 
 export function GlobalAlertEngine() {
@@ -144,6 +165,7 @@ export function GlobalAlertEngine() {
       intervalMs:      10_000,
       maxDurationMs:   0,
       onDiagnostics: (d) => {
+        refletirBloqueioDeAudio(d, true);
         try {
           localStorage.setItem(ORDER_ALERT_DIAG_KEY, JSON.stringify({ ...d, updatedAt: new Date().toISOString() }));
           if (d.lastResult === "success" && d.lastAttemptAt) {
@@ -166,6 +188,7 @@ export function GlobalAlertEngine() {
       intervalMs:      9_000,
       maxDurationMs:   0,
       onDiagnostics: (d) => {
+        refletirBloqueioDeAudio(d);
         try {
           if (d.lastResult === "success" && d.lastAttemptAt) {
             localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date(d.lastAttemptAt).toISOString());

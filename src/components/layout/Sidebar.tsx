@@ -36,6 +36,21 @@ const HOME_ITEM: NavItem = {
   exact: true,
 };
 
+/**
+ * A porta do guia de configuração — o item que faltava.
+ *
+ * A tela `/onboarding` existia completa e **sem nenhum caminho até ela**: nem
+ * link, nem botão, nem redirecionamento em `src/` inteiro. Este item só existe
+ * enquanto houver etapa pendente (`guia.concluido === false`) e some sozinho
+ * quando o restaurante chega na linha de chegada — menu que nunca some vira
+ * decoração que o lojista aprende a ignorar.
+ */
+const GUIA_ITEM: NavItem = {
+  href:  "/onboarding",
+  label: "Começar aqui",
+  icon:  "🚀",
+};
+
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Vendas",
@@ -63,7 +78,10 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/settings",          label: "Configurações",   icon: "⚙️" },
       { href: "/integracoes",       label: "Integrações",     icon: "🔌" },
-      { href: "/menu-enhancement",  label: "Fotos do Cardápio", icon: "📸" },
+      // "Fotos do Cardápio" (/menu-enhancement) saiu do menu em 13/08/2026 por
+      // ordem do CEO: era item exclusivo de um restaurante, não é produto. A
+      // rota continua existindo e acessível por URL — tirar do menu se desfaz,
+      // apagar não.
     ],
   },
 ];
@@ -72,7 +90,8 @@ const NAV_GROUPS: NavGroup[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { open, close } = useSidebar();
+  const { open, close, guia } = useSidebar();
+  const mostrarGuia = !!guia && !guia.concluido;
 
   function isActive(item: NavItem): boolean {
     if (item.exact) return pathname === item.href;
@@ -128,6 +147,37 @@ export function Sidebar() {
 
         {/* Nav — scrollbar hidden (scrolls invisibly) for a cleaner look */}
         <nav className="flex-1 overflow-y-auto px-2 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Guia de configuração — primeiro item enquanto faltar etapa */}
+          {mostrarGuia && (
+            <div className="mb-2">
+              <Link
+                href={GUIA_ITEM.href}
+                onClick={close}
+                className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
+                  pathname.startsWith(GUIA_ITEM.href)
+                    ? "bg-brand-500 text-white"
+                    : "bg-brand-50 text-brand-600 hover:bg-brand-100"
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <span className="text-[15px] leading-none">{GUIA_ITEM.icon}</span>
+                  {GUIA_ITEM.label}
+                </span>
+                {/* O número é o que falta, não um enfeite: sai do mesmo cálculo
+                    que a tela do guia mostra no cabeçalho. */}
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                    pathname.startsWith(GUIA_ITEM.href)
+                      ? "bg-white/20 text-white"
+                      : "bg-brand-500 text-white"
+                  }`}
+                >
+                  {guia!.pendentes}
+                </span>
+              </Link>
+            </div>
+          )}
+
           {/* Standalone home item */}
           <div className="mb-3">
             {(() => {

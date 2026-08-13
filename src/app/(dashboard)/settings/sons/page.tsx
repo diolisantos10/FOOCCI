@@ -258,6 +258,30 @@ export default function SonsPage() {
         </div>
       )}
 
+      {/* Teste do aparelho — a ÚNICA prova honesta de que o som toca aqui.
+          O indicador permanente "Som ativo" saiu da barra superior em 13/08/2026:
+          ele afirmava que o som estava bom com base numa marca antiga do
+          navegador, enquanto a liberação real cai a cada carregamento. Prova é
+          tocar; o resto é palpite. */}
+      <PageCard>
+        <SectionHeading
+          title="Este aparelho está tocando o alerta?"
+          subtitle="Aperte e ouça. É o único jeito de ter certeza — o navegador só libera som depois de um toque seu, e isso vale por sessão."
+        />
+        <button
+          type="button"
+          onClick={() => void testOrderSound()}
+          className="rounded-xl border border-brand-500 bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600"
+        >
+          🔔 Tocar som de pedido agora
+        </button>
+        <p className="mt-3 text-xs text-muted">
+          Qualquer clique dentro do Foocci já libera o som daquela sessão. Se mesmo assim um pedido chegar
+          e o navegador recusar tocar, aparece o aviso laranja <strong>&ldquo;Ativar som&rdquo;</strong> no
+          topo da tela em que você estiver — um toque libera e o alerta volta a soar.
+        </p>
+      </PageCard>
+
       {/* Master switch */}
       <PageCard>
         <SectionHeading
@@ -270,12 +294,6 @@ export default function SonsPage() {
           checked={settings.soundEnabled}
           onChange={(v) => patch({ soundEnabled: v })}
         />
-        <p className="mt-3 text-xs text-muted">
-          O som se ativa sozinho no primeiro clique que você der dentro do Foocci (entrar, abrir um menu,
-          aceitar um pedido). Se por acaso ainda estiver bloqueado quando um pedido chegar, aparece uma
-          barra <strong>&ldquo;Toque para ativar o som&rdquo;</strong> na própria tela — um toque e pronto,
-          vale o dia inteiro. Não precisa mais vir aqui testar toda manhã.
-        </p>
       </PageCard>
 
       {/* Volume — fixo em 100%, sem controle no app (use o volume do aparelho) */}
@@ -309,13 +327,8 @@ export default function SonsPage() {
             checked={settings.repeatNewOrderSoundUntilAccepted}
             onChange={(v) => patch({ repeatNewOrderSoundUntilAccepted: v })}
           />
-          <button
-            type="button"
-            onClick={() => void testOrderSound()}
-            className="rounded-xl border border-line2 bg-paper px-4 py-2 text-sm font-medium text-ink2 hover:bg-[#FAFAF8] transition"
-          >
-            🔔 Testar som de pedido
-          </button>
+          {/* O botão de tocar este som mora no cartão de teste, no topo da página
+              — dois botões idênticos em telas diferentes é a origem do drift. */}
         </div>
       </PageCard>
 
@@ -444,12 +457,13 @@ export default function SonsPage() {
         <SectionHeading title="Sobre o áudio no navegador" />
         <p className="text-sm text-ink2">
           Por segurança, todo navegador bloqueia áudio automático até você interagir com a página uma
-          vez. O Foocci aproveita <strong>qualquer</strong> interação natural — entrar no painel, abrir
-          um menu, aceitar um pedido, teclar — para liberar o som na hora, sem você perceber. Se um
-          pedido chegar antes de qualquer clique, aparece uma barra <strong>&ldquo;Toque para ativar o
-          som&rdquo;</strong> no topo da tela em que você estiver: um toque libera para a sessão inteira.
-          Depois de liberado, os alertas tocam sozinhos em qualquer tela do Foocci que estiver aberta em
-          primeiro plano — não precisa ficar na tela de Pedidos nem voltar aqui para testar todo dia.
+          vez — e essa liberação vale por carregamento, não para sempre. O Foocci aproveita
+          <strong> qualquer</strong> interação natural — entrar no painel, abrir um menu, aceitar um
+          pedido, teclar — para liberar o som na hora, sem você perceber. Se um pedido chegar antes de
+          qualquer clique, o alerta não toca e aparece o aviso laranja
+          <strong> &ldquo;Ativar som&rdquo;</strong> no topo da tela: um toque libera e o alerta soa em
+          seguida. O aviso só aparece quando um alerta de verdade falhou — enquanto ele não estiver na
+          tela, nada falhou até agora.
         </p>
       </PageCard>
     </div>

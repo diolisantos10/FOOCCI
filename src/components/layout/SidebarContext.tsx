@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
+import type { ResumoDoGuia } from "@/services/onboarding/onboardingStatus";
 
 export interface ShellRestaurant {
   name:    string | null;
@@ -13,6 +14,12 @@ interface SidebarCtx {
   close: () => void;
   /** Partner restaurant brand, surfaced in the TopBar account cluster. */
   restaurant: ShellRestaurant;
+  /**
+   * Guia de configuração, calculado no servidor (layout do painel). `null` quando
+   * não há restaurante no contexto ou o banco falhou — e aí nada é afirmado sobre
+   * o guia, nem que falta nem que está pronto.
+   */
+  guia: ResumoDoGuia | null;
 }
 
 const SidebarContext = createContext<SidebarCtx>({
@@ -20,6 +27,7 @@ const SidebarContext = createContext<SidebarCtx>({
   toggle: () => {},
   close: () => {},
   restaurant: { name: null, logoUrl: null },
+  guia: null,
 });
 
 export function useSidebar() {
@@ -29,9 +37,11 @@ export function useSidebar() {
 export function SidebarProvider({
   children,
   restaurant = { name: null, logoUrl: null },
+  guia = null,
 }: {
   children: React.ReactNode;
   restaurant?: ShellRestaurant;
+  guia?: ResumoDoGuia | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -41,6 +51,7 @@ export function SidebarProvider({
         toggle: () => setOpen((v) => !v),
         close: () => setOpen(false),
         restaurant,
+        guia,
       }}
     >
       {children}
