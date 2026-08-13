@@ -101,6 +101,25 @@ export function clearAudioBlocked(): void {
 }
 
 /**
+ * O navegador RECUSOU tocar um alerta real que tinha item esperando (política de
+ * autoplay)? Erro de rede, arquivo faltando ou alarme sem item **não** contam.
+ *
+ * Uma função só, porque dois lugares dependem exatamente deste juízo: o aviso da
+ * barra superior e a cessão de liderança do `sound-leader` (a aba muda precisa
+ * passar a vez para uma que consiga tocar). Duas cópias da regra divergiriam na
+ * primeira correção, e o alarme mudo é caro demais para isso.
+ */
+export function ehRecusaDeAutoplay(
+  d: { lastResult: "success" | "error" | null; lastError: string | null; activeCount: number },
+): boolean {
+  return (
+    d.lastResult === "error" &&
+    d.activeCount > 0 &&
+    /notallowed|not allowed|suspended|gesture/i.test(d.lastError ?? "")
+  );
+}
+
+/**
  * Traduz a tentativa de um alerta REAL no estado do aviso da barra superior.
  *
  * Só um motivo autoriza o aviso: o navegador recusou tocar (política de
@@ -115,8 +134,7 @@ export function refletirTentativaDeAlerta(
   d: { lastResult: "success" | "error" | null; lastError: string | null; activeCount: number },
   limpaAoEsvaziar = false,
 ): void {
-  const recusado = /notallowed|not allowed|suspended|gesture/i.test(d.lastError ?? "");
-  if (d.lastResult === "error" && d.activeCount > 0 && recusado) {
+  if (ehRecusaDeAutoplay(d)) {
     markAudioBlocked();
   } else if (d.lastResult === "success" || (limpaAoEsvaziar && d.activeCount === 0)) {
     clearAudioBlocked();

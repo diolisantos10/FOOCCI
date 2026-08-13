@@ -1492,6 +1492,18 @@ model MetaMessageTemplate {
   rejectedReason     String? // Meta's reason when status = REJECTED (shown to the owner)
   metaTemplateId     String? // Meta's template id — enables zero-gap edits of an approved template
 
+  /// Quando a sincronização deixou de encontrar este modelo na WABA atual.
+  ///
+  /// NULO = existe na conta de hoje. Preenchido = ÓRFÃO: veio de outra conta
+  /// (tipicamente a WABA anterior, depois de uma troca de número) e NÃO pode mais
+  /// ser usado para enviar — a Meta rejeita um nome que não existe na WABA dela.
+  ///
+  /// É marcação, não exclusão, de propósito: apagar perderia a perícia de "isto já
+  /// foi aprovado um dia", e um modelo pode sumir da resposta por falha de rede.
+  /// Só a leitura COMPLETA e bem-sucedida da lista marca órfão; leitura falha ou
+  /// truncada não toca em nada (ausência de resposta não é ausência de modelo).
+  orphanedAt         DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1500,6 +1512,48 @@ model MetaMessageTemplate {
   @@unique([restaurantId, templateName, languageCode])
   @@index([restaurantId, status])
   @@map("meta_message_templates")
+}
+
+// Mensagem que a Meta entregou para um `phone_number_id` que NENHUM restaurante
+// reconhece — a evidência de que existe cliente falando com uma porta sem dono.
+//
+// POR QUE ESTA TABELA EXISTE. Até 13/08/2026 esse caso morria num `console.warn`
+// (`webhooks/meta/whatsapp/route.ts`), que a retenção do Railway apaga no deploy
+// seguinte. Em 12/08 um restaurante trocou de chip, o `phone_number_id` gravado
+// continuou apontando para o número velho e TODA mensagem que entrava sumia ali.
+// A tela ficou verde o tempo todo; o CEO descobriu pelas vendas, no dia seguinte.
+//
+// AGREGADA POR NÚMERO, e isso é o teto de volume: uma linha por `phone_number_id`,
+// com contador. Uma enxurrada aumenta um inteiro, não cria linha nova.
+//
+// NÃO guarda conteúdo de mensagem, NÃO guarda telefone de cliente em claro e NÃO
+// tem `restaurantId`: sem dono conhecido, atribuir a alguém seria vazamento entre
+// inquilinos — mensagem de um cliente aparecendo na tela de outro restaurante.
+// `displayPhoneNumber` é o número DO NEGÓCIO que a Meta manda no metadata (não o
+// do cliente), e é justamente ele que diz ao operador QUAL número ficou órfão.
+model MetaUnroutedInbound {
+  id String @id @default(cuid())
+
+  /// Chave da agregação. O `phone_number_id` que chegou e não resolveu.
+  phoneNumberId      String  @unique
+  /// Número legível do NEGÓCIO, vindo de `value.metadata.display_phone_number`.
+  displayPhoneNumber String?
+
+  /// Quantas mensagens já foram descartadas para este número.
+  messageCount Int      @default(0)
+  firstSeenAt  DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+
+  /// Remetente da última mensagem, SEMPRE mascarado (ex.: "+55***4947"). Serve para
+  /// o operador reconhecer que é gente real tentando falar, sem guardar dado
+  /// pessoal de um cliente que não tem dono definido.
+  lastMaskedFrom String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastSeenAt])
+  @@map("meta_unrouted_inbound")
 }
 
 // ═══════════════════════════════════════════

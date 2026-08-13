@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { metaGraphUrl } from "@/services/whatsapp/metaFlag";
 import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
+import { MetaUnroutedInboundService } from "@/services/whatsapp/MetaUnroutedInboundService";
 
 function mask(v: string | null): string {
   if (!v) return "—";
@@ -86,7 +87,37 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return ok({ count: out.length, configs: out });
+    // ── PORTAS SEM DONO ─────────────────────────────────────────────────────
+    // Mensagens que a Meta entregou para um `phone_number_id` que nenhum
+    // restaurante reconhece. Vem PRIMEIRO no retorno e carrega o próximo passo,
+    // porque é o único item deste diagnóstico que significa "cliente falando e
+    // ninguém ouvindo" — e era exatamente o que morria num log até 13/08/2026.
+    //
+    // Lista vazia é "nada a relatar", NUNCA prova de que nada se perdeu: um
+    // número só entra aqui depois que alguém escreve para ele (guardrail 1).
+    const unrouted = await MetaUnroutedInboundService.listOpen().catch((err) => {
+      console.error("[GET /api/admin/meta/diag] leitura de mensagens sem dono falhou", err);
+      return null;
+    });
+
+    return ok({
+      unroutedInbound: unrouted === null
+        ? { available: false, detail: "Não foi possível ler o rastro de mensagens sem dono." }
+        : {
+            available: true,
+            count:     unrouted.length,
+            needsAttention: unrouted.length > 0,
+            // O alerta carrega a própria evidência E o conserto (guardrail 6).
+            attention: unrouted.map((u) =>
+              `${u.messageCount} mensagem(ns) chegaram para ${u.displayPhoneNumber ?? `o número ${mask(u.phoneNumberId)}`} ` +
+              `e foram descartadas (última ${u.lastSeenAt}). Este número não está conectado a nenhum restaurante — ` +
+              `conecte-o em Integrações → WhatsApp do restaurante dono, ou confirme que ele deveria estar desligado.`,
+            ),
+            numbers: unrouted,
+          },
+      count: out.length,
+      configs: out,
+    });
   } catch (err) {
     console.error("[GET /api/admin/meta/diag]", err);
     return serverError();

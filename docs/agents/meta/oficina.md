@@ -765,3 +765,125 @@ Diretor.
   "Aprovado" para sempre. Proveniência: `MetaTemplateService.ts:243-286`, 13/08.
 - **A documentação da Meta mudou de endereço e a de coexistência exige login.**
   URL antiga em `/docs/whatsapp/` dá 404 real. Proveniência: captura ao vivo, 13/08.
+
+---
+
+## 2026-08-13 (2) · Os dois defeitos que faziam o sistema mentir calado
+
+Segundo despacho do dia, sob a ordem nova do CEO: *"tudo que puder fazer sem mim é
+o melhor caminho"*. Os dois achados que eu tinha deixado para depois eram código,
+não dependiam dele, e foram consertados.
+
+### 1 · Mensagem de cliente sumindo num log
+
+`webhooks/meta/whatsapp/route.ts` descartava toda mensagem cujo `phone_number_id`
+não resolvia, num `console.warn` que a retenção do Railway apaga no deploy
+seguinte. É o pior defeito da categoria: **mensagem de cliente de restaurante
+desaparecendo**, e é exatamente o que acontece depois de uma troca de número.
+
+**Não é hipótese e o custo está medido**, no cabeçalho de `channelHealth.ts:43-47`:
+em 12/08 um restaurante trocou de chip, o id gravado seguiu apontando para o número
+velho, e a tela ficou **verde o tempo todo**. O CEO descobriu no dia seguinte, pelas
+vendas.
+
+**O que foi feito** — `MetaUnroutedInboundService.ts`, tabela `meta_unrouted_inbound`:
+
+- **Agregada por número, não por mensagem.** Uma linha por `phone_number_id`, com
+  contador. O teto de volume está na FORMA da tabela: enxurrada incrementa um
+  inteiro, não cria linha. Teto que depende de alguém lembrar falha no dia em que
+  importa. Há um segundo teto (`MAX_TRACKED_NUMBERS = 50`) para números distintos.
+- **Sem dono adivinhado.** Nada de `restaurantId`: sem saber de quem é, atribuir a
+  um restaurante qualquer poria a mensagem de um cliente na tela de **outro
+  negócio**. Vazamento entre inquilinos é pior que o problema original.
+- **Sem dado sensível.** Sem conteúdo, e o remetente só **mascarado** (`+55***4321`).
+  O `displayPhoneNumber` guardado é o do NEGÓCIO, vindo do `metadata` — e é ele que
+  responde a pergunta útil: *qual* número ficou órfão. Para isso, `metaWebhook.ts`
+  passou a expor `displayPhoneNumber` no normalizado.
+- **O alerta usa o caminho que a casa já tem:** `/api/admin/meta/diag` ganhou
+  `unroutedInbound`, com `needsAttention` e `attention[]` em português — o mesmo
+  formato do `instagramTokenRefresh`. Carrega a evidência **e** o conserto.
+- **O alerta se apaga sozinho.** `listOpen()` exclui, na leitura, os números que já
+  têm config. Não existe campo "resolvido" para marcar na mão: estado mantido por
+  gente diverge do mundo, e alerta que segue aceso depois de resolvido ensina o
+  operador a ignorá-lo. A linha histórica fica para perícia.
+- **Registrar nunca derruba o webhook.** Toda falha é engolida — a Meta desativa a
+  inscrição de quem não responde 200, e perder o canal para gravar um diagnóstico
+  seria a proteção mais destrutiva que o problema (guardrail 5).
+
+### 2 · Modelo fantasma
+
+`syncFromMeta` só fazia `upsert` e nunca invalidava. Modelo aprovado na WABA antiga
+ficava `APPROVED` **para sempre** depois da troca de conta — o sync seguinte nem o
+toca, porque ele não vem na lista da conta nova. `findApproved` resolvia o fantasma,
+o envio saía com um nome inexistente e a Meta rejeitava.
+
+**O que foi feito** — coluna `orphanedAt` + `reconcileOrphans` em
+`MetaTemplateService.ts`:
+
+- **Marca, não apaga.** Apagar perderia a perícia de "isto já foi aprovado um dia" e
+  seria irreversível diante de uma leitura ruim.
+- **`findApproved` passou a exigir `orphanedAt: null`** — o órfão sai do caminho de
+  envio. Vale nos DOIS caminhos de resolução (por nome e por tipo de campanha).
+- **Leitura ruim não invalida nada.** Erro da Graph, falha de rede e — o caso que eu
+  quase deixei passar — **lista TRUNCADA no teto de páginas** não marcam órfão
+  nenhum. `MAX_SYNC_PAGES` era um `10` solto no `while`; reconciliar com meia lista
+  marcaria como órfão modelo que existe e está aprovado, e o CRM pararia de enviar
+  **por causa da proteção**.
+- **Reabilitação automática:** o modelo que volta a existir tem a marca removida.
+  Proteção sem saída automática vira o próximo incidente.
+- A data do órfão já marcado é **preservada** — ela é a evidência de desde quando.
+
+### 3 · Sabotagem — sete, todas pegas
+
+47 testes novos em três arquivos.
+
+| Sabotagem | Reprova |
+|---|---|
+| webhook deixa de gravar o rastro | 1 (o de rota) |
+| remover o teto de números distintos | 1 |
+| guardar telefone do cliente em claro | 1 |
+| erro de banco volta a propagar | 1 |
+| reconciliar com lista truncada | 1 |
+| apagar em vez de marcar | 2 |
+| `findApproved` volta a aceitar órfão | 2 |
+
+**A lacuna que a sabotagem revelou:** meus primeiros testes eram só do serviço.
+Apagar a chamada no webhook não reprovava nada — serviço perfeito que ninguém chama
+não protege. Daí `unrouted.route.test.ts`, no nível da rota, com assinatura HMAC
+real. **A trava tem de ser verificada onde ela mora.**
+
+Um segundo teste estava fraco: o "NÃO APAGA" checava que o mock não tinha
+`deleteMany`. Isso passa por acidente. Agora `deleteMany` e `delete` existem no mock
+de propósito, e o teste afirma que **não foram chamados**.
+
+`tsc --noEmit` limpo. **6433 testes** verdes em 492 arquivos (eram 6386/489).
+
+### 4 · O que falta, e não é código meu
+
+- **A tela de modelos ainda mostra só `status`.** `MetaTemplateView` já devolve
+  `orphanedAt`; falta a tela distinguir "aprovado nesta conta" de "veio de outra
+  conta". Fica para quem cuida de tela — `src/app/(dashboard)/` estava fora do meu
+  escopo por ordem do Diretor.
+- **A migration não foi aplicada** — não há banco nesta sessão. Ela roda no deploy.
+
+### 5 · Sobre o CRM zero — o que MUDA e o que continua não verificado
+
+Não desviei para caçar isso. Mas registro o efeito colateral, porque ele é
+observável: para um restaurante cujos modelos ficaram órfãos, a campanha fria agora
+**bloqueia com `META_TEMPLATE_REQUIRED`** em vez de tentar e levar rejeição opaca da
+Meta. O resultado prático para o cliente é o mesmo (não sai mensagem); o que muda é
+que **agora existe motivo legível** em vez de erro de provedor. Isso não explica "0
+campanhas processadas" — segue **NÃO VERIFICADO**, com os candidatos já listados no
+registro anterior.
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **Mensagem sem dono agora deixa rastro, e o alerta se apaga sozinho.** Agregada
+  por número (teto na forma da tabela), sem `restaurantId` adivinhado, sem telefone
+  em claro. Proveniência: `MetaUnroutedInboundService.ts` + `meta_unrouted_inbound`,
+  13/08, com o custo medido do incidente de 12/08.
+- **Modelo órfão é marcado, nunca apagado — e leitura incompleta não invalida
+  nada.** O caso perigoso não é o erro de rede, é a **lista truncada**, que parece
+  sucesso. Proveniência: `MetaTemplateService.ts` `reconcileOrphans`, 13/08.
+- **Testar o serviço não testa a trava.** Sabotar a chamada no webhook não reprovava
+  teste nenhum até existir teste de rota. Proveniência: a própria sabotagem, 13/08.

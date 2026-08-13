@@ -27,6 +27,7 @@ import { ConversationStatus } from "@prisma/client";
 import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 import { verifyMetaChallenge, validateMetaSignature, normalizeMetaWebhook } from "@/services/whatsapp/providers/metaWebhook";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { MetaUnroutedInboundService } from "@/services/whatsapp/MetaUnroutedInboundService";
 import { WhatsAppBrainRuntimeService, isWhatsAppBrainEnabled } from "@/services/whatsapp/brain/WhatsAppBrainRuntimeService";
 import { isSupportPhoneNumberId, handleInboundSupport } from "@/services/support/SupportWhatsAppService";
 import { InboundGuardsService } from "@/services/whatsapp/inbound/InboundGuardsService";
@@ -165,7 +166,38 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
     }
 
     const cfg = await MetaConfigService.getByPhoneNumberId(m.phoneNumberId);
-    if (!cfg) { console.warn(`[webhook/meta/whatsapp] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched`); continue; }
+    if (!cfg) {
+      // ── PORTA SEM DONO ────────────────────────────────────────────────────
+      // Um cliente escreveu para um número que nenhum restaurante reconhece. É o
+      // que acontece depois de uma troca de chip: o `phone_number_id` gravado
+      // segue apontando para o número velho e o novo não resolve.
+      //
+      // Não dá para gravar a conversa: sem dono, atribuir a um restaurante
+      // qualquer poria a mensagem de um cliente na tela de OUTRO negócio —
+      // vazamento entre inquilinos, pior que o problema original. Então guarda-se
+      // o RASTRO, agregado por número, para que "estamos perdendo mensagem?"
+      // tenha resposta.
+      //
+      // Até 13/08/2026 isto era só o `console.warn` abaixo, e a retenção de log do
+      // Railway é por deploy: a explicação morria antes de alguém procurar. Em
+      // 12/08 isso custou um dia inteiro de mensagens de um restaurante, com a
+      // tela verde o tempo todo.
+      //
+      // O `await` é deliberado (a gravação precisa acontecer antes de a função
+      // terminar), mas o serviço NUNCA lança — ver decisão 4 no cabeçalho dele.
+      await MetaUnroutedInboundService.record({
+        phoneNumberId:      m.phoneNumberId,
+        displayPhoneNumber: m.displayPhoneNumber,
+        fromPhone:          m.fromPhone,
+        seenAt:             m.timestamp,
+      });
+      console.warn(
+        `[webhook/meta/whatsapp] MENSAGEM DESCARTADA — phone_number_id=${m.phoneNumberId} ` +
+        `(${m.displayPhoneNumber ?? "número desconhecido"}) não pertence a nenhum restaurante. ` +
+        `Rastro gravado; veja "unroutedInbound" em /api/admin/meta/diag.`,
+      );
+      continue;
+    }
 
     // Supressão dura de comando interno num número de RESTAURANTE. Um `/build`
     // aqui nunca é executado (o portão de canal do Build OS reprova), mas também

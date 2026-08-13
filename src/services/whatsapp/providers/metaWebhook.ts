@@ -62,6 +62,13 @@ export interface NormalizedInboundMessage {
   providerMessageId: string;   // wamid... — dedupe key
   fromPhone:         string;    // customer wa_id (digits)
   phoneNumberId:     string;    // Meta phone_number_id → restaurant mapping
+  /**
+   * Número legível DO NEGÓCIO (`value.metadata.display_phone_number`) — não o do
+   * cliente. Só serve quando o `phoneNumberId` NÃO resolve nenhum restaurante: é a
+   * única coisa no payload que diz, em português, QUAL número ficou órfão. Um id da
+   * Graph não ajuda ninguém a reconhecer o próprio número.
+   */
+  displayPhoneNumber: string | null;
   timestamp:         Date;
   type:              string;    // text | image | interactive | ...
   text:              string | null;
@@ -152,6 +159,7 @@ export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
           providerMessageId: m.id,
           fromPhone:         m.from,
           phoneNumberId,
+          displayPhoneNumber: value.metadata?.display_phone_number ?? null,
           timestamp:         tsToDate(m.timestamp) ?? new Date(),
           type:              m.type ?? "unknown",
           // Media captions carry the customer's text — surface it as the message body.

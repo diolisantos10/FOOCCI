@@ -358,3 +358,141 @@ commit, sem push.
    proposta na apuração da manhã, agora **com o conserto junto**: o filtro é do
    servidor e existe faixa de saúde. A entrada de 01/08 sobre o filtro
    client-side pode ser aposentada.
+
+---
+
+## 2026-08-13 · O alarme de pedido novo: veredito e conserto do eleitor de líder
+
+**Despacho:** apurar se "pedido entra e não apita" acontece em produção. O achado
+do agente de interface: em desenvolvimento, 20s de painel aberto → quatro buscas
+a `/api/settings/sounds` e **zero** a `/api/orders`. Suspeita dele:
+`sound-leader.ts` guarda `release` só dentro da callback do Web Lock; com o
+duplo-mount do StrictMode o `dispose()` vem antes e o lock fica preso numa
+instância morta.
+
+### Veredito, em duas partes
+
+**(a) O gatilho descrito é de desenvolvimento.** `next.config.js:13` liga
+`reactStrictMode`, e o duplo-invoke de efeito do StrictMode é comportamento de
+build de desenvolvimento do React — o build de produção monta uma vez só. Uma aba
+sozinha em produção recebe o lock, `onBecomeLeader` chama `reevalRef.current()` e
+o poll de `/api/orders` anda. **Não é este o defeito de produção.**
+
+**(b) A causa que ele apontou não é do StrictMode — é do módulo, e vale em
+produção.** O gatilho verdadeiro não é "montar duas vezes", é **"morrer enquanto
+se está na fila"**. `dispose()` só sabia liberar quem já era líder; quem morria na
+fila deixava o pedido lá, e a concessão futura ia parar numa instância morta que
+segurava o lock **para sempre** — travando o alarme de **todas as abas daquele
+navegador**, não só da aba culpada. Provado sem StrictMode nenhum, com um
+`LockManager` falso que modela a fila: `src/lib/sound-leader.test.ts:141`
+("aba que morre AINDA NA FILA não trava o lock para sempre") **reprova a versão
+anterior** — restaurei o arquivo antigo e rodei: `expected false to be true`.
+
+Hoje, em produção, esse gatilho é **latente**: procurei e não achei navegação que
+desmonte o `GlobalAlertEngine` sem destruir o documento (o "Sair" do `TopBar.tsx:253`
+usa `window.location.href`; os links do painel ficam todos dentro do grupo
+`(dashboard)`). Não é conserto de problema imaginário: é uma armadilha a um
+refactor de distância, cujo estrago é o alarme inteiro do navegador, e é o mesmo
+"estado que prende para sempre" do guardrail da casa.
+
+### O que eu achei e que ninguém tinha visto: o líder mudo
+
+Duas verdades do código que se compõem mal:
+
+1. `GlobalAlertEngine.tsx` trocou o portão de foco pelo portão de liderança —
+   `canRing()` dá o direito **exclusivo** de apitar a UMA aba, escolhida por ordem
+   de chegada no lock;
+2. `audio-gate.ts` existe porque o navegador **só libera áudio para um documento
+   que recebeu um gesto do usuário**, a cada carregamento.
+
+Nada liga as duas. Uma aba aberta e **nunca clicada** — o padrão "abri e fui
+trabalhar na outra" — pode ganhar a liderança e ficar **muda**, enquanto a aba
+que o dono usa, essa sim armada, nem busca pedido (`canRing()` falso → `pollOrders`
+retorna sem `fetch`). Pedido entra, nada apita, em lugar nenhum. E não havia
+caminho de recuperação: quem morre o navegador substitui na hora; **quem fica vivo
+e mudo não é substituído nunca**.
+
+### O conserto
+
+`src/lib/sound-leader.ts`, reescrito com uma invariante declarada: *enquanto não
+houver `dispose()`, este cliente sempre tem **o lock ou um pedido na fila**.*
+
+- **Pedido abortável** (`AbortSignal`) + geração que invalida pedido velho: uma
+  concessão que chega depois do `dispose()` é devolvida no mesmo instante. Duas
+  travas, porque a segunda cobre navegador sem `AbortController` (teste em
+  `sound-leader.test.ts:172`).
+- **`stepDownIfSomeoneIsWaiting()`**: o líder recusado pelo navegador devolve o
+  lock **e volta para a fila no mesmo instante**. Só cede se `locks.query()`
+  mostrar alguém esperando — largar sem substituto seria o pior dos mundos:
+  ninguém buscando pedido e ninguém tocando. Com descanso de 30s, senão duas abas
+  mudas ficariam jogando batata quente a cada toque do alarme.
+- **`pagehide`/`pageshow` com `persisted`**: documento congelado no bfcache não
+  segura mais o alarme das outras abas. (Elegibilidade real de bfcache com Web
+  Lock: **NÃO VERIFICADO** — é defesa barata, não diagnóstico.)
+- `ehRecusaDeAutoplay()` saiu de dentro de `refletirTentativaDeAlerta` e virou
+  função exportada de `audio-gate.ts`: o aviso da barra e a cessão de liderança
+  passaram a depender do **mesmo** juízo, em vez de duas cópias do regex.
+
+Ligação no motor: 3 linhas em `GlobalAlertEngine.tsx` (`passarAVezSeEstaMuda` nos
+dois `onDiagnostics`). Travado por fonte em `alarm-contract.test.ts` — o padrão
+que a casa já usa ali.
+
+### As duas metades, provadas
+
+13 testes em `src/lib/sound-leader.test.ts`, sobre uma fila de verdade (FIFO,
+titular único, `AbortSignal`, `query()`):
+
+- **líder morto é substituído** — líder que fecha entrega na hora; aba que morre
+  na fila não trava; concessão atrasada é devolvida;
+- **líder vivo não é duplicado** — com 4 abas, `filter(isLeader).length === 1`
+  antes e depois da troca; quem cede deixa de ser líder **antes** de o próximo
+  assumir; quem não é líder não cede; sem ninguém na fila, não larga.
+
+`npx tsc --noEmit` limpo · `npx vitest run` **492 arquivos / 6.433 verdes**.
+
+### As respostas que o Diretor pediu
+
+- **Líder morre → quanto tempo até outra assumir?** Aba fechada, recarregada ou
+  travada: **imediato**, sem tempo de espera — o navegador concede ao próximo da
+  fila, e toda aba viva mantém um pedido lá. Não há timeout nem heartbeat no
+  caminho da aba. Líder **vivo e mudo**: antes, nunca; agora, no primeiro alerta
+  recusado.
+- **Sem Web Locks?** `supported=false` e o motor cai no portão antigo
+  (`isVisibleRef`): apita na aba em primeiro plano. Perde-se o toque em segundo
+  plano; não se perde o alarme. `stepDown` vira no-op.
+- **Onde o lojista descobre?** No que está no ar hoje (`6c9ff23`), **em lugar
+  nenhum** — o `SoundStatusChip` ainda diz "Som ativo" com base em `localStorage`.
+  Nesta branch já existe o `SoundBlockedChip` (evidência, não status). Fica um
+  buraco declarado: **o aviso aparece na aba que tentou tocar, que é justamente a
+  que ninguém está olhando.** Cross-tab desse aviso: não fiz, não é deste bloco.
+
+### Não fiz
+
+Nada em `whatsapp/`, `crm/`, `order/`, `webhooks/meta/` ou `payments/`. Não subi
+push. Commit por caminho explícito (5 arquivos + este registro) — a árvore tem
+trabalho de outros dois agentes e não encostei neles.
+
+**Achado de brinde, para o Diretor decidir depois:** `AlarmLeaderService` +
+`POST/DELETE /api/settings/sounds/claim-leader` + duas colunas no banco existem e
+**não têm nenhum chamador no cliente** — e `alarm-contract.test.ts:114` proíbe o
+motor de chamá-los. É a coordenação entre APARELHOS diferentes (balcão, tablet,
+celular), desligada de propósito num commit antigo. Consequência hoje: dois
+computadores apitam juntos. Pelo critério do CEO ("na dúvida, toque demais") isso
+está do lado certo — mas é código morto se passando por recurso.
+
+### Proposta de vitrine
+
+1. **"O eleito por lock precisa provar que consegue fazer o trabalho — e devolver
+   o cargo quando não consegue."** Eleição por ordem de chegada não olha
+   capacidade. Aqui, a aba escolhida podia ser a única sem permissão de áudio.
+   Todo portão exclusivo precisa de um caminho de renúncia. Origem: apuração do
+   alarme mudo, 2026-08-13.
+2. **"`dispose()` que só sabe soltar o que já pegou deixa órfão na fila."** Todo
+   pedido assíncrono a um recurso exclusivo nasce com cancelamento, ou o desmonte
+   vira vazamento permanente. Mesmo formato da comanda presa em `CLAIMED`. Origem:
+   `sound-leader.ts`, 2026-08-13.
+3. **"Sintoma de desenvolvimento pode ter causa de produção."** O StrictMode não
+   inventou o defeito: ele o **acelerou**. Fechar em "é só dev" teria arquivado
+   uma armadilha viva. Origem: este veredito, 2026-08-13.
+
+— canais, bloco do alarme de pedido novo, 13/08/2026

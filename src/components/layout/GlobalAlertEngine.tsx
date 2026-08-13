@@ -34,7 +34,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AlertLoopController } from "@/lib/alert-loop";
 import { playAlertAudio, installGlobalAudioArming, resumeSharedAudioContext } from "@/lib/sound-player";
-import { markAudioArmed, refletirTentativaDeAlerta } from "@/lib/audio-gate";
+import { markAudioArmed, refletirTentativaDeAlerta, ehRecusaDeAutoplay } from "@/lib/audio-gate";
 import { startSoundLeaderElection } from "@/lib/sound-leader";
 import {
   ORDER_ALERT_ASSET,
@@ -131,6 +131,22 @@ export function GlobalAlertEngine() {
     isVisibleRef.current =
       typeof document === "undefined" ? true : document.visibilityState === "visible";
 
+    // ── Quem toca: o LÍDER entre as abas ─────────────────────────────────────
+    // Ring on ANY screen. Which tab rings is decided by a cross-tab LEADER (Web
+    // Locks) instead of "is this tab in the foreground" — so the alarm sounds even
+    // when FOOCCI is a BACKGROUND tab (owner working on another site), while still
+    // never ringing in two tabs at once. Sem Web Locks → cai no gate de foco antigo.
+    const leader = startSoundLeaderElection(() => reevalRef.current());
+
+    // O líder que NÃO consegue tocar é pior que aba nenhuma: ele detém o direito
+    // exclusivo de apitar e fica mudo. O navegador só libera áudio para um
+    // documento que recebeu um gesto — uma aba aberta e nunca clicada pode ganhar
+    // a liderança e engolir o alarme inteiro. Quando um alerta REAL é recusado com
+    // pedido esperando, esta aba passa a vez (só se houver outra na fila).
+    const passarAVezSeEstaMuda = (d: { lastResult: "success" | "error" | null; lastError: string | null; activeCount: number }) => {
+      if (ehRecusaDeAutoplay(d)) void leader.stepDownIfSomeoneIsWaiting();
+    };
+
     // ── Controllers ──────────────────────────────────────────────────────────
     const orderController = new AlertLoopController({
       play: async (vol) => {
@@ -145,6 +161,7 @@ export function GlobalAlertEngine() {
       maxDurationMs:   0,
       onDiagnostics: (d) => {
         refletirTentativaDeAlerta(d, true);
+        passarAVezSeEstaMuda(d);
         try {
           localStorage.setItem(ORDER_ALERT_DIAG_KEY, JSON.stringify({ ...d, updatedAt: new Date().toISOString() }));
           if (d.lastResult === "success" && d.lastAttemptAt) {
@@ -168,6 +185,7 @@ export function GlobalAlertEngine() {
       maxDurationMs:   0,
       onDiagnostics: (d) => {
         refletirTentativaDeAlerta(d);
+        passarAVezSeEstaMuda(d);
         try {
           if (d.lastResult === "success" && d.lastAttemptAt) {
             localStorage.setItem(HANDOFF_SOUND_LAST_PLAYED_KEY, new Date(d.lastAttemptAt).toISOString());
@@ -184,11 +202,6 @@ export function GlobalAlertEngine() {
     const resolvedOrderIds = new Set<string>();
 
     // ── The rule, in one place ───────────────────────────────────────────────
-    // Ring on ANY screen. Which tab rings is decided by a cross-tab LEADER (Web
-    // Locks) instead of "is this tab in the foreground" — so the alarm sounds even
-    // when FOOCCI is a BACKGROUND tab (owner working on another site), while still
-    // never ringing in two tabs at once. Sem Web Locks → cai no gate de foco antigo.
-    const leader = startSoundLeaderElection(() => reevalRef.current());
     const canRing = () => (leader.supported ? leader.isLeader() : isVisibleRef.current);
     const canRingOrder   = canRing;
     const canRingHandoff = canRing;

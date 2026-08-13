@@ -106,6 +106,15 @@ describe("alarm contract — sound is bounded (sound window ≠ visual window)",
     expect(engine).not.toContain("isAtendimentoScreenRef");
   });
 
+  it("o líder que o navegador recusou PASSA A VEZ — nunca segura o alarme mudo", () => {
+    // A aba líder tem o direito EXCLUSIVO de apitar: se ela não consegue tocar
+    // (documento sem gesto do usuário → autoplay recusado) e não devolve a
+    // liderança, o pedido entra e NENHUMA aba apita. Fail-open é a regra: na
+    // dúvida entre tocar demais e não tocar, toca.
+    expect(engine).toContain("ehRecusaDeAutoplay");
+    expect(engine).toContain("stepDownIfSomeoneIsWaiting");
+  });
+
   it("the old app-wide leader machinery that bled sound across screens is gone", () => {
     // Web Locks / cross-tab BroadcastChannel / device lease made one sound play
     // on several unrelated screens — all removed.
