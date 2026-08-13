@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import type { OverviewStats, CustomerTier, TopCustomersResult, TopCustomerSegment } from "@/services/crm/CRMService";
-import type { CrmAction, CrmActionType, ActionPriority } from "@/services/crm/CrmActionCenterService";
+import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { ReviewRequestModal } from "./ReviewRequestModal";
+import { ActionCenterBanner } from "./ActionCenterBanner";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -18,30 +19,12 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: stri
 
 export type DateFilterPreset = "today" | "week7" | "week" | "total" | "month" | "last_month" | "year" | "custom";
 
-// ── Action Center config ──────────────────────────────────────────────────────
-
-const PRIORITY_STYLE: Record<ActionPriority, { dot: string; badge: string; label: string; border: string; bg: string }> = {
-  HIGH:   { dot: "bg-red-500",    badge: "bg-red-50 text-red-700",       label: "Alta",  border: "border-red-100",    bg: "bg-red-50/30"     },
-  MEDIUM: { dot: "bg-yellow-400", badge: "bg-amber-50 text-amber-700", label: "Média", border: "border-line",   bg: "bg-[#FAFAF8]/50"    },
-  LOW:    { dot: "bg-line2",   badge: "bg-[#FAFAF8] text-muted",     label: "Baixa", border: "border-line",   bg: "bg-[#FAFAF8]/30"    },
-};
-
-const ACTION_ICON: Record<CrmActionType, string> = {
-  RECOVER_COLD_CUSTOMERS:       "🔴",
-  RECOVER_LOST_CUSTOMERS:       "👻",
-  WARM_CUSTOMERS:               "🟡",
-  VIP_APPRECIATION:             "💎",
-  REVIEW_REQUEST:                "⭐",
-  BIRTHDAY_CAMPAIGN:            "🎂",
-  COUPON_OPPORTUNITY:           "🎁",
-  NO_ORDER_FIRST_PURCHASE:      "🆕",
-  HIGH_VALUE_CUSTOMER_ATTENTION:"🏆",
-  CAMPAIGN_PERFORMANCE_ALERT:   "📊",
-  SAFETY_ISSUE_ALERT:           "⚠️",
-};
-
-const CONFIG_ACTION_TYPES: CrmActionType[] = ["SAFETY_ISSUE_ALERT", "CAMPAIGN_PERFORMANCE_ALERT"];
-
+// ── Action Center ─────────────────────────────────────────────────────────────
+// A faixa de avisos vive em `./ActionCenterBanner`. Aqui existiam três tabelas
+// (PRIORITY_STYLE, ACTION_ICON, CONFIG_ACTION_TYPES) que nunca chegaram a ser
+// usadas — sobra do painel de ações que jamais foi desenhado — e uma delas ainda
+// carregava `bg-yellow-400`, o drift #7 do DESIGN.md (aviso é `amber`). Saíram
+// junto com a dívida.
 
 // ReviewRequestModal imported from ./ReviewRequestModal (extracted for reuse in CustomersTab)
 
@@ -460,6 +443,7 @@ export function OverviewTab({
   stats,
   opportunitiesCount,
   actions = [],
+  actionsFailed = false,
   onNavigateToTab,
   onSegmentClick,
   loading,
@@ -475,6 +459,8 @@ export function OverviewTab({
   stats: OverviewStats;
   opportunitiesCount: number;
   actions?: CrmAction[];
+  /** O Action Center não pôde ser calculado nesta carga (ver `crm/page.tsx`). */
+  actionsFailed?: boolean;
   onNavigateToTab?: (tab: "campanhas" | "customers") => void;
   onSegmentClick?: (filter: "quente" | "morno" | "frio" | "perdido" | "novos" | "nao-compraram") => void;
   loading: boolean;
@@ -579,6 +565,15 @@ export function OverviewTab({
 
   return (
     <div className="space-y-6">
+
+      {/* 0. O que está travando o CRM — antes de qualquer número. Quem abre o CRM
+             com o canal caído precisa ler isso antes de olhar o gráfico de receita.
+             Sem impedimento, esta faixa não desenha nada. */}
+      <ActionCenterBanner
+        actions={actions}
+        failed={actionsFailed}
+        onNavigateToTab={onNavigateToTab ? () => onNavigateToTab("campanhas") : undefined}
+      />
 
       {/* 1. Números de clientes — primeira camada (não dependem do período) */}
       {/* 7 cards on one row from lg up (all client categories aligned, no wrap). */}
