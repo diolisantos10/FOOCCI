@@ -100,6 +100,29 @@ export function clearAudioBlocked(): void {
   notify();
 }
 
+/**
+ * Traduz a tentativa de um alerta REAL no estado do aviso da barra superior.
+ *
+ * Só um motivo autoriza o aviso: o navegador recusou tocar (política de
+ * autoplay) **enquanto havia item esperando**. Erro de rede, arquivo faltando ou
+ * alarme sem item não valem — aviso sem evidência é ruído que ninguém investiga.
+ *
+ * `limpaAoEsvaziar` é do alarme de PEDIDO: se não há mais pedido esperando, não
+ * há mais o que avisar. O alarme de atendimento não apaga o aviso ao esvaziar,
+ * porque o silêncio dele não prova nada sobre o pedido que entrou mudo.
+ */
+export function refletirTentativaDeAlerta(
+  d: { lastResult: "success" | "error" | null; lastError: string | null; activeCount: number },
+  limpaAoEsvaziar = false,
+): void {
+  const recusado = /notallowed|not allowed|suspended|gesture/i.test(d.lastError ?? "");
+  if (d.lastResult === "error" && d.activeCount > 0 && recusado) {
+    markAudioBlocked();
+  } else if (d.lastResult === "success" || (limpaAoEsvaziar && d.activeCount === 0)) {
+    clearAudioBlocked();
+  }
+}
+
 /** Subscribe to gate changes (arming and the blocked alarm). Returns an unsubscribe fn. */
 export function subscribeAudioArmed(cb: Listener): () => void {
   listeners.add(cb);
