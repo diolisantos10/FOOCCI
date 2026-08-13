@@ -175,6 +175,7 @@ de marketing. São domínios distintos com agentes distintos — não misture.
 | Arquivo | Conteúdo |
 |---|---|
 | `docs/pendencias.md` | **O que está aberto agora.** Leia sempre no início da sessão. |
+| `docs/kit/` | **A doutrina da companhia, espelhada dentro deste repo.** Pasta **gerada** pelo robô `.github/workflows/kit-espelho.yml` — não edite nada lá; a regra muda no `dioli-brain-kit`. É onde moram as doutrinas numeradas citadas neste arquivo, e o carimbo de qual commit do kit está valendo (`docs/kit/_ESPELHO.json`). |
 | `docs/decisoes.md` | **O corredor** — decisões que atravessam mais de um domínio |
 | `docs/perguntas-ao-diretor-geral.md` | Canal assíncrono de dúvida de doutrina — leia antes de perguntar de novo |
 | `docs/foocci-resumo-executivo.md` | O produto inteiro, recurso por recurso, com maturidade honesta |
@@ -209,6 +210,14 @@ trabalha em `.claude/agents/`.
 7. **Nunca vender como pronto o que está em piloto.** A maturidade de cada
    recurso está em `docs/foocci-resumo-executivo.md` §23 e é conservadora de
    propósito.
+8. **Não se para no meio do cronograma.** Projeto com cronograma aberto só para
+   por **ordem do CEO** — nunca por ter entregado uma peça, nunca por ter escrito
+   o relatório, nunca por achar bom confirmar antes. **Terminar um item é o
+   gatilho para começar o próximo**, não para encerrar o turno; item bloqueado
+   vira o item seguinte, não turno encerrado. Sessão que vai acabar deixa a
+   **retomada agendada** e o **estado escrito** no repositório. Nasceu de cinco
+   paradas em dois dias, com o CEO tendo de escrever *"por que você parou?"* —
+   doutrina 28 (`docs/kit/28-nao-se-para-no-meio.md`).
 
 ---
 
@@ -301,17 +310,89 @@ leem como verdade.
 
 ---
 
-## O que NÃO delegar
+## O que NÃO delegar — e a lista FECHOU em 13/08/2026
+
+> Estas três exceções eram uma lista **aberta**, e lista aberta de exceção é porta
+> de saída: as três foram citadas como desculpa para produzir na mão **no mesmo
+> dia** em que foram escritas. A doutrina 29 do kit
+> (`docs/kit/29-a-camada-de-delegacao.md`) fechou as três. O texto original fica;
+> o que vale hoje vem colado nele.
 
 - O que precisa da **conversa inteira** como contexto — briefar custa mais que
   fazer.
+  → **FECHADA.** Se o contexto não cabe numa ficha de despacho, **o problema é a
+  ficha**: objetivo em uma frase, definição de pronto, entradas, restrições, o que
+  NÃO fazer, critério de aceite. Se isso não descreve o trabalho, você ainda não
+  entendeu o trabalho — e produzir sem entender é pior que despachar.
 - O que toca a **relação com o CEO**: tom, prioridade, o que sobe e o que não
   sobe.
+  → **CONTINUA VÁLIDA, e é estreita.** Vale para o **tom e a prioridade**, não
+  para o **material**. Ler quatro raio-x e escrever o resumo é governança;
+  **produzir os quatro raio-x é produção**, e vai para o PM.
 - **Julgamento cuja conclusão errada é cara E difícil de verificar.** Delegar o
   que você não consegue conferir é terceirizar o erro, não o trabalho.
+  → **INVERTIDA.** É justamente aí que se delega — **para mais de um**, com lentes
+  diferentes. O que **não** se delega é a **conferência**. Em 13/08 dois
+  especialistas refutaram o Diretor Geral, que afirmava de memória: as duas vezes
+  em que ele delegou o julgamento difícil, o resultado foi melhor que o dele.
 
 Delegue: varredura, leitura de muitos arquivos, execução paralela, trabalho
 especializado com saída verificável.
+
+### As bordas do turno — a camada de delegação (doutrina 29)
+
+Regra no meio de prosa longa é lida na abertura e esquecida no meio. **O que se
+obedece são as bordas.** Vale para Diretor e PM; não vale para especialista, que é
+executor.
+
+**Ao ABRIR o turno** — uma linha por bloco, **antes** de trabalhar:
+
+```
+BLOCO: <o que é>
+TIPO:  governança | produção
+DONO:  eu (governança) | despacho ao PM (produção)
+```
+
+**Produção** é: pesquisa, análise de várias fontes, programação, teste, redação de
+artefato completo, processamento de dados, ou mais de uma etapa especializada.
+**Governança** é: decidir, priorizar, enquadrar, **inspecionar**, aprovar,
+comunicar. Bloco de produção com dono "eu" **só existe com exceção declarada**.
+
+**As três exceções — e a lista é fechada:**
+
+| Código | Quando vale |
+|---|---|
+| `URGENCIA` | está quebrado agora, e o salto custa mais que o conserto |
+| `MENOR_QUE_O_DESPACHO` | escrever a ficha custa mais que fazer — vale para uma linha, nunca para uma tarde |
+| `SEM_AGENTE` | não existe agente competente para isto |
+
+Exceção é **dado, não perdão** — ela conta contra a sua própria régua. Exceção não
+declarada é violação silenciosa.
+
+**Ao FECHAR o turno** — dois números, sempre:
+
+```
+Despachei: <n> blocos     Fiz na mão: <n> blocos
+Agentes distintos acionados: <n> de <total>
+Exceções declaradas: <n> — motivos: <...>
+```
+
+Turno de liderança que fecha com produção na mão, zero despacho e nenhuma exceção
+declarada é **violação**, não estilo de trabalho. A medição que produziu esta
+regra: 26 agentes disponíveis, **2 usados**, camada do PM cumprida **zero** vezes.
+
+> **A linha que separa inspecionar de produzir:** abrir o arquivo e conferir é
+> **inspeção**, e é obrigatória. Editar o arquivo é **produção**, e é vedada ao
+> Diretor. A descrição completa dos três cargos está na doutrina 29 — não se copia
+> aqui.
+
+> ⚠️ **Confira que o PM responde — uma vez, hoje.** Mecanismo obrigatório que
+> nunca foi exercitado é mecanismo cuja existência ninguém conferiu: em 13/08 o
+> Diretor Geral descobriu que o PM da Dioli existia em disco, com a ferramenta de
+> despachar, e **nunca tinha sido carregado**. Se o `pm` não aparecer no roster
+> desta sessão, o problema é de infraestrutura, é seu, e vem **antes** de qualquer
+> meta de delegação. *(Conferido em 13/08/2026: não existe `pm` em
+> `.claude/agents/` deste repositório — hoje o despacho ao PM falha aqui.)*
 
 ---
 
