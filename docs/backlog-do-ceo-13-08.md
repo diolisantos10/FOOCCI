@@ -24,7 +24,27 @@ funciona."* Isto é receita, e é o item mais caro da lista inteira.
 | 4 | **Menu não aparece** no número antigo (que saiu da API e virou celular) | dentro do raio-X |
 | 5 | **Resíduo dos "dois chips"** — comprou o chip certo, não sabe se sobrou lixo | dentro do raio-X |
 
-### A causa provável do CRM, achada em 13/08
+### ⚠️ CORREÇÃO — a hipótese abaixo estava INCOMPLETA (13/08, mesma sessão)
+
+O raio-X do `canais` apurou, e eu confirmei lendo
+`MetaTemplateService.findApproved:293-311`: o dropdown da tela
+(`mappedCampaignType`) é o caminho **SECUNDÁRIO**. O primário é o modelo gravado
+na própria campanha — `readExplicitTemplate(campaign.audienceConfig)` é lido
+antes (`metaCrmSend.ts:80-85`), e é ele que o provisionamento automático preenche
+(`MetaTemplateProvisionService.ts:163-171`).
+
+**Portanto "— não usar em campanha —" em todos os modelos é o estado NORMAL desta
+casa**, e mandar o CEO preencher os 20 dropdowns era trabalho possivelmente
+inútil. A tela sugere um elo quebrado que provavelmente não é o elo que importa.
+
+**A causa mais provável, e a mais barata de testar, é outra:** o `phone_number_id`
+gravado ainda aponta para o número ANTIGO. Ver a seção do raio-X abaixo.
+
+**Fica escrito em vez de apagado** porque foi um diagnóstico meu, dado ao CEO com
+confiança que eu não tinha, e o registro do erro vale mais que a aparência de
+acerto.
+
+### A hipótese original (mantida para perícia)
 
 Na tela de Modelos de mensagem, **todos aprovados e todos com "— não usar em
 campanha —"**. Sem vínculo, `resolveMetaCrmTemplate` devolve nulo
