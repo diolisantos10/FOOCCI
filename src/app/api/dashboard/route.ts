@@ -23,9 +23,10 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { computePeriodRange, buildChartBuckets, type Period } from "@/lib/dashboard-periods";
 import { getRevenueSources } from "@/services/dashboard/RevenueAttributionService";
+import { REVENUE_STATUS_LIST } from "@/lib/order-revenue";
 
 const TERMINAL: OrderStatus[]        = ["DELIVERED", "CANCELLED"];
-const REVENUE_STATUS: OrderStatus[]  = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
+const REVENUE_STATUS: OrderStatus[]  = REVENUE_STATUS_LIST; // fonte única: @/lib/order-revenue
 const ACTIVE_CAMP: CampaignStatus[]  = ["ACTIVE", "SCHEDULED", "SENDING"];
 const DELAY_MS                       = 20 * 60 * 1_000;
 const DELAY_OK: OrderStatus[]        = ["READY", "OUT_FOR_DELIVERY", "AWAITING_PAYMENT"];

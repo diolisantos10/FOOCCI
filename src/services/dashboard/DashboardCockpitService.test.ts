@@ -90,10 +90,20 @@ describe("B — pending payments alert", () => {
     expect(alerts.find(x => x.id === "pending-payments")).toBeUndefined();
   });
 
-  it("payment alert includes actionHref to /orders", () => {
+  // CORRIGIDO EM 13/08/2026 — este teste travava o DEFEITO, não o acerto.
+  //
+  // Ele exigia `actionHref === "/orders"`, e `/orders` exclui AWAITING_PAYMENT
+  // por construção (`OrderService.list`). Ou seja: o teste garantia que o
+  // alerta continuasse levando o lojista a uma tela onde os pagamentos
+  // pendentes NUNCA aparecem. Um teste verde protegendo um beco sem saída.
+  //
+  // A asserção agora é a que importa: o destino tem que carregar o recorte.
+  it("payment alert leva à tela ONDE os pendentes aparecem (com o recorte)", () => {
     const alerts = buildAlerts({ ...CLEAN, pendingPayments: 2 });
     const a = alerts.find(x => x.id === "pending-payments");
-    expect(a?.actionHref).toBe("/orders");
+    const url = new URL(a!.actionHref!, "https://foocci.com.br");
+    expect(url.pathname).toBe("/orders");
+    expect(url.searchParams.get("status")).toBe("AWAITING_PAYMENT");
   });
 });
 

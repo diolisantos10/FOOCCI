@@ -31,18 +31,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OrderStatus, OrderType } from "@prisma/client";
 import { requireApiScope, jsonError, jsonOk, resolveDesde, V1_MAX_ROWS } from "@/lib/api-v1";
+import { REVENUE_STATUS_LIST } from "@/lib/order-revenue";
 
 export const dynamic = "force-dynamic";
 
-// Same definition of a realized sale as the dashboard's FATURAMENTO card, so the
-// external total always reconciles with what the lojista sees inside Foocci.
-const REVENUE_STATUS: OrderStatus[] = [
-  OrderStatus.CONFIRMED,
-  OrderStatus.PREPARING,
-  OrderStatus.READY,
-  OrderStatus.OUT_FOR_DELIVERY,
-  OrderStatus.DELIVERED,
-];
+// Mesma definição de venda realizada do card FATURAMENTO do painel, vinda da
+// fonte única (@/lib/order-revenue): o total externo reconcilia com o que o
+// lojista vê por dentro, por construção e não por coincidência.
+const REVENUE_STATUS: OrderStatus[] = REVENUE_STATUS_LIST;
 
 // Friendly channel label from the order type (matches the brief's "Delivery").
 const CHANNEL_LABEL: Record<OrderType, string> = {

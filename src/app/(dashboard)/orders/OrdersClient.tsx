@@ -38,7 +38,33 @@ type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 
-type StatusFilter = "PENDING" | "PREPARING" | "READY" | "DELAYED" | null;
+type StatusFilter = "PENDING" | "PREPARING" | "READY" | "DELAYED" | "AWAITING_PAYMENT" | null;
+
+/**
+ * O recorte pedido pela URL (`/orders?status=…`).
+ *
+ * Existe por causa do alerta "N pagamentos pendentes" do painel: ele oferece
+ * uma ação, e até 13/08/2026 essa ação abria esta tela — onde AWAITING_PAYMENT
+ * é excluído por construção. O lojista clicava e não achava nada.
+ *
+ * Só `AWAITING_PAYMENT` é aceito daqui, de propósito: é o único status que a
+ * lista operacional esconde e que, por isso, precisa de pedido explícito. Os
+ * outros chips continuam sendo filtro de tela sobre o que já foi carregado.
+ */
+function statusInicialDaUrl(): StatusFilter {
+  if (typeof window === "undefined") return null;
+  const s = new URLSearchParams(window.location.search).get("status");
+  return s === "AWAITING_PAYMENT" ? "AWAITING_PAYMENT" : null;
+}
+
+/**
+ * O que precisa ir ao SERVIDOR (e não só filtrar o array já carregado).
+ * `AWAITING_PAYMENT` não vem na resposta padrão: sem mandar isto, filtrar por
+ * ele na tela devolveria vazio para sempre.
+ */
+function statusParaOServidor(f: StatusFilter): string | null {
+  return f === "AWAITING_PAYMENT" ? "AWAITING_PAYMENT" : null;
+}
 
 type SortKey =
   | "recent"
@@ -622,6 +648,7 @@ export function StatusRow({
     PREPARING: orders.filter((o) => o.status === "PREPARING").length,
     READY:     orders.filter((o) => o.status === "READY").length,
     DELAYED:   orders.filter(isDelayed).length,
+    AWAITING_PAYMENT: orders.filter((o) => o.status === "AWAITING_PAYMENT").length,
   };
 
   const total = orders.length;
@@ -632,6 +659,14 @@ export function StatusRow({
     { id: "PREPARING", label: "Preparando", count: counts.PREPARING, on: "bg-brand-500 text-white" },
     { id: "READY",     label: "Pronto",     count: counts.READY,     on: "bg-teal-600 text-white"  },
     { id: "DELAYED",   label: "Atrasados",  count: counts.DELAYED,   on: "bg-red-600 text-white"   },
+    // Só aparece quando o recorte está ATIVO (o alerta de pagamentos pendentes
+    // trouxe o lojista para cá). Fora disso, esses pedidos não são fila de
+    // cozinha e não devem competir com ela por atenção. Mas lista recortada
+    // PRECISA se anunciar: sem este chip, nenhum ficaria aceso e a tela estaria
+    // filtrada sem dizer por quê — o mesmo pecado do KPI que mentia em 05/08.
+    ...(statusFilter === "AWAITING_PAYMENT"
+      ? [{ id: "AWAITING_PAYMENT" as StatusFilter, label: "Aguardando Pix", count: counts.AWAITING_PAYMENT, on: "bg-amber-600 text-white" }]
+      : []),
   ];
 
   return (
@@ -1657,7 +1692,9 @@ export function NewOrderModal({
 
 export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: boolean; isManagerOrOwner?: boolean } = {}) {
   const [orders,       setOrders]       = useState<MockOrder[]>([]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  // Semeado pela URL: `/orders?status=AWAITING_PAYMENT` é o destino do alerta
+  // de pagamentos pendentes. Sem isto, o alerta abre a tela sem o recorte.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusInicialDaUrl);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [checkedIds,   setCheckedIds]   = useState<Set<string>>(new Set());
   const [searchQuery,  setSearchQuery]  = useState("");
@@ -1757,7 +1794,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
    */
   const fetchOrders = useCallback(async () => {
     try {
-      const res  = await fetch(ordersListUrl(appliedPeriod, ORDERS_PAGE_LIMIT));
+      const res  = await fetch(ordersListUrl(appliedPeriod, ORDERS_PAGE_LIMIT, statusParaOServidor(statusFilter)));
       const page = parseOrdersListResponse<ApiOrder>(await res.json());
       if (!page) {
         setLoadError("Não foi possível carregar os pedidos. Tentando de novo em instantes.");
@@ -1809,9 +1846,9 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     } finally {
       setLoading(false);
     }
-  }, [appliedPeriod]);
+  }, [appliedPeriod, statusFilter]);
 
-  // Carga inicial e recarga a cada troca de período
+  // Carga inicial e recarga a cada troca de período (ou de recorte de status)
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);

@@ -24,10 +24,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { OrderStatus } from "@prisma/client";
+import { REVENUE_STATUS_LIST } from "@/lib/order-revenue";
 
-// Same set the dashboard "Faturamento" KPI uses (route.ts) — no AWAITING_PAYMENT —
-// so this breakdown always sums to the number shown in the KPI square.
-const REVENUE_STATUS: OrderStatus[] = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
+// A definição de venda é única e mora em @/lib/order-revenue — assim este
+// detalhamento sempre soma exatamente o número do quadrado de Faturamento.
+const REVENUE_STATUS: OrderStatus[] = REVENUE_STATUS_LIST;
 
 export type RevenueSourceKey = "crm" | "garcom" | "espontanea";
 

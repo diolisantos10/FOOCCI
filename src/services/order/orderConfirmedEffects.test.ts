@@ -190,5 +190,13 @@ describe("portão: todo pedido CONFIRMED carrega as mesmas obrigações", () => 
     // Nem uma tabela de rótulos de tela
     expect(escreveConfirmedEmPedido(`const LABELS = [{ status: "CONFIRMED", label: "Confirmado" }];`))
       .toBe(false);
+
+    // O falso positivo que a primeira versão deste portão produziu: uma escrita
+    // de OUTRO campo no pedido, seguida logo abaixo pela chamada ao ponto único.
+    // A janela fixa acusava; o corpo exato da chamada não acusa.
+    expect(escreveConfirmedEmPedido(
+      `await tx.order.update({ where: { id: orderId }, data: { notes: nota } });\n` +
+      `await OrderService.updateStatus(restaurantId, orderId, { status: "CONFIRMED" });`
+    )).toBe(false);
   });
 });

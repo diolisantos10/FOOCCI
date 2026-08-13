@@ -16,6 +16,7 @@ import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import { OrderNotificationService } from "@/services/order/OrderNotificationService";
 import { runOrderConfirmedEffects } from "@/services/order/orderConfirmation";
+import { AWAITING_PAYMENT_STATUS } from "@/lib/order-revenue";
 
 export type OrderWithDetails = Order & {
   items: OrderItem[];
@@ -52,11 +53,20 @@ export class OrderService {
     const { page, limit, status, customerId, from, to } = query;
     const skip = (page - 1) * limit;
 
+    // AWAITING_PAYMENT não é trabalho de cozinha: o pagamento não caiu. Fica FORA
+    // da fila operacional por padrão — se entrasse, poluiria a tela do preparo e
+    // faria o alarme de pedido novo tocar para Pix que ninguém pagou.
+    //
+    // Mas ele deixou de ser INALCANÇÁVEL (correção de 13/08/2026). O comentário
+    // antigo prometia "a future endpoint exposes them separately" — endpoint que
+    // nunca existiu, e enquanto isso o alerta "N pagamentos pendentes" mandava o
+    // lojista para esta lista, onde eles eram filtrados por construção. Agora
+    // pedir `?status=AWAITING_PAYMENT` explicitamente devolve exatamente esses.
+    const pediuPendentesDePagamento = status === AWAITING_PAYMENT_STATUS;
+
     const where = {
       restaurantId,
-      // AWAITING_PAYMENT orders are not operational — payment not confirmed.
-      // Excluded regardless of provider. A future endpoint exposes them separately.
-      NOT: { status: "AWAITING_PAYMENT" as const },
+      ...(pediuPendentesDePagamento ? {} : { NOT: { status: AWAITING_PAYMENT_STATUS } }),
       ...(status && { status }),
       ...(customerId && { customerId }),
       ...(from || to

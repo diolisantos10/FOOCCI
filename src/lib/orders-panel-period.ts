@@ -151,12 +151,27 @@ function rangeParams(period: OrdersPeriod): string {
   return parts.join("&");
 }
 
-/** URL da LISTA. Com período, o recorte é feito no banco — não no cliente. */
-export function ordersListUrl(period: OrdersPeriod | null, limit: number): string {
-  const base = `/api/orders?limit=${limit}`;
-  if (!period) return base;
-  const r = rangeParams(period);
-  return r ? `${base}&${r}` : base;
+/**
+ * URL da LISTA. Com período, o recorte é feito no banco — não no cliente.
+ *
+ * `status` existe por um motivo específico: `AWAITING_PAYMENT` é excluído da
+ * lista operacional por padrão (não é trabalho de cozinha), e a ÚNICA forma de
+ * alcançá-lo é pedindo por ele. É para cá que o alerta "N pagamentos pendentes"
+ * aponta. Sem este parâmetro chegar ao servidor, o alerta abriria uma tela vazia
+ * — que foi exatamente o defeito de 13/08/2026.
+ */
+export function ordersListUrl(
+  period: OrdersPeriod | null,
+  limit: number,
+  status?: string | null,
+): string {
+  const parts: string[] = [`limit=${limit}`];
+  if (period) {
+    const r = rangeParams(period);
+    if (r) parts.push(r);
+  }
+  if (status) parts.push(`status=${encodeURIComponent(status)}`);
+  return `/api/orders?${parts.join("&")}`;
 }
 
 /**

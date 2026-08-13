@@ -14,16 +14,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OrderStatus } from "@prisma/client";
 import { requireApiScope, jsonError, jsonOk, resolveDesde, V1_MAX_ROWS } from "@/lib/api-v1";
+import { REVENUE_STATUS_LIST } from "@/lib/order-revenue";
 
 export const dynamic = "force-dynamic";
 
-const REVENUE_STATUS: OrderStatus[] = [
-  OrderStatus.CONFIRMED,
-  OrderStatus.PREPARING,
-  OrderStatus.READY,
-  OrderStatus.OUT_FOR_DELIVERY,
-  OrderStatus.DELIVERED,
-];
+// Fonte única: @/lib/order-revenue — reconcilia linha a linha com /vendas e o painel.
+const REVENUE_STATUS: OrderStatus[] = REVENUE_STATUS_LIST;
 
 export async function GET(req: NextRequest) {
   try {

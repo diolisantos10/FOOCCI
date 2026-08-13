@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { REVENUE_STATUS_LIST, PENDING_PAYMENTS_HREF, AWAITING_PAYMENT_STATUS } from "@/lib/order-revenue";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -129,8 +130,12 @@ export function buildAlerts(d: CockpitRawData): CockpitAlert[] {
       severity:    n >= 3 ? "WARNING" : "INFO",
       title:       `${n} pagamento${n !== 1 ? "s" : ""} pendente${n !== 1 ? "s" : ""}`,
       description: "Pedidos aguardando confirmação de pagamento Pix.",
-      actionLabel: "Ver pedidos",
-      actionHref:  "/orders",
+      actionLabel: "Ver pagamentos pendentes",
+      // A tela onde eles DE FATO aparecem. Até 13/08/2026 este alerta apontava
+      // para "/orders", que exclui AWAITING_PAYMENT por construção: o lojista
+      // clicava e não achava nada. Alerta que oferece ação tem que abrir a tela
+      // onde a ação existe — senão ensina o lojista a ignorar o alerta.
+      actionHref:  PENDING_PAYMENTS_HREF,
     });
   }
 
@@ -270,7 +275,12 @@ function brazilMidnight(): Date {
   return d;
 }
 
-const REVENUE_STATUS = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "AWAITING_PAYMENT"] as const;
+// CORREÇÃO DE 13/08/2026: esta lista incluía AWAITING_PAYMENT — Pix que ninguém
+// pagou entrava no faturamento do dia e na média dos 7 dias que serve de régua
+// para "as vendas estão fracas hoje?". Agora vem da fonte única
+// (@/lib/order-revenue), igual ao dashboard, à atribuição por origem e às APIs
+// públicas. O pagamento pendente não sumiu: ele é alerta, não é venda.
+const REVENUE_STATUS = REVENUE_STATUS_LIST;
 const OPEN_STATUS    = ["PENDING", "CONFIRMED", "PREPARING", "READY"] as const;
 const DELAY_MS       = 20 * 60 * 1_000;
 
@@ -292,7 +302,7 @@ export async function getCockpitReport(restaurantId: string): Promise<CockpitRep
   ] = await Promise.all([
     // 1. Today's revenue orders (real Foocci orders only — imported excluded)
     prisma.order.findMany({
-      where:  { restaurantId, importedAt: null, status: { in: [...REVENUE_STATUS] }, createdAt: { gte: todayStart } },
+      where:  { restaurantId, importedAt: null, status: { in: REVENUE_STATUS }, createdAt: { gte: todayStart } },
       select: { total: true },
     }),
     // 2. Cancellations today
@@ -301,12 +311,12 @@ export async function getCockpitReport(restaurantId: string): Promise<CockpitRep
     }),
     // 3. Last 7 days revenue (for avg baseline — exclude today)
     prisma.order.findMany({
-      where:  { restaurantId, importedAt: null, status: { in: [...REVENUE_STATUS] }, createdAt: { gte: sevenDaysAgo, lt: todayStart } },
+      where:  { restaurantId, importedAt: null, status: { in: REVENUE_STATUS }, createdAt: { gte: sevenDaysAgo, lt: todayStart } },
       select: { total: true },
     }),
     // 4. Pending payment orders (real-time)
     prisma.order.count({
-      where: { restaurantId, importedAt: null, status: "AWAITING_PAYMENT" },
+      where: { restaurantId, importedAt: null, status: AWAITING_PAYMENT_STATUS },
     }),
     // 5. Open orders for delayed check (real-time)
     prisma.order.findMany({
