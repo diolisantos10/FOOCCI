@@ -55,7 +55,7 @@ export function SupportContactBlock({ className = "" }: { className?: string }) 
           <a href={SUPPORT_FALLBACK_URL} className={LINK}>
             Deixe seu nome e WhatsApp aqui
           </a>{" "}
-          que uma pessoa do Foocci entra em contato para devolver o seu acesso.
+          que a gente entra em contato para devolver o seu acesso.
         </p>
       )}
     </div>

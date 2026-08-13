@@ -121,8 +121,8 @@ export default function RecoverPage() {
         <p className="font-semibold text-ink">Esta página não redefine senha.</p>
         <p className="mt-1 max-w-md text-sm text-ink2">
           Ela só serve para criar o primeiro acesso de um restaurante recém-instalado.
-          O seu já tem acesso criado — entre pelo login, e se a senha não funcionar,
-          quem devolve o acesso é a equipe do Foocci.
+          O seu já tem acesso criado — entre pelo login. Se a senha não funcionar, o
+          caminho está logo abaixo.
         </p>
         <a
           href="/login"

@@ -55,6 +55,27 @@ This endpoint deletes all users for a restaurant. It is now:
 - Requires `x-admin-secret: <value>` header matching `ADMIN_SECRET`
 - Logs failed access attempts
 
+**Reforço de 13/08/2026 (irreversível = três chaves, não uma):**
+- comparação do segredo passou a ser de tempo constante
+  (`checkAdminSecretHeader`, em `src/lib/admin-auth.ts`) — o `!==` cru saiu;
+- **só cabeçalho**: o cookie de sessão do admin NÃO abre esta rota. Apagar acesso
+  não pode depender de uma aba aberta;
+- **alvo explícito**: o corpo exige `restaurantSlug`. A rota escolhia sozinha com
+  `findFirst({ isActive: true })` — mira aleatória num produto multi-restaurante;
+- **confirmação**: `confirm: "APAGAR-USUARIOS"`;
+- `dryRun: true` responde quantas contas seriam apagadas sem apagar nenhuma;
+- a tela pública `/recover?force=true`, que chamava esta rota a um clique do
+  lojista (e sem mandar o segredo), **foi removida**. O portão estrutural
+  `src/security/recoveryPathGuard.test.ts` impede que ela volte.
+
+### 4b. `/api/recover` — rota pública que cria conta OWNER (13/08/2026)
+Ela é liberada pelo middleware antes de qualquer sessão. Passou a exigir o estado
+de instalação inequívoco: **exatamente um restaurante no banco**, ativo, e sem
+proprietário ativo. Antes usava `findFirst({ isActive: true })` — bastava esse
+restaurante sorteado estar sem OWNER para qualquer pessoa da internet virar dona
+dele. O nome do restaurante só sai na resposta quando a recuperação está liberada.
+Coberto por `src/app/api/recover/recoverRoute.test.ts` (as duas metades).
+
 ### 5. Fixed internal error leakage (`src/lib/api-response.ts`)
 - `serverError()` no longer forwards the `details` argument to the JSON response;
   details are only logged server-side
@@ -99,6 +120,8 @@ New variables introduced by this hardening:
 | Variable | Required | Description |
 |---|---|---|
 | `ADMIN_SECRET` | No | If set, enables and protects `POST /api/admin/reset-owner`. Use a strong random string (≥ 32 chars). |
+| `NEXT_PUBLIC_SUPPORT_WHATSAPP` | No | Número (só dígitos, com DDI) do canal de socorro mostrado na tela de login para quem não consegue entrar. Não é segredo — é público de propósito. |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | No | Caixa de e-mail do mesmo canal de socorro. Sem nenhum dos dois, o login cai no formulário do site. |
 
 Existing variables that must be set in production:
 

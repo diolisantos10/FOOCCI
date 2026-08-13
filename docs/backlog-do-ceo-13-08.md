@@ -82,6 +82,28 @@ ruído (guardrail 6).
 
 ---
 
+## 🎨 FOOCCI — design dos cardápios (o CEO declarou: NÃO é prioridade)
+
+> *"A gente precisa melhorar o design dos cardápios, tanto do QR Code como o
+> cardápio sem ser o da IA. Os cardápios que não têm IA. Deixar ele mais
+> sofisticado. Está bom mas precisa melhorar. Só pra colocar aí na listinha."*
+> — 13/08/2026
+
+| # | Item | Natureza |
+|---|---|---|
+| 21 | **Cardápio do QR Code** — subir o nível do design | refino visual |
+| 22 | **Cardápio sem IA** (o segundo, não o do Garçom) — mais sofisticado | refino visual |
+
+**Ele mesmo classificou como não prioritário.** Fica na fila abaixo de tudo que
+é receita ou acesso, e não entra na frente de nada.
+
+Nota para quem pegar: *"está bom mas precisa melhorar"* é pedido de **elevação
+de padrão**, não conserto de defeito. O `DESIGN.md` e as Referências (§norte
+estético) mandam aqui — e a régua é a auto-revisão de 0 a 10 com 8+ nos quatro
+eixos antes de mostrar ao CEO.
+
+---
+
 ## 🟡 FOOCCI MANAGER — decisão de dono, não minha
 
 > *"amanhã vamos decidir se o Foocci Vendas vai ser só um canal de vendas que
