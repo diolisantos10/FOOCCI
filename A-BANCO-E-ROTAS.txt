@@ -1,0 +1,202 @@
+🔑 Credenciais lidas do Railway (nenhuma impressa).
+
+══════════════════════════════════════════════════════════════════════════════
+A. QUANTO O CRM DISPAROU DE VERDADE (campaign_executions)
+══════════════════════════════════════════════════════════════════════════════
+   30d: READ=6 · BLOCKED=1182 · SENT=4696 · FAILED=347 · SKIPPED=10520 
+   90d: READ=91 · BLOCKED=1235 · SENT=5689 · SKIPPED=10520 · PENDING=1949 · FAILED=1138 
+
+══════════════════════════════════════════════════════════════════════════════
+B. CAMPANHA A CAMPANHA — enviados em 30d / 90d / desde sempre
+══════════════════════════════════════════════════════════════════════════════
+   restaurante        | tipo | campanha (template)              | estado    |   30d |   90d |  tudo | bloq90 | falh90 | último envio
+   ---------------------------------------------------------------------------------------------------------------------------------
+   sushi-cazza        | AUTO | recuperar-perdidos               | ACTIVE    |   936 |   948 |   948 |      0 |      0 | Sun Aug 02
+   sushi-cazza        | AUTO | cupom-vencendo                   | ACTIVE    |   824 |   824 |   824 |     64 |     88 | Tue Aug 11
+   sushi-cazza        | AUTO | siga-redes                       | ACTIVE    |   722 |   725 |   725 |    592 |     14 | Tue Aug 11
+   sushi-cazza        | AUTO | recuperar-frios                  | ACTIVE    |   493 |   679 |   679 |     33 |     34 | Tue Aug 11
+   sushi-cazza        | AUTO | cadastro-sem-compra              | ACTIVE    |   552 |   626 |   626 |    149 |      7 | Tue Aug 11
+   sushi-cazza        | AUTO | indique-amigo                    | ACTIVE    |   576 |   576 |   576 |    250 |      0 | Tue Aug 11
+   sushi-cazza        | AUTO | carrinho-abandonado              | COMPLETED |   251 |   480 |   480 |     81 |    173 | Tue Aug 11
+   sushi-cazza        | AUTO | reativar-mornos                  | ACTIVE    |    94 |   306 |   306 |      1 |     22 | Tue Aug 11
+   sushi-cazza        | AUTO | segunda-compra                   | ACTIVE    |   158 |   187 |   187 |     20 |      1 | Tue Aug 11
+   sushi-cazza        | AUTO | quente-esfriando                 | ACTIVE    |    59 |    79 |    79 |      8 |     17 | Tue Aug 11
+   sushi-cazza        | AUTO | aniversariantes                  | ACTIVE    |    37 |    64 |    64 |      0 |     27 | Sat Aug 08
+   sushi-cazza        | AUTO | recuperar-frios                  | SENT      |     0 |    61 |    61 |      0 |     89 | Mon May 25
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     7 |     7 |      2 |      0 | Sun Jul 05
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     7 |     7 |      1 |      0 | Mon Jun 22
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     6 |     6 |      0 |      0 | Tue Jun 23
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     5 |     5 |      0 |      0 | Mon Jul 06
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     5 |     5 |      1 |      0 | Sat Jul 04
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     5 |     5 |      5 |      0 | Sun Jun 28
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     5 |     5 |      0 |      0 | Sat Jun 20
+   sushi-cazza        | AUTO | aniversariantes                  | COMPLETED |     0 |     5 |     5 |      0 |      1 | Tue Jun 16
+   sushi-cazza        | AUTO | aniversariantes                  | COMPLETED |     0 |     5 |     5 |      0 |      1 | Sat Jun 06
+   sushi-cazza        | AUTO | aniversariantes                  | COMPLETED |     0 |     5 |     5 |      0 |      1 | Sat Jun 06
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     4 |     4 |      0 |      0 | Thu Jun 25
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     3 |     3 |      1 |      0 | Fri Jul 03
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     3 |     3 |      1 |      0 | Thu Jul 02
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     3 |     3 |      0 |      0 | Tue Jun 30
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     2 |     2 |      1 |      0 | Wed Jul 08
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     2 |     2 |      0 |      0 | Tue Jul 07
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     2 |     2 |      4 |      0 | Sat Jun 27
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     2 |     2 |      0 |      0 | Sat Jun 27
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     2 |     2 |      0 |      1 | Fri Jun 26
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     2 |     2 |      2 |      0 | Fri Jun 19
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     2 |     2 |      0 |      0 | Tue Jun 16
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     2 |     2 |      0 |      0 | Wed May 27
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Wed Jul 08
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Mon Jun 22
+   sushi-cazza        | MANU | auto:POST_ORDER                  | SENT      |     0 |     1 |     1 |      8 |      0 | Sun Jun 21
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Sun Jun 07
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Fri Jun 05
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Wed Jun 03
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Tue Jun 02
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Sat May 30
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Fri May 29
+   sushi-cazza        | MANU | auto:BIRTHDAY                    | SENT      |     0 |     1 |     1 |      0 |      0 | Sun May 24
+   sushi-cazza        | MANU | TODOS                            | ACTIVE    |     0 |     0 |     0 |      0 |      0 | nunca
+   sushi-cazza        | AUTO | clientes-vip                     | PAUSED    |     0 |     0 |     0 |      0 |      0 | nunca
+   sushi-cazza        | MANU | auto:POST_ORDER                  | DRAFT     |     0 |     0 |     0 |      0 |      0 | nunca
+   sushi-cazza        | AUTO | aniversariantes                  | COMPLETED |     0 |     0 |     0 |      0 |      1 | nunca
+   sushi-cazza        | AUTO | recuperar-frios                  | DRAFT     |     0 |     0 |     0 |      0 |      0 | nunca
+   sushi-cazza        | AUTO | recuperar-frios                  | DRAFT     |     0 |     0 |     0 |      0 |      0 | nunca
+   sushi-cazza        | AUTO | recuperar-frios                  | DRAFT     |     0 |     0 |     0 |      0 |      0 | nunca
+
+   AUTOMÁTICAS (campanhas prontas) — 30d: 4702 · 90d: 5570
+   MANUAIS/AGENDADAS pelo lojista  — 30d: 0 · 90d: 79
+
+══════════════════════════════════════════════════════════════════════════════
+C. POR QUE FOI BLOQUEADO / FALHOU — códigos de máquina, 90d
+══════════════════════════════════════════════════════════════════════════════
+   BLOCKED · por errorMessage:
+        1106 × RECENT_CRM_MESSAGE_24H
+         129 × INVALID_PHONE_FORMAT
+   BLOCKED · por failedReason:
+        1106 × Cliente já recebeu mensagem CRM nas últimas 24h
+         129 × Formato de telefone inválido
+   FAILED · por errorMessage:
+         700 × (vazio)
+         323 × META_133010
+          73 × EVOLUTION_HTTP_400
+          30 × EVOLUTION_HTTP_500
+          12 × Evolution API POST /message/sendText/sushicazza → HTTP 400
+   FAILED · por failedReason:
+         627 × Evolution API POST /message/sendText/sushicazza → HTTP 400
+         323 × (#133010) Account not registered
+          44 × Evolution API POST /message/sendText/sushicazza → HTTP 500
+          40 × Limite semanal atingido (1/1)
+          30 × HTTP 500: {"status":500,"error":"Internal Server Error","res
+          18 × HTTP 400: {"status":400,"error":"Bad Request","response":{"m
+          16 × HTTP 400: {"status":400,"error":"Bad Request","response":{"m
+          16 × HTTP 400: {"status":400,"error":"Bad Request","response":{"m
+          11 × HTTP 400: {"status":400,"error":"Bad Request","response":{"m
+           8 × HTTP 400: {"status":400,"error":"Bad Request","response":{"m
+           2 × HTTP 400: {"status":400,"error":"Bad Request","response":{"m
+           1 × Body is unusable
+
+   PENDING (criado e nunca enviado) — total 1949, do mais antigo Sat May 23 ao mais recente Wed Jun 24.
+   PENDING recente é fila viva; PENDING só antigo é resíduo de um motor que parou.
+
+══════════════════════════════════════════════════════════════════════════════
+C2. ESTÁ ENVIANDO HOJE? — enviados por dia, últimos 30 dias
+══════════════════════════════════════════════════════════════════════════════
+   2026-07-17  ███████ 68
+   2026-07-18  ███████ 66
+   2026-07-19  ████████████ 113
+   2026-07-20  ████████████████████████████ 273
+   2026-07-21  ████████████████████████████████████████████████████████████ 812
+   2026-07-22  ████████████████████████████████████████████████████████████ 640
+   2026-07-23  ███████████████████████████████████████ 390
+   2026-07-24  █████████████████████████ 250
+   2026-07-25  █████████████████████████████ 290
+   2026-07-26  ████████████████████████████ 280
+   2026-07-27  ████████ 74
+   2026-07-28  ████ 31
+   2026-07-29  ███████ 66
+   2026-07-30  ██████████████ 132
+   2026-07-31  █████████████████████████████████████ 368
+   2026-08-01  ██████████ 98
+   2026-08-02  ███████ 63
+   2026-08-03  █████████ 88
+   2026-08-04  ████████ 72
+   2026-08-05  ████████ 78
+   2026-08-06  ███████ 67
+   2026-08-07  ███████ 68
+   2026-08-08  ███████ 64
+   2026-08-09  █████████ 85
+   2026-08-10  ██████████ 94
+   2026-08-11  ███████ 62
+   2026-08-12  █ 10
+
+══════════════════════════════════════════════════════════════════════════════
+C3. O CATÁLOGO LIGADO — quantas das 16 campanhas prontas cada casa ativou
+══════════════════════════════════════════════════════════════════════════════
+   sushi-cazza          ligadas 10/16
+      desligadas: pedido-avaliacao, clientes-vip, subiu-de-nivel, quase-no-proximo-nivel, mimo-mensal-nivel, carrinho-abandonado
+   foocci-bakery        NENHUMA campanha existe nesta casa (nem rascunho).
+
+══════════════════════════════════════════════════════════════════════════════
+D. O TETO DE VERDADE — quanto a base atual comporta por dia
+══════════════════════════════════════════════════════════════════════════════
+   Por restaurante: clientes contactáveis (a matéria-prima), campanhas ativas,
+   e a soma dos limites diários dessas campanhas. O teto real é o MENOR entre
+   a soma dos limites e o que a audiência viva comporta.
+   sushi-cazza                clientes   5149 · contactáveis   5109 · campanhas ativas  11 · soma dos limites/dia   390
+                             pessoas distintas contatadas: 30d  1953 (38% dos contactáveis) · 90d  2115
+   foocci-bakery        (demo) clientes      1 · contactáveis      1 · campanhas ativas   0 · soma dos limites/dia     0
+                             pessoas distintas contatadas: 30d     0 (0% dos contactáveis) · 90d     0
+
+══════════════════════════════════════════════════════════════════════════════
+D2. A PRATELEIRA REAL — contactáveis por tempo desde o último pedido
+══════════════════════════════════════════════════════════════════════════════
+   Compare cada faixa com o teto de resolução (500). Faixa >> 500 significa
+   que a campanha daquele segmento enxerga só uma fatia da fila.
+   sushi-cazza          0-30 dias: 100 · 120+ dias: 2981 · 31-60 dias: 86 · 61-120 dias: 150 · sem pedido: 1792
+   foocci-bakery        0-30 dias: 1
+
+══════════════════════════════════════════════════════════════════════════════
+E. VOLUME REAL DA CASA — pedidos em 30d (um restaurante sem movimento
+   não tem carrinho para recuperar; isso NÃO é defeito)
+══════════════════════════════════════════════════════════════════════════════
+   sushi-cazza          pedidos    141 · rascunhos de carrinho    146
+   foocci-bakery        pedidos      1 · rascunhos de carrinho      2
+
+══════════════════════════════════════════════════════════════════════════════
+F. POR QUE CADA CAMPANHA ATIVA NÃO DISPARA AGORA (rota de diagnóstico)
+══════════════════════════════════════════════════════════════════════════════
+   ┌─ foocci-bakery — canal INDISPONÍVEL · loja aberta · enviados hoje 0
+   │  teto diário aplicado 900 · cooldown 24h · máx/semana por cliente 5 · silêncio 21:00–08:00 · fim de semana sim
+   └─ (nenhuma campanha ativa nesta casa)
+   ┌─ sushi-cazza — canal disponível · loja fechada · enviados hoje 0
+   │  teto diário aplicado 900 · cooldown 24h · máx/semana por cliente 5 · silêncio 21:00–08:00 · fim de semana sim
+   │  11 campanha(s) ativa(s), 0 de vez agora
+   │  agendador interno: inativo NESTE processo · sem rodada registrada
+   │  (o agendador é estado de MEMÓRIA de um processo; 'inativo' aqui pode ser
+   │   só a réplica que atendeu esta requisição. Quem prova envio é a seção A.)
+   │  (audiência 500 = teto de resolução, não o tamanho real do segmento)
+   │  TODOS                        de vez=não · audiência 500 (nova 500) · limite/dia 60 · último envio nunca
+   │      motivo: Before time window — 11:30 not yet reached (now 08:07 America/Sao_Paulo)
+   │  indique-amigo                de vez=não · audiência 500 (nova 0) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  cupom-vencendo               de vez=não · audiência 116 (nova 98) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  recuperar-perdidos           de vez=não · audiência 500 (nova 0) · limite/dia 50 · último envio 2026-08-02
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  siga-redes                   de vez=não · audiência 500 (nova 19) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  cadastro-sem-compra          de vez=não · audiência 500 (nova 19) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  segunda-compra               de vez=não · audiência 177 (nova 17) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  quente-esfriando             de vez=não · audiência 17 (nova 16) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  aniversariantes              de vez=não · audiência 23 (nova 0) · limite/dia 20 · último envio 2026-08-08
+   │      motivo: Before time window — 10:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  recuperar-frios              de vez=não · audiência 500 (nova 10) · limite/dia 50 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   │  reativar-mornos              de vez=não · audiência 86 (nova 11) · limite/dia 30 · último envio 2026-08-11
+   │      motivo: Before time window — 11:00 not yet reached (now 08:07 America/Sao_Paulo)
+   └─
+
+(Somente leitura. Nenhuma mensagem foi enviada, nenhuma campanha alterada.)

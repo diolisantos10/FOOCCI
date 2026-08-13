@@ -1,0 +1,1 @@
+❌ workflow crm-cron.yml não encontrado em diolisantos10/FOOCCI
