@@ -144,18 +144,35 @@ const BTN_VARIANTS: Record<string, string> = {
   ghost:     "bg-transparent text-ink2 border-transparent hover:bg-[#F4F4F2]",
 };
 
+const BTN_BASE =
+  "inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-[13.5px] font-semibold transition-colors disabled:opacity-50";
+
 export function Button({ variant = "secondary", className, children, ...rest }: BtnProps) {
   return (
-    <button
-      className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-[13.5px] font-semibold transition-colors disabled:opacity-50",
-        BTN_VARIANTS[variant],
-        className,
-      )}
-      {...rest}
-    >
+    <button className={cx(BTN_BASE, BTN_VARIANTS[variant], className)} {...rest}>
       {children}
     </button>
+  );
+}
+
+/**
+ * O mesmo botão, quando a ação é NAVEGAR.
+ *
+ * Existe porque `<button>` dentro de `<a>` é HTML inválido e copiar a string de
+ * classe para fora do kit é exatamente a origem do drift #8 do DESIGN.md ("kit
+ * subadotado, telas reimplementam inline"). Base e variantes são compartilhadas
+ * com o `Button` acima — mudar o botão muda os dois por construção.
+ */
+export function ButtonLink({
+  variant = "secondary",
+  className,
+  children,
+  ...rest
+}: React.ComponentProps<typeof Link> & { variant?: "primary" | "secondary" | "ghost" }) {
+  return (
+    <Link className={cx(BTN_BASE, BTN_VARIANTS[variant], className)} {...rest}>
+      {children}
+    </Link>
   );
 }
 

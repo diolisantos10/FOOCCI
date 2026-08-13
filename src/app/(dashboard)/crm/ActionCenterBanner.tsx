@@ -31,7 +31,7 @@
  *   passo aparece escrito — nunca um botão que não leva a lugar nenhum.
  */
 
-import Link from "next/link";
+import { Button, ButtonLink, Pill } from "@/components/ui";
 import type { CrmAction, ActionPriority } from "@/services/crm/CrmActionCenterService";
 
 // ── Modelo ────────────────────────────────────────────────────────────────────
@@ -126,7 +126,8 @@ type Severity = {
   rail: string;
   railWidth: string;
   border: string;
-  pill: string;
+  /** Tom do `Pill` do kit — cor é o TERCEIRO sinal, nunca o único. */
+  tone: "red" | "amber" | "neutral";
   iconTone: string;
   shape: "triangle" | "circle";
 };
@@ -137,7 +138,7 @@ const SEVERITY: Record<ActionPriority, Severity> = {
     rail: "bg-red-500",
     railWidth: "w-1.5",
     border: "border-red-100",
-    pill: "bg-red-50 text-red-600",
+    tone: "red",
     iconTone: "text-red-500",
     shape: "triangle",
   },
@@ -146,7 +147,7 @@ const SEVERITY: Record<ActionPriority, Severity> = {
     rail: "bg-amber-400",
     railWidth: "w-1",
     border: "border-amber-100",
-    pill: "bg-amber-50 text-amber-700",
+    tone: "amber",
     iconTone: "text-amber-500",
     shape: "circle",
   },
@@ -155,7 +156,7 @@ const SEVERITY: Record<ActionPriority, Severity> = {
     rail: "bg-line2",
     railWidth: "w-0.5",
     border: "border-line",
-    pill: "bg-[#F4F4F2] text-ink2",
+    tone: "neutral",
     iconTone: "text-muted",
     shape: "circle",
   },
@@ -170,30 +171,31 @@ function SeverityIcon({ shape, className }: { shape: Severity["shape"]; classNam
           d="M11.13 3.6a1 1 0 0 1 1.74 0l8.62 15.1a1 1 0 0 1-.87 1.5H3.38a1 1 0 0 1-.87-1.5l8.62-15.1Z"
           fill="currentColor"
         />
-        <rect x="11.15" y="8.6" width="1.7" height="5.4" rx=".85" fill="#fff" />
-        <circle cx="12" cy="16.7" r="1.05" fill="#fff" />
+        <rect x="11.15" y="8.6" width="1.7" height="5.4" rx=".85" className="fill-paper" />
+        <circle cx="12" cy="16.7" r="1.05" className="fill-paper" />
       </svg>
     );
   }
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className} width="20" height="20">
       <circle cx="12" cy="12" r="9.2" fill="currentColor" />
-      <rect x="11.15" y="7" width="1.7" height="6" rx=".85" fill="#fff" />
-      <circle cx="12" cy="16.1" r="1.05" fill="#fff" />
+      <rect x="11.15" y="7" width="1.7" height="6" rx=".85" className="fill-paper" />
+      <circle cx="12" cy="16.1" r="1.05" className="fill-paper" />
     </svg>
   );
 }
 
 // ── A faixa ───────────────────────────────────────────────────────────────────
 
+// O `Card` do kit não serve aqui: ele não aceita a barra lateral posicionada, que
+// é um dos três sinais de severidade. As classes abaixo são as MESMAS do kit
+// (`rounded-2xl border bg-paper` + a sombra do DESIGN.md §3), só com `relative
+// overflow-hidden` para a barra caber dentro do raio.
 const CARD =
   "relative overflow-hidden rounded-2xl border bg-paper shadow-[0_1px_2px_rgba(11,11,11,.03)]";
 
-const CTA_PRIMARY =
-  "inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand-500 bg-brand-500 px-4 py-2.5 text-[13.5px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600 sm:w-auto";
-
-const CTA_SECONDARY =
-  "inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-line2 bg-paper px-4 py-2.5 text-[13.5px] font-semibold text-ink transition-colors hover:bg-[#FAFAF8] sm:w-auto";
+/** Botão largo no celular (polegar), do tamanho do texto no resto. */
+const CTA_WIDTH = "w-full sm:w-auto";
 
 export function ActionCenterBanner({
   actions = [],
@@ -221,13 +223,13 @@ export function ActionCenterBanner({
                 Isso não quer dizer que está tudo certo — quer dizer que eu ainda não sei.
                 Atualize a página para eu tentar de novo.
               </p>
-              <button
+              <Button
                 type="button"
                 onClick={() => window.location.reload()}
-                className={`mt-3 ${CTA_SECONDARY}`}
+                className={`mt-3 ${CTA_WIDTH}`}
               >
                 Tentar de novo
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -238,13 +240,13 @@ export function ActionCenterBanner({
   const alerts = selectCrmAlerts(actions);
 
   // Nada travando ⇒ nada na tela. A ausência de aviso não vira selo de saúde.
-  if (alerts.length === 0) return <p>Tudo em ordem por aqui</p>;
+  if (alerts.length === 0) return null;
 
   return (
     <section aria-label="Avisos do CRM" data-testid="crm-action-center" className="space-y-2">
       {alerts.map((alert) => {
         const sev = SEVERITY[alert.priority];
-        const ctaClass = alert.priority === "HIGH" ? CTA_PRIMARY : CTA_SECONDARY;
+        const ctaVariant = alert.priority === "HIGH" ? "primary" : "secondary";
 
         return (
           <div key={alert.id} className={`${CARD} ${sev.border}`} data-testid="crm-alert">
@@ -256,11 +258,9 @@ export function ActionCenterBanner({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <h3 className="text-[14px] font-semibold leading-snug text-ink">{alert.title}</h3>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[.04em] ${sev.pill}`}
-                    >
+                    <Pill tone={sev.tone} className="uppercase tracking-[.04em]">
                       {sev.label}
-                    </span>
+                    </Pill>
                   </div>
                   <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">{alert.body}</p>
                   {alert.meta && <p className="mt-1 text-[12px] leading-relaxed text-muted">{alert.meta}</p>}
@@ -272,19 +272,25 @@ export function ActionCenterBanner({
                 </div>
 
                 {alert.cta?.href && (
-                  <Link href={alert.cta.href} title={alert.nextStep} className={`shrink-0 ${ctaClass}`}>
-                    {alert.cta.label} <span aria-hidden="true">→</span>
-                  </Link>
-                )}
-                {alert.cta?.tab && onNavigateToTab && (
-                  <button
-                    type="button"
+                  <ButtonLink
+                    href={alert.cta.href}
+                    variant={ctaVariant}
                     title={alert.nextStep}
-                    onClick={() => onNavigateToTab(alert.cta!.tab!)}
-                    className={`shrink-0 ${ctaClass}`}
+                    className={`shrink-0 ${CTA_WIDTH}`}
                   >
                     {alert.cta.label} <span aria-hidden="true">→</span>
-                  </button>
+                  </ButtonLink>
+                )}
+                {alert.cta?.tab && onNavigateToTab && (
+                  <Button
+                    type="button"
+                    variant={ctaVariant}
+                    title={alert.nextStep}
+                    onClick={() => onNavigateToTab(alert.cta!.tab!)}
+                    className={`shrink-0 ${CTA_WIDTH}`}
+                  >
+                    {alert.cta.label} <span aria-hidden="true">→</span>
+                  </Button>
                 )}
                 {alert.cta?.tab && !onNavigateToTab && (
                   <p className="shrink-0 text-[12.5px] font-semibold leading-relaxed text-ink2">

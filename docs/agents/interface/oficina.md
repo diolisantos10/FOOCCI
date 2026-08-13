@@ -2211,3 +2211,99 @@ Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
 375/768/1280, **inclusive com a gaveta "Fora de operação" aberta**.
 
 — interface, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-13 — A Central de Ações do CRM sai da prop e vira tela
+
+**O defeito, já apurado pelo Diretor:** `CrmActionCenterService` calculava
+"WhatsApp não conectado — nenhuma campanha pode ser enviada" a cada carga de
+`crm/page.tsx`, a prop `actions` atravessava `CRMClient` e chegava em
+`OverviewTab` — onde era **desestruturada e esquecida**. Nunca renderizada em
+commit nenhum. O lojista via "0 mensagens enviadas" com 12 campanhas ativas e
+zero explicação, com a resposta pronta a três props de distância.
+
+**O que foi feito:** nasceu `crm/ActionCenterBanner.tsx`, montado como bloco 0 da
+Visão Geral, acima do primeiro KPI. `page.tsx` passou a distinguir "nada travando"
+de "não deu para calcular" (o `.catch(() => null)` mandava os dois para a mesma
+lista vazia), e `CRMClient` carrega a bandeira `initialActionsFailed`.
+
+### Achado 1 — o comentário no fim do arquivo era metade da explicação
+
+`OverviewTab.tsx` terminava com um comentário registrando uma decisão anterior:
+"Oportunidades de receita e Configurações pendentes foram removidas da Visão
+Geral — as campanhas fixas já rodam sozinhas, sugerir 'criar campanha' para o que
+é automático não faz sentido". A decisão está certa e não foi desfeita. **Mas as
+duas seções saíram juntas, e só uma era oportunidade.** "WhatsApp não conectado"
+não é sugestão comercial: é obstáculo. A faixa nova desenha só impedimento
+(`SAFETY_ISSUE_ALERT`, `CAMPAIGN_PERFORMANCE_ALERT`, e `REVIEW_REQUEST` com
+`recommendedCampaignType === null`), no máximo três linhas, e deixa as
+oportunidades onde a decisão anterior as pôs: fora.
+
+Regra que fica: **quando duas seções somem no mesmo commit, conferir se o motivo
+alegado cobre as duas.** O motivo aqui cobria uma.
+
+### Achado 2 — os três estilos de ação já existiam no arquivo, mortos
+
+`PRIORITY_STYLE`, `ACTION_ICON` e `CONFIG_ACTION_TYPES` estavam declarados no topo
+do `OverviewTab.tsx` e **nunca usados** — restos do painel que não foi desenhado.
+Um deles ainda carregava `bg-yellow-400`, o drift #7 do `DESIGN.md` (aviso é
+`amber`). Saíram. Existe também um `CrmOverviewPolish.test.ts` que testa cópias
+locais dessa lógica e passa verde há meses sem que nada dela esteja na tela —
+teste que espelha a UI em vez de renderizá-la não é portão de UI nenhum.
+
+### Achado 3 — severidade em forma custa uma decisão de tamanho de pílula
+
+Primeira versão usava pílula inline de 10,5px. Funcionava, mas o rótulo escrito
+("Urgente"/"Atenção") é justamente **o sinal que sobrevive a quem não distingue
+cor** — e ele estava no menor tipo da tela. Trocado pelo `Pill` do kit
+(11,5px). Efeito colateral bom: a 375px os **três** cartões passaram a quebrar a
+pílula para a linha de baixo, em vez de um inline e dois quebrados. A
+inconsistência anterior era pior que a quebra.
+
+Os três sinais de severidade, em ordem de robustez: (1) rótulo escrito,
+(2) silhueta do ícone — triângulo × círculo, (3) espessura da barra lateral
+(`w-1.5` × `w-1` × `w-0.5`). Cor é o quarto.
+
+### Achado 4 — o kit não tinha botão que navega, e por isso ninguém o usava
+
+O próximo passo da faixa é NAVEGAR (`/integracoes/whatsapp`, `/marca`), e
+`<button>` dentro de `<a>` é HTML inválido. A saída fácil seria copiar a string
+de classe do `Button` para dentro da tela — que é literalmente o drift #8
+("kit subadotado, telas reimplementam inline"). Nasceu `ButtonLink` em
+`@/components/ui`, compartilhando `BTN_BASE` e `BTN_VARIANTS` com o `Button`:
+mudar o botão muda os dois por construção.
+
+### Achado 5 — teste de UI só vale se renderizar a UI
+
+Os seis primeiros testes provavam o componente e passariam **com o componente
+existindo e ninguém o chamando** — que é o defeito original. Faltava renderizar a
+`OverviewTab` inteira (`renderToStaticMarkup`) e procurar a faixa lá dentro, com
+a ordem provada por índice: `indexOf(faixa) < indexOf("Clientes na base")`.
+
+Conferido por sabotagem, três vezes: (a) apagar o `<ActionCenterBanner>` da
+`OverviewTab` → 2 reprovações; (b) trocar o vazio por "Tudo em ordem por aqui" →
+5 reprovações; (c) parar de selecionar `SAFETY_ISSUE_ALERT` → 6 reprovações.
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` **483 arquivos / 6.335 verdes**
+(18 novos em `crm/ActionCenterBanner.test.ts`). Screenshots 375/768/1280 em
+quatro estados: um impedimento, três impedimentos, **erro** e **vazio**.
+`scrollWidth == clientWidth` exato nos três tamanhos e em todos os estados; zero
+transbordo em qualquer cartão (`scrollWidth == clientWidth` medido por cartão).
+
+Medida do estado vazio, que é a que interessa: `bandTop = null` (a faixa não
+existe no DOM) e o primeiro KPI sobe de 498px para **301px** a 375 — nenhum
+espaço reservado, nenhuma casca vazia.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8,5, consistência 9.
+
+### Pendência que NÃO resolvi (é do `experiencia`, não minha)
+
+A tira de abas do CRM ocupa **quatro linhas** a 375px, empurrando qualquer coisa
+da Visão Geral para 250px de rolagem. Isso não é classe errada: é excesso de aba
+numa superfície de celular. Registrado, não tocado.
+
+— interface, faixa da Central de Ações do CRM (branch
+`claude/crm-bloqueio-com-rastro`)
