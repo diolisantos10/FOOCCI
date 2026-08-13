@@ -52,6 +52,7 @@ import {
   getSafetyConfig,
   getTodayGlobalSendCount,
   getWeekGlobalSendCount,
+  BUDGET_COUNTED_CAMPAIGN_FILTER,
   checkQuietHours,
   checkWeekendBlock,
   randomDelayMs,
@@ -608,7 +609,14 @@ export class ScheduledCampaignRunnerService {
     }
 
     // Mark the start of this cycle so the detail API can filter current-cycle executions.
-    await prisma.campaign.update({ where: { id: campaignId }, data: { lastRunAt: new Date() } });
+    // Um lote que chegou até aqui passou por todos os portões: qualquer bloqueio de
+    // ciclo anotado antes está resolvido, e deixá-lo na tela seria alerta mentindo.
+    // Cobre também as campanhas isentas de orçamento (aniversário, carrinho), que
+    // não passam pelo orquestrador e por isso não são limpas lá.
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data:  { lastRunAt: new Date(), lastBlockedAt: null, lastBlockReason: null },
+    });
 
     // Send batch
     const override = readOverridePolicy(campaign.scheduleConfig);
@@ -722,6 +730,13 @@ export class ScheduledCampaignRunnerService {
         // Minimum interval between cycles: if the CRM produced execution activity
         // more recently than the configured spacing, this run waits for the next
         // tick. Dry runs still preview normally.
+        //
+        // A atividade que conta é a das campanhas que DISPUTAM o orçamento global.
+        // Campanha isenta (aniversário, carrinho abandonado) não reinicia este
+        // relógio: o carrinho grava execução a cada minuto e, sem o filtro,
+        // segurava todas as recorrentes indefinidamente. É a MESMA isenção do teto
+        // diário, importada do mesmo lugar de propósito — ver
+        // BUDGET_COUNTED_CAMPAIGN_FILTER.
         if (!dryRun && budget.minMinutesBetweenCycles > 0) {
           const lastActivity = await prisma.campaignExecution.findFirst({
             where:   { restaurantId: rid },
@@ -729,11 +744,13 @@ export class ScheduledCampaignRunnerService {
             select:  { createdAt: true },
           });
           if (isCycleIntervalActive(lastActivity?.createdAt ?? null, budget.minMinutesBetweenCycles)) {
+            const motivo = `Aguardando intervalo mínimo entre ciclos (${budget.minMinutesBetweenCycles} min)`;
+            await this._registrarBloqueioDeCiclo(group, motivo);
             results.push(...group.map((c): CampaignBatchResult => ({
               campaignId:   c.id,
               campaignName: c.name,
               eligible:     0, sent: 0, failed: 0, blocked: 0, skipped: 0,
-              reason:       `Aguardando intervalo mínimo entre ciclos (${budget.minMinutesBetweenCycles} min)`,
+              reason:       motivo,
               completed:    false,
             })));
             continue;
@@ -770,6 +787,56 @@ export class ScheduledCampaignRunnerService {
       totalSkipped:       results.reduce((s, r) => s + r.skipped, 0),
       results,
     };
+  }
+
+  /**
+   * Anota, em cada campanha, o motivo pelo qual o CICLO INTEIRO não rodou.
+   *
+   * POR QUE ISTO NÃO É UMA `campaign_execution`: os bloqueios globais (canal
+   * caído, cadência, disjuntor) acontecem ANTES de existir destinatário. Não há
+   * ninguém a quem atribuir a linha, e gravar uma por cliente × 12 campanhas a
+   * cada 10 minutos viraria enxurrada. Pior: o portão de cadência olha para
+   * `campaign_executions` recentes — gravar o bloqueio ali faria o portão
+   * disparar por causa do próprio registro e se trancar para sempre. O rastro
+   * mora na campanha, que é o objeto de que o bloqueio realmente fala.
+   *
+   * O texto gravado é o mesmo que o lojista lê na tela: motivo em português,
+   * nunca um código (guardrail 6 — o alerta carrega a própria evidência).
+   *
+   * Nunca lança: registrar o bloqueio é observabilidade, e observabilidade que
+   * derruba o motor é pior que a cegueira que ela conserta.
+   */
+  private static async _registrarBloqueioDeCiclo(
+    campanhas: Array<{ id: string }>,
+    motivo: string,
+  ): Promise<void> {
+    if (campanhas.length === 0) return;
+    await prisma.campaign.updateMany({
+      where: { id: { in: campanhas.map((c) => c.id) } },
+      // Data calculada no momento do bloqueio — nunca uma constante escrita à mão.
+      data:  { lastBlockedAt: new Date(), lastBlockReason: motivo },
+    }).catch((e) => console.error("[ScheduledCampaignRunner] não foi possível registrar o bloqueio de ciclo", {
+      campanhas: campanhas.length, motivo, error: e instanceof Error ? e.message : String(e),
+    }));
+  }
+
+  /**
+   * Apaga o rastro quando o ciclo volta a passar pelos portões globais.
+   *
+   * Sem isto o motivo velho apodrece na tela: canal reconectado continuaria
+   * exibindo "WhatsApp desconectado" para sempre — um alerta que mente é pior
+   * que nenhum. NULO significa "sem bloqueio agora", e é para lá que a campanha
+   * volta. O `lastBlockedAt: { not: null }` evita escrever no banco quando não
+   * há nada a limpar (a esmagadora maioria dos ciclos).
+   */
+  private static async _limparBloqueioDeCiclo(campanhas: Array<{ id: string }>): Promise<void> {
+    if (campanhas.length === 0) return;
+    await prisma.campaign.updateMany({
+      where: { id: { in: campanhas.map((c) => c.id) }, lastBlockedAt: { not: null } },
+      data:  { lastBlockedAt: null, lastBlockReason: null },
+    }).catch((e) => console.error("[ScheduledCampaignRunner] não foi possível limpar o bloqueio de ciclo", {
+      campanhas: campanhas.length, error: e instanceof Error ? e.message : String(e),
+    }));
   }
 
   /**
@@ -892,9 +959,22 @@ export class ScheduledCampaignRunnerService {
       });
 
       if (plan.globalBlockReason) {
+        // O ciclo inteiro parou (canal caído, disjuntor, teto global). Isto é o
+        // que o lojista precisa ver e o que antes sumia: nenhuma execução era
+        // gravada, o motivo virava console.log e a tela mostrava zero sem causa.
+        // Dry run é simulação: prevê, não deixa marca.
+        if (!dryRun) {
+          await this._registrarBloqueioDeCiclo(
+            pending.map((p) => ({ id: p.campaignId })),
+            describeBudgetAllocation({ allocated: 0, reason: plan.globalBlockReason }),
+          );
+        }
         for (const p of pending) resultsById.set(p.campaignId, skip(byId.get(p.campaignId)!, plan.globalBlockReason));
         break;
       }
+
+      // Passou pelos portões globais: se havia bloqueio anotado, ele acabou.
+      if (!dryRun) await this._limparBloqueioDeCiclo(pending.map((p) => ({ id: p.campaignId })));
 
       // Serve the campaign with the largest allocation first (priority-weighted in
       // PRIORITY mode); ties fall to input order.

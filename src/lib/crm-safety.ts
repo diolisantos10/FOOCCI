@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 // ─── Config shape ─────────────────────────────────────────────────────────────
 
@@ -352,6 +353,32 @@ export async function getContactBudgetStatus(restaurantId: string): Promise<Cont
  *  `scheduleConfig.mode = "CART_RECOVERY"` e o runner só pega `RECURRING`. */
 export const BUDGET_EXEMPT_TEMPLATE_IDS = ["aniversariantes", "carrinho-abandonado"] as const;
 
+/**
+ * Filtro Prisma sobre a relação `campaign` de uma execução: deixa passar SÓ as
+ * campanhas que participam do orçamento global — ou seja, tudo que **não** está
+ * em `BUDGET_EXEMPT_TEMPLATE_IDS`.
+ *
+ * POR QUE ISTO É UMA CONSTANTE E NÃO DUAS CÓPIAS DA MESMA CONDIÇÃO:
+ *
+ * A isenção nasceu no teto diário (`getTodayGlobalSendCount`, logo abaixo) e foi
+ * **esquecida no portão de cadência do runner**, que perguntava ao banco pela
+ * última execução do restaurante *sem filtro nenhum*. Como o carrinho abandonado
+ * passou a gravar `campaign_executions` em 05/08/2026 e o agendador dele tica a
+ * cada 60 segundos (`CartRecoveryScheduler`), cada recuperação de carrinho
+ * reiniciava o relógio do intervalo mínimo entre ciclos. Num restaurante com
+ * movimento isso segurava TODAS as campanhas recorrentes indefinidamente — e em
+ * silêncio, porque aquele bloqueio não gravava linha nenhuma.
+ *
+ * Um recurso derrubando o outro sem ninguém ver. A isenção agora tem um dono só:
+ * quem precisar dela importa daqui. Duas cópias divergem em três meses.
+ */
+export const BUDGET_COUNTED_CAMPAIGN_FILTER: Prisma.CampaignWhereInput = {
+  OR: [
+    { templateId: null },
+    { templateId: { notIn: [...BUDGET_EXEMPT_TEMPLATE_IDS] } },
+  ],
+};
+
 export async function getTodayGlobalSendCount(restaurantId: string): Promise<number> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return prisma.campaignExecution.count({
@@ -360,10 +387,7 @@ export async function getTodayGlobalSendCount(restaurantId: string): Promise<num
       sentAt: { gte: cutoff },
       status: { in: ["SENT", "DELIVERED", "READ"] },
       // Budget-exempt sends don't eat the other campaigns' daily allowance.
-      campaign: { OR: [
-        { templateId: null },
-        { templateId: { notIn: [...BUDGET_EXEMPT_TEMPLATE_IDS] } },
-      ] },
+      campaign: BUDGET_COUNTED_CAMPAIGN_FILTER,
     },
   });
 }

@@ -1035,6 +1035,19 @@ model Campaign {
   // { dedupeByConcept?, dedupeByMessage?, dedupeWindowDays?, allowResendToImpacted? }
   dedupePolicy       Json?
   lastRunAt          DateTime? // set at the start of each recurring batch; defines cycle boundary
+  // ── Último bloqueio de CICLO INTEIRO (canal caído, cadência, disjuntor) ────
+  // Estes bloqueios param TODAS as campanhas do restaurante de uma vez e não
+  // produzem `campaign_executions` — não há destinatário para gravar, porque
+  // nada chegou a ser tentado. Sem estas duas colunas eles eram invisíveis: o
+  // motivo só existia como string na memória do processo e um console.log que
+  // morria no deploy seguinte. O lojista via zero sem causa.
+  //
+  // NULO = nunca foi bloqueado / bloqueio já resolvido (ambos são "sem bloqueio
+  // agora"). Nunca é 0 nem string vazia: aqui "não medido" e "medido zero" são
+  // coisas diferentes e não podem colidir. Limpos assim que um ciclo volta a
+  // rodar (ver _marcarCicloExecutado no ScheduledCampaignRunnerService).
+  lastBlockedAt      DateTime?
+  lastBlockReason    String? // texto para o lojista, já em português — nunca um código
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
