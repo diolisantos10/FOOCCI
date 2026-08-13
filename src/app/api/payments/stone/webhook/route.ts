@@ -17,6 +17,7 @@ import { auditLog } from "@/lib/audit";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
+import { runOrderConfirmedEffects } from "@/services/order/orderConfirmation";
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -79,17 +80,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Atomic update: payment PAID + order CONFIRMED
+  // Só avança um pedido que ainda espera pagamento — nunca REBAIXA um que já
+  // está no fluxo operacional (PREPARING/READY/…). Mesmo critério do
+  // confirmMpPayment: a reconciliação do dinheiro é segura mesmo quando a
+  // cozinha começou antes de o pagamento cair.
+  const orderNeedsStatusAdvance = ["PENDING", "AWAITING_PAYMENT"].includes(payment.order.status);
+
+  // Atomic update: payment PAID (+ order CONFIRMED quando ele ainda esperava)
   await prisma.$transaction([
     prisma.payment.update({
       where: { id: payment.id },
       data: { status: "PAID", paidAt: new Date() },
     }),
-    prisma.order.update({
-      where: { id: payment.orderId },
-      data: { status: "CONFIRMED" },
-    }),
+    ...(orderNeedsStatusAdvance
+      ? [
+          prisma.order.update({
+            where: { id: payment.orderId },
+            data: { status: "CONFIRMED" },
+          }),
+        ]
+      : []),
   ]);
+
+  // Obrigações de todo pedido CONFIRMED (comanda + NFC-e), num lugar só.
+  //
+  // Esta chamada É O CONSERTO de 13/08/2026: a Stone é o caminho de pagamento
+  // online de todo restaurante SEM Mercado Pago configurado (o `finalize` cai
+  // nela por padrão), e este webhook confirmava o pedido sem nunca mandar a
+  // comanda para a impressora nem emitir a nota. O cliente pagava e a cozinha
+  // não ficava sabendo.
+  if (orderNeedsStatusAdvance) {
+    void runOrderConfirmedEffects(payment.order.restaurantId, payment.orderId, "stone_webhook");
+  }
 
   auditLog({
     action: "payment.status_change",

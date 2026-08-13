@@ -15,8 +15,7 @@ import type { UpdateOrderStatusInput, OrderListQuery } from "@/validators/order"
 import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import { OrderNotificationService } from "@/services/order/OrderNotificationService";
-import { PrintQueueService } from "@/services/print/PrintQueueService";
-import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
+import { runOrderConfirmedEffects } from "@/services/order/orderConfirmation";
 
 export type OrderWithDetails = Order & {
   items: OrderItem[];
@@ -174,14 +173,8 @@ export class OrderService {
       SaiposIntegrationService.maybeSendOrder(restaurantId, orderId).catch((e) =>
         console.error("[saipos] updateStatus send failed:", e)
       );
-      // Enqueue station print jobs for the Carteiro (idempotent, internal guard).
-      PrintQueueService.maybeEnqueueOrder(restaurantId, orderId).catch((e) =>
-        console.error("[print] updateStatus enqueue failed:", e)
-      );
-      // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
-      FiscalEmissionService.maybeEmitForOrder(restaurantId, orderId).catch((e) =>
-        console.error("[fiscal] updateStatus emit failed:", e)
-      );
+      // Obrigações de todo pedido CONFIRMED (comanda + NFC-e), num lugar só.
+      void runOrderConfirmedEffects(restaurantId, orderId, "update_status");
     }
 
     // Fire-and-forget: notify customer via WhatsApp on key status changes.

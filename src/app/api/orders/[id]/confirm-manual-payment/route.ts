@@ -12,6 +12,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { Decimal } from "@prisma/client/runtime/library";
+import { OrderService } from "@/services/order/OrderService";
 
 const bodySchema = z.object({
   reason: z.string().min(1),
@@ -66,6 +67,9 @@ export async function POST(
   const stamp = now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
   const noteAppend = `[${stamp} — Confirmação manual] ${reason}`;
 
+  // ── Passo 1: o dinheiro (atômico) ─────────────────────────────────────────
+  // Registra o pagamento e a justificativa. NÃO mexe no status do pedido: quem
+  // avança status é o passo 2, pelo ponto único.
   await prisma.$transaction(async (tx) => {
     if (order.payment) {
       await tx.payment.update({
@@ -85,15 +89,44 @@ export async function POST(
       });
     }
 
-    // Only advance to CONFIRMED if still waiting; PREPARING stays PREPARING (payment reconciled only).
     await tx.order.update({
       where: { id: orderId },
-      data: {
-        status: ["PENDING", "AWAITING_PAYMENT"].includes(order.status) ? "CONFIRMED" : order.status,
-        notes: order.notes ? `${order.notes}\n${noteAppend}` : noteAppend,
-      },
+      data: { notes: order.notes ? `${order.notes}\n${noteAppend}` : noteAppend },
     });
   });
+
+  // ── Passo 2: o status, pelo MESMO caminho de sempre ───────────────────────
+  //
+  // ESTA É A CORREÇÃO DE 13/08/2026. Antes, esta rota escrevia
+  // `status: "CONFIRMED"` direto no banco — e por isso NÃO enfileirava a
+  // comanda nem emitia a NFC-e. Era o pior defeito do sistema: o lojista
+  // socorria um Pix cujo aviso não chegou, o pedido sumia da fila de
+  // pendentes, e a cozinha nunca ficava sabendo. Quem descobria era o cliente.
+  //
+  // `OrderService.updateStatus` é o ponto único: valida a transição, dispara
+  // Saipos, roda as obrigações do pedido confirmado (comanda + nota) e avisa o
+  // cliente. O pagamento já está PAID acima, então a trava anti-"pedido aceito
+  // com Pix não pago" do updateStatus deixa a notificação passar — corretamente.
+  //
+  // PREPARING continua PREPARING (só o pagamento foi reconciliado): a comanda
+  // desse pedido já saiu quando ele virou CONFIRMED.
+  if (["PENDING", "AWAITING_PAYMENT"].includes(order.status)) {
+    const advanced = await OrderService.updateStatus(restaurantId, orderId, { status: "CONFIRMED" });
+    if (!advanced.ok) {
+      // O dinheiro está registrado, o pedido não avançou. Isso se REPORTA — não
+      // vira sucesso silencioso, que é exatamente o defeito que esta rota tinha.
+      console.error("[confirm-manual-payment] pagamento registrado mas o pedido não avançou", {
+        restaurantId, orderId, fromStatus: order.status, error: advanced.error,
+      });
+      return NextResponse.json(
+        {
+          error: "Pagamento registrado, mas o pedido não avançou para Confirmado. Verifique a comanda na tela de impressoras.",
+          paymentRecorded: true,
+        },
+        { status: 502 }
+      );
+    }
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -22,8 +22,7 @@ import { assignOrderNumber, formatOrderNumber } from "@/lib/order-number";
 import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { geocodeAddress, type LatLng } from "@/lib/geocoding";
 import { isQuoteStatusBlocked } from "@/lib/delivery-authorization";
-import { PrintQueueService } from "@/services/print/PrintQueueService";
-import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
+import { runOrderConfirmedEffects } from "@/services/order/orderConfirmation";
 
 const itemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -428,14 +427,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Cupom já utilizado por este cliente" }, { status: 400 });
   }
 
-  // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
-  PrintQueueService.maybeEnqueueOrder(restaurantId, order.id).catch((e) =>
-    console.error("[print] manual order enqueue failed:", e),
-  );
-  // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
-  FiscalEmissionService.maybeEmitForOrder(restaurantId, order.id).catch((e) =>
-    console.error("[fiscal] manual order emit failed:", e),
-  );
+  // Obrigações de todo pedido CONFIRMED (comanda + NFC-e), num lugar só.
+  void runOrderConfirmedEffects(restaurantId, order.id, "manual_order");
 
   const displayNumber = formatOrderNumber(order.orderNumber, order.id);
 

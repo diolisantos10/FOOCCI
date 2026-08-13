@@ -5928,6 +5928,7 @@ export function CRMClient({
   customersPageSize = 20,
   initialOpportunities,
   initialActions = [],
+  initialActionsFailed = false,
   overviewStats,
   opportunitiesCount,
   reviewLinks = { google: null, ifood: null },
@@ -5938,6 +5939,8 @@ export function CRMClient({
   customersPageSize?:    number;
   initialOpportunities:  Opportunity[];
   initialActions?:       CrmAction[];
+  /** O Action Center falhou no servidor nesta carga — ver `crm/page.tsx`. */
+  initialActionsFailed?: boolean;
   restaurantName:        string;
   overviewStats:         OverviewStats;
   opportunitiesCount:    number;
@@ -6143,6 +6146,7 @@ export function CRMClient({
           stats={currentStats}
           opportunitiesCount={opportunitiesCount}
           actions={initialActions}
+          actionsFailed={initialActionsFailed}
           onNavigateToTab={setTab}
           onSegmentClick={handleSegmentClick}
           loading={statsLoading}

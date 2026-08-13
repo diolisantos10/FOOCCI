@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
+import { OrderService } from "@/services/order/OrderService";
 
 export async function PATCH(
   req: NextRequest,
@@ -38,16 +39,34 @@ export async function PATCH(
     return NextResponse.json({ error: "Pagamento MP não encontrado" }, { status: 404 });
   }
 
-  await prisma.$transaction([
-    prisma.payment.update({
-      where: { orderId },
-      data: { status: "PAID", paidAt: new Date() },
-    }),
-    prisma.order.update({
-      where: { id: orderId },
-      data: { status: "CONFIRMED" },
-    }),
-  ]);
+  await prisma.payment.update({
+    where: { orderId },
+    data: { status: "PAID", paidAt: new Date() },
+  });
+
+  // ── O status vai pelo ponto único ─────────────────────────────────────────
+  //
+  // CORREÇÃO DE 13/08/2026. Esta rota escrevia `status: "CONFIRMED"` direto no
+  // banco e, por isso, NÃO enfileirava a comanda nem emitia a NFC-e: o socorro
+  // do lojista para um webhook do MP que não chegou deixava a cozinha sem papel.
+  //
+  // Dois ganhos de passar pelo `OrderService.updateStatus`:
+  //   1. as obrigações do pedido confirmado (comanda + nota) rodam;
+  //   2. a transição é VALIDADA. Antes, esta rota carimbava CONFIRMED sobre
+  //      QUALQUER status — um pedido já em READY era REBAIXADO para Confirmado
+  //      por um clique de reconciliação de pagamento.
+  if (["PENDING", "AWAITING_PAYMENT"].includes(order.status)) {
+    const advanced = await OrderService.updateStatus(ctx.restaurantId, orderId, { status: "CONFIRMED" });
+    if (!advanced.ok) {
+      console.error("[mp mark-paid] pagamento marcado mas o pedido não avançou", {
+        restaurantId: ctx.restaurantId, orderId, fromStatus: order.status, error: advanced.error,
+      });
+      return NextResponse.json(
+        { error: "Pagamento marcado como pago, mas o pedido não avançou para Confirmado.", paymentRecorded: true },
+        { status: 502 }
+      );
+    }
+  }
 
   // Idempotent coupon usage count
   if (order.promotionId && !order.couponUsageCountedAt) {

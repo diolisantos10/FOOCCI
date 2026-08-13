@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { OrderService } from "@/services/order/OrderService";
 
 export async function PATCH(
   req: NextRequest,
@@ -57,22 +58,28 @@ export async function PATCH(
     return NextResponse.json({ ok: true, alreadyPaid: true });
   }
 
-  // Atomic: mark payment PAID + advance order to CONFIRMED (if not already)
-  const paymentUpdate = prisma.payment.update({
+  await prisma.payment.update({
     where: { id: order.payment.id },
     data: { status: "PAID", paidAt: new Date() },
   });
 
+  // ── O status vai pelo ponto único ─────────────────────────────────────────
+  //
+  // CORREÇÃO DE 13/08/2026: escrevia `status: "CONFIRMED"` direto e por isso
+  // não enfileirava a comanda nem emitia a NFC-e. Mesmo defeito das outras
+  // rotas de socorro — o lojista reconciliava o pagamento e a cozinha não
+  // ficava sabendo do pedido.
   if (order.status === "AWAITING_PAYMENT" || order.status === "PENDING") {
-    await prisma.$transaction([
-      paymentUpdate,
-      prisma.order.update({
-        where: { id: orderId },
-        data: { status: "CONFIRMED" },
-      }),
-    ]);
-  } else {
-    await paymentUpdate;
+    const advanced = await OrderService.updateStatus(restaurantId, orderId, { status: "CONFIRMED" });
+    if (!advanced.ok) {
+      console.error("[stone mark-paid] pagamento marcado mas o pedido não avançou", {
+        restaurantId, orderId, fromStatus: order.status, error: advanced.error,
+      });
+      return NextResponse.json(
+        { error: "Pagamento marcado como pago, mas o pedido não avançou para Confirmado.", paymentRecorded: true },
+        { status: 502 }
+      );
+    }
   }
 
   // Idempotent coupon usage count

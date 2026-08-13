@@ -739,7 +739,7 @@ export class ScheduledCampaignRunnerService {
         // BUDGET_COUNTED_CAMPAIGN_FILTER.
         if (!dryRun && budget.minMinutesBetweenCycles > 0) {
           const lastActivity = await prisma.campaignExecution.findFirst({
-            where:   { restaurantId: rid },
+            where:   { restaurantId: rid, campaign: BUDGET_COUNTED_CAMPAIGN_FILTER },
             orderBy: { createdAt: "desc" },
             select:  { createdAt: true },
           });
@@ -966,7 +966,7 @@ export class ScheduledCampaignRunnerService {
         if (!dryRun) {
           await this._registrarBloqueioDeCiclo(
             pending.map((p) => ({ id: p.campaignId })),
-            describeBudgetAllocation({ allocated: 0, reason: plan.globalBlockReason }),
+            plan.globalBlockReason,
           );
         }
         for (const p of pending) resultsById.set(p.campaignId, skip(byId.get(p.campaignId)!, plan.globalBlockReason));

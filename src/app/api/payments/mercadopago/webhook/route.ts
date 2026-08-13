@@ -29,8 +29,7 @@ import { verifyMpWebhookSignature } from "@/lib/mercadopago";
 import { Decimal } from "@prisma/client/runtime/library";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
-import { PrintQueueService } from "@/services/print/PrintQueueService";
-import { FiscalEmissionService } from "@/services/fiscal/FiscalEmissionService";
+import { runOrderConfirmedEffects } from "@/services/order/orderConfirmation";
 
 const LOG = "[mp-webhook]";
 
@@ -91,16 +90,10 @@ export async function confirmMpPayment(
 
   console.info(LOG, "order confirmed", { orderId: order.id });
 
-  // Fire-and-forget: enqueue station print jobs for the Carteiro (idempotent).
-  // Only when this webhook actually advanced the order to CONFIRMED.
+  // Obrigações de todo pedido CONFIRMED (comanda + NFC-e), num lugar só.
+  // Só quando ESTE webhook de fato avançou o pedido para CONFIRMED.
   if (orderNeedsStatusAdvance) {
-    PrintQueueService.maybeEnqueueOrder(order.restaurantId, order.id).catch((e) =>
-      console.error("[print] mp webhook enqueue failed:", e),
-    );
-    // Fire-and-forget: emit the NFC-e (no-op unless the restaurant enabled it).
-    FiscalEmissionService.maybeEmitForOrder(order.restaurantId, order.id).catch((e) =>
-      console.error("[fiscal] mp webhook emit failed:", e),
-    );
+    void runOrderConfirmedEffects(order.restaurantId, order.id, "mp_webhook");
   }
 
   // Idempotent coupon usage: updateMany WHERE couponUsageCountedAt IS NULL wins the race.

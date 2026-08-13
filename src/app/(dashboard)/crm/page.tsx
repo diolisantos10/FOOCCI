@@ -43,6 +43,10 @@ export default async function CRMPage({
   let customersTotal       = 0;
   let opportunities:       Opportunity[]  = [];
   let actionCenterActions: CrmAction[]    = [];
+  // Falhou o cálculo dos avisos? A Visão Geral precisa saber a diferença entre
+  // "nada travando" e "não deu para conferir" — senão o erro vira silêncio, e
+  // silêncio o lojista lê como saúde (guardrail 1).
+  let actionCenterFailed = false;
   let overviewStats: OverviewStats = {
     totalCustomers: 0, ativoCustomers: 0, mornoCustomers: 0, frioCustomers: 0,
     perdidosCustomers: 0, naoCompraramCustomers: 0,
@@ -127,7 +131,11 @@ export default async function CRMPage({
         ifood:  brandConfig.ifoodReviewUrl  ?? null,
       };
     }
-    if (actionCenterResult) actionCenterActions = actionCenterResult.actions;
+    if (actionCenterResult) {
+      actionCenterActions = actionCenterResult.actions;
+    } else {
+      actionCenterFailed = true;
+    }
   }
 
   return (
@@ -144,6 +152,7 @@ export default async function CRMPage({
           customersPageSize={CUSTOMERS_PAGE_SIZE}
           initialOpportunities={opportunities}
           initialActions={actionCenterActions}
+          initialActionsFailed={actionCenterFailed}
           restaurantName={restaurantName}
           overviewStats={overviewStats}
           opportunitiesCount={opportunities.length}
