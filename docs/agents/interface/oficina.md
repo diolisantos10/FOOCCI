@@ -2307,3 +2307,108 @@ numa superfície de celular. Registrado, não tocado.
 
 — interface, faixa da Central de Ações do CRM (branch
 `claude/crm-bloqueio-com-rastro`)
+
+---
+
+## 2026-08-13 · A tela órfã ganha porta, o som para de mentir, a loja de mentira sai da tela
+
+Quatro itens de um despacho só. Três eram ordem direta do CEO; o primeiro veio
+do raio-X de percurso do mesmo dia.
+
+### 1. O guia de configuração existia e ninguém alcançava
+
+`/onboarding` estava completa — 7 etapas, estado real do banco, barra de
+progresso, link "Configurar" em cada passo — e **nenhum arquivo de `src/`
+apontava para ela**. Enquanto isso `contratar/obrigado` prometia ao cliente que
+"o próprio painel te guia no primeiro cardápio". Não guiava.
+
+Três consumidores precisavam da mesma resposta ("ainda falta etapa?"): o menu, o
+`/dashboard` e o vazio do painel. Em vez de três leituras, extraí o cálculo da
+rota da API para `src/services/onboarding/onboardingStatus.ts`, e o shell do
+painel calcula **uma vez** por requisição e desce o resumo pelo `SidebarContext`.
+Regra que uma tela precisa saber de outra não pode ser literal repetido — é a
+mesma lição do `w-60` × `lg:left-56` que já está na vitrine, aplicada a uma
+regra em vez de a uma medida.
+
+Duas decisões que valem registro:
+
+- **A linha de chegada é `PRONTO_PARA_PILOTO`, não "as 7 verdes".** A etapa
+  *Canais* só fica verde com o WhatsApp da Meta conectado, coisa que a maioria
+  dos restaurantes nunca faz. Item de menu que nunca some vira decoração que o
+  lojista aprende a ignorar — e aí não vale nada no dia em que importar.
+- **O redirecionamento tem saída.** `/dashboard` só cede lugar ao guia quando
+  não há **nenhum produto ativo** (cardápio vazio implica etapa bloqueada, então
+  nunca colide com guia concluído), e o guia volta para `/dashboard?painel=1`.
+  Sem o parâmetro, o dono ficaria preso num vaivém entre as duas telas.
+
+Corrigi também a hierarquia da tela, que passou a ser a **primeira** que o dono
+novo vê: o título era o rótulo de prontidão, e num restaurante recém-criado ele
+é "Bloqueado", vermelho, tamanho manchete. Virou "Vamos configurar seu
+restaurante", com o rótulo como pílula secundária. As bolinhas de etapa pendente
+viraram neutras (eram sete alarmes amarelos de uma vez) e a barra de progresso
+saiu do vermelho para o laranja da casa — progresso é progresso, não repreensão.
+De quebra, o estado de **erro** ganhou "Tentar de novo", que faltava (§6.1).
+
+### 2. O chip "Som ativo" saiu — e o que ficou é alarme, não status
+
+`SoundStatusChip` mostrava "🔔 Som ativo" com base em `armed || optedIn`, e
+`optedIn` é uma marca de `localStorage` de algum dia do passado. O navegador
+exige um gesto **a cada carregamento**. O dono lia "Som ativo" de manhã e o
+pedido entrava mudo.
+
+Removi o chip (ordem do CEO) e coloquei no lugar o `SoundBlockedChip`: invisível
+o tempo todo, aparece **só** depois de um alerta real ser recusado pelo
+navegador — `lastResult === "error"` **e** `activeCount > 0` **e** o erro ser de
+autoplay. Erro de rede não conta; alarme sem item esperando não conta. A regra
+mora no `audio-gate` (sem React, testável) e não no componente.
+
+**Ausência de aviso não afirma que o som está bom** — quem quer certeza aperta
+*Tocar som de pedido agora*, que promovi ao topo de Configurações → Sons. E
+apaguei do texto de ajuda a promessa de uma barra "Toque para ativar o som" que
+**não existia mais no código**.
+
+### 3 e 4. Fotos do Cardápio e o cardápio de exemplo
+
+"Fotos do Cardápio" saiu do menu; a rota continua de pé (tirar do menu se
+desfaz, apagar não). O convite a "popular com um cardápio de exemplo (pizzaria,
+4 categorias, 11 itens)" saiu da tela do lojista: a loja pública está no ar
+desde o minuto zero, e um dono curioso virava uma pizzaria de mentira, ao vivo.
+Junto saiu o aviso de roadmap interno ("Integração futura…") do rodapé do
+cardápio.
+
+### Provas
+
+`npx tsc --noEmit` limpo · `npx vitest run` **489 arquivos / 6.395 verdes**
+(11 novos em `services/onboarding/onboardingStatus.test.ts`, 9 novos em
+`lib/audio-gate.test.ts`). Screenshots 375/768/1280 de guia, painel, cardápio e
+Sons; `scrollWidth == clientWidth` exato nos três tamanhos em todas.
+
+**As duas metades, provadas no ar e não só no teste:** com o cardápio vazio,
+`/dashboard` cai em `/onboarding` nos três tamanhos e o menu mostra "Começar
+aqui 7"; completando o restaurante no banco local (cardápio, endereço, horário,
+entrega, pagamento, teste final), `/dashboard` **não** redireciona, o item some
+do menu e o vazio volta a ser "Nenhum pedido em andamento".
+
+Sabotagem, seis vezes, cada uma reprovando o teste certo: (a) item nunca
+aparece; (b) item nunca some; (c) "Fotos do Cardápio" de volta ao menu; (d)
+`deveAbrirOGuia` ignorando `?painel=1`; (e) aviso de som virando status de novo;
+(f) o alarme de atendimento apagando o aviso do pedido mudo.
+
+Autoavaliação: hierarquia 9, tipografia 9, espaçamento 8,5, consistência 8,5.
+
+### Duas coisas que NÃO resolvi, de propósito
+
+1. **O motor de alerta não chega a pedir `/api/orders` no servidor de
+   desenvolvimento.** Em 20s de painel aberto ele busca `/api/settings/sounds`
+   quatro vezes e a lista de pedidos **nenhuma**. A suspeita tem endereço:
+   `startSoundLeaderElection` guarda `release` só quando a callback do Web Lock
+   roda; com o duplo-mount do StrictMode, o `dispose()` pode acontecer antes
+   disso e o lock fica preso numa instância morta, sem nunca ser liberado — a
+   segunda instância espera para sempre e nenhuma aba se elege líder. Em
+   produção não há duplo-mount, o que mascara. Está no caminho do som, que é
+   dinheiro, e não é um dos meus quatro itens: reportado ao Diretor, não tocado.
+2. **A 375px, com o aviso de som na tela, o título da página é espremido a
+   zero.** Achei certo: quando um pedido entrou mudo, o alarme É a ação
+   principal da barra. Fica registrado como escolha, não como descuido.
+
+— interface, bloco dos quatro itens de 13/08 (guia, som, fotos, cardápio de exemplo)
