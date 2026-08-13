@@ -635,3 +635,133 @@ um novo antes de olhar"; **não** autoriza dizer qual é nem quem o administra.
   Toda leitura de DNS aqui vai por DoH e **com consulta de controle**, senão
   ausência de ferramenta lê como ausência de registro — guardrail 1 mordendo pela
   ferramenta, não pelos dados. Proveniência: incidente da própria sessão, 08/08.
+
+---
+
+## 2026-08-13 · Uma caixa só para o Sushi Cazza — parecer, e a trava que saiu dele
+
+Despacho do Diretor: conferir a afirmação dele de que "um WhatsApp só é
+impossível". Ele pediu explicitamente para ser refutado se estivesse errado.
+**Estava, em duas das três afirmações.** Depois, segundo despacho: implementar a
+trava que o próprio parecer propôs.
+
+### 1 · O que foi refutado, com fonte
+
+- **"Um número está ou na API ou no aplicativo, nunca nos dois"** — errado como
+  regra geral. Vale para o registro normal, e nisso ele acertou:
+  *"Registered numbers … cannot be used with WhatsApp Messenger"* e *"Numbers
+  already in use with WhatsApp cannot be registered unless they are deleted first"*
+  (fonte oficial, capturada ao vivo em 13/08:
+  `https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers`).
+  Mas existe **coexistência**, e o Foocci **já tem o botão dela na tela**
+  (`MetaProviderCard.tsx:437`), a coluna no banco (`schema.prisma:1397`) e a guarda
+  que impede registrar um número em coexistência (`admin/meta/register/route.ts:88`).
+- **"Dois números são duas caixas que não se juntam"** — errado dentro do Foocci.
+  `Conversation` **não tem campo de número** (`schema.prisma:867-907`) e o webhook
+  agrupa por restaurante + telefone do CLIENTE
+  (`webhooks/meta/whatsapp/route.ts:314-326`). A caixa única já existe.
+- **"O número antigo saiu da API, então mensagem para ele não chega"** — certo.
+
+### 2 · A biblioteca de fontes citada no despacho NÃO EXISTE
+
+`docs/plataformas/meta/fontes/` não existe; não há `docs/plataformas/` nenhum.
+Recapturei ao vivo em vez de deduzir.
+
+⚠️ **A documentação da Meta MUDOU DE ENDEREÇO** — de `/docs/whatsapp/…` para
+`/documentation/business-messaging/whatsapp/…`. As URLs antigas devolvem **404
+real**. Toda URL citada de memória em `/docs/whatsapp/` tem chance alta de estar
+morta; isso sozinho explica erro de quem responde sem conferir.
+
+⚠️ **A página de coexistência exige LOGIN.** `.../business-phone-numbers/coexistence`
+responde 200 mas devolve shell que redireciona para `business.facebook.com/loginpage`.
+**NÃO VERIFIQUEI** o conteúdo oficial: sincronia de histórico de 6 meses, sentidos
+da sincronização e o limite de 1 número por conta seguem apoiados só em
+`docs/whatsapp-coexistence-setup.md`, que é documento **interno**. Capturar exige a
+conta do CEO.
+
+**Verificado com fonte oficial:** vários números por WABA são suportados — teto
+inicial de 2, subindo até 20 com verificação de negócio
+(`.../whatsapp/whatsapp-business-accounts`).
+
+### 3 · O achado grave, e a trava que ele gerou
+
+`MetaConfigService.upsert` tem chave **`restaurantId`**, não o número. Conectar um
+segundo número no mesmo restaurante **sobrescrevia o primeiro** — `phoneNumberId`,
+`wabaId` e token trocados de uma vez, sem erro e sem log. O número que sai deixa de
+resolver no webhook e toda mensagem para ele passa a ser descartada no
+`console.warn` de `webhooks/meta/whatsapp/route.ts:168`.
+
+Não era hipótese: o botão *"Conectar número que está no celular"* fica ao lado de um
+restaurante já conectado. **Um clique derrubava o número que atende o restaurante.**
+
+**Implementado** em `MetaConfigService.ts:61-148`:
+
+- `MetaNumberSwapBlockedError`, com a frase do **conserto** dentro do erro — quem
+  captura devolve ela, não inventa outra;
+- allowlist `SWAPPABLE_STATUSES = {DISCONNECTED}` — **fail-closed**. `PENDING`,
+  `ERROR` e status desconhecido recusam. A denylist "bloqueia só CONNECTED" deixaria
+  a falha aberta: bastaria um health-check marcar ERROR para a troca silenciosa
+  voltar;
+- a guarda lê com `select` de **três campos não sensíveis**, nunca `getResolved` —
+  senão um token corrompido derrubaria a própria guarda (guardrail 5);
+- `connect/route.ts:59-80` devolve **400 com a orientação**, não o `serverError()`
+  genérico. "Erro interno" esconderia justamente o próximo passo.
+
+**Continua passando de propósito:** mesmo número com token novo, troca de WABA,
+primeiro número, e depois de desconectar. Travar o legítimo é como esta guarda
+viraria a próxima quebra — token que expira e ninguém consegue renovar é queda pior
+que a evitada.
+
+### 4 · Sabotagem — três, todas pegas
+
+`src/services/whatsapp/tests/MetaConfigService.numberSwap.test.ts` (9 testes).
+
+| Sabotagem | Resultado |
+|---|---|
+| remover a guarda inteira | **3 reprovam** (os de recusa) |
+| trocar a allowlist por `=== "CONNECTED"` | **1 reprova** — exatamente o do fail-closed |
+| remover o `.trim()` da comparação | **1 reprova** — o de espaço no id |
+
+Original restaurado, 9 verdes. `tsc --noEmit` limpo, **6386 testes** verdes (489
+arquivos).
+
+### 5 · Sobre o CRM — o que confirmei e o que NÃO
+
+**Confirmado por leitura:** `MetaMessageTemplate` **não tem `wabaId`**
+(`schema.prisma:1482-1501`) e `syncFromMeta` só faz `upsert`, sem nenhuma
+reconciliação ou remoção (`MetaTemplateService.ts:243-286`). **Logo: template
+aprovado na WABA antiga fica "Aprovado" na lista local para sempre.** Rodar o sync
+não conserta — o template velho simplesmente não vem na lista nova e ninguém o toca.
+`findApproved` então resolve um fantasma e a Meta rejeita o envio.
+
+**NÃO VERIFICADO — e não afirmei:** a causa do "0 mensagens, 0 campanhas". Template
+fantasma produz *erro por mensagem*, não *zero campanhas processadas*. Os candidatos
+com endereço: `crmWhatsAppChannel.ts:28-38` (qualquer erro vira DESCONECTADO, e é
+caminho **diferente** do selo da tela, que usa `ReadyMadeCampaignService.ts:231`),
+`.github/workflows/crm-cron.yml` (se o `CRON_SECRET` não bate com o Railway, nada
+roda e a tela não diz), e `metaSendPolicy.ts:52-57`. A ferramenta certa para fechar
+é `CRMPreflightDiagnosisService.ts:116`, read-only. **Não executei** — exige segredo
+de produção.
+
+### 6 · O que NÃO fiz
+
+Nenhuma chamada de escrita à Meta. Nenhum envio, registro, desconexão ou
+provisionamento. Nenhum segredo lido, exibido ou logado — a captura de documentação
+foi só `GET` em página pública. Não toquei no schema: dois números simultâneos é a
+Opção 3 inteira, com migration em sistema no ar, e não era este despacho. O
+`console.warn` que descarta mensagem de `phone_number_id` desconhecido
+(`webhooks/meta/whatsapp/route.ts:168`) fica para o próximo despacho, por ordem do
+Diretor.
+
+### 7 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **A caixa única já existe; o que falta é o segundo número.** `Conversation` não
+  guarda número; a Central agrupa por restaurante + cliente. Proveniência:
+  `schema.prisma:867-907` + `webhooks/meta/whatsapp/route.ts:314-326`, 13/08.
+- **`upsert` de config Meta é chaveado por restaurante — um segundo número
+  sobrescrevia o primeiro, calado.** Agora trava, fail-closed, com 9 testes e 3
+  sabotagens. Proveniência: `MetaConfigService.ts:61-148`, 13/08.
+- **`syncFromMeta` nunca invalida template órfão.** Aprovado na WABA velha fica
+  "Aprovado" para sempre. Proveniência: `MetaTemplateService.ts:243-286`, 13/08.
+- **A documentação da Meta mudou de endereço e a de coexistência exige login.**
+  URL antiga em `/docs/whatsapp/` dá 404 real. Proveniência: captura ao vivo, 13/08.

@@ -13,7 +13,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/api-response";
 import { isMetaWhatsAppEnabled } from "@/services/whatsapp/metaFlag";
-import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
+import { MetaConfigService, MetaNumberSwapBlockedError } from "@/services/whatsapp/MetaConfigService";
 import { exchangeCodeForToken, fetchPhoneDetails, inspectTokenExpiry, subscribeAppToWaba } from "@/services/whatsapp/MetaOnboardingService";
 import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 
@@ -56,19 +56,28 @@ export async function POST(req: NextRequest) {
     // the merchant can also enable it in Meta Business Manager).
     try { await subscribeAppToWaba(accessToken, body.wabaId); } catch { /* non-fatal */ }
 
-    await MetaConfigService.upsert({
-      restaurantId:       ctx.restaurantId,
-      wabaId:             body.wabaId,
-      phoneNumberId:      body.phoneNumberId,
-      displayPhoneNumber: body.displayPhoneNumber ?? details.displayPhoneNumber,
-      businessId:         body.businessId ?? null,
-      configId:           body.configId ?? null,
-      accessToken,
-      tokenExpiresAt:     expiresAt,
-      // Coexistence numbers are already registered on the phone — persist the flag so
-      // the register endpoint refuses to evict them.
-      coexistence:        body.coexistence === true,
-    });
+    // A trava de troca de número lança daqui. É a ÚNICA falha deste bloco que o
+    // lojista sabe consertar sozinho, então ela sobe como orientação (400) em vez de
+    // cair no `serverError()` genérico lá embaixo — "erro interno" esconderia
+    // justamente o passo seguinte (desconectar o atual primeiro).
+    try {
+      await MetaConfigService.upsert({
+        restaurantId:       ctx.restaurantId,
+        wabaId:             body.wabaId,
+        phoneNumberId:      body.phoneNumberId,
+        displayPhoneNumber: body.displayPhoneNumber ?? details.displayPhoneNumber,
+        businessId:         body.businessId ?? null,
+        configId:           body.configId ?? null,
+        accessToken,
+        tokenExpiresAt:     expiresAt,
+        // Coexistence numbers are already registered on the phone — persist the flag so
+        // the register endpoint refuses to evict them.
+        coexistence:        body.coexistence === true,
+      });
+    } catch (err) {
+      if (err instanceof MetaNumberSwapBlockedError) return badRequest(err.message);
+      throw err;
+    }
 
     // Best-effort health check — credentials are already saved. A transient failure
     // here must NOT block the success response; the UI reflects live status on reload.
