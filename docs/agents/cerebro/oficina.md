@@ -1481,3 +1481,94 @@ não pode ser implementado tirando a caneta, quando o mesmo cargo é o único
 autorizado a escrever a memória da casa. Onde a permissão de ferramenta não
 consegue exprimir a regra, o honesto é escrever a regra por caminho **e declarar
 que ela é aviso**, em vez de fingir que a lista de `tools:` já é a trava.
+
+---
+
+## 2026-08-14 (2) · O PM da hierarquia vira arquivo em `.claude/agents/`
+
+**Pedido:** ordem direta do CEO — *"CRIA AGORA O PM DO FOOCCI"*. Fechar o buraco
+que eu mesmo tinha reportado ao plantar o `diretor.md`: o `CLAUDE.md:121` manda o
+Diretor entregar o pedido inteiro ao PM, e não havia para quem. Fonte da
+definição: doutrina 29 (seção *Project Manager*), formato do despacho na 18,
+formato do relatório na 24, e o `diretor.md` como par obrigatório.
+
+### O que tentei e o que descobri
+
+**1. A "ficha de despacho da doutrina 18" não existe na 18 — ela é uma composição
+de duas doutrinas, e isso precisava ficar escrito.** A 18 dá a hierarquia e a
+lista `tarefas, donos, prazos, prompts` (linha 122), mais o aviso contra o
+"ritual lento" (*"o agente precisa do objetivo e dos ponteiros, não de um
+dossiê"*). Os **seis campos** — objetivo em uma frase, definição de pronto,
+entradas, restrições, o que NÃO fazer, critério de aceite — estão na **29**, no
+fechamento da desculpa *"precisa da conversa inteira como contexto"*. Transcrever
+"o formato da 18" ao pé da letra teria produzido uma ficha sem os seis campos.
+Montei a ficha com as duas e **anotei a proveniência de cada bloco dentro do
+próprio arquivo**, para o Diretor conseguir conferir campo a campo contra a
+fonte em vez de acreditar em mim.
+
+**2. O risco de contradição com o `diretor.md` estava num lugar não óbvio: os
+seis campos aparecem nos dois.** O `diretor.md:228-230` diz que *o enquadramento
+do Diretor* tem os seis campos. Se eu escrevesse que a ficha do PM tem os mesmos
+seis, ficariam duas verdades competindo sobre quem escreve o quê. Resolvi pela
+**granularidade, que é o que a própria 29 separa**: o Diretor aplica os seis ao
+**pedido inteiro**, uma vez; o PM aplica os seis **a cada tarefa**, com `PARA`,
+`PRAZO` e `DEPENDE DE` em cima. É a mesma fronteira "enquadra × decompõe", e não
+inventa campo nenhum.
+
+**3. Ferramentas: aqui a trava é real, e é o inverso exato do caso do Diretor.**
+Ontem eu concluí que *ferramenta de escrita não separa produção de governança —
+caminho separa*, porque o Diretor precisa de `Write` para o livro de bordo
+(`docs/pendencias.md`, `docs/decisoes.md`, as vitrines). Testei a mesma pergunta
+para o PM e a resposta virou: **o PM não tem caminho de escrita nenhum**. A
+vitrine é do Diretor, a oficina é do especialista, o quadro do CEO é do Diretor, e
+os nove itens que a 29 manda o PM produzir (decomposição, mapa, ficha, cobrança,
+verificação, integração, avaliação, síntese) são todos **retorno**, não arquivo.
+Logo `tools: [Read, Grep, Glob, Bash]` — leitura para o histórico e para abrir o
+artefato, `Bash` para a *primeira verificação de qualidade* ter número (`tsc`,
+`vitest`, `git diff`). Sem `Write`/`Edit`, "virar gargalo" — refazer a peça do
+especialista — deixa de ser aviso e vira impossibilidade. É a única das quatro
+peças mecânicas que a 29 declara inexistentes que dá para entregar de graça neste
+cargo.
+
+**4. `Task` eu deliberadamente NÃO declarei.** Nenhum dos treze perfis desta casa
+declara ferramenta de acionar agente, e um subagente aqui não abre subagente.
+Declarar `Task` seria escrever capacidade que o cargo não tem — o mesmo erro que o
+guardrail do Cérebro chama de *mentir sobre si mesmo*, que verificador de fato não
+pega. O arquivo trata isso pela nota de honestidade técnica da 18: o PM devolve a
+**ordem de despacho pronta** e quem o chamou encaminha sem editar.
+
+**5. A armadilha de nome foi para a primeira tela, em tabela.** "PM da hierarquia"
+× "PM de mídia" (etapa de produto, do `agencia`). Pus o teste de roteamento junto
+— *se o pedido fala de campanha, criativo ou peça, não é seu* — porque a colisão
+não se resolve sabendo que ela existe, e sim tendo a pergunta que decide.
+
+### O que conferi contra a árvore, não de memória
+
+- `.claude/agents/` tinha **13** arquivos; com o `pm.md` são **14** — doze
+  especialistas, o `diretor` e o `pm`. A Sala dos Agentes enumera a pasta por
+  descoberta automática (`sala/leituraDeArquivos.ts:42-50`), então **o número que
+  o CEO vê na tela sobe de 13 para 14, e dois deles não são especialistas.**
+- Rodei a montagem real da Sala: o cartão sai como **"Project Manager do Foocci"**
+  (a heurística de `sala/montagem.ts:201` casa com a primeira linha do corpo),
+  função não vazia, `tools` legíveis. Estado **`atencao`**, porque não existe
+  `docs/agents/pm/` — igual ao `diretor`, e a tela **declara a lacuna** em vez de
+  contar zero (`Sem sala em docs/agents: agencia, diretor, experiencia, pm,
+  seguranca`). Isso é o comportamento correto, não defeito.
+- `docs/agents/` tem sala para **nove** dos doze especialistas — faltam `agencia`,
+  `experiencia` e `seguranca`. Escrevi isso no perfil com a regra do guardrail 1:
+  **sem sala não é sem histórico**, e o PM registra na ficha que escolheu sem
+  histórico em vez de concluir que o agente é fraco.
+
+**Verificação:** `npx vitest run src/services/agents/` → 12 arquivos, 150 testes,
+todos passaram (inclui `elencoObrigatorio.test.ts`, que varre a pasta inteira
+exigindo `name:` e `tools:` legíveis, e `salaReal.test.ts`, que lê o diretório
+real). `npx tsc --noEmit` → exit 0.
+
+**Aprendizado que proponho guardar:** *doutrina composta precisa dizer de onde
+veio cada pedaço, dentro do artefato.* A ficha de despacho não existe inteira em
+nenhum documento do kit — ela é 18 + 29. Um artefato que apresenta a composição
+como se fosse transcrição de um único documento é indistinguível de um artefato
+com regra inventada, e o revisor só descobre a diferença relendo as duas fontes.
+Anotar a proveniência **por bloco** transforma a conferência de "acreditar" em
+"conferir", que é a mesma razão pela qual entrada de vitrine carrega data, origem
+e commit.
