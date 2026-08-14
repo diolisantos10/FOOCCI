@@ -7,6 +7,41 @@
 
 ---
 
+## Doutrina composta diz de onde veio cada pedaço, dentro do artefato
+
+A ficha de despacho não existe inteira em nenhum documento do kit — ela é a
+doutrina 18 mais a 29. Um artefato que apresenta **composição** como se fosse
+transcrição de um documento único é **indistinguível de um artefato com regra
+inventada**, e o revisor só descobre a diferença relendo as duas fontes.
+
+Anotar a proveniência **bloco a bloco** transforma a conferência de "acreditar"
+em "conferir" — mesma razão pela qual entrada de vitrine carrega data, origem e
+commit.
+
+> **Proveniência:** 14/08/2026 · promovido pelo Diretor · origem: criação de `.claude/agents/pm.md` · commit `53da5a6b`
+
+---
+
+## Ferramenta de escrita não separa produção de governança — caminho separa
+
+Um cargo definido pelo que ele **não** produz não pode ser implementado tirando
+a caneta, quando o mesmo cargo é o único autorizado a escrever a memória da casa
+(vitrine, corredor, pendências). A lista de `tools:` só sabe dizer "escreve" ou
+"não escreve"; ela não sabe dizer **onde**.
+
+Onde a permissão de ferramenta não consegue exprimir a regra, o honesto é
+escrever a regra **por caminho** e declarar, no mesmo lugar, que ela é **aviso e
+não trava** — em vez de deixar a lista de `tools:` passar por portão que ela não
+é. Vale para todo perfil cuja fronteira seja de domínio, e não de verbo.
+
+**E o teste que decide:** refaça a pergunta para cada cargo. Ela inverte. Para o
+`pm`, a resposta foi o oposto — ele não tem caminho de escrita nenhum, e ali
+tirar `Write`/`Edit` **é** a trava, não o aviso.
+
+> **Proveniência:** 14/08/2026 · promovido pelo Diretor · origem: construção de `.claude/agents/diretor.md` e `pm.md` · commits `31dcfb31` e `53da5a6b`
+
+---
+
 ## Coleta que julga não pode ser a mesma que mede
 
 Instrumento que usa IA para **coletar** erra diferente toda noite — e aí "piorou

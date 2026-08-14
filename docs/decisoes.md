@@ -977,3 +977,47 @@ Mentira em qualquer direção custa a mesma confiança, e o silêncio custa vend
 **Como isso não volta a divergir:** o percentual que aparece no site é DERIVADO da
 mesma função que cobra o cartão. Não existe estado em que o site anuncie 50% e o
 checkout cobre outra coisa.
+
+## Problema nunca sobe sozinho: no mínimo duas saídas, sempre
+
+**Data:** 2026-08-14 · **Decidido por:** CEO · **Registrado por:** Diretor do Foocci
+
+Ordem literal: *"Sempre que me trouxer um problema, traga junto, no mínimo, duas
+soluções. Regra de ouro."*
+
+**A regra:** todo problema apresentado ao CEO carrega no mínimo duas saídas, cada
+uma com o que custa, o que arrisca e o que destrava, mais a recomendação do
+Diretor dita por extenso. Sem exceção por urgência — se não deu tempo de pensar
+em duas, o que subiu não era relatório, era desabafo.
+
+**As duas cláusulas que evitam o teatro:** "consertar ou não consertar" não são
+duas saídas, é uma opção e a ausência dela; e quando só há um caminho, isso se
+diz com as descartadas nomeadas. A regra obriga a mostrar o percurso, não a
+inventar alternativa falsa.
+
+**Por quê:** problema apresentado sozinho transfere ao CEO o trabalho de inventar
+a saída — e ele é quem tem menos contexto para isso. Escolher entre duas custa
+segundos; inventar a terceira do zero custa a reunião.
+
+Está em `CLAUDE.md` e proposto ao Diretor Geral em
+`docs/perguntas-ao-diretor-geral.md` para virar doutrina de todos os projetos.
+
+## Os cargos de Diretor e de PM viram agente despachável
+
+**Data:** 2026-08-14 · **Decidido por:** CEO · **Registrado por:** Diretor do Foocci
+
+Ordem do CEO: *"quero você apenas delegando para os Diretores. Preciso da linha
+de produção funcionando hoje."*
+
+Existem agora `.claude/agents/diretor.md` e `.claude/agents/pm.md`, transcritos da
+doutrina 29 do kit. **A pasta passou de 12 para 14 arquivos, e dois deles não são
+especialistas** — a tabela do `CLAUDE.md` diz isso, porque a Sala dos Agentes
+conta a pasta por descoberta automática e já anunciou número errado uma vez.
+
+**O achado que veio junto:** o `CLAUDE.md` mandava o Diretor entregar o pedido ao
+PM desde sempre, e **o PM não existia em disco**. A hierarquia estava escrita e
+não era executável. Quem achou foi o `cerebro`, ao construir o Diretor.
+
+**A fronteira entre os dois, para não se sobreporem:** o Diretor aplica os seis
+campos da ficha ao pedido inteiro, uma vez; o PM aplica os seis a cada tarefa,
+com dono, prazo e dependência em cima. Enquadrar é do Diretor; decompor é do PM.
