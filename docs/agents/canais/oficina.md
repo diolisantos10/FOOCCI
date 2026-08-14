@@ -491,3 +491,25 @@ Sem deploy, sem merge, sem push para a padrão.
 4. **"Canal interno sem teto vira canal de massa no primeiro reaproveitamento."**
    Todo canal sem restaurante precisa de teto de destinos distintos — é o que
    separa "responde ao operador" de "manda para uma lista".
+
+### Nota de procedência deste bloco — leia antes de procurar o commit
+
+Os arquivos acima **não estão num commit meu**. Ao terminar, encontrei a árvore
+limpa e o meu commit inexistente: uma sessão paralela, trabalhando no MESMO
+diretório de trabalho, rodou um `git add -A`/`commit` e varreu tudo o que eu
+tinha em `stage` para dentro do commit dela — **`2b43543f`**, cuja mensagem fala
+de outra coisa ("Manual: o aviso de branch esgotada…").
+
+Conteúdo íntegro e conferido depois do fato: `npx tsc --noEmit` exit 0, `vitest`
+6356 verdes / 0 falhas / 2 pendentes deliberados, já **com** o bloco do `meta`
+(`67d0cff6`) misturado na mesma árvore. Nada se perdeu; o que se perdeu foi a
+mensagem de commit, que é onde mora o porquê.
+
+**NÃO reescrevi a história**: reescrever branch compartilhada com sessões ativas
+é destruir trabalho de terceiro para consertar um rótulo meu — a proteção seria
+pior que o problema (guardrail 5).
+
+Lição para a casa, e ela não é minha de resolver: **agentes em paralelo no mesmo
+`working tree` compartilham o índice do git.** `git add -A` de qualquer um
+sequestra o trabalho de todos. Ou cada sessão paralela usa `git commit -- <paths>`
+com caminho explícito, ou usa árvore separada. Vale escalar ao Diretor.
