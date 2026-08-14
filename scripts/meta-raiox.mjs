@@ -341,11 +341,21 @@ const main = async () => {
       if (gc.status !== 200) { p(`      graph-check HTTP ${gc.status}`); continue; }
       const j = gc.json ?? {};
       p(`      token válido: ${j.tokenValid ? "✅ sim" : "🔴 NÃO — só o dono reconecta, com login pessoal"}`);
-      p(`      vence em: ${j.expiresInDays ?? "?"} dia(s) · nasceu curto? ${j.tokenLooksShortLived}`);
-      if (j.tokenLooksShortLived === true) {
-        p("      🔴 TOKEN CURTO: 60 dias é o certo. Curto significa que a troca `ig_exchange_token`");
-        p("         está falhando em produção — o defeito é ESSE, não a expiração.");
+      // Duas perguntas DIFERENTES, e confundi-las custou 22 dias: "quanto FALTA" não
+      // distingue nada (todo token expirado dá negativo); "com quanto NASCEU" é que
+      // acusa a troca falhando, e continua verdadeiro depois que o token morre.
+      p(`      quanto FALTA: ${j.expiresInDays ?? "?"} dia(s)`);
+      p(`      com quanto NASCEU: ${j.tokenIssuedForDays ?? "não dá para dizer"} dia(s) (emitido em ${j.tokenIssuedAt ?? "?"})`);
+      if (j.tokenBornShort === true) {
+        p("      🔴 NASCEU CURTO — 60 dias é o certo. A troca `ig_exchange_token` está falhando");
+        p("         em produção: o defeito é ESSE, não a expiração. Reconectar sem consertar repete.");
+        p(`      🔎 motivo LITERAL da Meta: ${j.longLivedExchangeError ?? "(não gravado nesta conexão — é anterior a 05/08)"}`);
+      } else if (j.tokenBornShort === false) {
+        p("      ✅ nasceu com validade durável — se morreu, foi por prazo, não pela troca.");
+      } else {
+        p("      ⚪ com quanto nasceu: PRECISO CONFIRMAR — falta `tokenIssuedAt`/`connectedAt` no registro.");
       }
+      p(`      inscrição da conta no webhook: ${j.webhookSubscribedAt ?? "NUNCA"}${j.webhookSubscribeError ? ` · erro: ${j.webhookSubscribeError}` : ""}`);
     }
   }
 

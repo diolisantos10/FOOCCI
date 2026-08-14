@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getInstagramConfig, decryptPageToken, upsertInstagramConfig } from "./InstagramConfigService";
-import { refreshInstagramLongLivedToken } from "./instagramLoginOAuth";
+import { refreshInstagramLongLivedToken, DURABLE_TOKEN_MIN_SECONDS } from "./instagramLoginOAuth";
 
 export interface RefreshOneResult {
   restaurantId: string;
@@ -37,7 +37,10 @@ export async function refreshInstagramTokenForRestaurant(restaurantId: string): 
   const newExpiresAt = res.expiresInSeconds ? new Date(Date.now() + res.expiresInSeconds * 1000).toISOString() : null;
   await upsertInstagramConfig(restaurantId, {
     pageAccessToken: res.token,
-    metadata: { tokenExpiresAt: newExpiresAt },
+    // `tokenIssuedAt` acompanha o token novo. Sem isto, a conta "quanto durou ao
+    // nascer" continuaria ancorada no `connectedAt` da conexão original e passaria a
+    // medir a idade da CONEXÃO, não a vida do TOKEN.
+    metadata: { tokenExpiresAt: newExpiresAt, tokenIssuedAt: new Date().toISOString() },
   });
   await prisma.instagramChannelConfig.update({ where: { restaurantId }, data: { lastError: null } }).catch(() => {});
   return { restaurantId, refreshed: true, newExpiresAt };
@@ -63,6 +66,18 @@ export interface RefreshSweepResult {
    * num canal ligado é, no mínimo, uma pergunta que alguém tem de responder.
    */
   silent: Array<{ restaurantId: string; lastWebhookAt: string | null; days: number | null }>;
+  /**
+   * Conexões cujo token NASCEU curto — `tokenExpiresAt − connectedAt` bem abaixo dos
+   * ~60 dias de um long-lived. É a assinatura aritmética do fallback de
+   * `ig_exchange_token`, e sobrevive à morte do token (diferente do tempo restante,
+   * que vira negativo e não distingue nada).
+   *
+   * Por que precisa estar AQUI e não só na tela: quando a troca falha, o canal morre
+   * em ~1h e some da vista. A varredura do dia seguinte era a única testemunha, e ela
+   * só sabia dizer "a renovação falhou" — nunca "ele já nasceu morto, e a Meta
+   * recusou dizendo X".
+   */
+  bornShort: Array<{ restaurantId: string; issuedForSeconds: number; exchangeError: string | null }>;
   /**
    * True when this run deserves a human. The daily job used to answer
    * `{checked:0, refreshed:0}` with HTTP 200 and the workflow printed "✅ executado" —
@@ -128,7 +143,44 @@ export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<R
     })
     .filter((r) => r.days !== null && r.days >= SILENCE_ALERT_DAYS);
 
+  // Token que NASCEU curto. A conta pode até já estar desabilitada — por isso a
+  // varredura é sobre `all`, não sobre `rows`: o defeito tem de continuar visível
+  // depois que a vítima sai da consulta.
+  const bornShort: Array<{ restaurantId: string; issuedForSeconds: number; exchangeError: string | null }> = [];
+  for (const r of all) {
+    const meta = (r.metadata && typeof r.metadata === "object") ? (r.metadata as Record<string, unknown>) : {};
+    const exp  = typeof meta.tokenExpiresAt === "string" ? Date.parse(meta.tokenExpiresAt) : NaN;
+    // `tokenIssuedAt` é a âncora exata; `connectedAt` é a queda para as linhas gravadas
+    // antes de ele existir (14/08). Nas antigas a conta é aproximada e erra para MAIS
+    // (a conexão é mais velha que o token), o que produz falso NEGATIVO, nunca falso
+    // positivo — o lado seguro de errar quando se vai acusar um defeito.
+    const conn = typeof meta.tokenIssuedAt === "string"
+      ? Date.parse(meta.tokenIssuedAt)
+      : (typeof meta.connectedAt === "string" ? Date.parse(meta.connectedAt) : NaN);
+    // Sem as duas pontas não dá para calcular a vida de nascimento — e ausência de
+    // informação não é informação: fica quieto em vez de acusar no escuro.
+    if (!Number.isFinite(exp) || !Number.isFinite(conn)) continue;
+    const issuedForSeconds = Math.round((exp - conn) / 1000);
+    if (issuedForSeconds <= 0 || issuedForSeconds >= DURABLE_TOKEN_MIN_SECONDS) continue;
+    bornShort.push({
+      restaurantId: r.restaurantId,
+      issuedForSeconds,
+      exchangeError: typeof meta.longLivedExchangeError === "string" ? meta.longLivedExchangeError : null,
+    });
+  }
+
   const attention: string[] = [];
+  // Vem PRIMEIRO de propósito: é a causa, e o resto (renovação falhando, canal mudo)
+  // são consequências dela. Quem lê o alerta precisa ver a causa na primeira linha.
+  for (const b of bornShort) {
+    const horas = Math.round((b.issuedForSeconds / 3600) * 10) / 10;
+    attention.push(
+      `Instagram do restaurante ${b.restaurantId}: o token NASCEU com ${horas}h de validade`
+      + ` em vez dos ~60 dias de um long-lived. Isso é a troca \`ig_exchange_token\` falhando`
+      + ` no ato da conexão — reconectar sem consertar repete o resultado.`
+      + (b.exchangeError ? ` A Meta recusou dizendo: "${b.exchangeError.slice(0, 200)}".` : ""),
+    );
+  }
   for (const bad of ineligible) {
     attention.push(`Instagram do restaurante ${bad.restaurantId} não está sendo renovado: ${bad.reason}.`);
   }
@@ -157,6 +209,7 @@ export async function refreshExpiringInstagramTokens(withinDays = 10): Promise<R
     totalConfigs: all.length,
     ineligible,
     silent: silent.map(({ restaurantId, lastWebhookAt, days }) => ({ restaurantId, lastWebhookAt, days })),
+    bornShort,
     needsAttention: attention.length > 0,
     attention,
   };
