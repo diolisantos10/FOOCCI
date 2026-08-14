@@ -420,6 +420,12 @@ export async function handleInstagramLoginCallback(
         tokenExpiresAt: profile.expiresInSeconds
           ? new Date(Date.now() + profile.expiresInSeconds * 1000).toISOString()
           : null,
+        // Âncora EXATA da emissão deste token. `connectedAt` servia de aproximação, mas
+        // ele não se move numa renovação — então, depois do primeiro refresh, a conta
+        // "quanto o token durou ao nascer" passava a medir outra coisa. Com isto a
+        // aritmética que denuncia a troca falhando (`expira − emitido ≈ 1h`) fica exata
+        // e continua válida a vida inteira da conexão.
+        tokenIssuedAt: new Date().toISOString(),
         webhookSubscribedAt: subscribed ? new Date().toISOString() : null,
         webhookSubscribeError: subscribeError,
         longLivedExchangeError: profile.longLivedError ?? null,

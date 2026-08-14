@@ -971,3 +971,140 @@ caminhos explícitos — há outro agente na mesma árvore.
   Antes de investigar, leia os quatro. Proveniência: campos ausentes no `diag` até 14/08.
 - **A guarda de coexistência do `/register` protege só o NOSSO registro.** Ela não
   desfaz o que o fluxo da Meta fizer. Proveniência: `admin/meta/register/route.ts:88`.
+
+---
+
+## 2026-08-14 (tarde) · O Instagram: o sinal que a casa mandava confiar estava MEDINDO A COISA ERRADA
+
+### 0 · Antes, o registro do assunto que fechou (ordem do Diretor)
+
+**Coexistência está PARADA e não é configuração faltando criar.** O CEO abriu o
+dropdown "Recursos" do Cadastro Incorporado no app `Foocci Whats`: a única opção
+listada é `app_only_install`. **"WhatsApp Business App Onboarding" não existe na
+lista** — a Meta não oferece o recurso para este app.
+
+Leitura do Diretor, que eu **não confirmei nem derrubei** (não é prioridade e eu não
+alcanço a Graph): o portão mais provável é `business_verification_status = not_verified`,
+que o raio-x já mostrou. Fica registrado como **preciso confirmar**. O assunto está
+travado até o CEO verificar o negócio, e ele já foi avisado.
+
+Vale anotar que a correção fail-closed de hoje de manhã **continua necessária e ficou
+mais importante**: sem o recurso disponível, o botão jamais poderia cair na configuração
+comum — e caía.
+
+### 1 · Conclusão: a frase "nasceu curto? true" NÃO era prova de nada
+
+`graph-check/route.ts:53`, antes:
+
+```ts
+const tokenLooksShortLived = expiresInDays !== null && expiresInDays < 7;
+```
+
+**Isso é o tempo que FALTA, não a vida com que o token NASCEU.** Duas consequências,
+e as duas apareceram:
+
+1. Um token de 60 dias com 55 dias de idade reportava `true`.
+2. **Todo token expirado reporta `true` por aritmética** — dias restantes negativos são
+   menores que 7, sempre.
+
+O raio-x de hoje leu `vence em: -2.4 dias · nasceu curto? true`. **A segunda metade é
+consequência matemática da primeira.** O campo não estava relatando um diagnóstico;
+estava repetindo, com outro nome, que o token está vencido.
+
+Isto é grave além do bug: **a vitrine manda usar exatamente esse campo** para decidir
+se a reconexão deu certo ("Se vier curto de novo, a troca `ig_exchange_token` está
+falhando em produção — e é aí que está o defeito"). A ferramenta que a doutrina
+manda usar respondia `true` para qualquer canal morto, por qualquer motivo. Quem
+seguisse a doutrina à risca seria mandado para a causa errada — e foi.
+
+### 2 · Então a troca está falhando ou não? PRECISO CONFIRMAR — e digo por quê
+
+**Não afirmo nem nego.** Não alcanço a Graph API nem o banco (mesmo bloqueio de ontem:
+sem `RAILWAY_TOKEN`, sem `ADMIN_SECRET`, API de Actions em 403 pelo proxy).
+
+O que **derrubei** é que a evidência apresentada sustentasse a conclusão. O que sobra
+de indício, e é só indício:
+
+- `lastError` diz expiração em **11-Ago-26 21:00 PDT** (= 12/08 04:00 UTC). Em 06/08 o
+  mesmo campo dizia **05-Ago 16:00 PDT**. São tokens diferentes → **houve reconexão
+  entre 06/08 e 12/08**, e o token novo morreu em poucos dias ou horas.
+- Isso é compatível com nascimento curto, e também com outras coisas. Sem a vida de
+  nascimento, não dá para separar.
+
+**Duas hipótese de causa que eu ELIMINEI por leitura de código, com o raciocínio:**
+
+- **Não é o segredo errado.** O passo 1 (`authorization_code`, `instagramLoginOAuth.ts:168-189`)
+  usa **o mesmo `creds.appSecret`** do passo 2 e **funciona** — sai um short token. Se o
+  segredo estivesse errado, o passo 1 falharia primeiro. Isso confirma, por outro
+  caminho, o que a oficina de 05/08 já tinha achado comparando os valores.
+- **Não é metadata sendo sobrescrito.** `upsertInstagramConfig` faz **merge**
+  (`InstagramConfigService.ts:187-192`), então `connectedAt` e `longLivedExchangeError`
+  não são apagados pela renovação. Hipótese descartada.
+
+**E a evidência que responde isso está no banco há NOVE DIAS, sem leitor.** Desde 05/08
+o callback grava `metadata.longLivedExchangeError` — o motivo **literal** que a Meta deu
+para recusar a troca — justamente para sobreviver ao deploy (a retenção de log do
+Railway é por deploy). Eu mesmo escrevi na oficina de 06/08: *"Campo escrito sem caminho
+de leitura = evidência morta. Correção de 4 linhas, read-only, dentro do meu domínio —
+proposta, não executada."* Ficou proposta. Nove dias depois estamos adivinhando com a
+resposta guardada.
+
+### 3 · O que consertei
+
+| Arquivo | O quê |
+|---|---|
+| `graph-check/route.ts` | `tokenLooksShortLived` passa a medir **emissão**, não tempo restante; nasce `tokenIssuedForDays`, `tokenBornShort` e o campo separado `tokenExpiringSoon` |
+| `graph-check/route.ts` | devolve `longLivedExchangeError`, `webhookSubscribedAt`, `webhookSubscribeError`, `connectedAt`, `tokenIssuedAt` — a evidência enterrada vira legível |
+| `instagramLoginOAuth.ts` (callback) | grava `tokenIssuedAt` — âncora **exata** da emissão |
+| `instagramTokenRefresh.ts` | grava `tokenIssuedAt` junto do token renovado |
+| `instagramTokenRefresh.ts` | `bornShort[]` novo; a varredura diária acusa nascimento curto **com o motivo da Meta**, e essa linha vem **primeiro** no `attention` — é a causa, o resto é consequência |
+| `scripts/meta-raiox.mjs` | imprime "quanto FALTA" e "com quanto NASCEU" como perguntas separadas, e o motivo literal |
+| `tests/InstagramTokenBornShort.test.ts` | **7 casos** |
+
+**Por que `tokenIssuedAt` e não só `connectedAt`:** `connectedAt` não se move numa
+renovação. Depois do primeiro refresh, `tokenExpiresAt − connectedAt` passaria a medir
+a idade da CONEXÃO, não a vida do TOKEN — e o sinal voltaria a mentir, só que na outra
+direção. Com a âncora própria a aritmética fica exata para sempre.
+
+**Compatibilidade com as linhas antigas:** cai em `connectedAt` quando `tokenIssuedAt`
+não existe. Nessas, a conta erra **para mais** (a conexão é mais velha que o token), o
+que produz **falso negativo, nunca falso positivo** — o lado seguro de errar quando se
+vai acusar um defeito. Travado por teste.
+
+**Por que o `bornShort` varre `all` e não `rows`:** quando a troca falha, o canal morre
+em ~1h, o token some e a conta **sai** da consulta de renovação. Varrer só os elegíveis
+faria o defeito desaparecer justamente quando ele acontece — guardrail 2 outra vez.
+
+### 4 · O alarme no ato da emissão (item 3 do despacho)
+
+Já existia no nível da tela (`lastError` no callback, desde 03/08) e **não existia** no
+nível da máquina. Agora a varredura diária tem `bornShort[]` no `attention`, com a
+mensagem da Meta anexada, e a conta aparece **mesmo desabilitada**.
+
+⚠️ **Isso ainda toca em sala vazia.** Sem `META_ALERT_PHONE` e sem o canal Master, o
+alerta morre dentro do Actions. É a mesma pendência de ontem, e continua sendo do CEO.
+
+### 5 · O que NÃO fiz
+
+Sem deploy, sem merge, sem push. Nenhuma chamada à Meta. Nenhum segredo lido ou
+impresso. Não toquei em `src/components/agencia/`, `src/lib/agencia/`,
+`src/app/(dashboard)/agencia/` nem `public/fonts/` — o `interface` está nessa árvore.
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **🔴 CORRIGE A PRÓPRIA VITRINE.** A entrada *"O token curto é o bug; a expiração é só
+  o sintoma"* manda conferir `graph-check` e confiar em `tokenLooksShortLived`. Até
+  14/08 esse campo media **tempo restante**, então respondia `true` para qualquer token
+  vencido, por qualquer causa. A doutrina estava certa e a ferramenta que ela indicava
+  não media aquilo. Hoje mede. Proveniência: `graph-check/route.ts:53` antes × depois.
+- **"Quanto falta" e "com quanto nasceu" são perguntas diferentes.** Só a segunda acusa
+  a troca falhando, e só ela continua verdadeira depois que o token morre. Nunca
+  diagnostique emissão com tempo restante.
+- **Evidência gravada sem leitor não é evidência.** `longLivedExchangeError` existia
+  desde 05/08, foi apontado como buraco em 06/08, e em 14/08 ainda estávamos adivinhando
+  com a resposta no banco. Proposta que não vira rota morre igual a log que some no
+  deploy. Proveniência: oficina 06/08 §2 × `graph-check` de 14/08.
+- **Passo que funciona prova credencial do passo seguinte.** O `authorization_code`
+  usa o mesmo `client_secret` do `ig_exchange_token`: se o primeiro passa, o segredo
+  está certo e a hipótese "credencial errada" cai sem precisar imprimir nada.
+  Proveniência: `instagramLoginOAuth.ts:168-199`.

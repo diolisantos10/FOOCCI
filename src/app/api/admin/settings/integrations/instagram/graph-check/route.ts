@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { getInstagramConfig, decryptPageToken } from "@/services/instagram/InstagramConfigService";
 import { GRAPH_INSTAGRAM_BASE, GRAPH_FACEBOOK_BASE } from "@/services/instagram/InstagramSendClient";
+import { DURABLE_TOKEN_MIN_SECONDS } from "@/services/instagram/instagramLoginOAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +50,54 @@ export async function GET(req: NextRequest) {
   const tokenExpiresAtRaw = typeof config.metadata?.tokenExpiresAt === "string" ? config.metadata.tokenExpiresAt : null;
   const expMs = tokenExpiresAtRaw ? Date.parse(tokenExpiresAtRaw) : NaN;
   const expiresInDays = Number.isFinite(expMs) ? Math.round(((expMs - Date.now()) / (24 * 60 * 60 * 1000)) * 10) / 10 : null;
-  // < 7 remaining days on a token that should be ~60 is the short-lived fallback.
-  const tokenLooksShortLived = expiresInDays !== null && expiresInDays < 7;
+
+  /**
+   * 🔴 ESTE CAMPO MENTIA, E A MENTIRA CUSTOU CARO.
+   *
+   * Ele era `expiresInDays < 7` — ou seja, o tempo que FALTA. Duas consequências, e as
+   * duas apareceram em produção:
+   *   1. Um token de 60 dias perfeitamente saudável, com 55 dias de idade, reportava
+   *      "nasceu curto: true".
+   *   2. **Todo token expirado reporta `true` por aritmética**, sempre, porque dias
+   *      restantes negativos são menores que 7. Foi assim que o raio-x de 14/08 leu
+   *      "vence em -2,4 dias · nasceu curto? true" — a segunda metade não era prova
+   *      de nada, era consequência da primeira.
+   *
+   * O que realmente identifica o defeito é a vida com que o token NASCEU, e a vitrine
+   * já dizia isso: `tokenExpiresAt − connectedAt ≈ 1h` é a assinatura digital do
+   * fallback de `ig_exchange_token`. Aritmética simples, que dispensa log — e que
+   * continua verdadeira depois que o token morre.
+   *
+   * Guardrail 1: sem `connectedAt` não dá para calcular a vida de nascimento, e aí a
+   * resposta é `null` ("não sei"), nunca `false` ("nasceu bem").
+   */
+  const connectedAtRaw = typeof config.metadata?.connectedAt === "string" ? config.metadata.connectedAt : null;
+  // Âncora exata da emissão, com queda para `connectedAt` nas conexões anteriores a
+  // 14/08. Nas antigas a conta erra para MAIS, ou seja, falso negativo — o lado seguro.
+  const issuedAtRaw = typeof config.metadata?.tokenIssuedAt === "string" ? config.metadata.tokenIssuedAt : connectedAtRaw;
+  const connMs = issuedAtRaw ? Date.parse(issuedAtRaw) : NaN;
+  const tokenIssuedForSeconds =
+    Number.isFinite(expMs) && Number.isFinite(connMs) ? Math.round((expMs - connMs) / 1000) : null;
+  const tokenIssuedForDays =
+    tokenIssuedForSeconds !== null ? Math.round((tokenIssuedForSeconds / (24 * 60 * 60)) * 10) / 10 : null;
+  // Um long-lived do Instagram dura ~60 dias. Menos de 7 na EMISSÃO é o fallback.
+  const tokenBornShort = tokenIssuedForSeconds === null ? null : tokenIssuedForSeconds < DURABLE_TOKEN_MIN_SECONDS;
+  // Mantido com o nome antigo porque o raio-x e os scripts já o leem — mas agora ele
+  // mede o que o nome promete. O "está vencendo" virou campo próprio.
+  const tokenLooksShortLived = tokenBornShort === true;
+  const tokenExpiringSoon = expiresInDays !== null && expiresInDays < 7;
+
+  /**
+   * A EVIDÊNCIA QUE ESTAVA ENTERRADA. Desde 05/08 o callback grava, no metadata, o
+   * motivo LITERAL que a Meta deu para recusar a troca — justamente para o motivo
+   * sobreviver ao deploy, já que a retenção de log do Railway é por deploy. Só que
+   * NENHUMA rota devolvia esses campos: campo escrito sem caminho de leitura é
+   * evidência morta. Ficaram nove dias com a resposta no banco, sem ninguém ler.
+   */
+  const meta = config.metadata ?? {};
+  const longLivedExchangeError = typeof meta.longLivedExchangeError === "string" ? meta.longLivedExchangeError : null;
+  const webhookSubscribedAt    = typeof meta.webhookSubscribedAt === "string" ? meta.webhookSubscribedAt : null;
+  const webhookSubscribeError  = typeof meta.webhookSubscribeError === "string" ? meta.webhookSubscribeError : null;
 
   // 1) Token validity + account identity.
   const me = await graphGet(base, "me?fields=id,username,account_type,name", token);
@@ -77,8 +124,19 @@ export async function GET(req: NextRequest) {
     instagramBusinessAccountId: igId,
     tokenValid: me.ok,
     tokenExpiresAt: tokenExpiresAtRaw,
+    connectedAt: connectedAtRaw,
+    tokenIssuedAt: issuedAtRaw,
     expiresInDays,
+    // Quanto o token durou DESDE A EMISSÃO — é isto que acusa a troca falhando.
+    tokenIssuedForDays,
+    tokenBornShort,
     tokenLooksShortLived,
+    // Quanto FALTA — outra pergunta, outro campo. Confundir as duas custou 22 dias.
+    tokenExpiringSoon,
+    // O motivo literal da Meta, que já estava no banco e ninguém devolvia.
+    longLivedExchangeError,
+    webhookSubscribedAt,
+    webhookSubscribeError,
     lastError: config.lastError,
     me: me.json,
     subscribedApps: subs.json,
