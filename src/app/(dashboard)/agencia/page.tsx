@@ -1,73 +1,74 @@
 import { Suspense } from "react";
+import { prisma } from "@/lib/prisma";
 import { getTenantId } from "@/lib/tenant";
-import { loadAgencyClient, emptySheet } from "@/lib/agencia/client-data";
-import { emptyAgencyClientView } from "@/lib/agencia/views";
-import { ClientCommandCenter } from "@/components/agencia/ClientCommandCenter";
-import { sora } from "@/components/agencia/fonts";
-import "@/components/agencia/dioli.css";
+import { TopBar } from "@/components/layout/TopBar";
+import { AgenciaClient } from "./AgenciaClient";
 
-export const metadata = { title: "Agência — Client Command Center" };
-export const dynamic = "force-dynamic";
+export const metadata = { title: "Agência — Projetos" };
+export const dynamic  = "force-dynamic";
 
-// O eixo desta tela é o CLIENTE, não o projeto (CLAUDE_HANDOFF.md). O cliente
-// da agência, aqui, é o `Restaurant` do tenant da sessão. A lista de projetos
-// virou uma aba dentro do cliente; `/agencia/[id]` continua sendo o detalhe de
-// um projeto e `/agencia/novo` continua sendo a criação.
-
-async function Content() {
+export default async function AgenciaPage() {
   let restaurantId: string | null = null;
-  try {
-    restaurantId = getTenantId();
-  } catch {
-    /* sem sessão */
+  let restaurantName = "Restaurante";
+  try { restaurantId = getTenantId(); } catch { /* unauthenticated */ }
+
+  type ProjectRow = {
+    id: string;
+    name: string;
+    objective: string;
+    status: string;
+    services: unknown;
+    createdAt: Date;
+    strategySession: { id: string; generatedAt: Date } | null;
+  };
+
+  let projects: ProjectRow[] = [];
+
+  if (restaurantId) {
+    const [restaurant, rows] = await Promise.all([
+      prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
+      prisma.agencyProject.findMany({
+        where:   { restaurantId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id:        true,
+          name:      true,
+          objective: true,
+          status:    true,
+          services:  true,
+          createdAt: true,
+          strategySession: { select: { id: true, generatedAt: true } },
+        },
+      }),
+    ]);
+    restaurantName = restaurant?.name ?? "Restaurante";
+    projects = rows.map((p) => ({
+      ...p,
+      createdAt: p.createdAt,
+      strategySession: p.strategySession
+        ? { ...p.strategySession, generatedAt: p.strategySession.generatedAt }
+        : null,
+    }));
   }
 
-  if (!restaurantId) {
-    return (
-      <div className={`dioliOS ${sora.variable}`}>
-        <ClientCommandCenter
-          view={emptyAgencyClientView({
-            id: "—", name: "Cliente", initial: "?",
-            category: null, activeSince: null, isActive: false,
-          })}
-          sheet={emptySheet("Cliente")}
-          loadError="Sessão sem restaurante associado. Entre novamente para carregar o cliente."
-        />
-      </div>
-    );
-  }
-
-  const { view, sheet, error } = await loadAgencyClient(restaurantId);
+  const serialized = projects.map((p) => ({
+    ...p,
+    createdAt: p.createdAt.toISOString(),
+    strategySession: p.strategySession
+      ? { ...p.strategySession, generatedAt: p.strategySession.generatedAt.toISOString() }
+      : null,
+  }));
 
   return (
-    <div className={sora.variable}>
-      <ClientCommandCenter view={view} sheet={sheet} loadError={error} />
-    </div>
-  );
-}
-
-export default function AgenciaPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="dioliOS">
-          <div className="agencyBar">
-            <div className="agencyLogo">
-              <i>O°</i>
-              <b>Dioli</b>
-              <small>AGÊNCIA</small>
-            </div>
-          </div>
-          <main className="projectPage clientWorkspace">
-            <div className="loadingBlock" aria-busy="true" aria-live="polite">
-              <span className="srOnly">Carregando o cliente…</span>
-              <i /><i /><i /><i /><i />
-            </div>
-          </main>
+    <>
+      <TopBar title="Agência — Projetos" />
+      <Suspense fallback={
+        <div className="flex items-center justify-center py-24 text-sm text-muted">
+          Carregando projetos…
         </div>
-      }
-    >
-      <Content />
-    </Suspense>
+      }>
+        <AgenciaClient projects={serialized} restaurantName={restaurantName} />
+      </Suspense>
+    </>
   );
 }
