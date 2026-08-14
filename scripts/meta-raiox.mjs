@@ -142,6 +142,8 @@ const main = async () => {
     "META_COEXISTENCE_CONFIG_ID", "META_GRAPH_VERSION", "META_WHATSAPP_ENABLED", "META_TEST_PHONE",
     "NEXT_PUBLIC_META_APP_ID", "NEXT_PUBLIC_META_CONFIG_ID", "NEXT_PUBLIC_WHATSAPP_SALES_NUMBER",
     "META_ALERT_PHONE", "INSTAGRAM_ALERT_PHONE",
+    "NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID", "FOOCCI_BASE_URL",
+    "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
     "BUILDOS_META_PHONE_NUMBER_ID", "BUILDOS_META_ACCESS_TOKEN",
     "SUPPORT_META_PHONE_NUMBER_ID", "SUPPORT_META_ACCESS_TOKEN",
   ];
@@ -320,6 +322,62 @@ const main = async () => {
     p("     Ele NÃO cai mais na configuração comum: o cadastro padrão migra o número e o");
     p("     TIRA do celular, que é o oposto do que o botão promete.");
   }
+
+  /* ── 4c. UM RESTAURANTE NOVO CONSEGUE SE INTEGRAR SOZINHO? ──────────────────── */
+  p("\n═══ 4c · AUTOATENDIMENTO — o que um restaurante NOVO precisa para conectar ═══");
+  p("   (isto NÃO olha restaurante já conectado; olha se a porta está aberta para o próximo)");
+
+  const bloqueios = [];
+  const avisos    = [];
+
+  // WhatsApp. NEXT_PUBLIC_* é congelado no BUILD — presente no Railway e ausente no
+  // bundle dá o mesmo resultado prático: o botão não abre. Por isso o alerta é duplo.
+  const waFalta = [];
+  if (V.META_WHATSAPP_ENABLED !== "true") waFalta.push("META_WHATSAPP_ENABLED=true");
+  if (!V.NEXT_PUBLIC_META_APP_ID) waFalta.push("NEXT_PUBLIC_META_APP_ID");
+  if (!V.NEXT_PUBLIC_META_CONFIG_ID) waFalta.push("NEXT_PUBLIC_META_CONFIG_ID");
+  if (!V.META_APP_ID || !V.META_APP_SECRET) waFalta.push("META_APP_ID/META_APP_SECRET");
+  if (!V.META_WEBHOOK_VERIFY_TOKEN) waFalta.push("META_WEBHOOK_VERIFY_TOKEN");
+  p(`\n   ${waFalta.length ? "🔴" : "✅"} WhatsApp (Cadastro Incorporado): ${waFalta.length ? "faltando " + waFalta.join(", ") : "porta aberta"}`);
+  if (waFalta.length) bloqueios.push("WhatsApp: " + waFalta.join(", "));
+
+  // Coexistência: manter o número no celular. Compartilha a configuração do fluxo
+  // padrão — o que separa os dois é o featureType, e isso é trava de código.
+  const coexOk = !!V.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID;
+  p(`   ${coexOk ? "✅" : "⚪"} Coexistência (número segue no celular): ${coexOk ? "ligada" : "DESLIGADA — o botão não abre"}`);
+  if (!coexOk) avisos.push("Coexistência desligada: restaurante que atende pelo aparelho não consegue conectar sem perder o número.");
+  if (coexOk && V.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID !== V.NEXT_PUBLIC_META_CONFIG_ID) {
+    p("      ℹ️ usa configuração PRÓPRIA (diferente do cadastro padrão)");
+  } else if (coexOk) {
+    p("      ℹ️ usa a MESMA configuração do cadastro padrão — o que separa os dois fluxos");
+    p("         é o featureType, travado por teste em src/lib/meta/embeddedSignup.ts");
+  }
+
+  // Instagram.
+  const igFalta = [];
+  if (!V.INSTAGRAM_APP_ID) igFalta.push("INSTAGRAM_APP_ID");
+  if (!V.INSTAGRAM_APP_SECRET) igFalta.push("INSTAGRAM_APP_SECRET");
+  if (!V.INSTAGRAM_WEBHOOK_VERIFY_TOKEN) igFalta.push("INSTAGRAM_WEBHOOK_VERIFY_TOKEN");
+  if (!V.FOOCCI_BASE_URL) igFalta.push("FOOCCI_BASE_URL (o OAuth do IG bloqueia sem ela)");
+  p(`   ${igFalta.length ? "🔴" : "✅"} Instagram (Entrar com Instagram): ${igFalta.length ? "faltando " + igFalta.join(", ") : "porta aberta"}`);
+  if (igFalta.length) bloqueios.push("Instagram: " + igFalta.join(", "));
+
+  // Google.
+  const gFalta = [];
+  if (!(V.GOOGLE_OAUTH_CLIENT_ID || V.GOOGLE_CLIENT_ID)) gFalta.push("GOOGLE_OAUTH_CLIENT_ID");
+  if (!(V.GOOGLE_OAUTH_CLIENT_SECRET || V.GOOGLE_CLIENT_SECRET)) gFalta.push("GOOGLE_OAUTH_CLIENT_SECRET");
+  p(`   ${gFalta.length ? "🔴" : "✅"} Google (Meu Negócio / Analytics): ${gFalta.length ? "faltando " + gFalta.join(", ") : "porta aberta"}`);
+  if (gFalta.length) bloqueios.push("Google: " + gFalta.join(", "));
+
+  p("\n   ── VEREDITO DO AUTOATENDIMENTO ──");
+  if (bloqueios.length === 0) {
+    p("   ✅ Nenhuma variável bloqueia um restaurante novo de conectar os três canais.");
+  } else {
+    for (const b of bloqueios) p(`   🔴 ${b}`);
+  }
+  for (const a of avisos) p(`   ⚠️ ${a}`);
+  p("   ⚠️ Variável presente no Railway NÃO basta para as `NEXT_PUBLIC_*`: elas são");
+  p("      congeladas no BUILD. Depois de mudar qualquer uma delas, REDEPLOY.");
 
   /* ── 5. Instagram ───────────────────────────────────────────────────────────── */
   p("\n═══ 5 · INSTAGRAM ═══");

@@ -1226,3 +1226,119 @@ impresso. Não toquei em `src/components/agencia/`, `src/lib/agencia/`,
 - **A resposta do primeiro passo já dizia tudo.** `permissions` vinha em toda troca de
   código e era descartado — inclusive nas quatro tentativas em que se investigou host e
   verbo. Antes de procurar causa longe, leia o que o serviço já devolveu de perto.
+
+---
+
+## 2026-08-14 (noite) · Raio-X do autoatendimento: um restaurante novo consegue se integrar?
+
+**Ordem do CEO:** *"delega um raio-x pra validar se está tudo ok para os clientes
+fazerem suas integrações."* Metade técnica (a máquina está certa?); o `experiencia`
+faz o percurso da pessoa em paralelo.
+
+### 0 · Três coisas minhas que ficam CORRIGIDAS
+
+1. **"A coexistência não existe para este app" — ERRADO, e era meu.** O CEO percorreu o
+   fluxo e a sessão devolveu `WHATSAPP_BUSINESS_APP_ONBOARDING_PHONE_CREATION` com
+   `config_id=1571394541276497` e `featureType=whatsapp_business_app_onboarding`. Eu
+   concluí a ausência a partir do dropdown "Recursos" mostrar só `app_only_install` —
+   **inferi negação do silêncio de uma tela**, que é exatamente o guardrail 1, e errei.
+   O `featureType` viaja nos `extras`, não no dropdown.
+2. **O `not_verified` era do portfólio do CLIENTE** (Sushi cazza, `826882764595784`),
+   não do app do Foocci. O app do Foocci está **liberado para produção** (verificação da
+   empresa, análise do app e integridade, os três verdes).
+3. **O "Pendente" do 91896-4947 é NOME DE EXIBIÇÃO em revisão**, não o número — que está
+   VERIFIED/LIVE, credencial viva, 92 templates aprovados. `is_on_biz_app=false`, WABA
+   com um número só.
+
+### 1 · O ponto exato que quebra para um restaurante NOVO
+
+`src/app/api/integracoes/whatsapp/meta/connect/route.ts`, antes:
+
+```ts
+try { await subscribeAppToWaba(accessToken, body.wabaId); } catch { /* non-fatal */ }
+```
+
+**`subscribeAppToWaba` NÃO lança** — ela devolve `{ ok:false, error }`
+(`MetaOnboardingService.ts:62-80`). O `catch` não pegava nada e o `{ok:false}` ia para o
+lixo. E a rota devolvia `connected: true` de qualquer jeito.
+
+Sem essa assinatura **a Meta não entrega mensagem nenhuma**. Para um restaurante que se
+integra sozinho: conecta, tela verde, **envia**, e **nunca recebe**. Sem erro, sem log,
+sem pista.
+
+**É o mesmo defeito que manteve o Instagram mudo por 22 dias, no canal que mais importa
+para cliente novo** — e a terceira vez que encontro esta forma exata hoje (`/me` do IG,
+`subscribe` do IG, agora o `connect` do WhatsApp). O padrão: `try/catch` em volta de
+função que **reporta por retorno**, não por exceção.
+
+**Corrigido, sem bloquear a conexão** (guardrail 5 — as credenciais já estão salvas e a
+falha é recuperável): a resposta ganha `inboundReady` e `inboundError`, e o motivo da
+Meta é gravado em `lastError`. 4 testes, incluindo a metade que reproduz o antigo.
+
+### 2 · A segurança de ligar a coexistência — CONFIRMO, com uma condição
+
+Ligar `META_COEXISTENCE_CONFIG_ID` e `NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID` com
+`1571394541276497` **é seguro**, e o motivo é a evidência do CEO: a Meta aceitou o
+`featureType` nessa configuração e abriu o fluxo de criação de número do Business App.
+
+**A condição, e ela é dura:** com as duas variáveis apontando para a MESMA configuração,
+**a única coisa que separa "mantém o número no celular" de "migra e arranca do celular"
+é uma string dentro de `extras`.** A proteção que eu instalei de manhã (recusar quando
+falta config id dedicada) **deixa de cobrir esse caso** — o id passa a existir.
+
+Guardrail 4 aplicado: a invariante virou trava.
+
+| Arquivo | O quê |
+|---|---|
+| `src/lib/meta/embeddedSignup.ts` (novo) | `buildEmbeddedSignupParams` **lança** se o fluxo é coexistência e o `featureType` não é o certo |
+| `MetaProviderCard.tsx` `fbLogin` | passa a montar os parâmetros por ali; sem featureType válido, o login nem abre |
+| `src/lib/meta/embeddedSignup.test.ts` | 6 casos, incluindo os dois fluxos compartilhando o mesmo id sem se confundirem |
+
+Custo de a trava disparar: um botão que não abre + aviso. Custo de deixar passar: o
+restaurante perde o WhatsApp em que atende cliente, sem aviso e sem volta.
+
+### 3 · O que o raio-x passa a responder sozinho
+
+Bloco novo **4c · AUTOATENDIMENTO**: percorre as variáveis que um restaurante NOVO
+precisa, canal por canal (WhatsApp, coexistência, Instagram, Google), e dá veredito.
+Ele também avisa que `NEXT_PUBLIC_*` é congelada no build — presente no Railway e
+ausente no bundle dão o **mesmo resultado prático**, e essa confusão já mordeu aqui.
+
+Rodar: Actions → **Raio-X do aplicativo Meta** → Run workflow.
+
+### 4 · O Instagram, na próxima reconexão
+
+Com `d29c6fdb` no ar (confirmado: é ancestral de `3b54d78a`, o commit em produção), a
+próxima conexão grava as permissões concedidas. As três respostas possíveis:
+
+| O que o raio-x mostrar | O que significa | Quem resolve |
+|---|---|---|
+| `com quanto NASCEU: ~60 dias` | acabou | ninguém — conferir DM chegando |
+| `FALTAM: instagram_business_...` | a Meta não concedeu | **CEO** — App Review, ou o dono remarcar a permissão na tela de autorização |
+| `nasceu curto` **e** permissões completas | aí sim é defeito nosso, e é novo | eu |
+
+⚠️ **Não reconectar antes do próximo deploy** só valeria se o conserto não estivesse no
+ar — e está. Pode reconectar quando quiser; a evidência será gravada.
+
+### 5 · O que NÃO fiz
+
+Sem deploy, sem merge, sem push. Nenhuma chamada que altere estado na Meta. Nenhum
+segredo lido ou impresso. Não toquei em tela (o `experiencia` está nesse percurso) nem
+em `src/components/agencia/`, `src/lib/agencia/`, `src/app/(dashboard)/agencia/`.
+Branch nova a partir da padrão: `claude/meta-raiox-autoatendimento` (0/0 na criação).
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **`try/catch` em volta de função que reporta por RETORNO não trata erro — cria
+  silêncio.** Três ocorrências da mesma forma foram achadas em um único dia:
+  `/me` do Instagram, `subscribe` do Instagram e `subscribeAppToWaba` do WhatsApp. Ao
+  revisar integração, procure `catch {}` colado em função que devolve `{ok:false}`.
+  Proveniência: `connect/route.ts` + `instagramLoginOAuth.ts`, 14/08.
+- **Ausência num dropdown não é ausência do recurso.** Concluí que a coexistência não
+  existia porque a lista "Recursos" só mostrava `app_only_install`; ela existe e é
+  selecionada por `featureType` nos `extras`. Guardrail 1 vale para tela de terceiro
+  também. Proveniência: sessão real do CEO, 14/08.
+- **Quando dois fluxos compartilham a MESMA configuração, o que os separa vira trava.**
+  Com `META_COEXISTENCE_CONFIG_ID == META_CONFIG_ID`, uma string em `extras` é a única
+  diferença entre manter e arrancar o número do celular. Proveniência:
+  `src/lib/meta/embeddedSignup.ts`, 14/08.

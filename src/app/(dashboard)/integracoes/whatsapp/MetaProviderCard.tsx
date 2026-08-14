@@ -1,5 +1,7 @@
 "use client";
 
+import { buildEmbeddedSignupParams } from "@/lib/meta/embeddedSignup";
+
 /**
  * Meta WhatsApp provider card — Integrações → WhatsApp.
  *
@@ -635,16 +637,20 @@ function loadFbSdk(appId: string): Promise<boolean> {
 function fbLogin(configId: string, featureType?: string): Promise<string | null> {
   return new Promise((resolve) => {
     if (!window.FB) { resolve(null); return; }
-    const extras: Record<string, unknown> = { setup: {} };
-    // Coexistence: launches the "connect your existing WhatsApp Business App" flow
-    // (QR scan in the app) instead of the standard WABA selection.
-    if (featureType) extras.featureType = featureType;
-    window.FB.login(
-      (resp: unknown) => {
-        const code = (resp as { authResponse?: { code?: string } })?.authResponse?.code ?? null;
-        resolve(code);
-      },
-      { config_id: configId, response_type: "code", override_default_response_type: true, extras },
-    );
+    // A MESMA configuração serve os dois fluxos: só o `featureType` separa "mantém o
+    // número no celular" de "migra o número e o tira do celular". Por isso os
+    // parâmetros são montados por `buildEmbeddedSignupParams`, que RECUSA o fluxo de
+    // coexistência sem o featureType — trava de código, não comentário (guardrail 4).
+    let params;
+    try {
+      params = buildEmbeddedSignupParams({
+        configId,
+        flow: featureType ? "coexistencia" : "padrao",
+        featureType,
+      });
+    } catch { resolve(null); return; }
+    window.FB.login((resp: unknown) => {
+      resolve((resp as { authResponse?: { code?: string } })?.authResponse?.code ?? null);
+    }, params);
   });
 }

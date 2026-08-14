@@ -51,10 +51,23 @@ export async function POST(req: NextRequest) {
     const details = await fetchPhoneDetails(accessToken, body.phoneNumberId);
     const { expiresAt } = await inspectTokenExpiry(accessToken);
 
-    // Subscribe our app to the WABA so inbound webhooks route to us after signup.
-    // Best-effort: a failure here must NOT block the connect (it can be retried, and
-    // the merchant can also enable it in Meta Business Manager).
-    try { await subscribeAppToWaba(accessToken, body.wabaId); } catch { /* non-fatal */ }
+    // ASSINAR O NOSSO APP NA WABA DO LOJISTA. Sem isto a Meta não entrega mensagem
+    // nenhuma para nós — o número conecta, envia, e NUNCA recebe.
+    //
+    // 🔴 O RESULTADO ERA DESCARTADO. Estava assim:
+    //     try { await subscribeAppToWaba(...) } catch { /* non-fatal */ }
+    // e `subscribeAppToWaba` **não lança**: ela devolve `{ ok:false, error }`. O
+    // `catch` não pegava nada e o `{ok:false}` ia para o lixo. Resultado para um
+    // restaurante novo: a tela responde "conectado", o selo fica verde, e nenhuma
+    // mensagem de cliente chega — sem erro, sem log, sem pista. É exatamente o mesmo
+    // defeito que manteve o Instagram mudo por 22 dias, no canal que mais importa.
+    //
+    // Continua NÃO bloqueante (guardrail 5): as credenciais já estão salvas e a falha
+    // é recuperável. O que muda é que ela passa a ser DITA — gravada no config e
+    // devolvida na resposta.
+    const sub = await subscribeAppToWaba(accessToken, body.wabaId).catch(
+      (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "falha ao assinar a conta" }),
+    );
 
     await MetaConfigService.upsert({
       restaurantId:       ctx.restaurantId,
@@ -80,10 +93,25 @@ export async function POST(req: NextRequest) {
       healthDetail = health.detail ?? null;
     } catch { /* non-fatal */ }
 
+    // A evidência tem de sobreviver ao deploy e chegar a quem pode agir. Sem assinatura
+    // o canal está mudo, e "conectado" sozinho seria uma meia-verdade cara.
+    if (!sub.ok) {
+      await MetaConfigService.setHealth(ctx.restaurantId, {
+        lastError:
+          "O WhatsApp conectou, mas o Foocci não conseguiu se inscrever para RECEBER as mensagens"
+          + ` — a Meta respondeu: "${sub.error ?? "motivo não informado"}".`
+          + " Enviar funciona; receber, não. Reconecte ou fale com o suporte Foocci.",
+      });
+    }
+
     return ok({
       connected: true,
       healthCheckPassed: healthOk,
       healthDetail,
+      // `inboundReady:false` = conectado para ENVIAR e mudo para RECEBER. Quem consome
+      // esta resposta não pode tratar `connected:true` como "está tudo certo".
+      inboundReady: sub.ok,
+      inboundError: sub.ok ? null : (sub.error ?? "não foi possível assinar a conta na Meta"),
       meta: await MetaConfigService.getPublic(ctx.restaurantId),
     });
   } catch (err) {
