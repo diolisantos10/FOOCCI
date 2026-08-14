@@ -89,6 +89,35 @@ async function admin(caminho, secret) {
   catch { return { status: r.status, json: null, texto: texto.slice(0, 160) }; }
 }
 
+/**
+ * Traduz o "Pendente" do Gerenciador de Negócios para o campo que o causou.
+ *
+ * O painel NÃO mostra `code_verification_status` — por isso um número pode aparecer
+ * "Pendente" na tela e "VERIFIED" pela API ao mesmo tempo, sem contradição: são
+ * coisas diferentes. A ordem abaixo é a ordem em que a Meta bloqueia.
+ *
+ * Guardrail 1: campo que a Meta não devolveu vira "preciso confirmar", nunca veredito.
+ */
+function explicarPendencia(ph = {}, waba = {}) {
+  const faltou = (v) => v === undefined || v === null || v === "";
+  if (faltou(ph.status) && faltou(ph.name_status) && faltou(waba.account_review_status)) {
+    return "por que Pendente: PRECISO CONFIRMAR — a Meta não devolveu `status`, `name_status` nem `account_review_status` para este token.";
+  }
+  if (ph.name_status && ph.name_status !== "APPROVED") {
+    return `por que Pendente: o NOME DE EXIBIÇÃO está em "${ph.name_status}" — é revisão da Meta sobre o nome, não sobre o número. Não impede mensagem; impede o nome aparecer.`;
+  }
+  if (waba.account_review_status && waba.account_review_status !== "APPROVED") {
+    return `por que Pendente: a CONTA (WABA) está em "${waba.account_review_status}" — revisão da conta inteira, geralmente presa à verificação do negócio.`;
+  }
+  if (ph.status && !["CONNECTED", "VERIFIED"].includes(ph.status)) {
+    return `por que Pendente: o NÚMERO está em "${ph.status}" na Cloud API.`;
+  }
+  if (ph.code_verification_status === "VERIFIED" && ph.status === "CONNECTED") {
+    return "por que Pendente: pelos campos da API este número está VERIFICADO e CONECTADO. Se o painel ainda diz Pendente, o rótulo é de OUTRA coisa (verificação do negócio ou nome) — confira as duas linhas abaixo.";
+  }
+  return "por que Pendente: nenhum campo lido explica — PRECISO CONFIRMAR com a aba 'Ações necessárias'.";
+}
+
 async function graph(caminho, appToken) {
   const sep = caminho.includes("?") ? "&" : "?";
   const r = await fetch(`${GRAPH}/${caminho}${sep}access_token=${encodeURIComponent(appToken)}`);
@@ -231,6 +260,12 @@ const main = async () => {
         p(`      templates aprovados: ${c.approvedTemplateCount ?? 0} · por status: ${jsonCurto(c.templatesByStatus, 200)}`);
         const ph = c.phone ?? {};
         p(`      número: verificação=${ph.code_verification_status ?? "?"} · nome=${ph.name_status ?? "?"} · plataforma=${ph.platform_type ?? "?"} · qualidade=${ph.quality_rating ?? "?"}`);
+        p(`      estado na Cloud API (\`status\`): ${ph.status ?? "(a Meta não devolveu)"} · modo=${ph.account_mode ?? "?"} · no app do celular (\`is_on_biz_app\`)=${ph.is_on_biz_app ?? "?"}`);
+        p(`      limite de mensagens=${ph.messaging_limit_tier ?? "?"} · conta oficial=${ph.is_official_business_account ?? "?"}`);
+        p(`      ${explicarPendencia(ph, c.wabaInfo)}`);
+        const w = c.wabaInfo ?? {};
+        p(`      CONTA (WABA): revisão=${w.account_review_status ?? "(não devolvido)"} · verificação do negócio=${w.business_verification_status ?? "(não devolvido)"}`);
+        p(`      portfólio dono: ${jsonCurto(w.owner_business_info, 160)}`);
         const todos = c.wabaPhones?.data ?? [];
         if (todos.length) {
           p(`      TODOS os números desta WABA (${todos.length}):`);
@@ -240,6 +275,50 @@ const main = async () => {
         }
       }
     }
+  }
+
+  /* ── 4b. A OUTRA WABA (a do número que está no aparelho) ────────────────────── */
+  p("\n═══ 4b · UNIR AS DUAS CONTAS — o que dá para ler ═══");
+  const outraWaba = (process.env.WABA_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!outraWaba.length) {
+    p("   (informe WABA_IDS=... para inspecionar contas específicas — ex.: a do número do aparelho)");
+  }
+  if (!secret) {
+    p("   ⛔ sem ADMIN_SECRET — a leitura de outra WABA usa o token do restaurante, que só o servidor abre.");
+  } else {
+    for (const id of outraWaba) {
+      p(`\n   ── WABA ${id} ──`);
+      const r = await admin(`/api/admin/meta/waba-lookup?wabaId=${encodeURIComponent(id)}`, secret);
+      if (r.status === 404 || (r.texto && r.texto.startsWith("<"))) {
+        p("      (rota `waba-lookup` ainda não está em produção — este deploy é mais antigo que ela)");
+        continue;
+      }
+      if (r.status !== 200) { p(`      HTTP ${r.status} — ${jsonCurto(r.json ?? r.texto, 200)}`); continue; }
+      const d = r.json?.data ?? r.json ?? {};
+      if (d.error) {
+        // Permissão negada aqui NÃO prova que as contas não podem ser unidas —
+        // prova só que ESTE token não enxerga aquela conta (guardrail 1).
+        p(`      não deu para ler: ${jsonCurto(d.error, 240)}`);
+        p("      (isso é esperado quando o token do restaurante é escopado à outra WABA — não é veredito)");
+        continue;
+      }
+      p(`      nome=${d.waba?.name ?? "?"} · revisão=${d.waba?.account_review_status ?? "?"} · verificação do negócio=${d.waba?.business_verification_status ?? "?"}`);
+      p(`      portfólio dono: ${jsonCurto(d.waba?.owner_business_info, 160)}`);
+      for (const n of d.phones ?? []) {
+        p(`      · ${n.display_phone_number ?? n.id} — status=${n.status ?? "?"} · plataforma=${n.platform_type ?? "?"} · no celular=${n.is_on_biz_app ?? "?"} · nome=${n.name_status ?? "?"}`);
+      }
+    }
+  }
+
+  p("\n   ── COEXISTÊNCIA: pronta para acontecer? ──");
+  const temCoexConfig = !!V.META_COEXISTENCE_CONFIG_ID;
+  const temCoexPublic = !!V.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID;
+  p(`   ${temCoexConfig ? "✅" : "🔴"} META_COEXISTENCE_CONFIG_ID`);
+  p(`   ${temCoexPublic ? "✅" : "🔴"} NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID (é esta que o navegador usa; exige REDEPLOY)`);
+  if (!temCoexConfig || !temCoexPublic) {
+    p("   → O botão \"Conectar número que está no celular\" está DESLIGADO de propósito.");
+    p("     Ele NÃO cai mais na configuração comum: o cadastro padrão migra o número e o");
+    p("     TIRA do celular, que é o oposto do que o botão promete.");
   }
 
   /* ── 5. Instagram ───────────────────────────────────────────────────────────── */

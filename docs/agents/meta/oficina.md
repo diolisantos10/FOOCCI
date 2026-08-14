@@ -838,3 +838,136 @@ src/app/api/webhooks/` = **924 verdes, 0 vermelhos**. Os 27 testes novos:
 - **Default de conveniência em campo que a Meta revisa é dívida cara.**
   `verified_name` nascia "Sushi Cazza" para qualquer número novo. Proveniência:
   `provision/route.ts:42`, corrigido em 14/08.
+
+---
+
+## 2026-08-14 (manhã) · Unir as duas contas de WhatsApp do Sushi Cazza — e o botão que tirava o número do celular
+
+**Dados novos que eu não tinha:** o Diretor conseguiu rodar o `meta-raiox.yml`
+(run `31801477314`, SUCCESS) e o CEO mandou print do Gerenciador de Negócios.
+Duas WABAs no portfólio "Sushi cazza":
+
+| WABA | Número | Rótulo no painel |
+|---|---|---|
+| `2260553624782440` | +55 11 97244-0131 | "Aplicativo WhatsApp Business" · **Offline** |
+| `1518010393024094` | +55 11 91896-4947 | **Pendente** — é a que o nosso sistema usa |
+
+**Ordem do CEO, literal:** *"é uma conta do WhatsApp, com o número do CRM e o número
+que está no aparelho pra falar com os clientes. Ambos têm que estar no mesmo WhatsApp."*
+
+### 1 · 🔴 O achado que muda a prioridade: o botão de coexistência PODIA derrubar o aparelho
+
+`MetaProviderCard.tsx:88` (antes):
+
+```ts
+const coexistenceConfigId = process.env.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID || configId;
+```
+
+E o raio-x provou que `META_COEXISTENCE_CONFIG_ID` está **VAZIA**. Logo o botão
+**"Conectar número que está no celular"** já estava, hoje, apontando para a
+configuração de Cadastro Incorporado **comum**.
+
+**Por que isso é grave, e não teórico.** O `featureType` que mandamos no `FB.login`
+(`MetaProviderCard.tsx:609`) **não cria** a feature — ele pede um fluxo que a
+configuração precisa suportar. A coexistência só existe quando a configuração foi
+criada com "WhatsApp Business App Onboarding" (`docs/whatsapp-coexistence-setup.md:35-37`).
+Com a configuração comum, o que abre é o **cadastro padrão**, e o cadastro padrão
+oferece **migrar** o número existente para a Cloud API — a operação que
+`docs/whatsapp-coexistence-setup.md:14-15` descreve como aquela que **tira o número do
+celular**.
+
+E a nossa guarda não cobre isso: o `coexistence: true` protege só o **nosso**
+`/register` (`admin/meta/register/route.ts:88`). Ele **não desfaz** uma migração feita
+dentro do fluxo da própria Meta. Ou seja: um botão rotulado *"o número segue no
+celular"* era capaz de derrubar o WhatsApp onde o restaurante atende cliente na mão.
+
+**Fechado, fail-closed, em três camadas:**
+
+| Arquivo | O quê |
+|---|---|
+| `MetaProviderCard.tsx:~108` | o fallback morreu; sem config dedicada `coexistenceConfigId` é `undefined` |
+| `MetaProviderCard.tsx:~462` | o botão fica **desabilitado** e a tela explica em português por que |
+| `metaFlag.ts:metaCoexistenceConfigId` | não cai mais em `META_CONFIG_ID` |
+| `MetaAppCredentialsService.ts:121` | idem — a tela `/admin/meta` mostrava um id que **não serve** para coexistência, e alguém leria isso como "configurado" |
+| `metaCoexistenceConfig.test.ts` | 4 casos, com a metade que reproduz o erro antigo |
+
+Conferi antes de mexer: `metaCoexistenceConfigId()` **não tinha nenhum consumidor**, e
+`MetaAppCredentialsService.coexistenceConfigId` só é exibido na tela de credenciais.
+Tirar o fallback não muda runtime de ninguém — muda o que a tela **afirma**.
+
+### 2 · Dá para unir? O que eu sustento e o que NÃO sustento
+
+**Sustento, com fonte desta casa** (`docs/whatsapp-coexistence-setup.md`):
+
+- A coexistência é **o único caminho** que deixa o número do WhatsApp Business (app
+  verde) entrar na Cloud API **sem sair do aparelho** (§1, linhas 14-19). O onboarding
+  normal registra o número e o **tira** do celular.
+- Ela exige uma **configuração própria** com a feature "WhatsApp Business App
+  Onboarding" (§3.1) — e essa configuração **não existe** hoje.
+- Ela exige assinar os campos `history`, `smb_app_state_sync` e `smb_message_echoes`
+  além de `messages` (§3.2). O raio-x mostrou só `messages` assinado.
+- Pré-requisitos do lado do número (§2): ativo no WhatsApp Business há **≥7 dias**, app
+  v2.24.17+, câmera para o QR, **WABA vinculada a uma Página do Facebook**, e
+  **máximo 1 número por conta em coexistência**.
+
+**NÃO sustento — preciso confirmar:**
+
+- **Se o 97244-0131 entra na WABA `1518010393024094` ou permanece na dele.** O fluxo de
+  coexistência anexa o número à WABA da sessão de cadastro; a Meta **não** oferece
+  "mover número entre WABAs" como operação avulsa. Se o resultado for os dois números
+  na mesma WABA, a ordem do CEO está cumprida ao pé da letra; se for duas WABAs no
+  mesmo portfólio com os dois números na mesma Cloud API, o efeito prático para ele é o
+  mesmo, mas **é outra coisa**, e eu não vou afirmar qual sem ver. A leitura que
+  responde é a §7 do documento: depois da coexistência, `wabaPhones[]` tem de mostrar o
+  número com `is_on_biz_app: true` e `platform_type: CLOUD_API`.
+- **Se a WABA vinculada tem Página do Facebook.** O fluxo Instagram Login grava
+  `facebookPageId: null` de propósito, mas isso é o Instagram, não a WABA. Não medi.
+
+### 3 · Por que o Business Manager diz "Pendente" com a Graph dizendo VERIFIED
+
+**Não é contradição — são campos diferentes, e o painel não mostra o que a Graph mostra.**
+`code_verification_status: VERIFIED` é a verificação do NÚMERO por SMS. O rótulo do
+painel reflete `status` (estado do número na Cloud API), `name_status` (revisão do NOME
+de exibição) ou `account_review_status` (revisão da CONTA). **Nenhum dos três era lido
+por nós** — nem no `diag`, nem no raio-x.
+
+Fechei a lacuna:
+
+| Arquivo | O quê |
+|---|---|
+| `admin/meta/diag/route.ts` | `phone` ganhou `status`, `name_status`, `is_on_biz_app`, `is_official_business_account`, `messaging_limit_tier`, `account_mode`; `wabaInfo` ganhou `account_review_status`, `business_verification_status`, `owner_business_info`; `wabaPhones` ganhou `status` e `is_on_biz_app` |
+| `scripts/meta-raiox.mjs` → `explicarPendencia()` | traduz o campo culpado para português, na ordem em que a Meta bloqueia — e devolve **"preciso confirmar"** quando a Meta não devolveu os campos (guardrail 1) |
+| `admin/meta/waba-lookup/route.ts` (novo) | lê **qualquer** WABA pelo id, com o token do restaurante — é o que faltava para enxergar a conta do aparelho |
+| `scripts/meta-raiox.mjs` bloco 4b | `WABA_IDS=...` inspeciona as duas contas e reporta a prontidão da coexistência |
+
+Na `waba-lookup`, permissão negada volta rotulada como **leitura que faltou**, nunca
+como veredito: um token escopado a uma WABA não enxergar a outra **não** prova que as
+contas não podem ser unidas.
+
+### 4 · O que preparei para quando o id existir (item 3 do despacho)
+
+O encanamento **já existia inteiro** — não construí nada novo, tirei o fallback que o
+tornava perigoso. Quando o CEO criar a configuração e mandar o id, é **configurar, não
+construir**: `META_COEXISTENCE_CONFIG_ID` + `NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID` no
+Railway (a segunda exige **redeploy**, é congelada no build), ou o campo "ID da
+configuração de coexistência" em `/admin/meta`. O botão acende sozinho. **Não inventei
+id nenhum.**
+
+### 5 · O que NÃO fiz
+
+Nenhum deploy, nenhuma chamada à Meta, nenhum segredo lido ou impresso, nada alterado
+do lado da Meta, e o número que atende o restaurante **não foi tocado**. Commit com
+caminhos explícitos — há outro agente na mesma árvore.
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **`featureType` não cria feature; a CONFIGURAÇÃO é que carrega.** Um fluxo de
+  coexistência apontado para a configuração comum abre o cadastro padrão, que migra o
+  número e o tira do celular. Fallback de config id em fluxo destrutivo é bomba-relógio.
+  Proveniência: `MetaProviderCard.tsx:609` + `docs/whatsapp-coexistence-setup.md:14-19,35-37`,
+  corrigido em 14/08.
+- **"Pendente" no Gerenciador de Negócios × "VERIFIED" na Graph não é contradição.**
+  São `status`/`name_status`/`account_review_status` contra `code_verification_status`.
+  Antes de investigar, leia os quatro. Proveniência: campos ausentes no `diag` até 14/08.
+- **A guarda de coexistência do `/register` protege só o NOSSO registro.** Ela não
+  desfaz o que o fluxo da Meta fizer. Proveniência: `admin/meta/register/route.ts:88`.

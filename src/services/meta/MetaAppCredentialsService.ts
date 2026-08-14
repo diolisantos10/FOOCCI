@@ -118,7 +118,13 @@ export const MetaAppCredentialsService = {
       appId:               row?.appId               ?? env.META_APP_ID ?? env.FACEBOOK_APP_ID,
       appSecret:           safeDecrypt(row?.appSecret) ?? env.META_APP_SECRET ?? env.FACEBOOK_APP_SECRET,
       configId:            row?.configId            ?? env.META_CONFIG_ID,
-      coexistenceConfigId: row?.coexistenceConfigId ?? env.META_COEXISTENCE_CONFIG_ID ?? row?.configId ?? env.META_CONFIG_ID,
+      // ⚠️ SEM FALLBACK PARA O `configId` COMUM, e isto é deliberado.
+      // A coexistência só funciona com uma configuração de Cadastro Incorporado criada
+      // com a feature "WhatsApp Business App Onboarding". Cair na configuração padrão
+      // faz a tela exibir um id que NÃO serve para coexistência — e alguém lendo
+      // "configurado" abriria o cadastro normal, que MIGRA o número e o tira do
+      // celular do restaurante. Ausente é ausente: a tela precisa dizer "faltando".
+      coexistenceConfigId: row?.coexistenceConfigId ?? env.META_COEXISTENCE_CONFIG_ID,
       webhookVerifyToken:  safeDecrypt(row?.webhookVerifyToken) ?? env.META_WEBHOOK_VERIFY_TOKEN,
       graphVersion:        row?.graphVersion        ?? env.META_GRAPH_VERSION,
       igAppId:             row?.igAppId             ?? env.INSTAGRAM_APP_ID,

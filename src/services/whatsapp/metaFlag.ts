@@ -35,12 +35,17 @@ export function metaWebhookVerifyToken(): string | undefined { return process.en
 
 /**
  * Embedded Signup configuration id for the COEXISTENCE flow (Business App number →
- * Cloud API, keeping the number on the phone). Set META_COEXISTENCE_CONFIG_ID to a
- * config whose feature is "WhatsApp Business App Onboarding"; falls back to the
- * standard config id when unset.
+ * Cloud API, keeping the number on the phone). `META_COEXISTENCE_CONFIG_ID` has to
+ * point at a configuration whose feature is "WhatsApp Business App Onboarding".
+ *
+ * ⚠️ NÃO cai mais no `META_CONFIG_ID` padrão. O fallback parecia conveniente e era
+ * perigoso: a configuração comum abre o cadastro PADRÃO, que oferece migrar o número
+ * para a Cloud API — a operação que TIRA o número do celular do restaurante. Um
+ * fluxo rotulado "o número segue no celular" jamais pode cair nela.
+ * Ausente devolve `undefined`, e quem chama tem de recusar (fail-closed).
  */
 export function metaCoexistenceConfigId(): string | undefined {
-  return process.env.META_COEXISTENCE_CONFIG_ID || process.env.META_CONFIG_ID;
+  return process.env.META_COEXISTENCE_CONFIG_ID || undefined;
 }
 
 export function metaGraphUrl(path: string): string {

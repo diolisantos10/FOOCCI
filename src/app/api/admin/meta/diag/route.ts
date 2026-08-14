@@ -50,11 +50,19 @@ export async function GET(req: NextRequest) {
       });
 
       const subscribed = await graph(`${cfg.wabaId}/subscribed_apps`, cfg.accessToken);
-      const phone      = await graph(`${cfg.phoneNumberId}?fields=display_phone_number,verified_name,code_verification_status,quality_rating,platform_type,throughput,webhook_configuration`, cfg.accessToken);
-      const wabaInfo   = await graph(`${cfg.wabaId}?fields=id,name,timezone_id,message_template_namespace`, cfg.accessToken);
+      // `status` e `is_on_biz_app` são os campos que decidem a pergunta "por que o
+      // Business Manager mostra Pendente enquanto a Graph diz VERIFIED?" — o painel
+      // não mostra `code_verification_status`, mostra o estado do NÚMERO na Cloud API
+      // (`status`) e o da REVISÃO DO NOME (`name_status`). Não eram lidos aqui.
+      // `is_on_biz_app: true` é a assinatura de um número em coexistência.
+      const phone      = await graph(`${cfg.phoneNumberId}?fields=display_phone_number,verified_name,code_verification_status,name_status,status,quality_rating,platform_type,is_on_biz_app,is_official_business_account,messaging_limit_tier,account_mode,throughput,webhook_configuration`, cfg.accessToken);
+      // `account_review_status` é a revisão da CONTA (WABA) e `owner_business_info`
+      // diz a qual portfólio ela pertence — as duas peças que faltavam para saber se
+      // duas WABAs do mesmo dono podem ser unidas, e se a verificação do negócio saiu.
+      const wabaInfo   = await graph(`${cfg.wabaId}?fields=id,name,timezone_id,message_template_namespace,account_review_status,business_verification_status,owner_business_info,on_behalf_of_business_info`, cfg.accessToken);
       // All phone numbers still attached to this WABA — lets us see if a "freed" number is
       // in fact still held here (which blocks re-registering it on the WhatsApp Business app).
-      const wabaPhones = await graph(`${cfg.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,platform_type,account_mode,code_verification_status,name_status`, cfg.accessToken);
+      const wabaPhones = await graph(`${cfg.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,platform_type,account_mode,code_verification_status,name_status,status,is_on_biz_app,quality_rating,messaging_limit_tier`, cfg.accessToken);
       // Approved templates gate business-initiated (outside-24h) CRM sends. Summarize by status.
       const templatesRaw = await graph(`${cfg.wabaId}/message_templates?fields=name,status,category,language&limit=200`, cfg.accessToken);
       const tData = (templatesRaw as { data?: Array<{ name?: string; status?: string; category?: string }> })?.data ?? [];

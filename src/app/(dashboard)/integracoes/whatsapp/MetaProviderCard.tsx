@@ -83,9 +83,29 @@ export function MetaProviderCard() {
 
   const appId    = process.env.NEXT_PUBLIC_META_APP_ID;
   const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
-  // Coexistence config (Business App number → Cloud API, keeping it on the phone).
-  // Falls back to the standard config when a dedicated one isn't set.
-  const coexistenceConfigId = process.env.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID || configId;
+  /**
+   * Config da COEXISTÊNCIA — o fluxo que traz o número do celular para a Cloud API
+   * SEM tirá-lo do aparelho.
+   *
+   * 🔴 AQUI HAVIA UM FALLBACK PARA O `configId` NORMAL, E ELE ERA PERIGOSO.
+   *
+   * A coexistência só existe quando a configuração de Cadastro Incorporado foi criada
+   * com a feature "WhatsApp Business App Onboarding" (`docs/whatsapp-coexistence-setup.md`
+   * §3.1). O `featureType` que mandamos no `FB.login` NÃO cria essa feature — ele apenas
+   * pede um fluxo que a configuração precisa suportar. Com a configuração comum, o que
+   * abre é o **cadastro padrão**, e o cadastro padrão oferece MIGRAR o número existente
+   * para a Cloud API — que é exatamente a operação que **tira o número do celular**.
+   *
+   * O nosso `coexistence:true` protege só o NOSSO `/register`; ele não desfaz uma
+   * migração feita dentro do fluxo da própria Meta. Ou seja: o fallback transformava um
+   * botão rotulado "o número segue no celular" num caminho capaz de derrubar o WhatsApp
+   * onde o restaurante atende cliente na mão.
+   *
+   * Guardrail 4 — prompt é aviso, código é trava: sem config dedicada, o botão não abre.
+   * Guardrail 5 — a proteção não pode ser mais destrutiva que o problema: recusar é um
+   * aviso na tela; deixar passar é perder o atendimento do restaurante.
+   */
+  const coexistenceConfigId = process.env.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID;
 
   const load = useCallback(() => {
     fetch("/api/integracoes/whatsapp/meta/status")
@@ -160,7 +180,9 @@ export function MetaProviderCard() {
   // coexistence:true (skips /register).
   async function connectCoexistence() {
     if (!appId || !coexistenceConfigId) {
-      flash(false, "Precisa de autorização da Foocci para ativar. Fale com o suporte Foocci.");
+      // Recusa explícita, com o motivo — nunca um fallback silencioso para o cadastro
+      // padrão, que migraria o número e o tiraria do celular.
+      flash(false, "A coexistência ainda não está liberada nesta conta. Ela exige uma configuração própria da Meta; sem ela, conectar por aqui tiraria o número do celular. Fale com o suporte Foocci.");
       return;
     }
     setBusy("coexistence");
@@ -434,10 +456,20 @@ export function MetaProviderCard() {
                   <li>• App atualizado (v2.24.17+) e câmera para ler o QR Code.</li>
                   <li>• Ao clicar, escolha “conectar sua conta do WhatsApp Business” e leia o QR no aparelho.</li>
                 </ul>
-                <button type="button" disabled={busy === "coexistence"} onClick={connectCoexistence}
-                  className="mt-2 rounded-lg border border-green-600 bg-white px-3 py-1.5 text-[11px] font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50">
+                {/* Sem config dedicada, o botão fica DESLIGADO e diz por quê. Ligá-lo
+                    com a configuração comum abriria o cadastro padrão, que migra o
+                    número e o tira do aparelho — o oposto do que o rótulo promete. */}
+                <button type="button" disabled={busy === "coexistence" || !coexistenceConfigId} onClick={connectCoexistence}
+                  className="mt-2 rounded-lg border border-green-600 bg-white px-3 py-1.5 text-[11px] font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                   {busy === "coexistence" ? "Abrindo Meta…" : "Conectar número que está no celular"}
                 </button>
+                {!coexistenceConfigId && (
+                  <p className="mt-1.5 text-[10px] font-medium text-amber-700">
+                    Ainda não liberado nesta conta: a coexistência exige uma configuração
+                    própria da Meta. Sem ela, conectar por aqui <strong>tiraria o número do
+                    celular</strong>. Fale com o suporte Foocci.
+                  </p>
+                )}
               </div>
 
               {/* Support-only manual connect (Integrar com API path). Gate ?suporte=1. */}
