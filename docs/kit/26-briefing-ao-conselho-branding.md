@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/26-briefing-ao-conselho-branding.md
-kit-commit: dd312af89f7cd75c5fcc27ed686e935ea105b78b
+kit-commit: 8d60b5e919b2429b2166a2731c8548e6023a84a3
 sha256-do-corpo: 17b326a460abe5400045199e39de5132622c2ecded5cabc24060c560fa5b7eef
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/26-briefing-ao-conselho-branding.md`,
-> no commit `dd312af`.
+> no commit `8d60b5e`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a

@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/15-conferir-o-deploy-e-usar-agentes.md
-kit-commit: dd312af89f7cd75c5fcc27ed686e935ea105b78b
-sha256-do-corpo: 772bba378ad5d566d2317c097c771d9e8346bdc15da1478b4cf0a6d85534d691
+kit-commit: 8d60b5e919b2429b2166a2731c8548e6023a84a3
+sha256-do-corpo: 1569192f938caeaf3f9b168b95699164ddc563529e6154529b536fdf523d56ad
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/15-conferir-o-deploy-e-usar-agentes.md`,
-> no commit `dd312af`.
+> no commit `8d60b5e`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
@@ -77,6 +77,9 @@ a qualidade do que volta, consolida. Não é bancada de operário.
   paralelo.
 - Trabalho especializado com saída verificável (o `qualidade` para duvidar de um
   resultado; o `interface` para pixel; etc.).
+
+> ⚠️ **Ver `29-a-camada-de-delegacao.md` antes de invocar isto.** A lista abaixo
+> virou porta de saída em 13/08 e foi fechada lá.
 
 **O que o Diretor NÃO delega** (fica na mão dele): o que precisa da conversa
 inteira como contexto; a relação com o CEO; e julgamento cuja conclusão errada é

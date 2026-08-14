@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/08-modelo-ceo-pm-agentes.md
-kit-commit: dd312af89f7cd75c5fcc27ed686e935ea105b78b
-sha256-do-corpo: 98d09897a2a19c39b29ae9e250bf0cb286802633d95034a8e3fc34c144449033
+kit-commit: 8d60b5e919b2429b2166a2731c8548e6023a84a3
+sha256-do-corpo: 028b03a6974186590a4113efabee2dab193cfc5afa56d9437135ee00b8236ca2
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/08-modelo-ceo-pm-agentes.md`,
-> no commit `dd312af`.
+> no commit `8d60b5e`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a
@@ -350,6 +350,12 @@ Regras de conduta que evitam os erros clássicos:
   chat"? Pare e escreva agora.
 
 ### 3.1 O que NÃO delegar ⭐ *novo na v2*
+
+> ⚠️ **SUPERSEDIDO EM PARTE — ver `29-a-camada-de-delegacao.md` (13/08/2026).**
+> O conteúdo abaixo continua certo, e a lista deixou de ser aberta: as três
+> exceções foram **fechadas** na doutrina 29, depois de serem usadas como desculpa
+> no mesmo dia em que foram citadas. Antes de invocar qualquer item desta seção,
+> leia como ela se fecha lá.
 
 Delegar demais é tão caro quanto delegar de menos. Fica com o PM:
 

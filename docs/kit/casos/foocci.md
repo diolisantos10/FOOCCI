@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: casos/foocci.md
-kit-commit: dd312af89f7cd75c5fcc27ed686e935ea105b78b
+kit-commit: 8d60b5e919b2429b2166a2731c8548e6023a84a3
 sha256-do-corpo: d01a1953df81fcb57362ff5a861e307594e204a8d7052ae3a45f897eb88ce383
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `casos/foocci.md`,
-> no commit `dd312af`.
+> no commit `8d60b5e`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a

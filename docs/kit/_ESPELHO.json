@@ -1,9 +1,9 @@
 {
   "kitRepo": "diolisantos10/dioli-brain-kit",
   "kitBranch": "main",
-  "kitCommit": "dd312af89f7cd75c5fcc27ed686e935ea105b78b",
-  "kitCommitData": "2026-08-10T13:27:50Z",
-  "verificadoEm": "2026-08-11T06:06:35.651Z",
+  "kitCommit": "8d60b5e919b2429b2166a2731c8548e6023a84a3",
+  "kitCommitData": "2026-08-13T14:23:37Z",
+  "verificadoEm": "2026-08-14T06:44:57.810Z",
   "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
   "arquivos": [
     {
@@ -59,7 +59,7 @@
     {
       "destino": "docs/kit/08-modelo-ceo-pm-agentes.md",
       "origem": "docs/08-modelo-ceo-pm-agentes.md",
-      "sha256": "98d09897a2a19c39b29ae9e250bf0cb286802633d95034a8e3fc34c144449033"
+      "sha256": "028b03a6974186590a4113efabee2dab193cfc5afa56d9437135ee00b8236ca2"
     },
     {
       "destino": "docs/kit/09-como-trabalhar-aqui.md",
@@ -94,7 +94,7 @@
     {
       "destino": "docs/kit/15-conferir-o-deploy-e-usar-agentes.md",
       "origem": "docs/15-conferir-o-deploy-e-usar-agentes.md",
-      "sha256": "772bba378ad5d566d2317c097c771d9e8346bdc15da1478b4cf0a6d85534d691"
+      "sha256": "1569192f938caeaf3f9b168b95699164ddc563529e6154529b536fdf523d56ad"
     },
     {
       "destino": "docs/kit/16-raio-x-noturno.md",
@@ -165,6 +165,11 @@
       "destino": "docs/kit/28-nao-se-para-no-meio.md",
       "origem": "docs/28-nao-se-para-no-meio.md",
       "sha256": "09c8a70ebe0e628938603e77d10cab2b265dceabbf6e3c4a5c7a091bc0fd7fc7"
+    },
+    {
+      "destino": "docs/kit/29-a-camada-de-delegacao.md",
+      "origem": "docs/29-a-camada-de-delegacao.md",
+      "sha256": "b9d810d2b2c06c5d3b599e8d882a84a2826c9166ac313dea2e711e1b00bdb624"
     },
     {
       "destino": "docs/kit/perguntas-abertas.md",
