@@ -8,6 +8,7 @@
 
 import type { Metadata } from "next";
 import { LegalShell, LegalBlock } from "@/components/marketing/LegalShell";
+import { POLITICA_PRIVACIDADE_ATUALIZADA_EM } from "@/lib/site/politicaPrivacidade";
 
 const TITLE = "Política de Privacidade | Foocci";
 const DESCRIPTION = "Entenda como o Foocci trata informações enviadas pelo site e canais de contato.";
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function PoliticaPage() {
   return (
-    <LegalShell title="Política de Privacidade" lastUpdated="4 de junho de 2026">
+    <LegalShell title="Política de Privacidade" lastUpdated={POLITICA_PRIVACIDADE_ATUALIZADA_EM}>
       <LegalBlock heading="Introdução">
         <p>
           Esta Política de Privacidade explica, em linguagem simples, como o Foocci trata

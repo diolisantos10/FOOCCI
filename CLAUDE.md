@@ -285,8 +285,12 @@ leem como verdade.
   um da sua (`claude/pm-canais`, `claude/pm-crm`, `claude/pm-cmv`, …). Depois do
   merge, **reinicie a partir da padrão** em vez de empilhar em cima de histórico já
   mergeado.
-  > ⚠️ `claude/foocci-brain-vaamrx` era a branch citada aqui e **está esgotada**:
-  > 39 commits atrás da padrão, zero à frente, tudo já mergeado. Não use.
+  > ⚠️ Este aviso já dizia que `claude/foocci-brain-vaamrx` estava **esgotada**
+  > (39 commits atrás, tudo mergeado). **Não está mais**, e o aviso virou
+  > armadilha: em 14/08/2026 ela foi reiniciada a partir da padrão e conferida —
+  > `git rev-list --left-right --count origin/claude/remove-legacy-runner-q8iXa...HEAD`
+  > devolveu `0 0`. A lição fica, o rótulo sai: **branch esgotada não se
+  > declara de memória, se mede** — com esse comando, na hora de abrir o bloco.
 - **Antes de codar, confira se a branch de trabalho não ficou para trás.** Já
   aconteceu de duas correções P0 ficarem 42 commits presas sem chegar em produção.
 - **Verificação de um bloco:** `npx tsc --noEmit` limpo + `npx vitest run` verde.

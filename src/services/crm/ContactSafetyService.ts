@@ -13,6 +13,7 @@
  *   • quiet hours / weekend        • cross-campaign 24h dedup
  *   • sending window               • duplicate-in-campaign dedup
  *   • restaurant operational status (opt-in)
+ *   • histórico do contato apurado — "não sei" reprova (UNKNOWN_CONTACT_HISTORY)
  *
  * Design:
  *   - `evaluateContactSafety()` is a PURE function (no DB) — fully unit-testable.
@@ -57,6 +58,11 @@ export type ContactBlockReason =
   | "RECENT_CRM_MESSAGE_24H"
   | "DUPLICATE_CAMPAIGN_RECIPIENT"
   | "RESTAURANT_CLOSED"
+  /**
+   * Não foi possível saber quantas mensagens este contato já recebeu.
+   * NÃO é erro: é o portão dizendo "não sei", que aqui significa REPROVADO.
+   */
+  | "UNKNOWN_CONTACT_HISTORY"
   | "UNKNOWN_ERROR";
 
 export interface ContactSafetyDecision {
@@ -106,6 +112,23 @@ export interface ContactSafetyEvalInput {
   otherCampaignSendsWithin24h: number;
   /** Successful CRM sends to this customer from THIS campaign already. */
   sameCampaignSends: number;
+  /**
+   * ⚠️ OS QUATRO CONTADORES ACIMA SÃO CONFIÁVEIS?
+   *
+   * `true`  → foram realmente apurados; zero quer dizer "não mandei nada".
+   * `false` → NÃO foi possível apurar; zero é ignorância, não histórico limpo.
+   *
+   * Este campo é OBRIGATÓRIO de propósito. Ele não existia, e a ausência dele era
+   * a armadilha exata descrita em `docs/sdr-foocci-desenho.md`: quem chamasse o
+   * portão sem `customerId` recebia quatro zeros, e o avaliador lia "nunca mandei
+   * nada" → **liberado**. Um lead do site não tem `customerId`; o primeiro código
+   * do SDR cairia aqui e ganharia permissão silenciosa para mandar quantas
+   * mensagens quisesse, sem descanso.
+   *
+   * Guardrail 1 aplicado ao portão: ausência de informação não é informação.
+   * Guardrail 2: sem portão = reprovado — não sei é NÃO.
+   */
+  contactHistoryKnown: boolean;
 
   // ── global context ──
   safety: CRMWhatsAppSafetyConfig;
@@ -234,6 +257,20 @@ export function evaluateContactSafety(input: ContactSafetyEvalInput): ContactSaf
     return block(
       "DAILY_GLOBAL_CAP_REACHED",
       `Cap global diário atingido (${input.globalSentToday}/${input.safety.dailyGlobalCap})`,
+    );
+  }
+
+  // 10.5. O histórico deste contato é conhecido?
+  //
+  // Vem ANTES das travas de frequência porque é delas que estamos falando: sem
+  // histórico apurado, cooldown, teto semanal, dedup de 24h e dedup de campanha
+  // avaliariam quatro zeros e liberariam. E vem FORA do `if (!isBirthday)` de
+  // propósito: aniversário isenta de frequência, não de identidade — não existe
+  // aniversário sem cliente para fazer aniversário.
+  if (!input.contactHistoryKnown) {
+    return block(
+      "UNKNOWN_CONTACT_HISTORY",
+      "Não foi possível apurar quantas mensagens este contato já recebeu — envio reprovado por precaução",
     );
   }
 
@@ -438,6 +475,12 @@ export class ContactSafetyService {
       let sendsWithinWeek = 0;
       let otherCampaignSendsWithin24h = 0;
       let sameCampaignSends = 0;
+      /**
+       * Só vira `true` DEPOIS de a consulta ter rodado. Enquanto for `false`, os
+       * quatro zeros acima são ignorância — e o avaliador reprova em vez de
+       * confundir "não sei" com "nunca mandei". Ver `contactHistoryKnown`.
+       */
+      let contactHistoryKnown = false;
 
       if (input.customerId) {
         const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
@@ -466,6 +509,7 @@ export class ContactSafetyService {
             otherCampaignSendsWithin24h++;
           }
         }
+        contactHistoryKnown = true;
       }
 
       return evaluateContactSafety({
@@ -476,6 +520,7 @@ export class ContactSafetyService {
         sendsWithinWeek,
         otherCampaignSendsWithin24h,
         sameCampaignSends,
+        contactHistoryKnown,
         safety: ctx.safety,
         whatsappAvailable: ctx.whatsappAvailable,
         globalSentToday: ctx.globalSentToday,

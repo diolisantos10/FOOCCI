@@ -128,6 +128,7 @@ function safetyInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSa
     sendsWithinWeek:             0,
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends:           0,
+    contactHistoryKnown:         true, // cenário-base: os contadores foram apurados
     safety:                      { ...DEFAULT_SAFETY_CONFIG },
     whatsappAvailable:           true,
     globalSentToday:             0,

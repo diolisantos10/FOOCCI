@@ -57,6 +57,9 @@ function evalInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafe
     sendsWithinWeek: 0,
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
+    // Os quatro contadores acima foram apurados de verdade neste cenário-base.
+    // Quem quiser testar a ignorância passa `contactHistoryKnown: false`.
+    contactHistoryKnown: true,
     safety: { ...DEFAULT_SAFETY_CONFIG },
     whatsappAvailable: true,
     globalSentToday: 0,
@@ -182,6 +185,19 @@ describe("evaluateContactSafety — block reasons", () => {
       safety: { ...DEFAULT_SAFETY_CONFIG, maxPerWeekPerCustomer: 5 },
     }));
     expect(d.sendable).toBe(true);
+  });
+
+  it("reprova quando o histórico do contato não foi apurado, mesmo com tudo zerado", () => {
+    const d = evaluateContactSafety(evalInput({ contactHistoryKnown: false }));
+    expect(d.sendable).toBe(false);
+    expect(d.reason).toBe("UNKNOWN_CONTACT_HISTORY");
+  });
+
+  it("a trava de histórico vem DEPOIS da identidade — o motivo mais útil ganha", () => {
+    // Sem telefone E sem histórico: quem responde é MISSING_PHONE, que é o que
+    // quem lê o log precisa consertar primeiro.
+    const d = evaluateContactSafety(evalInput({ contactHistoryKnown: false, phone: null }));
+    expect(d.reason).toBe("MISSING_PHONE");
   });
 
   it("opt-out takes precedence over every other block", () => {
@@ -344,6 +360,62 @@ describe("ContactSafetyService.assertSendable (mocked prisma)", () => {
       context: ctx,
     });
     expect(d.reason).toBe("DUPLICATE_CAMPAIGN_RECIPIENT");
+  });
+
+  /*
+   * ── A ARMADILHA DO SDR (P0 de `docs/sdr-foocci-desenho.md`) ─────────────────
+   *
+   * Um lead do site NÃO tem `customerId`. Antes desta trava, chamar o portão com
+   * ele pulava o bloco que conta mensagens recentes: os quatro contadores ficavam
+   * em zero, o avaliador lia "nunca mandei nada para este contato" e LIBERAVA —
+   * permissão silenciosa para mandar quantas mensagens quisesse, sem descanso,
+   * sem cooldown, sem teto semanal.
+   *
+   * As duas metades:
+   *   1. sem `customerId` → REPROVA com UNKNOWN_CONTACT_HISTORY (a falha de antes);
+   *   2. com `customerId` e histórico limpo → libera (senão bastaria reprovar sempre).
+   */
+  it("REPROVA quando não há customerId — quatro zeros são ignorância, não histórico limpo", async () => {
+    prismaMock.campaignExecution.findMany.mockResolvedValue([]);
+    const d = await ContactSafetyService.assertSendable({
+      restaurantId: "r1",
+      customerId: null, // ← um lead do site chega exatamente assim
+      phone: "+5511999990000",
+      enforceTimeWindows: false,
+      context: ctx,
+    });
+    expect(d.sendable).toBe(false);
+    expect(d.reason).toBe("UNKNOWN_CONTACT_HISTORY");
+    // E nem chegou a consultar: não havia por quem perguntar.
+    expect(prismaMock.campaignExecution.findMany).not.toHaveBeenCalled();
+  });
+
+  it("aniversário NÃO isenta da trava — não existe aniversário sem cliente", async () => {
+    prismaMock.campaignExecution.findMany.mockResolvedValue([]);
+    const d = await ContactSafetyService.assertSendable({
+      restaurantId: "r1",
+      customerId: null,
+      phone: "+5511999990000",
+      isBirthday: true, // isenta de frequência, não de identidade
+      enforceTimeWindows: false,
+      context: ctx,
+    });
+    expect(d.reason).toBe("UNKNOWN_CONTACT_HISTORY");
+  });
+
+  it("a outra metade: COM customerId e histórico apurado limpo, libera", async () => {
+    prismaMock.campaignExecution.findMany.mockResolvedValue([]);
+    const d = await ContactSafetyService.assertSendable({
+      restaurantId: "r1",
+      customerId: "c1",
+      phone: "+5511999990000",
+      hasOptedOut: false,
+      crmContactable: true,
+      enforceTimeWindows: false,
+      context: ctx,
+    });
+    expect(d.sendable).toBe(true);
+    expect(prismaMock.campaignExecution.findMany).toHaveBeenCalledTimes(1);
   });
 
   it("returns UNKNOWN_ERROR (never throws) when a query fails", async () => {

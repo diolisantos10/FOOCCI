@@ -38,6 +38,7 @@ import { generateLeadCode } from "@/lib/site/leadCode";
 import type { CreateSiteLeadInput } from "@/validators/site-lead";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
+import { POLITICA_PRIVACIDADE_VERSAO } from "@/lib/site/politicaPrivacidade";
 
 /** Sender identity. Resend's shared onboarding domain works with zero DNS setup. */
 const FROM = process.env.LEADS_FROM_EMAIL || "Foocci <onboarding@resend.dev>";
@@ -118,6 +119,12 @@ export const SiteLeadService = {
             referrer:    existente.referrer    ?? ouNulo(input.referrer),
             submissions: { increment: 1 },
             lastInteractionAt: agora,
+            /* Reenvio: o consentimento é REAFIRMADO, e a versão passa a ser a que
+             * está no ar hoje. Aqui a regra é o oposto da dos outros campos (que
+             * só completam o que faltava): consentimento é sempre o ato MAIS
+             * RECENTE, e é ele que vale se alguém auditar. */
+            consentAt:            agora,
+            consentPolicyVersion: POLITICA_PRIVACIDADE_VERSAO,
           },
         }),
         prisma.siteLeadInteraction.create({
@@ -249,6 +256,17 @@ async function createWithCode(
     fonte:       "FORMULARIO_DEMONSTRACAO" as const,
     stage:       "NOVO" as const,
     lastInteractionAt: new Date(),
+    /* ── A PROVA DO CONSENTIMENTO (LGPD) ────────────────────────────────────
+     * Preencher o formulário BASTA juridicamente — a política já declara a
+     * finalidade. O que faltava era a PROVA: quando, e a QUÊ. `createdAt` já
+     * dava a data; `consentPolicyVersion` é o que faltava, porque a política
+     * muda e sem a versão o registro não diz a que a pessoa consentiu.
+     *
+     * Gravado no MESMO `create` do contato, e não num passo depois: um segundo
+     * passo pode falhar, e aí existiria contato sem consentimento registrado —
+     * exatamente a linha que o portão do SDR reprova. */
+    consentAt:            new Date(),
+    consentPolicyVersion: POLITICA_PRIVACIDADE_VERSAO,
   };
 
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {

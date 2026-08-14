@@ -4924,6 +4924,26 @@ model SiteLead {
   /// Quem mudou por último ("admin", "sdr-agent", …). Espelha o último evento.
   stageChangedBy String?
 
+  // ── LGPD: CONSENTIMENTO E SILÊNCIO ─────────────────────────────────────────
+  // O que faltava, escrito em `docs/sdr-foocci-desenho.md`: preencher o
+  // formulário BASTA juridicamente, mas não havia **prova** nem **freio**.
+  // Estes quatro campos são a prova e o freio; quem os lê é o portão do SDR
+  // (`src/services/foocci-sdr/LeadContactSafety.ts`).
+  //
+  /// Quando esta pessoa entregou os dados por vontade própria. Nulo em contato
+  /// da primeira safra — nesse caso o portão usa `createdAt`, que é a mesma data.
+  /// NUNCA é preenchido "de ofício": consentimento sem ato é consentimento falso.
+  consentAt            DateTime?
+  /// Qual versão da política estava no ar naquele momento. Sem isso não há como
+  /// dizer A QUE a pessoa consentiu — a política muda, o aceite não volta atrás.
+  consentPolicyVersion String?
+  /// Quando pediu para parar. Preenchido = **silêncio para sempre, todos os
+  /// canais**. É terminal de propósito: não existe "opt-out por 30 dias" aqui.
+  optOutAt             DateTime?
+  /// Por onde o pedido de silêncio chegou ("whatsapp", "email", "admin").
+  /// Guardrail 6: quem auditar precisa saber de onde veio, não só que existe.
+  optOutCanal          String?
+
   /// Última vez que a FOOCCI falou com esta pessoa (interação de saída).
   /// null = ninguém abordou ainda. É o filtro "quem falta abordar" do SDR.
   lastContactedAt   DateTime?
@@ -4938,6 +4958,7 @@ model SiteLead {
   @@index([utmCampaign])
   @@index([whatsappDigits])
   @@index([lastContactedAt])
+  @@index([optOutAt])
 }
 
 /// As etapas do funil comercial da Foocci. ORDEM IMPORTA: a taxa de conversão
