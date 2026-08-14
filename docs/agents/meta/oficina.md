@@ -1108,3 +1108,121 @@ impresso. Não toquei em `src/components/agencia/`, `src/lib/agencia/`,
   usa o mesmo `client_secret` do `ig_exchange_token`: se o primeiro passa, o segredo
   está certo e a hipótese "credencial errada" cai sem precisar imprimir nada.
   Proveniência: `instagramLoginOAuth.ts:168-199`.
+
+---
+
+## 2026-08-14 (fim de tarde) · "Unsupported request" NÃO era endpoint errado. Era permissão.
+
+**Evidência que chegou** (raio-x run `31808418562`, com o commit `2f99b325` no ar — a
+régua corrigida funcionou):
+
+```
+com quanto NASCEU: 0 dia(s) (emitido em 2026-08-12T02:40:24.005Z)
+motivo LITERAL da Meta: Unsupported request - method type: get (code 100)
+inscrição da conta no webhook: NUNCA · erro: Unsupported request - method type: post
+```
+
+**Hipótese do Diretor:** host/verbo errado — a troca do Instagram Login vive em
+`graph.instagram.com`, e chamar o host errado devolve exatamente isso.
+
+### 1 · DERRUBEI a hipótese, com fonte e com medição
+
+**Fonte da Meta**, `developers.facebook.com/docs/instagram-platform/reference/access_token`,
+lida agora:
+
+```
+GET https://graph.instagram.com/access_token
+  ?grant_type=ig_exchange_token
+  &client_secret=<INSTAGRAM_APP_SECRET>
+  &access_token=<VALID_SHORT_LIVED_ACCESS_TOKEN>
+```
+
+É **exatamente** o que `instagramLoginOAuth.ts:197-199` monta. Host, verbo, caminho e
+parâmetros: corretos. A doc do webhook prescreve
+`POST https://graph.instagram.com/v26.0/{id}/subscribed_apps?subscribed_fields=...` —
+nosso `subscribe` tem o mesmo host, verbo e forma, mudando só a versão.
+
+**E a versão também não é.** Sondei `graph.instagram.com` sem autenticação, com
+`/me?fields=username`, de `v21.0` a `v26.0` **e sem versão**: todas resolvem e
+respondem `190 Invalid OAuth 2.0 Access Token`. Nenhuma responde "Unsupported request".
+
+**A medição que decide**, feita agora, sem token real e sem alterar nada:
+
+| Chamada | Resposta |
+|---|---|
+| `GET /access_token?grant_type=ig_exchange_token&client_secret=zzz&access_token=zzz` | `190 Cannot parse access token` |
+| `POST /v21.0/{id}/subscribed_apps?...&access_token=zzz` | `190 Cannot parse access token` |
+| `POST /v21.0/me/subscribed_apps?...&access_token=zzz` | `190 Cannot parse access token` |
+
+**Os três endpoints EXISTEM.** Com token inválido a Meta responde **190**, não 100.
+
+### 2 · A leitura que isso obriga
+
+A Meta avalia **o token primeiro** (190) e **a operação depois** (100). Nossa chamada
+de produção **passou do 190** e morreu no **100**. Logo:
+
+> o token era válido, e o que a Meta recusou foi a **operação** — não a URL.
+
+E a própria doc do `/access_token` traz a seção **Permissions**:
+`instagram_business_basic` **para apps que implementaram Business Login for Instagram**.
+
+**Conclusão: falta permissão no token, e a Meta comunica isso dizendo "Unsupported
+request".** É uma mensagem que se lê como endpoint errado — e foi por isso que esta
+casa investigou host, verbo e versão por quatro tentativas.
+
+⚠️ **Não afirmo QUAL permissão falta.** Não tenho o token nem a lista concedida. O que
+afirmo é que a causa está na autorização, não na chamada — e construí o caminho que
+responde na primeira reconexão.
+
+### 3 · O defeito de código que impedia saber isso o tempo todo
+
+**O passo 1 devolve `permissions` e nós jogávamos fora.** O Business Login responde
+`POST /oauth/access_token` com `{data:[{access_token, user_id, permissions}]}`. O tipo
+declarado em `instagramLoginOAuth.ts:180-184` nem listava o campo. **A resposta estava
+na primeira linha da conversa com a Meta, em todas as quatro tentativas.**
+
+**Segundo defeito, na mesma função: o `/me` engolia erro.** `fetch` **não lança** em
+HTTP 400 — uma resposta de erro caía **fora** do `catch`, `username` virava `null` e
+`igUserId` caía em silêncio para o id do passo 1. E é esse id que ia para a inscrição
+do webhook. Três chamadas na função, três podendo falhar, e só duas deixavam rastro.
+
+### 4 · O que consertei
+
+| Arquivo | O quê |
+|---|---|
+| `instagramLoginOAuth.ts` | captura `permissions` (string com vírgula **ou** array) → `InstagramProfile.grantedPermissions` |
+| `instagramLoginOAuth.ts` | `INSTAGRAM_REQUIRED_PERMISSIONS` + `missingInstagramPermissions()` — lista vazia devolve `[]`, nunca acusação (guardrail 1) |
+| `instagramLoginOAuth.ts` | `/me` passa a checar `res.ok`/`error` e a devolver `profileError` |
+| `instagramLoginOAuth.ts` | `subscribe` tenta **`me`** primeiro (o que a doc prescreve), com o id numérico como segunda tentativa, e o erro diz **qual alvo** falhou |
+| `instagramLoginOAuth.ts` (callback) | permissão faltando vira `lastError` explicando que **"Unsupported request" parece endpoint errado e não é**, e que se resolve no App Review |
+| `instagramLoginOAuth.ts` (metadata) | grava `grantedPermissions`, `missingPermissions`, `profileError` — sobrevivem ao deploy |
+| `graph-check/route.ts` | devolve os três |
+| `scripts/meta-raiox.mjs` | imprime as permissões e, faltando, diz que **não é endpoint** |
+| `tests/InstagramLoginPermissions.test.ts` | **11 casos** |
+
+O teste central reproduz o caso de 14/08 byte a byte: permissões vazias → a troca
+devolve `Unsupported request - method type: get (code 100)` → o token nasce com 3600s
+e o motivo literal sobrevive.
+
+### 5 · O que NÃO fiz
+
+Não reconectei nada, não pedi nada ao CEO, não fiz deploy nem merge. As chamadas que
+fiz à Meta foram **GET/POST com token propositalmente inválido** (`zzz`), que a Meta
+recusa antes de qualquer efeito — nenhuma alterou estado. Nenhum segredo lido ou
+impresso. Não toquei em `src/components/agencia/`, `src/lib/agencia/`,
+`src/app/(dashboard)/agencia/` nem `public/fonts/`.
+
+### 6 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **`Unsupported request - method type: X` (code 100) da Meta significa PERMISSÃO, não
+  endpoint.** O teste que separa: chame o mesmo endpoint com um token propositalmente
+  inválido. Se responder **190**, o endpoint existe e a URL está certa — o 100 veio da
+  autorização. Custa dez segundos e teria poupado quatro tentativas de reconexão.
+  Proveniência: `curl` em `graph.instagram.com` em 14/08 + doc oficial do `/access_token`.
+- **`fetch` não lança em HTTP 400.** Um `try/catch` em volta de um `fetch` sem checar
+  `res.ok` não trata erro nenhum — ele transforma erro em silêncio. Havia um assim no
+  `/me`, e ele contaminava o id usado para inscrever o webhook. Proveniência:
+  `instagramLoginOAuth.ts` passo 3, corrigido em 14/08.
+- **A resposta do primeiro passo já dizia tudo.** `permissions` vinha em toda troca de
+  código e era descartado — inclusive nas quatro tentativas em que se investigou host e
+  verbo. Antes de procurar causa longe, leia o que o serviço já devolveu de perto.

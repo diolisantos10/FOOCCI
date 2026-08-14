@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { getInstagramConfig, decryptPageToken } from "@/services/instagram/InstagramConfigService";
 import { GRAPH_INSTAGRAM_BASE, GRAPH_FACEBOOK_BASE } from "@/services/instagram/InstagramSendClient";
-import { DURABLE_TOKEN_MIN_SECONDS } from "@/services/instagram/instagramLoginOAuth";
+import { DURABLE_TOKEN_MIN_SECONDS, missingInstagramPermissions } from "@/services/instagram/instagramLoginOAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +98,17 @@ export async function GET(req: NextRequest) {
   const longLivedExchangeError = typeof meta.longLivedExchangeError === "string" ? meta.longLivedExchangeError : null;
   const webhookSubscribedAt    = typeof meta.webhookSubscribedAt === "string" ? meta.webhookSubscribedAt : null;
   const webhookSubscribeError  = typeof meta.webhookSubscribeError === "string" ? meta.webhookSubscribeError : null;
+  const profileError           = typeof meta.profileError === "string" ? meta.profileError : null;
+  /**
+   * AS PERMISSÕES CONCEDIDAS. É a peça que separa "a chamada está errada" de "a Meta
+   * não autorizou" — e a ausência dela custou quatro tentativas de reconexão, porque
+   * a Meta recusa por falta de permissão dizendo `Unsupported request`, que se lê como
+   * endpoint errado. Gravadas na conexão desde 14/08; conexões anteriores não as têm.
+   */
+  const grantedPermissions = Array.isArray(meta.grantedPermissions)
+    ? (meta.grantedPermissions as unknown[]).filter((s): s is string => typeof s === "string")
+    : [];
+  const missingPermissions = missingInstagramPermissions(grantedPermissions);
 
   // 1) Token validity + account identity.
   const me = await graphGet(base, "me?fields=id,username,account_type,name", token);
@@ -137,6 +148,10 @@ export async function GET(req: NextRequest) {
     longLivedExchangeError,
     webhookSubscribedAt,
     webhookSubscribeError,
+    profileError,
+    // Vazio pode significar "conexão anterior a 14/08", não "nenhuma permissão".
+    grantedPermissions,
+    missingPermissions,
     lastError: config.lastError,
     me: me.json,
     subscribedApps: subs.json,
