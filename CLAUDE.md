@@ -153,6 +153,14 @@ naquele turno.
 | `manual` | guias, assistente de ajuda, robô noturno de sync, onboarding do lojista |
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
+| `seguranca` | **quem consegue entrar sem ser convidado** — rota pública sem autenticação, webhook que aceita qualquer chamador, id de inquilino aceito sem provar dono, segredo que nunca rotacionou |
+
+> Esta tabela listava onze e **omitia o `seguranca`**, que existe em disco desde
+> 07/08, é Essencial pela doutrina 23 e tem teste travando a existência dele
+> (`src/services/agents/elencoObrigatorio.test.ts`). Manual e árvore divergiam.
+> Corrigido em 14/08. **Fora da tabela ficam os dois cargos** — `diretor` e `pm`
+> — que não são especialistas: eles não produzem entregável, coordenam quem
+> produz.
 
 > **`interface` × `experiencia` — a fronteira, porque eles olham a MESMA tela:**
 > o `interface` responde *"está bonita e funciona em 375/768/1280?"*; o
@@ -294,9 +302,18 @@ leem como verdade.
 
 ## Decisões pendentes do CEO (não resolver em silêncio)
 
-- **Faixas de preço e bloqueio por plano.** O campo de plano existe e não bloqueia
-  nada. Bloqueador comercial. Depende do custo por restaurante — em stand by por
-  decisão do CEO (ver `docs/pendencias.md`).
+- **Bloqueio por plano.** O campo de plano existe e **não bloqueia nada**: a única
+  leitura de `restaurant.plan` no repositório monta contexto de IA
+  (`src/lib/ai-context/builder.ts`). O site publica teto de pedidos por plano —
+  300 / 1.200 / 4.000 por mês — e **nenhum código mede ou barra**. Promessa
+  publicada sem motor.
+  > ⚠️ **As faixas de preço NÃO estão mais em stand by, e este item dizia que
+  > estavam.** O CEO fechou a tabela em **04/08/2026** e ela cobra em produção:
+  > `src/lib/billing/pricing.ts`, `PLAN_CYCLE_CENTS` ("Tabela aprovada pelo
+  > CEO") — 179 / 429 / 899 no mensal. O que continua em stand by é outra coisa:
+  > o **custo por restaurante** (desde 31/07) e este bloqueio. Corrigido em
+  > 14/08 ao montar `docs/modelo-de-negocio.md`, que quase nasceu com o bloco de
+  > receita vazio por causa desta linha.
 - **Ampliar o pedido por texto no WhatsApp** além da lista de telefones
   autorizados.
 - **Promover o raciocínio livre do Cérebro** de `SHADOW_ONLY` para `ALLOWLIST`.
