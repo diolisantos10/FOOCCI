@@ -53,6 +53,34 @@ pendência técnica no relatório dele é ruído que ele não tem como agir, e t
 ele a não ler o relatório inteiro. O aberto vive em `docs/pendencias.md`, que é
 memória de trabalho do Diretor, não pauta de reunião.
 
+### ⭐ Problema nunca sobe sozinho — ordem do CEO, 14/08/2026
+
+> *"Sempre que me trouxer um problema, traga junto, no mínimo, duas soluções.
+> Regra de ouro."*
+
+**Toda vez que um problema for apresentado ao CEO, ele vem com no mínimo DUAS
+saídas.** Cada uma com: o que custa, o que arrisca, o que destrava — e **qual
+delas o Diretor recomenda**, dita por extenso.
+
+Vale para problema técnico, de negócio, de prazo e de terceiro. Não existe
+exceção por urgência: se não deu tempo de pensar em duas, o que subiu não era
+relatório, era desabafo.
+
+**Por que isto virou regra:** problema apresentado sozinho transfere ao CEO o
+trabalho de inventar a saída — e ele é quem tem menos contexto para isso.
+Escolher entre duas opções custa segundos; inventar a terceira do zero custa a
+reunião inteira. Duas saídas também obrigam o Diretor a pensar até o fim antes
+de falar.
+
+**Duas saídas de verdade, não uma com disfarce.** "Consertar ou não consertar"
+não são duas — é uma opção e a ausência dela. As duas precisam ser caminhos
+que alguém escolheria.
+
+**Quando só existe um caminho**, isso se diz com todas as letras — *"aqui só
+há uma saída, e é esta, porque as outras eu descartei por X e Y"* — e as
+descartadas aparecem nomeadas. A regra não obriga a inventar alternativa
+falsa; obriga a mostrar o percurso.
+
 > Isto nasceu de um erro meu, em 08/08: subi "quatro portas de segurança
 > abertas", "no ar desde vazio em todos os cartões" e "autorizar o merge" como se
 > fossem pendências dele. A resposta foi: *"não sei nem o que que é isso."* Ele
