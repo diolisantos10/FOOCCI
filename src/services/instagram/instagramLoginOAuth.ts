@@ -138,6 +138,24 @@ export interface InstagramProfile {
   longLivedToken: string;
   expiresInSeconds: number | null;
   /**
+   * As permissões que a Meta REALMENTE concedeu, devolvidas pelo próprio passo 1
+   * (`POST /oauth/access_token` → campo `permissions`).
+   *
+   * Isto era jogado fora, e era a evidência que decidia tudo. `Unsupported request`
+   * nos passos seguintes não é endpoint errado — é a Meta recusando a OPERAÇÃO para
+   * um token que não carrega a permissão exigida. Com esta lista, a diferença entre
+   * "a chamada está errada" e "o usuário não concedeu / o App Review não saiu" deixa
+   * de ser adivinhação.
+   */
+  grantedPermissions: string[];
+  /**
+   * Erro do `GET /me`, quando houve. Antes ele era engolido: `fetch` não lança em
+   * HTTP 400, então uma resposta de erro virava `username: null` + `igUserId` caindo
+   * silenciosamente para o id do passo 1 — e esse id ia direto para a inscrição do
+   * webhook. Três falhas na mesma função e só duas deixavam rastro.
+   */
+  profileError: string | null;
+  /**
    * The exact reason `ig_exchange_token` refused, when the long-lived exchange failed
    * and we fell back to the ~1h token. Without this the panel could only say "veio
    * curto" — never WHY — and the console line dies with the next deploy. It happened
@@ -178,8 +196,8 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
       body: form.toString(),
     });
     const shortBody = (await shortRes.json().catch(() => ({}))) as {
-      access_token?: string; user_id?: string | number;
-      data?: { access_token?: string; user_id?: string | number }[];
+      access_token?: string; user_id?: string | number; permissions?: string | string[];
+      data?: { access_token?: string; user_id?: string | number; permissions?: string | string[] }[];
       error_message?: string; error_type?: string;
     };
     const shortToken = shortBody.access_token ?? shortBody.data?.[0]?.access_token;
@@ -187,6 +205,18 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
     if (!shortRes.ok || !shortToken) {
       throw new Error(shortBody.error_message ?? `Troca de código falhou (HTTP ${shortRes.status})`);
     }
+
+    // AS PERMISSÕES CONCEDIDAS, que vinham na resposta e eram descartadas.
+    // O Business Login devolve `permissions` como lista separada por vírgula (ou
+    // array). Sem ela, "Unsupported request" nos passos seguintes é indistinguível
+    // de um erro de endpoint — e foi por isso que se investigou host e verbo por
+    // quatro tentativas, quando a resposta estava no primeiro passo o tempo todo.
+    const permsRaw = shortBody.permissions ?? shortBody.data?.[0]?.permissions;
+    const grantedPermissions = Array.isArray(permsRaw)
+      ? permsRaw.filter((s): s is string => typeof s === "string")
+      : typeof permsRaw === "string"
+        ? permsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
 
     // 2) short-lived → long-lived (60-day) token. RETRY: a transient failure here
     //    silently falls back to the 1h short token, which then dies in ~1h and kills
@@ -226,17 +256,34 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
     }
 
     // 3) profile — canonical account id (matches webhook entry[].id) + @username.
+    //
+    // ⚠️ ESTE BLOCO ENGOLIA ERRO. `fetch` NÃO lança em HTTP 400: uma resposta de erro
+    // caía fora do `catch`, `username` virava null e `igUserId` caía em silêncio para
+    // o id do passo 1 — que é justamente o id usado depois para inscrever a conta no
+    // webhook. Se o `/me` estivesse falhando, ninguém saberia, e o subscribe iria para
+    // um id possivelmente errado. Agora a falha é registrada e viaja com o perfil.
     let username: string | null = null;
     let igUserId = tokenUserId;
+    let profileError: string | null = null;
     try {
       const meUrl = `${IG_GRAPH}/${GRAPH_VERSION}/me?fields=user_id,username&access_token=${encodeURIComponent(longToken)}`;
       const meRes = await fetch(meUrl);
-      const meBody = (await meRes.json().catch(() => ({}))) as { user_id?: string; id?: string; username?: string };
-      username = typeof meBody.username === "string" ? meBody.username : null;
-      igUserId = String(meBody.user_id ?? meBody.id ?? tokenUserId);
-    } catch { /* keep the id from the token exchange */ }
+      const meBody = (await meRes.json().catch(() => ({}))) as {
+        user_id?: string; id?: string; username?: string; error?: { message?: string; code?: number };
+      };
+      if (!meRes.ok || meBody.error) {
+        const c = meBody.error?.code != null ? ` (code ${meBody.error.code})` : "";
+        profileError = `${meBody.error?.message ?? `HTTP ${meRes.status}`}${c}`;
+        console.warn(`[ig-oauth] /me FALHOU err=${profileError}`);
+      } else {
+        username = typeof meBody.username === "string" ? meBody.username : null;
+        igUserId = String(meBody.user_id ?? meBody.id ?? tokenUserId);
+      }
+    } catch (e) {
+      profileError = e instanceof Error ? e.message : "falha ao ler o perfil";
+    }
 
-    return { igUserId, username, longLivedToken: longToken, expiresInSeconds: expiresIn, longLivedError };
+    return { igUserId, username, longLivedToken: longToken, expiresInSeconds: expiresIn, longLivedError, grantedPermissions, profileError };
   },
 
   /**
@@ -247,18 +294,29 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
    * green panel that still receives nothing. Failure is reported, never swallowed.
    */
   async subscribe({ igUserId, token }) {
-    try {
-      const res = await fetch(
-        `${IG_GRAPH}/${GRAPH_VERSION}/${igUserId}/subscribed_apps?subscribed_fields=messages`
-        + `&access_token=${encodeURIComponent(token)}`,
-        { method: "POST" },
-      );
-      const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
-      if (res.ok && body.success !== false) return { ok: true };
-      return { ok: false, error: body.error?.message ?? `HTTP ${res.status}` };
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "subscribe falhou" };
+    // A doc da Meta prescreve `POST /me/subscribed_apps` (o `me` resolve para a conta
+    // dona do token). Usávamos o id numérico vindo do `/me` — e o `/me` podia ter
+    // falhado calado, deixando aqui o id do passo 1. `me` primeiro elimina essa
+    // dependência; o id numérico fica como segunda tentativa, porque o exemplo oficial
+    // também o aceita e um dos dois pode responder melhor conforme o tipo de conta.
+    const alvos = ["me", igUserId].filter((v, i, a) => !!v && a.indexOf(v) === i);
+    let ultimoErro = "subscribe não tentado";
+    for (const alvo of alvos) {
+      try {
+        const res = await fetch(
+          `${IG_GRAPH}/${GRAPH_VERSION}/${alvo}/subscribed_apps?subscribed_fields=messages`
+          + `&access_token=${encodeURIComponent(token)}`,
+          { method: "POST" },
+        );
+        const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string; code?: number } };
+        if (res.ok && body.success !== false && !body.error) return { ok: true };
+        const c = body.error?.code != null ? ` (code ${body.error.code})` : "";
+        ultimoErro = `${body.error?.message ?? `HTTP ${res.status}`}${c} [alvo: ${alvo}]`;
+      } catch (e) {
+        ultimoErro = `${e instanceof Error ? e.message : "subscribe falhou"} [alvo: ${alvo}]`;
+      }
     }
+    return { ok: false, error: ultimoErro };
   },
 };
 
@@ -337,6 +395,30 @@ export interface CallbackResult {
 /** A token below this is treated as short-lived (the ~1h fallback), not a real 60-day token. */
 export const DURABLE_TOKEN_MIN_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
+/**
+ * Permissões sem as quais NADA depois do primeiro passo funciona.
+ *
+ * `instagram_business_basic` é exigida pelo próprio `/access_token?grant_type=
+ * ig_exchange_token` (a doc da Meta a lista em "Permissions", para apps que usam
+ * Business Login for Instagram). `instagram_business_manage_messages` é a que
+ * permite inscrever a conta em `messages` e receber DM.
+ *
+ * Sem elas, a Meta não responde "faltou permissão": responde
+ * **`Unsupported request - method type: get/post` (code 100)** — que se lê como
+ * endpoint errado e mandou esta casa investigar host, verbo e versão por quatro
+ * tentativas. Por isso a checagem é explícita aqui, com nome.
+ */
+export const INSTAGRAM_REQUIRED_PERMISSIONS = [
+  "instagram_business_basic",
+  "instagram_business_manage_messages",
+] as const;
+
+/** Quais das permissões obrigatórias faltam. Lista vazia de entrada = "não sei" → []. */
+export function missingInstagramPermissions(granted: string[]): string[] {
+  if (!granted || granted.length === 0) return []; // guardrail 1: silêncio não vira acusação
+  return INSTAGRAM_REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p));
+}
+
 export async function handleInstagramLoginCallback(
   input: { state: string; code?: string | null; error?: string | null; redirectUri: string | null },
   graph: InstagramLoginGraph = realInstagramLoginGraph,
@@ -398,6 +480,19 @@ export async function handleInstagramLoginCallback(
     if (subscribeError) {
       problemas.push(`a conta não foi inscrita no webhook de mensagens — a Meta respondeu: "${subscribeError}". Sem isso nenhuma DM chega.`);
     }
+    // A CAUSA, quando é ela. Vem por último no texto mas é a primeira coisa a checar:
+    // faltando permissão, os erros acima são consequência e enganam.
+    const faltando = missingInstagramPermissions(profile.grantedPermissions ?? []);
+    if (faltando.length > 0) {
+      problemas.push(
+        `a Meta concedeu apenas [${profile.grantedPermissions.join(", ")}] e faltam [${faltando.join(", ")}].`
+        + " Enquanto faltar, a Meta recusa a troca do token de 60 dias e a inscrição no webhook com"
+        + " \"Unsupported request\" — que PARECE endpoint errado e não é. Isso se resolve no App Review, não no código.",
+      );
+    }
+    if (profile.profileError) {
+      problemas.push(`não foi possível ler o perfil da conta — a Meta respondeu: "${profile.profileError}".`);
+    }
     const lastError = problemas.length > 0 ? `Conexão instável: ${problemas.join(" Além disso, ")}` : null;
 
     const result = await upsertInstagramConfig(row.restaurantId, {
@@ -429,6 +524,10 @@ export async function handleInstagramLoginCallback(
         webhookSubscribedAt: subscribed ? new Date().toISOString() : null,
         webhookSubscribeError: subscribeError,
         longLivedExchangeError: profile.longLivedError ?? null,
+        // A evidência que decide o diagnóstico, gravada para sobreviver ao deploy.
+        grantedPermissions: profile.grantedPermissions ?? [],
+        missingPermissions: faltando,
+        profileError: profile.profileError ?? null,
       },
     });
 

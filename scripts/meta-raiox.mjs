@@ -356,6 +356,18 @@ const main = async () => {
         p("      ⚪ com quanto nasceu: PRECISO CONFIRMAR — falta `tokenIssuedAt`/`connectedAt` no registro.");
       }
       p(`      inscrição da conta no webhook: ${j.webhookSubscribedAt ?? "NUNCA"}${j.webhookSubscribeError ? ` · erro: ${j.webhookSubscribeError}` : ""}`);
+      // A peça que separa "a chamada está errada" de "a Meta não autorizou".
+      // "Unsupported request" é como a Meta recusa por FALTA DE PERMISSÃO — e se lê
+      // como endpoint errado. Sem esta linha, o diagnóstico vai para o lugar errado.
+      const perms = Array.isArray(j.grantedPermissions) ? j.grantedPermissions : [];
+      const faltam = Array.isArray(j.missingPermissions) ? j.missingPermissions : [];
+      p(`      permissões concedidas: ${perms.join(", ") || "(não gravadas — conexão anterior a 14/08)"}`);
+      if (faltam.length) {
+        p(`      🔴 FALTAM: ${faltam.join(", ")} — é isto que faz a Meta responder "Unsupported request".`);
+        p("         Não é endpoint errado: os endpoints existem (respondem 190 com token inválido).");
+        p("         Resolve-se no App Review / na tela de autorização, NÃO no código.");
+      }
+      if (j.profileError) p(`      ⚠️ leitura do perfil (/me) falhou: ${j.profileError}`);
     }
   }
 
