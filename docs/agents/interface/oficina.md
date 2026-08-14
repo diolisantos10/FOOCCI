@@ -2316,3 +2316,109 @@ progresso é o lugar clássico onde se inventa número sem perceber.
 arquivos) · rolagem horizontal **zero** nas 48 cenas medidas.
 
 — interface, branch `claude/foocci-brain-vaamrx`
+
+---
+
+## 2026-08-14 — o Command Center foi para o repositório certo (`dioli-agency-os-1`)
+
+**Correção de rota do Diretor.** O porte de ontem foi implantado no Foocci por
+engano — o painel é da **Dioli Digital**, agência, sistema próprio já no ar. O
+trabalho foi reaproveitado inteiro. Branch: `claude/client-command-center`,
+commit `d73e98b`, repo `diolisantos10/dioli-agency-os-1`. **Não mergeada, não
+deployada.**
+
+### O que a mudança de casa ensinou
+
+**1. O bloco NORMALIZE não era só desnecessário — ele era um DEFEITO.**
+No Foocci (Tailwind v3) eu reproduzi à mão o preflight do v4 que a referência
+assumia. O repo certo é **Tailwind v4, a mesma versão da referência**, então o
+bloco saiu. Mas a lição não é "sobrou código": minha reprodução acrescentou
+`text-align: left` em **todo** botão, e o preflight do v4 **não faz isso**.
+Onde a referência conta com botão centralizado, aquele porte desalinhava em
+silêncio. **Reproduzir reset alheio à mão introduz regra que o original não
+tem, e o sintoma é mudo.** Confira o preflight real (`node_modules/tailwindcss/
+preflight.css`) antes de escrever o seu.
+
+**2. Seletor da referência pode mirar o elemento errado quando o DOM ganha um
+nível.** `.projectHead > div > div { display:flex }` foi escrito para a página
+de PROJETO, onde `> div` era a fileira de selos. Na página de CLIENTE existe
+`.clientTitle` no meio, e o mesmo seletor passou a pegar o bloco de
+h1+subtítulo+selos — jogando os três na mesma linha. No desktop ficou bom por
+acidente; **a 768px o nome do cliente virou três linhas quebradas por cima dos
+selos.** Porte fiel de CSS por prefixo não confere a ÁRVORE; seletor por
+combinador de filho é onde a fidelidade quebra.
+
+**3. Cor por posição é cor que mente.** `span:nth-child(2) { color: #c33 }`
+pinta de vermelho o que estiver em segundo lugar, seja lá o que for. No cliente
+sem pendência isso escrevia **"Sem pendência" em vermelho** — a tela
+contradizendo a própria frase. Só apareceu no cliente VAZIO. **Todo screenshot
+de estado cheio precisa do par vazio ao lado**; metade dos defeitos de cor
+semântica só existe quando o dado some.
+
+**4. Grade fixa + lista variável = "faltou carregar".** `.kpis` é
+`repeat(6,1fr)`; área com quatro métricas desenhava caixa branca vazia à
+direita. Ninguém lê isso como "só existem quatro". A contagem passou a vir do
+componente por `--kpiN` — **quem sabe quantos são é quem monta a lista, não a
+folha de estilo**. Abaixo de 900px a contagem não manda (seis números lado a
+lado num celular é linha ilegível): ali vale duas colunas.
+
+**5. O que a referência esconde no celular pode ser função, não enfeite.**
+A folha escondia "Editar Cliente" abaixo de 900px e a faixa `.clientPulse`
+inteira abaixo de 600px — e o botão "Portal do cliente" mora **dentro** dessa
+faixa. Medido a 375px: **nem editar o cadastro nem gerar o link do portal eram
+alcançáveis**, e as duas coisas funcionavam na página que este layout
+substitui. Os quatro indicadores de leitura continuam escondidos; os dois
+botões voltaram. **Ao portar decisão responsiva de maquete, separe o que é
+leitura do que é ação — maquete não distingue.**
+
+### Fronteira que NÃO se duplica
+
+O porte trazia `views.ts` com seletor próprio de portal
+(`toClientPortalView`, `INTERNAL_ONLY_KEYS`, `assertNoInternalLeak`). **Foi
+removido.** A fronteira já existe neste sistema, é mais antiga e tem cicatriz:
+`Deliverable.visibility` (nasce "interno"), `ApprovalRequest.clientVisible`,
+`app/api/brain/portal-data` (traduz jargão, barra preço) e
+`lib/auth/posse-de-workspace.ts`. Duas políticas de segurança com o mesmo nome
+é o defeito que aquele arquivo foi criado para matar. Sobrou de `vista.ts` só o
+view-model — e `Metric.value: string | null`, que é regra, não estilo.
+
+### Controle que simula ação não sobrevive ao porte
+
+Três peças da referência viraram navegação para o lugar real:
+`RequestModal` (caixa de texto que descartava o que fosse digitado) →
+`/agency/requests`; `Interview` (três perguntas fixas, respostas que não iam a
+lugar nenhum) → a Ficha de Marca, que **já pergunta de verdade**
+(`lib/agency/esteira/ficha-de-marca.ts`); rodapé do chat do PM (textarea +
+"Enviar") → `/agency/inbox`. Este último por um motivo mais duro que estética:
+**mandar mensagem a cliente real é efeito irreversível com destinatário
+externo**, e a casa já tem UM lugar onde isso acontece, com fila que se confere.
+
+### O mock que morava na página de um cliente pagante
+
+A página anterior era `"use client"` e importava `MOCK_AGENTS` e
+`MOCK_BRAND_ASSETS` — clientes fictícios (Sushikasa, Santioh). Para o CityJobs
+resolvia em lista vazia **por acaso**, porque nenhum id batia; um id de agente
+coincidente teria pintado nome e função inventados na ficha de um cliente que
+paga. A página virou servidor e lê o Prisma com posse de workspace.
+
+### Verificação
+
+`tsc` limpo · `eslint` limpo · `next build` limpo · `vitest` **3.495 verdes**
+(213 arquivos) · **21 capturas em 375/768/1280, rolagem horizontal ZERO**.
+
+Um teste falha: `__tests__/plataforma/o-navegador-chega-em-producao.test.ts`
+(`browsers.json` ausente no `standalone`). **Medido na base, sem as minhas
+mudanças: falha igual.** Ele só sai do `skipIf` quando existe build no
+diretório — por isso passa despercebido em suíte sem build.
+
+### Pendente do CEO, registrado e NÃO decidido
+
+A tipografia da referência: **90 regras em 5px, 79 em 6px, 48 em 7px** de corpo
+de texto, contra títulos display de 21–24px. Não é escala pequena, é maquete
+desenhada em duas escalas — zoom uniforme não resolve (levaria títulos a 40px+).
+Nada foi alterado. O `dioli.css` traz a proposta **desligada por padrão**
+(`.ccTextoLegivel`), com 225 blocos **gerados a partir das próprias regras do
+arquivo**, mapa +5px (5→10, 6→11, 7→12, 8→13, 9→14) para preservar a ordem dos
+degraus. Aprovada, vira o tamanho das regras originais; reprovada, o bloco sai.
+
+— interface, branch `claude/client-command-center` (repo `dioli-agency-os-1`)
