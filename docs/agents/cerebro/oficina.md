@@ -1420,3 +1420,64 @@ vai, e quem lê lá?". A trava virou código (`PORTÃO 0` do workflow consulta a
 visibilidade em toda execução) porque prompt já falhou em produção neste projeto,
 e porque um repositório pode virar público depois, sem ninguém revisar o robô.
 — origem: mesmo bloco
+
+---
+
+## 2026-08-14 · O cargo de Diretor do Foocci vira arquivo em `.claude/agents/`
+
+**Pedido:** materializar o cargo de Diretor de projeto como agente despachável,
+transcrevendo a doutrina 29 (§"Diretor de projeto") e sem contradizer o
+`CLAUDE.md`. Entregue: `.claude/agents/diretor.md`.
+
+**A pergunta que precisava ser respondida antes de escrever:** o Diretor é a
+própria sessão que fala com o CEO — um arquivo de agente para ele finge um papel
+que a arquitetura sustenta? Concluí que **sustenta com uma fronteira declarada**,
+e a declarei dentro do próprio arquivo em vez de deixá-la implícita: o cargo é
+uma **carta de cargo** (o que produz, o que é vedado, como confere, como fala com
+o CEO) e não uma **capacidade de despachar**. Se ele rodar como subagente sem
+ferramenta de acionar outros agentes, devolve o enquadramento e a ordem de
+despacho prontos ao chamador — que é a mesma *nota de honestidade técnica* que a
+doutrina 18 já aplica ao PM, um andar abaixo. Sem essa linha, o arquivo seria um
+convite a produzir "porque daqui não dá para despachar".
+
+**Ferramentas — a decisão e o porquê.** `[Read, Grep, Glob, Write, Edit, Bash]`.
+Tirar `Write`/`Edit` seria a leitura literal de *"editar o arquivo é produção, e
+é vedada"*, mas quebra três obrigações que o `CLAUDE.md` põe **na conta do
+Diretor e de mais ninguém**: promover vitrine (`docs/agents/*/vitrine.md`, "SÓ O
+DIRETOR ESCREVE"), registrar decisão no corredor, e a regra de ouro de decisão
+virar registro na mesma sessão. A doutrina 18 R6 resolve o aparente conflito: o
+que fica inline para o Diretor é *"decisão, tradução do pedido, síntese,
+conferência e **registro**"*. Então o limite não é a ferramenta, é o **caminho** —
+livro de bordo sim, `src/` não. E isso é **aviso, não trava**: registrei no
+próprio arquivo que a trava mecânica ("tirar a ferramenta de produção do
+Diretor") é uma das quatro peças que a doutrina 29 declara inexistentes.
+
+**O que quebrou / o que achei pelo caminho:**
+
+1. **Não existe PM em `.claude/agents/`.** Doze arquivos, nenhum é o PM. É
+   exatamente o achado constrangedor com que a doutrina 29 abre — só que aqui o
+   PM não existe nem em disco. A hierarquia do `CLAUDE.md` ("Diretor entrega o
+   pedido inteiro ao PM") **não é executável hoje**. Não criei o arquivo: fora do
+   escopo do despacho. Está no relatório como proposta.
+2. **A tabela de especialistas do `CLAUDE.md` lista onze e não inclui o
+   `seguranca`**, que existe em disco desde 07/08 e é Essencial pela doutrina 23.
+   Divergência entre manual e árvore; anotada dentro do `diretor.md` com data.
+3. **A Sala dos Agentes enumera `.claude/agents/*.md` por descoberta automática**
+   (`src/services/agents/sala/leituraDeArquivos.ts:42-50`). Adicionar o
+   `diretor.md` muda a contagem que a tela mostra ao CEO de 12 para 13 — e um
+   deles não é especialista. Conferi a heurística de nome
+   (`sala/montagem.ts:201`): a primeira linha do corpo casa e a tela mostra
+   "Diretor do Foocci", não o slug. Vale lembrar que o incidente de 07/08 foi
+   justamente esta tela anunciando número errado.
+
+**Verificação:** `npx vitest run src/services/agents/` → 12 arquivos, 150 testes,
+todos passaram (inclui `elencoObrigatorio.test.ts`, que varre a pasta inteira
+exigindo `name:` e `tools:` legíveis, e `salaReal.test.ts`, que lê o diretório
+real). `npx tsc --noEmit` → exit 0.
+
+**Aprendizado que proponho guardar:** *ferramenta de escrita não separa produção
+de governança — caminho separa.* Um cargo definido pelo que ele **não** produz
+não pode ser implementado tirando a caneta, quando o mesmo cargo é o único
+autorizado a escrever a memória da casa. Onde a permissão de ferramenta não
+consegue exprimir a regra, o honesto é escrever a regra por caminho **e declarar
+que ela é aviso**, em vez de fingir que a lista de `tools:` já é a trava.
