@@ -43,6 +43,27 @@ export function isMetaConnectConfigured(): boolean {
   return getMetaAppCreds() !== null;
 }
 
+/**
+ * A MESMA leitura, respeitando **banco primeiro, ambiente depois**.
+ *
+ * Igual ao caso do Instagram Login: este era um dos três pontos que liam `process.env`
+ * direto e furavam a precedência de `MetaAppCredentialsService` (achado 1 do raio-x de
+ * 05/08). Rotacionar o segredo pela tela `/admin/meta` sem tocar no Railway deixava
+ * este caminho de OAuth com a credencial velha — e ele falharia calado, na renovação
+ * seguinte, sem log óbvio. O fallback para o env continua, então nada que funciona
+ * hoje deixa de funcionar.
+ */
+export async function resolveMetaAppCreds(): Promise<MetaAppCreds | null> {
+  try {
+    const { MetaAppCredentialsService } = await import("@/services/meta/MetaAppCredentialsService");
+    const r = await MetaAppCredentialsService.getResolved();
+    if (r.appId && r.appSecret) return { appId: r.appId, appSecret: r.appSecret };
+  } catch {
+    // Banco fora do ar não pode impedir um OAuth que o env já sustentava.
+  }
+  return getMetaAppCreds();
+}
+
 /** Exactly which env vars are missing for one-click connect (names only, never values). */
 export interface MetaEnvStatus {
   metaAppIdConfigured: boolean;
@@ -197,7 +218,7 @@ export interface StartResult {
 }
 
 export async function startMetaConnect(input: { restaurantId: string; userId: string; redirectUri: string | null; returnPlatform?: string }): Promise<StartResult> {
-  const creds = getMetaAppCreds();
+  const creds = await resolveMetaAppCreds();
   if (!creds) return { ok: false, blocked: "BLOCKED_BY_META_APP_ENV", missing: getMetaEnvStatus().missing };
   // Never build an OAuth dialog pointing at a broken/localhost redirect URI.
   const redirectUri = input.redirectUri;
@@ -244,7 +265,7 @@ export async function handleMetaCallback(
     await prisma.metaOAuthState.update({ where: { id: row.id }, data: { status: "CONSUMED", error: input.error.slice(0, 300) } }).catch(() => undefined);
     return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Autorização cancelada na Meta.", returnPlatform: platform };
   }
-  const creds = getMetaAppCreds();
+  const creds = await resolveMetaAppCreds();
   if (!creds || !input.code || !input.redirectUri) {
     return { ok: false, restaurantId: row.restaurantId, candidateCount: 0, reason: "Configuração da Meta ausente.", returnPlatform: platform };
   }

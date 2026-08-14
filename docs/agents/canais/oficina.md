@@ -358,3 +358,136 @@ commit, sem push.
    proposta na apuração da manhã, agora **com o conserto junto**: o filtro é do
    servidor e existe faixa de saúde. A entrada de 01/08 sobre o filtro
    client-side pode ser aposentada.
+
+---
+
+## 2026-08-14 (madrugada) — o SDR fica pronto para ligar: os dois P0 e a porta que não existia
+
+Despacho do Diretor: deixar o SDR pronto para o dia em que o CEO responder duas
+perguntas, de modo que a resposta dele seja **escolher**, não construir.
+
+### O que o desenho de 05/08 dizia — e o que envelheceu
+
+Conferi `docs/sdr-foocci-desenho.md` linha a linha contra o código de hoje.
+
+| Afirmação do desenho | Hoje |
+|---|---|
+| número de vendas é `null` (`config.ts:24`) | **verdade** — `HARDCODED_SALES_NUMBER` null em `config.ts:39`; a chave real é `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` |
+| envio é sempre por restaurante | **verdade** — `WhatsAppMessagingService` exige `restaurantId` |
+| portão do CRM aprova por omissão (`:420`) | **verdade, e pior que o descrito** (ver abaixo) |
+| `BuildNotifier` envia sem freio (`:24-45`) | **verdade** |
+| "Meta oficial × Evolution" é escolha do CEO | ❌ **CADUCOU** |
+
+**A Evolution não existe mais.** Saiu em 04/08/2026 por ordem do CEO, um dia
+ANTES de o desenho ser escrito — `activeProvider.ts:1-15`,
+`WhatsAppMessagingService.ts:1-29`, `metaSendPolicy.ts:9-11`,
+`BuildOsMetaChannel.ts:5-13`. Não há diretório `src/services/evolution/`, não há
+segundo provedor em `src/services/whatsapp/providers/`. O desenho e o cronograma
+(`docs/cronograma-sdr-e-crm-foocci.md:30`) descrevem uma escolha que o código já
+não oferece. **Isto muda a pergunta 1 do CEO** e está no relatório ao Diretor.
+
+Lição de forma, para mim: documento de investigação escrito no dia seguinte a uma
+remoção grande cita o mundo de anteontem. Conferir a data do documento contra o
+`git log` do módulo deveria ser o primeiro passo, não o último.
+
+### P0-A — o portão aprovava por omissão. E não era só hipótese.
+
+`ContactSafetyService.assertSendable` (hoje `:419`) só entra no bloco que conta
+mensagens recentes **se houver `customerId`** (`:442`). Sem ele, os quatro
+contadores ficam em zero e o avaliador lê "nunca mandei nada" → libera. Um lead
+do site nunca tem `customerId`.
+
+O desenho dizia "não é bug ativo (ninguém chama assim)". **Chama:**
+`CrmCampaignService.ts:677` passa `customerId: exec.customerId ?? null`. Só não
+dispara porque `CampaignExecution.customerId` é `String` não-nulo no schema
+(`schema.prisma:1123`) — ou seja, o que segura o furo hoje é uma coluna, não uma
+decisão. Coluna muda.
+
+Conserto: campo **obrigatório** `contactHistoryKnown` no avaliador puro, e bloqueio
+`UNKNOWN_CONTACT_HISTORY` antes das travas de frequência. Obrigatório de propósito
+— assim toda construção de entrada tem que declarar o que sabe, e o compilador
+cobra. Ficou fora do `if (!isBirthday)`: aniversário isenta de frequência, não de
+identidade.
+
+Cuidado que tomei (guardrail 5): conferi os 4 chamadores antes. Todos passam
+`customerId` real → **zero mudança de comportamento em produção**.
+
+### P0-B — o caminho de envio sem freio
+
+`BuildOsMetaChannel.sendBuildOsMetaText` era o único envio **sem restaurante** e
+sem trava nenhuma. O que existia contra o abuso era um comentário dizendo "é
+interno".
+
+Freio: janela deslizante de 1h com dois tetos — 40 mensagens (mata laço de
+retentativa) e 5 destinos distintos (mata lista de leads na 6ª pessoa). Recusa
+**antes da rede**, com a evidência no motivo.
+
+Honestidade sobre o que ele NÃO é, e escrevi isso no cabeçalho do arquivo: é
+**por processo, em memória**. Não é teto global. É para-choque contra as duas
+formas de acidente que já aconteceram nesta casa, não substituto de portão.
+
+Descoberta lateral: `instagramAttentionAlert.ts:68` também usa esse canal. Um
+destino fixo, poucas mensagens — passa folgado no freio. Confirmado por leitura,
+não por suposição.
+
+### O que o desenho NÃO viu, e era o buraco principal
+
+`api/webhooks/meta/whatsapp/route.ts:168` (antes do meu bloco): `phone_number_id`
+que não casa com restaurante → `console.warn` e **descarte**. O número de vendas
+não tem restaurante.
+
+Ou seja: o site inteiro já está pronto para mandar a pessoa dizer "oi"
+(`config.ts` monta a mensagem com `#código`), e **não havia ninguém do outro
+lado**. Ligar o número sem isso seria a pior combinação possível — o CEO paga
+anúncio, a pessoa escreve, e a mensagem morre num log.
+
+Construí a recepção: `FoocciSalesInbound.receberMensagemDeVendas` — reconhece pelo
+`#código` (`extractLeadCode`, que já existia), cai no telefone quando não acha,
+cria contato `WHATSAPP_DIRETO` para quem vem de anúncio, aplica opt-out e grava a
+linha do tempo. **Não redige e não envia**: redigir é do Cérebro e a escada de
+liberação não autorizou.
+
+Ordem que discuti comigo mesmo e ficou: **o pedido de silêncio vem antes de
+"contato novo"**. Um desconhecido que manda "PARE" é GRAVADO, justamente para
+poder honrar o silêncio — base que não sabe quem pediu para parar volta a
+incomodar a mesma pessoa na semana seguinte.
+
+### LGPD do lead: o que faltava era prova e freio
+
+`SiteLead` não guardava aceite, versão nem opt-out (o detector de "PARE" grava em
+`Customer`, que o lead não tem). Quatro colunas aditivas + índice. Contato antigo
+fica com `consentAt` nulo e o portão usa `createdAt` — que É o instante do envio
+do formulário. **Não preenchi consentimento por migração**: inventar aceite que
+ninguém deu é pior que não ter o campo.
+
+### A costura do provedor — e o que ela não é
+
+`resolverProvedorDeVendas()` lê `FOOCCI_SALES_PROVIDER`. Só `META_CLOUD_API` é
+implementado; qualquer outro valor **falha declarando**, nunca cai na Meta em
+silêncio. Isto **não** é a Evolution voltando — é a diferença entre trocar de
+canal mexendo num arquivo e caçar envio espalhado.
+
+### Não fiz
+
+Nenhuma mensagem enviada. Nenhum número cadastrado, nada contratado, nada gasto.
+Não toquei em credencial nem em configuração do app Meta (é do `meta`). Não
+registrei agente nem escrevi persona — isso é do Cérebro, com portão de qualidade.
+Não escrevi o que o SDR responde sobre preço: é decisão do CEO e está em stand by.
+Sem deploy, sem merge, sem push para a padrão.
+
+### Proposta de vitrine
+
+1. **"A Evolution saiu em 04/08/2026 — e os documentos de 05/08 ainda falam dela."**
+   Entrada da vitrine "A Evolution é o default E o fallback" está **caduca** e
+   precisa de tarja. Fonte: `activeProvider.ts:1-15`.
+2. **"Mensagem para `phone_number_id` sem restaurante é DESCARTADA, com aviso que
+   ninguém lê."** Todo número novo sem restaurante precisa de desvio explícito no
+   webhook ANTES do lookup — hoje são três (suporte, Build OS, vendas).
+   Fonte: `api/webhooks/meta/whatsapp/route.ts`.
+3. **"Portão que busca dado por chave opcional aprova por omissão quando a chave
+   falta."** O padrão, não o caso: `if (id) { …conta… }` seguido de avaliação dos
+   contadores é sempre esta armadilha. A correção é um booleano obrigatório de
+   "eu apurei", nunca um comentário.
+4. **"Canal interno sem teto vira canal de massa no primeiro reaproveitamento."**
+   Todo canal sem restaurante precisa de teto de destinos distintos — é o que
+   separa "responde ao operador" de "manda para uma lista".

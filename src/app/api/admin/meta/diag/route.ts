@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { metaGraphUrl } from "@/services/whatsapp/metaFlag";
 import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
+import { inspectMetaToken } from "@/services/whatsapp/metaTokenHealth";
 
 function mask(v: string | null): string {
   if (!v) return "—";
@@ -65,6 +66,14 @@ export async function GET(req: NextRequest) {
       const subApps = (subscribed as { data?: Array<{ whatsapp_business_api_data?: { id?: string; name?: string } }> })?.data ?? [];
       const ourAppSubscribed = subApps.some((a) => a?.whatsapp_business_api_data?.id === ourAppId);
 
+      // A CREDENCIAL ESTÁ VIVA? Faltava aqui, e é a pergunta que o painel não sabe
+      // responder: `connectionStatus` é o que o banco GUARDOU, não o que a Meta DIZ.
+      // Um token expirado continua exibindo "CONNECTED" — foi exatamente assim que o
+      // Instagram ficou treze dias mudo em julho. `tokenHealth` pergunta à Meta
+      // (`debug_token`) e devolve validade, vencimento, aplicativo emissor e permissões.
+      // O token nunca aparece na resposta, nem mascarado.
+      const tokenHealth = await inspectMetaToken(cfg.accessToken);
+
       out.push({
         restaurantId:      row.restaurantId,
         connectionStatus:  cfg.connectionStatus,
@@ -75,6 +84,7 @@ export async function GET(req: NextRequest) {
         displayPhoneNumber: cfg.displayPhoneNumber,
         ourAppId,
         ourAppSubscribed,
+        tokenHealth,
         subscribedAppIds:  subApps.map((a) => ({ id: a?.whatsapp_business_api_data?.id, name: a?.whatsapp_business_api_data?.name })),
         subscribedRaw:     subscribed,
         phone,

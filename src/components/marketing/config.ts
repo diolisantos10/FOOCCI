@@ -31,8 +31,16 @@ export const LOGIN_URL = "/login";
  * (`docs/sdr-foocci-desenho.md`).
  *
  * Duas formas de acender, nesta ordem de precedência:
- *   1. `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` no Railway — não exige deploy de código.
+ *   1. `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` no Railway — não exige mudar código.
  *   2. `HARDCODED_SALES_NUMBER` abaixo — para quem preferir fixar no repositório.
+ *
+ * ⚠️ ARMADILHA REAL, e ela já mordeu neste projeto: variável `NEXT_PUBLIC_*` é
+ * **congelada no BUILD**, não lida em tempo de execução. Este arquivo é importado
+ * por `DemoForm.tsx`, que é `"use client"`. Salvar a variável no Railway **e não
+ * refazer o build** deixa o site exatamente como estava — sem erro, sem log, sem
+ * pista. Quem estiver esperando o botão acender vai concluir que o número está
+ * quebrado. Depois de salvar, **Redeploy**. O mesmo aviso já existe em
+ * `docs/setup-meta-passo-a-passo.md` para `NEXT_PUBLIC_META_APP_ID`.
  *
  * Formato: só dígitos, com DDI. Ex.: `5511999998888`.
  */

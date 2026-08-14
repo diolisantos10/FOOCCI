@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Credencial do WhatsApp da Meta — varredura diária
+#
+# O Instagram ficou treze dias mudo em julho porque um token expirou sem avisar
+# ninguém. Depois daquilo o Instagram ganhou varredura diária; o WhatsApp — que é
+# o canal que atende o restaurante AGORA — não ganhou nada. Este job fecha isso.
+#
+# Somente leitura contra a Meta: pergunta `debug_token` para cada credencial e
+# reporta validade, vencimento, aplicativo emissor e permissões. Não registra, não
+# desconecta e não renova nada.
+#
+# ⚠️ `on: schedule` só dispara a partir da branch PADRÃO do repositório. Enquanto
+# este arquivo não estiver lá, use "Run workflow" (workflow_dispatch).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Meta WhatsApp — saúde da credencial
+
+on:
+  schedule:
+    - cron: "42 6 * * *" # 06:42 UTC, 25 min depois da varredura do Instagram
+  workflow_dispatch:
+    inputs:
+      warnDays:
+        description: "Avisar quando faltar este número de dias para o vencimento"
+        required: false
+        default: "30"
+
+jobs:
+  health:
+    name: "Perguntar à Meta se a credencial está viva"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Montar a URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="https://foocci.com.br"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/whatsapp/meta-token-health" >> "$GITHUB_OUTPUT"
+
+      - name: Varrer
+        env:
+          URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          WARN_DAYS: ${{ github.event.inputs.warnDays || '30' }}
+        run: |
+          set +e
+          curl --connect-timeout 20 --max-time 120 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "{\"warnDays\": ${WARN_DAYS}}" -o /tmp/meta-health.json -w "%{http_code}" > /tmp/code.txt
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP          : $HTTP"
+          echo "← totalConfigs  : $(jq -r '.totalConfigs // "?"' /tmp/meta-health.json 2>/dev/null)"
+          echo "← responderam   : $(jq -r '.answered // "?"' /tmp/meta-health.json 2>/dev/null)"
+          # Nunca imprimimos token. Só o que é seguro e útil para decidir.
+          jq -r '.results[]? | "  · \(.restaurantId) \(.displayPhoneNumber // "") — válida: \(.isValid) · vence em: \(.expiresInDays // "n/d") dia(s) · app nosso: \(.appIdMatches)"' /tmp/meta-health.json 2>/dev/null
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::varredura non-2xx ($HTTP)."; exit 1; fi
+
+          # Guardrail 2: esquecer o portão nunca pode ler como "aprovado". Se a
+          # varredura não conseguiu nem PERGUNTAR à Meta, isso já é needsAttention.
+          NEEDS=$(jq -r '.needsAttention // false' /tmp/meta-health.json 2>/dev/null)
+          if [[ "$NEEDS" == "true" ]]; then
+            jq -r '.attention[]? | "::error::" + .' /tmp/meta-health.json 2>/dev/null
+            ALERT=$(jq -r '.alertSent // false' /tmp/meta-health.json 2>/dev/null)
+            REASON=$(jq -r '.alertReason // "—"' /tmp/meta-health.json 2>/dev/null)
+            if [[ "$ALERT" == "true" ]]; then
+              echo "📲 aviso enviado por WhatsApp ao responsável."
+            else
+              echo "::error::O aviso por WhatsApp NÃO saiu ($REASON). Este log é o único lugar onde o problema aparece — e ninguém lê log."
+            fi
+            echo "::error::A credencial de WhatsApp precisa de atenção humana — veja as linhas acima."
+            exit 1
+          fi
+          echo "✅ Todas as credenciais de WhatsApp responderam vivas e com folga."

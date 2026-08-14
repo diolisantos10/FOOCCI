@@ -20,6 +20,7 @@ function input(over: Record<string, unknown> = {}) {
     sendsWithinWeek: 1, // at the weekly cap
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
+    contactHistoryKnown: true, // contadores apurados — o override é sobre teto, não sobre ignorância
     ...over,
   } as never;
 }

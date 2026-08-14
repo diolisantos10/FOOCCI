@@ -56,6 +56,35 @@ export function isInstagramLoginConfigured(): boolean {
   return getInstagramLoginCreds() !== null;
 }
 
+/**
+ * A MESMA leitura, mas respeitando a regra da casa: **banco primeiro, ambiente depois**.
+ *
+ * `getInstagramLoginCreds()` acima lê só `process.env` — e era um dos três lugares que
+ * furavam a precedência de `MetaAppCredentialsService` (achado 1 do raio-x de 05/08).
+ * O efeito prático do furo: ao rotacionar o segredo do aplicativo pela tela
+ * `/admin/meta` sem mexer no Railway, o WhatsApp passava a usar a credencial nova e o
+ * Instagram continuava com a velha. Dois valores em vigor ao mesmo tempo, para o mesmo
+ * aplicativo, sem erro nenhum — a falha silenciosa que este papel existe para impedir.
+ *
+ * O fallback para o env permanece intacto: nada que funcionava hoje deixa de funcionar.
+ * A versão síncrona continua existindo para a tela de status (que só reporta presença
+ * de variável de ambiente e não pode virar assíncrona por causa disso).
+ */
+export async function resolveInstagramLoginCreds(): Promise<InstagramLoginCreds | null> {
+  try {
+    const { MetaAppCredentialsService } = await import("@/services/meta/MetaAppCredentialsService");
+    const r = await MetaAppCredentialsService.getResolved();
+    // O `igAppSecret` do banco não cai para `META_APP_SECRET` sozinho — quem faz isso é
+    // o fallback histórico daqui. Mantido, na mesma ordem, para não mudar comportamento.
+    const appId     = r.igAppId ?? process.env.INSTAGRAM_APP_ID;
+    const appSecret = r.igAppSecret ?? process.env.INSTAGRAM_APP_SECRET ?? r.appSecret ?? process.env.META_APP_SECRET;
+    if (appId && appSecret) return { appId, appSecret };
+  } catch {
+    // Banco indisponível não pode impedir uma conexão que o env já sustentava.
+  }
+  return getInstagramLoginCreds();
+}
+
 export interface InstagramLoginEnvStatus {
   appIdConfigured: boolean;
   appSecretConfigured: boolean;
@@ -268,7 +297,7 @@ export interface StartResult {
 export async function startInstagramLogin(
   input: { restaurantId: string; userId: string; redirectUri: string | null },
 ): Promise<StartResult> {
-  const creds = getInstagramLoginCreds();
+  const creds = await resolveInstagramLoginCreds();
   if (!creds) return { ok: false, blocked: "BLOCKED_BY_INSTAGRAM_APP_ENV", missing: getInstagramLoginEnvStatus().missing };
   if (!input.redirectUri) {
     return { ok: false, blocked: "PUBLIC_BASE_URL_NOT_CONFIGURED", missing: ["FOOCCI_BASE_URL=https://foocci.com.br"] };
@@ -326,7 +355,7 @@ export async function handleInstagramLoginCallback(
     await prisma.metaOAuthState.update({ where: { id: row.id }, data: { status: "CONSUMED", error: input.error.slice(0, 300) } }).catch(() => undefined);
     return { ok: false, restaurantId: row.restaurantId, reason: "Autorização cancelada no Instagram.", username: null };
   }
-  const creds = getInstagramLoginCreds();
+  const creds = await resolveInstagramLoginCreds();
   if (!creds || !input.code || !input.redirectUri) {
     return { ok: false, restaurantId: row.restaurantId, reason: "Configuração do Instagram ausente.", username: null };
   }

@@ -32,6 +32,8 @@ import { isSupportPhoneNumberId, handleInboundSupport } from "@/services/support
 import { InboundGuardsService } from "@/services/whatsapp/inbound/InboundGuardsService";
 import { dispatchInboundAgent, interceptBuildOsCommand } from "@/services/whatsapp/inbound/InboundAgentDispatch";
 import { isBuildOsPhoneNumberId } from "@/services/buildos/BuildOsMetaChannel";
+import { isFoocciSalesPhoneNumberId } from "@/services/foocci-sdr/FoocciSalesChannel";
+import { receberMensagemDeVendas } from "@/services/foocci-sdr/FoocciSalesInbound";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -161,6 +163,33 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
       }
       // Isolamento do Master: o que não era comando é simplesmente ignorado,
       // NUNCA persistido como mensagem de cliente.
+      continue;
+    }
+
+    // Número de VENDAS da Foocci: quem escreve aqui é um dono de restaurante
+    // interessado no produto, não cliente de restaurante nenhum. Desvia ANTES do
+    // fluxo de restaurante — e por isso NÃO cria Customer, Conversation nem
+    // Message: prospecto não entra na Central de Conversas de lojista algum.
+    //
+    // POR QUE ESTE DESVIO PRECISA EXISTIR: sem ele, esta mensagem cairia no
+    // `if (!cfg)` logo abaixo — um `console.warn` e o descarte. O site já manda a
+    // pessoa escrever esse "oi" (`src/components/marketing/config.ts`); faltava
+    // alguém do outro lado.
+    //
+    // Gated: com `FOOCCI_SALES_PHONE_NUMBER_ID`/`FOOCCI_SALES_ACCESS_TOKEN`
+    // ausentes, `isFoocciSalesPhoneNumberId` é sempre false e este webhook se
+    // comporta exatamente como antes. Aditivo, risco zero.
+    //
+    // ⚠️ NENHUMA RESPOSTA SAI DAQUI. O recepcionista anota; quem redige é o
+    // Cérebro, e a escada de liberação ainda não autorizou a primeira mensagem.
+    if (isFoocciSalesPhoneNumberId(m.phoneNumberId)) {
+      void receberMensagemDeVendas({
+        fromPhone:   m.fromPhone,
+        text:        m.text ?? null,
+        profileName: m.profileName ?? null,
+      })
+        .then((r) => console.info(`[webhook/meta/whatsapp] vendas: ${r.status} — ${r.detalhe}`))
+        .catch((err) => console.error("[webhook/meta/whatsapp] recepção de vendas falhou", err));
       continue;
     }
 

@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidWebhookVerifyToken } from "@/services/instagram/InstagramConfigService";
 import { handleWebhookEvent, handleCommentWebhookEvent } from "@/services/instagram/InstagramChannelService";
 import { verifyInstagramSignature } from "@/services/instagram/InstagramWebhookParser";
+import { MetaAppCredentialsService } from "@/services/meta/MetaAppCredentialsService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,11 +42,22 @@ export async function POST(req: NextRequest) {
   // (object:"page") is signed by the Meta/Facebook app. Both can arrive on this endpoint,
   // so accept a signature that matches ANY of our configured app secrets. HMAC comparison
   // stays constant-time per candidate; an attacker still can't forge either secret.
-  const candidateSecrets = [
+  //
+  // ⚠️ A CREDENCIAL SALVA NA TELA `/admin/meta` TAMBÉM ENTRA — e essa foi a correção.
+  // A regra da casa é "banco primeiro, ambiente depois" (`MetaAppCredentialsService`),
+  // e este era um dos três lugares que liam `process.env` direto. Consequência real:
+  // rotacionar o segredo do app pela tela, sem atualizar o Railway, fazia ESTE webhook
+  // devolver 403 para toda DM — sem erro na tela, sem log óbvio, e com o painel ainda
+  // dizendo "Conectado". A lista é ADITIVA de propósito: o que já funcionava por env
+  // continua funcionando, então subir isto não pode quebrar um deploy que estava bom.
+  const resolvidas = await MetaAppCredentialsService.getResolved().catch(() => ({} as { appSecret?: string; igAppSecret?: string }));
+  const candidateSecrets = Array.from(new Set([
+    resolvidas.igAppSecret,
+    resolvidas.appSecret,
     process.env.INSTAGRAM_APP_SECRET,
     process.env.META_APP_SECRET,
     process.env.FACEBOOK_APP_SECRET,
-  ].filter((s): s is string => !!s);
+  ].filter((s): s is string => !!s)));
 
   const signatureOk = candidateSecrets.some((secret) => verifyInstagramSignature(rawBody, signature, secret));
   if (!signatureOk) {

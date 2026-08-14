@@ -1,0 +1,259 @@
+/**
+ * LeadContactSafety — o portão de contato do SDR da Foocci.
+ *
+ * ── POR QUE NÃO REUSAMOS O PORTÃO DO CRM ─────────────────────────────────────
+ * `ContactSafetyService` governa a relação com o cliente **de um restaurante**:
+ * ele conta `CampaignExecution`, lê `Customer`, respeita horário de loja. Um lead
+ * do site não é nada disso — não tem restaurante, não tem `customerId`, não tem
+ * histórico de campanha. Chamar aquele portão com um lead era exatamente a
+ * armadilha P0 de `docs/sdr-foocci-desenho.md` (fechada em 14/08 com
+ * `UNKNOWN_CONTACT_HISTORY`).
+ *
+ * Então o SDR tem portão próprio, e ele é **mais rígido** que o do CRM por um
+ * motivo que não é técnico: o CRM fala com quem já comprou; o SDR fala com um
+ * estranho, em nome da empresa. Estranho tem menos paciência e mais botão de
+ * denúncia — e denúncia é o que queima número.
+ *
+ * ── A REGRA DA CASA, aplicada aqui ───────────────────────────────────────────
+ * PURO: sem banco, sem rede, sem relógio escondido (o `agora` entra por
+ * parâmetro). Quem busca os dados é o chamador; quem decide é esta função. Assim
+ * a decisão é testável caso a caso, e nenhum caminho de envio pode "esquecer" de
+ * consultar o portão sem que isso apareça no tipo.
+ *
+ * NÃO SEI = NÃO. Todo campo que descreve o que sabemos do lead é obrigatório, e
+ * há um `historicoConhecido` explícito. Zero tentativas só vale como "nunca
+ * abordei" quando alguém realmente contou.
+ */
+
+// ─── Motivos ────────────────────────────────────────────────────────────────────
+
+export type LeadBlockReason =
+  /** Não foi possível apurar quantas vezes já falamos com esta pessoa. */
+  | "HISTORICO_DESCONHECIDO"
+  /** A pessoa pediu silêncio. Terminal, todos os canais, para sempre. */
+  | "LEAD_OPT_OUT"
+  | "LEAD_SEM_TELEFONE"
+  | "LEAD_TELEFONE_INVALIDO"
+  /** Preencheu o formulário há tempo demais — aquilo já não é interesse vivo. */
+  | "CONSENTIMENTO_VENCIDO"
+  /** Não há registro de quando (nem se) a pessoa entregou os dados. */
+  | "CONSENTIMENTO_DESCONHECIDO"
+  /** Fora de 9h–19h, ou fim de semana. Mais rígido que o CRM, de propósito. */
+  | "FORA_DA_JANELA"
+  /** Já foram feitas as tentativas que o desenho permite (abertura + lembrete). */
+  | "TETO_DE_TENTATIVAS"
+  /** Já falamos com esta pessoa há pouco — dê espaço. */
+  | "DESCANSO_ATIVO"
+  /** O canal de vendas não está configurado, ou o envio está desligado. */
+  | "CANAL_INDISPONIVEL";
+
+export interface LeadSafetyDecision {
+  /** true → pode falar. false → não pode, e o motivo está ao lado. */
+  sendable: boolean;
+  reason: LeadBlockReason | null;
+  /** Frase curta em português, com o caso concreto (guardrail 6). */
+  detail: string;
+}
+
+// ─── Os números, e de onde eles vêm ─────────────────────────────────────────────
+
+/**
+ * As constantes do desenho aprovado. Elas vivem aqui, exportadas, porque um
+ * número escondido dentro de um `if` é um número que ninguém consegue conferir —
+ * e o CEO tem direito de perguntar "quantas vezes esse robô insiste?" e receber
+ * uma resposta com arquivo e linha.
+ */
+export const REGRA = {
+  /** Janela útil de abordagem, hora local de São Paulo. */
+  janela: { inicioHora: 9, fimHora: 19 },
+  /** 1 = segunda … 5 = sexta. Sábado e domingo estão fora, e não é negociável. */
+  diasUteis: [1, 2, 3, 4, 5] as const,
+  /**
+   * Teto duro de tentativas por lead: **uma abertura e um lembrete**. Não é
+   * "quantas cabem"; é quantas uma pessoa educada faria antes de entender que a
+   * resposta é o silêncio.
+   */
+  maxTentativas: 2,
+  /** Horas de descanso entre a abertura e o lembrete. */
+  descansoHoras: 48,
+  /**
+   * Prazo do consentimento. Um formulário de oito meses não é interesse vivo: é
+   * um dado velho que a pessoa já esqueceu que deu.
+   */
+  consentimentoDias: 90,
+  fusoHorario: "America/Sao_Paulo",
+} as const;
+
+// ─── Entrada ────────────────────────────────────────────────────────────────────
+
+export interface LeadSafetyInput {
+  /** Telefone do lead, como veio do formulário. */
+  telefone: string | null;
+  /** Preenchido = pediu silêncio. Terminal. */
+  optOutAt: Date | null;
+  /**
+   * Quando a pessoa entregou os dados. Para contato da primeira safra, o
+   * chamador passa `createdAt` — é literalmente o instante do envio do
+   * formulário. `null` significa "não sei", e não sei é NÃO.
+   */
+  consentimentoEm: Date | null;
+  /**
+   * Quantas mensagens de saída a Foocci já mandou para este lead.
+   * Só é lido quando `historicoConhecido` é true.
+   */
+  tentativas: number;
+  /** Quando a Foocci falou com esta pessoa pela última vez. */
+  ultimoContatoEm: Date | null;
+  /**
+   * ⚠️ OBRIGATÓRIO E É O PONTO DO ARQUIVO.
+   * `true`  → `tentativas` e `ultimoContatoEm` foram realmente apurados.
+   * `false` → não foi possível apurar; zero é ignorância, não histórico limpo.
+   */
+  historicoConhecido: boolean;
+  /** O canal de vendas está configurado E ligado para enviar? */
+  canalPronto: boolean;
+  /** Injetável para teste. */
+  agora?: Date;
+}
+
+// ─── Auxiliares ─────────────────────────────────────────────────────────────────
+
+function bloqueia(reason: LeadBlockReason, detail: string): LeadSafetyDecision {
+  return { sendable: false, reason, detail };
+}
+
+/** Dígitos plausíveis para um telefone brasileiro com DDI. */
+export function telefonePlausivel(v: string | null | undefined): boolean {
+  if (!v) return false;
+  const d = v.replace(/\D/g, "");
+  return d.length >= 10 && d.length <= 13;
+}
+
+/**
+ * Dia da semana (0=dom…6=sáb) e hora, no fuso de São Paulo.
+ *
+ * Feito com `Intl` e não com `getHours()` de propósito: o servidor roda em UTC, e
+ * `getHours()` daria 19h em Londres às 16h em São Paulo — três horas de invasão
+ * na casa das pessoas, num robô que existe justamente para não incomodar.
+ */
+export function agendaLocal(agora: Date, tz: string = REGRA.fusoHorario): { dia: number; hora: number; minuto: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const p = fmt.formatToParts(agora);
+  const mapa: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    dia: mapa[p.find((x) => x.type === "weekday")?.value ?? "Sun"] ?? 0,
+    hora: parseInt(p.find((x) => x.type === "hour")?.value ?? "0", 10),
+    minuto: parseInt(p.find((x) => x.type === "minute")?.value ?? "0", 10),
+  };
+}
+
+/** true quando AGORA está fora da janela de abordagem. */
+export function foraDaJanela(agora: Date): boolean {
+  const { dia, hora } = agendaLocal(agora);
+  if (!(REGRA.diasUteis as readonly number[]).includes(dia)) return true;
+  return hora < REGRA.janela.inicioHora || hora >= REGRA.janela.fimHora;
+}
+
+// ─── O portão ───────────────────────────────────────────────────────────────────
+
+/**
+ * Pode o SDR falar com este lead agora?
+ *
+ * A ORDEM DAS PERGUNTAS É DELIBERADA e vale como documentação: primeiro o que é
+ * inviolável (silêncio pedido), depois o que é impossível (sem telefone, sem
+ * canal), depois o que é ignorância (histórico, consentimento), e só então o que
+ * é medida (janela, teto, descanso). O motivo devolvido é sempre o primeiro que
+ * se aplica — e é por isso que "ela pediu para parar" nunca é encoberto por
+ * "está fora do horário".
+ */
+export function avaliarContatoDeLead(input: LeadSafetyInput): LeadSafetyDecision {
+  const agora = input.agora ?? new Date();
+
+  // 1. Silêncio pedido — inviolável, terminal, todos os canais.
+  if (input.optOutAt) {
+    return bloqueia("LEAD_OPT_OUT", "Esta pessoa pediu para não receber mensagens.");
+  }
+
+  // 2. Dá para entregar?
+  if (!input.telefone || input.telefone.trim() === "") {
+    return bloqueia("LEAD_SEM_TELEFONE", "Contato sem telefone.");
+  }
+  if (!telefonePlausivel(input.telefone)) {
+    return bloqueia("LEAD_TELEFONE_INVALIDO", "Telefone com formato improvável.");
+  }
+  if (!input.canalPronto) {
+    return bloqueia("CANAL_INDISPONIVEL", "O canal de vendas da Foocci não está pronto para enviar.");
+  }
+
+  // 3. O que NÃO se sabe. Aqui mora a diferença entre este portão e o do CRM.
+  if (!input.historicoConhecido) {
+    return bloqueia(
+      "HISTORICO_DESCONHECIDO",
+      "Não foi possível apurar quantas vezes já falamos com esta pessoa — reprovado por precaução.",
+    );
+  }
+  if (!input.consentimentoEm) {
+    return bloqueia(
+      "CONSENTIMENTO_DESCONHECIDO",
+      "Não há registro de quando esta pessoa entregou os dados.",
+    );
+  }
+
+  // 4. O consentimento ainda é vivo?
+  const idadeDias = (agora.getTime() - input.consentimentoEm.getTime()) / 86_400_000;
+  if (idadeDias > REGRA.consentimentoDias) {
+    return bloqueia(
+      "CONSENTIMENTO_VENCIDO",
+      `Preencheu o formulário há ${Math.floor(idadeDias)} dias (teto ${REGRA.consentimentoDias}).`,
+    );
+  }
+  // Data no futuro é dado corrompido, não consentimento fresquíssimo.
+  if (idadeDias < 0) {
+    return bloqueia("CONSENTIMENTO_DESCONHECIDO", "Data de consentimento no futuro — dado inconsistente.");
+  }
+
+  // 5. Insistência: o teto duro do desenho.
+  if (input.tentativas >= REGRA.maxTentativas) {
+    return bloqueia(
+      "TETO_DE_TENTATIVAS",
+      `Já foram ${input.tentativas} tentativas (teto ${REGRA.maxTentativas}: uma abertura e um lembrete).`,
+    );
+  }
+
+  // 6. Descanso entre tentativas.
+  if (input.ultimoContatoEm) {
+    const horas = (agora.getTime() - input.ultimoContatoEm.getTime()) / 3_600_000;
+    if (horas < REGRA.descansoHoras) {
+      return bloqueia(
+        "DESCANSO_ATIVO",
+        `Falamos há ${Math.floor(horas)}h (descanso de ${REGRA.descansoHoras}h).`,
+      );
+    }
+  }
+
+  // 7. Horário. Por último porque é o único bloqueio que passa sozinho com o
+  // tempo — os anteriores exigem que alguém ou alguma coisa mude.
+  if (foraDaJanela(agora)) {
+    return bloqueia(
+      "FORA_DA_JANELA",
+      `Fora da janela de abordagem (${REGRA.janela.inicioHora}h–${REGRA.janela.fimHora}h, dias úteis, horário de São Paulo).`,
+    );
+  }
+
+  return { sendable: true, reason: null, detail: "Liberado." };
+}
+
+/**
+ * O bloqueio some sozinho com o tempo, ou precisa de gente?
+ *
+ * Existe por causa da lição do incidente da Nicole, que virou guardrail 5: a
+ * proteção não pode ser pior que o problema. Um bloqueio de horário se resolve
+ * esperando; um "pediu silêncio" nunca se resolve, e insistir nele é o erro.
+ * Quem monta fila usa isto para saber o que reagendar e o que arquivar — em vez
+ * de tentar tudo de novo daqui a pouco.
+ */
+export function bloqueioPassaSozinho(reason: LeadBlockReason): boolean {
+  return reason === "FORA_DA_JANELA" || reason === "DESCANSO_ATIVO" || reason === "CANAL_INDISPONIVEL";
+}

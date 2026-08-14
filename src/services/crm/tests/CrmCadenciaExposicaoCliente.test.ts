@@ -39,6 +39,7 @@ function base(over: Partial<ContactSafetyEvalInput> = {}): ContactSafetyEvalInpu
     sendsWithinWeek: 0,
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
+    contactHistoryKnown: true, // os contadores vêm do banco; aqui eles são o cenário
     safety: seguranca,
     whatsappAvailable: true,
     globalSentToday: 0,
