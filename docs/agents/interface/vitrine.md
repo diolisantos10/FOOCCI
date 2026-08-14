@@ -7,6 +7,26 @@
 
 ---
 
+## Reproduzir reset alheio à mão introduz regra que o original não tem
+
+Ao portar CSS de outra casa, é tentador reproduzir o preflight da versão de
+origem à mão. Não faça sem medir: o bloco escrito à mão acrescentou
+`text-align: left` em **todo** botão — coisa que o preflight real do Tailwind 4
+não faz. O layout fica quase certo, e **o sintoma é mudo**: nada quebra, nada
+avisa, e o desvio passa por escolha de desenho.
+
+A regra: **compare com o arquivo real** (`node_modules/tailwindcss/preflight.css`),
+não com a lembrança do que ele faz. E quando a casa de destino já usa a mesma
+versão, apagar o bloco **aumenta** a fidelidade.
+
+**A irmã desta, do mesmo porte:** fronteira que já existe na casa **não se
+duplica**. Duas camadas para a mesma regra é uma regra que vai divergir — e a
+que diverge em silêncio é a de segurança.
+
+> **Proveniência:** 14/08/2026 · promovido pelo Diretor · origem: porte do Client Command Center para `dioli-agency-os-1` · commit `d73e98b`
+
+---
+
 ## Unificar rótulo revela colisão que a variação escondia
 
 Onze CTAs com nove textos diferentes pareciam nove ofertas. Com o mesmo texto,
