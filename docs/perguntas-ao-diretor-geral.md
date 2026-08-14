@@ -52,6 +52,52 @@ inteira dentro do Foocci, a resposta também cabe.
 
 ## Abertas
 
+## PROPOSTA — problema nunca sobe sozinho: no mínimo duas saídas, sempre
+
+**Aberta em** 2026-08-14 · **bloqueia:** nada. Já está valendo no Foocci
+(`CLAUDE.md`, seção "Problema nunca sobe sozinho"); o que proponho é virar
+doutrina de todos os projetos.
+
+**Origem:** ordem literal do CEO ao Diretor do Foocci, em 14/08/2026 —
+*"Sempre que me trouxer um problema, traga junto, no mínimo, duas soluções.
+Regra de ouro."* Ele pediu explicitamente para valer também no kit.
+
+**O que eu já li e não respondeu:** `docs/kit/` inteiro, `CLAUDE.md` do kit e
+deste projeto, `docs/18-o-despacho.md`. O kit define **o que sobe** ao CEO e
+**em que formato o relatório sai**, mas não define **a forma do problema**.
+Hoje um Diretor pode subir um problema nu e estar cumprindo a doutrina.
+
+**A regra proposta, em uma frase:** todo problema apresentado ao CEO carrega no
+mínimo duas saídas, cada uma com custo, risco e o que destrava, mais a
+recomendação do Diretor dita por extenso.
+
+**As opções que eu vejo:**
+
+1. **Entrar como regra dura no kit**, ao lado do formato de relatório. Custo:
+   nenhum para quem já faz; obriga quem não faz. Risco: Diretor sem saída real
+   inventar uma segunda opção falsa só para cumprir — mitigado pela cláusula de
+   escape abaixo.
+2. **Entrar como recomendação forte, não obrigatória.** Custo: quase nada.
+   Risco: recomendação que não trava não muda comportamento — foi assim que
+   "prompt é aviso, código é trava" virou guardrail 4 aqui.
+3. **Não entrar no kit e ficar só no Foocci.** Custo: o CEO recebe padrões
+   diferentes de projetos diferentes, que é exatamente o que ele reclamou.
+
+**Minha recomendação: opção 1**, com duas cláusulas que evitam o efeito
+colateral:
+
+- **"Consertar ou não consertar" não são duas saídas** — é uma opção e a
+  ausência dela. As duas precisam ser caminhos que alguém escolheria.
+- **Quando só existe um caminho, isso se diz**: *"aqui só há uma saída, e é
+  esta, porque descartei X e Y"*, com as descartadas nomeadas. A regra não
+  obriga a inventar alternativa falsa; obriga a mostrar o percurso.
+
+**Por que acho que serve a todos os projetos:** problema apresentado sozinho
+transfere ao CEO o trabalho de inventar a saída — e ele é quem tem menos
+contexto para isso. Escolher entre duas custa segundos; inventar a terceira do
+zero custa a reunião. E obriga o Diretor a pensar até o fim antes de falar.
+
+
 ## PROPOSTA — o kit precisa de um livro de assinaturas, porque hoje ninguém sabe quem está atualizado
 
 **Aberta em** 2026-08-06 · **bloqueia:** nada. Já assinei a minha linha do meu
